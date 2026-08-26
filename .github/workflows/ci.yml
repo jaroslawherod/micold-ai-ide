@@ -224,6 +224,38 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Runtime version
         run: docker version --format '{{.Server.Version}}' && docker info --format '{{.Driver}}'
+      # Every test behind `sandbox-real-runtime` starts from `micold-daemon:dev`, the image a
+      # developer builds with `mise run image`. A runner has no such image, and the failure is not
+      # a helpful one: the first test to want it dies on `No such image: micold-daemon:dev` and
+      # cargo stops there, so the tests after it never run at all and the summary shows one failure
+      # rather than the six targets that were skipped behind it.
+      #
+      # This is `mise run image` with its two host-specific parts removed. It does not go through
+      # `scripts/build-lock.sh` -- the lock exists to stop several worktrees on one workstation from
+      # compiling into one target directory, and a runner has neither -- and it does not
+      # cross-compile, because `x86_64-unknown-linux-gnu` is already this runner's own triple. What
+      # it keeps is the part that matters: the daemon binary staged beside the Containerfile, and
+      # `-f`, without which docker looks for a `Dockerfile` and fails.
+      - name: Build the :dev sandbox image
+        run: |
+          set -e
+          cargo build --release -p micold-daemon
+          cp target/release/micold-daemon packaging/sandbox/micold-daemon
+          docker build -f packaging/sandbox/Containerfile -t micold-daemon:dev packaging/sandbox
+          rm -f packaging/sandbox/micold-daemon
+          # The image can build and still not run: `docker build` only proves the file was copied,
+          # and whether it executes depends on the base's glibc being no older than the toolchain's.
+          # That mismatch surfaces as `version GLIBC_x.yy not found` on first start, which is a
+          # terrible place to find out -- so find out here. The daemon exits for its own reasons
+          # (no token, no endpoint) and those are correct; only loader failures are fatal.
+          smoke="$(docker run --rm --entrypoint /usr/local/bin/micold-daemon micold-daemon:dev 2>&1 | head -5 || true)"
+          case "$smoke" in
+            *GLIBC*|*"cannot execute"*|*"exec format error"*)
+              echo "the daemon cannot execute inside micold-daemon:dev:" >&2
+              echo "$smoke" >&2
+              exit 1
+              ;;
+          esac
       # `sandbox_real_` is a *test-name* filter, not a file filter: cargo matches it against the
       # test function's path, and an integration target's name is not part of that path. So a test
       # in `tests/sandbox_real_*.rs` whose function is not also named `sandbox_real_*` runs locally

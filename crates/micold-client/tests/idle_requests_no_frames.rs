@@ -27,14 +27,20 @@ use iced::advanced::Shell;
 use iced::window::RedrawRequest;
 use iced::{window, Event};
 
-use micold_client::ui::cdk::motion::Progress;
+use micold_client::ui::cdk::motion::{Progress, FRAME};
 
 /// The duration a component would state in its own motion spec. Any value works; this one is a
 /// realistic transition rather than a degenerate one.
 const OVER: Duration = Duration::from_millis(100);
 
-fn redraw_event() -> Event {
-    Event::Window(window::Event::RedrawRequested(Instant::now()))
+/// The redraw event for frame `n` of a run that started at `origin`.
+///
+/// Numbered rather than `Instant::now()`, because a track advances by the wall-clock time between
+/// the frame it is handed and the one before it (007 BUG-001). Two `Instant::now()`s taken inside a
+/// test loop are microseconds apart, so a thousand of them would not add up to one frame of a
+/// 100 ms transition and nothing here would ever arrive.
+fn frame_at(origin: Instant, n: u32) -> Event {
+    Event::Window(window::Event::RedrawRequested(origin + FRAME * n))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -49,8 +55,9 @@ fn a_resting_track_asks_for_no_frame() {
     let mut shell = Shell::new(&mut messages);
     let mut track = Progress::new(0.0);
 
-    for _ in 0..10 {
-        track.on_frame(&redraw_event(), 0.0, OVER, &mut shell);
+    let origin = Instant::now();
+    for n in 1..=10 {
+        track.on_frame(&frame_at(origin, n), 0.0, OVER, &mut shell);
     }
 
     assert!(!track.animating(), "precondition: the track is at rest");
@@ -69,7 +76,7 @@ fn a_moving_track_asks_for_the_next_frame() {
     let mut shell = Shell::new(&mut messages);
     let mut track = Progress::new(0.0);
 
-    track.on_frame(&redraw_event(), 1.0, OVER, &mut shell);
+    track.on_frame(&frame_at(Instant::now(), 1), 1.0, OVER, &mut shell);
 
     assert!(track.animating(), "precondition: the track is in flight");
     assert_eq!(
@@ -90,17 +97,18 @@ fn it_stops_asking_the_moment_it_arrives() {
     let mut asked_after_arrival = 0;
     let mut frames = 0;
 
-    for _ in 0..1_000 {
+    let origin = Instant::now();
+    for n in 1..1_000 {
         let mut messages: Vec<()> = Vec::new();
         let mut shell = Shell::new(&mut messages);
-        track.on_frame(&redraw_event(), 1.0, OVER, &mut shell);
+        track.on_frame(&frame_at(origin, n), 1.0, OVER, &mut shell);
         frames += 1;
 
         if !track.animating() {
             // One more frame, now that it has arrived. This is the frame that matters.
             let mut messages: Vec<()> = Vec::new();
             let mut shell = Shell::new(&mut messages);
-            track.on_frame(&redraw_event(), 1.0, OVER, &mut shell);
+            track.on_frame(&frame_at(origin, n + 1), 1.0, OVER, &mut shell);
             if shell.redraw_request() != RedrawRequest::Wait {
                 asked_after_arrival += 1;
             }

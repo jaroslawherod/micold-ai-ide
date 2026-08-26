@@ -125,10 +125,12 @@ impl<'a, M> SplitAction<'a, M> {
     /// only thing that knows where a sidebar row is: the view lays the rows out and does not hold
     /// their positions, and a row scrolls.
     ///
-    /// Two messages leave one press, in order: the chevron's own says the list was asked for, this
-    /// says where. They are separate because the chevron is an ordinary enabled button and stays
-    /// one — a wrapper that swallowed the press to build a single message would leave iced drawing
-    /// it as disabled, without its hover and press state layers.
+    /// Two messages leave one click, in order: **this** says where the press landed, and the
+    /// chevron's own says the list was asked for — in that order, because this is reported on the
+    /// press and the chevron, being an ordinary iced button, publishes on the release (T089). They
+    /// are separate because the chevron is an ordinary enabled button and stays one — a wrapper
+    /// that swallowed the press to build a single message would leave iced drawing it as disabled,
+    /// without its hover and press state layers.
     pub fn on_secondary_anchor(mut self, f: impl Fn((u16, u16)) -> M + 'a) -> Self {
         self.secondary_anchor = Some(Box::new(f));
         self

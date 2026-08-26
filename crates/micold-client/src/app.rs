@@ -24,7 +24,7 @@ use micold_core::selector::Selector;
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation, ShellInstanceId};
 use micold_core::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
 use micold_core::worktree::Worktree;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -273,9 +273,11 @@ pub enum Message {
     /// refreshes the availability set first — this is one of the two named events research R11
     /// means by "when the choice is offered".
     SessionStartMenuOpened(SessionLocation),
-    /// Where the chevron that opened the list was pressed, in window pixels (018 BUG-008,
-    /// FR-029d). Arrives from the same press as [`Message::SessionStartMenuOpened`], immediately
-    /// after it: that one says the list was asked for, this one says where to hang it.
+    /// Where a press on the start affordance landed, in window pixels (018 BUG-008, FR-029d).
+    /// Arrives from the same click as [`Message::SessionStartMenuOpened`] and **before** it — this
+    /// one is published on `ButtonPressed`, that one on the release, because it comes from the
+    /// wrapped button's own `on_press`. So this says where the click was, and the open that
+    /// follows it is what hangs the list there (feature 026, T089).
     SessionStartMenuAnchored((u16, u16)),
     /// Dismiss the "start a session on…" list without choosing.
     SessionStartMenuDismissed,
@@ -852,6 +854,36 @@ pub struct State {
     /// confirm dialog being shown (T037). Transient — never persisted. Mirrors
     /// `worktree_delete_target`.
     pub forget_target: Option<PathBuf>,
+    /// The start failure already reported to the user for each session, by the sentence reported
+    /// (feature 026, FR-010, T088).
+    ///
+    /// This is a *said-it* record, not a copy of the failure — the failure itself lives in the
+    /// daemon's snapshot, where `WireLifecycle::Failed { reason, .. }` carries it, and the sidebar
+    /// tint and bar text are already derived from that. What the client lacks without this is any
+    /// memory of having spoken, and the notification is a one-shot: `reconcile_catalog` runs on
+    /// every `CatalogChanged`, an activity badge moving is one of those (T086), and a failure
+    /// re-announced on each of them would be a banner every few seconds for as long as the session
+    /// stays failed.
+    ///
+    /// Keyed by session and holding the sentence, so a *different* reason for the same session —
+    /// a missing CLI after a conversation that had gone missing, say — is news and is said. The
+    /// entry is dropped as soon as the daemon reports that session as anything but failed, which
+    /// is what makes the next failure speak again.
+    ///
+    /// Transient, and deliberately not persisted: it records what this window has said, and a
+    /// window that has said nothing yet should say it.
+    pub announced_start_failures: BTreeMap<SessionId, String>,
+    /// Where the last press on a start affordance landed, in window pixels (feature 026, T089,
+    /// FR-029d).
+    ///
+    /// The point and the decision arrive in separate messages and, unavoidably, in separate event
+    /// phases: `ContextArea` reports the point on `ButtonPressed`, while the `IconButton` it wraps
+    /// publishes its own message on the *release*. So the point is known first and has to outlive
+    /// the message that carried it — [`crate::features::session::start_menu_toggled`] reads it
+    /// when it opens the list. `None` before the first press; a list is only ever opened by one.
+    ///
+    /// Transient: where a row was a moment ago is worth nothing after a restart.
+    pub session_start_press: Option<(u16, u16)>,
 }
 
 /// The sidebar's reported offset as the app bar reads it: whole pixels, never above the top.

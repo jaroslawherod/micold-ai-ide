@@ -1442,7 +1442,7 @@ a path only a second press exercises, or a pixel position.
   not the defect; what is under test is that a push happens at all. §B's frames remain the timing
   evidence.
 
-- [ ] T087 Report a failed **resume** to the client (FR-010). `ClientMsg::SessionStart` — the restart
+- [X] T087 Report a failed **resume** to the client (FR-010). `ClientMsg::SessionStart` — the restart
   a user presses on an existing session — calls `spawn_session_start(…, LaunchMode::Resume, None, …)`
   in `micold-daemon/src/server.rs`. That `None` is the reply channel, and the whole of the outcome
   handling sits behind `if let Some((client, req)) = reply`: the start failure is logged at `warn`
@@ -1453,7 +1453,45 @@ a path only a second press exercises, or a pixel position.
   the *success* case (a resume has no `SessionCreated` to send); the fix is to broadcast and report
   the error regardless, not to invent a reply for the success.
 
-- [ ] T088 Surface the reason a start failed, somewhere a user can read it (FR-010). The daemon
+  **Done 2026-08-26.** The fix is one line in each failure arm of `spawn_session_start`:
+  `task_state.broadcast_catalog()`, outside the `if let Some(reply)` that held every other outcome
+  path. Neither of the two obvious alternatives is right. An `OperationError` cannot be addressed to
+  this message at all — `ClientMsg::SessionStart` carries no `req` — and inventing one would be a
+  wire change for a report the catalog already carries; and the missing reply is *correct* for the
+  success case, which is the trap the diagnosis above warns about. What was actually asymmetric was
+  the announcement, not the reply: `start_session` records the sentence in `start_failures`,
+  `overlay_live_summaries` projects it as `Failed { reason, attempts: 0 }`, and the only
+  `broadcast_catalog` on the success path sits *after* `mark_session_running` — which a failed start
+  returns before reaching. The `SessionCreate` path has been relying on exactly this broadcast for
+  the same case all along, which is why every test of the failure *message* passed.
+
+  The gate (`crates/micold-daemon/tests/resume_failure_reported.rs`) drives `SessionStart` through a
+  real `serve_connection` and asserts on the frames the client receives. That is deliberate and it is
+  the whole difficulty of the task: the state half is already correct and already gated, so a test
+  that reads `welcome_payload()` — or calls `start_session` directly, as every existing test of this
+  refusal does — passes against the defect. Nothing else in the test can broadcast: the supervisor
+  tick belongs to the daemon binary rather than to `serve_connection`, and the `Welcome` snapshot is
+  drained before the start is sent, so a `CatalogChanged` arriving afterwards came from the start.
+  One provider (Copilot) rather than a sweep over `AiCli::ALL` — the per-provider wording is already
+  gated in `session_start.rs`; what was missing here is delivery.
+
+  Probed on `c96af25` by deleting the two broadcasts and running `cargo test --workspace
+  --no-fail-fast`: 221 binaries, **2168 pass and 1 fails**, and the failure is
+  `a_resume_that_fails_reaches_the_client` alone. `--no-fail-fast` again for the reason recorded
+  under T086 — a fail-fast run stops at the first failing binary and cannot distinguish "alone" from
+  "first". The red run before the fix failed at the ten-second receive timeout rather than on a
+  wrong value, which is the defect's actual shape: not a bad announcement, no announcement.
+
+  The ten seconds is a timeout and not a measurement — the start is a single `PATH` lookup and the
+  green run takes 0.00 s — so nothing here asserts latency; a deadline tight enough to *be* the
+  measurement would fail on a loaded runner for a reason that is not the defect.
+
+  What this does **not** do is put the reason in front of the user: the client now receives
+  `Failed { reason }` for a resume as it already did for a create, and T088 is where that sentence
+  gets somewhere readable. Restart on a missing CLI moves the bar to `failed` after this; it does
+  not yet say why.
+
+- [X] T088 Surface the reason a start failed, somewhere a user can read it (FR-010). The daemon
   already computes the sentence — "GitHub Copilot isn't installed. Install it, or start this session
   on another AI CLI." — and it reaches `WireLifecycle::Failed { reason, attempts: 0 }`. §B found it
   displayed nowhere: the bar reads "failed", and the reason is not in the row, not in the terminal,
@@ -1461,7 +1499,57 @@ a path only a second press exercises, or a pixel position.
   surface and gate it there; a tooltip is enough if that is what the sidebar can carry, but the
   choice belongs in the task rather than in whatever is convenient at the call site.
 
-- [ ] T089 Anchor the session-start list to the press that opened it. Both halves of `SplitAction`
+  **Done 2026-08-26.** The surface is the notification queue (`micold-core/src/notify.rs`), drawn as
+  a `material::Snackbar` on `Layer::Snackbar` from the root view (`ui/mod.rs:453`). It was chosen
+  because it is the only surface that is both *unconditional* and able to carry a sentence, and the
+  two nearer-looking candidates fail on one of those. The session pane's empty-state text renders
+  only when `grid` is `None`, and a restart that fails leaves the previous grid in place — so the
+  text would never draw in exactly the case it is for. The bar has a width budget and already says
+  `failed`; the reason is a full sentence naming a CLI and an action, and it does not fit. A tooltip
+  was the task's own suggested fallback and is rejected deliberately: a user who pressed restart and
+  saw nothing happen has no reason to go hunting for a hover target.
+
+  The announcement is **level-triggered**, against a new `State::announced_start_failures`
+  (`BTreeMap<SessionId, String>`, owner `session` in `feature_write_isolation`'s `OWNERS`). It holds
+  the sentence *already said*, not a copy of the failure — the lifecycle itself stays the daemon's,
+  and arrives in the catalog. Edge-free pushing is not an option here because of T086: a badge
+  moving now publishes the catalog, so an unguarded push would banner every few seconds for as long
+  as the session stayed failed. The entry is dropped as soon as the daemon reports the session as
+  anything but failed, so a genuine *second* failure is news again rather than being swallowed by
+  the record of the first. An empty `reason` says nothing at all: the crash-loop give-up reaches
+  `Failed` too and carries no text, and a banner with nothing in it is worse than the bar's `failed`.
+
+  Gated in two places, because the claim spans two crates. `micold-daemon/tests/catalog_join.rs`
+  holds the whole path — a real `start_session(id, Resume)` against a `PATH` with no Copilot on it,
+  through `overlay_live_summaries` and the wire, into `reconcile_catalog` — and asserts the visible
+  notification is an `Error` naming `display_name()` and *not* `command()`, which is FR-010's actual
+  ask (name the CLI, in the words a user would recognise). `micold-client/tests/start_failure_notice.rs`
+  holds the four behaviours against `reconcile_catalog` directly, on hand-built snapshots: said once
+  however many snapshots repeat it, said again after the session has been something else, a
+  different reason for the same session is news, and nothing to say says nothing.
+
+  Four probes on `62e5981`, each scoped to the binary that should notice and each failing **alone**
+  within it: removing the call site fails the daemon join gate and three of the four client gates
+  (the fourth asserts absence, and correctly still passes); pushing unconditionally fails
+  `an_unchanged_failure_is_said_once…` only; dropping the forget-on-recovery fails
+  `a_failure_after_the_session_has_been_something_else_is_said_again` only; dropping the
+  `!reason.trim().is_empty()` filter fails `a_failure_with_nothing_to_say_says_nothing` only.
+
+  The first probe also failed `every_state_field_has_an_owner`, which is **not** a probe effect and
+  is worth recording as the run's second finding: the new `State` field had no `OWNERS` entry, so
+  that pre-existing guard had been red from the moment the field was added, and a workspace run made
+  for a different purpose is simply where it was noticed. Fixed in the same commit. The lesson is
+  the one `--no-fail-fast` keeps paying for — a fail-fast run would have stopped at the first
+  failing binary and reported the probe as clean.
+
+  Two limits, recorded rather than glossed. A repeat press against an unchanged world produces a
+  byte-identical snapshot — `attempts` stays `0` by contract for a start that never launched — so
+  once the ten-second banner has expired, a second press is silent. Closing that needs the daemon to
+  publish the attempt, which is a wire change and a task of its own. Clearing the record on the
+  press instead was considered and rejected: the press path (`view_and_start`) lives in `shell/`,
+  which is binary-only and unreachable from `tests/`, so the fix would have shipped ungated.
+
+- [X] T089 Anchor the session-start list to the press that opened it. Both halves of `SplitAction`
   open the CLI list at the window origin, over the sidebar header, whatever row was pressed —
   `evidence/session-start-menu-anchors-at-origin.png`. The cause is an event-phase mismatch:
   `ContextArea::on_primary_press`/`on_secondary_anchor` publish the anchor from `reported_press`,
@@ -1475,6 +1563,50 @@ a path only a second press exercises, or a pixel position.
   `clamp_menu_anchor` problem. T085's `tests/session_start_press.rs` cannot see it because its
   assertion is `SessionStartMenuAnchored(_)`: the gate must assert the *point*, and the probe is to
   restore the `(0, 0)` write and watch that one assertion fail.
+
+  **Done 2026-08-26.** The diagnosis above is right about the cause and silent about the one thing
+  that had to be decided: which side to move. Reporting the point on the *release* instead would put
+  the two messages in the order the doc comments assumed, but `ContextArea` deliberately reports on
+  the press — `reported_press`'s own unit test argues it at length, and the terminal tab's context
+  menu, which opens from that press, depends on it. So the phase stays and the reducer stops
+  depending on an order it does not get: `start_menu_anchored` records the point on
+  `State::session_start_press` (owner `session`), and `start_menu_toggled` reads it back when it
+  opens. The `(0, 0)` was never a placeholder that got corrected — the correction ran while nothing
+  was open, did nothing, and the point was dropped; by the time a list existed there was no point
+  left to apply.
+
+  `start_menu_anchored` deliberately does **not** also move an already-open list, which is what it
+  used to do and all it used to do. Pressing another row's chevron while one is open would slide the
+  open panel to the new row for the frame between the press and the release, before the toggle
+  replaced it — a twitch bought for a case that cannot arise, since the toggle reads the same point
+  a moment later.
+
+  Three doc comments asserted the opposite phase order in so many words and are corrected with the
+  code, not just the one the task names: `features/session.rs::start_menu_anchored` ("the same press
+  publishes both messages"), `cdk::context_area::on_primary_press` ("child first … so the surface is
+  never rendered at the point the opening message left it"), and
+  `material::split_action::on_secondary_anchor` ("Two messages leave one press, in order: the
+  chevron's own … this says where"). All three described a correction-after-open that never
+  happened. `Message::SessionStartMenuAnchored`'s own doc said it too.
+
+  The gate is two tests in T085's `tests/session_start_press.rs`, which already has the harness that
+  presses the real widget. Both press a glyph located by what it paints — `only_glyph` generalises
+  `start_glyph`'s rule to the chevron — then feed **everything the press published, in the order it
+  published it**, through `State::update`, and read `session_start_menu.anchor`. Driving the real
+  reducer is the point: the defect is entirely an ordering one, and a test that inspected the
+  message list would have passed on the broken tree exactly as T085's `SessionStartMenuAnchored(_)`
+  did. Both halves are covered because both can open the list — the primary half when the stored
+  default is not installed (FR-004 scenario 4), the chevron always.
+
+  Probed on `976ca75` by restoring `anchor: (0, 0)` and running `cargo test --workspace
+  --no-fail-fast`: 222 binaries, **2174 pass and 2 fail**, and the two are the new gates alone. So
+  nothing else in the workspace was relying on the list opening at the origin, and the red run
+  before the fix failed on the value — `(0, 0)` against `(272, 129)` — rather than on a panic or a
+  missing message, which is the defect's actual shape.
+
+  The render half needs no change and was checked rather than assumed: `ui/mod.rs` positions this
+  surface from `menu.anchor` through `clamp_menu_anchor`, the same path the overflow menu and the
+  Settings dropdown take, which is why those two anchored correctly all along.
 
 ---
 
