@@ -38,9 +38,17 @@ fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+/// The file's text, with line endings normalised to `\n`.
+///
+/// Every scan below splits on a needle containing a newline (`"\n  test:\n"`, `"\n## "`), and a
+/// Windows runner checks these files out with CRLF -- `core.autocrlf` is `true` there by default.
+/// Without this, all three needles miss and the panics blame the documents: "ci.yml has no `test:`
+/// job", on a ci.yml that plainly has one. That is what T115's first run on the matrix reported.
 fn read(relative: &str) -> String {
     let path = repo_root().join(relative);
-    fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
+    fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
+        .replace("\r\n", "\n")
 }
 
 /// The §A section only. §B is the manual pass and makes no claim about any platform.
