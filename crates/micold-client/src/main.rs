@@ -515,13 +515,33 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // to itself.
         Message::SandboxRestartRequested => {
             match app.sandbox_boot.clone() {
-                Some(plan) if app.sandbox.restart(micold_core::sandbox::lifecycle::RestartRequested) => shell::sandbox::boot(plan),
+                Some(plan) if app.sandbox.restart(micold_core::sandbox::lifecycle::RestartRequested) => {
+                    // Going back to the sandbox has to take the connection with it. If a fallback
+                    // was in force, `placement.kind` is the host process; left there, the sandbox
+                    // would come up and every session would still be running outside it — the
+                    // banner saying "sandboxed" over an unconfined shell, which is the one thing
+                    // FR-035b exists to prevent.
+                    app.placement.kind = micold_core::sandbox::placement::PlacementKind::LocalSandbox;
+                    shell::sandbox::boot(plan)
+                }
                 _ => Task::none(),
             }
         }
         Message::SandboxFallbackAccepted => {
             if let Some(offer) = app.sandbox.fallback_offer() {
-                app.sandbox.accept_fallback(offer);
+                // Consent is not the whole of it. `daemon::connection` dials from `app.placement`,
+                // and for `LocalSandbox` it deliberately never falls back to a host process
+                // (FR-035, and the comment in `daemon.rs` says so). So the *only* thing that can
+                // turn accepted consent into a working service is moving the placement here —
+                // without this the user presses "Run without it for now", the banner changes, and
+                // the client goes on dialling a port nothing is listening on, forever.
+                //
+                // In memory only: nothing writes it back to the settings store, which is what
+                // makes the choice last for this occurrence alone (FR-035a).
+                if app.sandbox.accept_fallback(offer) {
+                    app.placement.kind =
+                        micold_core::sandbox::placement::PlacementKind::HostProcess;
+                }
             }
             Task::none()
         }
@@ -1438,6 +1458,99 @@ pub(crate) mod tests {
             ripples_animating: Arc::new(AtomicUsize::new(0)),
             scene_ripple_frames: std::cell::Cell::new(0),
         }
+    }
+
+    // --- FR-035a: an accepted fallback has to reach the connection, not only the banner --------
+
+    /// An `App` configured for the sandbox, with the sandbox failed and a boot plan to restart.
+    fn app_with_a_failed_sandbox() -> App {
+        use micold_core::sandbox::lifecycle::{Failure, Stage};
+        let mut app = base_app();
+        app.placement.kind = micold_core::sandbox::placement::PlacementKind::LocalSandbox;
+        app.sandbox = micold_client::features::sandbox::Sandbox {
+            state: micold_core::sandbox::lifecycle::SandboxState::Failed(Failure {
+                stage: Stage::Probing,
+                error: micold_core::sandbox::runtime::RuntimeError::NotInstalled {
+                    kind: micold_core::sandbox::runtime::RuntimeKind::Docker,
+                },
+            }),
+            ..micold_client::features::sandbox::Sandbox::default()
+        };
+        app.sandbox_boot = Some(shell::sandbox::BootPlan {
+            profile: micold_core::sandbox::SandboxProfile::default(),
+            state_dir: PathBuf::from("/tmp/micold-test-state"),
+            projects: Vec::new(),
+        });
+        app
+    }
+
+    #[test]
+    fn accepting_the_fallback_moves_the_connection_to_a_host_process() {
+        // The defect this was written for: `SandboxFallbackAccepted` used to record consent and
+        // return `Task::none()`, and nothing else changed. But `daemon::connection` dials from
+        // `app.placement`, and its `LocalSandbox` arm never falls back to a host process by design
+        // (FR-035) — so the user pressed "Run without it for now", the banner said they were
+        // running unsandboxed, and the client kept dialling a port nothing was listening on. The
+        // offer worked as a statement and not as a service.
+        let mut app = app_with_a_failed_sandbox();
+
+        let _ = update_inner(&mut app, Message::SandboxFallbackAccepted);
+
+        assert!(
+            app.sandbox.fallback.is_some(),
+            "the consent must be recorded, or the persistent notice has nothing to show"
+        );
+        assert_eq!(
+            app.placement.kind,
+            micold_core::sandbox::placement::PlacementKind::HostProcess,
+            "accepting the fallback must move the connection to a host process — the subscription              is keyed on this value, and only changing it makes the client dial somewhere a daemon              can actually be"
+        );
+    }
+
+    #[test]
+    fn a_fallback_that_was_not_on_offer_leaves_the_connection_where_it_is() {
+        // The other half: consent is not a thing the application may take on its own behalf
+        // (FR-035). A running sandbox offers no fallback, so nothing here may move the placement —
+        // otherwise a stray message would quietly unsandbox a working session.
+        let mut app = base_app();
+        app.placement.kind = micold_core::sandbox::placement::PlacementKind::LocalSandbox;
+        app.sandbox = micold_client::features::sandbox::Sandbox {
+            state: micold_core::sandbox::lifecycle::SandboxState::Running(
+                micold_core::sandbox::runtime::ContainerId("x".into()),
+            ),
+            ..micold_client::features::sandbox::Sandbox::default()
+        };
+
+        let _ = update_inner(&mut app, Message::SandboxFallbackAccepted);
+
+        assert!(app.sandbox.fallback.is_none());
+        assert_eq!(
+            app.placement.kind,
+            micold_core::sandbox::placement::PlacementKind::LocalSandbox,
+            "a fallback nobody offered must not move a running sandbox's connection"
+        );
+    }
+
+    #[test]
+    fn trying_the_sandbox_again_brings_the_connection_back_with_it() {
+        // The return leg. Without it the restart succeeds, the container comes up, and every
+        // session keeps running on the host process the fallback moved us to — a banner claiming
+        // containment over an unconfined shell, which is precisely what FR-035b forbids.
+        let mut app = app_with_a_failed_sandbox();
+        let _ = update_inner(&mut app, Message::SandboxFallbackAccepted);
+        assert_eq!(
+            app.placement.kind,
+            micold_core::sandbox::placement::PlacementKind::HostProcess,
+            "precondition: the fallback moved us off the sandbox"
+        );
+
+        let _ = update_inner(&mut app, Message::SandboxRestartRequested);
+
+        assert_eq!(
+            app.placement.kind,
+            micold_core::sandbox::placement::PlacementKind::LocalSandbox,
+            "asking for the sandbox back must point the connection back at it"
+        );
     }
 
     // --- T117 / FR-024a / SC-021: the read-only state must end when the daemon says we hold the
