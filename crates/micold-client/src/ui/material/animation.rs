@@ -9,6 +9,13 @@
 //! clipped to the visible area. Both are passthrough widgets — layout, events, and the
 //! overlay are delegated to the child.
 //!
+//! **The veil dims fills, not text.** It is a quad in the same layer as the content it covers, and
+//! the renderer draws a layer's text above its quads — so a faded panel's background converges on
+//! the backdrop tone while its labels stay at full contrast until the widget is dropped. Measured
+//! on 2026-08-26 (`specs/007-motion-overlay-fade/evidence/BUG-001-exits-after-the-fix.md`). An
+//! overlay does not have this problem: its scrim is a *separate* layer in `cdk::overlay`'s stack,
+//! so it dims everything beneath it, text included. A [`Fade`] used on its own does.
+//!
 //! # Self-animating (feature 017, FR-011/FR-014)
 //!
 //! Each wrapper owns the scalar it animates, as widget-tree state. A caller says *where it wants
