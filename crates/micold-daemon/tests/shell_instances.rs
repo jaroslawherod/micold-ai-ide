@@ -12,7 +12,7 @@ use alacritty_terminal::index::{Column, Line};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::SessionProcess;
 use micold_core::session::{
-    Session, SessionId, SessionLabel, SessionLocation, ShellInstanceId, TerminalMode,
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, ShellInstanceId, TerminalMode,
 };
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
@@ -58,6 +58,7 @@ fn catalog_with_session(
         SessionLocation::Default,
         SessionLabel::Named("S".into()),
         TerminalMode::AiCli,
+        AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project.to_path_buf(), vec![session]);
@@ -163,7 +164,7 @@ fn opening_a_shell_on_a_session_whose_primary_is_not_running_still_attaches_a_sh
     let attached = state.attach_process(id, SessionProcess::Shell(instance));
     assert!(
         attached.is_some(),
-        "the shell instance must exist and be attachable — otherwise the mode toggle silently \
+        "the shell instance must exist and be attachable — otherwise pressing its tab silently \
          does nothing (FR-003, FR-007)"
     );
     assert!(
@@ -178,7 +179,7 @@ fn opening_a_shell_on_a_session_whose_primary_is_not_running_still_attaches_a_sh
 /// `remove_session` returns only the *primary* handle for the caller to `kill()`, and there is no
 /// primary here. What actually reclaims the shell is the removal of the whole `LiveSession`: each
 /// `Proc`'s `Drop` kills and joins its child. This pins that, since a future refactor that leaned
-/// on the returned handle instead would leak a shell per toggle.
+/// on the returned handle instead would leak a shell per switch.
 #[test]
 fn a_shell_opened_without_a_primary_is_reclaimed_when_the_session_is_removed() {
     let project = tempfile::tempdir().unwrap();
@@ -213,4 +214,178 @@ fn a_shell_opened_without_a_primary_is_reclaimed_when_the_session_is_removed() {
         wait_until(Duration::from_secs(5), || !shell.is_alive()),
         "the shell process must be reclaimed with the session, not leaked"
     );
+}
+
+// ---------------------------------------------------------------------------------------
+// `012` BUG-003 — the daemon knows which shell instances are live and never said so.
+//
+// `LiveSession.procs` is keyed by `SessionProcess::Shell(id)`, so a live instance is already a key
+// in that map; it simply had no wire field. Without this the client cannot honour `012` FR-008
+// ("each Regular Terminal instance MUST independently track its own shell lifecycle"), because
+// nothing tells it — three of that requirement's four states were unreachable in production.
+// ---------------------------------------------------------------------------------------
+
+/// The live shell instances the daemon reports for `id`, as a connected client would read them.
+fn reported_live_shells(
+    state: &DaemonState,
+    id: SessionId,
+) -> Vec<micold_core::session::ShellInstanceId> {
+    state
+        .welcome_payload()
+        .0
+        .projects
+        .into_iter()
+        .flat_map(|p| p.sessions)
+        .find(|s| s.id == id)
+        .expect("the session is in the snapshot")
+        .live_shells
+}
+
+#[test]
+fn the_snapshot_reports_which_shell_instances_are_live() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let sid = SessionId::new();
+    let state = DaemonState::new(catalog_with_session(project.path(), store.path(), sid));
+
+    // A session the daemon is not hosting has none — and that is the honest answer, not a default
+    // standing in for one (mirrors `input_serial`'s reasoning).
+    assert!(reported_live_shells(&state, sid).is_empty());
+
+    let mut cmd = CommandBuilder::new("cat");
+    cmd.cwd(std::env::temp_dir());
+    let primary = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn primary");
+    let primary = state.register_session(primary);
+
+    // A live Primary is not a shell instance: the field names instances, not processes.
+    assert!(
+        reported_live_shells(&state, sid).is_empty(),
+        "the Primary process must not be reported as a shell instance"
+    );
+
+    let a = ShellInstanceId(0);
+    let b = ShellInstanceId(1);
+    state.open_shell(sid, a).expect("open a");
+    state.open_shell(sid, b).expect("open b");
+
+    let mut live = reported_live_shells(&state, sid);
+    live.sort_by_key(|i| i.0);
+    assert_eq!(
+        live,
+        vec![a, b],
+        "every open instance is reported, so the client can mark each one running (FR-008)"
+    );
+
+    // Closing one removes it, which is the signal that makes `exited` reachable at all: the client
+    // cannot tell a dead shell from a quiet one by watching for frames.
+    let _ = state.close_shell(sid, a);
+    assert_eq!(
+        reported_live_shells(&state, sid),
+        vec![b],
+        "a closed instance stops being reported; its sibling is untouched"
+    );
+
+    for pty in state.session_ptys(sid) {
+        pty.kill().ok();
+    }
+    drop(primary);
+}
+
+/// `012` BUG-003, second pass — found by the visual pass, not by the first round of tests.
+///
+/// The first test used `close_shell`, an explicit close that removes the process from the registry.
+/// A shell that **exits on its own** does not: its PTY stays registered so the final screen survives.
+/// So `live_shells` went on naming a dead shell, and `exited` — the state FR-008 most needs — stayed
+/// unreachable. Nothing caught it because no test let a shell die by itself.
+#[test]
+fn a_shell_instance_that_exits_on_its_own_stops_being_reported_live() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let sid = SessionId::new();
+    let state = DaemonState::new(catalog_with_session(project.path(), store.path(), sid));
+
+    let mut cmd = CommandBuilder::new("cat");
+    cmd.cwd(std::env::temp_dir());
+    let primary = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn primary");
+    let primary = state.register_session(primary);
+
+    let inst = ShellInstanceId(0);
+    state.open_shell(sid, inst).expect("open shell instance");
+    let (shell, _) = state
+        .attach_process(sid, SessionProcess::Shell(inst))
+        .expect("attach the shell instance");
+    assert!(wait_until(Duration::from_secs(5), || shell.is_alive()));
+    assert_eq!(reported_live_shells(&state, sid), vec![inst]);
+
+    // Let it end the way a user ends one.
+    state.session_input(sid, 0, b"exit\n");
+    assert!(
+        wait_until(Duration::from_secs(10), || !shell.is_alive()),
+        "the shell must actually exit for this test to be testing anything"
+    );
+
+    assert!(
+        reported_live_shells(&state, sid).is_empty(),
+        "a shell whose process has ended must not be reported live — reporting presence in the \
+         registry rather than liveness is what kept `exited` unreachable"
+    );
+
+    // Still registered, deliberately: the client is looking at its final output.
+    assert!(
+        state
+            .session_ptys(sid)
+            .iter()
+            .any(|p| std::sync::Arc::ptr_eq(p, &shell)),
+        "the dead instance keeps its PTY so the pane keeps its last screen"
+    );
+
+    for pty in state.session_ptys(sid) {
+        pty.kill().ok();
+    }
+    drop(primary);
+}
+
+/// The other half: something has to *announce* the death. The supervision tick names the owning
+/// project the first time it observes a shell instance gone — that is what makes the caller
+/// broadcast — and does not keep naming it afterwards, or a dead shell would re-broadcast on every
+/// tick for as long as it stayed open.
+#[test]
+fn the_supervision_tick_announces_a_dead_shell_instance_exactly_once() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let sid = SessionId::new();
+    let state = DaemonState::new(catalog_with_session(project.path(), store.path(), sid));
+
+    let mut cmd = CommandBuilder::new("cat");
+    cmd.cwd(std::env::temp_dir());
+    let primary = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn primary");
+    let primary = state.register_session(primary);
+
+    let inst = ShellInstanceId(0);
+    state.open_shell(sid, inst).expect("open shell instance");
+    let (shell, _) = state
+        .attach_process(sid, SessionProcess::Shell(inst))
+        .expect("attach");
+    assert!(wait_until(Duration::from_secs(5), || shell.is_alive()));
+
+    // While it lives, the tick has nothing to say about it.
+    assert!(state.supervise_exited_sessions().is_empty());
+
+    state.session_input(sid, 0, b"exit\n");
+    assert!(wait_until(Duration::from_secs(10), || !shell.is_alive()));
+
+    assert_eq!(
+        state.supervise_exited_sessions(),
+        vec![project.path().to_path_buf()],
+        "the first tick after the shell died must name its project, so the catalog is broadcast"
+    );
+    assert!(
+        state.supervise_exited_sessions().is_empty(),
+        "and no tick after that — announcing once is what stops a dead shell broadcasting forever"
+    );
+
+    for pty in state.session_ptys(sid) {
+        pty.kill().ok();
+    }
+    drop(primary);
 }

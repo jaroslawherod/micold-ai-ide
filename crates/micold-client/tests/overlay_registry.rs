@@ -91,7 +91,7 @@ fn dialogs() -> Vec<Dialog> {
         },
         Dialog {
             id: "add_worktree",
-            cancel: Message::AddWorktreeCancelled,
+            cancel: Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
             open: |state| state.worktree_form = Some(Default::default()),
         },
         Dialog {
@@ -283,7 +283,10 @@ fn the_reducer_opens_a_dialog_through_that_mechanism() {
     // forgets the call fails here — which is the failure the enum could not have.
     let openers: &[(&str, Message)] = &[
         ("about", Message::AboutOpened),
-        ("add_worktree", Message::AddWorktreeOpened),
+        (
+            "add_worktree",
+            Message::WorktreeForm(micold_client::features::worktree_form::Msg::Opened),
+        ),
     ];
 
     for (name, opening) in openers {
@@ -613,7 +616,11 @@ fn a_dialog_draws_from_its_own_state() {
         ("rename_project", |s| {
             s.update(Message::RenameStarted(std::path::PathBuf::from("/p")))
         }),
-        ("add_worktree", |s| s.update(Message::AddWorktreeOpened)),
+        ("add_worktree", |s| {
+            s.update(Message::WorktreeForm(
+                micold_client::features::worktree_form::Msg::Opened,
+            ))
+        }),
         ("confirm_worktree_delete", |s| {
             s.update(Message::WorktreeDeleteRequested("feat-x".to_string()))
         }),

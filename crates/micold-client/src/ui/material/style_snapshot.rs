@@ -115,14 +115,54 @@ fn render_all() -> String {
             ("disabled", button::Status::Disabled),
         ];
         let buttons: Vec<(&str, ButtonStyleFn)> = vec![
-            ("filled", Box::new(style::filled(r))),
-            ("outlined", Box::new(style::outlined(r))),
-            ("text", Box::new(style::text_button(r))),
+            ("filled", Box::new(style::filled(r, None))),
+            ("outlined", Box::new(style::outlined(r, None))),
+            ("text", Box::new(style::text_button(r, None))),
             ("circular_icon", Box::new(style::circular_icon_button(r))),
         ];
         for (name, f) in &buttons {
             for (st_name, st) in button_statuses {
                 writeln!(s, "button.{name}[{st_name}] = {:?}", f(&theme, st)).unwrap();
+            }
+        }
+
+        // The same variants **on a host** — the composition, byte for byte. `composition_contrast`
+        // asserts these clear a threshold; a threshold passes for a wide band of colours and would
+        // not notice the pair drifting inside it. The snapshot notices, which is the division of
+        // labour the two gates are for (BUG-009 T157, SC-008g).
+        //
+        // Every host that imposes, and the neutral ones too: a level whose fill stops imposing is
+        // exactly the regression this file exists to make visible, and it can only show up here if
+        // the neutral pose is recorded rather than skipped.
+        let hosts: Vec<(String, style::Host)> = NoticeLevel::ALL
+            .into_iter()
+            .map(|lvl| {
+                (
+                    format!("notification[{lvl:?}]"),
+                    style::notification_host(r, lvl),
+                )
+            })
+            .chain(std::iter::once((
+                "snackbar".to_string(),
+                style::snackbar_host(r),
+            )))
+            .collect();
+        for (host_name, host) in &hosts {
+            writeln!(s, "host.{host_name} = {host:?}").unwrap();
+            let on_host: Vec<(&str, ButtonStyleFn)> = vec![
+                ("filled", Box::new(style::filled(r, Some(*host)))),
+                ("outlined", Box::new(style::outlined(r, Some(*host)))),
+                ("text", Box::new(style::text_button(r, Some(*host)))),
+            ];
+            for (name, f) in &on_host {
+                for (st_name, st) in button_statuses {
+                    writeln!(
+                        s,
+                        "button.{name}@{host_name}[{st_name}] = {:?}",
+                        f(&theme, st)
+                    )
+                    .unwrap();
+                }
             }
         }
 

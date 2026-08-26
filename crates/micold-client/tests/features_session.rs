@@ -4,6 +4,16 @@
 //! builds a `State`. What it holds to is the other half of SC-004 — it names no other feature's
 //! types. No sidebar rows, no overlays, no drafts.
 //!
+//! The three `let _ =` bindings below are the same decision spelled for a function whose answer is
+//! only outcomes: this file asserts on no sidebar field, so dropping them is the boundary rather
+//! than a shortcut. A test that asserts a *moved* consequence needs a draining helper instead —
+//! `tests/switch_active.rs` has one, and T067a-6 records the four files that needed it.
+//!
+//! `switch_active` now answers `Option<Vec<Outcome>>` rather than `bool` — `None` is still the
+//! refusal, and the outcomes are the sidebar consequences of arriving somewhere (T067a-6). This
+//! file drops them on the floor deliberately: it asserts on no sidebar field, which is the same
+//! boundary the header claims above, and the split turned out to fall exactly along it.
+//!
 //! The switch sequence is what is worth pinning here. Its step order is load-bearing
 //! (data-model.md I1) and every step is individually plausible in the wrong place, which is exactly
 //! the kind of thing a refactor breaks quietly.
@@ -11,7 +21,7 @@
 use micold_client::app::State;
 use micold_client::features::session::{ForegroundChoice, SelectKind};
 use micold_core::project::{Availability, Project};
-use micold_core::session::{Session, SessionId, SessionLocation};
+use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
 use std::path::{Path, PathBuf};
 
 fn project(path: &str) -> Project {
@@ -31,10 +41,10 @@ fn two_projects(a: usize, b: usize) -> (State, Vec<SessionId>, Vec<SessionId>) {
     st.workspace.projects.push(project("/b"));
 
     let sessions_a: Vec<Session> = (0..a)
-        .map(|_| Session::start_new(SessionLocation::Default))
+        .map(|_| Session::start_new(SessionLocation::Default, AiCli::ClaudeCode))
         .collect();
     let sessions_b: Vec<Session> = (0..b)
-        .map(|_| Session::start_new(SessionLocation::Default))
+        .map(|_| Session::start_new(SessionLocation::Default, AiCli::ClaudeCode))
         .collect();
     let ids_a = sessions_a.iter().map(|s| s.id).collect();
     let ids_b = sessions_b.iter().map(|s| s.id).collect();
@@ -54,7 +64,7 @@ fn switching_to_an_unknown_project_changes_nothing_and_says_so() {
     let (mut st, a, _) = two_projects(1, 1);
     st.active_session = Some(a[0]);
 
-    let switched = st.switch_active(Path::new("/nowhere"));
+    let switched = st.switch_active(Path::new("/nowhere")).is_some();
 
     assert!(
         !switched,
@@ -78,8 +88,8 @@ fn switching_away_and_back_returns_to_the_session_that_was_in_front() {
     let (mut st, a, _) = two_projects(2, 1);
     st.active_session = Some(a[1]);
 
-    assert!(st.switch_active(Path::new("/b")));
-    assert!(st.switch_active(Path::new("/a")));
+    assert!(st.switch_active(Path::new("/b")).is_some());
+    assert!(st.switch_active(Path::new("/a")).is_some());
 
     assert_eq!(
         st.active_session,
@@ -94,7 +104,7 @@ fn switching_away_and_back_returns_to_the_session_that_was_in_front() {
 fn entering_a_project_with_no_recorded_foreground_falls_back_to_a_running_session() {
     let (mut st, _, b) = two_projects(1, 1);
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(st.switch_active(Path::new("/b")).is_some());
 
     assert_eq!(
         st.active_session,
@@ -114,7 +124,7 @@ fn a_switch_lands_on_a_terminal_ready_to_type() {
     let (mut st, _, _) = two_projects(1, 1);
     st.update(micold_client::app::Message::TerminalFocusReleased);
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(st.switch_active(Path::new("/b")).is_some());
 
     assert!(
         st.terminal_focused(),
@@ -145,7 +155,7 @@ fn a_restart_in_an_inactive_project_is_remembered_until_the_user_returns() {
         "it happened out of sight, so it is owed a notice"
     );
 
-    assert!(st.switch_active(Path::new("/b")));
+    assert!(st.switch_active(Path::new("/b")).is_some());
 
     assert!(
         !st.restarted_while_inactive.contains(&b[0]),
@@ -159,7 +169,10 @@ fn sessions_are_located_by_worktree_regardless_of_whether_they_are_visible() {
     st.workspace.projects.push(project("/a"));
     st.workspace.active = Some(PathBuf::from("/a"));
 
-    let mut archived = Session::start_new(SessionLocation::Worktree("feat-a".into()));
+    let mut archived = Session::start_new(
+        SessionLocation::Worktree("feat-a".into()),
+        AiCli::ClaudeCode,
+    );
     archived.archived = true;
     let id = archived.id;
     st.workspace
@@ -258,8 +271,8 @@ fn restoring_a_stopped_session_does_not_start_it() {
         session.record_clean_exit();
     }
 
-    assert!(st.switch_active(Path::new("/b")));
-    assert!(st.switch_active(Path::new("/a")));
+    assert!(st.switch_active(Path::new("/b")).is_some());
+    assert!(st.switch_active(Path::new("/a")).is_some());
 
     assert_eq!(st.active_session, Some(a[0]), "restored");
     assert!(
@@ -305,8 +318,8 @@ fn the_choice_is_recorded_where_the_binary_can_log_it() {
     st.active_session = Some(a[0]);
     st.record_foreground();
 
-    assert!(st.switch_active(Path::new("/b")));
-    assert!(st.switch_active(Path::new("/a")));
+    assert!(st.switch_active(Path::new("/b")).is_some());
+    assert!(st.switch_active(Path::new("/a")).is_some());
 
     assert_eq!(
         st.last_foreground_choice,
@@ -314,4 +327,277 @@ fn the_choice_is_recorded_where_the_binary_can_log_it() {
         "the reducer decides; the binary logs. Keeping the reason on the state is what lets the \
          log line say why without the decision leaking into the I/O boundary"
     );
+}
+
+/// `010` BUG-013. The client boots, restores its project, and resolves which session to show —
+/// all **before** the daemon's catalog arrives. Sessions live on the daemon, so at that instant
+/// the project has none and the resolve honestly answers `NoSessionsForKey`. Then the catalog
+/// lands and the sessions appear, and nothing ever asked the question again.
+///
+/// The visible cost was not a missing selection: it was a sidebar that looked *empty*. A location
+/// row opens when it holds the current session (`effective_open`), so with nothing current the
+/// Default row stayed shut and the sessions inside it — present in state, listed in the catalog —
+/// were never drawn. The session survived the restart in every layer except the one the user
+/// can see.
+#[test]
+fn a_foreground_resolved_before_the_catalog_arrived_is_resolved_again_when_it_does() {
+    let (mut st, ids_a, _) = two_projects(1, 0);
+    st.workspace.active = Some(PathBuf::from("/a"));
+
+    // Boot order: the resolve runs against a project the client has, but whose sessions are still
+    // on the wire.
+    let staged = st
+        .workspace
+        .sessions
+        .remove(Path::new("/a"))
+        .expect("sessions");
+    let _ = st.restore_after_activation(Path::new("/a"));
+    assert_eq!(
+        st.last_foreground_choice,
+        Some(ForegroundChoice::NoSessionsForKey),
+        "with no sessions filed under the key, this is the honest answer — the bug is that it is final"
+    );
+    assert_eq!(st.active_session, None);
+
+    // The catalog arrives; `reconcile_catalog` files the sessions under the project.
+    st.workspace.sessions.insert(PathBuf::from("/a"), staged);
+
+    assert!(
+        st.resolve_foreground_after_catalog().is_some(),
+        "the resolve must be re-run now that the data it needed exists"
+    );
+    assert_eq!(
+        st.active_session,
+        Some(ids_a[0]),
+        "the session the daemon was hosting all along is now the current one, which is also what \
+         opens its row in the sidebar"
+    );
+}
+
+/// The narrow guard, and the reason it is narrow: FR-007 forbids choosing a session for the user
+/// when they are landing on the project overview. `NoneActive` is that landing — the project *has*
+/// sessions and none is running — and re-resolving there would make a choice the user did not ask
+/// for. Only `NoSessionsForKey` means "the resolve ran against data that had not arrived".
+#[test]
+fn a_deliberate_landing_on_the_project_overview_is_left_alone() {
+    let (mut st, _ids, _) = two_projects(1, 0);
+    st.workspace.active = Some(PathBuf::from("/a"));
+    // A project whose only session has stopped: sessions exist, none is active.
+    for s in st.workspace.sessions.get_mut(Path::new("/a")).unwrap() {
+        s.record_clean_exit();
+    }
+    let _ = st.restore_after_activation(Path::new("/a"));
+    assert!(
+        matches!(
+            st.last_foreground_choice,
+            Some(ForegroundChoice::NoneActive { .. })
+        ),
+        "got {:?}",
+        st.last_foreground_choice
+    );
+
+    assert!(
+        st.resolve_foreground_after_catalog().is_none(),
+        "nothing was missing, so nothing is re-resolved — the user is on the overview because that \
+         is where the rule put them (FR-007)"
+    );
+    assert_eq!(st.active_session, None);
+}
+
+/// A session already chosen must never be replaced by a later catalog: a reconnect mid-session
+/// arrives at `on_connected` exactly like a boot does.
+#[test]
+fn a_catalog_arriving_mid_session_does_not_move_the_user() {
+    let (mut st, ids_a, _) = two_projects(2, 0);
+    st.workspace.active = Some(PathBuf::from("/a"));
+    let _ = st.set_current_session(Some(ids_a[1]));
+
+    assert!(st.resolve_foreground_after_catalog().is_none());
+    assert_eq!(
+        st.active_session,
+        Some(ids_a[1]),
+        "a reconnect must not relocate the user to a different session"
+    );
+}
+
+/// `010` BUG-013 — the wiring half, which the three tests above cannot reach.
+///
+/// `resolve_foreground_after_catalog` can be perfectly correct and never called, which is the state
+/// this codebase has been in three times now (`010` BUG-011, `012` BUG-003, `012` BUG-004): both
+/// halves tested, the join untested, the application broken. `shell/daemon_sync.rs` lives in the
+/// binary crate and cannot be reached from here, so the call is read out of the source — the same
+/// idiom as `terminal_bar_stability.rs`'s gates, and for the same reason.
+///
+/// Order matters as much as presence: `on_connected` reads `active_session` further down to decide
+/// whether to view-and-start a session or send the empty overview view. Re-resolving after that
+/// read would set the session and then not act on it.
+#[test]
+fn the_connect_path_re_resolves_the_foreground_after_folding_the_catalog() {
+    let src = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("shell")
+            .join("daemon_sync.rs"),
+    )
+    .expect("daemon_sync.rs");
+
+    let connected = src
+        .split_once("pub fn on_connected")
+        .expect("on_connected exists")
+        .1;
+    let fold = connected
+        .find("reconcile_catalog(")
+        .expect("on_connected folds the catalog");
+    let resolve = connected.find("resolve_foreground_after_catalog()").expect(
+        "on_connected must re-resolve the foreground: the boot-time resolve ran before this \
+             catalog existed and answered `NoSessionsForKey` against sessions still on the wire",
+    );
+    let reads_active = connected
+        .find("app.core.active_session")
+        .expect("on_connected decides what to view from active_session");
+
+    assert!(
+        fold < resolve && resolve < reads_active,
+        "the re-resolve must sit between folding the catalog and reading `active_session` \
+         (fold={fold}, resolve={resolve}, read={reads_active})"
+    );
+}
+// ---------------------------------------------------------------------------------------
+// Which AI CLI a new session runs (feature 026, T022 — FR-001, FR-004, FR-005, FR-006, SC-001)
+// ---------------------------------------------------------------------------------------
+//
+// This file owns every render-free session decision in US1. The branching lives here rather than in
+// the implementation tasks because Principle I's GUI exception covers *drawing* and does not cover
+// *branching* — `ui/sidebar.rs` only dispatches what these functions decide.
+
+use micold_client::features::session::{PressTarget, StartIntent};
+
+/// A state with a chosen default and a chosen availability set.
+fn state_with(default_ai_cli: AiCli, available: &[AiCli]) -> State {
+    State {
+        default_ai_cli,
+        available_providers: available.to_vec(),
+        ..State::default()
+    }
+}
+
+#[test]
+fn a_start_with_no_override_uses_the_stored_default() {
+    let state = state_with(AiCli::Copilot, &[AiCli::ClaudeCode, AiCli::Copilot]);
+    assert_eq!(state.provider_for_start(None), AiCli::Copilot);
+}
+
+#[test]
+fn an_override_wins_and_leaves_the_setting_untouched() {
+    // FR-004's two halves in one assertion. The second is true by shape — `provider_for_start`
+    // reads the default and writes nothing — and asserting it anyway is what would catch an
+    // implementation that "remembered" the last override as the new default.
+    let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode, AiCli::Copilot]);
+
+    assert_eq!(
+        state.provider_for_start(Some(AiCli::Copilot)),
+        AiCli::Copilot
+    );
+    assert_eq!(
+        state.default_ai_cli,
+        AiCli::ClaudeCode,
+        "choosing an override for one session must not change what the next one defaults to"
+    );
+}
+
+#[test]
+fn changing_the_default_changes_no_existing_sessions_provider() {
+    // FR-005, and it is true *by shape*: `Session::provider` is a constructor argument with no
+    // setter, so there is no message that could change it. What this test can hold is that the
+    // shape has not quietly acquired one — a `pub` field assigned somewhere would compile.
+    let mut state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode, AiCli::Copilot]);
+    let existing = Session::start_new(SessionLocation::Default, AiCli::Copilot);
+    state
+        .workspace
+        .sessions
+        .insert(PathBuf::from("/repo"), vec![existing.clone()]);
+
+    state.default_ai_cli = AiCli::ClaudeCode;
+
+    assert_eq!(
+        state.workspace.sessions[Path::new("/repo")][0].provider,
+        AiCli::Copilot,
+        "the open session still runs the CLI it was started on"
+    );
+    assert_eq!(
+        state.provider_for_start(None),
+        AiCli::ClaudeCode,
+        "and the next new one takes the new default"
+    );
+}
+
+#[test]
+fn the_primary_half_starts_the_default_in_one_press() {
+    // SC-001: the one-interaction start survives the affordance gaining a second half.
+    let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode, AiCli::Copilot]);
+    assert_eq!(
+        state.start_intent(PressTarget::Primary),
+        StartIntent::Start(AiCli::ClaudeCode)
+    );
+}
+
+#[test]
+fn the_secondary_half_offers_the_installed_clis_and_starts_nothing() {
+    let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode, AiCli::Copilot]);
+    assert_eq!(
+        state.start_intent(PressTarget::Secondary),
+        StartIntent::OfferChoice(vec![AiCli::ClaudeCode, AiCli::Copilot])
+    );
+}
+
+#[test]
+fn a_single_installed_cli_has_no_secondary_half_at_all() {
+    // FR-006. A "choose which one" control that opens a list of one is a worse single-CLI
+    // experience than the plain button it replaced, so the half is absent rather than disabled.
+    let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode]);
+
+    assert!(!state.start_affordance_offers_a_choice());
+    assert_eq!(
+        state.start_intent(PressTarget::Primary),
+        StartIntent::Start(AiCli::ClaudeCode),
+        "and the primary half is unchanged — the single-CLI user is unaffected by this feature"
+    );
+}
+
+#[test]
+fn an_unavailable_default_offers_the_choice_rather_than_starting_or_substituting() {
+    // FR-002 and FR-004 scenario 4, and the case with three wrong answers, all plausible:
+    // silently start the other CLI (FR-002 forbids substituting), silently do nothing (the user
+    // pressed a button), or start the missing one and let the spawn fail (that is FR-010's story,
+    // not this one — the application knows *now* that it cannot).
+    let state = state_with(AiCli::Copilot, &[AiCli::ClaudeCode]);
+
+    assert!(!state.default_ai_cli_is_available());
+    assert_eq!(
+        state.start_intent(PressTarget::Primary),
+        StartIntent::OfferChoice(vec![AiCli::ClaudeCode])
+    );
+    assert_eq!(
+        state.default_ai_cli,
+        AiCli::Copilot,
+        "and the stored default is not rewritten on the way past (research R11)"
+    );
+}
+
+#[test]
+fn no_installed_cli_means_nothing_to_offer() {
+    let state = state_with(AiCli::ClaudeCode, &[]);
+    for target in [PressTarget::Primary, PressTarget::Secondary] {
+        assert_eq!(state.start_intent(target), StartIntent::NothingAvailable);
+    }
+    assert!(!state.start_affordance_offers_a_choice());
+}
+
+#[test]
+fn only_installed_clis_are_ever_offered() {
+    // FR-006 for the menus — the Settings select and the override list read this one function, so
+    // an unavailable CLI cannot appear in one and not the other.
+    let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode]);
+    assert_eq!(state.offered_providers(), vec![AiCli::ClaudeCode]);
+    assert!(!state.offered_providers().contains(&AiCli::Copilot));
 }

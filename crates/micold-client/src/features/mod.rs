@@ -14,6 +14,9 @@
 //!
 //! Modules are declared here as each is extracted from `crate::app`, one migration step at a time.
 
+use crate::overlay::SurfaceId;
+use micold_core::session::SessionId;
+
 /// A consequence a feature returns rather than applies (FR-021).
 ///
 /// **One variant so far, and it is here in Phase 5 rather than at T065 because FR-015a needs it.**
@@ -37,6 +40,96 @@ pub enum Outcome {
     /// (contract C3) — whether anything should be written at all was settled by the feature that
     /// emitted the request.
     ClipboardWrite(String),
+    /// These sessions are gone; the session feature should drop them (FR-021, contract O2).
+    ///
+    /// Emitted by the worktree delete path, which owns *worktrees* and must not reach into session
+    /// state to close what lived in one — the anti-pattern the contract names by name. T066 is the
+    /// conversion; this variant is the vocabulary it needs to exist first.
+    SessionsClosed(Vec<SessionId>),
+    /// This surface should close, whoever owns it.
+    ///
+    /// Also the worktree delete path: confirming a delete dismisses its own dialog, and the
+    /// registry — not the deleting feature — is what knows how a surface closes.
+    OverlayDismissed(SurfaceId),
+    /// Raise a notification, from any feature.
+    ///
+    /// The one outcome the contract lists as "emitted by: any feature", and the reason is that a
+    /// notification is nobody's feature: every path that can fail wants one, and `notify` belongs
+    /// to none of them. Carries the queue's own `Notification` rather than the banner's
+    /// `NoticeLevel`, so the translation stays where `State::push_notification` already put it.
+    NotificationRaised(micold_core::notify::Notification),
+    /// Discovery replaced the worktree list; these `dir_name`s are what survived (T066).
+    ///
+    /// **The first outcome anything actually emits**, and the one that gave `app::drain` its first
+    /// caller. The worktree feature owns the list and prunes its own state when it changes; the
+    /// sidebar's expansion set is not its to prune, so it reports what survived and the root routes
+    /// that to `sidebar::worktrees_replaced`.
+    WorktreesReplaced(std::collections::BTreeSet<String>),
+    /// The shell created this worktree; the list it joins is not the form's to write (T067a-4).
+    ///
+    /// `worktree_form` is a separate feature because its lifecycle is independent (FR-003), but
+    /// what it creates lands in `worktree`'s list. The form reports the creation and closes; the
+    /// worktree feature performs the insert, keeping its own two identities distinct — a create
+    /// names the directory, a daemon include answers with a path.
+    WorktreeCreated(micold_core::worktree::Worktree),
+    /// This location belongs in the user's own open set (feature 024; T067a-6).
+    ///
+    /// **Not "reveal this row".** The revealed row is *derived* by `State::location_open` as the
+    /// union of the user's set with the one current session's location, and is never written. What
+    /// is written is the moment a reveal stops being one: when the current session changes, the row
+    /// it opened would silently close, so the outgoing location is folded into the user's set
+    /// first. `session::started` emits the same fact a moment earlier for the session it creates.
+    LocationOpened(micold_core::session::SessionLocation),
+    /// The sidebar should scroll to the current session's row once one exists (research R7, I4).
+    RevealScrollArmed,
+    /// The user arrived in a project, so view state switched on for the previous one resets.
+    ///
+    /// `default_expanded` is not keyed per project (unlike `expanded`, pruned by `dir_name`), and
+    /// feature 014's reveal of agent worktrees is remembered nowhere — both would otherwise render
+    /// in a project that never asked for them.
+    ProjectEntered,
+    /// The user closed (or reopened) the row holding the current session (feature 024, I2).
+    ///
+    /// The sidebar owns the row and knows the twisty was clicked; whether that suppresses the
+    /// reveal is a fact about the *session*, which is why it travels rather than being written.
+    RevealSuppressed(bool),
+    /// This surface opened, so whatever it displaces should close (T067a-2).
+    ///
+    /// The feature reports that *its* surface is now open and stops there. Which other surfaces
+    /// that closes is the relation between surfaces, which no single feature owns: the three panel
+    /// popovers are mutually exclusive, a context menu displaces the other one and two of the
+    /// three panels, and the project row menu deliberately leaves the switcher it was opened from
+    /// alone. `FloatingSurface::displaces` declares it and `overlay::registry::displace` applies
+    /// it, so a toggle no longer assigns its neighbours' fields — the twelve cross-feature writes
+    /// that were the last of the T067 catalogue.
+    SurfaceOpened(crate::overlay::SurfaceId),
+    /// A terminal took the keyboard, so no text field holds it any more (FR-018; T067a-9).
+    ///
+    /// Unconditional, unlike `window::field_focus_changed`'s guarded blur: a press on the pane is
+    /// a request for *that* terminal and must not be defeated by whichever field still believes it
+    /// has focus. The session feature knows the terminal was asked for; the window feature owns
+    /// what having focus means.
+    FieldFocusCleared,
+}
+
+/// `Outcome::SurfaceOpened` when a toggle left its surface open, and nothing when it closed it.
+///
+/// Five reducers spell the same two lines rather than each writing them.
+///
+/// **The check is not what makes the behaviour correct**, and a probe was what established that:
+/// reporting an opening unconditionally changes nothing observable, because
+/// `overlay::registry::displace` resolves the displacing surface out of the set that is *open* and
+/// a closed one is silently skipped. What this guards is the vocabulary, not the state — an
+/// `Outcome::SurfaceOpened` for a surface that did not open is a false statement about what
+/// happened, and outcomes are the one place in this design where a feature says what happened.
+/// `tests/popover_displacement.rs::a_toggle_that_shut_its_surface_reports_nothing` is what holds
+/// it, and it has to read the return value, since no state can tell the two apart.
+pub(crate) fn surface_opened(open: bool, id: crate::overlay::SurfaceId) -> Vec<Outcome> {
+    if open {
+        vec![Outcome::SurfaceOpened(id)]
+    } else {
+        Vec::new()
+    }
 }
 
 pub mod connection;
@@ -47,5 +140,6 @@ pub mod sandbox;
 pub mod session;
 pub mod settings;
 pub mod sidebar;
+pub mod window;
 pub mod worktree;
 pub mod worktree_form;

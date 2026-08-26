@@ -135,7 +135,7 @@ A few details worth knowing:
   **(unavailable)** projects.
 - **Re-opening a forgotten folder starts fresh.** If you later open the same folder again, it comes
   back as a brand-new entry with the default (folder) name — the custom name and other remembered
-  details from before are gone. (Any `claude` conversations still present in the folder's worktrees
+  details from before are gone. (Any AI CLI conversations still present in the folder's worktrees
   on disk may be rediscovered, exactly as they would be for any folder you open that already
   contains conversations — that is the folder's current contents, not Micold remembering the
   forgotten entry.)

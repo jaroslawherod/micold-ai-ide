@@ -2,6 +2,15 @@
 
 **Branch**: `024-reveal-current-session` | **Date**: 2026-08-09 | **Spec**: [spec.md](./spec.md)
 
+**Bugfix**: 2026-08-19 — [BUG-001](./bugs/BUG-001.md) Updated from bugfix patch: the file tree
+named `tree_view.rs` and `text.rs` as the whole of the 500-weight name, and left out the widget
+that actually draws it. `ui/material/ellipsized.rs` is added below as the third file FR-003a
+depends on.
+
+**Bugfix**: 2026-08-20 — [BUG-002](./bugs/BUG-002.md) Updated from bugfix patch: the drain named
+below reads a scroll offset the application only learns second-hand, and the rendering stack does not
+always tell it. See the note under the file tree.
+
 **Input**: Feature specification from `/specs/024-reveal-current-session/spec.md`
 
 ## Summary
@@ -27,6 +36,10 @@ machinery, not a new subsystem:
 
 The non-colour half of the mark (FR-003a) is a fourth, smaller change: the current row's name
 renders at the type scale's 500 weight while other session rows stay at 400.
+
+> **BUG-001 (2026-08-19)**: this was built as a role selection and stopped there. `Ellipsized`,
+> which draws every session name, takes a role's *size* and discards its font, so the two roles are
+> indistinguishable on screen. The change is smaller than it looked, but it is one file wider.
 
 ## Technical Context
 
@@ -135,8 +148,11 @@ crates/micold-client/src/
 │   └── material/
 │       ├── scrollable.rs           # +.id(), +.on_viewport_resize() (Sensor-backed)
 │       ├── tree_view.rs            # the current row's 500-weight name (FR-003a)
+│       ├── ellipsized.rs           # draws that name; must carry the role's font, not only its
+│                                   #   size (BUG-001)
 │       └── text.rs                 # the 500-weight sidebar-session role
-└── main.rs                         # drains pending_reveal_scroll into operation::scroll_to
+└── main.rs                         # drains pending_reveal_scroll into operation::scroll_to,
+                                    #   recording the target (BUG-002)
 
 crates/micold-client/tests/         # integration coverage per quickstart §A
 docs/user-guide/worktrees-and-sessions.md
@@ -145,6 +161,14 @@ docs/user-guide/worktrees-and-sessions.md
                                     # `### Filtering worktrees by tag` (:47) — the one exempt row
                                     #   and the chip that says why it is there
 ```
+
+> **BUG-002 (2026-08-20)**: the drain was written as "compute the offset, issue the operation", on
+> the assumption that `sidebar_scroll_offset` says where the panel is. It says where the panel last
+> *reported* being — and iced publishes that only when the content overflows its viewport, so a
+> reveal in a project whose sidebar fits moves the list silently and the mirror keeps the previous
+> project's offset. The next arrival then measures its row against a position the panel left, calls
+> it visible, and consumes the arm. The drain now records the offset it asked for, which it knows
+> and does not need to be told.
 
 **Structure Decision**: The existing `micold-core` / `micold-client` / `micold-daemon` workspace,
 unchanged. The feature is entirely client-side view logic: `micold-core` owns sessions and

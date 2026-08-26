@@ -6,7 +6,7 @@
 
 **Created**: 2026-07-20
 
-**Status**: Draft
+**Status**: Implemented — all tasks closed 2026-08-25; open defects tracked in `bugs/`
 
 **Input**: Re-architect micold-ai-ide so AI CLI sessions run in a user-space background service that outlives the UI. The UI becomes a thin client that attaches on demand to drive sessions forward, and terminal/agent processes keep running when no UI is attached.
 

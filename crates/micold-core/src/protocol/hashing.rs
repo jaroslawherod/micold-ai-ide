@@ -39,7 +39,12 @@ pub fn sha256(data: &[u8]) -> [u8; 32] {
     msg.extend_from_slice(&bit_len.to_be_bytes());
 
     let mut w = [0u32; 64];
-    for chunk in msg.chunks_exact(64) {
+    // `as_chunks::<64>().0` rather than `chunks_exact(64)`: identical 64-byte blocks, but the chunk
+    // arrives as `&[u8; 64]` so the four indexes below are bounds-checked once by the type instead
+    // of on every access. clippy 1.98 added `chunks_exact_to_as_chunks` and CI's
+    // `dtolnay/rust-toolchain@stable` picked it up; the message padding above guarantees a length
+    // that is a multiple of 64, so the discarded remainder is always empty.
+    for chunk in msg.as_chunks::<64>().0 {
         for (i, word) in w.iter_mut().enumerate().take(16) {
             let j = i * 4;
             *word = u32::from_be_bytes([chunk[j], chunk[j + 1], chunk[j + 2], chunk[j + 3]]);
@@ -130,4 +135,22 @@ pub fn schema_hash(messages: &str, grid: &str, envelope: &str) -> [u8; 32] {
     buf.push_str("§envelope\n");
     buf.push_str(&canonicalize(envelope));
     sha256(buf.as_bytes())
+}
+
+/// The lowercase hex rendering of [`sha256`].
+///
+/// Copilot names each working directory's session index `<sha256_hex(cwd)>.json`
+/// (`specs/026-multi-provider-sessions/contracts/copilot-cli.md`), so this is what
+/// `CopilotProvider` derives that filename with — the workspace's own dependency-free SHA-256
+/// rather than a new crate (research R3).
+///
+/// `allow(dead_code)`: `build.rs` `include!`s this file and only ever calls `schema_hash`, so
+/// without it this function reads as unused there and warns.
+#[allow(dead_code)]
+pub fn sha256_hex(data: &[u8]) -> String {
+    let mut out = String::with_capacity(64);
+    for byte in sha256(data) {
+        out.push_str(&format!("{byte:02x}"));
+    }
+    out
 }

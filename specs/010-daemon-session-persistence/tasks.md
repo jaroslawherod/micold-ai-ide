@@ -368,8 +368,26 @@ docs state per-platform support (quickstart S14).
   about process-tree teardown, the `0x03` interrupt path, or the inverted `portable-pty` `kill()`
   result. Those need the implementation first and then their own tests; splitting the CI-gate clause
   (met) from the Windows-behaviour clause (not started) is what this checkbox now records.
-- [ ] T084 Run all quickstart.md scenarios S1–S15 and record outcomes. **Partially blocked**: the scenarios are GUI/interactive (`mise run run`, multi-window, logout). Their underlying behaviour is covered by automated tests — S5/S7 (`version_recovery`), S6 (`exclusivity`/`liveness`), S8 (`mutation_semantics`/`mutation_atomicity`), supervision (`supervision_restart`/`supervision_giveup`) — but the manual walkthrough + outcome log still needs a human at the GUI.
-- [ ] T085 [P] Measure retargeted `TerminalPane` repaint cost at 60 Hz on the client (Risk 2 — all streaming measurements were daemon-side); record whether the tick rate is the right knob. **Blocked in this environment**: needs a running GUI + a frame profiler; can't be measured headlessly here.
+- [x] T084 Run all quickstart.md scenarios S1–S15 and record outcomes.
+  **Run 2026-08-25** — `evidence/T084-quickstart-pass.md`. The "needs a human at the GUI" note above
+  was wrong: every scenario except two named clauses was driven headlessly against a real client on
+  Xvfb `:83` with lavapipe, using `xdotool`. Thirteen of fifteen pass outright or pass on every
+  clause this environment can decide; S5 splits (BUG-016) and S10 fails on responsiveness (BUG-021,
+  with BUG-022 behind it). Six further findings sat behind a green suite — BUG-015, BUG-018,
+  BUG-019, BUG-020, BUG-021/022 and BUG-023 — which is the point of walking a quickstart the
+  tests already "cover". **Out of reach here and not claimed**: S2's 3 s cold-start budget (software
+  rasteriser), S14's actual logout, S15's non-Linux platforms (CI is the gate; T083, BUG-008).
+- [x] T085 [P] Measure retargeted `TerminalPane` repaint cost at 60 Hz on the client (Risk 2 — all
+  streaming measurements were daemon-side); record whether the tick rate is the right knob.
+  **Measured 2026-08-25** — the "blocked" note above was wrong on both halves: the frame profiler
+  already ships in the client (`MICOLD_FRAME_PROBE`, feature 018 FR-039b), and a headless Xvfb +
+  lavapipe run is a running GUI. `render(app)` over 400 counted frames costs **0.31 ms mean /
+  0.40 ms p95** at an idle terminal and **0.42 ms / 0.58 ms** under a saturating flood — 2.5 % of a
+  16.7 ms budget. Answer to the question asked: **the tick rate is not the knob**, because the client
+  has no terminal tick left to turn (`shell/subscriptions.rs`: "the idle window schedules nothing at
+  all"); the one control is the daemon's `FRAME_INTERVAL = 16 ms`
+  (`crates/micold-daemon/src/server.rs:1543`). Evidence, CPU split and the lavapipe caveat:
+  `evidence/T085-terminalpane-repaint-cost.md`.
 
 ---
 
@@ -1672,3 +1690,58 @@ all. That is a client-side defect with its own seam, not this one.
 **Bugfix**: 2026-08-16 — BUG-011. Added FR-006d and SC-025 to `spec.md`, and Phase 27 (T135–T138).
 **No task reopened**: T053 and the FR-006a work implement what was specified, and what was specified
 never said how a session *leaves* the interrupted-resumable state. See `bugs/BUG-011.md`.
+
+---
+
+## Phase 28: Bugfix BUG-013 — a session survives the client restart and never comes back on screen
+
+**Goal**: Make SC-001 true from the user's side. The session survived every layer — the process, the
+durable record, the service — and the window could not reach it. A missing *selection* presented as
+missing *data*.
+
+The boot-time foreground resolve runs at project entry, before the daemon's welcome catalog arrives.
+Sessions live on the daemon, so it answers `NoSessionsForKey` — correctly — and nothing asks again
+once the catalog files them. Nothing being current then keeps the location row shut
+(`effective_open`), and the sidebar emits a node's sessions only when expanded, so the session was
+present in `State`, listed in the catalog, and invisible.
+
+### Diagnostics first (the report asked for this before any fix) ⚠️
+
+- [X] T139 [BUG-013] Add `micold_client::catalog_sync::attach_log_line` and write it at every
+  connect outcome in `shell/daemon_sync.rs` (connected / failed / disconnected). The counts are the
+  point, not the fact of connecting: "attached with `sessions=0`" and "never attached" are different
+  bugs wanting opposite fixes, and the report could not tell them apart because the client's entire
+  log for a failing run was one line, emitted before any catalog could arrive and byte-identical in
+  the run that worked. Formatting lives in the **library** so it can be asserted on — three tests;
+  a diagnostic nothing tests is one that quietly stops being written
+- [X] T140 [BUG-013] Reproduce with it. One run settled a question two rebuilds and an on-disk store
+  probe had not: `attach: connected projects=1 sessions=1 active=… active_sessions=1`. The client
+  attached and the catalog carried the session, eliminating the "never attached" candidate
+
+### Tests for BUG-013 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T141 [BUG-013] Three rules in `tests/features_session.rs`: a foreground resolved before the
+  catalog arrived is resolved again when it does; a deliberate `NoneActive` overview landing is left
+  alone (FR-007 — the guard is `NoSessionsForKey` specifically, the one answer that indicts the
+  *key* rather than the sessions); a reconnect does not relocate a user who already has a session
+- [X] T142 [BUG-013] Gate the **wiring**:
+  `the_connect_path_re_resolves_the_foreground_after_folding_the_catalog` reads `on_connected` out
+  of the source and asserts the call sits *between* the fold and the read of `active_session`.
+  Order is load-bearing — re-resolving after that read would set the session and then not act on
+  it. Proven by deleting the call and watching it fail. This gate exists because an unwired fix is
+  this codebase's most frequent failure mode: BUG-011, and `012`'s BUG-003 and BUG-004, were each a
+  correct function nothing called
+
+### Implementation for BUG-013
+
+- [X] T143 [BUG-013] `State::resolve_foreground_after_catalog` (`features/session.rs`), called from
+  `on_connected` between `reconcile_catalog` and the read of `active_session`, so the attach that
+  follows views the restored session rather than the overview
+
+**Checkpoint**: start a session, quit the client, reopen — the session is listed, selected, its pane
+shows its own scrollback, and the bar reads `running`. **Confirmed on screen** 2026-08-19 (Xvfb +
+lavapipe, stub `claude`): the process is older than the restart, so it was reattached and not
+respawned — [evidence](./evidence/BUG-013-fixed.png).
+
+**Bugfix**: 2026-08-19 — BUG-013. **No requirement added**: SC-001 already stated this. **No task
+reopened**: feature 025's restore is correct and was simply asked too early. See `bugs/BUG-013.md`.

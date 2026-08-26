@@ -12,23 +12,18 @@
 
 use crate::features::notifications::NoticeLevel;
 use crate::features::project::{ProjectMenu, RenameDraft, SwitcherEntry};
-use crate::features::session::SelectKind;
+use crate::features::session::{SelectKind, SessionMenu};
 use crate::features::settings::SettingsDraft;
 use crate::features::sidebar::TagFilter;
-use crate::features::worktree::WorktreeRenameDraft;
-use crate::features::worktree_form::{
-    BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
-};
-use micold_core::naming::ConventionalType;
+use crate::features::window::FieldId;
+use crate::features::worktree::{WorktreeMenu, WorktreeRenameDraft};
+use crate::features::worktree_form::WorktreeForm;
 use micold_core::notify;
-use micold_core::project::{canonicalize_best_effort, Availability, FolderEntry};
+use micold_core::project::{Availability, FolderEntry};
 use micold_core::selector::Selector;
-use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
-use micold_core::theme::{
-    observe_system_scheme, resolve, ColorScheme, SystemScheme, ThemePreference,
-};
-use micold_core::typeahead::{move_highlight, Direction};
-use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree};
+use micold_core::session::{AiCli, Session, SessionId, SessionLocation, ShellInstanceId};
+use micold_core::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
+use micold_core::worktree::Worktree;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -39,60 +34,6 @@ pub const SIDEBAR_MIN_WIDTH: u16 = 180;
 pub const SIDEBAR_MAX_WIDTH: u16 = 600;
 /// Default sidebar width in pixels, used until the user resizes it.
 pub const SIDEBAR_DEFAULT_WIDTH: u16 = 300;
-
-/// Which text field holds the keyboard, when one does (BUG-003).
-///
-/// A filled field's whole focus affordance — the label floating clear of the value, the active
-/// indicator thickening to the accent, the focus state layer (§7.7, FR-031, FR-035) — is decided
-/// when the field is *built*, from a flag its caller supplies. Nothing supplied it. The component
-/// honoured the flag, every anatomy gate proved it honoured the flag, and in the running
-/// application every field was drawn permanently at rest.
-///
-/// One enum for the whole application rather than a focus flag on each of the four drafts: at most
-/// one field can hold the keyboard, and this is the shape that says so. `Option<FieldId>` also makes "two fields focused at once" unrepresentable
-/// (Principle V), where four booleans would have needed a rule keeping them apart.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FieldId {
-    /// The rename-project dialog's name field.
-    RenameProjectName,
-    /// The rename-worktree dialog's name field.
-    RenameWorktreeName,
-    /// The add-worktree form's optional ticket field.
-    AddWorktreeTicket,
-    /// The add-worktree form's branch-name field.
-    AddWorktreeName,
-    /// Settings: the terminal scrollback limit.
-    SettingsScrollback,
-    /// The confirm-worktree-delete dialog's "also delete the branch" checkbox.
-    ConfirmDeleteAlsoBranch,
-    /// Settings: the environment-include on/off checkbox. Not a text field — the checkbox now
-    /// takes the keyboard too, and this is the same fact about the same dialog (BUG-003).
-    SettingsEnvIncludeEnabled,
-    /// Settings: the sandbox image's reference (feature 027).
-    SettingsImageReference,
-    /// Settings: the archive an imported image is loaded from (feature 027).
-    SettingsImagePath,
-    /// Settings: one host credential's share opt-in (feature 027, FR-004c).
-    ///
-    /// Parameterised rather than four variants, because the four are the *same* control repeated
-    /// over `CredentialShare::ALL` — spelling them out would mean a fifth share silently losing
-    /// its keyboard focus rather than failing to compile.
-    SettingsCredential(micold_core::sandbox::CredentialShare),
-    /// Settings: the "keep sessions running after I sign out" checkbox (feature 027).
-    SettingsSurviveLogout,
-    /// Settings: the sandbox's processor limit, in cores (feature 027, FR-012).
-    SettingsCpuLimit,
-    /// Settings: the sandbox's memory limit, in MiB (feature 027, FR-013).
-    SettingsMemoryLimit,
-    /// Settings: the sandbox's process-count limit (feature 027, FR-014).
-    SettingsPidLimit,
-    /// Settings: the sandbox's writable-storage limit, in MiB (feature 027, FR-015).
-    SettingsStorageLimit,
-    /// Settings: the environment-include script path.
-    SettingsEnvIncludePath,
-    /// Settings: the environment-include timeout.
-    SettingsEnvIncludeTimeout,
-}
 
 /// Every user interaction that can change application state.
 ///
@@ -148,21 +89,20 @@ pub enum Message {
     ProjectForgetCancelled,
 
     // ---- Feature 015: forget from the switcher's right-click menu ----
-    /// The pointer moved to this window-pixel position. Emitted by the binary only while the
-    /// project switcher is open, so a right-click can anchor its menu at the cursor.
-    CursorMoved {
-        x: u16,
-        y: u16,
-    },
     /// The window was resized (or reported its initial size). Feeds context-menu clamping.
     WindowResized {
         width: u16,
         height: u16,
     },
-    /// Open (or close, if already open) a project's switcher right-click context menu, by path.
-    /// Anchored at the last known [`State::cursor`]. The switcher panel stays open behind it;
-    /// the other popovers are mutually exclusive.
-    ProjectMenuToggled(PathBuf),
+    /// Open (or close, if already open) a project's switcher right-click context menu, by path,
+    /// anchored at the press point in window pixels. The switcher panel stays open behind it; the
+    /// other popovers are mutually exclusive.
+    ///
+    /// The point rides on the message since BUG-008. It used to be read from a `State::cursor` fed
+    /// by a pointer subscription that ran only while the switcher was open — a side channel that
+    /// existed because the row handed over a bare message, and that answered `(0, 0)` to anyone
+    /// who was not the running binary.
+    ProjectMenuToggled(PathBuf, (u16, u16)),
     /// Dismiss the project context menu (outside click, or after an action is chosen).
     ProjectMenuDismissed,
     /// The user selected a theme preference (Follow system / Light / Dark) (FR-007, FR-008).
@@ -195,8 +135,9 @@ pub enum Message {
     DefaultExpansionToggled,
 
     // ---- Feature 008: worktree sidebar refinement ----
-    /// Open (or close, if already open) a worktree's right-click context menu, by `dir_name`.
-    WorktreeMenuToggled(String),
+    /// Open (or close, if already open) a worktree's right-click context menu, by `dir_name`,
+    /// anchored at the press point in window pixels (018 FR-029d).
+    WorktreeMenuToggled(String, (u16, u16)),
     /// Dismiss the worktree context menu (outside click, or after an action is chosen).
     WorktreeMenuDismissed,
     /// Request deletion of a worktree; opens the confirm dialog (FR-018), by `dir_name`.
@@ -241,11 +182,6 @@ pub enum Message {
     /// Toggle whether agent-owned worktrees are included in the sidebar list (feature 014,
     /// FR-010). Sole mutation: `show_agent_worktrees`. Never touches the tag filters (FR-010d).
     ShowAgentWorktreesToggled,
-    /// Content scrolled underneath an open floating surface (feature 017, FR-009). The third of
-    /// the three dismissal triggers, and the one no widget used to report — see
-    /// [`micold_core::overlay::Trigger::ScrollBeneath`]. Emitted unconditionally by the scrollable
-    /// that moved; deciding whether anything closes is the reducer's job, via the shared rule.
-    ScrolledBeneathOverlay,
     /// Escape was pressed with the terminal unfocused (feature 021, T034). The first of the three
     /// dismissal triggers to be reported the same way the third already was: as *what happened*,
     /// not as what should close.
@@ -278,6 +214,33 @@ pub enum Message {
     /// derives from it (FR-025a) — and the sidebar is the only scroll region beneath the bar, so it
     /// is the only thing that can answer "is content passing under it".
     SidebarScrolled(u32),
+    /// The terminal tab strip scrolled; carries the offset, the viewport's width and its content's,
+    /// all in whole pixels (feature 026 FR-002e).
+    ///
+    /// Two numbers in one message because they answer one question — "does anything lie beyond this
+    /// edge" — and the rendering stack delivers them together. Split across messages there would be
+    /// frames where one is stale, and a fade computed from a stale pair points at nothing or fails
+    /// to point at something.
+    ///
+    /// It was three until feature 027. The content width came with them and is no longer carried:
+    /// the strip's content is now a function of its viewport (the trailing alignment's slack is
+    /// laid out inside it), so a *measured* content width paired with the current viewport is
+    /// exactly the stale pair this doc warns about — and it went stale for real, because this
+    /// message is the only thing that ever wrote it and it fires only when something scrolls. The
+    /// fade derives the width from the tab count instead (`ui::terminal::strip_overflow`).
+    TabStripScrolled {
+        offset: u32,
+        width: u32,
+    },
+    /// The tab strip's viewport was laid out, or resized (feature 026 FR-002e).
+    ///
+    /// Separate from [`Self::TabStripScrolled`] because the two answer different questions and fire
+    /// at different times — the same split the sidebar's pair makes. This one is what covers the
+    /// **first** frame, where nothing has scrolled yet and a strip that already overflows still has
+    /// to fade its edge.
+    TabStripViewportResized {
+        width: u32,
+    },
     /// The sidebar's scroll viewport was laid out at this height, in whole logical pixels
     /// (feature 024).
     ///
@@ -299,69 +262,32 @@ pub enum Message {
     /// Copy arbitrary displayed text (e.g. a worktree name) to the system clipboard. The binary
     /// performs the actual clipboard write; the reducer has no state to update.
     TextCopyRequested(String),
-    /// Open the add-worktree form (FR-005).
-    AddWorktreeOpened,
-    /// The form's type selection changed.
-    AddWorktreeTypeSelected(ConventionalType),
-    /// The form's ticket field changed.
-    AddWorktreeTicketChanged(String),
-    /// The form's name field changed.
-    AddWorktreeNameChanged(String),
-    /// Submit the form (FR-006). Validation happens here; the binary performs the git create.
-    AddWorktreeSubmitted,
-    /// Dismiss the form without creating (Cancel or Esc).
-    AddWorktreeCancelled,
-    /// Switch between the new-branch and existing-branch halves of the form (feature 016,
-    /// FR-010). Switching back to `New` clears any selection (FR-015).
-    AddWorktreeSourceChanged(BranchSource),
-    /// The binary listed the repository's branches for the picker (feature 016, FR-011).
-    AddWorktreeBranchesListed(Vec<BranchCandidate>),
-    /// An existing branch was picked from the list (feature 016, FR-014).
+    /// Everything the add-worktree wizard says about itself (feature 021, T064 — FR-003).
     ///
-    /// A blocked candidate is **ignored entirely** (feature 021, FR-012a): it does not become the
-    /// selection and does not close the list. Feature 016 let it be selected and refused at the
-    /// point of creating, because the list widget of the day could not disable a row; the
-    /// type-ahead can, so the refusal moved to the point of choosing.
-    AddWorktreeBranchSelected(BranchCandidate),
-    /// The branch search field took focus, so the list opens on what is already on offer (feature
-    /// 021, FR-001b). Not a query change: focusing is not typing.
-    AddWorktreeBranchFocused,
-    /// The branch search text changed (feature 021, FR-001, FR-005).
-    AddWorktreeBranchQueryChanged(String),
-    /// The keyboard moved through the results (feature 021, FR-017). The saturating rule lives in
-    /// `micold_core::typeahead`, not here — this arm applies its answer.
-    AddWorktreeBranchHighlightMoved(Direction),
-    /// The result list closed without a pick — Escape, a press outside it, or Tab taking focus out
-    /// of the field (feature 021, FR-001b). Three triggers, one effect.
-    AddWorktreeBranchDismissed,
-    /// Pre-flight found something the user must decide about; raise the prompt (feature 016,
-    /// FR-001). Never dispatched for [`BranchSituation::Free`].
-    AddWorktreeConflictDetected(BranchSituation),
-    /// The user answered the prompt (feature 016, FR-002). The binary performs the create with
-    /// the chosen mode. `Overwrite` can only arrive via [`Message::AddWorktreeOverwriteConfirmed`].
-    AddWorktreeResolutionChosen(CreateMode),
-    /// The user chose Overwrite; show the destructive confirmation first (feature 016, FR-005).
-    AddWorktreeOverwriteRequested,
-    /// The destructive confirmation was accepted (feature 016, FR-005).
-    AddWorktreeOverwriteConfirmed,
-    /// Back out of the prompt (or its confirmation) without acting (feature 016, FR-007).
-    AddWorktreeResolutionCancelled,
-    /// The binary is about to send the `WorktreeCreate` RPC (feature 010; T055); marks the form
-    /// `Creating` so it shows an in-progress state until the daemon's reply closes or reopens it.
-    /// Carries the mode so the stage display can be worded for it (feature 016, FR-024).
-    WorktreeCreateStarted(CreateMode),
-    /// The daemon reported progress on the in-flight create: a new stage (feature 016, FR-024), or
-    /// — with the stage unchanged — its latest live output line, rate-limited daemon-side so a long
-    /// stage reads as moving rather than frozen (BUG-009, T123). Ignored once the form has closed.
-    WorktreeCreateStageChanged(CreateStage, Option<String>),
-    /// The daemon created a worktree successfully (FR-007); add it and close the form.
-    WorktreeCreated(Worktree),
-    /// The daemon reported a worktree create failure (FR-017); show it, keep the form open.
-    WorktreeCreateFailed(String),
+    /// **The only nested unit in the application**, and research.md §5 tested every feature against
+    /// FR-003's bar to say so: the form is opened, edited across several steps and then submitted
+    /// or dismissed as a unit, and no other feature reads its intermediate state. Twenty-two
+    /// variants — 17% of this enum — collapse to this one.
+    WorktreeForm(crate::features::worktree_form::Msg),
+    /// Open the "start a session on…" list for a location (feature 026, FR-004). The binary
+    /// refreshes the availability set first — this is one of the two named events research R11
+    /// means by "when the choice is offered".
+    SessionStartMenuOpened(SessionLocation),
+    /// Where the chevron that opened the list was pressed, in window pixels (018 BUG-008,
+    /// FR-029d). Arrives from the same press as [`Message::SessionStartMenuOpened`], immediately
+    /// after it: that one says the list was asked for, this one says where to hang it.
+    SessionStartMenuAnchored((u16, u16)),
+    /// Dismiss the "start a session on…" list without choosing.
+    SessionStartMenuDismissed,
     /// Start a new session at the given location — a worktree or, as of feature 010, the
-    /// project root ("Default", FR-001) — (FR-010). The binary spawns `claude`.
+    /// project root ("Default", FR-001) — (FR-010). The binary spawns the named AI CLI.
     SessionStartRequested {
+        /// Where the session runs.
         location: SessionLocation,
+        /// Which AI CLI to run (feature 026, FR-004). Already resolved — `State::provider_for_start`
+        /// applied the override or the default before this message was built, so the binary's
+        /// handler copies the answer onto the wire and decides nothing.
+        provider: AiCli,
     },
     /// A session was started/added for the active project (FR-011).
     SessionStarted(Session),
@@ -384,8 +310,9 @@ pub enum Message {
     },
 
     // ---- Bugfix BUG-003: session Remove (distinct from Close/archive) ----
-    /// Open (or close, if already open) a session's right-click context menu.
-    SessionMenuToggled(SessionId),
+    /// Open (or close, if already open) a session's right-click context menu, anchored at the
+    /// press point in window pixels (018 FR-029d).
+    SessionMenuToggled(SessionId, (u16, u16)),
     /// Dismiss the session context menu (outside click, or after an action is chosen).
     SessionMenuDismissed,
     /// Request permanent removal of a session; opens the confirm dialog (FR-015c).
@@ -397,8 +324,11 @@ pub enum Message {
     SessionRemoveCancelled,
 
     // ---- Feature 010: switchable regular terminal mode ----
-    /// The mode toggle was pressed for the active session (FR-001–FR-004, FR-010).
-    TerminalModeToggled,
+    // The mode toggle's `TerminalModeToggled` lived here until feature 027 deleted the control.
+    // The tab strip is the only route between a session's panes now, so a message meaning "switch
+    // to whichever pane is not showing" has no sender and, more to the point, no meaning: a strip
+    // names its destination. `TerminalAiCliSelected` and `ShellInstanceSelected` are what remain,
+    // and both **set** rather than flip — see FR-007 below for why that distinction is load-bearing.
     /// The manual restart affordance was pressed for the active session's currently-attached,
     /// not-running process — for the AI CLI branch, and for whichever Regular Terminal instance
     /// is currently active (FR-013; contracts/terminal-mode-lifecycle.md).
@@ -427,12 +357,45 @@ pub enum Message {
     /// body: mirrors `TerminalRestartRequested`, which only triggers binary-side spawn logic.
     /// Carries the owning session explicitly for the same reason as `ShellInstanceSelected`.
     ShellInstanceRestartRequested(SessionId, ShellInstanceId),
+    /// Open the context menu for one strip tab, at a window-pixel point (feature 012 BUG-005
+    /// FR-010b, widened by feature 026 FR-006a). Dispatched by a secondary (right) press.
+    ///
+    /// Carries a `StripTab` rather than a `ShellInstanceId` since feature 026, because the AI tab
+    /// has a menu too and it is **the same menu** with Close filtered out (FR-004, FR-006a). One
+    /// message, one surface, one registration: two would be the shape that lets the two menus drift
+    /// into offering different actions for the same reason, which is the thing FR-006a is worded to
+    /// prevent.
+    StripTabMenuRequested(crate::ui::terminal::StripTab, u16, u16),
+    /// Dismiss the terminal-tab context menu.
+    ShellInstanceMenuClosed,
+    /// Show the session's AI CLI process in the pane (feature 026 FR-006, FR-007).
+    ///
+    /// **Sets** the mode rather than toggling it, which is FR-007: pressing the AI tab while the AI
+    /// CLI is already displayed must be a no-op with no visible change, and a flipping message
+    /// would switch away. Carries the session explicitly, for the same reason
+    /// `ShellInstanceSelected` does.
+    TerminalAiCliSelected(SessionId),
     /// A Regular Terminal instance reported it is running (feature 011; replaces feature 010's
     /// `ShellSessionRunning(SessionId)`, now id-addressed since a session may have more than one
     /// instance).
+    ///
+    /// **Emitted nowhere in production**, like [`Self::SessionRunning`]. The daemon owns this
+    /// transition and publishes it as `SessionSummary::live_shells`, which `reconcile_catalog`
+    /// adopts (`012` FR-008, BUG-003). Kept as the reducer's own `→ Running` edge, which feature
+    /// 023's FR-019 rule (a session reaching `Running` must not move the keyboard) is asserted
+    /// through.
+    ///
+    /// The older reason for keeping it — that it was the *only* lever `tests/` had, because
+    /// `reconcile_catalog` sat in the binary crate — no longer holds: the fold now lives in
+    /// [`crate::catalog_sync`] and `crates/micold-daemon/tests/catalog_join.rs` drives the real
+    /// daemon → wire → client path. That is the coverage this variant was standing in for, and
+    /// standing in badly: it let `012` BUG-003 ship an incomplete fix.
     ShellInstanceRunning(SessionId, ShellInstanceId),
     /// A Regular Terminal instance's shell process exited (intentional or crash) — never
     /// auto-restarted (FR-008; replaces feature 010's `ShellSessionExited(SessionId)`).
+    ///
+    /// Emitted nowhere in production, for the same reason and with the same caveat as
+    /// [`Self::ShellInstanceRunning`] above.
     ShellInstanceExited(SessionId, ShellInstanceId),
 
     /// Periodic redraw tick while a terminal is live (drives streamed-output repaint).
@@ -539,6 +502,8 @@ pub enum Message {
     SettingsEnvIncludePathChanged(String),
     /// The Settings environment-include timeout field changed (FR-003).
     SettingsEnvIncludeTimeoutChanged(String),
+    /// The Settings **Default AI CLI** select changed (feature 026, FR-003).
+    SettingsDefaultAiCliChanged(AiCli),
     /// Save the Settings form (validated + persisted by the binary) (FR-020, FR-021).
     SettingsSaved,
     /// Dismiss the Settings form without saving (Cancel or Esc).
@@ -684,6 +649,28 @@ pub struct State {
     /// Worktrees discovered for the active project (feature 005, FR-018). Re-derived from git
     /// on open and after each mutation — never persisted.
     pub worktrees: Vec<Worktree>,
+    /// Which AI CLIs are installed, in `AiCli::ALL`'s order (feature 026, FR-006, T014a).
+    ///
+    /// Filled at the I/O boundary from `Capabilities::available_providers()`, the way `worktrees`
+    /// above is filled from git — and refreshed on a **named event**, when the choice is offered
+    /// (the Settings overlay opening, the override menu opening), never per frame. A `PATH` probe
+    /// per render is exactly the scheduled work SC-006 forbids.
+    ///
+    /// It is here rather than reached for because there is no route to it otherwise, and the three
+    /// consumers each lack a different one: `features/` imports nothing from `shell::` and
+    /// `Capabilities` is a shell type; `ui/settings_form.rs`'s view is dispatched through the
+    /// shared `DialogView` fn-pointer and sees `&State` and nothing else; and the sidebar's
+    /// `row_actions_cluster` takes narrow arguments rather than the whole state.
+    ///
+    /// Holding it in memory is not a violation of research R11's rule, which is "never
+    /// *persisted*" — an in-memory snapshot refreshed when the choice is offered cannot go stale
+    /// in a file.
+    pub available_providers: Vec<AiCli>,
+    /// The default AI CLI a new session runs when nothing is chosen for it (feature 026, FR-003).
+    ///
+    /// Service-owned: this mirrors what the daemon reported in `DaemonSettings`, and is written
+    /// only from a `SettingsChanged` or the boot-time settings load.
+    pub default_ai_cli: AiCli,
     /// Which worktree rows are expanded to reveal their sessions (FR-003). By `dir_name`.
     pub expanded: BTreeSet<String>,
     /// Whether the "Default" (project-root) sidebar row is expanded to reveal its sessions
@@ -725,6 +712,24 @@ pub struct State {
     /// the first frame where a row for the current session actually exists (research R7,
     /// invariant I4).
     pub pending_reveal_scroll: bool,
+    /// The tab strip's scroll offset, in whole pixels from its leading edge (feature 026 FR-002e).
+    ///
+    /// Presentation, not state to persist: FR-002d scrolls the marked tab into view on selection,
+    /// and where the user has scrolled to is not remembered across sessions or restarts (spec
+    /// Assumptions). It lives here only because the edge fade and the reveal both have to read it,
+    /// and only the reducer sees both.
+    pub tab_strip_scroll_offset: u32,
+    /// The tab strip viewport's laid-out width, in whole pixels. `0` until the first layout, which
+    /// reads as "cannot decide yet" and never as "nothing fits" — the same rule
+    /// [`Self::sidebar_viewport_height`] follows, and for the same reason.
+    pub tab_strip_viewport_width: u32,
+    /// Whether the marked tab is waiting to be scrolled into view (feature 026 FR-002d).
+    ///
+    /// A flag, not a target, for the reason [`Self::pending_reveal_scroll`] is one: the offset
+    /// cannot be computed when the selection changes, because the viewport's width is not known
+    /// until layout. The reducer arms it; the binary computes and applies the scroll on the first
+    /// frame where the viewport has a width.
+    pub pending_tab_reveal: bool,
     /// The add-worktree form, present only while its overlay is shown (FR-005).
     pub worktree_form: Option<WorktreeForm>,
     /// A message shown when opening a non-git directory was refused (FR-001a), or a worktree
@@ -749,6 +754,16 @@ pub struct State {
     /// The open terminal right-click context menu's anchor in pane-local pixels, or `None` when
     /// no menu is showing (feature 006, FR-013).
     pub terminal_context_menu: Option<(u16, u16)>,
+    /// The open terminal-tab context menu — which instance it belongs to, and where it was opened
+    /// in window pixels — or `None` when no menu is showing (feature 012, BUG-005, FR-010b).
+    ///
+    /// Carries the instance because the menu acts on the tab it was opened on, **not** on the
+    /// active one: restarting a background instance without selecting it first is the whole of
+    /// FR-010a, and it is what addressing the restart message by instance id was built for.
+    /// Window pixels rather than the pane-local point [`State::terminal_context_menu`] holds — that
+    /// one is drawn on the pane's own overlay because a pane's origin is not known at render time,
+    /// and this one is drawn on the window's, where the anchor is already in the right space.
+    pub shell_instance_menu: Option<(crate::ui::terminal::StripTab, u16, u16)>,
     /// In-progress Settings form, present only while the Settings overlay is shown (feature 006).
     pub settings_draft: Option<SettingsDraft>,
     /// Why entering a project landed on the session it did, from the most recent switch.
@@ -782,19 +797,15 @@ pub struct State {
     /// `help_menu_open`.
     pub project_switcher_open: bool,
     /// The open project right-click context menu (feature 015), with the project it acts on and
-    /// the cursor anchor to draw it at. At most one is open. Mutually exclusive with the other
+    /// the press point to draw it at. At most one is open. Mutually exclusive with the other
     /// popovers, but the switcher panel itself stays open behind it. Transient — not persisted.
     pub project_menu_open: Option<ProjectMenu>,
-    /// Last known pointer position in window pixels (feature 015). Tracked only while the
-    /// project switcher is open — see the binary's cursor subscription — purely so a right-click
-    /// can anchor its context menu at the cursor. Transient — not persisted.
-    pub cursor: (u16, u16),
     /// Last known window size in pixels (feature 015), used to clamp a context menu so it cannot
     /// open off-screen. `(0, 0)` means "not reported yet", which disables clamping. Transient.
     pub window_size: (u16, u16),
-    /// The worktree whose right-click context menu is open, by `dir_name` (feature 008). At
-    /// most one is open at a time; `None` means no menu is showing.
-    pub worktree_menu_open: Option<String>,
+    /// The worktree whose right-click context menu is open, and where it was opened from
+    /// (feature 008). At most one is open at a time; `None` means no menu is showing.
+    pub worktree_menu_open: Option<WorktreeMenu>,
     /// The worktree pending deletion (its `dir_name`), shown in the confirm dialog (feature
     /// 008, FR-018/FR-019). Its presence *is* the confirm dialog being shown (T037).
     pub worktree_delete_target: Option<String>,
@@ -823,9 +834,16 @@ pub struct State {
     /// The worktree row the pointer is currently over, by `dir_name` (feature 008). Drives the
     /// hover-revealed row actions (add-session + delete). Transient.
     pub hovered_worktree: Option<String>,
-    /// The session whose right-click context menu is open (bugfix BUG-003). At most one is open
-    /// at a time; `None` means no menu is showing. Mirrors `worktree_menu_open`.
-    pub session_menu_open: Option<SessionId>,
+    /// The session whose right-click context menu is open, and where it was opened from (bugfix
+    /// BUG-003). At most one is open at a time; `None` means no menu is showing. Mirrors
+    /// `worktree_menu_open`.
+    pub session_menu_open: Option<SessionMenu>,
+    /// Which location's "start a session on…" list is open, if any, and where it hangs from
+    /// (feature 026, FR-004).
+    ///
+    /// The location rather than a boolean: the list's items have to name where the session will
+    /// start, and every sidebar row can open its own.
+    pub session_start_menu: Option<crate::features::session::StartMenu>,
     /// The session pending permanent removal, shown in the confirm dialog (bugfix BUG-003,
     /// FR-015c). Its presence *is* the confirm dialog being shown (T037). Mirrors
     /// `worktree_delete_target`.
@@ -878,7 +896,7 @@ impl State {
     /// ground moving under it means the user has moved on, while a dialog is anchored to nothing
     /// and must survive it. Shared by the two messages that can report a scroll so the rule has one
     /// caller-visible answer rather than two that can drift.
-    fn dismiss_on_scroll_beneath(&mut self) {
+    pub(crate) fn dismiss_on_scroll_beneath(&mut self) {
         // Which surfaces the trigger reaches is the registry's answer now, not a list here. It
         // used to name six of the seven popovers; the seventh, the terminal's context menu, is
         // included from T031 — it is a non-modal surface and the core rule has always said so.
@@ -938,19 +956,6 @@ impl State {
     /// by sending the cancellation the dialog itself declared, so this is still not a list of
     /// dialogs anybody has to maintain.
     ///
-    /// Callers must invoke it **before** setting up the dialog they are opening — otherwise it
-    /// closes the one they just prepared. The eight call sites that did it the other way round
-    /// were reordered at T037.
-    pub fn clear_for_dialog(&mut self) {
-        crate::overlay::registry::close_dialogs(self);
-        crate::overlay::registry::close_popovers(self);
-        // A dialog opens with nothing focused. The fields that reported focus belong to a widget
-        // tree that is being torn down and will never report losing it, so a remembered focus would
-        // outlive them — and reopening the same dialog would draw its field focused over an input
-        // that has not been clicked (BUG-003).
-        self.focused_field = None;
-    }
-
     /// The one surface that does not take the keyboard — see [`State::any_surface_takes_keyboard`].
     /// Matched by id because the registry is the list; a typo here would silently make the
     /// terminal yield to its own right-click menu, so `the_terminals_own_context_menu_is_furniture`
@@ -998,25 +1003,6 @@ impl State {
                 .any(|open| open.id() != SurfaceId::new(Self::TERMINAL_CONTEXT_MENU))
     }
 
-    /// The user is being put in front of a terminal (FR-011, FR-021a, FR-008b).
-    ///
-    /// Clears the explicit release *and* any text-field focus. The second one matters: a press on
-    /// the pane, or a navigation that displays a terminal, is a request for that terminal, and it
-    /// must not be defeated by a field that still believes it holds the keyboard. Without it, a
-    /// press into the pane made while a rename field had focus would depend on iced's blur
-    /// arriving first. FR-018 permits taking the keyboard from a field for exactly this reason —
-    /// it is a user press.
-    pub(crate) fn focus_terminal(&mut self) {
-        self.terminal_released = false;
-        self.focused_field = None;
-    }
-
-    /// The user handed the keyboard back to the application (FR-021) — the reserved chord or the
-    /// release affordance. It holds until they give it back or navigate to a terminal.
-    pub(crate) fn release_terminal(&mut self) {
-        self.terminal_released = true;
-    }
-
     /// Apply a [`Message`], transitioning the state. Pure and side-effect free.
     pub fn update(&mut self, message: Message) {
         match message {
@@ -1048,230 +1034,93 @@ impl State {
             | Message::LogoutSurvivalRequested
             | Message::LogoutSurvivalOutcome(_) => {}
             Message::HelpMenuToggled => {
-                self.help_menu_open = !self.help_menu_open;
-                // The overflow menu, the project switcher, and the sidebar filter panel are
-                // mutually exclusive (feature 009).
-                self.project_switcher_open = false;
-                self.sidebar_filter_open = false;
-                // Mutually exclusive with the project context menu (feature 015).
-                self.project_menu_open = None;
+                let outcomes = crate::features::help::menu_toggled(self);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ProjectSwitcherToggled => {
-                self.project_switcher_open = !self.project_switcher_open;
-                self.help_menu_open = false;
-                self.sidebar_filter_open = false;
-                // Mutually exclusive with the project context menu (feature 015).
-                self.project_menu_open = None;
+                let outcomes = crate::features::project::switcher_toggled(self);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::AboutOpened => {
-                // Idempotent: opening while already open keeps a single instance (FR-015).
-                self.clear_for_dialog();
-                self.about_open = true;
-            }
-            Message::AboutClosed => {
-                // No-op when nothing is open (edge case); otherwise return to the
-                // main window unchanged (FR-012).
-                self.about_open = false;
-            }
+            Message::AboutOpened => crate::features::help::about_opened(self),
+            Message::AboutClosed => crate::features::help::about_closed(self),
             Message::SelectorNavigatedInto(path) => {
-                if let Some(selector) = &mut self.selector {
-                    selector.enter(path);
-                }
+                crate::features::project::selector_navigated_into(self, path)
             }
-            Message::SelectorNavigatedUp => {
-                if let Some(selector) = &mut self.selector {
-                    selector.up();
-                }
-            }
+            Message::SelectorNavigatedUp => crate::features::project::selector_navigated_up(self),
             Message::SelectorListingReady(entries) => {
-                if let Some(selector) = &mut self.selector {
-                    selector.listing_ready(entries);
-                }
+                crate::features::project::selector_listing_ready(self, entries)
             }
             Message::SelectorListingFailed(message) => {
-                if let Some(selector) = &mut self.selector {
-                    selector.listing_failed(message);
-                }
+                crate::features::project::selector_listing_failed(self, message)
             }
-            Message::ProjectSelectorClosed => {
-                self.selector = None;
-            }
-            Message::RenameStarted(path) => {
-                let current = self
-                    .workspace
-                    .projects
-                    .iter()
-                    .find(|p| p.path == path)
-                    .map(|p| p.display_name.clone());
-                if let Some(name) = current {
-                    self.clear_for_dialog();
-                    self.rename_draft = Some(RenameDraft {
-                        path,
-                        text: name,
-                        error: None,
-                    });
-
-                }
-            }
-            // A blur is only believed from the field that currently holds focus. Gaining and losing
-            // are reported by two different widgets and arrive in whichever order the frame
-            // produced them, so an unguarded `None` on the way out of one field would erase the
-            // focus the next one had already claimed — and clicking straight from one field to
-            // another would leave both at rest.
+            Message::ProjectSelectorClosed => crate::features::project::selector_closed(self),
+            Message::RenameStarted(path) => crate::features::project::rename_started(self, path),
             Message::FieldFocusChanged(field, focused) => {
-                if focused {
-                    self.focused_field = Some(field);
-                } else if self.focused_field == Some(field) {
-                    self.focused_field = None;
-                }
+                crate::features::window::field_focus_changed(self, field, focused)
             }
             Message::RenameTextChanged(text) => {
-                if let Some(draft) = &mut self.rename_draft {
-                    draft.text = text;
-                    draft.error = None;
-                }
+                crate::features::project::rename_text_changed(self, text)
             }
-            Message::RenameConfirmed => {
-                if let Some((path, text)) = self
-                    .rename_draft
-                    .as_ref()
-                    .map(|draft| (draft.path.clone(), draft.text.clone()))
-                {
-                    match self.workspace.rename(&path, &text) {
-                        // Renaming never touches disk — only the stored name (FR-018).
-                        Ok(()) => {
-                            self.rename_draft = None;
-                        }
-                        Err(error) => {
-                            if let Some(draft) = &mut self.rename_draft {
-                                draft.error = Some(error);
-                            }
-                        }
-                    }
-                }
-            }
-            Message::RenameCancelled => {
-                self.rename_draft = None;
-            }
-            Message::CursorMoved { x, y } => {
-                self.cursor = (x, y);
-            }
+            Message::RenameConfirmed => crate::features::project::rename_confirmed(self),
+            Message::RenameCancelled => crate::features::project::rename_cancelled(self),
             Message::WindowResized { width, height } => {
-                self.window_size = (width, height);
+                crate::features::window::resized(self, width, height)
             }
-            Message::ProjectMenuToggled(path) => {
-                // Toggle: the same project closes; a different one replaces (only one open),
-                // re-anchored at wherever the pointer now is. The switcher panel stays open
-                // behind the menu (so the right-clicked row remains visible), but the other
-                // popovers are mutually exclusive with it.
-                self.project_menu_open = match &self.project_menu_open {
-                    Some(open) if open.path == path => None,
-                    _ => Some(ProjectMenu {
-                        path,
-                        anchor: self.cursor,
-                    }),
-                };
-                self.help_menu_open = false;
-                self.sidebar_filter_open = false;
-                self.worktree_menu_open = None;
+            Message::ProjectMenuToggled(path, anchor) => {
+                let outcomes = crate::features::project::menu_toggled(self, path, anchor);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::ProjectMenuDismissed => {
-                self.project_menu_open = None;
-            }
+            Message::ProjectMenuDismissed => crate::features::project::menu_dismissed(self),
             Message::ProjectForgetRequested(path) => {
-                // Open the confirmation; nothing is removed until confirmed (FR-002).
-                self.clear_for_dialog();
-                self.forget_target = Some(path);
+                crate::features::project::forget_requested(self, path)
             }
             Message::ProjectForgetConfirmed => {
-                // Drop the record + all per-path metadata (FR-003/FR-005). The binary has already
-                // stopped the project's live processes and will persist + delete the per-project
-                // state file after this pure transition.
-                if let Some(path) = self.forget_target.clone() {
-                    // If the forgotten project was the active working space, its active session
-                    // pointer must be cleared too — `forget` clears `workspace.active`, so the
-                    // dangling `active_session` (which only ever referenced the active project)
-                    // would otherwise point at a project that no longer exists (FR-008).
-                    let was_active = self.workspace.active.as_deref()
-                        == Some(canonicalize_best_effort(&path).as_path());
-                    self.workspace.forget(&path);
-                    if was_active {
-                        // Feature 024: an app-initiated clear like any other, so it goes through
-                        // the same function (contract §3's table). It arms nothing — there is no
-                        // session and, after a forget, no project either.
-                        self.set_current_session(None);
-                    }
-                }
-                self.forget_target = None;
+                let outcomes = crate::features::project::forget_confirmed(self);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::ProjectForgetCancelled => {
-                self.forget_target = None;
-            }
-            Message::ThemeModeCycled => {
-                // Advance to the next mode; the menu stays open so repeated clicks cycle.
-                self.theme_pref = self.theme_pref.next();
-            }
+            Message::ProjectForgetCancelled => crate::features::project::forget_cancelled(self),
+            Message::ThemeModeCycled => crate::features::settings::theme_mode_cycled(self),
             Message::ThemePreferenceChanged(pref) => {
-                // Pure state change; the binary persists it at the I/O boundary (FR-009).
-                self.theme_pref = pref;
+                crate::features::settings::theme_preference_changed(self, pref)
             }
             Message::SystemThemeChanged(detected) => {
-                self.system_scheme = observe_system_scheme(detected, self.system_scheme);
+                crate::features::settings::system_theme_changed(self, detected)
             }
             Message::ProjectOpenRefused(message) => {
-                // Non-git directory refused (FR-001a); the active project is unchanged.
-                // Reported through the global surface, not `worktree_error`: the refusal
-                // arrives with the selector already closed, so the Add Worktree modal that
-                // owns `worktree_error` is not open and the message was never drawn.
-                self.notify_error(message);
+                let outcomes = crate::features::project::open_refused(self, message);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::WorktreesLoaded(worktrees) => {
-                self.worktree_error = None;
-                self.set_worktrees(worktrees);
+                // The root is the only interpreter (FR-022, contract O3), and this is where the
+                // draining loop finally has something to drain.
+                let outcomes = crate::features::worktree::loaded(self, worktrees);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::WorktreeExpansionToggled(dir) => {
-                self.toggle_location(SessionLocation::Worktree(dir));
+                let outcomes = self.toggle_location(SessionLocation::Worktree(dir));
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::DefaultExpansionToggled => {
-                self.toggle_location(SessionLocation::Default);
+                let outcomes = self.toggle_location(SessionLocation::Default);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::WorktreeMenuToggled(dir) => {
-                // Toggle: same worktree closes; a different one replaces (only one open).
-                self.worktree_menu_open = if self.worktree_menu_open.as_deref() == Some(dir.as_str())
-                {
-                    None
-                } else {
-                    Some(dir)
-                };
-                // Mutually exclusive with the project context menu (feature 015).
-                self.project_menu_open = None;
+            Message::WorktreeMenuToggled(dir, anchor) => {
+                let outcomes = crate::features::worktree::menu_toggled(self, dir, anchor);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::WorktreeMenuDismissed => {
-                self.worktree_menu_open = None;
-            }
+            Message::WorktreeMenuDismissed => crate::features::worktree::menu_dismissed(self),
             // 016 BUG-002. The request itself changes nothing here: the daemon owns the included
             // set, as it owns every other piece of durable state, and answers with the worktree as
             // its own discovery sees it.
             Message::WorktreeIncludeRequested(_) => {}
             Message::WorktreeIncluded(worktree) => {
-                if !self.worktrees.iter().any(|w| w.path == worktree.path) {
-                    self.worktrees.push(worktree);
-                    self.worktrees.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
-                }
-                self.worktree_error = None;
+                let outcomes = crate::features::worktree::included(self, worktree);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::WorktreeExcludeRequested(_) => {
-                self.worktree_menu_open = None;
-            }
-            Message::WorktreeExcluded(path) => {
-                self.worktrees.retain(|w| w.path != path);
-            }
-            Message::WorktreeDeleteRequested(dir) => {
-                self.clear_for_dialog();
-                self.worktree_delete_target = Some(dir);
-                // Never carries a choice over from a previously cancelled/confirmed dialog.
-                self.worktree_delete_keep_branch = false;
-            }
+
+            Message::WorktreeExcludeRequested(_) => crate::features::worktree::exclude_requested(self),
+            Message::WorktreeExcluded(path) => crate::features::worktree::excluded(self, path),
+            Message::WorktreeDeleteRequested(dir) => crate::features::worktree::delete_requested(self, dir),
             // Confirming *requests* the delete; it does not perform it. The daemon owns the git
             // removal and the session records, and answers with `OperationOk` (which is followed by
             // a `CatalogChanged` carrying git's refreshed truth) or `OperationError`.
@@ -1282,382 +1131,60 @@ impl State {
             // it, which reads as the app resurrecting something the user deleted rather than as the
             // failure it is. Leaving the row alone means a refusal simply leaves it in place, next
             // to the error notification explaining why.
-            Message::WorktreeDeleteConfirmed => {
-                self.worktree_delete_target = None;
-            }
-            Message::WorktreeDeleteCancelled => {
-                self.worktree_delete_target = None;
-            }
+            Message::WorktreeDeleteConfirmed => crate::features::worktree::delete_confirmed(self),
+            Message::WorktreeDeleteCancelled => crate::features::worktree::delete_cancelled(self),
             Message::WorktreeDeleteKeepBranchToggled(keep) => {
-                self.worktree_delete_keep_branch = keep;
+                crate::features::worktree::delete_keep_branch_toggled(self, keep)
             }
-            Message::WorktreeRenameStarted(dir) => {
-                let text = self.worktree_display_name(&dir);
-                self.clear_for_dialog();
-                self.worktree_rename_draft = Some(WorktreeRenameDraft {
-                    dir_name: dir,
-                    text,
-                    error: None,
-                });
-
-            }
+            Message::WorktreeRenameStarted(dir) => crate::features::worktree::rename_started(self, dir),
             Message::WorktreeRenameTextChanged(text) => {
-                if let Some(draft) = &mut self.worktree_rename_draft {
-                    draft.text = text;
-                    draft.error = None;
-                }
+                crate::features::worktree::rename_text_changed(self, text)
             }
-            Message::WorktreeRenameConfirmed => {
-                if let Some((dir, text)) = self
-                    .worktree_rename_draft
-                    .as_ref()
-                    .map(|d| (d.dir_name.clone(), d.text.clone()))
-                {
-                    // Changes only the stored display name — never the folder or branch (FR-014).
-                    match self.workspace.set_worktree_name(&dir, &text) {
-                        Ok(()) => {
-                            self.worktree_rename_draft = None;
-                        }
-                        Err(error) => {
-                            if let Some(draft) = &mut self.worktree_rename_draft {
-                                draft.error = Some(error);
-                            }
-                        }
-                    }
-                }
-            }
-            Message::WorktreeRenameCancelled => {
-                self.worktree_rename_draft = None;
-            }
+            Message::WorktreeRenameConfirmed => crate::features::worktree::rename_confirmed(self),
+            Message::WorktreeRenameCancelled => crate::features::worktree::rename_cancelled(self),
             Message::SidebarFilterToggled(filter) => {
-                if !self.sidebar_filters.remove(&filter) {
-                    self.sidebar_filters.insert(filter);
-                }
+                crate::features::sidebar::filter_toggled(self, filter)
             }
-            Message::SidebarFiltersCleared => {
-                self.sidebar_filters.clear();
-            }
+            Message::SidebarFiltersCleared => crate::features::sidebar::filters_cleared(self),
             Message::SidebarViewportResized(height) => {
-                self.sidebar_viewport_height = height;
+                crate::features::sidebar::viewport_resized(self, height)
             }
-            Message::SidebarScrolled(offset) => {
-                self.sidebar_scroll_offset = offset;
-                // The sidebar's scroll is *also* the dismissal trigger, and the rendering stack
-                // gives a scrollable one message per event — so this arm does both rather than the
-                // view trying to emit two. Same rule, one call, no second copy of it.
-                self.dismiss_on_scroll_beneath();
+            Message::TabStripScrolled { offset, width } => {
+                crate::features::session::tab_strip_scrolled(self, offset, width)
             }
-            Message::ScrolledBeneathOverlay => self.dismiss_on_scroll_beneath(),
+            Message::TabStripViewportResized { width } => {
+                crate::features::session::tab_strip_viewport_resized(self, width)
+            }
+            Message::SidebarScrolled(offset) => crate::features::sidebar::scrolled(self, offset),
             Message::EscapePressed => self.dismiss_topmost(),
             Message::SidebarFilterMenuToggled => {
-                self.sidebar_filter_open = !self.sidebar_filter_open;
-                // Mutually exclusive with the other two lightweight popovers (feature 009).
-                self.help_menu_open = false;
-                self.project_switcher_open = false;
-                // Mutually exclusive with the project context menu (feature 015).
-                self.project_menu_open = None;
+                let outcomes = crate::features::sidebar::filter_menu_toggled(self);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ShowAgentWorktreesToggled => {
-                // Sole mutation (FR-010d): the tag filters, expansion state, and overlays are all
-                // left exactly as they were. Nothing is re-discovered either — this is a pure view
-                // recomputation, so no git call and no `Task` (FR-008).
-                self.show_agent_worktrees = !self.show_agent_worktrees;
+                crate::features::sidebar::show_agent_worktrees_toggled(self)
             }
-            Message::WorktreeHovered(dir) => {
-                self.hovered_worktree = Some(dir);
-            }
-            Message::WorktreeUnhovered(dir) => {
-                // Only clear if we're leaving the row we thought was hovered (avoids a stale
-                // exit from a previous row clobbering a fresh enter).
-                if self.hovered_worktree.as_deref() == Some(dir.as_str()) {
-                    self.hovered_worktree = None;
-                }
-            }
-            Message::AddWorktreeOpened => {
-                self.clear_for_dialog();
-                self.worktree_form = Some(WorktreeForm::default());
-                self.worktree_error = None;
-            }
-            Message::AddWorktreeTypeSelected(type_) => {
-                if let Some(form) = &mut self.worktree_form {
-                    // Ignored while a create is in flight (feature 010 follow-up) — the form
-                    // is inactive until it resolves, not just the submit button.
-                    if form.status == WorktreeFormStatus::Editing {
-                        form.type_ = Some(type_);
-                        form.error = None;
-                    }
-                }
-            }
-            Message::AddWorktreeTicketChanged(text) => {
-                if let Some(form) = &mut self.worktree_form {
-                    if form.status == WorktreeFormStatus::Editing {
-                        form.ticket = text;
-                        form.error = None;
-                    }
-                }
-            }
-            Message::AddWorktreeNameChanged(text) => {
-                if let Some(form) = &mut self.worktree_form {
-                    if form.status == WorktreeFormStatus::Editing {
-                        form.name = text;
-                        form.error = None;
-                    }
-                }
-            }
-            Message::AddWorktreeSubmitted => {
-                // Validate only (FR-008); the binary performs the git create on a valid form
-                // and dispatches WorktreeCreated / WorktreeCreateFailed. A create already in
-                // flight (feature 010) makes this a no-op — no double-submit.
-                if let Some(form) = &mut self.worktree_form {
-                    if form.status == WorktreeFormStatus::Editing {
-                        if let Err(error) = form.preview() {
-                            form.error = Some(error);
-                        }
-                    }
-                }
-            }
-            Message::AddWorktreeCancelled => {
-                self.worktree_form = None;
-            }
-            // ----- feature 016: existing-branch source + conflict resolution -----
-            Message::AddWorktreeSourceChanged(source) => {
-                if let Some(form) = &mut self.worktree_form {
-                    if form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting()
-                    {
-                        form.source = source;
-                        form.error = None;
-                        // Leaving the picker drops its selection so no stale branch can be
-                        // submitted from the new-branch inputs (FR-015).
-                        if source == BranchSource::New {
-                            form.selected_branch = None;
-                        }
-                        // …and takes the search with it, so returning never resumes someone
-                        // else's half-finished query (feature 021).
-                        form.reset_branch_search();
-                    }
-                }
-            }
-            Message::AddWorktreeBranchesListed(candidates) => {
-                if let Some(form) = &mut self.worktree_form {
-                    form.candidates = candidates;
-                    // The results describe the current query, whenever the candidates arrive.
-                    form.rematch_branches();
-                }
-            }
-            Message::AddWorktreeBranchSelected(candidate) => {
-                if let Some(form) = &mut self.worktree_form {
-                    if form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting()
-                    {
-                        // FR-012a: a branch held elsewhere cannot be chosen. Silently, and without
-                        // closing the list — a press that does nothing must not look like a press
-                        // that did something.
-                        if !candidate.is_available() {
-                            return;
-                        }
-                        form.selected_branch = Some(candidate);
-                        form.error = None;
-                        form.branch_list_open = false;
-                        // The query is deliberately left alone (FR-014a).
-                    }
-                }
-            }
-            Message::AddWorktreeBranchFocused => {
-                if let Some(form) = &mut self.worktree_form {
-                    if form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting()
-                    {
-                        form.branch_list_open = true;
-                    }
-                }
-            }
-            Message::AddWorktreeBranchQueryChanged(text) => {
-                if let Some(form) = &mut self.worktree_form {
-                    if form.status == WorktreeFormStatus::Editing && !form.resolution.is_prompting()
-                    {
-                        form.branch_query = text;
-                        form.branch_list_open = true;
-                        form.rematch_branches();
-                    }
-                }
-            }
-            Message::AddWorktreeBranchHighlightMoved(direction) => {
-                if let Some(form) = &mut self.worktree_form {
-                    // Saturating, not wrapping — and the rule itself is `micold_core`'s, not this
-                    // arm's (FR-017a, FR-021). An empty list has nowhere to land, so the highlight
-                    // is left exactly as it was.
-                    let rows = form.branch_matches.len();
-                    if let Some(next) = move_highlight(form.branch_highlight, direction, rows) {
-                        form.branch_highlight = Some(next);
-                    }
-                }
-            }
-            Message::AddWorktreeBranchDismissed => {
-                if let Some(form) = &mut self.worktree_form {
-                    form.branch_list_open = false;
-                }
-            }
-            Message::AddWorktreeConflictDetected(situation) => {
-                if let Some(form) = &mut self.worktree_form {
-                    // Invariant 4: a prompt and an in-flight create cannot coexist.
-                    if form.status == WorktreeFormStatus::Editing {
-                        form.resolution = ResolutionState::Choosing { situation };
-                    }
-                }
-            }
-            Message::AddWorktreeOverwriteRequested => {
-                if let Some(form) = &mut self.worktree_form {
-                    // Only ever from `Choosing`, and only for a situation that HAS a local branch
-                    // to overwrite — invariant 1 (FR-005).
-                    if let ResolutionState::Choosing { situation } = &form.resolution {
-                        if matches!(situation, BranchSituation::LocalAvailable { .. }) {
-                            form.resolution = ResolutionState::ConfirmingOverwrite {
-                                situation: situation.clone(),
-                            };
-                        }
-                    }
-                }
-            }
-            Message::AddWorktreeOverwriteConfirmed => {
-                // The ONLY route to `CreateMode::Overwrite`. The binary picks the resolution up
-                // and runs the create; here we just clear the prompt and record the mode.
-                if let Some(form) = &mut self.worktree_form {
-                    if matches!(form.resolution, ResolutionState::ConfirmingOverwrite { .. }) {
-                        form.resolution = ResolutionState::Idle;
-                    }
-                }
-            }
-            Message::AddWorktreeResolutionChosen(mode) => {
-                if let Some(form) = &mut self.worktree_form {
-                    // Overwrite must go through the confirmation, never straight from the choice
-                    // (invariant 1) — reject it here rather than trusting call sites.
-                    let allowed = !matches!(mode, CreateMode::Overwrite)
-                        && matches!(form.resolution, ResolutionState::Choosing { .. });
-                    if allowed {
-                        form.resolution = ResolutionState::Idle;
-                    }
-                }
-            }
-            Message::AddWorktreeResolutionCancelled => {
-                if let Some(form) = &mut self.worktree_form {
-                    form.resolution = match &form.resolution {
-                        // Backing out of the confirmation returns to the choice, not to the form
-                        // (invariant 3, US2 AS3).
-                        ResolutionState::ConfirmingOverwrite { situation } => {
-                            ResolutionState::Choosing {
-                                situation: situation.clone(),
-                            }
-                        }
-                        // Cancelling the choice leaves every input exactly as it was (FR-007).
-                        _ => ResolutionState::Idle,
-                    };
-                }
-            }
-            Message::WorktreeCreateStarted(mode) => {
-                if let Some(form) = &mut self.worktree_form {
-                    form.status = WorktreeFormStatus::Creating;
-                    form.mode = mode;
-                    // A new attempt never inherits the previous one's stage.
-                    form.stage = None;
-                    form.stage_detail = None;
-                }
-            }
-            Message::WorktreeCreateStageChanged(stage, detail) => {
-                if let Some(form) = &mut self.worktree_form {
-                    // Entering a stage clears the previous stage's trailing line — it described
-                    // work that is over. A detail-only push keeps the stage and replaces the line.
-                    if form.stage != Some(stage) {
-                        form.stage = Some(stage);
-                        form.stage_detail = None;
-                    }
-                    if detail.is_some() {
-                        form.stage_detail = detail;
-                    }
-                }
-            }
-            Message::WorktreeCreated(worktree) => {
-                if !self
-                    .worktrees
-                    .iter()
-                    .any(|w| w.dir_name == worktree.dir_name)
-                {
-                    self.worktrees.push(worktree);
-                    self.worktrees.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
-                }
-                self.worktree_form = None;
-                self.worktree_error = None;
-            }
-            Message::WorktreeCreateFailed(message) => {
-                // Keep the form open so the user can adjust; show the error (FR-017). Reset to
-                // Editing (feature 010) so the user can retry instead of staying stuck Creating.
-                self.worktree_error = Some(message);
-                if let Some(form) = &mut self.worktree_form {
-                    form.status = WorktreeFormStatus::Editing;
-                }
+            Message::WorktreeHovered(dir) => crate::features::worktree::hovered(self, dir),
+            Message::WorktreeUnhovered(dir) => crate::features::worktree::unhovered(self, dir),
+            Message::WorktreeForm(msg) => {
+                let outcomes = crate::features::worktree_form::update(self, msg);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::SessionStarted(session) => {
-                let id = session.id;
-                let location = session.location.clone();
-                if let Some(path) = self.workspace.active.clone() {
-                    self.workspace
-                        .sessions
-                        .entry(path)
-                        .or_default()
-                        .push(session);
-                }
-                // The started session's location joins the user's own open set, as it always has.
-                //
-                // Feature 024 makes this redundant for *display* — `set_current_session` below
-                // opens the row by derivation anyway — but it is kept, and not only because
-                // feature 021's assertion freeze forbids rewriting the expectation. It is also
-                // what the reveal would do a moment later: the commit in `set_current_session`
-                // turns a revealed row into ordinary user-open state on the next change of current
-                // session, so writing it here reaches the same place by the same rule, sooner.
-                match location {
-                    SessionLocation::Worktree(dir) => {
-                        self.expanded.insert(dir);
-                    }
-                    SessionLocation::Default => {
-                        self.default_expanded = true;
-                    }
-                }
-                self.set_current_session(Some(id));
-                // Making a session the displayed session puts the user in front of a terminal,
-                // so it holds the keyboard (FR-011). No re-assertion from the gui path any more:
-                // nothing releases focus on the same click, so there is no race to win.
-                self.focus_terminal();
+                let outcomes = crate::features::session::started(self, session);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::SessionSelected(id) => {
-                // Feature 024: the ONE writer that does not go through `set_current_session`
-                // (contract §3.0). The user clicked a row they could already see, so revealing it
-                // would open nothing they had not opened and scroll a list they were reading
-                // (FR-006). `tests/current_session_writers.rs` knows about this exemption by name;
-                // any other direct write to `active_session` fails that gate.
-                self.active_session = Some(id);
-                // Selecting a session displays its terminal, so it holds the keyboard, clearing
-                // any earlier release (FR-011, FR-021a).
-                self.focus_terminal();
+                let outcomes = crate::features::session::selected(self, id);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::SessionRunning(id) => {
-                if let Some(session) = self.session_mut(id) {
-                    session.mark_running();
-                }
-            }
+            Message::SessionRunning(id) => crate::features::session::running(self, id),
             Message::SessionTitleUpdated { id, title } => {
-                if let Some(session) = self.session_mut(id) {
-                    session.set_title(title);
-                }
+                crate::features::session::title_updated(self, id, title)
             }
-            Message::TerminalModeToggled => {
-                if let Some(id) = self.active_session {
-                    if let Some(session) = self.session_mut(id) {
-                        let next = session.mode.other();
-                        session.set_mode(next);
-                    }
-                }
-                // Switching mode puts a different terminal in front of the user, so it holds the
-                // keyboard (FR-011). This is the navigation the reported bug was about: it used to
-                // take two presses to reach and then left you looking at a terminal that ignored
-                // the keyboard.
-                self.focus_terminal();
+            Message::TerminalAiCliSelected(id) => {
+                let outcomes = crate::features::session::ai_cli_selected(self, id);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::TerminalRestartRequested => {
                 // No pure state to update here — the binary decides which process to spawn based on
@@ -1671,255 +1198,145 @@ impl State {
             Message::ShellInstanceOpenRequested => {
                 // No session state to update here — the binary decides whether the active session
                 // is in Regular mode, opens the instance (`Session::open_shell_instance`), and
-                // spawns its process, following up with `ShellInstanceRunning` once it's up.
+                // spawns its process. The daemon then reports it in `SessionSummary::live_shells`
+                // and `reconcile_catalog` marks it running (`012` FR-008, BUG-003); this used to
+                // claim a follow-up `ShellInstanceRunning` message, which is emitted nowhere and
+                // is why every instance sat at `NotStarted` for its whole life.
                 // The new instance is what the user will be looking at, so it holds the keyboard
-                // (FR-011).
-                self.focus_terminal();
+                // (FR-011) and is scrolled into view (026 FR-002d) — see
+                // `session::shell_instance_open_requested` for why the second half was missing
+                // until feature 027 put the "+" beside the strip it fills.
+                let outcomes = crate::features::session::shell_instance_open_requested(self);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ShellInstanceSelected(id, shell_id) => {
-                if let Some(session) = self.session_mut(id) {
-                    session.select_shell(shell_id);
-                }
-                self.focus_terminal(); // FR-011
+                let outcomes = crate::features::session::shell_instance_selected(self, id, shell_id);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ShellInstanceCloseRequested(id, shell_id) => {
-                if let Some(session) = self.session_mut(id) {
-                    session.close_shell(shell_id);
-                }
-                // Whichever instance takes its place is what the user is now looking at (FR-011).
-                self.focus_terminal();
+                let outcomes =
+                    crate::features::session::shell_instance_close_requested(self, id, shell_id);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ShellInstanceRestartRequested(..) => {
-                // No pure state to update here — the binary spawns the process and follows up
-                // with ShellInstanceRunning once it's up (mirrors TerminalRestartRequested).
+                // No pure state to update here — the binary spawns the process, and the daemon's
+                // next snapshot reports the instance live (`012` FR-008, BUG-003). Mirrors
+                // `TerminalRestartRequested`, including that neither emits a follow-up message.
             }
             Message::ShellInstanceRunning(session_id, shell_id) => {
-                if let Some(session) = self.session_mut(session_id) {
-                    session.mark_shell_running(shell_id);
-                }
+                crate::features::session::shell_instance_running(self, session_id, shell_id)
             }
             Message::ShellInstanceExited(session_id, shell_id) => {
-                if let Some(session) = self.session_mut(session_id) {
-                    session.mark_shell_exited(shell_id);
-                }
+                crate::features::session::shell_instance_exited(self, session_id, shell_id)
             }
             Message::SessionCloseRequested(id) => {
-                // Bugfix BUG-003 (FR-015a): close ARCHIVES the session (kept, hidden from the
-                // sidebar via `active_sessions()`) rather than deleting its record outright, so a
-                // still-existing `claude` transcript doesn't get reconstructed by reconciliation
-                // (FR-020b) on the next project open. The durable, provider-side suppression
-                // marker (FR-020c) is written by the caller at the I/O boundary (`src/main.rs`),
-                // alongside killing the process.
-                if let Some(path) = self.workspace.active.clone() {
-                    if let Some(list) = self.workspace.sessions.get_mut(&path) {
-                        if let Some(session) = list.iter_mut().find(|s| s.id == id) {
-                            session.archive();
-                        }
-                    }
-                }
-                if self.active_session == Some(id) {
-                    // Feature 024: through `set_current_session` so the row the closed session was
-                    // in is committed open rather than snapping shut and taking its siblings out of
-                    // view (FR-001c). Nothing is armed — no session is current to scroll to, and
-                    // FR-001a forbids moving the panel when the user closes the session they were
-                    // on.
-                    //
-                    // Nothing to clear alongside it: with no displayed session `terminal_focused()`
-                    // is already false (feature 023, FR-012/FR-016).
-                    self.set_current_session(None);
-                }
+                let outcomes = crate::features::session::close_requested(self, id);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::SessionMenuToggled(id) => {
-                // Toggle: same session closes; a different one replaces (only one open) —
-                // mirrors `WorktreeMenuToggled` (bugfix BUG-003).
-                self.session_menu_open = if self.session_menu_open == Some(id) {
-                    None
-                } else {
-                    Some(id)
-                };
+            Message::SessionMenuToggled(id, anchor) => {
+                crate::features::session::menu_toggled(self, id, anchor)
             }
-            Message::SessionMenuDismissed => {
-                self.session_menu_open = None;
-            }
-            Message::SessionRemoveRequested(id) => {
-                self.clear_for_dialog();
-                self.session_remove_target = Some(id);
-            }
+            Message::SessionMenuDismissed => crate::features::session::menu_dismissed(self),
+            Message::SessionRemoveRequested(id) => crate::features::session::remove_requested(self, id),
             Message::SessionRemoveConfirmed => {
-                // Unlike close (archive), remove drops the record outright — the pre-BUG-003
-                // close behavior. The binary has already killed the process and recorded the
-                // durable suppression marker (FR-015c, FR-020c).
-                if let Some(id) = self.session_remove_target.take() {
-                    // Feature 024: clear the pointer BEFORE dropping the record. The commit that
-                    // keeps the row open (FR-001c) resolves the outgoing session's location by
-                    // looking it up — and a record already removed has no location to find, so
-                    // ordering it the other way collapses the row and takes its siblings out of
-                    // view. The close arm above is not exposed to this: archiving leaves the
-                    // record in place.
-                    if self.active_session == Some(id) {
-                        self.set_current_session(None);
-                    }
-                    if let Some(path) = self.workspace.active.clone() {
-                        if let Some(list) = self.workspace.sessions.get_mut(&path) {
-                            list.retain(|s| s.id != id);
-                        }
-                    }
-                }
+                let outcomes = crate::features::session::remove_confirmed(self);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::SessionRemoveCancelled => {
-                self.session_remove_target = None;
-            }
+            Message::SessionRemoveCancelled => crate::features::session::remove_cancelled(self),
             Message::TerminalTick => {}
-            Message::SidebarToggled => {
-                self.sidebar_hidden = !self.sidebar_hidden;
-            }
+            Message::SidebarToggled => crate::features::sidebar::toggled(self),
             // The handle only speaks while it is being dragged, so there is no flag to consult:
             // an arriving width *is* the drag. Clamped here — how wide the sidebar may be is the
             // application's decision, not the edge's.
-            Message::SidebarDragMoved(x) => {
-                self.sidebar_width = x.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
-            }
+            Message::SidebarDragMoved(x) => crate::features::sidebar::drag_moved(self, x),
 
             // ---- Feature 006 ----
             Message::TerminalFocused => {
-                self.focus_terminal();
+                let outcomes = self.focus_terminal();
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::TerminalFocusReleased => {
                 self.release_terminal();
             }
             Message::TerminalContextMenuOpened { x, y } => {
-                self.terminal_context_menu = Some((x, y));
+                crate::features::session::context_menu_opened(self, x, y)
             }
-            Message::TerminalContextMenuClosed => {
-                self.terminal_context_menu = None;
+            Message::TerminalContextMenuClosed => crate::features::session::context_menu_closed(self),
+            Message::StripTabMenuRequested(tab, x, y) => {
+                crate::features::session::strip_tab_menu_requested(self, tab, x, y)
             }
-            Message::SettingsOpened => {
-                self.clear_for_dialog();
-                // The binary seeds the current value; ensure a draft exists for the reducer path.
-                if self.settings_draft.is_none() {
-                    self.settings_draft = Some(SettingsDraft::default());
-                }
+            Message::ShellInstanceMenuClosed => {
+                crate::features::session::shell_instance_menu_closed(self)
             }
+            Message::SettingsOpened => crate::features::settings::opened(self),
             Message::SettingsSectionShown(section) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.show(section);
-                }
+                crate::features::settings::section_shown(self, section)
             }
             Message::SettingsThemeChanged(theme) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.appearance.theme = theme;
-                    draft.edited();
-                }
+                crate::features::settings::theme_changed(self, theme)
             }
             Message::SettingsScrollbackChanged(text) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.terminal.scrollback_lines = text;
-                    draft.edited();
-                }
+                crate::features::settings::scrollback_changed(self, text)
             }
             Message::SettingsEnvIncludeEnabledToggled(enabled) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.environment.enabled = enabled;
-                    draft.edited();
-                }
+                crate::features::settings::env_include_enabled_toggled(self, enabled)
             }
             Message::SettingsEnvIncludePathChanged(text) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.environment.script_path = text;
-                    draft.edited();
-                }
+                crate::features::settings::env_include_path_changed(self, text)
             }
             Message::SettingsEnvIncludeTimeoutChanged(text) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.environment.timeout_secs = text;
-                    draft.edited();
-                }
+                crate::features::settings::env_include_timeout_changed(self, text)
             }
             Message::SettingsPlacementChanged(placement) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.daemon.placement = placement;
-                    draft.edited();
-                }
+                crate::features::settings::placement_changed(self, placement)
             }
             Message::SettingsRuntimeChanged(runtime) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.daemon.profile.runtime = runtime;
-                    draft.edited();
-                }
+                crate::features::settings::runtime_changed(self, runtime)
             }
             Message::SettingsImageKindChanged(kind) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.daemon.profile.image.kind = kind;
-                    draft.edited();
-                }
+                crate::features::settings::image_kind_changed(self, kind)
             }
             Message::SettingsImageReferenceChanged(text) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.daemon.profile.image.reference = text;
-                    draft.edited();
-                }
+                crate::features::settings::image_reference_changed(self, text)
             }
             Message::SettingsImagePathChanged(text) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.daemon.image_path = text;
-                    draft.edited();
-                }
+                crate::features::settings::image_path_changed(self, text)
             }
             Message::SettingsCredentialToggled(share, shared) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    // A set, so opting in twice is opting in once (rule N-2) and the order the
-                    // section lists them in is the order it always lists them in.
-                    if shared {
-                        draft.daemon.profile.credentials.insert(share);
-                    } else {
-                        draft.daemon.profile.credentials.remove(&share);
-                    }
-                    draft.edited();
-                }
+                crate::features::settings::credential_toggled(self, share, shared)
             }
             Message::SettingsSurviveLogoutToggled(survive) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.daemon.profile.survive_logout = survive;
-                    draft.edited();
-                }
+                crate::features::settings::survive_logout_toggled(self, survive)
             }
             Message::SettingsNetworkChanged(posture) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.daemon.profile.network = posture;
-                    draft.edited();
-                }
+                crate::features::settings::network_changed(self, posture)
             }
             Message::SettingsCpuLimitChanged(text) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.daemon.cpus = text;
-                    draft.edited();
-                }
+                crate::features::settings::cpu_limit_changed(self, text)
             }
             Message::SettingsMemoryLimitChanged(text) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.daemon.memory_mib = text;
-                    draft.edited();
-                }
+                crate::features::settings::memory_limit_changed(self, text)
             }
             Message::SettingsPidLimitChanged(text) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.daemon.pids = text;
-                    draft.edited();
-                }
+                crate::features::settings::pid_limit_changed(self, text)
             }
             Message::SettingsStorageLimitChanged(text) => {
-                if let Some(draft) = &mut self.settings_draft {
-                    draft.daemon.storage_mib = text;
-                    draft.edited();
-                }
+                crate::features::settings::storage_limit_changed(self, text)
             }
-            Message::SettingsSaved => {
-                // Validation + persistence happen in the binary; the reducer closes the form.
-                self.settings_draft = None;
+            Message::SessionStartMenuOpened(location) => {
+                crate::features::session::start_menu_toggled(self, location)
             }
-            Message::SettingsCancelled => {
-                self.settings_draft = None;
+            Message::SessionStartMenuAnchored(point) => {
+                crate::features::session::start_menu_anchored(self, point)
             }
+            Message::SessionStartMenuDismissed => {
+                crate::features::session::start_menu_dismissed(self)
+            }
+            Message::SettingsDefaultAiCliChanged(which) => {
+                crate::features::settings::default_ai_cli_changed(self, which)
+            }
+            Message::SettingsSaved => crate::features::settings::saved(self),
+            Message::SettingsCancelled => crate::features::settings::cancelled(self),
             Message::NotificationDismissed => self.notify.dismiss(),
             Message::NotificationsAdvanced(elapsed_ms) => {
                 self.notify.advance(Duration::from_millis(u64::from(elapsed_ms)));
@@ -1986,15 +1403,15 @@ impl State {
     /// 008). The single path used by both the `WorktreesLoaded` reducer and the binary's direct
     /// re-discovery, so a worktree removed in-app OR externally cannot leave stale expansion,
     /// hover, context-menu, delete-confirmation, or rename-override state behind.
-    pub fn set_worktrees(&mut self, worktrees: Vec<Worktree>) {
+    #[must_use = "the sidebar's expansion is pruned by draining this, not by `set_worktrees` (T066)"]
+    pub fn set_worktrees(&mut self, worktrees: Vec<Worktree>) -> Vec<crate::features::Outcome> {
         self.worktrees = worktrees;
         let names: BTreeSet<String> = self.worktrees.iter().map(|w| w.dir_name.clone()).collect();
 
-        self.expanded.retain(|d| names.contains(d));
         if self
             .worktree_menu_open
-            .as_deref()
-            .is_some_and(|d| !names.contains(d))
+            .as_ref()
+            .is_some_and(|m| !names.contains(&m.dir_name))
         {
             self.worktree_menu_open = None;
         }
@@ -2020,6 +1437,130 @@ impl State {
                 map.retain(|dir, _| names.contains(dir));
             }
         }
+        // Everything above is worktree-owned. `expanded` is the sidebar's, so it is reported
+        // rather than pruned here (FR-020/FR-021, contract O2) — this is the write T066 converted.
+        vec![crate::features::Outcome::WorktreesReplaced(names)]
+    }
+}
+
+/// How many outcomes one drain may apply before it gives up (feature 021, T060 — FR-024,
+/// contract O4).
+///
+/// **A bound, not a capacity.** Interpreting one outcome may emit another — the spec's Edge Cases
+/// name that case — so the queue has no natural end and a cycle would otherwise hang the UI with
+/// no error and no frame. Sixty-four is far above any real cascade (the longest known is two: a
+/// worktree delete closing sessions, whose closure raises a notification) and far below anything a
+/// person would wait through.
+/// Apply one outcome, and return anything applying it produced (FR-022, contract O3).
+///
+/// **The root is the only interpreter of cross-feature consequences**, which is the whole of O3:
+/// the feature that emitted `SessionsClosed` does not know how a session is dropped, and the
+/// session feature does not know a worktree was deleted. Neither learns anything about the other;
+/// this function is the only place the two meet.
+///
+/// # `ClipboardWrite` is not the root's, and the arm says so
+///
+/// It is an *effect request* under FR-015a, interpreted by `shell::clipboard::interpret` — the one
+/// outcome whose destination is outside the pure core entirely. The shell partitions the queue
+/// before draining, so this arm is unreachable in practice; it returns nothing rather than
+/// panicking, because an outcome vocabulary that aborts on a variant it does not own would make
+/// every future effect request a crash waiting for its shell arm.
+///
+/// # Returning `Vec<Outcome>` when nothing yet returns any
+///
+/// Interpreting one outcome may emit another — the spec's Edge Cases name the case, and
+/// [`drain`]'s bound exists for it (O4). None of these three does so today. The signature is what
+/// makes that a fact about the current interpretations rather than a shape the vocabulary cannot
+/// express.
+pub fn interpret(
+    state: &mut State,
+    outcome: crate::features::Outcome,
+) -> Vec<crate::features::Outcome> {
+    use crate::features::Outcome;
+    match outcome {
+        Outcome::SessionsClosed(ids) => return crate::features::session::closed(state, &ids),
+        Outcome::OverlayDismissed(id) => crate::overlay::registry::dismiss(state, id),
+        Outcome::SurfaceOpened(id) => crate::overlay::registry::displace(state, id),
+        Outcome::NotificationRaised(notification) => state.notify.push(notification),
+        Outcome::WorktreesReplaced(names) => {
+            crate::features::sidebar::worktrees_replaced(state, &names);
+            crate::features::worktree_form::worktree_list_changed(state);
+        }
+        Outcome::WorktreeCreated(worktree) => {
+            return crate::features::worktree::created(state, worktree)
+        }
+        Outcome::LocationOpened(location) => state.location_opened(&location),
+        Outcome::RevealScrollArmed => state.reveal_scroll_armed(),
+        Outcome::ProjectEntered => state.project_entered(),
+        Outcome::RevealSuppressed(suppressed) => state.reveal_suppression_set(suppressed),
+        Outcome::FieldFocusCleared => crate::features::window::field_focus_cleared(state),
+        Outcome::ClipboardWrite(_) => {}
+    }
+    Vec::new()
+}
+
+pub const OUTCOME_BUDGET: usize = 64;
+
+/// What one drain did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Drained {
+    /// How many outcomes were applied.
+    pub applied: usize,
+    /// Whether the bound was reached with work still queued.
+    ///
+    /// Unreachable in debug — [`drain`] asserts before it can be returned — so this is what a
+    /// release build hands the shell to log. `false` on every ordinary drain.
+    pub overflowed: bool,
+}
+
+/// Apply outcomes until none remain, following any that interpreting one produces (FR-022, FR-024).
+///
+/// `apply` is the root's interpretation of a single outcome; whatever it returns is queued behind
+/// what is already waiting. The loop is the whole of contracts O4 and O5, and each half is a
+/// deliberate choice rather than an implementation detail:
+///
+/// **Bounded (O4).** Exceeding [`OUTCOME_BUDGET`] trips a `debug_assert`, so a cycle fails loudly
+/// in every test run rather than freezing the window. A release build stops at the bound and
+/// reports it through [`Drained::overflowed`] instead of panicking at a user — this function has
+/// no logger of its own, and inventing one here would put an I/O concern in the reducer.
+///
+/// **First in, first out (O5).** A stack would let one feature's cascade run to completion ahead
+/// of an outcome another feature had already emitted, which makes the interleaving depend on which
+/// feature was composed first — exactly what O5 forbids. A queue applies each feature's outcomes in
+/// its own emission order no matter where it sits in the composition.
+///
+/// Generic over `apply` because the properties above are properties of the loop, not of any
+/// variant: `tests/outcome_termination.rs` drives it with a cycle no real interpretation can
+/// produce, which is the only way to observe the bound being reached at all.
+pub fn drain<F>(
+    initial: impl IntoIterator<Item = crate::features::Outcome>,
+    mut apply: F,
+) -> Drained
+where
+    F: FnMut(crate::features::Outcome) -> Vec<crate::features::Outcome>,
+{
+    let mut queue: std::collections::VecDeque<crate::features::Outcome> =
+        initial.into_iter().collect();
+    let mut applied = 0usize;
+    while let Some(outcome) = queue.pop_front() {
+        if applied == OUTCOME_BUDGET {
+            debug_assert!(
+                false,
+                "outcome interpretation exceeded {OUTCOME_BUDGET} applications with {} still \
+                 queued — an outcome cycle (FR-024, contract O4)",
+                queue.len() + 1
+            );
+            return Drained {
+                applied,
+                overflowed: true,
+            };
+        }
+        applied += 1;
+        queue.extend(apply(outcome));
+    }
+    Drained {
+        applied,
+        overflowed: false,
     }
 }
 

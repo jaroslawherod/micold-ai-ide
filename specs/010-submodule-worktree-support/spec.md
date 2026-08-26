@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-18
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "Support creating worktrees for repositories that use git submodules. Today, worktree creation runs `git worktree add -b <branch> <path> HEAD` and stops there, so any repo with a `.gitmodules` file ends up with empty, uninitialized submodule directories in the new worktree — the user has to manually run `git submodule update --init --recursive` themselves before the worktree is usable. Instead, when a worktree is created for a repository that has submodules, the app should automatically fetch and initialize them (recursively, so nested submodules are also populated) as part of worktree creation, with no extra user action required. Non-submodule repositories are unaffected and see no new behavior or prompts. While submodule fetch is running, the user should see it's in progress (this can be slow for large or numerous submodules) rather than the worktree form appearing hung. If submodule fetch fails partway (network failure, missing credentials for a private submodule remote, a submodule pointing at an unreachable commit), define what happens to the worktree that was just created. Also cover: repos with submodules that are already partially initialized in the parent repo, and cross-platform parity (macOS/Linux/Windows) for the submodule fetch step."
 

@@ -13,7 +13,9 @@ use std::sync::Arc;
 
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::ActivitySignal;
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -37,6 +39,7 @@ fn state_with_session(id: SessionId) -> (Arc<DaemonState>, tempfile::TempDir, te
         SessionLocation::Default,
         SessionLabel::Pending,
         TerminalMode::AiCli,
+        AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project.path().to_path_buf(), vec![session]);

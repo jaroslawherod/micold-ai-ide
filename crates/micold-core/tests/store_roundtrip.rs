@@ -2,6 +2,7 @@
 //! — never the real user data directory (research R7/R8; storage-schema contract).
 
 use micold_core::project::{Availability, Project};
+use micold_core::session::AiCli;
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
 use std::path::{Path, PathBuf};
@@ -126,7 +127,7 @@ fn worktree_display_name_override_roundtrips() {
     let mut ws = Workspace::empty();
     ws.projects.push(project("/repo", "repo", true));
     ws.active = Some(PathBuf::from("/repo"));
-    ws.set_worktree_name("feat-abc-123-login-page", "My Login")
+    ws.set_worktree_name("feat-abc-123_login-page", "My Login")
         .unwrap();
     store.save(&ws).unwrap();
 
@@ -134,7 +135,7 @@ fn worktree_display_name_override_roundtrips() {
     assert_eq!(out.status, LoadStatus::Loaded);
     assert_eq!(out.workspace.active, Some(PathBuf::from("/repo")));
     assert_eq!(
-        out.workspace.worktree_name("feat-abc-123-login-page"),
+        out.workspace.worktree_name("feat-abc-123_login-page"),
         Some("My Login")
     );
 }
@@ -196,7 +197,7 @@ fn pre_feature_010_catalog_with_multiple_sessions_loads_as_all_worktree_located(
 
 #[test]
 fn forgotten_project_does_not_reappear_and_survivors_stay_intact() {
-    use micold_core::session::{Session, SessionLocation};
+    use micold_core::session::{AiCli, Session, SessionLocation};
     let dir = tempdir().unwrap();
     let store = JsonFileStore::at(dir.path().join("projects.json"));
 
@@ -206,9 +207,10 @@ fn forgotten_project_does_not_reappear_and_survivors_stay_intact() {
     ws.active = Some(PathBuf::from("/keep"));
     ws.sessions.insert(
         PathBuf::from("/drop"),
-        vec![Session::start_new(SessionLocation::Worktree(
-            "feat-x".to_string(),
-        ))],
+        vec![Session::start_new(
+            SessionLocation::Worktree("feat-x".to_string()),
+            AiCli::ClaudeCode,
+        )],
     );
     store.save(&ws).unwrap();
     // The dropped project's per-project state file exists after the initial save.
@@ -267,8 +269,10 @@ fn the_last_session_memory_survives_save_and_load() {
 
     let mut ws = Workspace::empty();
     ws.projects.push(project("/a/one", "one", true));
-    let session =
-        micold_core::session::Session::start_new(micold_core::session::SessionLocation::Default);
+    let session = micold_core::session::Session::start_new(
+        micold_core::session::SessionLocation::Default,
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     ws.sessions.insert(PathBuf::from("/a/one"), vec![session]);
     ws.foreground_by_project.insert(PathBuf::from("/a/one"), id);
@@ -315,6 +319,7 @@ fn a_state_file_written_before_this_feature_still_loads() {
         PathBuf::from("/a/one"),
         vec![micold_core::session::Session::start_new(
             micold_core::session::SessionLocation::Default,
+            AiCli::ClaudeCode,
         )],
     );
     store.save(&ws).unwrap();
@@ -359,10 +364,14 @@ fn two_projects_remember_independently() {
     let mut ws = Workspace::empty();
     ws.projects.push(project("/a/one", "one", true));
     ws.projects.push(project("/a/two", "two", true));
-    let a =
-        micold_core::session::Session::start_new(micold_core::session::SessionLocation::Default);
-    let b =
-        micold_core::session::Session::start_new(micold_core::session::SessionLocation::Default);
+    let a = micold_core::session::Session::start_new(
+        micold_core::session::SessionLocation::Default,
+        AiCli::ClaudeCode,
+    );
+    let b = micold_core::session::Session::start_new(
+        micold_core::session::SessionLocation::Default,
+        AiCli::ClaudeCode,
+    );
     let (a_id, b_id) = (a.id, b.id);
     ws.sessions.insert(PathBuf::from("/a/one"), vec![a]);
     ws.sessions.insert(PathBuf::from("/a/two"), vec![b]);
@@ -392,8 +401,10 @@ fn closing_the_remembered_session_does_not_erase_the_memory() {
 
     let mut ws = Workspace::empty();
     ws.projects.push(project("/a/one", "one", true));
-    let mut session =
-        micold_core::session::Session::start_new(micold_core::session::SessionLocation::Default);
+    let mut session = micold_core::session::Session::start_new(
+        micold_core::session::SessionLocation::Default,
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     session.archive();
     ws.sessions.insert(PathBuf::from("/a/one"), vec![session]);
@@ -547,5 +558,152 @@ fn forgetting_a_project_forgets_what_it_included() {
         ws.included_worktrees.is_empty(),
         "inclusion is metadata keyed by project path, so it goes when the project does (feature \
          014, FR-003/FR-005). Nothing on disk is touched either way (FR-028)"
+    );
+}
+// ---------------------------------------------------------------------------------------
+// Feature 026 (T036/T037) — the session's AI CLI survives, and an unknown one is a refusal
+// ---------------------------------------------------------------------------------------
+
+/// Save a workspace holding one session per provider and read it back.
+///
+/// Through the real store rather than by hand-writing JSON: the round-trip is what SC-003 is
+/// about, and the mapping between `AiCli` and its persisted mirror is the part that could be
+/// wired backwards while both directions still "worked" on the default variant alone.
+#[test]
+fn a_sessions_ai_cli_survives_save_and_load() {
+    use micold_core::session::{AiCli, Session, SessionLocation};
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let repo = PathBuf::from("/repo");
+    let claude = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+    let copilot = Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::Copilot,
+    );
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/repo", "repo", true));
+    ws.sessions
+        .insert(repo.clone(), vec![claude.clone(), copilot.clone()]);
+    store.save(&ws).unwrap();
+
+    let out = store.load();
+    assert_eq!(out.status, LoadStatus::Loaded);
+    let sessions = &out.workspace.sessions[&repo];
+    let provider_of = |id| {
+        sessions
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.provider)
+            .expect("session present")
+    };
+    assert_eq!(provider_of(claude.id), AiCli::ClaudeCode);
+    assert_eq!(
+        provider_of(copilot.id),
+        AiCli::Copilot,
+        "the Copilot session came back as a Copilot session — this and the load below are SC-003"
+    );
+}
+
+#[test]
+fn a_session_written_before_this_feature_loads_as_claude_code() {
+    // FR-013. Hand-written at the previous shape, with no `provider` key anywhere, because that is
+    // the file this has to load. Every session that existed before feature 026 ran Claude Code, so
+    // the serde default *is* the migration — there is nothing to convert.
+    use micold_core::session::AiCli;
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("projects.json");
+    std::fs::write(
+        &path,
+        r#"{"schema_version":1,"last_active":"/repo","projects":[
+            {"path":"/repo","display_name":"repo","is_git_repo":true,"sessions":[
+                {"id":"11111111-1111-1111-1111-111111111111","worktree_dir":"feat-one","title":"One","mode":"AiCli","archived":false}
+            ]}
+        ]}"#,
+    )
+    .unwrap();
+
+    let out = JsonFileStore::at(path).load();
+    assert_eq!(
+        out.status,
+        LoadStatus::Loaded,
+        "an older file is not a corrupt one — the missing field is a default, not a recovery"
+    );
+    let session = out
+        .workspace
+        .sessions
+        .values()
+        .flatten()
+        .next()
+        .expect("the legacy session loaded");
+    assert_eq!(session.provider, AiCli::ClaudeCode);
+    assert_eq!(
+        session.label,
+        micold_core::session::SessionLabel::Named("One".to_string()),
+        "and the rest of the record is intact, so the default did not arrive by the file being \
+         discarded and rebuilt"
+    );
+}
+
+#[test]
+fn the_schema_version_does_not_move_for_this_field() {
+    // Research R8. The field is additive and defaulted, exactly as `mode` and `archived` were
+    // before it, so an older build reads a newer file and gets the right answer for every session
+    // it has ever written. A bump would cost a migration path purely to express a default.
+    use micold_core::session::{AiCli, Session, SessionLocation};
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("projects.json");
+    let store = JsonFileStore::at(path.clone());
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/repo", "repo", true));
+    ws.sessions.insert(
+        PathBuf::from("/repo"),
+        vec![Session::start_new(SessionLocation::Default, AiCli::Copilot)],
+    );
+    store.save(&ws).unwrap();
+
+    let written: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(written["schema_version"], 1);
+}
+
+#[test]
+fn an_unknown_provider_is_a_load_error_not_a_silent_fallback() {
+    // The data-model's round-trip table, and the one place this feature deliberately chooses the
+    // *less* forgiving behaviour.
+    //
+    // `#[serde(other)]` on the persisted enum would make a future `"Codex"` load as `ClaudeCode`,
+    // and the consequence is not a cosmetic mislabel: the next resume would start `claude` in that
+    // worktree, against a conversation it has never seen. Declining to load is safer, and the
+    // store's existing malformed-file recovery already knows what to do with a file it cannot
+    // parse — it recovers to empty and preserves the original as a backup.
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("projects.json");
+    std::fs::write(
+        &path,
+        r#"{"schema_version":1,"last_active":"/repo","projects":[
+            {"path":"/repo","display_name":"repo","is_git_repo":true,"sessions":[
+                {"id":"11111111-1111-1111-1111-111111111111","worktree_dir":"feat-one","title":"One","provider":"Codex"}
+            ]}
+        ]}"#,
+    )
+    .unwrap();
+
+    let out = JsonFileStore::at(path.clone()).load();
+    assert_eq!(
+        out.status,
+        LoadStatus::Recovered,
+        "an unrecognised provider makes the file unparseable, which the existing recovery path \
+         handles — rather than being quietly coerced to a CLI the session does not run"
+    );
+    assert!(
+        out.workspace.sessions.is_empty(),
+        "nothing was reconstructed under a guessed provider"
+    );
+    assert!(
+        path.with_extension("json.bak").exists(),
+        "and the unreadable original is moved aside rather than deleted — the same recovery the          store already applies to any file it cannot parse, which is exactly why declining to load          an unknown provider is a safe failure rather than a destructive one"
     );
 }

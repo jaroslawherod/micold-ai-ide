@@ -10,8 +10,15 @@
 //!
 //! T052 names `send_op`, `switch_daemon_attachment`, `reconcile_catalog` and [`PendingOp`].
 //! `PendingOp::describe` came with its type; `wire_to_lifecycle` and `wire_to_worktree_status` came
-//! with [`reconcile_catalog`], their only caller — both translate a daemon wire enum and nothing
+//! with `reconcile_catalog`, their only caller — both translate a daemon wire enum and nothing
 //! else in the client has a reason to (FR-001a).
+//!
+//! Those three have since moved to the **library**, as [`micold_client::catalog_sync`], and are
+//! called from here. The grouping T052 argued for was right and is unchanged; what was wrong was
+//! the crate. A binary-crate function cannot be reached from `tests/`, and the fold from the
+//! daemon's snapshot into client state is exactly the seam three bugs lived in (`010` BUG-011,
+//! `012` BUG-003 and BUG-004) — each with both halves tested and the join untestable. The module
+//! docs over there carry the full account.
 //!
 //! # `App` is the argument, and that is the plan rather than a shortcut
 //!
@@ -33,29 +40,28 @@
 //! way for the same reason — `App` is the binary's type. Each fixture sits with what it is *of*,
 //! not with who happens to call it.
 
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use iced::Task;
 
 use micold_client::app::Message;
+// Moved to the library (see `micold_client::catalog_sync` for why): the fold has to be reachable
+// from `tests/`, and a binary-crate function is not.
+use micold_client::catalog_sync::{attach_log_line, reconcile_catalog, wire_to_worktree_status};
 use micold_client::features::worktree_form::{
-    BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
+    BranchSource, Msg as FormMsg, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
 use micold_core::protocol::messages::{
-    CatalogSnapshot, ClientMsg, DaemonMsg, OperationResult, SessionProcess, WireLifecycle,
+    CatalogSnapshot, ClientMsg, DaemonMsg, OperationResult, SessionProcess,
 };
-use micold_core::session::{
-    Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
-    TerminalMode,
-};
+use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId, TerminalMode};
 use micold_core::worktree::{BranchOrigin, CreateMode};
 
 use crate::shell::env_include::{default_resolution_cwd, refresh_env_include};
+use crate::App;
 use crate::{
     active_project_displaced, session_cwd_for_location, session_cwd_mode_and_active_shell,
 };
-use crate::{App, State};
 
 /// A mutating RPC the client has sent to the daemon and is awaiting a reply for (T055). Tracked per
 /// correlation `req` so the reply can be matched, a duplicate submission avoided, and — if the
@@ -129,23 +135,6 @@ impl PendingOp {
     }
 }
 
-/// Map a wire lifecycle back to the domain one (inverse of the daemon's `wire_lifecycle`).
-/// `InterruptedResumable` — a session the daemon found durably-running after a restart, never
-/// auto-relaunched — is carried through as its own state so the sidebar/status can present it
-/// distinctly and its select action resumes it (FR-006a).
-pub fn wire_to_lifecycle(w: &WireLifecycle) -> SessionLifecycle {
-    match w {
-        WireLifecycle::Idle => SessionLifecycle::Idle,
-        WireLifecycle::InterruptedResumable => SessionLifecycle::InterruptedResumable,
-        WireLifecycle::Starting => SessionLifecycle::Starting,
-        WireLifecycle::Running => SessionLifecycle::Running,
-        WireLifecycle::Restarting { attempts } => SessionLifecycle::Restarting {
-            attempts: *attempts,
-        },
-        WireLifecycle::Failed { .. } => SessionLifecycle::Failed,
-    }
-}
-
 /// Send a correlated mutating RPC to the daemon: allocate a `req`, record the pending op (so the
 /// reply can be matched and a disconnect can resolve it as unknown), and send the message `build`s.
 /// A no-op that notifies the user when there is no daemon connection (T055).
@@ -197,159 +186,6 @@ pub fn switch_daemon_attachment(app: &mut App, old: Option<PathBuf>, new: &Path)
     }
 }
 
-/// Reconcile the client's core session state from the daemon's authoritative catalog snapshot
-/// (FR-011). The daemon owns sessions now, so each project's session list is made to mirror the
-/// snapshot: existing sessions have their lifecycle + label updated; sessions the daemon reports
-/// but the client lacks are added; sessions the daemon no longer reports (archived/removed) are
-/// dropped. A dangling `active_session` pointer is cleared.
-pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktrees: bool) {
-    // Mirror the daemon's project list into the client (T055). Add projects the daemon reports that
-    // the client lacks (e.g. opened in another window), and adopt the daemon's display name for known
-    // ones. Deliberately NOT a full mirror: projects are not *removed* here — a `CatalogChanged` that
-    // predates this client's own in-flight `ProjectAdd` must not drop the project it just opened, and
-    // an ephemeral (non-persisting) daemon reporting an empty catalog must not wipe the list. Forget
-    // drops the record locally (optimistically) and durably on the daemon.
-    for snap in &snapshot.projects {
-        if let Some(existing) = core
-            .workspace
-            .projects
-            .iter_mut()
-            .find(|p| p.path == snap.path)
-        {
-            existing.display_name = snap.display_name.clone();
-        } else {
-            let availability = if snap.available {
-                micold_core::project::Availability::Available
-            } else {
-                micold_core::project::Availability::Unavailable
-            };
-            let mut project = micold_core::project::Project::new(
-                snap.path.clone(),
-                snap.is_git_repo,
-                availability,
-            );
-            project.display_name = snap.display_name.clone();
-            core.workspace.projects.push(project);
-        }
-    }
-    // Sessions observed transitioning into `Restarting` this reconciliation (feature 008,
-    // FR-011/SC-007) — collected here and applied after the loop below, since
-    // `note_background_restart` needs `&mut core` while `list` still holds `core.workspace`
-    // borrowed. `note_background_restart` itself no-ops for the active project's session, so
-    // background-ness isn't checked here.
-    let mut newly_restarting: Vec<SessionId> = Vec::new();
-    for project in &snapshot.projects {
-        let list = core
-            .workspace
-            .sessions
-            .entry(project.path.clone())
-            .or_default();
-        let snap_ids: HashSet<SessionId> = project.sessions.iter().map(|s| s.id).collect();
-        for summary in &project.sessions {
-            let lifecycle = wire_to_lifecycle(&summary.lifecycle);
-            if let Some(existing) = list.iter_mut().find(|s| s.id == summary.id) {
-                if !matches!(existing.lifecycle, SessionLifecycle::Restarting { .. })
-                    && matches!(lifecycle, SessionLifecycle::Restarting { .. })
-                {
-                    newly_restarting.push(existing.id);
-                }
-                existing.lifecycle = lifecycle;
-                existing.activity = summary.activity.clone();
-                // Adopt the daemon's title only when it has a real one. The daemon now overlays the
-                // live OSC-0 title onto the summary (T047), but a summary can still be `Pending`
-                // before the first title arrives; don't let that clobber a title already learned.
-                if let SessionLabel::Named(_) = summary.title {
-                    existing.label = summary.title.clone();
-                }
-            } else {
-                let location = summary
-                    .worktree_dir
-                    .clone()
-                    .map(SessionLocation::Worktree)
-                    .unwrap_or(SessionLocation::Default);
-                let mut s = Session::restored(
-                    summary.id,
-                    location,
-                    summary.title.clone(),
-                    TerminalMode::AiCli,
-                );
-                s.lifecycle = lifecycle;
-                s.activity = summary.activity.clone();
-                list.push(s);
-            }
-        }
-        // Drop sessions the daemon no longer reports (archived/removed on its side).
-        list.retain(|s| snap_ids.contains(&s.id));
-    }
-    for id in newly_restarting {
-        core.note_background_restart(id);
-    }
-    // Mirror the active project's worktrees from the daemon's git discovery into the render state
-    // (the sidebar reads `core.worktrees` + `worktree_names`). Only on `CatalogChanged` pushes, not
-    // the initial welcome: the welcome's worktree cache is empty until the post-attach refresh, so
-    // syncing it would briefly blank the list boot-time local discovery had populated (T055).
-    if sync_worktrees {
-        if let Some(active) = core.workspace.active.clone() {
-            if let Some(project) = snapshot.projects.iter().find(|p| p.path == active) {
-                core.set_worktrees(
-                    project
-                        .worktrees
-                        .iter()
-                        .map(|w| micold_core::worktree::Worktree {
-                            dir_name: w.dir_name.clone(),
-                            // The daemon's path, not one rebuilt from the app's own worktree root:
-                            // an included worktree is not under that root, and reconstructing the
-                            // location would put every one of them somewhere they are not
-                            // (016 BUG-002, FR-029).
-                            path: w.path.clone(),
-                            branch: w.branch.clone(),
-                            status: wire_to_worktree_status(w.status),
-                            included: w.included,
-                        })
-                        .collect(),
-                );
-                // Mirror display-name overrides from the catalog (a second window sees a rename).
-                let names: std::collections::BTreeMap<String, String> = project
-                    .worktrees
-                    .iter()
-                    .filter(|w| w.display_name != w.dir_name)
-                    .map(|w| (w.dir_name.clone(), w.display_name.clone()))
-                    .collect();
-                if names.is_empty() {
-                    core.workspace.worktree_names.remove(&active);
-                } else {
-                    core.workspace.worktree_names.insert(active, names);
-                }
-            }
-        }
-    }
-    // Clear a dangling active-session pointer if its session is gone.
-    //
-    // Feature 024: through `set_current_session`, like every other app-initiated clear, so the row
-    // the vanished session was in is committed open rather than snapping shut under the user
-    // (FR-001c). Nothing is armed: there is no session to scroll to.
-    if let Some(id) = core.active_session {
-        if core.workspace.find_session(id).is_none() {
-            core.set_current_session(None);
-        }
-    }
-}
-
-/// Project the wire [`WorktreeStatus`] back onto the client's core status enum (T055). The inverse of
-/// the daemon's mapping; `Locked`/`Prunable` both collapse to `Invalid` (the client renders both as
-/// an unusable/removable worktree).
-pub fn wire_to_worktree_status(
-    status: micold_core::protocol::messages::WorktreeStatus,
-) -> micold_core::worktree::WorktreeStatus {
-    use micold_core::protocol::messages::WorktreeStatus as Wire;
-    use micold_core::worktree::WorktreeStatus as Core;
-    match status {
-        Wire::Clean => Core::Valid,
-        Wire::Missing => Core::Missing,
-        Wire::Locked | Wire::Prunable => Core::Invalid,
-    }
-}
-
 // ---------------------------------------------------------------------------------------------
 // The arms (feature 021, T055)
 //
@@ -383,6 +219,7 @@ pub fn on_grid_frame(
 }
 
 pub fn on_disconnected(app: &mut App) -> Task<Message> {
+    crate::log_line("attach: disconnected");
     app.daemon = None;
     // Content on screen is now stale; the banner says so (FR-027). The subscription is
     // already auto-reconnecting with backoff.
@@ -411,6 +248,9 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
 }
 
 pub fn on_connect_failed(app: &mut App, reason: String) -> Task<Message> {
+    // The other half of `attach_log_line`'s job (`010` BUG-013): "never attached" and "attached and
+    // got nothing" are different bugs, so the log has to be able to say the first one too.
+    crate::log_line(&format!("attach: failed reason={reason}"));
     app.disconnected = true;
     app.core
         .notify_error(format!("Could not connect to the session daemon: {reason}"));
@@ -503,6 +343,10 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             app.env_include_enabled = settings.env_include_enabled;
             app.env_include_script_path = settings.env_include_script_path;
             app.env_include_timeout_secs = settings.env_include_timeout_secs;
+            // Service-owned, so the daemon's echo is what applies it — here and in
+            // `Welcome` below (feature 026, FR-003). The client's own write is a courtesy
+            // to the next boot; this is the value in force.
+            app.core.default_ai_cli = settings.default_ai_cli;
             app.env_include_cache.clear();
             let cwd = default_resolution_cwd(&app.core);
             refresh_env_include(app, &cwd);
@@ -542,15 +386,16 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             Some(PendingOp::WorktreeCreate(dir_name)) => {
                 if let Some(repo) = app.core.workspace.active.clone() {
                     let path = repo.join(".claude/worktrees").join(&dir_name);
-                    app.core
-                        .update(Message::WorktreeCreated(micold_core::worktree::Worktree {
+                    app.core.update(Message::WorktreeForm(FormMsg::Created(
+                        micold_core::worktree::Worktree {
                             dir_name,
                             path,
                             branch: None,
                             status: micold_core::worktree::WorktreeStatus::Valid,
                             // The app made this one, so it is not an inclusion (016 BUG-002).
                             included: false,
-                        }));
+                        },
+                    )));
                 }
             }
             // Feature 016: the pre-flight answer decides what happens next. A free name
@@ -594,14 +439,16 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                                     preferred_remote.as_deref(),
                                 ) {
                                     Some(mode) => send_worktree_create(app, project, names, mode),
-                                    None => app
-                                        .core
-                                        .update(Message::AddWorktreeConflictDetected(situation)),
+                                    None => app.core.update(Message::WorktreeForm(
+                                        FormMsg::ConflictDetected(situation),
+                                    )),
                                 }
                             }
                             _ => app
                                 .core
-                                .update(Message::AddWorktreeConflictDetected(situation)),
+                                .update(Message::WorktreeForm(FormMsg::ConflictDetected(
+                                    situation,
+                                ))),
                         }
                     }
                 }
@@ -632,7 +479,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 if let OperationResult::BranchList { candidates } = result {
                     if app.core.workspace.active.as_deref() == Some(asked_for.as_path()) {
                         app.core
-                            .update(Message::AddWorktreeBranchesListed(candidates));
+                            .update(Message::WorktreeForm(FormMsg::BranchesListed(candidates)));
                     }
                 }
             }
@@ -691,7 +538,9 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 Some(PendingOp::WorktreeCreate(_))
             ) {
                 app.core
-                    .update(Message::WorktreeCreateStageChanged(stage, detail));
+                    .update(Message::WorktreeForm(FormMsg::CreateStageChanged(
+                        stage, detail,
+                    )));
             }
         }
         DaemonMsg::OperationError {
@@ -708,10 +557,9 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 // and why (auth/network/unreachable commit) — `message` alone is the generic
                 // "git failed to create the worktree".
                 Some(PendingOp::WorktreeCreate(_)) => {
-                    app.core
-                        .update(Message::WorktreeCreateFailed(worktree_create_error_text(
-                            message, detail,
-                        )));
+                    app.core.update(Message::WorktreeForm(FormMsg::CreateFailed(
+                        worktree_create_error_text(message, detail),
+                    )));
                 }
                 // Feature 016: both branch queries back the open form, so their failures
                 // belong on its own error line. A notification would be raised into the
@@ -814,10 +662,27 @@ pub fn on_connected(
     app.env_include_enabled = settings.env_include_enabled;
     app.env_include_script_path = settings.env_include_script_path;
     app.env_include_timeout_secs = settings.env_include_timeout_secs;
+    app.core.default_ai_cli = settings.default_ai_cli;
     app.env_include_cache.clear();
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);
     reconcile_catalog(&mut app.core, &catalog, false);
+    // The boot-time foreground resolve ran before this catalog existed, so for a client that has
+    // just started it answered `NoSessionsForKey` against a project whose sessions were still on
+    // the wire. Ask again now that they are here (`010` BUG-013) — before `active_session` is read
+    // below, so the attach that follows views the restored session rather than the overview.
+    // Guarded to that one case; a mid-session reconnect changes nothing.
+    if let Some(outcomes) = app.core.resolve_foreground_after_catalog() {
+        micold_client::app::drain(outcomes, |o| {
+            micold_client::app::interpret(&mut app.core, o)
+        });
+    }
+    // Record what this attach actually produced (`010` BUG-013). Written after the fold and the
+    // re-resolve, so the counts describe the state the window is about to render from.
+    crate::log_line(&attach_log_line(
+        &catalog,
+        app.core.workspace.active.as_deref(),
+    ));
     // Adopt the daemon's per-session input position (FR-028a, T111). This process may be a
     // *new* client attached to sessions it did not start — after a package upgrade, or a
     // plain quit-and-reopen — in which case its stamper is empty and starting those counters
@@ -963,7 +828,7 @@ pub fn on_worktree_rename_confirmed(app: &mut App) -> Task<Message> {
 /// creates immediately, exactly as before; anything else becomes a decision for the user
 /// rather than the dead-end "a branch with that name already exists" error.
 pub fn on_add_worktree_submitted(app: &mut App) -> Task<Message> {
-    app.core.update(Message::AddWorktreeSubmitted);
+    app.core.update(Message::WorktreeForm(FormMsg::Submitted));
     let Some(form) = app.core.worktree_form.clone() else {
         return Task::none();
     };
@@ -1030,7 +895,9 @@ pub fn on_add_worktree_resolution_chosen(app: &mut App, mode: CreateMode) -> Tas
             && !matches!(mode, CreateMode::Overwrite)
     });
     app.core
-        .update(Message::AddWorktreeResolutionChosen(mode.clone()));
+        .update(Message::WorktreeForm(FormMsg::ResolutionChosen(
+            mode.clone(),
+        )));
     if !answering {
         return Task::none();
     }
@@ -1043,7 +910,8 @@ pub fn on_add_worktree_overwrite_confirmed(app: &mut App) -> Task<Message> {
         .worktree_form
         .as_ref()
         .is_some_and(|f| matches!(f.resolution, ResolutionState::ConfirmingOverwrite { .. }));
-    app.core.update(Message::AddWorktreeOverwriteConfirmed);
+    app.core
+        .update(Message::WorktreeForm(FormMsg::OverwriteConfirmed));
     if !confirmed {
         return Task::none();
     }
@@ -1053,7 +921,8 @@ pub fn on_add_worktree_overwrite_confirmed(app: &mut App) -> Task<Message> {
 /// Switching to the existing-branch picker lists what the repository already has
 /// (feature 016, FR-011). The daemon reads local ref storage only — nothing is fetched.
 pub fn on_add_worktree_source_changed(app: &mut App, source: BranchSource) -> Task<Message> {
-    app.core.update(Message::AddWorktreeSourceChanged(source));
+    app.core
+        .update(Message::WorktreeForm(FormMsg::SourceChanged(source)));
     if source != BranchSource::Existing {
         return Task::none();
     }
@@ -1073,7 +942,13 @@ pub fn on_add_worktree_source_changed(app: &mut App, source: BranchSource) -> Ta
 /// feature 010): spawn `claude` and stream it (FR-010/012/013). A `Default` location
 /// never creates, modifies, or removes a worktree (FR-002) — it simply runs in `repo`
 /// itself, so this arm never calls into `micold_core::worktree`.
-pub fn on_session_start_requested(app: &mut App, location: SessionLocation) -> Task<Message> {
+pub fn on_session_start_requested(
+    app: &mut App,
+    location: SessionLocation,
+    provider: micold_core::session::AiCli,
+) -> Task<Message> {
+    // Chosen from the override list, or pressed directly — either way the list is done.
+    app.core.session_start_menu = None;
     // Correlated create: the daemon owns the id + catalog. The new session arrives via the
     // `CatalogChanged` push (reconciled into the core) and is selected + focused when the
     // `OperationOk { SessionCreated }` reply names its id.
@@ -1082,11 +957,16 @@ pub fn on_session_start_requested(app: &mut App, location: SessionLocation) -> T
             SessionLocation::Worktree(dir) => dir.clone(),
             SessionLocation::Default => String::new(),
         };
+        // Copies the field across and no more (feature 026, T030a). The
+        // default-vs-override resolution happened in `features/session.rs`, which a test
+        // can link; this handler is in the GUI binary, which no integration test can, and a
+        // branch that drifted in here would become the feature's untestable mirror.
         send_op(app, PendingOp::CreateSession, |req| {
             ClientMsg::SessionCreate {
                 req,
                 project,
                 worktree_dir,
+                provider,
             }
         });
     }
@@ -1145,36 +1025,26 @@ pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
     Task::none()
 }
 
-/// Switch the active session's terminal between AI CLI and Regular modes (feature 010,
-/// FR-001–FR-004, FR-010): flip the mode, then reattach/spawn whichever process it now
-/// selects. Neither process is ever killed as a side effect (FR-006) — the previously-
-/// attached one simply stops being displayed/written to and keeps running in the
-/// background (research R6).
-pub fn on_terminal_mode_toggled(app: &mut App) -> Task<Message> {
-    app.core.update(Message::TerminalModeToggled);
-    if let Some(id) = app.core.active_session {
-        // Entering Regular with no instance yet: lazily open the session's first one
-        // (feature 011 FR-007), spawning it on the daemon.
-        let needs_first_shell = app
-            .core
-            .workspace
-            .find_session(id)
-            .is_some_and(|(_, s)| s.mode == TerminalMode::Regular && s.shells.is_empty());
-        if needs_first_shell {
-            let shell_id = app
-                .core
-                .workspace
-                .find_session_mut(id)
-                .map(|(_, s)| s.open_shell_instance());
-            if let (Some(shell_id), Some(d)) = (shell_id, &app.daemon) {
-                d.send(ClientMsg::SessionOpenShell {
-                    session: id,
-                    instance: shell_id,
-                });
-            }
-        }
-        attach_current_process(app, id);
-    }
+/// The AI tab was pressed — display the session's AI CLI and attach its process (feature 027,
+/// FR-002; feature 010 FR-001–FR-004 for what "attach" means).
+///
+/// # Why this arm has to exist
+///
+/// It is the deleted mode toggle's other half. `Message::TerminalAiCliSelected`'s reducer sets the
+/// mode and nothing more (feature 026 FR-006), and until feature 027 the message had **no arm in
+/// `main.rs` at all** — it fell through to the catch-all, which runs the reducer and stops. So the
+/// AI tab moved the mark while the daemon went on streaming and driving whichever shell instance
+/// was attached: the strip said AI CLI and the keys went to bash.
+///
+/// That was invisible while a mode toggle existed to do the attach, and it only opens after a trip
+/// through Regular mode — which is exactly the trip a tab strip invites. `tests` below hold it.
+///
+/// Unlike the toggle it replaces this never opens a shell instance: a session has exactly one AI
+/// CLI process and it is not created here. Neither process is killed as a side effect (010 FR-006)
+/// — the previously-attached one stops being displayed and keeps running (research R6).
+pub fn on_terminal_ai_cli_selected(app: &mut App, id: SessionId) -> Task<Message> {
+    app.core.update(Message::TerminalAiCliSelected(id));
+    attach_current_process(app, id);
     Task::none()
 }
 
@@ -1231,23 +1101,32 @@ pub fn on_shell_instance_restart_requested(
 /// instance, even if one is already running.
 pub fn on_shell_instance_open_requested(app: &mut App) -> Task<Message> {
     if let Some(id) = app.core.active_session {
-        if let Some((_cwd, TerminalMode::Regular, _)) =
-            session_cwd_mode_and_active_shell(&app.core, id)
-        {
-            let shell_id = {
-                let Some((_, session)) = app.core.workspace.find_session_mut(id) else {
-                    return Task::none();
-                };
-                session.open_shell_instance()
+        let shell_id = {
+            let Some((_, session)) = app.core.workspace.find_session_mut(id) else {
+                return Task::none();
             };
-            if let Some(d) = &app.daemon {
-                d.send(ClientMsg::SessionOpenShell {
-                    session: id,
-                    instance: shell_id,
-                });
-            }
-            attach_current_process(app, id);
+            // Feature 027 FR-004: the "+" is shown on the AI tab too now, so it has to *take* the
+            // user to Regular rather than assume they are already there. Feature 011's FR-019 made
+            // both this control and its chord a no-op outside Regular, which was coherent only
+            // while a mode toggle existed and the "+" was hidden there — the no-op was unreachable.
+            // Reachable, it is a control that reports success and changes nothing the user can see,
+            // and a session sitting on its AI tab with no instances would have no way to make one.
+            session.set_mode(TerminalMode::Regular);
+            session.open_shell_instance()
+        };
+        if let Some(d) = &app.daemon {
+            d.send(ClientMsg::SessionOpenShell {
+                session: id,
+                instance: shell_id,
+            });
         }
+        attach_current_process(app, id);
+        // The new instance is what the user is now looking at, so it holds the keyboard (023
+        // FR-011) and is the newly marked tab (026 FR-002d). This reducer used to be unreachable
+        // from here: `update_inner` routes the message to this handler *instead of* the core, so
+        // nothing ran it. Harmless while the "+" could not change which pane was displayed; not
+        // harmless now that it can.
+        app.core.update(Message::ShellInstanceOpenRequested);
     }
     Task::none()
 }
@@ -1546,7 +1425,7 @@ pub fn send_worktree_create(
     mode: CreateMode,
 ) {
     app.core
-        .update(Message::WorktreeCreateStarted(mode.clone()));
+        .update(Message::WorktreeForm(FormMsg::CreateStarted(mode.clone())));
     let (branch, dir_name) = (names.branch, names.dir_name);
     // The mode is not duplicated here: `WorktreeCreateStarted` above already put it on the form,
     // which is where the stage label reads it from (FR-024).
@@ -1578,6 +1457,13 @@ pub fn worktree_create_error_text(message: String, detail: Option<String>) -> St
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    // The wire/domain types the fixtures below build. They were in scope via the module's own
+    // imports until the fold moved to `micold_client::catalog_sync`; the production code here no
+    // longer names them, so the tests import them for themselves rather than the module carrying
+    // imports only its tests use.
+    use micold_client::app::State;
+    use micold_core::protocol::messages::WireLifecycle;
+    use micold_core::session::{AiCli, SessionLabel, SessionLifecycle};
 
     // Convergence fix (retrofit session, 2026-07-27): the daemon's OperationError.detail (git's
     // own stderr, e.g. naming which submodule failed and why) was destructured with `..` and
@@ -1629,9 +1515,24 @@ pub(crate) mod tests {
             id,
             worktree_dir: None,
             title: SessionLabel::Named(title.into()),
+            provider: AiCli::ClaudeCode,
             lifecycle,
             activity: ActivitySignal::Unknown,
             input_serial,
+            live_shells: Vec::new(),
+        }
+    }
+
+    /// `012` BUG-003: a session summary that names live shell instances.
+    pub(crate) fn summary_with_live_shells(
+        id: SessionId,
+        title: &str,
+        lifecycle: WireLifecycle,
+        live_shells: Vec<micold_core::session::ShellInstanceId>,
+    ) -> SessionSummary {
+        SessionSummary {
+            live_shells,
+            ..summary(id, title, lifecycle)
         }
     }
 
@@ -1893,6 +1794,111 @@ pub(crate) mod tests {
         );
     }
 
+    /// The same summary, on a chosen AI CLI (feature 026, T060a).
+    fn summary_on(
+        id: SessionId,
+        title: &str,
+        lifecycle: WireLifecycle,
+        provider: AiCli,
+    ) -> SessionSummary {
+        SessionSummary {
+            provider,
+            ..summary_at(id, title, lifecycle, 0)
+        }
+    }
+
+    /// A daemon-reported session materialises as a session of **the CLI the daemon named**
+    /// (feature 026, T060a — FR-012, FR-016, FR-016a).
+    ///
+    /// # Why this lives here
+    ///
+    /// Beside the fold's other tests, sharing their `summary_at`/`snapshot_with` helpers, and
+    /// beside the `Welcome` and `CatalogChanged` arms that call it — which is the whole reason a
+    /// defaulted provider here would be invisible. `micold-core/tests/session_reconciliation.rs`
+    /// mirrors the same rule on the pure side.
+    ///
+    /// # Why it is worth its weight
+    ///
+    /// This is the **only** path a daemon-reported session takes into the client model: every
+    /// session found by the FR-014 discovery pass, and every session at all after a client
+    /// restart. If the provider defaulted here, a Copilot session would come back labelled
+    /// `claude` on its sidebar row, `claude` on its terminal bar, and would resolve `claude` in the
+    /// split affordance — while the store, the wire and the daemon all said Copilot, and every
+    /// other test in the suite stayed green.
+    #[test]
+    fn a_daemon_reported_session_keeps_the_cli_the_daemon_named() {
+        let path = "/repo/demo";
+        let mut core = State::default();
+        let claude = SessionId::new();
+        let copilot = SessionId::new();
+
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                path,
+                vec![
+                    summary_on(claude, "A", WireLifecycle::Running, AiCli::ClaudeCode),
+                    summary_on(copilot, "B", WireLifecycle::Running, AiCli::Copilot),
+                ],
+            ),
+            false,
+        );
+
+        let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
+        let provider_of = |id: SessionId| {
+            list.iter()
+                .find(|s| s.id == id)
+                .map(|s| s.provider)
+                .expect("session adopted")
+        };
+        assert_eq!(provider_of(claude), AiCli::ClaudeCode);
+        assert_eq!(
+            provider_of(copilot),
+            AiCli::Copilot,
+            "the summary said Copilot and the client believed it"
+        );
+    }
+
+    /// And a session already in the model is not re-derived from the snapshot.
+    ///
+    /// The update branch adopts `lifecycle`, `activity` and a real `title` — deliberately not the
+    /// provider. A session's CLI is fixed for its lifetime (FR-001), so there is nothing a later
+    /// snapshot could correct, and a branch that "kept it in sync" would be a second place the
+    /// value could change.
+    #[test]
+    fn an_existing_sessions_cli_is_not_rewritten_by_a_later_snapshot() {
+        let path = "/repo/demo";
+        let mut core = State::default();
+        let id = SessionId::new();
+
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                path,
+                vec![summary_on(id, "A", WireLifecycle::Running, AiCli::Copilot)],
+            ),
+            false,
+        );
+
+        // A snapshot that disagrees — the shape a re-derivation bug would take.
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                path,
+                vec![summary_on(id, "A", WireLifecycle::Idle, AiCli::ClaudeCode)],
+            ),
+            false,
+        );
+
+        let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
+        assert_eq!(list[0].provider, AiCli::Copilot);
+        assert_eq!(
+            list[0].lifecycle,
+            SessionLifecycle::Idle,
+            "the runtime fields still track the daemon — it is only the identity that does not"
+        );
+    }
+
     pub(crate) fn snapshot_with(path: &str, sessions: Vec<SessionSummary>) -> CatalogSnapshot {
         CatalogSnapshot {
             schema_version: 1,
@@ -1906,6 +1912,120 @@ pub(crate) mod tests {
                 sessions,
             }],
         }
+    }
+
+    /// `012` BUG-003 / FR-008. Before this, `mark_shell_running` and `mark_shell_exited` were
+    /// reachable only from `Message::ShellInstanceRunning`/`ShellInstanceExited`, which nothing in
+    /// the client emits, so every instance sat at `Starting` for its whole life and the bar read
+    /// `starting…` beside a shell the user was typing into.
+    ///
+    /// Asserted here rather than by driving those messages — `tests/app_state.rs` already does
+    /// that, and proving the transitions correct is exactly what failed to notice nothing invoked
+    /// them.
+    #[test]
+    fn reconcile_marks_shell_instances_running_and_exited_from_the_snapshot() {
+        use micold_core::session::{ShellInstanceId, ShellLifecycle};
+
+        let path = "/repo/demo";
+        let mut core = State::default();
+        let id = SessionId::new();
+
+        // The client owns the instances: it allocates the ids and creates them locally.
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(path, vec![summary(id, "S", WireLifecycle::Running)]),
+            false,
+        );
+        let (a, b) = {
+            let (_, s) = core.workspace.find_session_mut(id).expect("session");
+            (s.open_shell_instance(), s.open_shell_instance())
+        };
+        let lifecycle_of = |core: &State, inst: ShellInstanceId| {
+            core.workspace
+                .sessions
+                .values()
+                .flatten()
+                .find(|s| s.id == id)
+                .expect("session")
+                .shells
+                .iter()
+                .find(|i| i.id == inst)
+                .expect("instance")
+                .lifecycle
+        };
+
+        // The daemon reports `a` live and says nothing about `b`.
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                path,
+                vec![summary_with_live_shells(
+                    id,
+                    "S",
+                    WireLifecycle::Running,
+                    vec![a],
+                )],
+            ),
+            false,
+        );
+        assert_eq!(lifecycle_of(&core, a), ShellLifecycle::Running);
+        assert_eq!(
+            lifecycle_of(&core, b),
+            ShellLifecycle::Starting,
+            "an instance the daemon has not (yet) spawned stays where `open_shell_instance` left \
+             it — a spawn in flight must not read as an absence"
+        );
+
+        // `a` stops being reported: it exited. This is the transition no client-side inference can
+        // make, because no frames is indistinguishable from a quiet shell.
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                path,
+                vec![summary_with_live_shells(
+                    id,
+                    "S",
+                    WireLifecycle::Running,
+                    vec![],
+                )],
+            ),
+            false,
+        );
+        assert_eq!(lifecycle_of(&core, a), ShellLifecycle::Exited);
+        assert_eq!(
+            lifecycle_of(&core, b),
+            ShellLifecycle::Starting,
+            "an instance never seen live stays starting rather than being reported as exited"
+        );
+
+        // The client stays the allocator: a snapshot naming an instance the client does not have
+        // creates nothing.
+        reconcile_catalog(
+            &mut core,
+            &snapshot_with(
+                path,
+                vec![summary_with_live_shells(
+                    id,
+                    "S",
+                    WireLifecycle::Running,
+                    vec![ShellInstanceId(99)],
+                )],
+            ),
+            false,
+        );
+        let count = core
+            .workspace
+            .sessions
+            .values()
+            .flatten()
+            .find(|s| s.id == id)
+            .expect("session")
+            .shells
+            .len();
+        assert_eq!(
+            count, 2,
+            "the snapshot reports liveness; it never adds instances"
+        );
     }
 
     #[test]
@@ -2006,7 +2126,12 @@ pub(crate) mod tests {
 
         // Returning to /a fires the return notice (mirrors `background_restart.rs`).
         core.record_foreground();
-        assert!(core.switch_active(Path::new("/a")));
+        // Drained the way the root does: the return notice is an outcome now (T067a-9), so
+        // producing it is not the same as raising it.
+        let arrival = core
+            .switch_active(Path::new("/a"))
+            .expect("the switch happened");
+        micold_client::app::drain(arrival, |o| micold_client::app::interpret(&mut core, o));
         let visible = core
             .notify
             .visible()
@@ -2015,6 +2140,138 @@ pub(crate) mod tests {
         assert_eq!(
             visible.message,
             "A background session was restarted while you were away."
+        );
+    }
+
+    // ---- feature 027: the tab strip is the only route between the panes --------------------
+
+    /// A connected app displaying a session in Regular mode with one open shell instance.
+    fn app_showing_a_shell() -> (
+        App,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+        SessionId,
+    ) {
+        let (mut app, rx) = connected_app();
+        let project = PathBuf::from("/repo");
+        let mut session = Session::start_new(
+            SessionLocation::Worktree("feat-x".to_string()),
+            micold_core::session::AiCli::ClaudeCode,
+        );
+        let id = session.id;
+        session.set_mode(TerminalMode::Regular);
+        session.open_shell_instance();
+        app.core
+            .workspace
+            .sessions
+            .insert(project.clone(), vec![session]);
+        app.core.workspace.active = Some(project);
+        app.core.active_session = Some(id);
+        (app, rx, id)
+    }
+
+    /// Everything the client put on the wire since the last drain.
+    fn wire(rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>) -> Vec<ClientMsg> {
+        let mut sent = Vec::new();
+        while let Ok(m) = rx.try_recv() {
+            sent.push(m);
+        }
+        sent
+    }
+
+    /// Pressing the AI tab repoints the attached process at the AI CLI (feature 027 FR-002).
+    ///
+    /// # The defect this exists for, which is live on `main`
+    ///
+    /// `Message::TerminalAiCliSelected` had **no arm in `main.rs`** — it fell through to the
+    /// catch-all, which runs the pure reducer and nothing else. So the AI tab moved the mark and
+    /// the mode while the daemon went on streaming and driving whichever shell instance was
+    /// attached: the user pressed the AI tab, the strip said AI, and the keys went to bash.
+    ///
+    /// It survived feature 026 because the mode toggle was still there doing the attach, and
+    /// because the AI process is normally attached already — the divergence only opens after a
+    /// trip through Regular mode, which is exactly the trip a tab strip invites. Feature 027
+    /// deletes the toggle, so this stops being a redundancy and becomes the only route.
+    #[test]
+    fn selecting_the_ai_tab_attaches_the_ai_process() {
+        let (mut app, mut rx, id) = app_showing_a_shell();
+        let _ = wire(&mut rx); // the setup's traffic, if any
+
+        let _ = on_terminal_ai_cli_selected(&mut app, id);
+
+        let sent = wire(&mut rx);
+        assert!(
+            sent.iter().any(|m| matches!(
+                m,
+                ClientMsg::SessionAttachProcess {
+                    session,
+                    process: SessionProcess::Primary
+                } if *session == id
+            )),
+            "pressing the AI tab must tell the daemon to attach the session's primary process, \
+             or the pane shows the AI CLI while the keyboard still drives the shell. Sent: {sent:?}"
+        );
+    }
+
+    /// "+" opens an instance from the AI pane too, and lands the user on it (feature 027 FR-004).
+    ///
+    /// Feature 011's FR-019 made both the control and its `Ctrl+Shift+T` chord a **no-op outside
+    /// Regular mode**, which was coherent while a mode toggle existed: the "+" was hidden there,
+    /// so the no-op was unreachable. With the toggle gone the "+" is always shown, and a session
+    /// sitting on its AI tab with no instances yet would otherwise have no way to make one.
+    #[test]
+    fn opening_a_terminal_from_the_ai_pane_switches_to_it() {
+        let (mut app, mut rx) = connected_app();
+        let project = PathBuf::from("/repo");
+        let session = Session::start_new(
+            SessionLocation::Worktree("feat-x".to_string()),
+            micold_core::session::AiCli::ClaudeCode,
+        );
+        let id = session.id;
+        assert_eq!(
+            session.mode,
+            TerminalMode::AiCli,
+            "precondition: a new session starts on its AI tab with no instances"
+        );
+        app.core
+            .workspace
+            .sessions
+            .insert(project.clone(), vec![session]);
+        app.core.workspace.active = Some(project);
+        app.core.active_session = Some(id);
+        let _ = wire(&mut rx);
+
+        let _ = on_shell_instance_open_requested(&mut app);
+
+        let opened = app
+            .core
+            .workspace
+            .find_session(id)
+            .expect("the session is still there")
+            .1;
+        assert_eq!(
+            opened.mode,
+            TerminalMode::Regular,
+            "opening a terminal from the AI pane has to show it, or the control reports success \
+             and changes nothing the user can see"
+        );
+        assert_eq!(opened.shells.len(), 1, "exactly one instance was opened");
+        let shell = opened.shells[0].id;
+
+        let sent = wire(&mut rx);
+        assert!(
+            sent.iter().any(
+                |m| matches!(m, ClientMsg::SessionOpenShell { session, instance }
+                    if *session == id && *instance == shell)
+            ),
+            "the daemon is told to spawn the new instance. Sent: {sent:?}"
+        );
+        assert!(
+            sent.iter().any(|m| matches!(
+                m,
+                ClientMsg::SessionAttachProcess { session, process: SessionProcess::Shell(s) }
+                    if *session == id && *s == shell
+            )),
+            "and the attachment follows it, so the keyboard drives what is displayed. Sent: {sent:?}"
         );
     }
 }

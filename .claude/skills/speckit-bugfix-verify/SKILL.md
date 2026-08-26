@@ -4,8 +4,12 @@ description: Verify that bugfix patches are consistent across all spec artifacts
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
   author: github-spec-kit
-  source: bugfix:commands/speckit.bugfix.verify.md
+  source: extension:bugfix
+user-invocable: true
+disable-model-invocation: false
 ---
+
+# Bugfix Verify Skill
 
 # Verify Bugfix Consistency
 

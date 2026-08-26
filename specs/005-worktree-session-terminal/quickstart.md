@@ -19,15 +19,17 @@ implementation code.
 
 ```bash
 # Pure core — no GUI, no PTY, no processes. Must stay green (Constitution I).
-cargo test --no-default-features
+mise run test-core
 
-# Full test suite (adds gui-gated adaptation tests) + lints.
-cargo test
-cargo clippy --all-targets
+# Full workspace suite (core + client + daemon), matching CI.
+mise run test
 
-# Run the app.
-cargo run
+# Run the app (it spawns/attaches the session daemon itself).
+mise run run
 ```
+
+> These were bare `cargo` invocations against a single crate. The workspace split and `mise.toml`
+> superseded them; the tasks above are the canonical entry points (CLAUDE.md).
 
 ## Validation scenarios (map to spec acceptance criteria)
 
@@ -49,8 +51,13 @@ Each scenario is covered by an automated pure-core test (against `FakeGit` /
 ### V3 — Create a worktree via the form (US2, FR-005–009, SC-003/003b)
 - Form offers Conventional types, optional ticket, name; shows derived `dir`/`branch` preview
   (FR-008a).
-- Submit `feat` + `ABC-123` + `Login page` → branch `feat/abc-123-login-page`, worktree at
-  `.claude/worktrees/feat-abc-123-login-page`; appears in the sidebar.
+- Submit `feat` + `ABC-123` + `Login page` → branch `feat/abc-123_login-page`, worktree at
+  `.claude/worktrees/feat-abc-123_login-page`; appears in the sidebar as "Login page" with an
+  `ABC-123` tag.
+- Submit `feat` + `#123` + `Login page` → worktree at `.claude/worktrees/feat-123_login-page`,
+  tagged `#123` (BUG-003: a numeric reference used to be discarded silently).
+- Delete that worktree, then re-create it from the **existing branch** picker → same directory,
+  same `ABC-123` tag (BUG-003: the branch carries the boundary, so the ticket round-trips).
 - Empty ticket → segment omitted (`chore/cleanup`).
 - Duplicate dir/branch → blocked with a message (FR-009).
 - Forced git failure → full rollback, no orphan branch/dir/sidebar entry (FR-006b).
@@ -78,7 +85,11 @@ Each scenario is covered by an automated pure-core test (against `FakeGit` /
 ### V6 — Close a session (FR-015a)
 - Close/stop a session → its process is terminated and it leaves the sidebar. (Worktree removal
   is out of scope.)
-- *Automated*: `SessionCloseRequested` → `kill()` called → session + persisted record removed.
+- Its persisted record is **kept and flagged archived**, plus a durable marker in the provider's
+  own directory — an invisible tombstone, so reconciliation cannot resurrect it (FR-015a as
+  amended by bugfix BUG-003, 2026-07-23; FR-020c). This line previously said the record was
+  removed, which was the pre-BUG-003 behaviour.
+- *Automated*: `SessionCloseRequested` → `kill()` called → session archived, record retained.
 
 ### V7 — Crash auto-restart with guard (FR-022/022a)
 - Kill a session's `claude` externally → it auto-restarts via `--resume` without user action.
@@ -114,3 +125,21 @@ creation and a `claude` session on at least one non-Linux platform before merge.
 
 `docs/user-guide/worktrees-and-sessions.md` ships in the same change and must pass the CI docs
 build.
+
+## Recorded runs
+
+**2026-08-21, Linux — V1–V10, the first end-to-end run of this procedure.** Headless: Xvfb +
+Mesa lavapipe, driven with `xdotool`, not a person at a display. Eight scenarios pass; V3 passes
+but for the forced-git-failure rollback (only reachable through `FakeGit`); V7's auto-restart
+passes and its crash-loop guard fails (`bugs/BUG-004.md`). SC-001, SC-002 and SC-004 all pass with
+large margins. Full record, including what was *not* covered:
+[evidence/T061-manual-validation.md](./evidence/T061-manual-validation.md).
+
+**macOS and Windows have never been run.** The cross-platform check above remains outstanding.
+
+**One prerequisite this document does not state, and should.** Every scenario that turns on
+persistence, pruning or resume (V6, V8) needs `claude` to actually record a transcript. A `claude`
+started from inside another Claude Code session inherits `CLAUDE_CODE_CHILD_SESSION` and saves
+nothing, which makes every session an "empty session" — correctly dropped on reload per FR-020, and
+indistinguishable from the feature being broken. Set `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1` in
+the app's environment before running those scenarios.

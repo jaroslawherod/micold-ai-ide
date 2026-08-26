@@ -20,7 +20,7 @@ verified in CI.
   worktree sidebar (including how agent-created worktrees are hidden and how to reveal them),
   creating worktrees (on a new branch, or by searching for one that already exists locally or on
   a remote),
-  and running `claude` sessions in the embedded terminal
+  and running AI CLI sessions (`claude` or `copilot`) in the embedded terminal
   (colored real-terminal rendering, interactive keyboard/mouse input, focus, resize, scrollback,
   and toggling a session's terminal to one or more independent plain-shell instances scoped to
   its worktree, switchable and individually closeable/restartable).
@@ -35,6 +35,12 @@ verified in CI.
 
 ## Development
 
+- [Client architecture](development/architecture.md) — where a feature lives and why one module
+  holds its types and the functions over them; how to add a floating surface (one module, one
+  registration line, no central match to extend) and how to add a capability (declare the trait,
+  write the fake, choose the real implementation once); and the read/write asymmetry across
+  features — why a feature may read any state and write only its own, what an `Outcome` is for, and
+  the guard tests that hold each of those lines rather than trusting them.
 - [The component library](development/component-library.md) — the two rendering layers, the rule
   that feature modules compose components rather than styling widgets, how that rule is enforced in
   CI, what to do when adding a component, and how to build a picker — searching or choosing — on the

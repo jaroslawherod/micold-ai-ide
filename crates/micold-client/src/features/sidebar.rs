@@ -88,6 +88,69 @@ pub enum TagFilter {
     Untyped,
 }
 
+/// The environment variable that pre-applies sidebar tag filters at launch.
+///
+/// A **test hook**, for the manual visual pass (quickstart §B5). The filter itself is a popover:
+/// it opens on a click and dismisses on any interaction elsewhere, including the pointer moving
+/// onto a row — which a screenshot harness cannot avoid, because it drives the pointer to reach
+/// anything at all. So §B5, the step that checks the current session's location survives a filter
+/// that excludes it, could not be run at all without this.
+///
+/// It sets the *same* state the popover sets, through the same message, so what the pass then
+/// observes is the real filter and not a second implementation of one.
+pub const FILTER_ENV_VAR: &str = "MICOLD_SIDEBAR_FILTER";
+
+impl TagFilter {
+    /// Parse one filter token: a conventional type (`feat`, `fix`, …), `issue`, or `untyped`.
+    pub fn from_token(token: &str) -> Option<Self> {
+        match token {
+            "issue" => Some(Self::HasIssue),
+            "untyped" => Some(Self::Untyped),
+            other => ConventionalType::from_token(other).map(Self::Type),
+        }
+    }
+}
+
+/// The filters named by [`FILTER_ENV_VAR`]'s value: a comma-separated list of tokens.
+///
+/// - `None`, empty, or all-whitespace → no filters, and the application starts normally.
+/// - `"fix"`, `"fix,docs"`, `"issue"`, `"untyped"` → those filters, in the order given.
+/// - anything else → `Err` naming the variable, the bad token, and the grammar.
+///
+/// A malformed value is an error rather than a silent "no filter", for the reason the frame probe
+/// gives for the same choice: someone who types `MICOLD_SIDEBAR_FILTER=feature` and gets an
+/// unfiltered list would conclude the hook is broken, and a typo mid-pass would record an
+/// unfiltered panel as evidence that filtering works.
+pub fn filters_from_env_value(raw: Option<&str>) -> Result<Vec<TagFilter>, String> {
+    let Some(raw) = raw else {
+        return Ok(Vec::new());
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut filters = Vec::new();
+    for token in trimmed.split(',') {
+        let token = token.trim();
+        if token.is_empty() {
+            continue;
+        }
+        let filter = TagFilter::from_token(token).ok_or_else(|| {
+            format!(
+                "{FILTER_ENV_VAR}: {token:?} is not a filter. Expected a comma-separated list of \
+                 conventional types ({}), `issue`, or `untyped`.",
+                ConventionalType::ALL
+                    .iter()
+                    .map(|t| t.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })?;
+        filters.push(filter);
+    }
+    Ok(filters)
+}
+
 /// Whether a worktree with `tags` passes the active `filters` (feature 008, FR-025). An empty
 /// filter set shows everything; otherwise a worktree matches if it satisfies ANY active filter
 /// (logical OR).
@@ -280,6 +343,29 @@ impl State {
         self.active_session.is_some() && self.reveal_suppressed_for == self.active_session
     }
 
+    /// Fold a location into the user's own open set (T067a-6).
+    ///
+    /// Reached from `Outcome::LocationOpened`. Idempotent: a location already open stays open.
+    pub fn location_opened(&mut self, location: &SessionLocation) {
+        match location {
+            SessionLocation::Worktree(dir) => {
+                self.expanded.insert(dir.clone());
+            }
+            SessionLocation::Default => self.default_expanded = true,
+        }
+    }
+
+    /// Arm the scroll that reaches the current session's row on the first frame one exists.
+    pub fn reveal_scroll_armed(&mut self) {
+        self.pending_reveal_scroll = true;
+    }
+
+    /// Drop view state that must not follow the user into a different project (T067a-6).
+    pub fn project_entered(&mut self) {
+        self.default_expanded = false;
+        self.show_agent_worktrees = false;
+    }
+
     /// Whether a location's row is shown open (feature 024, contract §1.1).
     ///
     /// The single answer to "is this row open", derived on every call. `expanded` and
@@ -307,8 +393,22 @@ impl State {
     pub fn reveal_scroll_offset(&self) -> Option<u32> {
         let entries = self.sidebar_entries();
         let index = current_session_row(&entries, self.active_session)?;
+        let heights = row_heights(&entries);
+        if crate::reveal_trace::enabled() {
+            let top: f32 = heights[..index].iter().sum::<f32>() + ROW_GAP * index as f32;
+            let content =
+                heights.iter().sum::<f32>() + ROW_GAP * heights.len().saturating_sub(1) as f32;
+            crate::reveal_trace::line(format_args!(
+                "geometry: row {index} of {} spans {top}..{}, content {content}, viewport {}, \
+                 offset {}",
+                heights.len(),
+                top + heights[index],
+                self.sidebar_viewport_height,
+                self.sidebar_scroll_offset,
+            ));
+        }
         scroll_target(
-            &row_heights(&entries),
+            &heights,
             index,
             self.sidebar_viewport_height as f32,
             self.sidebar_scroll_offset as f32,
@@ -333,7 +433,7 @@ impl State {
     /// Closing the revealed row is remembered against the session it was closed for; opening it
     /// again withdraws that, rather than leaving behind a suppression only a change of session
     /// could clear.
-    pub fn toggle_location(&mut self, location: SessionLocation) {
+    pub fn toggle_location(&mut self, location: SessionLocation) -> Vec<crate::features::Outcome> {
         let open = self.location_open(&location);
         let holds_current = self.current_session_location().as_ref() == Some(&location);
         match &location {
@@ -347,7 +447,10 @@ impl State {
             SessionLocation::Default => self.default_expanded = !open,
         }
         if holds_current {
-            self.reveal_suppressed_for = if open { self.active_session } else { None };
+            // Whether the reveal is suppressed is a fact about the session, not the row (T067a-6).
+            vec![crate::features::Outcome::RevealSuppressed(open)]
+        } else {
+            Vec::new()
         }
     }
 
@@ -516,9 +619,16 @@ impl State {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SidebarFilterPanel;
 
+impl SidebarFilterPanel {
+    /// This surface's identity, nameable by the surfaces that displace it or that it
+    /// displaces (T067a-2). The declaration has to point at something, and pointing at the
+    /// literal string in two places is how the two would come to disagree.
+    pub const ID: SurfaceId = SurfaceId::new("sidebar_filter");
+}
+
 impl FloatingSurface for SidebarFilterPanel {
     fn id(&self) -> SurfaceId {
-        SurfaceId::new("sidebar_filter")
+        Self::ID
     }
 
     fn layer(&self) -> Layer {
@@ -535,4 +645,73 @@ impl Registered for SidebarFilterPanel {
     fn open_in(state: &State) -> Option<Self> {
         state.sidebar_filter_open.then_some(SidebarFilterPanel)
     }
+}
+
+/// A tag filter was toggled on or off (feature 008, FR-024).
+///
+/// Filters combine with OR (FR-025); an empty set shows everything.
+pub fn filter_toggled(state: &mut State, filter: TagFilter) {
+    if !state.sidebar_filters.remove(&filter) {
+        state.sidebar_filters.insert(filter);
+    }
+}
+
+/// Every tag filter was cleared (feature 008, FR-024).
+pub fn filters_cleared(state: &mut State) {
+    state.sidebar_filters.clear();
+}
+
+/// The scroll viewport reported its laid-out height (feature 024).
+pub fn viewport_resized(state: &mut State, height: u32) {
+    state.sidebar_viewport_height = height;
+}
+
+/// The sidebar was scrolled (feature 024, FR-025a).
+///
+/// The scroll is *also* the dismissal trigger, and the rendering stack gives a scrollable one
+/// message per event — so this does both rather than the view emitting two. Same rule, one call,
+/// no second copy of it.
+pub fn scrolled(state: &mut State, offset: u32) {
+    crate::reveal_trace::line(format_args!("the scrollable reports offset {offset}"));
+    state.sidebar_scroll_offset = offset;
+    state.dismiss_on_scroll_beneath();
+}
+
+/// The tag-filter panel was toggled (feature 009, FR-002/FR-003).
+///
+/// Mutually exclusive with the other two panel popovers, and it closes the project row menu too.
+/// It used to assign those three fields; since T067a-2 it reports that the panel opened and the
+/// registry closes what this surface declares it displaces.
+#[must_use = "what an opening popover displaces is the registry's business, not the caller's"]
+pub fn filter_menu_toggled(state: &mut State) -> Vec<crate::features::Outcome> {
+    state.sidebar_filter_open = !state.sidebar_filter_open;
+    crate::features::surface_opened(state.sidebar_filter_open, SidebarFilterPanel::ID)
+}
+
+/// Agent-owned worktrees were shown or hidden (feature 014, FR-010).
+///
+/// Sole mutation (FR-010d): tag filters, expansion state and overlays are left exactly as they
+/// were, and nothing is re-discovered — this is a pure view recomputation, so no git call and no
+/// `Task` (FR-008).
+pub fn show_agent_worktrees_toggled(state: &mut State) {
+    state.show_agent_worktrees = !state.show_agent_worktrees;
+}
+
+/// The sidebar was collapsed or revealed.
+pub fn toggled(state: &mut State) {
+    state.sidebar_hidden = !state.sidebar_hidden;
+}
+
+/// The sidebar's drag handle moved (feature 007).
+pub fn drag_moved(state: &mut State, x: u16) {
+    state.sidebar_width = x.clamp(crate::app::SIDEBAR_MIN_WIDTH, crate::app::SIDEBAR_MAX_WIDTH);
+}
+
+/// The worktree list was replaced; drop expansion for rows that no longer exist (T066).
+///
+/// The sidebar's answer to `Outcome::WorktreesReplaced`. Pruning this used to happen inside
+/// `State::set_worktrees`, which is how the worktree feature came to write sidebar data — the
+/// first entry converted out of `tests/feature_write_isolation.rs`'s allowlist.
+pub fn worktrees_replaced(state: &mut State, names: &std::collections::BTreeSet<String>) {
+    state.expanded.retain(|dir| names.contains(dir));
 }

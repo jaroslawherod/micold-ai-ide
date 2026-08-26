@@ -65,19 +65,40 @@ pub fn surface<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
     )
 }
 
-/// `Scrollable` — content taller than its viewport, so the themed scrollbar is actually visible.
+/// `Scrollable` — content larger than its viewport on each axis, so the themed scrollbar is
+/// actually visible and both directions can be compared.
+///
+/// The horizontal instance is posed beside the vertical one rather than instead of it: the axis is
+/// a variant now (feature 026 FR-002a), and the thing worth seeing is that it is the *same* 4px
+/// themed bar turned through ninety degrees — not a second scrollbar that arrived with the second
+/// axis.
 pub fn scrollable<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
-    let mut long = iced::widget::column![].spacing(spacing::XS);
+    let mut tall = iced::widget::column![].spacing(spacing::XS);
     for (name, _) in samples::WORKTREES.iter().cycle().take(12) {
-        long = long.push(material::Text::new(*name, TypeRole::Body, roles));
+        tall = tall.push(material::Text::new(*name, TypeRole::Body, roles));
+    }
+    let mut wide = iced::widget::row![].spacing(spacing::MD);
+    for (name, _) in samples::WORKTREES.iter().cycle().take(12) {
+        wide = wide.push(material::Text::new(*name, TypeRole::Body, roles));
     }
     arrange(
-        vec![posed(
-            "scroll it",
-            iced::widget::container(material::Scrollable::new(long, roles))
-                .height(Length::Fixed(120.0)),
-            roles,
-        )],
+        vec![
+            posed(
+                "Vertical — scroll it",
+                iced::widget::container(material::Scrollable::new(tall, roles))
+                    .height(Length::Fixed(120.0)),
+                roles,
+            ),
+            posed(
+                "Horizontal — scroll it",
+                iced::widget::container(
+                    material::Scrollable::new(wide, roles)
+                        .direction(material::ScrollDirection::Horizontal),
+                )
+                .width(Length::Fixed(220.0)),
+                roles,
+            ),
+        ],
         Layout::Inline,
     )
 }
@@ -141,7 +162,13 @@ pub fn toolbar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
     )
 }
 
-/// `ConnectionBanner` — both notice levels, and one carrying an action.
+/// `ConnectionBanner` — both notice levels, and one carrying an action **on each of them**.
+///
+/// The two action specimens sit side by side because that pair is the rule made visible. On `Error`
+/// the button takes `on_error`, the fill's own paired foreground; on `Info` it keeps §7.3's
+/// `primary`, because `surface_variant` is inside §1.3's neutral enumeration. Showing only the red
+/// one would read as "the banner recolours its button" — showing both says the button asks what it
+/// is standing on, and gets a different answer (FR-004a, BUG-009 T156).
 pub fn connection_banner<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
         vec![
@@ -173,6 +200,17 @@ pub fn connection_banner<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Eleme
                     roles,
                 )
                 .action("Take over", Message::NoOp),
+                roles,
+            ),
+            posed(
+                "with an action, on Info",
+                material::ConnectionBanner::new(
+                    "Reconnecting to the session service",
+                    "You can keep working; unsent changes are queued.",
+                    roles,
+                )
+                .level(NoticeLevel::Info)
+                .action("Retry now", Message::NoOp),
                 roles,
             ),
         ],

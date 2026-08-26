@@ -149,7 +149,7 @@ impl<'a, M: Clone + 'a> From<SectionList<'a, M>> for Element<'a, M> {
             // the row's text by hand would put a second answer to "what colour is a button's
             // label" in the library, which is the drift `Button::leading`'s history records.
             let mut content = row![Text::new(section.label, TypeRole::Action, roles)
-                .tint(variant.content(roles))
+                .tint(variant.content(roles, None))
                 .width(Length::Fill)]
             .spacing(spacing::SM)
             .align_y(Alignment::Center);

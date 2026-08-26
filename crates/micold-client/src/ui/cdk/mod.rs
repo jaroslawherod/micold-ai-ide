@@ -13,6 +13,7 @@
 //! Consequence worth stating plainly: a change to how dialogs *look* never opens a file in here,
 //! and a change to how they *behave* never opens a style function.
 
+pub mod context_area;
 pub mod motion;
 pub mod overlay;
 pub mod picker;

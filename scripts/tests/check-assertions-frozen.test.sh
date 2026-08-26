@@ -9,12 +9,16 @@
 # script that commit carried -- and the first two cases silently exercised the buggy version they
 # were written to catch. A gate's own test is exactly where that mistake is most expensive.
 #
-# Two things are pinned here, and they are the two the check has already got wrong once:
+# Three things are pinned here. The first two are the ones the check has already got wrong once:
 #
 #   1. **Identity** (issue #146): an assertion is what it says, not which of its lines a diff
 #      happened to touch. Reversing a multi-line expectation in place must fail.
 #   2. **Scope** (spec.md Q3, task T074): FR-027 binds changes made for feature 021. Every other
 #      feature owns its own expectations, and must be reported without being blocked.
+#   3. **Adjudication** (task T074): a removal that has been read and judged not to be a relaxation
+#      can be written down, and the entry is re-verified against the tree on every run. The cases
+#      that matter are the ones holding the second half: a stale entry fails, an unheaded entry
+#      fails, and one adjudication does not cover a different removal.
 
 set -uo pipefail
 
@@ -176,6 +180,95 @@ rm -rf "$d"
 
 d="$(new_repo)"
 run "ASSERTION_FREEZE rejects an unknown mode" 2 "must be auto, enforce or report" "$d" HEAD ASSERTION_FREEZE=bogus
+rm -rf "$d"
+
+# --- adjudications: the third option, and the rule that keeps it honest (T074) -------------------
+
+# An adjudication file lives in the feature directory. Written here rather than by the fixture's
+# seed because most cases must run without one -- the default has to be "no adjudications".
+adjudicate() {
+  local dir="$1" heading="$2"
+  shift 2
+  {
+    printf '# Adjudicated removals\n\n## %s\n\n' "$heading"
+    printf 'was: %s\n' "$@"
+  } > "$dir/specs/021-mvu-slice-architecture/assertion-adjudications.md"
+}
+
+# The case T074 exists for: a removal read, judged not to be a relaxation, and written down.
+d="$(new_repo)"
+sed -i '/assert_eq!(state.count, 0);/d' "$d/crates/thing/tests/a.rs"
+adjudicate "$d" "T0xx — the counter moved into the daemon" 'assert_eq!(state.count,0)'
+claim_021 "$d"; commit_in "$d" adjudicated
+run "an adjudicated removal passes" 0 "1 removal(s) adjudicated" "$d" HEAD~1
+rm -rf "$d"
+
+# ...and is *named* in the output, with the task that removed it. A silent subtraction would be a
+# waiver by another name.
+d="$(new_repo)"
+sed -i '/assert_eq!(state.count, 0);/d' "$d/crates/thing/tests/a.rs"
+adjudicate "$d" "T0xx — the counter moved into the daemon" 'assert_eq!(state.count,0)'
+claim_021 "$d"; commit_in "$d" adjudicated
+run "an adjudicated removal is named, with its task" 0 "T0xx — the counter moved into the daemon" "$d" HEAD~1
+rm -rf "$d"
+
+# The rule that makes the file safe: an entry naming an assertion that is still in the suite is a
+# place to bury the next removal, so it fails.
+d="$(new_repo)"
+adjudicate "$d" "T0xx — stale" 'assert_eq!(state.count,0)'
+claim_021 "$d"; commit_in "$d" stale
+run "an adjudication that stopped being true fails" 1 "are not missing from the suite" "$d" HEAD~1
+rm -rf "$d"
+
+# ...including when the change touched no assertion at all, which is the run a fast path would have
+# skipped and the one a stale entry would otherwise survive forever.
+d="$(new_repo)"
+adjudicate "$d" "T0xx — stale" 'assert_eq!(state.count,0)'
+claim_021 "$d"; commit_in "$d" stale
+run "a stale adjudication fails even with nothing lost" 1 "not missing from the suite" "$d" HEAD~1
+rm -rf "$d"
+
+# ...but "no longer missing" is a claim about the *tree*, not about the diff, and judging it by the
+# diff is what took this job red on main the hour it landed. Once the branch merges, the removal is
+# behind the base as well as in front of it: absent from both sides, so it can never appear in a
+# diff again, and every entry in the file turns stale the moment it lands -- on main, and on every
+# branch cut from main afterwards, in scope or out, since the staleness verdict precedes the scope
+# gate. The adjudication file would be unlandable by construction, correct only in the one commit
+# that cannot exist.
+d="$(new_repo)"
+sed -i '/assert_eq!(state.count, 0);/d' "$d/crates/thing/tests/a.rs"
+adjudicate "$d" "T0xx — the counter moved into the daemon" 'assert_eq!(state.count,0)'
+claim_021 "$d"; commit_in "$d" adjudicated
+run "an adjudication survives its own merge" 0 "intact" "$d" HEAD
+rm -rf "$d"
+
+# The same thing one commit later: an unrelated change, cut from the merge, that touches no
+# assertion the file names and has no business being told about them.
+d="$(new_repo)"
+sed -i '/assert_eq!(state.count, 0);/d' "$d/crates/thing/tests/a.rs"
+adjudicate "$d" "T0xx — the counter moved into the daemon" 'assert_eq!(state.count,0)'
+claim_021 "$d"; commit_in "$d" adjudicated
+printf '#[test]\nfn later() {\n    assert!(state.other);\n}\n' > "$d/crates/thing/tests/b.rs"
+commit_in "$d" unrelated
+run "a merged adjudication does not fail later branches" 0 "added" "$d" HEAD~1
+rm -rf "$d"
+
+# An entry with no heading has nobody's name on it, which is the thing the file exists to prevent.
+d="$(new_repo)"
+sed -i '/assert_eq!(state.count, 0);/d' "$d/crates/thing/tests/a.rs"
+printf '# Adjudicated removals\n\nwas: assert_eq!(state.count,0)\n' \
+  > "$d/specs/021-mvu-slice-architecture/assertion-adjudications.md"
+claim_021 "$d"; commit_in "$d" unheaded
+run "an adjudication under no heading is refused" 1 "no \`## \` heading" "$d" HEAD~1
+rm -rf "$d"
+
+# One adjudication does not cover a different removal.
+d="$(new_repo)"
+sed -i '/assert_eq!(state.count, 0);/d' "$d/crates/thing/tests/a.rs"
+sed -i 's/!state.enabled,/state.enabled,/' "$d/crates/thing/tests/a.rs"
+adjudicate "$d" "T0xx — the counter moved into the daemon" 'assert_eq!(state.count,0)'
+claim_021 "$d"; commit_in "$d" partial
+run "an unadjudicated removal still fails beside one" 1 "1 assertion(s) removed" "$d" HEAD~1
 rm -rf "$d"
 
 # --- refusing to pass vacuously ------------------------------------------------------------------

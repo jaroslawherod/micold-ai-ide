@@ -12,7 +12,7 @@ holding it and marks the field — press **Cancel**, or Esc, to leave without sa
 | --- | --- |
 | [Appearance](#appearance) | The theme |
 | [Terminal](#terminal) | The embedded terminal's scrollback limit |
-| [Environment](#environment) | The script sourced before each session starts |
+| [Environment](#environment) | Which AI CLI a session runs, and the script sourced before it starts |
 | [Session service](#session-service) | Where sessions run, and what that service can reach |
 
 ## Appearance
@@ -36,6 +36,26 @@ scrollback](./worktrees-and-sessions.md)).
   keep their current buffer.
 
 ## Environment
+
+### Default AI CLI
+
+Which AI coding CLI a new session runs when you don't choose one for it.
+
+- **The choices** are the CLIs you actually have installed. If only one is installed, that is the
+  only option — and nothing else about starting a session changes for you.
+- **Default**: Claude Code.
+- **Changing it affects new sessions only.** A session's CLI is fixed when the session is created
+  and never changes afterwards, so sessions you already have keep running the CLI they started on.
+- You can override it per session without touching this setting — see
+  [Worktrees & sessions → Choosing which AI CLI a session runs](./worktrees-and-sessions.md#choosing-which-ai-cli-a-session-runs).
+
+**If your default names a CLI that isn't installed, the app keeps it rather than quietly changing
+it.** That is deliberate. A CLI can be missing for a moment — a `PATH` that hasn't loaded, an
+upgrade in progress — and silently rewriting your preference would lose a choice you made without
+saying so. The setting stays as you left it, and when you start a session the app tells you what is
+missing and offers the CLIs that are available instead of substituting one.
+
+### The environment a session starts in
 
 By default, every session's AI CLI process and regular-terminal process automatically pick up
 your normal shell environment — PATH additions from version managers (nvm, pyenv, rbenv),

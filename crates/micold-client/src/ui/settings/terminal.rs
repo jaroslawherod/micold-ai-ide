@@ -1,7 +1,8 @@
 //! The Terminal section — the embedded terminal's own settings (feature 027, FR-027).
 
-use crate::app::{FieldId, Message};
+use crate::app::Message;
 use crate::features::settings::{SettingsDraft, SettingsSection};
+use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::TextField;
 use crate::ui::settings::page;

@@ -18,7 +18,7 @@
 //! project's own state file and stops carrying it in the catalog.
 
 use crate::project::{Availability, Project};
-use crate::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use crate::session::{AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -142,6 +142,45 @@ struct StoredSession {
     /// `mark_archived`/`is_archived`), which survives even if this field's own file is lost.
     #[serde(default)]
     archived: bool,
+    /// Which AI CLI this session runs (feature 026, FR-013). `#[serde(default)]` → `ClaudeCode`,
+    /// which is the correct answer for every session written before that feature, and **no
+    /// `schema_version` bump** — additive and defaulted, by exactly the argument `mode` and
+    /// `archived` already carry (research R8).
+    #[serde(default)]
+    provider: StoredAiCli,
+}
+
+/// Serde-mapped mirror of [`AiCli`] (feature 026), kept separate for the same reason
+/// [`StoredTerminalMode`] is: the persisted spelling stays free to diverge from the in-memory one.
+///
+/// **Deliberately without `#[serde(other)]`.** Forward compatibility with a future third CLI is
+/// the obvious thing to want here, and it is the wrong thing: falling back means starting the
+/// *wrong CLI* in the user's worktree. An unknown value is a load error for that project file, and
+/// the store's existing malformed-file recovery already covers it — declining to load is the safer
+/// failure.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+enum StoredAiCli {
+    #[default]
+    ClaudeCode,
+    Copilot,
+}
+
+impl From<AiCli> for StoredAiCli {
+    fn from(which: AiCli) -> Self {
+        match which {
+            AiCli::ClaudeCode => StoredAiCli::ClaudeCode,
+            AiCli::Copilot => StoredAiCli::Copilot,
+        }
+    }
+}
+
+impl From<StoredAiCli> for AiCli {
+    fn from(which: StoredAiCli) -> Self {
+        match which {
+            StoredAiCli::ClaudeCode => AiCli::ClaudeCode,
+            StoredAiCli::Copilot => AiCli::Copilot,
+        }
+    }
 }
 
 /// Serde-mapped mirror of [`TerminalMode`] (feature 010, research R5): kept as a separate type
@@ -199,6 +238,7 @@ impl StoredSession {
             },
             mode: session.mode.into(),
             archived: session.archived,
+            provider: session.provider.into(),
         }
     }
 
@@ -214,6 +254,11 @@ impl StoredSession {
             Self::stored_to_location(self.worktree_dir),
             label,
             self.mode.into(),
+            // A **constructor argument**, alongside the other identity fields — not assigned
+            // afterwards the way `archived` is on the line below. `Session::provider` has no
+            // setter and no mutation path by design (FR-001, FR-005), and this struct's fields
+            // being `pub` means an assignment here would look like compliance and be the opposite.
+            self.provider.into(),
         );
         session.archived = self.archived;
         session

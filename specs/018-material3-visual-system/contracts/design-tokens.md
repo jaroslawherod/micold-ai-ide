@@ -86,10 +86,20 @@ The single normative table. Light and dark columns are tone values on the named 
 `scrim` and `shadow` are pure black in both schemes; their visible strength comes from the alpha at
 which they are drawn (§4, §7), not from a tone difference.
 
-### 1.3 Contrast obligations (FR-004, FR-005)
+### 1.3 Contrast obligations (FR-004, FR-005, FR-004b)
 
 The following (foreground, background) pairs carry text or icons and MUST meet **WCAG AA ≥ 4.5:1**
 in both schemes. The automated test asserts every row and fails the build on any violation.
+
+**Measured with the heaviest state layer composited, not at rest (FR-004b).** A state layer is the
+*content* colour drawn over the container at §5's opacity, so on an interactive element it moves the
+background toward the foreground and the pair reads lower under the pointer than it does at rest. The
+ratio a user sees is therefore a function of this table **and** §5, and a pair proved only at rest is
+not proved. Every row below clears 4.5:1 at rest and with the heaviest layer its element can carry
+composited — 10% for a button (`pressed`, and `focus` at the same figure), 12% for a row or a tag
+(`selected`). Layers never sum: §5 makes the states mutually exclusive, so an element shows one.
+*(Added by BUG-010, which found four labels at 4.40–4.49:1 under hover and press — each of them a
+pair that passes comfortably at rest.)*
 
 | Foreground                | Backgrounds it must clear                                                                                              |
 |---------------------------|------------------------------------------------------------------------------------------------------------------------|
@@ -106,13 +116,39 @@ in both schemes. The automated test asserts every row and fails the build on any
 | `on_error_container`      | `error_container`                                                                                                       |
 | `inverse_on_surface`      | `inverse_surface`                                                                                                       |
 | `inverse_primary`         | `inverse_surface`                                                                                                       |
-| `primary`                 | `surface`, `surface_container_low`, `surface_container` (text/outlined buttons and links draw `primary` on a surface)    |
+| `primary`                 | `surface`, `surface_container_low`, `surface_container`, `surface_container_high` — **neutral surfaces only, and only these four** (text/outlined buttons and links draw `primary` on a surface). `primary` MUST NOT be drawn on an **accent fill**: not on `primary`, `secondary`, `tertiary`, `error` or any `*_container`. A component on an accent fill draws that fill's paired `on_*` role (FR-004a). It MUST NOT be drawn on `surface_variant` or on `surface_container_highest` either — both are neutral, and both fail FR-004b's composited measurement; see the note below (FR-004b) |
 | `error`                   | `surface`, `surface_container` (error helper text)                                                                       |
 | each tag's text tone      | that same tag's fill tone, for all 11 tags (§1.4)                                                                        |
 
 `outline`, `outline_variant`, `scrim` and `shadow` carry no text and are exempt from the text
 contrast obligation. `outline` MUST still meet the non-text 3:1 threshold against the surfaces it
-divides.
+divides — and it is a neutral-variant tone, chosen against those surfaces, so it clears the
+threshold against **neutral** surfaces only. An outlined component standing on an **accent fill**
+draws its border from that fill's paired `on_*` role at the border's own opacity, not from `outline`
+(FR-004a; `outline` on `error` is **1.42:1**, below the 3:1 this paragraph already imposes).
+
+"Neutral surfaces" here means the four the `primary` row names, for the same reason and by the same
+measurement: `outline` on `surface_variant` is **2.96:1 in the dark scheme at rest** — a plain miss
+of the 3:1 threshold with no state layer involved — falling to 2.42:1 under a press. On the four
+permitted hosts it clears 3:1 in both schemes with the heaviest layer composited (FR-004b, BUG-010).
+
+**Which hosts, and why those.** Measured rather than asserted, at rest / hover / press, `primary`
+label then `outline` border:
+
+| Host                        | light label      | light border     | dark label       | dark border      |
+|-----------------------------|------------------|------------------|------------------|------------------|
+| `surface`                   | 6.14 5.51 5.33   | 4.28 3.84 3.71   | 10.83 9.30 8.93  | 5.86 5.03 4.83   |
+| `surface_container_low`     | 5.84 5.22 5.10   | 4.07 3.64 3.55   | 10.03 8.51 8.13  | 5.43 4.60 4.40   |
+| `surface_container`         | 5.53 4.99 4.82   | 3.86 3.48 3.36   | 9.60 8.05 7.68   | 5.19 4.36 4.16   |
+| `surface_container_high`    | 5.28 4.75 4.63   | 3.68 3.31 3.23   | 8.43 7.04 6.71   | 4.56 3.81 3.63   |
+| ~~`surface_container_highest`~~ | 4.99 4.49 **4.37** | 3.48 3.13 3.04 | 7.21 6.04 5.75 | 3.90 3.26 3.11   |
+| ~~`surface_variant`~~       | 4.99 4.49 **4.40** | 3.48 3.13 3.06 | 5.48 4.64 **4.48** | **2.96** 2.51 2.42 |
+
+The rule is not expensive: **ten of the twelve** columns above already satisfied it, and the two that
+do not are the pair of hosts with the least tonal headroom — light `surface_container_highest` misses
+by 0.13 and `surface_variant` misses in both schemes. Retuning `primary`'s tone would have satisfied
+them (light needs tone 30, dark tone 87), and is rejected: the ramps are checked-in Material data
+(§1.1) and moving the seed to fix two containers changes the accent everywhere.
 
 ### 1.4 Worktree tag and issue tag colors (FR-006, FR-006a)
 
@@ -333,6 +369,17 @@ buttons of every variant, text fields and the select control — not buttons alo
 | `selected`         | 0.12    | persistent; distinct from hover, and composable with it            |
 | `disabled_content` | 0.38    | applied to text and icons                                         |
 | `disabled_container`| 0.12   | applied to the container fill                                     |
+
+**A state layer is part of the contrast measurement, not separate from it (FR-004b).** Because the
+layer is the *content* colour, drawing it moves the background toward the foreground and lowers the
+pair's ratio — always, by construction, on every interactive element. §1.3's pairs are therefore
+measured with the heaviest layer here composited, and this table and that one are read together
+rather than one at a time. Which layer is heaviest depends on the element — a button reaches
+`pressed`/`focus` at 0.10, a row or tag reaches `selected` at 0.12 — and the states above are
+mutually exclusive, so the heaviest **single** layer is the measurement and layers never sum. The
+`disabled_*` opacities are excluded: disabled content is exempt from the contrast obligation by
+Material's own convention and by WCAG's. *(Added by BUG-010: §1.3 proved its pairs and §5 proved
+its opacities, and nothing multiplied them together.)*
 
 **Focus indicator (FR-022, FR-043)**: every element that *can* hold keyboard focus draws a **3dp
 `secondary` outline** at its own shape radius when focused, in addition to the focus state layer.
@@ -560,7 +607,31 @@ The label-alignment row is FR-030a applied here: 40dp of height around a 20dp `l
 20dp of slack by construction, and a height that does not say where its content sits resolves it
 against the top edge. Stated for the same reason §7.6's chip row states it.
 
-Destructive actions substitute `error` / `on_error` for `primary` / `on_primary`.
+Destructive actions substitute `error` / `on_error` for `primary` / `on_primary`. That substitution
+is about the action's **meaning**; the next paragraph is about the surface underneath it, and the two
+are independent.
+
+**Host surface (FR-004a, FR-027b).** The `Container` and `Label / icon` rows above describe a button
+on a **neutral surface**. A button placed on an **accent-filled container** — the connection banner's
+`error` fill, a snackbar's `inverse_surface`, a filled tag or chip — draws its label, its 1dp border,
+its state layers (§5) and its ripple from that container's paired foreground role instead:
+
+| Host fill              | Button foreground     |
+|------------------------|-----------------------|
+| `error`                | `on_error`            |
+| `primary` / `secondary` / `tertiary` | `on_primary` / `on_secondary` / `on_tertiary` |
+| any `*_container`      | that container's `on_*_container`             |
+| `inverse_surface`      | `inverse_primary`     |
+| a neutral surface **that §1.3 permits** | the table's own value (`primary`, `on_primary`, `on_surface_variant`) |
+| a neutral surface §1.3 does **not** permit — `surface_variant`, `surface_container_highest` | not a host: the container takes a permitted fill instead (FR-004b) |
+
+The outlined variant's border takes the same role at the border's opacity — `outline` is 1.42:1 on
+`error`, below §1.3's 3:1 non-text threshold — and the state layer takes it too, since `primary` at
+low alpha over red is no more visible than `primary` is. The foreground is a **parameter of the
+component**, not a choice at the call site (FR-027b): one definition of each variant, taking the role
+it should draw in, and the value derived from the same decision that produced the fill. *(Added by
+BUG-009 — `primary` on `error` is 1.00:1 in the light scheme and 1.01:1 in the dark, both roles
+reading their ramps at the tone their scheme assigns them.)*
 
 ### 7.4 Dialogs (FR-028)
 
@@ -594,6 +665,7 @@ Destructive actions substitute `error` / `on_error` for `primary` / `on_primary`
 | Divider         | 1dp `outline_variant`                        |
 | Panel top edge  | §7.1's bottom edge, for a panel anchored below the app bar (FR-029a) |
 | Panel width     | 240 for a panel anchored below the app bar; 160 for a cursor-anchored context menu (FR-029c) |
+| Panel anchor    | the **press point**, in window coordinates, for a context menu opened from an element — clamped so the panel stays inside the window (FR-029d). The edge anchors are the stated exceptions: §7.1's bottom edge for a panel hanging from the app bar (FR-029a), and a bar's top edge for one that must rise rather than fall |
 | Panel transition| §6's menu enter and exit — the panel plays both, so every panel of the kind does (FR-029c) |
 | States          | full state-layer set (§5)                     |
 
@@ -673,6 +745,28 @@ An empty field therefore shows one word on the value's line, not two: while the 
 the placeholder. Material's animated transition between the two positions is **not** implemented —
 the label snaps. Both endpoints are correct; only the transition is absent. Accepted fidelity gap
 #4.
+
+**Adornments (BUG-003 item 1).** The row this section did not have, which is why the label and the
+leading icon were positioned by two different rules and drawn on top of each other:
+
+| Property           | Value                                                              |
+|--------------------|--------------------------------------------------------------------|
+| Leading icon slot  | fixed at 24, **not** the glyph's advance — §7.2's rule, BUG-006's lesson |
+| Leading icon gap   | 16, between that slot and everything after it                       |
+| Content column     | `padding + slot + gap` when there is a leading icon, `padding` otherwise — followed by the value **and** the label, in either of the label's positions |
+| Adornment baseline | both adornments centred on the container's own middle, not on the floating value's line |
+| Adornment height   | the **container's**, not the value line's — a trailing `IconButton` keeps §7.3's 48dp target rather than being squeezed into 24dp |
+
+The content column is one figure for two things on purpose. The value was inset past the icon and
+the label was pinned at the padding, so an empty unfocused field with a leading icon drew its label
+underneath that icon — which is the state every searchable picker opens in. A figure with nothing
+stating its intent is the shape all of this section's bugs have had; this is that figure.
+
+The height row is the same defect one slot over. An adornment is not a second line of value, and
+offering it only the 24dp value line did not refuse the icon button that wanted 48 — it squeezed it:
+8dp of padding top and bottom out of 24 left the glyph an 8dp box, which it drew out of and down the
+field, ~11dp below the centre line with half the target §7.3 requires. It cost nothing at the gates,
+because the slot was the right size and the child fitted inside it.
 
 **Content migration (FR-031a, FR-031b).** Today's placeholders bundle the field name and a hint
 into one string. These split:

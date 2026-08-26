@@ -35,6 +35,7 @@ use std::sync::Arc;
 
 use iced::Task;
 use micold_client::app::{Message, State};
+use micold_client::features::sidebar::{filters_from_env_value, FILTER_ENV_VAR};
 use micold_client::input::SessionInputStamper;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::settings::Settings;
@@ -127,7 +128,7 @@ fn boot() -> (App, Task<Message>) {
         core.workspace.refresh_availability(caps.scanner());
         // Drop any leftover empty sessions so a restart never resumes a nonexistent
         // conversation (bug fix; see spec Clarifications 2026-07-16).
-        prune_empty_sessions(caps.provider(), &mut core.workspace);
+        prune_empty_sessions(&mut core.workspace);
     }
     let mut scrollback_lines = micold_core::settings::DEFAULT_SCROLLBACK_LINES;
     let mut env_include_enabled = micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED;
@@ -140,7 +141,15 @@ fn boot() -> (App, Task<Message>) {
         env_include_enabled = loaded.env_include_enabled;
         env_include_script_path = loaded.env_include_script_path;
         env_include_timeout_secs = loaded.env_include_timeout_secs;
+        // The local read, superseded by `DaemonConnected`'s authoritative copy a moment later. It
+        // is here so the first frame has the user's own default rather than `ClaudeCode` (feature
+        // 026, FR-003).
+        core.default_ai_cli = loaded.default_ai_cli;
     }
+    // The availability set, filled at the I/O boundary the way `worktrees` is (feature 026,
+    // T014a). Refreshed when the choice is offered — the Settings overlay opening, the override
+    // menu opening — and never per frame.
+    core.available_providers = caps.available_providers();
     // Feature 027: where the daemon runs. Read here rather than in the connection subscription
     // because the *bring-up* is what the user watches, and it starts before the first dial.
     let placement = caps
@@ -201,11 +210,27 @@ fn boot() -> (App, Task<Message>) {
     let mut env_include_cache = HashMap::new();
     env_include_cache.insert(boot_cwd, boot_snapshot);
     core.system_scheme = observe_system_scheme(detect_system_scheme(), core.system_scheme);
+    // The §B5 test hook. Applied through the same message the filter popover sends, so a visual
+    // pass photographs the real filter rather than a second implementation of one — and refused
+    // loudly on a typo, for the reason `MICOLD_FRAME_PROBE` is: a value that was asked for and
+    // silently not applied is the one failure that looks exactly like a pass.
+    match filters_from_env_value(std::env::var(FILTER_ENV_VAR).ok().as_deref()) {
+        Ok(filters) => {
+            for filter in filters {
+                core.update(Message::SidebarFilterToggled(filter));
+            }
+        }
+        Err(message) => {
+            eprintln!("{message}");
+            std::process::exit(2);
+        }
+    }
     // If a project is already active from a previous run, discover its worktrees for the initial
     // render. Session recovery from transcripts is now the daemon's responsibility (it owns
     // sessions); the client adopts them from the welcome catalog on connect (T055).
     if let Some(repo) = core.workspace.active.clone() {
-        core.set_worktrees(discover_worktrees(caps.git(), &repo));
+        let outcomes = core.set_worktrees(discover_worktrees(caps.git(), &repo));
+        micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut core, o));
         // Feature 025: land on the session this project was last showing, rather than on the
         // project overview. The memory came from the store above, beside that project's sessions.
         //
@@ -218,7 +243,8 @@ fn boot() -> (App, Task<Message>) {
         //
         // Ordering: after `prune_empty_sessions` above, so a memory naming a session with no
         // conversation on disk resolves to nothing rather than to a session about to be dropped.
-        core.restore_after_activation(&repo);
+        let outcomes = core.restore_after_activation(&repo);
+        micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut core, o));
     }
     (
         App {

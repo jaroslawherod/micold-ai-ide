@@ -40,7 +40,7 @@ fn three_projects_run_concurrently_with_no_cap() {
 fn switching_among_projects_never_stops_a_session() {
     let mut st = three_projects();
     for p in ["/p2", "/p3", "/p1", "/p2"] {
-        assert!(st.switch_active(Path::new(p)));
+        assert!(st.switch_active(Path::new(p)).is_some());
         for q in ["/p1", "/p2", "/p3"] {
             let list = &st.workspace.sessions[Path::new(q)];
             assert_eq!(list.len(), 1, "no session dropped from {q}");
@@ -122,7 +122,7 @@ fn two_concurrent_default_sessions_are_independent() {
 fn displayed_session_always_belongs_to_the_active_project() {
     let mut st = three_projects();
     for p in ["/p2", "/p3", "/p1"] {
-        assert!(st.switch_active(Path::new(p)));
+        assert!(st.switch_active(Path::new(p)).is_some());
         let expected = st.workspace.sessions[Path::new(p)][0].id;
         assert_eq!(
             st.active_session,
@@ -130,4 +130,48 @@ fn displayed_session_always_belongs_to_the_active_project() {
             "no cross-project leak of foreground"
         );
     }
+}
+
+// ---------------------------------------------------------------------------------------
+// Feature 026 (T025) — the provider is per session, not per project
+// ---------------------------------------------------------------------------------------
+
+/// Two sessions in one project, on different CLIs, both running (FR-009, US1 scenario 4).
+///
+/// `provider` is independent of `location`: nothing groups or constrains sessions by it
+/// (data-model invariant 2). The isolation this file is about — distinct identities, correct owner
+/// resolution, independent counts — is unaffected by the two rows being backed by different CLIs,
+/// and that is what makes a mixed project ordinary rather than a special case.
+#[test]
+fn two_sessions_in_one_project_can_run_different_clis_at_once() {
+    use micold_core::session::{AiCli, Session};
+
+    let claude = Session::start_new(
+        SessionLocation::Worktree("wt1".to_string()),
+        AiCli::ClaudeCode,
+    );
+    let mut copilot =
+        Session::start_new(SessionLocation::Worktree("wt1".to_string()), AiCli::Copilot);
+    copilot.mark_running();
+    let mut claude = claude;
+    claude.mark_running();
+
+    let mut st = State {
+        workspace: workspace_with(vec![("/p1", vec![claude.clone(), copilot.clone()])]),
+        ..State::default()
+    };
+    st.workspace.active = Some(PathBuf::from("/p1"));
+
+    let sessions = &st.workspace.sessions[Path::new("/p1")];
+    assert_eq!(sessions.len(), 2, "both are live in the same project");
+    assert_ne!(sessions[0].id, sessions[1].id);
+    assert_eq!(sessions[0].provider, AiCli::ClaudeCode);
+    assert_eq!(
+        sessions[1].provider,
+        AiCli::Copilot,
+        "the second session's CLI is its own — sharing a worktree does not share a provider"
+    );
+    assert!(sessions
+        .iter()
+        .all(|s| s.lifecycle == SessionLifecycle::Running));
 }

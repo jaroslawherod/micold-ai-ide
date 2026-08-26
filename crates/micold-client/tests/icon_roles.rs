@@ -8,30 +8,12 @@
 
 use micold_client::icons::{icon_role, IconSurface};
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{roles, Rgb};
-
-/// Linearize a single 0..=255 sRGB channel per the WCAG definition.
-fn linearize(channel: u8) -> f64 {
-    let c = channel as f64 / 255.0;
-    if c <= 0.039_28 {
-        c / 12.92
-    } else {
-        ((c + 0.055) / 1.055).powf(2.4)
-    }
-}
-
-fn luminance(c: Rgb) -> f64 {
-    0.2126 * linearize(c.r) + 0.7152 * linearize(c.g) + 0.0722 * linearize(c.b)
-}
-
-fn contrast(a: Rgb, b: Rgb) -> f64 {
-    let (la, lb) = (luminance(a), luminance(b));
-    let (hi, lo) = if la >= lb { (la, lb) } else { (lb, la) };
-    (hi + 0.05) / (lo + 0.05)
-}
+// `contrast` from the crate that owns the colours, not from a copy here — see the note in
+// `micold-core/tests/tokens_contrast.rs`.
+use micold_core::tokens::{contrast, roles, AA_NON_TEXT};
 
 /// WCAG 1.4.11 minimum contrast for non-text graphics (icons are >= 18px graphical marks).
-const ICON_MIN: f64 = 3.0;
+const ICON_MIN: f64 = AA_NON_TEXT;
 
 #[test]
 fn every_icon_tint_is_legible_on_its_surface() {

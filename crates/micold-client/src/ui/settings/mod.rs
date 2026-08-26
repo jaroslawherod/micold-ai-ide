@@ -21,8 +21,9 @@ pub(crate) mod daemon;
 pub(crate) mod environment;
 pub(crate) mod terminal;
 
-use crate::app::{FieldId, Message};
+use crate::app::Message;
 use crate::features::settings::{SettingsDraft, SettingsSection};
+use crate::features::window::FieldId;
 use crate::ui::material::{Text, TypeRole};
 use iced::widget::column;
 use iced::{Element, Length};

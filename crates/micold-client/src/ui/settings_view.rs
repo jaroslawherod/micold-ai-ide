@@ -19,13 +19,15 @@
 //! holds that line: a rail rebuilt privately here would be invisible to every component gate in
 //! the crate.
 
-use crate::app::{FieldId, Message};
+use crate::app::Message;
 use crate::features::settings::{SettingsDraft, SettingsSection};
+use crate::features::window::FieldId;
 use crate::ui::material::{self, Button, Scrollable, Section, SectionList, SurfaceKind};
 use crate::ui::settings::{appearance, daemon, environment, terminal};
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
+use micold_core::session::AiCli;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
 
@@ -39,6 +41,7 @@ const SHARING: &str = "Sharing";
 pub fn view<'a>(
     draft: &'a SettingsDraft,
     env_include_outcome: &'a EnvIncludeOutcome,
+    available_providers: &'a [AiCli],
     focused: Option<FieldId>,
     scheme: ColorScheme,
 ) -> Element<'a, Message> {
@@ -71,7 +74,9 @@ pub fn view<'a>(
     let page: Element<'a, Message> = match draft.section {
         SettingsSection::Appearance => appearance::view(draft, r),
         SettingsSection::Terminal => terminal::view(draft, focused, r),
-        SettingsSection::Environment => environment::view(draft, env_include_outcome, focused, r),
+        SettingsSection::Environment => {
+            environment::view(draft, env_include_outcome, available_providers, focused, r)
+        }
         SettingsSection::Daemon => daemon::view(draft, focused, r),
     };
 

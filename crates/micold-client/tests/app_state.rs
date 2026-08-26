@@ -1,10 +1,33 @@
 //! T011 — extended app base state: defaults + new message wiring (feature 005).
 
-use micold_client::app::{on_escape, FieldId, Message, State};
+use micold_client::app::{on_escape, Message, State};
+use micold_client::features::window::FieldId;
+use micold_client::ui::terminal::StripTab;
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
 /// Asked of the registry, which reads each dialog's own state, so this is the same question about
 /// the same fact rather than a weaker one.
+/// Switch project the way the root does: apply the outcomes, don't just produce them (T067a-6).
+///
+/// `switch_active` reports arriving in a project rather than performing its view resets, so a test
+/// that dropped the outcomes would assert against a half-applied switch.
+fn switch(state: &mut State, path: &std::path::Path) -> bool {
+    match state.switch_active(path) {
+        Some(outcomes) => {
+            micold_client::app::drain(outcomes, |o| micold_client::app::interpret(state, o));
+            true
+        }
+        None => false,
+    }
+}
+
+/// Change the current session the way the root does (T067a-6): the commit of the outgoing row and
+/// the armed scroll are outcomes now, so a test that dropped them would assert against half a move.
+fn set_current(state: &mut State, next: Option<SessionId>) {
+    let outcomes = state.set_current_session(next);
+    micold_client::app::drain(outcomes, |o| micold_client::app::interpret(state, o));
+}
+
 fn open_dialog(state: &State) -> Option<&'static str> {
     micold_client::overlay::registry::open_dialog(state).map(|open| open.id().as_str())
 }
@@ -12,7 +35,9 @@ use micold_client::features::sidebar::TagFilter;
 use micold_client::features::worktree_form::WorktreeFormStatus;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
-use micold_core::session::{Session, SessionId, SessionLifecycle, SessionLocation};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLifecycle, SessionLocation, TerminalMode,
+};
 use micold_core::worktree::{CreateStage, Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
@@ -31,7 +56,9 @@ fn defaults_are_empty() {
 #[test]
 fn opening_the_form_sets_overlay_and_draft() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
     assert_eq!(open_dialog(&state), Some("add_worktree"));
     assert!(state.worktree_form.is_some());
 }
@@ -39,31 +66,48 @@ fn opening_the_form_sets_overlay_and_draft() {
 #[test]
 fn form_edits_build_a_derived_preview() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
-    state.update(Message::AddWorktreeTicketChanged("ABC-1".to_string()));
-    state.update(Message::AddWorktreeNameChanged("Login".to_string()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TicketChanged("ABC-1".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("Login".to_string()),
+    ));
 
     let form = state.worktree_form.as_ref().unwrap();
     let derived = form.preview().unwrap();
-    assert_eq!(derived.dir_name, "feat-abc-1-login");
-    assert_eq!(derived.branch, "feat/abc-1-login");
+    // Both carry the ticket boundary, so the branch maps back to this directory exactly (BUG-003).
+    assert_eq!(derived.dir_name, "feat-abc-1_login");
+    assert_eq!(derived.branch, "feat/abc-1_login");
 }
 
 #[test]
 fn submitting_an_invalid_form_records_the_error() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
     // No type selected, no name.
-    state.update(Message::AddWorktreeSubmitted);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Submitted,
+    ));
     assert!(state.worktree_form.as_ref().unwrap().error.is_some());
 }
 
 #[test]
 fn cancelling_the_form_clears_it() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeCancelled);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Cancelled,
+    ));
     assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_form.is_none());
 }
@@ -71,7 +115,9 @@ fn cancelling_the_form_clears_it() {
 #[test]
 fn created_worktree_is_added_and_form_closed() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
     let wt = Worktree {
         dir_name: "feat-x".to_string(),
         path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
@@ -79,7 +125,9 @@ fn created_worktree_is_added_and_form_closed() {
         status: WorktreeStatus::Valid,
         included: false,
     };
-    state.update(Message::WorktreeCreated(wt));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Created(wt),
+    ));
     assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_form.is_none());
     assert_eq!(state.worktrees.len(), 1);
@@ -88,8 +136,12 @@ fn created_worktree_is_added_and_form_closed() {
 #[test]
 fn create_started_marks_form_creating() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
     assert_eq!(
         state.worktree_form.as_ref().unwrap().status,
         WorktreeFormStatus::Creating
@@ -99,17 +151,29 @@ fn create_started_marks_form_creating() {
 #[test]
 fn field_edits_are_ignored_while_creating() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
-    state.update(Message::AddWorktreeNameChanged("Login".to_string()));
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("Login".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
 
     // The whole form is inactive while a create is in flight (feature 010 follow-up), not
     // just the submit button — edits during this window must be no-ops.
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Fix));
-    state.update(Message::AddWorktreeTicketChanged("ABC-1".to_string()));
-    state.update(Message::AddWorktreeNameChanged(
-        "Something else".to_string(),
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Fix),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TicketChanged("ABC-1".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("Something else".to_string()),
     ));
 
     let form = state.worktree_form.as_ref().unwrap();
@@ -121,9 +185,15 @@ fn field_edits_are_ignored_while_creating() {
 #[test]
 fn create_failed_keeps_form_open_and_resets_status_to_editing() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
-    state.update(Message::WorktreeCreateFailed("boom".to_string()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
+    ));
     assert_eq!(state.worktree_error.as_deref(), Some("boom"));
     assert!(state.worktree_form.is_some(), "form stays open for retry");
     assert_eq!(
@@ -132,17 +202,76 @@ fn create_failed_keeps_form_open_and_resets_status_to_editing() {
     );
 }
 
+/// A worktree list change clears a create failure shown against the old list (T067a-4).
+///
+/// Written because probe P3 fired nothing: removing the root's routing of `WorktreesReplaced` to
+/// the form left all 104 client suites green, so this behaviour was unguarded — and had been since
+/// before T067a-4, when the clear lived in `worktree::loaded` with no test either. The routing is
+/// what makes `worktree_error` the form's own field rather than a thing the worktree feature
+/// reaches into, so it is worth pinning rather than trusting.
+#[test]
+fn a_worktree_list_change_clears_a_stale_create_failure() {
+    let mut state = State::default();
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
+    ));
+    assert_eq!(state.worktree_error.as_deref(), Some("boom"));
+
+    state.update(Message::WorktreesLoaded(vec![]));
+    assert!(
+        state.worktree_error.is_none(),
+        "discovery answering makes a failure against the previous list stale"
+    );
+}
+
+/// The same, for the other path that alters the list (016 BUG-002).
+#[test]
+fn an_include_clears_a_stale_create_failure_too() {
+    let mut state = State::default();
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
+    ));
+
+    state.update(Message::WorktreeIncluded(Worktree {
+        dir_name: "feat-x".to_string(),
+        path: PathBuf::from("/p/.claude/worktrees/feat-x"),
+        branch: Some("feat/x".to_string()),
+        status: WorktreeStatus::Valid,
+        included: true,
+    }));
+    assert!(state.worktree_error.is_none());
+    assert_eq!(state.worktrees.len(), 1, "the include still lands");
+}
+
 #[test]
 fn resubmitting_while_creating_is_a_no_op() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
-    state.update(Message::AddWorktreeNameChanged("Login".to_string()));
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("Login".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
     // Corrupt the form to prove the guard skips validation entirely while Creating —
     // an unguarded AddWorktreeSubmitted would call preview() and record an error here.
-    state.update(Message::AddWorktreeNameChanged(String::new()));
-    state.update(Message::AddWorktreeSubmitted);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged(String::new()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Submitted,
+    ));
     assert!(state.worktree_form.as_ref().unwrap().error.is_none());
 }
 
@@ -151,10 +280,14 @@ fn resubmitting_while_creating_is_a_no_op() {
 #[test]
 fn selecting_a_type_sets_the_form_value() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
     assert_eq!(state.worktree_form.as_ref().unwrap().type_, None);
 
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
+    ));
     assert_eq!(
         state.worktree_form.as_ref().unwrap().type_,
         Some(ConventionalType::Feat)
@@ -164,12 +297,22 @@ fn selecting_a_type_sets_the_form_value() {
 #[test]
 fn type_selection_is_ignored_while_creating() {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
-    state.update(Message::AddWorktreeNameChanged("Login".to_string()));
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("Login".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
 
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Fix));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Fix),
+    ));
     assert_eq!(
         state.worktree_form.as_ref().unwrap().type_,
         Some(ConventionalType::Feat)
@@ -191,15 +334,21 @@ fn session_started_selected_and_closed() {
     // session is started *from* its row. Feature 024 made this matter: a row is opened for the
     // current session only when the panel knows the location (FR-013), where the old expansion
     // write happened whether the location existed or not.
-    state.set_worktrees(vec![Worktree {
-        dir_name: "feat-x".to_string(),
-        path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
-        branch: Some("feat/x".to_string()),
-        status: WorktreeStatus::Valid,
-        included: false,
-    }]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![Worktree {
+            dir_name: "feat-x".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/feat-x"),
+            branch: Some("feat/x".to_string()),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
 
-    let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     state.update(Message::SessionStarted(session));
     assert_eq!(state.active_session, Some(id));
@@ -250,7 +399,7 @@ fn default_session_started_enters_workspace_sessions() {
     });
     state.workspace.active = Some(path);
 
-    let session = Session::start_new(SessionLocation::Default);
+    let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     let id = session.id;
     state.update(Message::SessionStarted(session));
 
@@ -286,7 +435,10 @@ fn state_with_worktree_and_session(dir: &str) -> State {
         status: WorktreeStatus::Valid,
         included: false,
     });
-    let session = Session::start_new(SessionLocation::Worktree(dir.to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree(dir.to_string()),
+        AiCli::ClaudeCode,
+    );
     state.update(Message::SessionStarted(session));
     state
 }
@@ -543,7 +695,7 @@ fn switching_projects_resets_the_reveal_control() {
     state.update(Message::ShowAgentWorktreesToggled);
     assert!(state.show_agent_worktrees);
 
-    assert!(state.switch_active(&other));
+    assert!(switch(&mut state, &other));
     assert!(
         !state.show_agent_worktrees,
         "the incoming project must be entered with agent worktrees hidden"
@@ -551,32 +703,73 @@ fn switching_projects_resets_the_reveal_control() {
 
     // Switching back does not restore it either — nothing is remembered per project.
     let first = PathBuf::from("/repo");
-    assert!(state.switch_active(&first));
+    assert!(switch(&mut state, &first));
     assert!(!state.show_agent_worktrees);
 }
 
-// --- Feature 010: switchable regular terminal mode ---
+// --- Feature 027: the tab strip is the only route between a session's panes ---
 
+/// A terminal tab pressed while the AI pane is showing has to **show that terminal** (FR-002).
+///
+/// # The defect this exists for, which feature 026 shipped
+///
+/// `Session::select_shell` sets `active_shell` and nothing else. From the AI pane that moved a
+/// field nobody was looking at: `marked_tab` derives the indicator from the *mode*, so the mark
+/// stayed on the AI tab, and `session_process` derives the attachment from the mode too, so the
+/// keyboard stayed with the AI CLI. Three layers agreeing on a no-op is indistinguishable from a
+/// press that never registered.
+///
+/// It stayed hidden because a mode toggle sat beside the strip: the way to a terminal was to press
+/// *that*, and it landed on whichever instance `active_shell` already named — including one this
+/// no-op had quietly set. Feature 027 deletes the toggle, so the tab is the only route and has to
+/// carry the whole switch.
 #[test]
-fn terminal_mode_toggled_flips_the_active_sessions_mode() {
+fn selecting_a_terminal_tab_shows_that_terminal() {
     use micold_core::session::TerminalMode;
 
     let mut state = state_with_worktree_and_session("feat-x");
+    let id = state.active_session.unwrap();
+    let shell = state
+        .workspace
+        .find_session_mut(id)
+        .unwrap()
+        .1
+        .open_shell_instance();
+    // The precondition that makes this a test rather than a tautology: the AI pane is showing.
+    state.update(Message::TerminalAiCliSelected(id));
     assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
 
-    state.update(Message::TerminalModeToggled);
-    assert_eq!(state.active_sessions()[0].mode, TerminalMode::Regular);
+    state.update(Message::ShellInstanceSelected(id, shell));
 
-    state.update(Message::TerminalModeToggled);
-    assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
+    assert_eq!(
+        state.active_sessions()[0].mode,
+        TerminalMode::Regular,
+        "pressing a terminal tab has to display that terminal, not merely record it as the one a \
+         later switch would land on"
+    );
+    assert_eq!(state.active_sessions()[0].active_shell, Some(shell));
 }
 
+/// And back again by the AI tab — the round trip the deleted mode toggle used to make on its own.
 #[test]
-fn terminal_mode_toggled_is_a_no_op_with_no_active_session() {
-    let mut state = State::default();
-    // No panic, no-op: there is no active session to address.
-    state.update(Message::TerminalModeToggled);
-    assert!(state.active_session.is_none());
+fn the_two_kinds_of_tab_move_the_session_between_its_panes() {
+    use micold_core::session::TerminalMode;
+
+    let mut state = state_with_worktree_and_session("feat-x");
+    let id = state.active_session.unwrap();
+    let shell = state
+        .workspace
+        .find_session_mut(id)
+        .unwrap()
+        .1
+        .open_shell_instance();
+    assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
+
+    state.update(Message::ShellInstanceSelected(id, shell));
+    assert_eq!(state.active_sessions()[0].mode, TerminalMode::Regular);
+
+    state.update(Message::TerminalAiCliSelected(id));
+    assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
 }
 
 #[test]
@@ -602,6 +795,179 @@ fn shell_instance_running_and_exited_update_that_instances_lifecycle() {
     assert_eq!(
         state.active_sessions()[0].active_shell_lifecycle(),
         Some(ShellLifecycle::Exited)
+    );
+}
+
+/// The tab context menu remembers **which tab** it was opened on (feature 012, BUG-005, FR-010b).
+///
+/// The whole reason the menu carries an instance id rather than reading the active one: FR-010a is
+/// about restarting an instance that is *not* selected, and reading `active_shell` at the moment the
+/// item is pressed would restart whichever tab the user happens to be looking at instead. That is a
+/// mistake no screenshot would catch — the menu opens on the right tab and does the wrong thing.
+#[test]
+fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    let id = state.active_session.unwrap();
+    let (background, active) = {
+        let session = state.workspace.find_session_mut(id).unwrap().1;
+        let first = session.open_shell_instance();
+        let second = session.open_shell_instance();
+        (first, second)
+    };
+    // `open_shell_instance` leaves the last-opened one active, so `background` is not selected —
+    // which is the case under test.
+    assert_eq!(state.active_sessions()[0].active_shell, Some(active));
+
+    state.update(Message::StripTabMenuRequested(
+        StripTab::Instance(background),
+        742,
+        761,
+    ));
+    assert_eq!(
+        state.shell_instance_menu,
+        Some((StripTab::Instance(background), 742, 761)),
+        "the menu must record the instance whose tab was clicked, not the active one"
+    );
+
+    // Opening another tab's menu moves the one menu rather than stacking a second: two open menus
+    // would each claim the next click, and only one of them would be the one the user is looking at.
+    state.update(Message::StripTabMenuRequested(
+        StripTab::Instance(active),
+        880,
+        761,
+    ));
+    assert_eq!(
+        state.shell_instance_menu,
+        Some((StripTab::Instance(active), 880, 761))
+    );
+
+    state.update(Message::ShellInstanceMenuClosed);
+    assert_eq!(state.shell_instance_menu, None);
+}
+
+/// Feature 026 FR-006/FR-007/FR-011: a primary press on the AI tab shows the AI CLI and does
+/// nothing else at all.
+///
+/// The three "nothing else" clauses are the test. FR-006 says selecting is *all* a primary press
+/// does — it must not start, stop, restart or otherwise disturb any process, neither the AI CLI nor
+/// any terminal instance — and FR-007 says pressing it while already displayed is a no-op with no
+/// visible change. Acting on the process is FR-006a's menu, reached by a different press.
+#[test]
+fn pressing_the_ai_tab_shows_the_ai_cli_and_disturbs_nothing() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    let id = state.active_session.unwrap();
+    let shell = {
+        let session = state.workspace.find_session_mut(id).unwrap().1;
+        let opened = session.open_shell_instance();
+        session.set_mode(TerminalMode::Regular);
+        opened
+    };
+    let before = state.active_sessions()[0].clone();
+    assert_eq!(before.mode, TerminalMode::Regular);
+
+    state.update(Message::TerminalAiCliSelected(id));
+    let after = &state.active_sessions()[0];
+    assert_eq!(
+        after.mode,
+        TerminalMode::AiCli,
+        "FR-006: the pane shows the AI CLI"
+    );
+    assert_eq!(
+        after.lifecycle, before.lifecycle,
+        "FR-006: selecting must not disturb the AI CLI process"
+    );
+    assert_eq!(
+        after.active_shell,
+        Some(shell),
+        "FR-006: the instance the user was on stays selected, so switching back returns to it \
+         rather than to an arbitrary one"
+    );
+    assert_eq!(
+        after.shells.iter().map(|s| s.lifecycle).collect::<Vec<_>>(),
+        before
+            .shells
+            .iter()
+            .map(|s| s.lifecycle)
+            .collect::<Vec<_>>(),
+        "FR-006: no terminal instance is started, stopped or restarted by selecting a tab"
+    );
+
+    // FR-007: pressing it again, while it is already what the pane shows, changes nothing at all.
+    let displayed = state.active_sessions()[0].clone();
+    state.update(Message::TerminalAiCliSelected(id));
+    let again = &state.active_sessions()[0];
+    assert_eq!(again.mode, displayed.mode);
+    assert_eq!(again.lifecycle, displayed.lifecycle);
+    assert_eq!(again.active_shell, displayed.active_shell);
+}
+
+/// FR-006a: the menu records **which tab** it was opened on, and the AI tab is one of them.
+///
+/// Extends feature 012's BUG-005 test to the AI tab, through the widened `StripTab` (research R8).
+/// One surface, not a second one: FR-006a defines the AI tab's menu as the terminal tab's menu with
+/// an item filtered, and two surfaces is the shape that lets them drift — which is the thing FR-006a
+/// is worded to prevent.
+#[test]
+fn the_tab_menu_records_which_tab_including_the_ai_one() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    let id = state.active_session.unwrap();
+    let shell = state
+        .workspace
+        .find_session_mut(id)
+        .unwrap()
+        .1
+        .open_shell_instance();
+
+    state.update(Message::StripTabMenuRequested(
+        StripTab::Instance(shell),
+        742,
+        761,
+    ));
+    assert_eq!(
+        state.shell_instance_menu,
+        Some((StripTab::Instance(shell), 742, 761))
+    );
+
+    // Opening the AI tab's menu **replaces** the instance's rather than stacking a second: two open
+    // menus would each claim the next click, and only one is the one the user is looking at.
+    state.update(Message::StripTabMenuRequested(StripTab::Ai, 880, 761));
+    assert_eq!(
+        state.shell_instance_menu,
+        Some((StripTab::Ai, 880, 761)),
+        "the AI tab's menu is the same surface, moved — not a second one beside it"
+    );
+
+    state.update(Message::ShellInstanceMenuClosed);
+    assert_eq!(state.shell_instance_menu, None);
+}
+
+/// Opening a dialog closes the tab menu with every other popover (feature 021, T031).
+///
+/// Registered rather than remembered: `clear_for_dialog` asks the registry which surfaces are open
+/// instead of assigning to a list of fields, so this passes because `ShellInstanceMenu` is in the
+/// registry. A menu left out of it would survive a dialog opening over it and take the next click.
+#[test]
+fn the_tab_menu_closes_when_a_dialog_opens() {
+    let mut state = state_with_worktree_and_session("feat-x");
+    let id = state.active_session.unwrap();
+    let shell = state
+        .workspace
+        .find_session_mut(id)
+        .unwrap()
+        .1
+        .open_shell_instance();
+
+    state.update(Message::StripTabMenuRequested(
+        StripTab::Instance(shell),
+        742,
+        761,
+    ));
+    assert!(state.shell_instance_menu.is_some());
+
+    state.clear_for_dialog();
+    assert_eq!(
+        state.shell_instance_menu, None,
+        "a menu that outlives the dialog opening over it claims the next click"
     );
 }
 
@@ -691,9 +1057,15 @@ fn multi_remote_conflict() -> BranchSituation {
 /// A form with valid new-branch inputs, ready to submit.
 fn form_state() -> State {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeTypeSelected(ConventionalType::Feat));
-    state.update(Message::AddWorktreeNameChanged("login".to_string()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("login".to_string()),
+    ));
     state
 }
 
@@ -708,7 +1080,9 @@ fn a_detected_conflict_opens_the_choice_prompt() {
     let mut state = form_state();
     assert_eq!(form(&state).resolution, ResolutionState::Idle);
 
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
 
     assert_eq!(
         form(&state).resolution,
@@ -722,11 +1096,17 @@ fn a_detected_conflict_opens_the_choice_prompt() {
 #[test]
 fn cancelling_the_choice_restores_idle_and_preserves_every_input() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeTicketChanged("ABC-123".to_string()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TicketChanged("ABC-123".to_string()),
+    ));
     let before = form(&state).clone();
 
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
-    state.update(Message::AddWorktreeResolutionCancelled);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ResolutionCancelled,
+    ));
 
     let after = form(&state);
     assert_eq!(after.resolution, ResolutionState::Idle);
@@ -743,10 +1123,14 @@ fn cancelling_the_choice_restores_idle_and_preserves_every_input() {
 #[test]
 fn overwrite_requires_passing_through_the_confirmation() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
 
     // Invariant 1: the destructive mode cannot be chosen straight from the prompt.
-    state.update(Message::AddWorktreeResolutionChosen(CreateMode::Overwrite));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ResolutionChosen(CreateMode::Overwrite),
+    ));
     assert_eq!(
         form(&state).resolution,
         ResolutionState::Choosing {
@@ -755,7 +1139,9 @@ fn overwrite_requires_passing_through_the_confirmation() {
         "Overwrite must not resolve directly from the choice"
     );
 
-    state.update(Message::AddWorktreeOverwriteRequested);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::OverwriteRequested,
+    ));
     assert_eq!(
         form(&state).resolution,
         ResolutionState::ConfirmingOverwrite {
@@ -763,7 +1149,9 @@ fn overwrite_requires_passing_through_the_confirmation() {
         }
     );
 
-    state.update(Message::AddWorktreeOverwriteConfirmed);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::OverwriteConfirmed,
+    ));
     assert_eq!(form(&state).resolution, ResolutionState::Idle);
 }
 
@@ -771,10 +1159,16 @@ fn overwrite_requires_passing_through_the_confirmation() {
 fn backing_out_of_the_confirmation_returns_to_the_choice_not_the_form() {
     // Invariant 3 (US2 AS3): reuse and cancel must still be available afterwards.
     let mut state = form_state();
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
-    state.update(Message::AddWorktreeOverwriteRequested);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::OverwriteRequested,
+    ));
 
-    state.update(Message::AddWorktreeResolutionCancelled);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ResolutionCancelled,
+    ));
 
     assert_eq!(
         form(&state).resolution,
@@ -788,8 +1182,12 @@ fn backing_out_of_the_confirmation_returns_to_the_choice_not_the_form() {
 fn overwrite_cannot_be_requested_for_a_remote_only_branch() {
     // There is no local branch to destroy, so the confirmation must never open.
     let mut state = form_state();
-    state.update(Message::AddWorktreeConflictDetected(remote_conflict()));
-    state.update(Message::AddWorktreeOverwriteRequested);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(remote_conflict()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::OverwriteRequested,
+    ));
 
     assert_eq!(
         form(&state).resolution,
@@ -802,16 +1200,22 @@ fn overwrite_cannot_be_requested_for_a_remote_only_branch() {
 #[test]
 fn choosing_reuse_or_track_resolves_the_prompt() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
-    state.update(Message::AddWorktreeResolutionChosen(CreateMode::ReuseLocal));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ResolutionChosen(CreateMode::ReuseLocal),
+    ));
     assert_eq!(form(&state).resolution, ResolutionState::Idle);
 
     let mut state = form_state();
-    state.update(Message::AddWorktreeConflictDetected(remote_conflict()));
-    state.update(Message::AddWorktreeResolutionChosen(
-        CreateMode::TrackRemote {
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(remote_conflict()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ResolutionChosen(CreateMode::TrackRemote {
             remote: "origin".to_string(),
-        },
+        }),
     ));
     assert_eq!(form(&state).resolution, ResolutionState::Idle);
 }
@@ -820,8 +1224,12 @@ fn choosing_reuse_or_track_resolves_the_prompt() {
 #[test]
 fn starting_fresh_over_a_remote_branch_resolves_to_a_new_branch() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeConflictDetected(remote_conflict()));
-    state.update(Message::AddWorktreeResolutionChosen(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(remote_conflict()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ResolutionChosen(CreateMode::NewBranch),
+    ));
     assert_eq!(form(&state).resolution, ResolutionState::Idle);
 }
 
@@ -829,10 +1237,14 @@ fn starting_fresh_over_a_remote_branch_resolves_to_a_new_branch() {
 #[test]
 fn a_conflict_is_never_raised_while_a_create_is_in_flight() {
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
     assert_eq!(form(&state).status, WorktreeFormStatus::Creating);
 
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
 
     assert_eq!(form(&state).resolution, ResolutionState::Idle);
 }
@@ -840,10 +1252,16 @@ fn a_conflict_is_never_raised_while_a_create_is_in_flight() {
 #[test]
 fn edits_are_ignored_while_a_prompt_is_open() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
 
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
-    state.update(Message::AddWorktreeBranchSelected(candidate("feat/other")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("feat/other")),
+    ));
 
     assert_eq!(form(&state).source, BranchSource::New);
     assert_eq!(form(&state).selected_branch, None);
@@ -867,8 +1285,12 @@ fn a_blocked_situation_offers_no_actionable_mode_and_dismisses_to_idle() {
 
         let mut state = form_state();
         let before = form(&state).clone();
-        state.update(Message::AddWorktreeConflictDetected(situation));
-        state.update(Message::AddWorktreeResolutionCancelled);
+        state.update(Message::WorktreeForm(
+            micold_client::features::worktree_form::Msg::ConflictDetected(situation),
+        ));
+        state.update(Message::WorktreeForm(
+            micold_client::features::worktree_form::Msg::ResolutionCancelled,
+        ));
 
         assert_eq!(form(&state).resolution, ResolutionState::Idle);
         assert_eq!(form(&state).name, before.name);
@@ -929,12 +1351,18 @@ fn blocked_candidate(name: &str) -> BranchCandidate {
 #[test]
 fn switching_to_the_existing_source_and_back_clears_the_selection() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
-    state.update(Message::AddWorktreeBranchSelected(candidate("feat/other")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("feat/other")),
+    ));
     assert_eq!(form(&state).source, BranchSource::Existing);
     assert!(form(&state).selected_branch.is_some());
 
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::New));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::New),
+    ));
 
     // FR-015: no residual state, and the new-branch inputs are untouched.
     assert_eq!(form(&state).selected_branch, None);
@@ -947,13 +1375,15 @@ fn the_preview_follows_the_active_source() {
     let mut state = form_state();
     assert_eq!(form(&state).preview().unwrap().branch, "feat/login");
 
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
     // Nothing picked yet — no preview to show.
     assert!(form(&state).preview().is_err());
 
-    state.update(Message::AddWorktreeBranchSelected(candidate(
-        "release/v1.2",
-    )));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("release/v1.2")),
+    ));
     let derived = form(&state).preview().unwrap();
     // FR-014: the directory is derived from the branch, using the same naming rules.
     assert_eq!(derived.branch, "release/v1.2");
@@ -971,18 +1401,22 @@ fn the_preview_follows_the_active_source() {
 #[test]
 fn a_blocked_candidate_cannot_even_become_the_selection() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
 
-    state.update(Message::AddWorktreeBranchSelected(blocked_candidate(
-        "main",
-    )));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(blocked_candidate("main")),
+    ));
     assert!(
         form(&state).selected_branch.is_none(),
         "a branch that is checked out elsewhere must not be choosable at all (FR-012a)"
     );
     assert!(!form(&state).can_submit());
 
-    state.update(Message::AddWorktreeBranchSelected(candidate("feat/free")));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchSelected(candidate("feat/free")),
+    ));
     assert_eq!(
         form(&state).selected_branch.as_ref().unwrap().name,
         "feat/free"
@@ -1006,11 +1440,15 @@ fn the_submit_guard_still_refuses_a_blocked_selection_if_one_ever_reached_it() {
 #[test]
 fn the_listed_candidates_are_stored_for_the_picker() {
     let mut state = form_state();
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
-    state.update(Message::AddWorktreeBranchesListed(vec![
-        candidate("feat/a"),
-        blocked_candidate("main"),
-    ]));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchesListed(vec![
+            candidate("feat/a"),
+            blocked_candidate("main"),
+        ]),
+    ));
     assert_eq!(form(&state).candidates.len(), 2);
 }
 
@@ -1019,13 +1457,19 @@ fn submission_is_blocked_while_a_prompt_is_open_or_a_create_is_running() {
     let mut state = form_state();
     assert!(form(&state).can_submit());
 
-    state.update(Message::AddWorktreeConflictDetected(local_conflict()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
+    ));
     assert!(!form(&state).can_submit());
 
-    state.update(Message::AddWorktreeResolutionCancelled);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::ResolutionCancelled,
+    ));
     assert!(form(&state).can_submit());
 
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
     assert!(!form(&state).can_submit());
 }
 
@@ -1072,10 +1516,14 @@ fn a_single_remote_needs_no_preference() {
 fn the_stage_label_is_worded_for_the_mode_in_flight() {
     // The whole point of FR-024: a reuse must not claim to be creating a branch.
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::ReuseLocal));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::CreatingWorktree,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::ReuseLocal),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::CreatingWorktree,
+            None,
+        ),
     ));
     assert_eq!(
         form(&state).stage_label(),
@@ -1083,10 +1531,14 @@ fn the_stage_label_is_worded_for_the_mode_in_flight() {
     );
 
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::CreatingWorktree,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::CreatingWorktree,
+            None,
+        ),
     ));
     assert_eq!(
         form(&state).stage_label(),
@@ -1094,10 +1546,14 @@ fn the_stage_label_is_worded_for_the_mode_in_flight() {
     );
 
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::Overwrite));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::CreatingWorktree,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::Overwrite),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::CreatingWorktree,
+            None,
+        ),
     ));
     assert_eq!(
         form(&state).stage_label(),
@@ -1105,12 +1561,16 @@ fn the_stage_label_is_worded_for_the_mode_in_flight() {
     );
 
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::TrackRemote {
-        remote: "origin".to_string(),
-    }));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::CreatingWorktree,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::TrackRemote {
+            remote: "origin".to_string(),
+        }),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::CreatingWorktree,
+            None,
+        ),
     ));
     assert_eq!(
         form(&state).stage_label(),
@@ -1122,10 +1582,14 @@ fn the_stage_label_is_worded_for_the_mode_in_flight() {
 fn stages_that_do_not_vary_by_mode_read_the_same_everywhere() {
     for mode in [CreateMode::NewBranch, CreateMode::ReuseLocal] {
         let mut state = form_state();
-        state.update(Message::WorktreeCreateStarted(mode));
-        state.update(Message::WorktreeCreateStageChanged(
-            CreateStage::SettingUpSubmodules,
-            None,
+        state.update(Message::WorktreeForm(
+            micold_client::features::worktree_form::Msg::CreateStarted(mode),
+        ));
+        state.update(Message::WorktreeForm(
+            micold_client::features::worktree_form::Msg::CreateStageChanged(
+                CreateStage::SettingUpSubmodules,
+                None,
+            ),
         ));
         assert_eq!(form(&state).stage_label(), Some("Setting up submodules"));
     }
@@ -1136,26 +1600,38 @@ fn there_is_no_stage_until_the_daemon_reports_one() {
     // The window between sending the RPC and git starting is real; the view falls back to the
     // generic wording rather than inventing a step.
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::ReuseLocal));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::ReuseLocal),
+    ));
     assert_eq!(form(&state).stage_label(), None);
 }
 
 #[test]
 fn a_new_attempt_never_inherits_the_previous_attempts_stage() {
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::Overwrite));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::CreatingWorktree,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::Overwrite),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::CreatingWorktree,
+            None,
+        ),
     ));
     // The create fails and the user retries with a plain new branch.
-    state.update(Message::WorktreeCreateFailed("boom".to_string()));
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
 
     assert_eq!(form(&state).stage_label(), None);
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::CreatingWorktree,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::CreatingWorktree,
+            None,
+        ),
     ));
     assert_eq!(
         form(&state).stage_label(),
@@ -1171,10 +1647,14 @@ fn a_live_output_line_is_kept_beside_the_stage_it_belongs_to() {
     // The reported case: "Setting up submodules" sat unchanged for the length of a fetch. The
     // daemon rate-limits these; the form's job is simply to hold the latest one.
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::SettingUpSubmodules,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+            None,
+        ),
     ));
     assert_eq!(
         form(&state).stage_detail,
@@ -1182,9 +1662,11 @@ fn a_live_output_line_is_kept_beside_the_stage_it_belongs_to() {
         "a stage arrives on its own"
     );
 
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::SettingUpSubmodules,
-        Some("Cloning into 'vendor/a'…".to_string()),
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+            Some("Cloning into 'vendor/a'…".to_string()),
+        ),
     ));
     assert_eq!(
         form(&state).stage_detail.as_deref(),
@@ -1192,9 +1674,11 @@ fn a_live_output_line_is_kept_beside_the_stage_it_belongs_to() {
     );
 
     // Superseded, not accumulated — this is a "where it is now" signal, not a log.
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::SettingUpSubmodules,
-        Some("Receiving objects:  47%".to_string()),
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+            Some("Receiving objects:  47%".to_string()),
+        ),
     ));
     assert_eq!(
         form(&state).stage_detail.as_deref(),
@@ -1212,18 +1696,26 @@ fn a_stage_change_drops_the_previous_stages_trailing_line() {
     // Otherwise a rollback would be captioned with the fetch line that preceded it — the most
     // misleading moment to show a stale line.
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::SettingUpSubmodules,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
     ));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::SettingUpSubmodules,
-        Some("Receiving objects:  47%".to_string()),
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+            None,
+        ),
     ));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::RollingBack,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+            Some("Receiving objects:  47%".to_string()),
+        ),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::RollingBack,
+            None,
+        ),
     ));
 
     assert_eq!(form(&state).stage_label(), Some("Rolling back"));
@@ -1233,17 +1725,27 @@ fn a_stage_change_drops_the_previous_stages_trailing_line() {
 #[test]
 fn a_new_attempt_never_inherits_the_previous_attempts_line() {
     let mut state = form_state();
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::SettingUpSubmodules,
-        None,
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
     ));
-    state.update(Message::WorktreeCreateStageChanged(
-        CreateStage::SettingUpSubmodules,
-        Some("Cloning into 'vendor/a'…".to_string()),
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+            None,
+        ),
     ));
-    state.update(Message::WorktreeCreateFailed("boom".to_string()));
-    state.update(Message::WorktreeCreateStarted(CreateMode::NewBranch));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStageChanged(
+            CreateStage::SettingUpSubmodules,
+            Some("Cloning into 'vendor/a'…".to_string()),
+        ),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
+    ));
 
     assert_eq!(form(&state).stage_detail, None);
 }
@@ -1333,7 +1835,10 @@ fn state_with_current_session_in(dir: &str) -> State {
         status: WorktreeStatus::Valid,
         included: false,
     }];
-    let session = Session::start_new(SessionLocation::Worktree(dir.to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree(dir.to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
     state.active_session = Some(id);
@@ -1362,13 +1867,16 @@ fn collapsing_the_revealed_row_closes_it_and_it_stays_closed() {
          a different session is not swallowed by it (invariant I2)"
     );
 
-    state.set_worktrees(vec![Worktree {
-        dir_name: "feat-a".to_string(),
-        path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
-        branch: Some("feat/feat-a".to_string()),
-        status: WorktreeStatus::Valid,
-        included: false,
-    }]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![Worktree {
+            dir_name: "feat-a".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+            branch: Some("feat/feat-a".to_string()),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
     assert!(
         !state.location_open(&location),
         "and a worktree re-discovery does not undo it — the case a one-shot implementation gets \
@@ -1406,7 +1914,7 @@ fn the_default_rows_twisty_suppresses_the_same_way() {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    let session = Session::start_new(SessionLocation::Default);
+    let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
     state.active_session = Some(id);
@@ -1431,7 +1939,7 @@ fn a_location_that_stops_holding_the_current_session_stays_open() {
     let mut state = state_with_current_session_in("feat-a");
     let location = SessionLocation::Worktree("feat-a".to_string());
 
-    state.set_current_session(None);
+    set_current(&mut state, None);
 
     assert!(
         state.location_open(&location),
@@ -1452,7 +1960,7 @@ fn a_row_the_user_closed_is_not_re_opened_by_the_commit() {
     let location = SessionLocation::Worktree("feat-a".to_string());
     state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
 
-    state.set_current_session(None);
+    set_current(&mut state, None);
 
     assert!(
         !state.location_open(&location),
@@ -1466,7 +1974,7 @@ fn clearing_the_current_session_arms_no_scroll() {
     let mut state = state_with_current_session_in("feat-a");
     state.pending_reveal_scroll = false;
 
-    state.set_current_session(None);
+    set_current(&mut state, None);
 
     assert!(
         !state.pending_reveal_scroll,
@@ -1482,11 +1990,14 @@ fn a_change_of_current_session_lifts_a_suppression_made_against_the_old_one() {
     state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
     assert_eq!(state.reveal_suppressed_for, state.active_session);
 
-    let next = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let next = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let next_id = next.id;
     let path = state.workspace.active.clone().unwrap();
     state.workspace.sessions.get_mut(&path).unwrap().push(next);
-    state.set_current_session(Some(next_id));
+    set_current(&mut state, Some(next_id));
 
     assert!(
         state.reveal_suppressed_for.is_none(),
@@ -1525,7 +2036,10 @@ fn state_with_many_worktrees(count: usize) -> State {
             included: false,
         })
         .collect();
-    let session = Session::start_new(SessionLocation::Worktree(format!("feat-{:02}", count - 1)));
+    let session = Session::start_new(
+        SessionLocation::Worktree(format!("feat-{:02}", count - 1)),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
     state.active_session = Some(id);
@@ -1585,7 +2099,9 @@ fn a_reveal_waits_for_the_worktree_list_rather_than_scrolling_to_a_stale_row() {
     let mut state = state_with_many_worktrees(30);
     state.sidebar_viewport_height = 400;
     // The switch has happened but discovery has not reported yet: the panel knows of no locations.
-    state.set_worktrees(Vec::new());
+    micold_client::app::drain(state.set_worktrees(Vec::new()), |o| {
+        micold_client::app::interpret(&mut state, o)
+    });
 
     assert!(
         !state.current_session_is_listed(),
@@ -1604,25 +2120,31 @@ fn a_reveal_waits_for_the_worktree_list_rather_than_scrolling_to_a_stale_row() {
 #[test]
 fn starting_a_session_reveals_it() {
     let mut state = state_with_current_session_in("feat-a");
-    state.set_worktrees(vec![
-        Worktree {
-            dir_name: "feat-a".to_string(),
-            path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
-            branch: Some("feat/feat-a".to_string()),
-            status: WorktreeStatus::Valid,
-            included: false,
-        },
-        Worktree {
-            dir_name: "feat-b".to_string(),
-            path: PathBuf::from("/repo/.claude/worktrees/feat-b"),
-            branch: Some("feat/feat-b".to_string()),
-            status: WorktreeStatus::Valid,
-            included: false,
-        },
-    ]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![
+            Worktree {
+                dir_name: "feat-a".to_string(),
+                path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+                branch: Some("feat/feat-a".to_string()),
+                status: WorktreeStatus::Valid,
+                included: false,
+            },
+            Worktree {
+                dir_name: "feat-b".to_string(),
+                path: PathBuf::from("/repo/.claude/worktrees/feat-b"),
+                branch: Some("feat/feat-b".to_string()),
+                status: WorktreeStatus::Valid,
+                included: false,
+            },
+        ]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
     state.pending_reveal_scroll = false;
 
-    let started = Session::start_new(SessionLocation::Worktree("feat-b".to_string()));
+    let started = Session::start_new(
+        SessionLocation::Worktree("feat-b".to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = started.id;
     state.update(Message::SessionStarted(started));
 
@@ -1643,7 +2165,10 @@ fn starting_a_session_reveals_it() {
 #[test]
 fn clicking_a_session_marks_it_and_moves_nothing() {
     let mut state = state_with_current_session_in("feat-a");
-    let other = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let other = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let other_id = other.id;
     let path = state.workspace.active.clone().unwrap();
     state.workspace.sessions.get_mut(&path).unwrap().push(other);
@@ -1662,7 +2187,10 @@ fn clicking_a_session_marks_it_and_moves_nothing() {
 #[test]
 fn closing_the_current_session_promotes_nothing_in_its_place() {
     let mut state = state_with_current_session_in("feat-a");
-    let sibling = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let sibling = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let path = state.workspace.active.clone().unwrap();
     state
         .workspace
@@ -1728,7 +2256,7 @@ fn applying_the_memory_makes_that_session_current_and_reveals_it() {
     let path = state.workspace.active.clone().unwrap();
 
     let choice = state.explain_foreground(&path);
-    state.set_current_session(choice.session());
+    set_current(&mut state, choice.session());
 
     assert_eq!(
         state.active_session,
@@ -1752,7 +2280,8 @@ fn applying_the_memory_starts_only_the_session_it_displays() {
         .map(|s| (s.id, s.lifecycle))
         .collect();
 
-    state.set_current_session(state.explain_foreground(&path).session());
+    let choice = state.explain_foreground(&path).session();
+    set_current(&mut state, choice);
 
     let after: Vec<_> = state
         .active_sessions()
@@ -1784,7 +2313,10 @@ fn applying_one_projects_memory_leaves_every_other_project_alone() {
     let other_session = SessionId::new();
     state.workspace.sessions.insert(
         elsewhere.clone(),
-        vec![Session::start_new(SessionLocation::Default)],
+        vec![Session::start_new(
+            SessionLocation::Default,
+            micold_core::session::AiCli::ClaudeCode,
+        )],
     );
     state
         .workspace
@@ -1792,7 +2324,8 @@ fn applying_one_projects_memory_leaves_every_other_project_alone() {
         .insert(elsewhere.clone(), other_session);
     let untouched = state.workspace.sessions.get(&elsewhere).cloned().unwrap();
 
-    state.set_current_session(state.explain_foreground(&opened).session());
+    let choice = state.explain_foreground(&opened).session();
+    set_current(&mut state, choice);
 
     assert_eq!(
         state.workspace.sessions.get(&elsewhere),
@@ -1813,10 +2346,13 @@ fn a_memory_whose_worktree_is_gone_is_still_restored() {
     let path = state.workspace.active.clone().unwrap();
     // Deleted outside the application: the worktree is gone from discovery, but the session's
     // record survives in the project's state file.
-    state.set_worktrees(Vec::new());
+    micold_client::app::drain(state.set_worktrees(Vec::new()), |o| {
+        micold_client::app::interpret(&mut state, o)
+    });
     state.expanded.insert("kept-open".to_string());
 
-    state.set_current_session(state.explain_foreground(&path).session());
+    let choice = state.explain_foreground(&path).session();
+    set_current(&mut state, choice);
 
     assert_eq!(
         state.active_session,
@@ -1840,7 +2376,8 @@ fn a_memory_naming_a_closed_session_restores_nothing_and_disturbs_nothing() {
     }
     state.expanded.insert("kept-open".to_string());
 
-    state.set_current_session(state.explain_foreground(&path).session());
+    let choice = state.explain_foreground(&path).session();
+    set_current(&mut state, choice);
 
     assert!(
         state.active_session.is_none(),

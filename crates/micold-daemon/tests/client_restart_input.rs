@@ -33,7 +33,9 @@ use micold_core::connect::{connect_or_spawn, Connected, DaemonConnection, Welcom
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg};
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::spawn::DAEMON_BIN_ENV;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -88,6 +90,7 @@ fn seed_catalog(project_dir: &Path) {
         SessionLocation::Default,
         SessionLabel::Named("Shell".into()),
         TerminalMode::Regular,
+        AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project_dir.to_path_buf(), vec![session]);

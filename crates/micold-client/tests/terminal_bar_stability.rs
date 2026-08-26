@@ -147,6 +147,60 @@ fn the_bar_does_not_branch_on_focus() {
     );
 }
 
+/// Feature 026 FR-003/FR-008a: the bar must not add or remove a child as a function of **how many
+/// instances are open** either.
+///
+/// The same rule as `the_bar_does_not_branch_on_focus`, applied to the thing this feature changes.
+/// The strip used to be pushed only once a session had more than one instance — an
+/// `if let Some(switcher)` around a `push`, which is precisely the shape that shifts every sibling
+/// after it. Opening a second instance therefore renumbered the "+" and the mode toggle under
+/// whatever press was in flight.
+///
+/// FR-003 makes the strip unconditional, which removes today's trigger. This removes the class:
+/// as long as the bar's child list does not vary with the session's shape, no sibling can shift
+/// under a press. It reads the source rather than the behaviour for the reason the module doc
+/// gives — the failure is silent, and no behavioural test can see a press that was never published.
+#[test]
+fn the_bar_does_not_branch_on_how_many_instances_are_open() {
+    let src = crate_sources()
+        .into_iter()
+        .find(|(rel, _)| rel == "ui/terminal.rs" || rel == "ui\\terminal.rs")
+        .map(|(_, src)| src)
+        .expect("ui/terminal.rs must exist");
+
+    /// The ways the source can ask "how many instances does this session have".
+    const INSTANCE_COUNT_QUESTION: &[&str] = &[
+        "shells.len()",
+        "shells.is_empty()",
+        "instance_switcher_row(",
+        "tab_strip_row(",
+    ];
+
+    let lines: Vec<&str> = src.lines().collect();
+    let mut found = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        let is_guard = (line.contains("if ") || line.contains("if let"))
+            && INSTANCE_COUNT_QUESTION.iter().any(|q| line.contains(q));
+        if !is_guard {
+            continue;
+        }
+        let window = lines[i..lines.len().min(i + 3)].join(" ");
+        if PUSHES_A_CHILD.iter().any(|p| window.contains(p)) {
+            found.push(format!("ui/terminal.rs:{}  {}", i + 1, line.trim()));
+        }
+    }
+
+    assert!(
+        found.is_empty(),
+        "the terminal's bottom bar must not add or remove a child as a function of the session's \
+         instance count (feature 026 FR-003, feature 023 FR-008a). A conditional child shifts every \
+         sibling after it, and iced's positional tree diff then drops the pressed sibling's \
+         `is_pressed` — the press is silently swallowed and the user has to press twice. The strip \
+         is always drawn now; push it unconditionally:\n{}",
+        found.join("\n")
+    );
+}
+
 // ---- BUG-001/T037: the bar carries no release-focus control ----
 
 /// Feature 023 FR-021b: the bottom bar must not carry a release-focus affordance.
@@ -227,5 +281,69 @@ fn no_scattered_release_writes() {
          are what made project switch, mode toggle and instance switch each miss a case; these \
          lines are the eighth. Call the helper that names the intent instead:\n{}",
         found.join("\n")
+    );
+}
+
+/// `012` BUG-004 / FR-010 — the wiring half, which a unit test cannot reach.
+///
+/// `restart_message` decides what the bar's restart control must act on, and `ui/terminal.rs`'s own
+/// unit tests prove that decision correct. Neither notices if the button stops asking: the defect
+/// was `.on_press(Message::TerminalRestartRequested)` written straight into the bar, restarting the
+/// session while the bar described a shell instance — and the session's AI CLI primary is still
+/// alive in Regular mode, so pressing it did nothing at all.
+///
+/// This is the same shape as `the_bar_does_not_branch_on_focus` above: a precondition of the bar
+/// that no ordinary test can observe, so it is read out of the source instead.
+#[test]
+fn the_bars_restart_control_asks_which_process_it_is_restarting() {
+    let src = fs::read_to_string(src_dir().join("ui").join("terminal.rs")).expect("terminal.rs");
+    let code = code_only(&src);
+
+    assert!(
+        code.contains("on_press(restart_message("),
+        "the bar's restart control must take its message from `restart_message`, which splits on \
+         the attached process the way `attached_process_restartable` already does"
+    );
+    assert!(
+        !code.contains("on_press(Message::TerminalRestartRequested)"),
+        "a bare session-level restart in the bar is BUG-004: in Regular mode the session's primary \
+         is still running, so the request is a no-op and the control does nothing"
+    );
+}
+
+/// Feature 026-multi-provider-sessions FR-016a (T058a): the bar's pinned AI tab names the session's
+/// CLI by its **command** name, and the label follows the session rather than a constant.
+///
+/// `ui/terminal.rs`'s own unit test proves `session_provider` answers with the session's CLI. What
+/// it cannot see is whether the tab still *asks* — a label rewritten to `display_name()`, or to a
+/// literal `"claude"`, leaves that test green and puts "GitHub Copilot" (or the wrong CLI outright)
+/// on a Copilot session's bar. That is the same silent shape as the restart control above, so it is
+/// read out of the source in the same way.
+///
+/// The register matters as much as the source. FR-016's clarification splits the two deliberately:
+/// rows and the bar are labels in a width budget and take `command()`, while menus and failure
+/// messages are sentences and take `display_name()`. `tests/features_sidebar.rs` and
+/// `features_settings.rs` hold the ends of that split; this holds the terminal bar's.
+#[test]
+fn the_pinned_ai_tab_names_the_sessions_cli() {
+    let src = fs::read_to_string(src_dir().join("ui").join("terminal.rs")).expect("terminal.rs");
+    let code = code_only(&src);
+    let tab = code
+        .split_once("fn pinned_ai_tab")
+        .expect(
+            "ui/terminal.rs no longer builds a pinned AI tab — FR-016a hangs the CLI's name \
+                 on it, so it cannot simply be gone",
+        )
+        .1;
+
+    assert!(
+        tab.contains("session_provider(state, id).provider().command()"),
+        "the pinned AI tab must label itself from the *session's* provider, by `command()` — a \
+         constant or a call that drops the session names one CLI on every session's bar (FR-016a)"
+    );
+    assert!(
+        !tab.contains("display_name()"),
+        "`display_name()` is the menus-and-sentences register (\"GitHub Copilot\"); a tab in a \
+         width budget takes `command()`. The two must not converge — see FR-016's clarification"
     );
 }

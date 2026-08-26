@@ -69,6 +69,36 @@ mod panel_placement;
 #[path = "gates/sibling_parity.rs"]
 mod sibling_parity;
 
+// --- The tab-children-fit gate (BUG-005) --------------------------------------------------------
+
+// The same arrangement once more. It reads a laid-out child against **what it asked for**, which is
+// the one question none of the five above puts: a control squeezed to nothing by a parent's fixed
+// width still contains its children, escapes nothing, overflows nothing, and answers to a constant
+// that is still correct in the source. The whole suite was green over a 0.0dp button.
+#[path = "gates/tab_children_fit.rs"]
+mod tab_children_fit;
+
+/// Feature 026's FR-002c, one level out from `tab_children_fit`: the bar's own controls must not be
+/// shrunk by a strip that grew. A second gate rather than a widened first one because the bar's
+/// children are not tabs and are not recognised by that gate's structural rule.
+#[path = "gates/bar_controls_hold_their_size.rs"]
+mod bar_controls_hold_their_size;
+
+/// Feature 027's FR-002/FR-003, beside the gate above rather than inside it: that one asks whether
+/// a bar control kept its **size**, this one whether it kept its **place**. Deleting the mode
+/// toggle made the arrangement itself the requirement — tabs, then "+", then the AI tab, all
+/// against the trailing edge — and an arrangement is a fact about coordinates.
+#[path = "gates/tabs_anchor_the_trailing_edge.rs"]
+mod tabs_anchor_the_trailing_edge;
+
+// --- The context-menu-anchor gate (BUG-008) -----------------------------------------------------
+
+// Here for a *different* reason than the five above: it builds its own states and reads no cache.
+// It shares this binary so that it can reuse `panel_placement`'s rule for what counts as an
+// anchored panel rather than restating it, which is the shape FR-029a forbids one level down.
+#[path = "gates/context_menu_anchor.rs"]
+mod context_menu_anchor;
+
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
 /// The gate itself (FR-003).

@@ -15,7 +15,7 @@
 
 use micold_client::app::{route_key, KeyRouting, State};
 use micold_client::keymap::KeyOutput;
-use micold_core::session::SessionLocation;
+use micold_core::session::{AiCli, SessionLocation};
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
 /// Asked of the registry, which reads each dialog's own state, so this is the same question about
@@ -97,6 +97,7 @@ fn focus_toggles_via_messages() {
     let mut s = State::default();
     s.update(Message::SessionStarted(Session::start_new(
         SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
     )));
     s.update(Message::TerminalFocused);
     assert!(s.terminal_focused());
@@ -133,7 +134,11 @@ fn selecting_a_session_focuses_its_terminal() {
     use micold_core::session::Session;
     let mut s = State::default();
     assert!(!s.terminal_focused(), "precondition: starts unfocused");
-    let id = Session::start_new(SessionLocation::Worktree("feat-x".to_string())).id;
+    let id = Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
+    )
+    .id;
     s.update(Message::SessionSelected(id));
     assert!(
         s.terminal_focused(),
@@ -149,6 +154,7 @@ fn starting_a_session_focuses_its_terminal() {
     let mut s = State::default();
     s.update(Message::SessionStarted(Session::start_new(
         SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
     )));
     assert!(
         s.terminal_focused(),
@@ -162,7 +168,11 @@ fn releasing_focus_after_auto_focus_still_works() {
     use micold_core::session::Session;
     let mut s = State::default();
     s.update(Message::SessionSelected(
-        Session::start_new(SessionLocation::Worktree("feat-x".to_string())).id,
+        Session::start_new(
+            SessionLocation::Worktree("feat-x".to_string()),
+            AiCli::ClaudeCode,
+        )
+        .id,
     ));
     assert!(s.terminal_focused());
     s.update(Message::TerminalFocusReleased);
@@ -177,7 +187,10 @@ fn closing_the_displayed_session_clears_focus() {
     use micold_client::app::Message;
     use micold_core::session::Session;
     let mut s = State::default();
-    let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     s.update(Message::SessionStarted(session));
     assert!(s.terminal_focused());
@@ -217,7 +230,10 @@ fn state_with_current_session() -> State {
         status: WorktreeStatus::Valid,
         included: false,
     }];
-    let session = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
     state.active_session = Some(id);
@@ -300,7 +316,8 @@ fn a_stopped_or_failed_session_that_is_current_is_still_marked() {
 // them, so what is tested is the answer rather than seven assignments agreeing.
 // See `specs/023-terminal-focus-flow/contracts/focus-model.md` (v2).
 
-use micold_client::app::{FieldId, Message};
+use micold_client::app::Message;
+use micold_client::features::window::FieldId;
 use micold_core::session::Session;
 
 /// A state showing one session's terminal, with nothing else claiming the keyboard.
@@ -308,6 +325,7 @@ fn showing_a_terminal() -> State {
     let mut s = State::default();
     s.update(Message::SessionStarted(Session::start_new(
         SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
     )));
     s
 }
@@ -360,8 +378,14 @@ fn only_the_displayed_sessions_terminal_is_eligible() {
     // Two sessions exist; neither is displayed. FR-020 is structural — `active_session` is the
     // only session the predicate names — and this is what would notice a second one creeping in.
     let mut s = State::default();
-    let first = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
-    let second = Session::start_new(SessionLocation::Worktree("feat-y".to_string()));
+    let first = Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
+    );
+    let second = Session::start_new(
+        SessionLocation::Worktree("feat-y".to_string()),
+        AiCli::ClaudeCode,
+    );
     s.update(Message::SessionStarted(first));
     s.update(Message::SessionStarted(second));
     assert!(
@@ -483,7 +507,7 @@ fn a_field_still_holds_the_keyboard_after_a_window_round_trip() {
 #[test]
 fn every_navigation_to_a_terminal_clears_a_release() {
     // The gap this closes: selecting and starting already focused, so the user learned to expect
-    // it — and then the mode toggle, the instance controls and a project switch each left them
+    // it — and then the pane switches, the instance controls and a project switch each left them
     // looking at a terminal that ignored the keyboard. An explicit release is about the present
     // moment, not a property a session carries, so deliberately going to a terminal ends it.
     let shell = micold_core::session::ShellInstanceId(1);
@@ -494,9 +518,10 @@ fn every_navigation_to_a_terminal_clears_a_release() {
         (
             "SessionStarted",
             Box::new(|_: &State| {
-                Message::SessionStarted(Session::start_new(SessionLocation::Worktree(
-                    "feat-y".to_string(),
-                )))
+                Message::SessionStarted(Session::start_new(
+                    SessionLocation::Worktree("feat-y".to_string()),
+                    AiCli::ClaudeCode,
+                ))
             }),
         ),
         (
@@ -504,8 +529,10 @@ fn every_navigation_to_a_terminal_clears_a_release() {
             Box::new(|s: &State| Message::SessionSelected(s.active_session.expect("displayed"))),
         ),
         (
-            "TerminalModeToggled",
-            Box::new(|_: &State| Message::TerminalModeToggled),
+            "TerminalAiCliSelected",
+            Box::new(|s: &State| {
+                Message::TerminalAiCliSelected(s.active_session.expect("displayed"))
+            }),
         ),
         (
             "ShellInstanceOpenRequested",
@@ -555,7 +582,10 @@ fn a_restored_session_holds_the_keyboard_at_launch() {
         "the application starts with the terminal not released, so a restored session is focused"
     );
     let mut s = State::default();
-    let session = Session::start_new(SessionLocation::Worktree("restored".to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree("restored".to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     s.workspace
         .sessions
@@ -656,7 +686,10 @@ fn output_and_lifecycle_never_change_the_holder() {
     s.update(Message::FieldFocusChanged(FieldId::AddWorktreeName, true));
     let before = s.terminal_focused();
 
-    let other = Session::start_new(SessionLocation::Worktree("noisy".to_string()));
+    let other = Session::start_new(
+        SessionLocation::Worktree("noisy".to_string()),
+        AiCli::ClaudeCode,
+    );
     let other_id = other.id;
     s.update(Message::SessionStarted(other));
     s.update(Message::FieldFocusChanged(FieldId::AddWorktreeName, true));
@@ -693,7 +726,8 @@ fn restoring_a_session_leaves_its_terminal_ready_to_type() {
     // The shape after a restart: the memory survived, the pointer did not.
     state.active_session = None;
 
-    state.restore_after_activation(&path);
+    let outcomes = state.restore_after_activation(&path);
+    micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut state, o));
 
     assert!(
         state.active_session.is_some(),
@@ -724,7 +758,8 @@ fn a_launch_that_restores_nothing_focuses_nothing() {
     }
     state.active_session = None;
 
-    state.restore_after_activation(&path);
+    let outcomes = state.restore_after_activation(&path);
+    micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut state, o));
 
     assert!(state.active_session.is_none());
     assert!(

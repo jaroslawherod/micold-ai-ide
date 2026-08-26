@@ -16,8 +16,8 @@
 //! things around it — that an empty field is *unset* rather than zero (rule RB-2), and that a
 //! number below what the daemon needs is refused with the range that would be accepted (FR-016).
 
-use micold_client::app::FieldId;
 use micold_client::features::settings::{SettingsDraft, SettingsSection};
+use micold_client::features::window::FieldId;
 use micold_client::ui::sandbox_limits;
 use micold_core::sandbox::runtime::{
     IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,

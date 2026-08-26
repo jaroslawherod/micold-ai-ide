@@ -38,6 +38,15 @@ pub enum Anchor {
     /// Bottom rather than centred so a notification raised while a dialog is open does not sit over
     /// the dialog's action row — it is above the scrim by band, and out of the way by position.
     BottomCenter { bottom: f32 },
+    /// The panel's **bottom**-left corner sits `bottom` above the window's bottom edge and `start`
+    /// from its left. A menu opened from a control in a bottom bar.
+    ///
+    /// `Point` cannot serve there. It places a panel's *top* at the cursor and leaves clamping to
+    /// the caller — fine in a tall pane, impossible in a bar pinned to the window's bottom edge,
+    /// where every press point has a bar's height of room beneath it and the panel is taller than
+    /// that. Measuring from the same edge the bar is pinned to is what makes the placement
+    /// well-defined without the panel's own height, which no anchor knows.
+    BottomStart { bottom: f32, start: f32 },
 }
 
 /// One floating surface: a panel, where it goes, and how it closes.
@@ -111,9 +120,20 @@ impl<'a, M: Clone + 'a> Surface<'a, M> {
     /// project switcher's panel onto the menu panel's old index and played the menu's exit on it.
     /// A panel nobody opened, closing.
     ///
-    /// When there is nothing to catch the layer is a bare `Space`: no press handler, so it takes no
-    /// input, and `Length::Fill` on both axes rather than a zero size so the stack's own sizing sees
-    /// the same shape either way.
+    /// **And always the same layer**, whether or not it has anything to catch — the same argument
+    /// one level down (021 T084). iced keys widget state by tree *structure*, so a wrapper that
+    /// comes and goes takes its subtree's state with it, and the scrim inside this one is the track
+    /// that clocks the exit and reports it finished. A closing surface deliberately carries no
+    /// dismisser — a snapshot being animated out has nothing left to cancel — so wrapping in
+    /// `mouse_area` only when a dismisser existed changed the chain at the very instant the exit
+    /// began: iced rebuilt the subtree, the fresh track started at zero, and `on_hidden` fired on
+    /// the exit's first frame. The dialog vanished instead of leaving. So the `mouse_area` is
+    /// unconditional and only its handler is optional; with no handler set it publishes nothing and
+    /// captures nothing, which is exactly what the old bare `Space` bought.
+    ///
+    /// When there is nothing to catch the layer is that inert `mouse_area` over a `Space` sized
+    /// `Length::Fill` on both axes rather than zero, so the stack's own sizing sees the same shape
+    /// either way.
     fn backdrop(&mut self) -> Element<'a, M> {
         let dismisser = self
             .on_dismiss
@@ -121,9 +141,6 @@ impl<'a, M: Clone + 'a> Surface<'a, M> {
             .filter(|_| self.dismisses_on(Trigger::OutsideClick));
 
         let scrim = self.scrim.take();
-        if scrim.is_none() && dismisser.is_none() {
-            return Space::new().width(Length::Fill).height(Length::Fill).into();
-        }
         let tinted = scrim.is_some();
 
         let fill = container(
@@ -132,9 +149,10 @@ impl<'a, M: Clone + 'a> Surface<'a, M> {
         .width(Length::Fill)
         .height(Length::Fill);
 
+        let area = mouse_area(fill);
         let catcher: Element<'a, M> = match dismisser {
-            Some(message) => mouse_area(fill).on_press(message).into(),
-            None => fill.into(),
+            Some(message) => area.on_press(message).into(),
+            None => area.into(),
         };
 
         // A tinted backdrop also blocks: the window beneath is dimmed precisely because it is not
@@ -184,6 +202,15 @@ impl<'a, M: Clone + 'a> Surface<'a, M> {
                     right: end,
                     left: 0.0,
                     bottom: 0.0,
+                }),
+            Anchor::BottomStart { bottom, start } => placed
+                .align_x(iced::alignment::Horizontal::Left)
+                .align_y(iced::alignment::Vertical::Bottom)
+                .padding(Padding {
+                    bottom,
+                    left: start,
+                    top: 0.0,
+                    right: 0.0,
                 }),
         }
         .into()

@@ -102,10 +102,18 @@ fn available(name: &str) -> BranchCandidate {
 /// The add-worktree form, on its existing-branch half, with its list open over `candidates`.
 fn form_with(candidates: Vec<BranchCandidate>) -> State {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
-    state.update(Message::AddWorktreeSourceChanged(BranchSource::Existing));
-    state.update(Message::AddWorktreeBranchesListed(candidates));
-    state.update(Message::AddWorktreeBranchFocused);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchesListed(candidates),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchFocused,
+    ));
     state
 }
 
@@ -333,11 +341,12 @@ fn first_row_past_the_card(state: &State) -> (usize, Point) {
         // A fresh screen per probe: the probe itself cancels the form when it lands on the scrim,
         // and a cancelled form floats no list to measure.
         let mut probe = Screen::of(state);
-        if probe
-            .press_beneath_the_list(at)
-            .iter()
-            .any(|m| matches!(m, Message::AddWorktreeCancelled))
-        {
+        if probe.press_beneath_the_list(at).iter().any(|m| {
+            matches!(
+                m,
+                Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled)
+            )
+        }) {
             return (index, at);
         }
     }
@@ -360,9 +369,10 @@ fn pressing_an_in_use_branch_leaves_the_form_open() {
     let published = screen.press(at);
 
     assert!(
-        !published
-            .iter()
-            .any(|m| matches!(m, Message::AddWorktreeCancelled)),
+        !published.iter().any(|m| matches!(
+            m,
+            Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled)
+        )),
         "pressing row {index} of the branch list — an in-use branch, drawn past the dialog's own \
          edge — cancelled the add-worktree form. The user reached for a branch and lost the form \
          and everything typed into it, with no message and no way to tell a refusal from a \
@@ -392,17 +402,21 @@ fn the_same_press_on_an_available_branch_still_selects_it() {
     let published = screen.press(at);
 
     assert!(
-        published
-            .iter()
-            .any(|m| matches!(m, Message::AddWorktreeBranchSelected(_))),
+        published.iter().any(|m| matches!(
+            m,
+            Message::WorktreeForm(micold_client::features::worktree_form::Msg::BranchSelected(
+                _
+            ))
+        )),
         "pressing row {index} of the branch list did not select the available branch under it, so \
          the fixture is not pressing rows at all and the refusal test proves nothing. Published: \
          {published:?}",
     );
     assert!(
-        !published
-            .iter()
-            .any(|m| matches!(m, Message::AddWorktreeCancelled)),
+        !published.iter().any(|m| matches!(
+            m,
+            Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled)
+        )),
         "selecting an available branch cancelled the form: {published:?}",
     );
 }

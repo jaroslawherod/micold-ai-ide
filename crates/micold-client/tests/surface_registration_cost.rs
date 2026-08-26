@@ -74,20 +74,42 @@ fn registered() -> Vec<Surface> {
     let body = &code[at..];
     let end = body.find("\n}").expect("unterminated register! invocation");
 
-    body[..end]
-        .lines()
-        .filter_map(|line| {
-            // `crate::features::<module>::<Type>` optionally followed by `=> <view path>`.
-            let line = line.trim().trim_end_matches(',');
-            let rest = line.strip_prefix("crate::features::")?;
-            let path = rest.split("=>").next()?.trim();
-            let (module, name) = path.split_once("::")?;
-            Some(Surface {
-                module: module.to_string(),
-                name: name.to_string(),
-            })
-        })
-        .collect()
+    // Depth-tracked, because a registration line is no longer the only line naming a surface.
+    // T067a-2 gave the macro a `{ displaces: … }` clause, which puts *other* surfaces' type names
+    // on lines of their own one level in; parsing those would count each displaced surface as a
+    // second registration and every test here would be reading a list that does not exist.
+    // `the_registration_list_is_actually_being_read` is what caught it, which is what it is for.
+    let mut depth = 0usize;
+    let mut surfaces = Vec::new();
+    for line in body[..end].lines() {
+        let line = line.trim();
+        if depth == 1 {
+            if let Some(surface) = registration_on(line) {
+                surfaces.push(surface);
+            }
+        }
+        depth = depth + line.matches('{').count() - line.matches('}').count();
+    }
+    surfaces
+}
+
+/// The surface a top-level registration line names, or `None` for anything else.
+///
+/// `crate::features::<module>::<Type>`, optionally followed by `=> <view path>` or by the opening
+/// brace of a `{ displaces: … }` clause.
+fn registration_on(line: &str) -> Option<Surface> {
+    let rest = line
+        .trim_end_matches(',')
+        .trim_end()
+        .trim_end_matches('{')
+        .trim_end()
+        .strip_prefix("crate::features::")?;
+    let path = rest.split("=>").next()?.trim();
+    let (module, name) = path.split_once("::")?;
+    Some(Surface {
+        module: module.to_string(),
+        name: name.to_string(),
+    })
 }
 
 /// Every client source, keyed by a path relative to `src/`, with comments stripped.
@@ -318,8 +340,14 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
             path: PathBuf::from("/tmp/p"),
             anchor: (10, 10),
         }),
-        worktree_menu_open: Some("wt".to_string()),
-        session_menu_open: Some(SessionId::new()),
+        worktree_menu_open: Some(micold_client::features::worktree::WorktreeMenu {
+            dir_name: "wt".to_string(),
+            anchor: (120, 300),
+        }),
+        session_menu_open: Some(micold_client::features::session::SessionMenu {
+            id: SessionId::new(),
+            anchor: (120, 340),
+        }),
         terminal_context_menu: Some((4, 2)),
         selector: Some(Selector::open_at(PathBuf::from("/tmp"))),
         rename_draft: Some(RenameDraft {

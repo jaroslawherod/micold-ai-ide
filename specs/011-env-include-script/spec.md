@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-20
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "Add an optional environment-include script that runs automatically, by default, and supplies environment variables to both the `claude` AI CLI process and the regular-terminal shell process for every session. Today, `LaunchSpec.env` (used for `claude`, `src/terminal.rs`) and `spawn_shell_pty`'s `env` parameter (used for the regular shell, `src/ui/terminal.rs`) are both populated with nothing but a hardcoded `TERM=xterm-256color` pair (`main.rs`), so neither process reliably picks up the user's normal shell environment. Add a new app-level setting (enabled + script path, default ON, default path the platform's conventional rc file) exposed in the Settings modal. Resolve the script by actually sourcing it in a real, disposable shell process and diffing the resulting environment against a clean baseline, then merge into the same `env: Vec<(String, String)>` used by both existing spawn call sites."
 

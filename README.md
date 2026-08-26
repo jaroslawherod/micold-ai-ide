@@ -1,7 +1,9 @@
 # Micold AI IDE
 
-A local-first, AI-assisted desktop IDE for managing [Claude Code](https://www.anthropic.com/claude-code)
-worktrees and sessions with an embedded, real terminal.
+A local-first, AI-assisted desktop IDE for managing git worktrees and AI coding sessions with an
+embedded, real terminal. A session runs [Claude Code](https://www.anthropic.com/claude-code) or
+[GitHub Copilot CLI](https://github.com/features/copilot/cli), whichever you pick when you start
+it.
 
 Built in **Rust** with the **iced** GUI framework. All state lives on your machine — the app is
 fully functional offline (Constitution Principle IV).
@@ -11,8 +13,9 @@ fully functional offline (Constitution Principle IV).
 - Open a git project and manage its worktrees (one branch per line of work) from a Material
   Design sidebar — on a new branch, or on one that already exists locally or on a remote, so work
   started outside the app can be picked up inside it.
-- Run multiple concurrent `claude` sessions, each in its own worktree or directly in the
-  project root ("Default"), in an embedded terminal.
+- Run multiple concurrent AI CLI sessions — `claude` or `copilot` — each in its own worktree or
+  directly in the project root ("Default"), in an embedded terminal. Each session remembers which
+  CLI it runs, and the two can run side by side in the same project.
 - A real terminal emulator: full ANSI color + text styling, live keyboard and mouse input,
   focus-gated key routing, resize, scrollback, and copy/paste.
 - Light/dark theming that follows your OS preference; configurable terminal scrollback.

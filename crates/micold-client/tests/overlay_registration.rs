@@ -46,7 +46,7 @@
 use micold_client::app::State;
 use micold_client::features::project::ProjectMenu;
 use micold_client::overlay::registry;
-use micold_core::session::SessionId;
+use micold_core::session::{SessionId, SessionLocation, ShellInstanceId};
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -71,13 +71,39 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
         })
     }),
     ("worktree_menu_open", "worktree_menu", |s| {
-        s.worktree_menu_open = Some("feature-x".to_string())
+        s.worktree_menu_open = Some(micold_client::features::worktree::WorktreeMenu {
+            dir_name: "feature-x".to_string(),
+            anchor: (120, 300),
+        })
     }),
     ("session_menu_open", "session_menu", |s| {
-        s.session_menu_open = Some(SessionId::new())
+        s.session_menu_open = Some(micold_client::features::session::SessionMenu {
+            id: SessionId::new(),
+            anchor: (120, 340),
+        })
     }),
     ("terminal_context_menu", "terminal_context_menu", |s| {
         s.terminal_context_menu = Some((4, 2))
+    }),
+    // The terminal *tab's* menu, not the terminal's own (feature 012, BUG-005). Two context menus
+    // on the same screen, on different things: this one acts on an instance, that one on the
+    // content. It carries the instance because the menu belongs to the tab it was opened on rather
+    // than to the active one — FR-010a is about restarting an instance you have not selected.
+    ("shell_instance_menu", "shell_instance_menu", |s| {
+        s.shell_instance_menu = Some((
+            micold_client::ui::terminal::StripTab::Instance(ShellInstanceId(1)),
+            4,
+            2,
+        ))
+    }),
+    // Feature 026: the "start a session on…" list, opened from a row's chevron. A menu rather than
+    // a dialog — summoned from a control, anchored to the sidebar, dismissed by clicking away —
+    // so it registers in the context-menu band with the other two.
+    ("session_start_menu", "session_start_menu", |s| {
+        s.session_start_menu = Some(micold_client::features::session::StartMenu {
+            location: SessionLocation::Default,
+            anchor: (4, 2),
+        })
     }),
 ];
 
@@ -256,7 +282,10 @@ fn the_guard_is_actually_looking_at_something() {
     );
     assert_eq!(
         POPOVERS.len(),
-        7,
-        "the seven FR-007 names. A shorter list is a guard that has stopped covering them."
+        9,
+        "feature 021's seven FR-007 names, plus the terminal tab menu (`012` BUG-005, FR-010b) and \
+         feature 026's `session_start_menu`. A shorter list is a guard that has stopped covering \
+         them; growing it is what adding a popover looks like, and the number moves in the same \
+         diff as the entry."
     );
 }

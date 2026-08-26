@@ -7,13 +7,15 @@
 //! the path needs to see it beside the field they just changed rather than in a snackbar that has
 //! already gone.
 
-use crate::app::{FieldId, Message};
+use crate::app::Message;
 use crate::features::settings::{SettingsDraft, SettingsSection};
+use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{Checkbox, TextField};
+use crate::ui::material::{Checkbox, Select, TextField};
 use crate::ui::settings::{caution, note, page};
 use iced::Element;
 use micold_core::env_include::EnvIncludeOutcome;
+use micold_core::session::AiCli;
 use micold_core::tokens::Roles;
 
 /// What this section renders. See [`crate::ui::settings`].
@@ -27,6 +29,7 @@ pub const SETTINGS: &[(&str, &str)] = &[
         "env_include_timeout_secs",
         "SettingsEnvIncludeTimeoutChanged",
     ),
+    ("default_ai_cli", "SettingsDefaultAiCliChanged"),
 ];
 
 /// The failure category and its diagnostic for the most recent resolution attempt, or `None` when
@@ -46,6 +49,7 @@ fn failure(outcome: &EnvIncludeOutcome) -> Option<(&'static str, &str)> {
 pub fn view<'a>(
     draft: &'a SettingsDraft,
     outcome: &'a EnvIncludeOutcome,
+    available_providers: &'a [AiCli],
     focused: Option<FieldId>,
     roles: Roles,
 ) -> Element<'a, Message> {
@@ -81,7 +85,31 @@ pub fn view<'a>(
         .on_input(Message::SettingsEnvIncludeTimeoutChanged)
         .on_submit(Message::SettingsSaved);
 
-    let mut controls: Vec<Element<'a, Message>> = vec![enabled.into(), path.into(), timeout.into()];
+    // The Default AI CLI (feature 026, FR-003/FR-006). The shared `Select` component, not a
+    // bespoke control (Principle VIII) -- and the options are `available_providers`, which is
+    // detected at startup rather than declared, so a CLI that is not installed is not offered.
+    //
+    // Named by `display_name()` through `Display`, which is a menu's register. `command()` -- the
+    // `claude`/`copilot` a sidebar row carries -- is not used here: a menu entry is not a label in
+    // a width budget (Clarifications 2026-08-18).
+    //
+    // It sits above the include controls because it answers the first question this section's own
+    // line asks -- which agent starts -- and the script is what that agent then inherits.
+    let default_ai_cli = Select::new(
+        available_providers,
+        Some(draft.environment.default_ai_cli),
+        Message::SettingsDefaultAiCliChanged,
+        roles,
+    )
+    .label("Default AI CLI")
+    .supporting("Used for new sessions unless you choose otherwise");
+
+    let mut controls: Vec<Element<'a, Message>> = vec![
+        default_ai_cli.into(),
+        enabled.into(),
+        path.into(),
+        timeout.into(),
+    ];
 
     if let Some((label, diagnostic)) = failure(outcome) {
         controls.push(caution(label, roles));

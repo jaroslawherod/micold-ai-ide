@@ -178,7 +178,7 @@ Single Rust crate: render-free core in `src/` (`--no-default-features`), `gui`-o
 
 ### Tests for User Story 5 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T053 [P] [US5] Failing tests: `Blocked` distinguishes `CheckedOutInProjectRoot` from `CheckedOutAt { path }` and carries the holder's path, in `tests/branch_conflict.rs` — **reopened by BUG-001**: two variants is one too few; superseded by T064
+- [X] T053 [P] [US5] Failing tests: `Blocked` distinguishes `CheckedOutInProjectRoot` from `CheckedOutAt { path }` and carries the holder's path, in `tests/branch_conflict.rs` — **reopened by BUG-001**: two variants is one too few; superseded by T064. *(Closed 2026-08-19 as superseded, not by new work: T064's four-shape classification is a strict superset of this two-shape one, and writing a test for the subset would duplicate assertions that already exist. Verified rather than assumed — `a_branch_checked_out_in_another_worktree_is_blocked_and_names_it` asserts `CheckedOutAt` by whole-value equality, so the holder's absolute path is checked and not merely present; `a_branch_checked_out_in_the_project_root_is_blocked_as_the_project_checkout` asserts the other variant, which is a unit variant and structurally cannot carry a path; and `only_holders_the_sidebar_would_list_are_described_as_the_apps_own` (T066) asserts the split between them. All three pass.)*
 - [X] T054 [P] [US5] Failing test: a `Blocked` or `DirectoryTaken` situation offers no actionable resolution and returns to `Idle` on dismiss, leaving inputs intact, in `tests/app_state.rs`
 
 ### Implementation for User Story 5
@@ -199,8 +199,8 @@ Single Rust crate: render-free core in `src/` (`--no-default-features`), `gui`-o
 - [X] T059 [P] Confirm no `CreateError::DuplicateBranch` references or other dead code remain: `grep -rn "DuplicateBranch" src/ tests/ docs/` returns nothing
 - [X] T060 Run `cargo clippy --features gui --all-targets` clean from the repository root
 - [X] T061 Run `mise run test` and `cargo test --features gui` and confirm the full suite is green
-- [ ] T062 Verify build and tests pass on Linux, macOS, and Windows via the matrix in `.github/workflows/ci.yml` (Constitution Principle VI)
-- [ ] T063 Run all seven [quickstart.md](./quickstart.md) scenarios manually, including Scenario 4's offline check (the GUI-wiring validation Principle I's exception requires)
+- [X] T062 Verify build and tests pass on Linux, macOS, and Windows via the matrix in `.github/workflows/ci.yml` (Constitution Principle VI) — all three green on [run 32263815467](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/32263815467) (PR #200), alongside `fmt + clippy`, `docs check` and `assertion freeze`; recorded in [bugs/evidence/T062-three-os-matrix.md](./bugs/evidence/T062-three-os-matrix.md), **including what the two non-Linux platforms do not run**
+- [X] T063 Run all seven [quickstart.md](./quickstart.md) scenarios manually, including Scenario 4's offline check (the GUI-wiring validation Principle I's exception requires) — all seven pass; recorded in [bugs/evidence/T063-quickstart-pass.md](./bugs/evidence/T063-quickstart-pass.md)
 
 ---
 

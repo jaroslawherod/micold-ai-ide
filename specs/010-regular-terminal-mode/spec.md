@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-18
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "Let the user switch a session's embedded terminal between running the `claude` CLI (the current default) and a regular shell, without losing the terminal pane's real-terminal behavior (colors, live keystroke input, scrollback, focus gating) established in feature 006. The user needs to occasionally run ordinary shell commands (git, package managers, ad-hoc scripts) in the same worktree the session is scoped to, without leaving the app or losing their place in the `claude` conversation. Add a toggle/action (e.g. in the terminal's toolbar dropdown, alongside the existing Settings item) that switches the active pane between 'AI CLI' mode and 'regular terminal' mode for the current session. Switching to regular terminal mode should start (or resume) a plain shell process in the session's worktree directory. Switching back to AI CLI mode should resume the existing `claude` session (same session id, `--resume`) rather than starting a new conversation — the `claude` conversation must survive round-trips through regular-terminal mode. Decide and specify: whether the `claude` process is suspended/killed while in regular-terminal mode or kept running in the background; what happens to a regular shell process when switching away (killed vs. kept alive and resumable); whether each session remembers its own last-used mode across restarts of the app; and how the current mode is indicated visually so the user always knows which process their keystrokes are going to."
 
@@ -13,6 +13,13 @@
 ### Session 2026-07-18
 
 - Q: Where should the AI CLI / Regular Terminal mode toggle live, and how should it be presented? → A: In the terminal's existing bottom status bar (the same bar that already shows the session name and lifecycle status), as a single icon button. The button's icon (and label/tooltip) changes to reflect the currently active mode, so the button itself doubles as the mode indicator rather than needing a separate indicator alongside it.
+
+  **Superseded by feature 027 (2026-08-21).** The bar is still where the switch lives; the single
+  icon button is not. Feature 026 put both panes in a tab strip in that same bar, which left the
+  button saying the same thing a tab already said — and saying it worse, since a toggle can only
+  name "the other one". 027 deletes it. Everywhere below that reads "activates the toggle", read
+  "presses the tab of the pane they want"; the requirement in each case is the switch, not the
+  control, and every one of them still holds.
 - Q: The AI CLI process already has crash-loop protection (auto-restart on unexpected exit, up to 3 attempts, then a Failed state). Should the new shell process get the same automatic-restart behavior, or is restart always manual for the shell? → A: Manual restart only. A shell exiting — whether the user typed `exit` or it crashed — always shows a not-running state with a manual restart affordance; there is no automatic retry loop for the shell process, unlike the AI CLI process.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -56,13 +63,15 @@ A developer glances at the terminal pane and can immediately tell, without typin
 
 **Why this priority**: Without a clear indicator, a user could type commands intended for one process into the other (e.g., shell commands into `claude`, or a `claude` slash command into a shell) — a usability and trust problem, but the feature is still functional without it, unlike Stories 1–2.
 
-**Independent Test**: Toggle between modes and confirm the bottom status bar's toggle button icon is a distinct, unambiguous indicator of the active mode at all times, updating immediately on switch.
+**Independent Test**: Switch between modes and confirm the bottom status bar's tab strip marks exactly one tab, distinctly and unambiguously, at all times, updating immediately on switch.
+
+*(**Amended by feature 027 FR-001**, which deleted the toggle. The story is untouched — a user still has to know which process is listening — and the cue that answers it is now the strip's active indicator, which names the pane rather than the one you are not in. Feature 026 FR-005 is the requirement that keeps it total.)*
 
 **Acceptance Scenarios**:
 
-1. **Given** the terminal is in AI CLI mode, **When** the user looks at the bottom status bar, **Then** the toggle button's icon clearly identifies the active mode as the AI CLI.
-2. **Given** the terminal is in Regular Terminal mode, **When** the user looks at the bottom status bar, **Then** the toggle button's icon clearly identifies the active mode as a regular/plain terminal.
-3. **Given** the user activates the mode toggle button, **When** the switch completes, **Then** the button's icon updates immediately to match the new mode.
+1. **Given** the terminal is in AI CLI mode, **When** the user looks at the bottom status bar, **Then** the AI tab carries the active indicator and no terminal tab does.
+2. **Given** the terminal is in Regular Terminal mode, **When** the user looks at the bottom status bar, **Then** the displayed instance's tab carries the active indicator and the AI tab does not.
+3. **Given** the user presses either tab, **When** the switch completes, **Then** the indicator moves to it immediately.
 
 ---
 
@@ -79,8 +88,8 @@ A developer glances at the terminal pane and can immediately tell, without typin
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST let the user switch a session's embedded terminal between AI CLI mode (running `claude`) and Regular Terminal mode (running a plain shell) via a single icon button in the terminal's bottom status bar (the bar that already shows the session name and lifecycle status).
-- **FR-002**: The mode toggle button MUST be reachable whenever a session's terminal is displayed, in either mode.
+- **FR-001**: The system MUST let the user switch a session's embedded terminal between AI CLI mode (running `claude`) and Regular Terminal mode (running a plain shell) ~~via a single icon button in the terminal's bottom status bar (the bar that already shows the session name and lifecycle status)~~. *(**Superseded in part by feature 027 FR-001.** The requirement — that a user can switch — is unchanged and is now stronger, since it is the only thing the strip does. The mechanism is not: the toggle button is deleted, and the switch is a press on the tab of the pane the user wants. Feature 026 made every pane a tab; a control meaning "the other one" was then a second vocabulary for the same navigation, and the only one that could not say where it was going.)*
+- ~~**FR-002**: The mode toggle button MUST be reachable whenever a session's terminal is displayed, in either mode.~~ *(**Superseded by feature 027 FR-001**; the reachability it asks for is carried by 027 FR-002, which puts both tabs in the bar unconditionally and anchors them to its trailing edge.)*
 - **FR-003**: Switching to Regular Terminal mode MUST start a plain shell process, scoped to the session's worktree directory, if one is not already running for that session.
   - **Clarified by BUG-002 (this feature's BUG-001)**: "if one is not already running" is the only
     precondition. In particular this MUST NOT depend on the session's *AI CLI* process running —
@@ -98,10 +107,12 @@ A developer glances at the terminal pane and can immediately tell, without typin
     processes being attached at once. A switch that cannot be honoured MUST fail visibly rather
     than leave the two halves disagreeing.
 - **FR-008**: All real-terminal behavior defined for the embedded terminal (colored/styled output, live per-keystroke input, scrollback, mouse/selection handling, copy/paste, focus gating) MUST apply identically in Regular Terminal mode as it does in AI CLI mode.
-- **FR-009**: The mode toggle button's icon (and accessible label/tooltip) MUST always reflect which mode is currently active, updated immediately on every switch, so it also serves as the pane's mode indicator.
+- **FR-009**: ~~The mode toggle button's icon (and accessible label/tooltip)~~ **The tab strip's active indicator** MUST always reflect which mode is currently active, updated immediately on every switch, so it also serves as the pane's mode indicator. *(**Amended by feature 027 FR-001.** The clause survives its control: feature 026 FR-005 already required exactly one tab to be marked at all times, derived from the same value the toggle's icon was, so deleting the toggle moves this requirement rather than dropping it — and moves it onto a cue that says *which* pane rather than which one you are not in.)*
   - **Clarified by BUG-001**: "which mode is currently active" means the mode the session is
     actually in, not the mode that was last requested. The indicator MUST NOT advance on a switch
-    that did not take effect.
+    that did not take effect. *(Unchanged by 027, and still the load-bearing half: the mark is
+    derived from the session's mode, so there is no second selection that could advance on its
+    own.)*
 - **FR-010**: Each session's mode MUST be tracked independently; switching one session's mode MUST NOT affect any other session's mode or processes.
 - **FR-011**: A session's current mode MUST be persisted and restored — reopening a session, including after an application restart, MUST show its terminal in the mode it was last in.
 - **FR-012**: Closing a session, or the AI CLI process's own crash-triggered auto-restart, MUST act on whichever of a session's processes (AI CLI, shell, or both) are currently running — closing stops both if both are running; a crash-triggered auto-restart of the AI CLI process never touches the shell process. (This is existing session-close/crash-restart behavior extended to cover two processes, distinct from FR-013's new manual shell-restart affordance below.)

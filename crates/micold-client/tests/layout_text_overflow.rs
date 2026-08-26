@@ -239,3 +239,140 @@ fn a_collapsed_panel_overlapping_the_sidebar_is_not_reported_as_an_overflow() {
          than an attribution accident — report it as a bug"
     );
 }
+
+/// A narrow session row degrades in the declared order (feature 026, FR-016, T058d).
+///
+/// `TreeItem::annotation` states the intended ordering — the CLI label takes its natural width and
+/// the name takes the remainder, so a narrow row shortens the *name* — but "by consequence rather
+/// than by declaration" is precisely the kind of property that holds until someone gives the
+/// annotation a `Length::Fill` or moves it inside the ellipsized run. FR-016 makes that label the
+/// row's identification: it is the one piece that must not be what a narrow row drops.
+///
+/// So this drives the same row at the sidebar's minimum and default widths and compares what the
+/// renderer *painted*. An `Ellipsized` label rewrites its content before shaping, so a shortened
+/// title is not an overflow — it is a different string, and only `painted_text` can see it.
+#[test]
+fn a_narrow_session_row_shortens_the_title_and_never_the_cli_label() {
+    use micold_core::session::{
+        AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+    };
+    use micold_core::worktree::{Worktree, WorktreeStatus};
+    use std::path::PathBuf;
+
+    const PROJECT: &str = "/fixture/narrow";
+    const TITLE: &str = "rewriting the provider seam so a session records which CLI it runs";
+
+    let mut renderer = lay::renderer();
+
+    // One worktree and one session under it, and nothing else long enough to ellipsize — every
+    // other string in the sidebar must be identical at both widths for the comparison below to
+    // mean what it says.
+    let mut painted = |width: u16| -> Vec<lay::Overflow> {
+        let session = Session::restored(
+            SessionId::new(),
+            SessionLocation::Worktree("feat-short".to_string()),
+            SessionLabel::Named(TITLE.to_string()),
+            TerminalMode::AiCli,
+            AiCli::Copilot,
+        );
+        let mut workspace = support::workspace_with(vec![(PROJECT, vec![session])]);
+        workspace.active = workspace.projects.first().map(|p| p.path.clone());
+
+        let mut state = micold_client::app::State {
+            workspace,
+            worktrees: vec![Worktree {
+                dir_name: "feat-short".to_string(),
+                path: PathBuf::from(PROJECT).join(".claude/worktrees/feat-short"),
+                branch: Some("feat/short".to_string()),
+                status: WorktreeStatus::Valid,
+                included: false,
+            }],
+            sidebar_width: width,
+            ..micold_client::app::State::default()
+        };
+        state.expanded.insert("feat-short".to_string());
+        state.theme_pref = micold_core::theme::ThemePreference::Light;
+        state.window_size = (1280, 800);
+
+        let element = micold_client::ui::view(
+            &state,
+            None,
+            None,
+            0,
+            None,
+            &micold_core::env_include::EnvIncludeOutcome::Disabled,
+            &micold_client::features::connection::ConnectionStatus::Connected,
+            &micold_client::features::sandbox::Sandbox::default(),
+        );
+        lay::painted_text(element, &mut renderer)
+    };
+
+    let wide = painted(micold_client::app::SIDEBAR_DEFAULT_WIDTH);
+    let narrow = painted(micold_client::app::SIDEBAR_MIN_WIDTH);
+
+    // The CLI label, whole, at both widths. `command()` is what the row draws (`claude`,
+    // `copilot`), and it is drawn as one paragraph, so "held" means it is painted at all and
+    // painted at its full natural width rather than clipped to something narrower.
+    for (label, drawn) in [("default", &wide), ("minimum", &narrow)] {
+        let cli: Vec<_> = drawn.iter().filter(|o| o.content == "copilot").collect();
+        assert_eq!(
+            cli.len(),
+            1,
+            "the {label}-width sidebar must paint the session's CLI label exactly once; FR-016 \
+             makes it the row's identification, so it is never what a narrow row drops. Drawn: \
+             {:?}",
+            drawn.iter().map(|o| &o.content).collect::<Vec<_>>()
+        );
+        assert!(
+            cli[0].natural_width <= cli[0].allowed_width + 0.1,
+            "the CLI label is clipped at the {label} width ({:.1}px wanted, {:.1}px allowed) — it \
+             takes its natural width, and the name takes the remainder",
+            cli[0].natural_width,
+            cli[0].allowed_width,
+        );
+    }
+
+    // The title is what gave way, and it gave way further as the row narrowed.
+    let title_of = |drawn: &[lay::Overflow]| -> String {
+        drawn
+            .iter()
+            .map(|o| o.content.clone())
+            .find(|c| {
+                c == TITLE || (c.ends_with('…') && TITLE.starts_with(c.trim_end_matches('…')))
+            })
+            .unwrap_or_else(|| {
+                panic!("no painted text resembles the session title; drawn: {drawn:#?}")
+            })
+    };
+    let (wide_title, narrow_title) = (title_of(&wide), title_of(&narrow));
+    assert!(
+        narrow_title.ends_with('…'),
+        "the title must ellipsize rather than spill or vanish; painted {narrow_title:?}"
+    );
+    assert!(
+        narrow_title.chars().count() < wide_title.chars().count(),
+        "narrowing the sidebar must shorten the title ({narrow_title:?} is no shorter than \
+         {wide_title:?}) — it is the only piece of the row that may give way"
+    );
+
+    // Nothing else went missing on the way down: same number of painted strings, so the trailing
+    // action and the badge are still drawn rather than squeezed out of the row.
+    assert_eq!(
+        narrow.len(),
+        wide.len(),
+        "the minimum-width sidebar paints a different number of strings than the default-width one \
+         — something other than the title changed. Default: {:?}\nMinimum: {:?}",
+        wide.iter().map(|o| &o.content).collect::<Vec<_>>(),
+        narrow.iter().map(|o| &o.content).collect::<Vec<_>>(),
+    );
+
+    // And it degraded without spilling: the narrow row still paints nothing wider than its clip.
+    let overflows: Vec<_> = narrow
+        .iter()
+        .filter(|o| o.natural_width > o.allowed_width + 0.1)
+        .collect();
+    assert!(
+        overflows.is_empty(),
+        "the minimum-width sidebar paints text past its clip: {overflows:?}"
+    );
+}

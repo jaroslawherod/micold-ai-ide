@@ -16,12 +16,60 @@ fn write_script(dir: &tempfile::TempDir, name: &str, contents: &str) -> PathBuf 
     path
 }
 
+/// Serialises the tests in this binary that actually spawn a shell — on Windows only.
+///
+/// # The flake this fixes, and why it is the harness rather than the code
+///
+/// Eight tests here spawn a shell, and [`resolve`] spawns **twice** per call: once to establish the
+/// baseline environment, once to source the script, both out of one shared budget (BUG-003). Cargo
+/// runs them in parallel, so a two-core Windows runner was starting up to sixteen cold
+/// `powershell.exe` processes at once, first launch of the session, with Defender scanning each.
+/// Four tests then failed together on the *baseline* — `TimedOut { diagnostic: "the timeout
+/// expired while establishing the baseline environment…" }` — having never reached the script.
+///
+/// That contention is an artifact of the test harness, not of the thing under test: the client
+/// resolves one directory at a time and never races itself. The unix module has the same shape with
+/// a *tighter* five-second budget and has never flaked, because `bash` starts in milliseconds. The
+/// variable is PowerShell's cold-start cost under contention, so the fix belongs here.
+///
+/// # Why serialising rather than raising the budgets
+///
+/// Because for two of these tests a bigger number provably cannot work.
+/// [`a_hanging_script_costs_its_own_budget_and_not_the_baselines_as_well`] asserts
+/// `elapsed < timeout * 4`, so its budget *is* the thing under test — raising it raises the ceiling
+/// proportionally, while the contended cold-start cost is an additive term that scales with nothing.
+/// Its margin is `3 × timeout` minus the baseline start, and no choice of `timeout` widens that.
+/// Removing the contention is the only move that helps every test in the file at once.
+///
+/// Unix keeps running in parallel: a no-op guard there costs nothing and serialising it would slow
+/// two of the three CI platforms to fix a problem neither has.
+struct SpawnGuard {
+    #[cfg(windows)]
+    _held: std::sync::MutexGuard<'static, ()>,
+}
+
+#[cfg(windows)]
+static SPAWNING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Take the spawn lock. Call it as a test's **first** statement, before any `Instant::now()`, so
+/// time spent waiting for the lock never lands inside a measured window.
+fn spawn_guard() -> SpawnGuard {
+    SpawnGuard {
+        // Poison-tolerant on purpose. A failure in this file manifests as a panic while the lock is
+        // held, and a poisoned mutex would turn one real assertion failure into seven others that
+        // report the poisoning instead of what they were testing.
+        #[cfg(windows)]
+        _held: SPAWNING.lock().unwrap_or_else(|e| e.into_inner()),
+    }
+}
+
 #[cfg(not(windows))]
 mod unix {
     use super::*;
 
     #[test]
     fn exported_variable_is_captured() {
+        let _guard = spawn_guard();
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(&dir, "script.sh", "export QUICKSTART_MARKER=hello\n");
 
@@ -44,6 +92,7 @@ mod unix {
 
     #[test]
     fn non_zero_exit_captures_diagnostic() {
+        let _guard = spawn_guard();
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(&dir, "script.sh", "echo 'something went wrong'\nexit 1\n");
 
@@ -61,6 +110,7 @@ mod unix {
 
     #[test]
     fn hanging_script_times_out_promptly() {
+        let _guard = spawn_guard();
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(&dir, "script.sh", "sleep 999\n");
 
@@ -78,6 +128,7 @@ mod unix {
 
     #[test]
     fn empty_script_succeeds_with_no_vars() {
+        let _guard = spawn_guard();
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(&dir, "script.sh", "");
 
@@ -109,6 +160,7 @@ mod unix {
     /// `QUICKSTART_MARKER=hello`.
     #[test]
     fn debian_default_bashrc_guard_blocks_export_from_reaching_session() {
+        let _guard = spawn_guard();
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(
             &dir,
@@ -138,6 +190,7 @@ mod unix {
     /// second, independent tempdir supplied as `resolve()`'s `cwd` argument.
     #[test]
     fn directory_dependent_export_is_captured_only_when_cwd_contains_marker() {
+        let _guard = spawn_guard();
         let script_dir = tempfile::tempdir().unwrap();
         let script = write_script(
             &script_dir,
@@ -177,6 +230,7 @@ mod windows {
 
     #[test]
     fn exported_variable_is_captured() {
+        let _guard = spawn_guard();
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(&dir, "profile.ps1", "$env:QUICKSTART_MARKER = 'hello'\n");
 
@@ -199,6 +253,7 @@ mod windows {
 
     #[test]
     fn non_zero_exit_captures_diagnostic() {
+        let _guard = spawn_guard();
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(
             &dir,
@@ -220,6 +275,7 @@ mod windows {
 
     #[test]
     fn hanging_script_times_out_promptly() {
+        let _guard = spawn_guard();
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(&dir, "profile.ps1", "Start-Sleep -Seconds 999\n");
 
@@ -237,6 +293,7 @@ mod windows {
 
     #[test]
     fn empty_script_succeeds_with_no_vars() {
+        let _guard = spawn_guard();
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(&dir, "profile.ps1", "");
 
@@ -250,6 +307,7 @@ mod windows {
     /// directory-dependent-PATH regression test — see that module's doc comment.
     #[test]
     fn directory_dependent_export_is_captured_only_when_cwd_contains_marker() {
+        let _guard = spawn_guard();
         let script_dir = tempfile::tempdir().unwrap();
         let script = write_script(
             &script_dir,
@@ -301,6 +359,7 @@ mod windows {
 /// for flakiness.
 #[test]
 fn a_script_that_backgrounds_a_pipe_holder_still_returns_promptly() {
+    let _guard = spawn_guard();
     let dir = tempfile::tempdir().unwrap();
 
     #[cfg(not(windows))]
@@ -354,6 +413,7 @@ fn a_script_that_backgrounds_a_pipe_holder_still_returns_promptly() {
 ///    variable in it as newly set by the user's script.
 #[test]
 fn a_budget_too_small_to_establish_a_baseline_says_so() {
+    let _guard = spawn_guard();
     let dir = tempfile::tempdir().unwrap();
     // A script that would succeed instantly given any real budget at all.
     #[cfg(not(windows))]
@@ -389,6 +449,7 @@ fn a_budget_too_small_to_establish_a_baseline_says_so() {
 /// defect was visible in the first place, and where a regression would reappear.
 #[test]
 fn a_hanging_script_costs_its_own_budget_and_not_the_baselines_as_well() {
+    let _guard = spawn_guard();
     let dir = tempfile::tempdir().unwrap();
     #[cfg(not(windows))]
     let script = write_script(&dir, "script.sh", "sleep 120\n");
@@ -410,4 +471,137 @@ fn a_hanging_script_costs_its_own_budget_and_not_the_baselines_as_well() {
          opening a project can stall, so anything the call does beyond sourcing the script — the \
          baseline probe above all — has to come out of it rather than be added to it (BUG-003)."
     );
+}
+
+/// Every test that sources a real script takes the spawn lock (BUG-004).
+///
+/// Structural, because forgetting the guard is **silent**: the test passes locally, passes on unix
+/// where the guard is a no-op anyway, and passes on Windows most of the time. It shows up as one
+/// more process in a race that four other tests then lose — which is the failure BUG-004 is about,
+/// and it took five CI re-runs and two bug reports to attribute. A ninth spawning test added
+/// without the guard would put it straight back.
+///
+/// A test **spawns** if it writes a script and resolves it. The two `nonexistent_path_…` tests
+/// resolve a path that does not exist, so `resolve()` returns `MissingScript` before touching a
+/// shell; they contend for nothing and are correctly unguarded.
+///
+/// The needles are assembled at runtime rather than written as literals. This test reads the file
+/// it is written in, so a literal `"write_script("` here would be found in its own body — the same
+/// self-matching trap `service_capability_fakes.rs` records hitting, where a fixture naming a real
+/// port reported itself as a live violation.
+#[test]
+fn every_test_that_sources_a_script_takes_the_spawn_lock() {
+    let (spawning, _non_spawning) = classify_tests();
+    let unguarded: Vec<&String> = spawning
+        .iter()
+        .filter(|(_, guarded)| !guarded)
+        .map(|(name, _)| name)
+        .collect();
+
+    assert!(
+        unguarded.is_empty(),
+        "these tests source a real script but do not take the spawn lock, so they race every \
+         other spawning test in this binary (BUG-004): {unguarded:?}\n\nAdd `let _guard = \
+         spawn_guard();` as the first statement, before any `Instant::now()`."
+    );
+}
+
+/// The vacuity check for the rule above, and its own test rather than a third assertion inside it.
+///
+/// A scan that matched nothing would satisfy "no test is unguarded" without having looked at
+/// anything — and a check that quietly stops checking is this file's entire failure mode, twice
+/// over now. Kept separate because two probes that both land on one test cannot be told apart by
+/// which tests they break: feature 021 T055 hit exactly that and the answer was to split the test,
+/// not to drop a probe.
+#[test]
+fn the_body_scan_finds_the_tests_it_is_meant_to_read() {
+    let (spawning, non_spawning) = classify_tests();
+
+    assert!(
+        spawning.len() >= 14,
+        "expected at least the fourteen spawning tests both platform modules declare, found {}: \
+         {spawning:?}. The body scan has drifted from the source it reads.",
+        spawning.len()
+    );
+    assert_eq!(
+        non_spawning
+            .iter()
+            .filter(|n| n.as_str() == "nonexistent_path_is_missing_script_with_no_vars")
+            .count(),
+        2,
+        "expected both platforms' missing-script tests to be classified as non-spawning; found \
+         {non_spawning:?}. If they now write a script they need the guard like everything else."
+    );
+}
+
+/// Reads this file and sorts its tests into `(spawning, guarded?)` and the rest.
+///
+/// A test **spawns** if it writes a script and resolves it. The two `nonexistent_path_…` tests
+/// resolve a path that does not exist, so `resolve()` returns `MissingScript` before touching a
+/// shell; they contend for nothing and are correctly unguarded.
+fn classify_tests() -> (Vec<(String, bool)>, Vec<String>) {
+    let src = include_str!("env_include_resolve.rs");
+    let writes = format!("{}_{}(", "write", "script");
+    let guards = format!("{}_{}()", "spawn", "guard");
+
+    let mut spawning = Vec::new();
+    let mut non_spawning = Vec::new();
+    for (name, body) in test_bodies(src) {
+        // This helper's own body names both needles; so would either test that calls it.
+        if name == "classify_tests"
+            || name == "every_test_that_sources_a_script_takes_the_spawn_lock"
+            || name == "the_body_scan_finds_the_tests_it_is_meant_to_read"
+        {
+            continue;
+        }
+        if body.contains(&writes) {
+            spawning.push((name, body.contains(&guards)));
+        } else {
+            non_spawning.push(name);
+        }
+    }
+    (spawning, non_spawning)
+}
+
+/// `(name, body)` for every `fn name() {` in `src`, the body matched by brace depth.
+///
+/// Depth-matched rather than "up to the next `}`", because a test body contains braces — a `match`
+/// arm, a format string's `{elapsed:?}` — and stopping at the first one would read a fraction of
+/// the body and call it whole.
+fn test_bodies(src: &str) -> Vec<(String, String)> {
+    let code: String = src
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let mut out = Vec::new();
+    let mut rest = code.as_str();
+    while let Some(at) = rest.find("fn ") {
+        let after = &rest[at + 3..];
+        let Some(paren) = after.find('(') else { break };
+        let name = after[..paren].trim().to_string();
+        let Some(open) = after.find('{') else { break };
+
+        let mut depth = 0usize;
+        let mut end = after.len();
+        for (i, c) in after.char_indices().skip(open) {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            out.push((name, after[open..end].to_string()));
+        }
+        rest = &after[end.min(after.len())..];
+    }
+    out
 }

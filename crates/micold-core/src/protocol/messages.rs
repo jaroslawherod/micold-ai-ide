@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
-use crate::session::{SessionId, SessionLabel, ShellInstanceId};
+use crate::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use crate::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
 
 // ---------------------------------------------------------------------------------------------
@@ -347,6 +347,11 @@ pub enum ClientMsg {
         project: PathBuf,
         /// Worktree directory name.
         worktree_dir: String,
+        /// Which AI CLI to run (feature 026, FR-004). The **client** resolves default-or-override
+        /// and sends the answer, so no launch depends on the two processes agreeing about a file.
+        /// The daemon does read `settings.json` — `Catalog::new` loads it at boot — it is simply
+        /// not asked to make this choice.
+        provider: AiCli,
     },
     /// Delete a session record.
     SessionDelete {
@@ -369,6 +374,8 @@ pub enum ClientMsg {
         env_include_script_path: Option<String>,
         /// New environment-include timeout in seconds, or `None` to leave unchanged.
         env_include_timeout_secs: Option<u64>,
+        /// New default AI CLI, or `None` to leave unchanged (feature 026, FR-003).
+        default_ai_cli: Option<AiCli>,
     },
 
     // --- Diagnostics ---
@@ -654,6 +661,13 @@ pub struct SessionSummary {
     pub lifecycle: WireLifecycle,
     /// Derived activity signal.
     pub activity: ActivitySignal,
+    /// Which AI CLI this session runs (feature 026, FR-016), carried outward the way
+    /// `worktree_dir` and `title` already are so the client can label rows without a second
+    /// request.
+    ///
+    /// **Not** the way `mode` does — `mode` does not travel at all, and citing it as the precedent
+    /// sends a reader looking for a field that is not there.
+    pub provider: AiCli,
     /// The input serial the service expects next for this session — its
     /// [`InputReceiver`](crate::input::InputReceiver) high-water mark (FR-028a, BUG-006).
     ///
@@ -663,6 +677,20 @@ pub struct SessionSummary {
     /// [`Stale`](crate::input::InputOutcome::Stale), and silently dropped — along with every one
     /// after it. Sessions the service is not hosting have no receiver and report `0`.
     pub input_serial: u64,
+    /// Which of this session's Regular-terminal shell instances the service currently hosts
+    /// (`012` FR-008, BUG-003).
+    ///
+    /// Runtime-only and overlaid from the live registry, exactly like `activity` and
+    /// `input_serial`: `LiveSession.procs` is keyed by [`SessionProcess::Shell`], so the service
+    /// already knows, and the durable catalog cannot. The **client** allocates instance ids and
+    /// owns the set of instances; this reports which of them are alive, and never introduces one.
+    ///
+    /// Absence is meaningful in one direction only. An id here means that instance's process
+    /// exists; an id missing means the service is not hosting it, which is a spawn still in flight
+    /// as well as a shell that exited — so a client MUST NOT read a first absence as death. It is
+    /// still the only signal that can distinguish an exited shell from a quiet one, which no
+    /// amount of watching for frames can do.
+    pub live_shells: Vec<ShellInstanceId>,
 }
 
 /// The wire form of a session's lifecycle (data-model §SessionLifecycle state machine).
@@ -783,6 +811,14 @@ pub struct DaemonSettings {
     pub env_include_script_path: String,
     /// The environment-include sourcing timeout, in seconds.
     pub env_include_timeout_secs: u64,
+    /// Which AI CLI a new session runs when nothing is chosen for it (feature 026, FR-003).
+    ///
+    /// Service-owned, alongside the scrollback limit rather than beside `theme`. `settings.json`
+    /// has two writers and the split is by field: the daemon's `set_scrollback` and
+    /// `set_env_include` each persist their whole `Settings` struct from the copy loaded at boot,
+    /// so a client-written field is reverted by the next unrelated settings change. That is
+    /// already true of `theme`; this preference must not inherit it.
+    pub default_ai_cli: AiCli,
 }
 
 /// The result payload of a successful mutating request.

@@ -473,6 +473,163 @@ fn a_resting_label_and_the_control_share_one_line() {
     );
 }
 
+/// A leading adornment moves the **label** as well as the value (BUG-003 item 1).
+///
+/// Both start on one x, in either of the label's two positions. They did not: the control was inset
+/// past the adornment and the label was pinned at the container's padding, so a field with a
+/// leading icon and a resting label drew the label underneath the icon — the state a search picker
+/// opens in, and the state T063 photographed at 600% zoom.
+///
+/// Asserted as an equality and not merely as "clear of the icon", because the defect is that there
+/// were two rules for one column. A label that cleared the icon by its own separate arithmetic
+/// would satisfy the weaker check and drift again at the next glyph.
+#[test]
+fn a_leading_adornment_moves_the_label_and_the_value_together() {
+    let r = roles();
+    let glyph =
+        |r| super::Glyph::<Message>::new(crate::icons::Icon::Search, super::TypeRole::Action, r);
+
+    for (state, field) in [
+        (
+            "resting",
+            FormField::new(input(), r).label("Branch").leading(glyph(r)),
+        ),
+        (
+            "floating",
+            FormField::new(input(), r)
+                .label("Branch")
+                .populated(true)
+                .leading(glyph(r)),
+        ),
+    ] {
+        let s = slots(field.into(), 400.0);
+        let (leading, control, label) = (s[0], s[1], s[3]);
+        assert_eq!(
+            label.x, control.x,
+            "{state}: the label starts at {:.1}dp and the value at {:.1}dp — one column, two \
+             rules, which is the whole of the defect",
+            label.x, control.x
+        );
+        assert!(
+            label.x >= leading.x + leading.width,
+            "{state}: the label starts at {:.1}dp and the leading icon ends at {:.1}dp — they \
+             overlap",
+            label.x,
+            leading.x + leading.width
+        );
+        assert_eq!(
+            label.x,
+            anatomy::text_field::PADDING
+                + anatomy::text_field::LEADING_ICON
+                + anatomy::text_field::LEADING_GAP,
+            "{state}: the column is not padding + the fixed icon slot + the gap, so it follows the \
+             glyph's own advance and moves with whichever icon the field carries (§7.2, BUG-006)"
+        );
+    }
+}
+
+/// …and without one, nothing is indented (the other half — a slot that costs nothing when empty).
+#[test]
+fn no_leading_adornment_means_no_indent() {
+    let r = roles();
+    let s = slots(FormField::new(input(), r).label("Branch").into(), 400.0);
+    assert_eq!(s[3].x, anatomy::text_field::PADDING);
+    assert_eq!(s[1].x, anatomy::text_field::PADDING);
+}
+
+/// An adornment sits on the container's centre line, not on the floating value's (BUG-003 item 1).
+///
+/// Material centres both icons in the 56dp box. Pinned instead to the top of the value line, a
+/// leading icon sat 5dp below the resting label it is supposed to share a line with — so fixing the
+/// horizontal collision alone would have replaced it with a vertical one.
+#[test]
+fn an_adornment_sits_on_the_fields_centre_line() {
+    let r = roles();
+    let glyph =
+        |r| super::Glyph::<Message>::new(crate::icons::Icon::Search, super::TypeRole::Action, r);
+    let middle =
+        tokens::density::height(tokens::density::TEXT_FIELD_BASE, tokens::density::STANDARD) / 2.0;
+
+    for (which, field) in [
+        ("leading", FormField::new(input(), r).leading(glyph(r))),
+        ("trailing", FormField::new(input(), r).trailing(glyph(r))),
+    ] {
+        let s = slots(field.into(), 400.0);
+        let slot = if which == "leading" { s[0] } else { s[2] };
+        assert!(
+            (slot.center_y() - middle).abs() < 0.5,
+            "the {which} adornment is centred at {:.1}dp in a box whose middle is {middle}dp",
+            slot.center_y()
+        );
+    }
+}
+
+/// A trailing **action** gets the container's height, not the value line's (BUG-003 item 1).
+///
+/// The slot being centred is not enough on its own, and this is the assertion that says so: it
+/// looks *through* the slot at the glyph the user actually sees. An `IconButton` wants §7.3's 48dp
+/// target around a container it pads by 8dp; offered only the 24dp value line it did not refuse,
+/// it squeezed — laying its glyph out in the 8dp that were left and drawing it out of that box and
+/// down the field, ~11dp below the centre line with a target compressed to half of §7.3's figure.
+/// Every gate was green, because the slot was the right size and the child fitted inside it.
+///
+/// Found by the visual pass on the fix for the leading icon, and fixed in the same place: an
+/// adornment is not a second line of value, so it is limited by the box rather than by the line.
+#[test]
+fn a_trailing_action_is_centred_and_keeps_its_touch_target() {
+    let r = roles();
+    let field = FormField::new(input(), r)
+        .label("Branch")
+        .populated(true)
+        .trailing(super::IconButton::new(crate::icons::Icon::Close, r).on_press(Message::NoOp));
+    let node = laid_out(field.into(), 400.0);
+
+    let box_ = node.children()[0].bounds();
+    let slot = node.children()[0].children()[2].bounds();
+    assert_eq!(
+        (slot.width, slot.height),
+        (
+            anatomy::button::MIN_TOUCH_TARGET,
+            anatomy::button::MIN_TOUCH_TARGET
+        ),
+        "the trailing action's target is {:.1}×{:.1} against §7.3's {}dp — a slot capped at the \
+         value line squeezes it to half",
+        slot.width,
+        slot.height,
+        anatomy::button::MIN_TOUCH_TARGET
+    );
+
+    // The glyph itself, not the slot around it — the slot was already centred while the glyph was
+    // not, which is exactly the failure this catches.
+    let glyph = deepest_leaf(&node.children()[0].children()[2]);
+    assert!(
+        (glyph.center_y() - box_.center_y()).abs() < 1.0,
+        "the trailing glyph is centred at {:.1}dp in a box whose middle is {:.1}dp",
+        glyph.center_y(),
+        box_.center_y()
+    );
+}
+
+/// The bounds of the first leaf under `node`, in the layout's own coordinates.
+///
+/// A slot's child chain is an implementation detail of whatever was put in it — an icon button is a
+/// target container around a ripple around a button around the glyph — so the assertion above walks
+/// to the end rather than naming a depth it would have to be revised for.
+fn deepest_leaf(node: &iced::advanced::layout::Node) -> iced::Rectangle {
+    let mut bounds = node.bounds();
+    let mut current = node;
+    while let Some(child) = current.children().first() {
+        let b = child.bounds();
+        bounds = iced::Rectangle {
+            x: bounds.x + b.x,
+            y: bounds.y + b.y,
+            ..b
+        };
+        current = child;
+    }
+    bounds
+}
+
 /// Focus tints the label as well as the indicator, and an error outranks focus (§7.7).
 ///
 /// A focused field recolours *both*; the version that moved only the indicator left the label in

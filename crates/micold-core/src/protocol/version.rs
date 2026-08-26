@@ -13,13 +13,22 @@
 /// Bumped 2 → 3 for `SessionSummary::input_serial` (FR-028a, BUG-006).
 /// Bumped 3 → 4 for `OperationResult::WorktreeDeleted::leftovers` (FR-023).
 /// Bumped 4 → 5 for `DaemonMsg::OperationProgress::detail` (FR-004a, BUG-009).
-/// Bumped 5 → 6 for the sandbox handshake: `ClientMsg::Hello` gains the authentication token and
-/// the build fingerprint (feature 027, research R1/R8). Both arrive together because the sandbox
-/// transport is loopback TCP, which — unlike the `0700`-guarded socket — authenticates nobody.
-/// Bumped 6 → 7 for `ClientMsg::RepoRootQuery` and `OperationResult::RepoRoot`: where the client
-/// cannot see the daemon's filesystem at the same paths — Windows, and the remote placement — the
-/// open-project gate has to be answered by the side that will actually run git (research R2).
-pub const PROTOCOL_VERSION: u32 = 7;
+/// Bumped 5 → 6 for `SessionSummary::live_shells` (`012` FR-008, BUG-003).
+/// Bumped 6 → 7 for feature 026's five additions, made together in one edit so the hash moves
+/// **once** for the whole feature: `provider` on `ClientMsg::SessionCreate` (inbound) and on
+/// `SessionSummary` (outbound), and `default_ai_cli` on `DaemonSettings`, `SettingsSet` and
+/// `SettingsChanged`. A second bump later in the feature would fail `tests/schema_hash.rs`.
+/// Bumped 7 → 8 for feature 027, in one edit for the same reason 026 used one: the sandbox
+/// handshake gives `ClientMsg::Hello` an authentication token and a build fingerprint — together,
+/// because the sandbox transport is loopback TCP, which unlike the `0700`-guarded socket
+/// authenticates nobody (research R1/R8) — and `ClientMsg::RepoRootQuery` /
+/// `OperationResult::RepoRoot` let the open-project gate be answered by the side that will
+/// actually run git, which is the only side that can where the client cannot see the daemon's
+/// filesystem at the same paths: Windows, and the remote placement (research R2).
+///
+/// 027 developed against 6 and 7 of its own while 026 was taking the same two numbers on main.
+/// Both wire changes are present here, so both cannot be 7; the feature's whole delta is 8.
+pub const PROTOCOL_VERSION: u32 = 8;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

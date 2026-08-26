@@ -77,7 +77,9 @@ pub struct DerivedNames { pub dir_name: String, pub branch: String }
 ```
 
 **Derivation** (single source of truth, FR-006/006a):
-- With ticket: `dir = "{type}-{ticket}-{name}"`, `branch = "{type}/{ticket}-{name}"`.
+- With ticket: `dir = "{type}-{ticket}_{name}"`, `branch = "{type}/{ticket}_{name}"`. The `_`
+  boundary is on both, so feature 016's branch→directory inverse is exact — see
+  contracts/naming.md (BUG-003).
 - Without ticket: `dir = "{type}-{name}"`, `branch = "{type}/{name}"`.
 - `ticket`/`name` are slugified to `[a-z0-9-]` before assembly (FR-008).
 

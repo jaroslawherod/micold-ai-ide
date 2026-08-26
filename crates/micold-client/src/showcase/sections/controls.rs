@@ -100,6 +100,85 @@ pub fn icon_button<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
     )
 }
 
+/// `SplitAction` — with and without its second half, and inert (feature 026, T033a).
+///
+/// The absent chevron is the state worth posing. It is not a *disabled* control: when fewer than
+/// two AI CLIs are installed there is nothing to choose between, so the affordance is the plain
+/// button it always was, and a gallery that only showed the two-half form would leave a reader
+/// believing the sidebar always grows one.
+pub fn split_action<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![
+            posed(
+                "with a choice",
+                material::SplitAction::new(Icon::AddSession, roles)
+                    .tint(roles.primary)
+                    .primary_tooltip("Start a session")
+                    .secondary_tooltip("Start a session on a different AI CLI")
+                    .on_press(Message::NoOp)
+                    .on_secondary_press_maybe(Some(Message::NoOp)),
+                roles,
+            ),
+            posed(
+                "nothing to choose between",
+                material::SplitAction::new(Icon::AddSession, roles)
+                    .tint(roles.primary)
+                    .primary_tooltip("Start a session")
+                    .on_press(Message::NoOp),
+                roles,
+            ),
+            posed(
+                "compact, in a dense row",
+                material::SplitAction::new(Icon::AddSession, roles)
+                    .compact()
+                    .size(TypeRole::SidebarName)
+                    .tint(roles.primary)
+                    .on_press(Message::NoOp)
+                    .on_secondary_press_maybe(Some(Message::NoOp)),
+                roles,
+            ),
+            posed(
+                "disabled",
+                material::SplitAction::<Message>::new(Icon::AddSession, roles),
+                roles,
+            ),
+        ],
+        Layout::Inline,
+    )
+}
+
+/// `LabelledToggle` — a glyph and the word for what it toggles (feature 026, T066a).
+pub fn labelled_toggle<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![
+            posed(
+                "default",
+                material::LabelledToggle::new(Icon::AiCli, "claude", roles).on_press(Message::NoOp),
+                roles,
+            ),
+            posed(
+                "a longer word",
+                material::LabelledToggle::new(Icon::AiCli, "copilot", roles)
+                    .on_press(Message::NoOp),
+                roles,
+            ),
+            posed(
+                "tinted",
+                material::LabelledToggle::new(Icon::AiCli, "copilot", roles)
+                    .tint(roles.primary)
+                    .on_press(Message::NoOp),
+                roles,
+            ),
+            posed(
+                "disabled",
+                material::LabelledToggle::<Message>::new(Icon::AiCli, "claude", roles),
+                roles,
+            ),
+        ],
+        Layout::Inline,
+    )
+}
+
 /// `Checkbox` — checked and unchecked, focused, and one with no toggle message (disabled).
 ///
 /// The focused pose earns its place: it is the state FR-035 recorded as out of reach for this

@@ -20,7 +20,9 @@ use micold_core::protocol::messages::{
 use micold_core::protocol::version::{
     BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
 };
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -346,6 +348,7 @@ async fn worktree_delete_blocked_by_an_unremovable_path_still_archives_and_repor
         SessionLocation::Worktree("wt3".into()),
         SessionLabel::Named("Shell".into()),
         TerminalMode::Regular,
+        AiCli::ClaudeCode,
     );
     let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
         project.path(),
@@ -458,6 +461,7 @@ async fn worktree_delete_with_live_session_and_no_stop_is_refused() {
         SessionLocation::Worktree("wt1".into()),
         SessionLabel::Named("Shell".into()),
         TerminalMode::Regular,
+        AiCli::ClaudeCode,
     );
     let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
         project.path(),
@@ -531,6 +535,7 @@ async fn worktree_delete_with_stop_sessions_archives_and_removes() {
         SessionLocation::Worktree("wt2".into()),
         SessionLabel::Named("Shell".into()),
         TerminalMode::Regular,
+        AiCli::ClaudeCode,
     );
     let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
         project.path(),
@@ -767,6 +772,7 @@ async fn session_delete_archives_and_stops() {
         SessionLocation::Default,
         SessionLabel::Named("Shell".into()),
         TerminalMode::Regular,
+        AiCli::ClaudeCode,
     );
     let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
         project.path(),
@@ -851,6 +857,7 @@ async fn project_remove_forgets_and_stops_sessions() {
         SessionLocation::Default,
         SessionLabel::Named("Shell".into()),
         TerminalMode::Regular,
+        AiCli::ClaudeCode,
     );
     let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
         project.path(),
@@ -909,6 +916,7 @@ async fn attach_prunes_empty_sessions_but_keeps_live_ones() {
             SessionLocation::Default,
             SessionLabel::Named("S".into()),
             TerminalMode::Regular,
+            AiCli::ClaudeCode,
         )
     };
     let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(

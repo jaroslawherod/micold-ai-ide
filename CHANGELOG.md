@@ -1,5 +1,74 @@
 # Changelog
 
+## [0.10.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.9.0...micold-ai-ide-v0.10.0) (2026-08-21)
+
+
+### Features
+
+* **021:** finish the MVU slice architecture — cross-feature writes 43 → 0 ([#215](https://github.com/jaroslawherod/micold-ai-ide/issues/215)) ([d413c81](https://github.com/jaroslawherod/micold-ai-ide/commit/d413c81a2cb4a64e54eb8b853b9119ad1f58c205))
+
+
+### Bug Fixes
+
+* **021:** an adjudication is a claim about the tree, not about the diff ([d9fb608](https://github.com/jaroslawherod/micold-ai-ide/commit/d9fb6082d459fdb8c1615e764ce561cecea0fa65))
+
+
+### Build & CI
+
+* **021:** run the assertion gate's own cases before the gate ([c27ab14](https://github.com/jaroslawherod/micold-ai-ide/commit/c27ab14bc2f5f369c42290eedf16a4030fcccb85))
+
+## [0.9.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.8.0...micold-ai-ide-v0.9.0) (2026-08-20)
+
+
+### Features
+
+* **016:** include a worktree the app does not manage ([01c2eba](https://github.com/jaroslawherod/micold-ai-ide/commit/01c2ebad65dfe58a27f384789e33d3b241ed1b36))
+* **024:** add MICOLD_SIDEBAR_FILTER so quickstart §B5 can be run at all ([a26d8f7](https://github.com/jaroslawherod/micold-ai-ide/commit/a26d8f72b08f0d5d907469bd27cfa31208bd035e))
+* **025:** finish the memory — per project, and quiet when it cannot be honoured ([7cd18ae](https://github.com/jaroslawherod/micold-ai-ide/commit/7cd18aee3a894ae4a256d18d45335b1e3c60b3b4))
+* **025:** reopen on the session you were last using ([dfc731e](https://github.com/jaroslawherod/micold-ai-ide/commit/dfc731e6d4e469b85d76da08d630312aff5afcb9))
+* **026:** a tab draws no inset, and the AI tab is pressable (T037-T044) ([cead7f3](https://github.com/jaroslawherod/micold-ai-ide/commit/cead7f3fb2e8a71e6de969d27c1c50db011980f7))
+* **026:** one predicate behind the mark and the menu (T017-T020) ([a95c431](https://github.com/jaroslawherod/micold-ai-ide/commit/a95c43122986e7ae95e204222e1e24672a8994e9))
+* **026:** promote the tab into the library and give it a tab's highlight (T006-T012) ([c5f8f97](https://github.com/jaroslawherod/micold-ai-ide/commit/c5f8f97af042dbad0b16d6171fe379b533f932c5))
+* **026:** the AI process is a tab, and the strip is always there (T021-T029) ([787822d](https://github.com/jaroslawherod/micold-ai-ide/commit/787822da780331a369ceb0b77031fee15ccc2690))
+* **026:** the strip says which processes are not running (T046-T052) ([6cdd17c](https://github.com/jaroslawherod/micold-ai-ide/commit/6cdd17ca4b7d701ffd4049668f6a3ee2e76184ab))
+* **026:** the strip stays honest once it overflows (T031-T035) ([aeea455](https://github.com/jaroslawherod/micold-ai-ide/commit/aeea4557c310c5e741631d92af6549bfe54a720b))
+* **026:** widen the two primitives the tab strip needs (T001-T005) ([2fd5a1c](https://github.com/jaroslawherod/micold-ai-ide/commit/2fd5a1ccf047a17b7cc65e01a53951ae3971b9b1))
+* **client:** give the shell one place to choose an implementation ([89e1993](https://github.com/jaroslawherod/micold-ai-ide/commit/89e1993e5affd2afdf6fc3f303249d94c6ff606f))
+* **client:** make copying a request the feature emits, not a call it makes ([507c92e](https://github.com/jaroslawherod/micold-ai-ide/commit/507c92e1a6c3f7ab63486a08bdf77b4110bdc4d4))
+* **core:** give every capability a fake, and split the one that was too wide ([9eb8915](https://github.com/jaroslawherod/micold-ai-ide/commit/9eb89153809b2c05fef612e59ebf3f18c52442c8))
+* **core:** put the one OS branch behind a probe, and test the timeline ([44bab27](https://github.com/jaroslawherod/micold-ai-ide/commit/44bab27572815f8404019c209bbe2fed9bf4aee0))
+
+
+### Bug Fixes
+
+* **008:** a directory name says whether it has a ticket (BUG-003) ([2291ab5](https://github.com/jaroslawherod/micold-ai-ide/commit/2291ab51122f8f4415762aff7b3ba32623feb062))
+* **008:** put you back on the session you left, running or not ([8ac3c02](https://github.com/jaroslawherod/micold-ai-ide/commit/8ac3c02323da7c64b203e9d7efadd61c0a6f87dd))
+* **010:** ask which session to show again once the catalog arrives (BUG-013) ([47c2fe5](https://github.com/jaroslawherod/micold-ai-ide/commit/47c2fe51c0aa82ca6f375c624c1c01717e708388))
+* **010:** report a session as running once its process exists (BUG-011) ([775c211](https://github.com/jaroslawherod/micold-ai-ide/commit/775c211d3ff14cb49b0845aeeff02d264f2a6b7d))
+* **012:** announce shell-instance liveness, and report it as liveness (BUG-003) ([9e9ace1](https://github.com/jaroslawherod/micold-ai-ide/commit/9e9ace11b869a92366b59452e3b09f6c915ad425))
+* **012:** make the switcher an indicator tab strip, not a row of containers ([491ca78](https://github.com/jaroslawherod/micold-ai-ide/commit/491ca78cf22cff7a0d64107b091b70e337f517dd))
+* **012:** make the terminal switcher read as tabs, and retire the release-focus button ([733caa1](https://github.com/jaroslawherod/micold-ai-ide/commit/733caa18b364fe034793876b55f670227ba148cc))
+* **012:** offer a stopped instance's restart from a menu on its tab (BUG-005) ([#198](https://github.com/jaroslawherod/micold-ai-ide/issues/198)) ([bd67826](https://github.com/jaroslawherod/micold-ai-ide/commit/bd67826e83ca16d7d9694cad35accfcbea932205))
+* **012:** report which shell instances are live, so an instance can leave Starting (BUG-003) ([015f412](https://github.com/jaroslawherod/micold-ai-ide/commit/015f4122c0ff598dd2e1d8871acc418bcee2844b))
+* **012:** restart the process the bar is describing, not the session (BUG-004) ([2244713](https://github.com/jaroslawherod/micold-ai-ide/commit/22447138818a93319db32b87452c5948ab33debc))
+* **016:** a refused branch row no longer closes the add-worktree form ([e4c6cc0](https://github.com/jaroslawherod/micold-ai-ide/commit/e4c6cc063d42d127dfdaf1ddc22d175c4d9a81eb))
+* **016:** one directory clash, one set of words (BUG-003 item 3) ([ee7015e](https://github.com/jaroslawherod/micold-ai-ide/commit/ee7015e24e79f0776ade71c769f8470652043199))
+* **018:** an adornment is not a second line of value (BUG-003 item 1) ([056daa4](https://github.com/jaroslawherod/micold-ai-ide/commit/056daa4252b79e32095836e300948decf58b3eb6))
+* **018:** one column for the label and the value (BUG-003 item 1) ([195f321](https://github.com/jaroslawherod/micold-ai-ide/commit/195f321122d7cc72e5d0e3a8b90a0b89ce43abac))
+* **019:** make the layout-snapshot commands actually select the target ([72a83be](https://github.com/jaroslawherod/micold-ai-ide/commit/72a83be7fcbbd362f9539a9710734fb43667cc98))
+* **021:** close BUG-002 — the gate it asked for, and the requirement (BUG-002) ([7aa7bfe](https://github.com/jaroslawherod/micold-ai-ide/commit/7aa7bfe96c6df8eef7733037dfd25a7823fa0fae))
+* **021:** scope the assertion freeze to the feature it belongs to ([41c5763](https://github.com/jaroslawherod/micold-ai-ide/commit/41c57634c7281b6ecfc34b7ede62d2de9498893d))
+* **022:** let the application take the keyboard back — BUG-004 ([03913c3](https://github.com/jaroslawherod/micold-ai-ide/commit/03913c36ad5ad94b818df92ef99b923472593773))
+* **024:** give Ellipsized the role's font, so the current session is drawn heavier (BUG-001) ([1f7f8a8](https://github.com/jaroslawherod/micold-ai-ide/commit/1f7f8a8d9d0eb2f7bcc8efa49e9432343ceed2a9))
+* **025:** resume the session a restore displays (BUG-002) ([4f16802](https://github.com/jaroslawherod/micold-ai-ide/commit/4f168020320545e93e872d1e5890ade105b888ff))
+* **025:** satisfy clippy in the new tests ([8c7888d](https://github.com/jaroslawherod/micold-ai-ide/commit/8c7888ddaf7efb4ff05daad4e636daae05af3796))
+* **026:** the bar was laying its mode toggle out at zero width (T014-T016) ([c773d2d](https://github.com/jaroslawherod/micold-ai-ide/commit/c773d2de08e5e94f43deddd1b512bd65db021a81))
+* **026:** the indicator was floating clear of the tab's edge too ([1fc32f6](https://github.com/jaroslawherod/micold-ai-ide/commit/1fc32f615fae28bf5e2133cf28bbb5bc41a2e170))
+* **ci:** judge assertions by what they say, not by which lines moved ([2f70e6c](https://github.com/jaroslawherod/micold-ai-ide/commit/2f70e6c156f1c303184d22f5f393c765d1d23b43))
+* **client:** say what is true when a restored session has no output (025 BUG-001) ([8faa882](https://github.com/jaroslawherod/micold-ai-ide/commit/8faa882a8663283cca93012110897b6ca385b196))
+* **core:** as_chunks for the schema hash's block loop ([5b1bc52](https://github.com/jaroslawherod/micold-ai-ide/commit/5b1bc52088770cff419f565dfb3bdc6272043fae))
+* **ui:** open a context menu where it was pressed (T143-T147) ([1ed1cf1](https://github.com/jaroslawherod/micold-ai-ide/commit/1ed1cf184b12cd9b1472b3c465fdfee8b16d1608))
+
 ## [0.8.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.7.0...micold-ai-ide-v0.8.0) (2026-08-11)
 
 

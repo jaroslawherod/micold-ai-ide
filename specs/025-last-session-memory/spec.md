@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-11
 
-**Status**: Draft
+**Status**: Closed
 
 **Bugfix**: 2026-08-14 — [BUG-001](./bugs/BUG-001.md) added FR-014 and SC-008 (the terminal area must
 not say a restored session is starting), a fourth US1 acceptance scenario, and a correction to the
@@ -184,6 +184,12 @@ that no longer exists is worse than not remembering at all.
   FR-003 names cannot diverge. Restoring MUST NOT change the run state of any session other than the
   one restored: at most one session is resumed, in the project being opened, and no other project's
   remembered session is touched.
+
+  > **Identifier note (2026-08-25).** Requirement ids are **feature-scoped**, so `FR-004a` names this
+  > rule *here* and a different rule in
+  > [`018-material3-visual-system`](../018-material3-visual-system/spec.md) (a component on an accent
+  > fill draws that fill's paired `on_*` role). A bare `grep FR-004a specs/` returns both; cite an id
+  > with its feature when the reader may be outside it.
 - **FR-005**: The application MUST NOT restore a session that has been closed, or whose record no
   longer exists. In those cases it MUST fall back to the same behaviour as a project with no
   memory.

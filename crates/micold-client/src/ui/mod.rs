@@ -58,7 +58,7 @@ use iced::widget::{column, container, row, Space};
 use iced::{Element, Length, Subscription};
 use micold_core::session::SessionId;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, spacing, Roles};
+use micold_core::tokens::{self, anatomy, spacing, Roles};
 
 /// How a dialog builds its body from the state that opened it.
 ///
@@ -80,12 +80,6 @@ pub type DialogView = for<'a> fn(
     ColorScheme,
     &'a micold_core::env_include::EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>>;
-
-/// Where the sidebar's own context menus open: just inside the sidebar, below the app bar.
-///
-/// A fixed point rather than the cursor — these menus are opened from a row whose position the view
-/// does not know — and the one place it is stated, rather than the two literals it was (T107).
-const SIDEBAR_MENU_ANCHOR: (u16, u16) = (24, 96);
 
 // The icon font and the two primitives that draw a glyph moved into the component library with
 // everything else that decides an appearance (FR-001). Re-exported here for `main`, which
@@ -234,7 +228,13 @@ pub fn view<'a>(
     // separate window, and the way out of it has to stay visible.
     let body: Element<'a, Message> = if let Some(draft) = state.settings_draft.as_ref() {
         material::ViewFade::new(
-            settings_view::view(draft, env_include_outcome, state.focused_field, scheme),
+            settings_view::view(
+                draft,
+                env_include_outcome,
+                &state.available_providers,
+                state.focused_field,
+                scheme,
+            ),
             bg,
         )
         .showing(main_content_key(state))
@@ -336,7 +336,9 @@ pub fn view<'a>(
             )),
             // Right-click a project row to reach its "Forget project" menu (feature 015). Offered
             // even for unavailable projects — those are precisely the ones a user wants to forget.
-            on_context: Some(Message::ProjectMenuToggled(e.path)),
+            on_context: Some(Box::new(move |point| {
+                Message::ProjectMenuToggled(e.path.clone(), point)
+            })),
         })
         .collect();
     // Trailing "Add project…" row opens the existing folder browser (008 FR-009). A row, not a
@@ -379,22 +381,23 @@ pub fn view<'a>(
             .into()
         });
 
-    // The worktree right-click context menu, anchored near the sidebar (feature 008, FR-013).
-    // Only present while a worktree's menu is open.
+    // The worktree right-click context menu, at the row it was opened from (feature 008, FR-013;
+    // the anchor since 018's BUG-008). Only present while a worktree's menu is open.
     //
-    // Clamped, like the project menu above and unlike its own past self (018's BUG-003, T107). The
-    // anchor is a fixed point rather than the cursor, so it never *starts* off-screen — but the
-    // panel it positions is now 48dp per item where it was 36, a four-item menu having grown from
-    // 152dp to 200, and nothing was stopping it running off the bottom of a short window.
+    // Clamped like the project menu above, and at the press point like it too. It was anchored at
+    // `SIDEBAR_MENU_ANCHOR = (24, 96)` until BUG-008 — a constant whose doc explained that a row's
+    // position "the view does not know", which was a description of a parameter the row's
+    // right-press did not carry rather than a decision about where a menu belongs.
     let worktree_menu: Option<cdk::overlay::Surface<'a, Message>> =
-        state.worktree_menu_open.as_ref().map(|dir| {
+        state.worktree_menu_open.as_ref().map(|menu| {
+            let dir = &menu.dir_name;
             let included = state
                 .worktrees
                 .iter()
                 .any(|w| &w.dir_name == dir && w.included);
             let items = worktree_menu_items(dir, &state.worktree_display_name(dir), included);
             let (x, y) = crate::features::project::clamp_menu_anchor(
-                SIDEBAR_MENU_ANCHOR,
+                menu.anchor,
                 material::menu_panel_size(items.len()),
                 state.window_size,
             );
@@ -404,16 +407,69 @@ pub fn view<'a>(
         });
 
     // The session right-click context menu (feature 010's BUG-003). Only present while a session's
-    // menu is open. Same anchor and the same clamping as the worktree menu above.
+    // menu is open. Same anchor rule and the same clamping as the worktree menu above.
     let session_menu: Option<cdk::overlay::Surface<'a, Message>> =
-        state.session_menu_open.map(|id| {
-            let items = session_menu_items(id);
+        state.session_menu_open.map(|menu| {
+            let items = session_menu_items(menu.id);
             let (x, y) = crate::features::project::clamp_menu_anchor(
-                SIDEBAR_MENU_ANCHOR,
+                menu.anchor,
                 material::menu_panel_size(items.len()),
                 state.window_size,
             );
             material::MenuOverlay::new(items, Message::SessionMenuDismissed, roles)
+                .anchor(iced::Point::new(x as f32, y as f32))
+                .into()
+        });
+
+    // A terminal tab's right-click context menu (feature 012, BUG-005, FR-010b). Only present while
+    // a tab's menu is open.
+    //
+    // Anchored at the point the tab was clicked, in **window** space — unlike the sidebar's two
+    // menus above, which anchor at a fixed edge because a tree row's own position is not what the
+    // menu should follow. A tab strip is a row of small targets close together, so a menu that did
+    // not follow the cursor would leave the user guessing which tab it belonged to.
+    //
+    // Mounted here rather than on the terminal pane, where the pane's *own* right-click menu lives:
+    // that one is anchored pane-local because a pane's origin is not known at render time, and this
+    // point is already in window space, which is what this overlay takes.
+    let shell_instance_menu: Option<cdk::overlay::Surface<'a, Message>> =
+        state.shell_instance_menu.and_then(|(tab, x, y)| {
+            let session = state.active_session?;
+            let items = strip_tab_menu_items(state, session, tab);
+            // FR-006b: a menu with no items does not open, and the secondary press does nothing.
+            // With restart the only item and Close excluded (FR-004), this is the AI tab's state
+            // whenever the AI CLI is running, which is most of the time. An empty panel is a defect
+            // everywhere else in this application, and a panel whose entire content is inert is one
+            // too — so the offer is absent rather than present-and-useless.
+            if items.is_empty() {
+                return None;
+            }
+            Some(
+                material::ContextMenu::new(items, (x, y), Message::ShellInstanceMenuClosed, roles)
+                    // Upward, from the bar's top edge rather than down from the press point: the tab
+                    // strip lives in the terminal's bottom bar, so a panel hung below the cursor has
+                    // the bar's remaining height to open into and is cut off by the window. The
+                    // press y is still what the primitive reports and still says which control was
+                    // pressed; it is the x that places the panel here. `app_bar::HEIGHT` is that bar's
+                    // height — §7.1's figure, read rather than restated (BUG-003's lesson, one bar
+                    // over).
+                    .rising_above(anatomy::app_bar::HEIGHT)
+                    .into(),
+            )
+        });
+
+    // The "start a session on…" list (feature 026, FR-004). Anchored at the chevron that opened it
+    // and clamped like every other menu here; its items are the *available* CLIs, named the
+    // human-readable way, because a menu entry is a sentence and not a label in a width budget.
+    let session_start_menu: Option<cdk::overlay::Surface<'a, Message>> =
+        state.session_start_menu.as_ref().map(|menu| {
+            let items = session_start_menu_items(state, &menu.location);
+            let (x, y) = crate::features::project::clamp_menu_anchor(
+                menu.anchor,
+                material::menu_panel_size(items.len()),
+                state.window_size,
+            );
+            material::MenuOverlay::new(items, Message::SessionStartMenuDismissed, roles)
                 .anchor(iced::Point::new(x as f32, y as f32))
                 .into()
         });
@@ -492,6 +548,8 @@ pub fn view<'a>(
         .push_maybe(project_menu)
         .push_maybe(worktree_menu)
         .push_maybe(session_menu)
+        .push_maybe(shell_instance_menu)
+        .push_maybe(session_start_menu)
         .push_maybe(modal)
         .push_maybe(snackbar)
         .into()
@@ -534,9 +592,111 @@ fn worktree_menu_items(
     items
 }
 
+/// The items in a terminal tab's right-click context menu (feature 012, BUG-005, FR-010b).
+///
+/// "Restart" is offered exactly when *that* instance's own lifecycle offers it — the same
+/// per-instance predicate the tab used to draw a button from, and independent of every sibling and
+/// of which instance is active. That independence is the requirement: FR-010a is about restarting a
+/// background instance without selecting it first, which is what addressing the message by instance
+/// id was built for and what a tab too narrow to hold the button had made impossible.
+///
+/// Not "Rename". An instance has no title to set, and giving it one reaches persistence and the
+/// daemon's session state — it is the separate feature BUG-002's "Deferred" note describes, and
+/// this menu is where it will land.
+///
+/// # The AI tab's menu is this menu minus Close (feature 026 FR-004, FR-006a)
+///
+/// Not a second list. FR-006a is worded as "the terminal tab's menu, except Close" precisely so the
+/// two cannot drift into offering different actions, and building it by **filtering** is what makes
+/// that structural rather than a promise — an item added below reaches both tabs, and Close stays
+/// excluded because a session has exactly one AI CLI process and terminating it is not an action
+/// offered from this control, by any press.
+///
+/// # Whether Restart is offered comes from the strip's own predicate (research R2)
+///
+/// `terminal::process_stopped`, the same function the stopped mark reads. FR-012d asks the mark and
+/// the menu to agree, and one predicate is what makes that true by construction — this file has
+/// paid twice for two readings of one fact, and both times the comment left behind says so.
+fn strip_tab_menu_items(
+    state: &State,
+    session: SessionId,
+    tab: terminal::StripTab,
+) -> Vec<material::MenuItem<Message>> {
+    // Labels without icons, like the terminal pane's own copy/paste menu and unlike the sidebar's
+    // two. There is no restart glyph in `Icon`, and adding one to this menu would either leave
+    // "Restart" unlabelled beside an iconed "Close" — which `reserve_icon` exists to prevent and
+    // which reads as a missing icon rather than a deliberate one — or pull a new codepoint, its
+    // registration and its documentation into a bugfix that is about layout. Two words are legible.
+    let mut items = Vec::new();
+    if terminal::process_stopped(state, session, tab) {
+        items.push(material::MenuItem::labeled(
+            "Restart",
+            match tab {
+                terminal::StripTab::Instance(instance) => {
+                    Message::ShellInstanceRestartRequested(session, instance)
+                }
+                terminal::StripTab::Ai => Message::TerminalRestartRequested,
+            },
+        ));
+    }
+    if let terminal::StripTab::Instance(instance) = tab {
+        items.push(material::MenuItem::labeled(
+            "Close",
+            Message::ShellInstanceCloseRequested(session, instance),
+        ));
+    }
+    items
+}
+
+/// The labels `strip_tab_menu_items` would produce, for a test that has no renderer.
+///
+/// A `MenuItem` carries a `Message`, which is not comparable, so the items themselves cannot be
+/// asserted against each other. The labels are what FR-006a is about — "the terminal tab's menu
+/// **minus Close**, in the same order" is a claim about which entries exist and in what order.
+#[cfg(test)]
+pub(crate) fn strip_tab_menu_labels(
+    state: &State,
+    session: SessionId,
+    tab: terminal::StripTab,
+) -> Vec<&'static str> {
+    let mut labels = Vec::new();
+    if terminal::process_stopped(state, session, tab) {
+        labels.push("Restart");
+    }
+    if matches!(tab, terminal::StripTab::Instance(_)) {
+        labels.push("Close");
+    }
+    labels
+}
+
 /// The items in a session's right-click context menu (bugfix BUG-003): "Close" archives (kept,
 /// hidden, never resurrected by reconciliation — FR-015a/FR-020c); "Remove" permanently deletes,
 /// behind a confirm dialog (FR-015c).
+/// The AI CLIs a session can be started on, for one location (feature 026, T033).
+///
+/// Named by `display_name()` — through `Display`, which is a menu's register — and **only** the
+/// available ones: an uninstalled CLI is never offered (FR-006). The list is
+/// `State::offered_providers`, the same function the Settings select reads, so the two surfaces
+/// cannot disagree about what exists.
+fn session_start_menu_items(
+    state: &State,
+    location: &micold_core::session::SessionLocation,
+) -> Vec<material::MenuItem<Message>> {
+    state
+        .offered_providers()
+        .into_iter()
+        .map(|provider| {
+            material::MenuItem::labeled(
+                provider.to_string(),
+                Message::SessionStartRequested {
+                    location: location.clone(),
+                    provider,
+                },
+            )
+        })
+        .collect()
+}
+
 fn session_menu_items(id: SessionId) -> Vec<material::MenuItem<Message>> {
     vec![
         material::MenuItem::new(Icon::Close, "Close", Message::SessionCloseRequested(id)),

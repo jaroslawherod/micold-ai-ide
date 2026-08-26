@@ -23,6 +23,11 @@ mod button;
 #[cfg(test)]
 mod button_anatomy;
 mod checkbox;
+/// A component read against the container it is *rendered in*, not against the surfaces its own
+/// role was enumerated for. The first check here that reads a **composition** rather than the
+/// token set (BUG-009).
+#[cfg(test)]
+mod composition_contrast;
 mod connection_banner;
 /// Where a component puts its content inside a height taller than that content. In-crate for the
 /// same reason as `form_field_anatomy`, and the first check that reads what a component *drew*
@@ -35,6 +40,7 @@ pub(crate) mod dialog;
 #[cfg(test)]
 mod dialog_anatomy;
 mod divider;
+mod edge_fade;
 mod ellipsized;
 /// A field reporting and taking the keyboard, driven rather than posed — the gap the anatomy
 /// modules structurally cannot see (BUG-003).
@@ -51,6 +57,9 @@ pub mod glyph;
 mod icon_button;
 mod icon_label;
 mod keyboard_focus;
+/// A toggle that names what it toggles — a glyph and a short word in one control (feature 026,
+/// T066a). The terminal bar's AI-CLI mode toggle carries the session's CLI with it.
+mod labelled_toggle;
 mod menu;
 /// §7.5's *spatial* figures — the item's inset, the panel's padding, the leading glyph, and what
 /// sits between two items. `anatomy_size` reads sizes; these are positions, and nothing read them
@@ -86,6 +95,9 @@ mod select;
 #[cfg(test)]
 mod select_anatomy;
 mod snackbar;
+/// The split action — a primary button with an adjacent "…or choose" chevron (feature 026,
+/// T033). Used by the sidebar's start-a-session row action.
+mod split_action;
 /// The one place design tokens become rendering types. Internal by intent (FR-002): a feature
 /// module that could reach it could render an off-spec variant of a shared component, which is
 /// exactly the drift this feature removes. `pub(crate)` rather than private only because the
@@ -112,6 +124,8 @@ mod style_snapshot;
 #[cfg(test)]
 mod style_states;
 mod surface;
+pub(crate) mod tab;
+mod tab_strip;
 mod tag;
 mod terminal_pane;
 /// The headless renderer the in-crate component tests share.
@@ -132,18 +146,20 @@ mod type_role_mapping;
 mod typeahead;
 
 pub use accordion::Accordion;
-pub use activity_badge::ActivityBadge;
+pub use activity_badge::{ActivityBadge, BadgeEmphasis};
 pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
 pub use button::{Button, Variant as ButtonVariant};
 pub use checkbox::Checkbox;
 pub use connection_banner::ConnectionBanner;
 pub use divider::Divider;
+pub use edge_fade::EdgeFade;
 pub use ellipsized::Ellipsized;
 pub use filter_panel::FilterTrigger;
 pub use form_field::{FormField, Layer as FieldLayer};
 pub use glyph::Glyph;
 pub use icon_button::IconButton;
 pub use icon_label::IconLabel;
+pub use labelled_toggle::LabelledToggle;
 pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
 pub use navigation_drawer::NavigationDrawer;
@@ -151,11 +167,14 @@ pub use picker::Row as TypeaheadRow;
 pub use progress::StageProgress;
 pub use resize_handle::ResizeHandle;
 pub use ripple::{pulse as ripple_pulse, Ripple};
-pub use scrollable::Scrollable;
+pub use scrollable::{ScrollDirection, Scrollable};
 pub use section_list::{Section, SectionList};
 pub use select::Select;
 pub use snackbar::Snackbar;
+pub use split_action::SplitAction;
 pub use surface::{Kind as SurfaceKind, Surface};
+pub use tab::{content_colour as tab_content_colour, IndicatorEdge, Tab, WIDTH as TAB_WIDTH};
+pub use tab_strip::TabStrip;
 pub use tag::Tag;
 #[cfg(test)]
 pub(crate) use terminal_pane::scrollbar_metrics;

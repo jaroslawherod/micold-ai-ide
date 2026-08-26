@@ -10,8 +10,8 @@ and it keeps running in the background afterward.
 
 ## What survives, and what doesn't (User Story 1)
 
-A session is a running process (your `claude` session or a shell) plus the interpreted screen it has
-produced. Both live in the daemon, so:
+A session is a running process (your AI CLI — `claude` or `copilot` — or a shell) plus the
+interpreted screen it has produced. Both live in the daemon, so:
 
 | You do this | What happens to your sessions |
 |---|---|
@@ -21,7 +21,7 @@ produced. Both live in the daemon, so:
 | **Reopen a session after any of the above** | You get the **current** screen immediately (a snapshot, not a replay), with scrollback covering the whole time you were away. |
 | **Log out / end your login session** (Linux) | This is the one thing that can stop the daemon; see [Surviving logout](#surviving-logout) (User Story 7). |
 
-Concretely, if you start a long-running build or a `claude` session that is working through a task,
+Concretely, if you start a long-running build or an AI CLI session that is working through a task,
 close the window, and come back ten minutes later, the session is still `Running`, the screen shows
 the latest output, and scrolling back shows what happened while you were gone — with no gaps and no
 duplicated lines.
@@ -70,13 +70,13 @@ glance what each one is doing without opening it:
 | _(no dot)_ | **Unknown** — the daemon has no signal yet (see below). This is deliberate, not a bug. |
 | **Hollow** | **Ended** — the session's process has finished. |
 
-The important, and unusual, one is **Unknown shows nothing**. The daemon derives activity from
-`claude`'s own lifecycle hooks — the authoritative "I started a turn / I finished a turn" signals —
-not from guessing based on how quiet the terminal is (which was measured and does not work: a session
-can sit silent for half a minute mid-task). So if those hooks aren't reaching the daemon — you ran a
-bare CLI, or hooks are misconfigured — the daemon reports **Unknown** rather than inventing an
-"idle" or "needs you" cue it can't stand behind. **A blank dot means "I don't know", never "nothing
-is happening."**
+The important, and unusual, one is **Unknown shows nothing**. The daemon derives activity from what
+the AI CLI itself reports at each turn boundary — the authoritative "I started a turn / I finished a
+turn" signal — not from guessing based on how quiet the terminal is (which was measured and does not
+work: a session can sit silent for half a minute mid-task). So if that signal isn't reaching the
+daemon — you ran a bare CLI outside the app, or the CLI is configured not to emit it — the daemon
+reports **Unknown** rather than inventing an "idle" or "needs you" cue it can't stand behind. **A
+blank dot means "I don't know", never "nothing is happening."**
 
 "Awaiting input" is a *strong hint*, not a guarantee: a turn can end and then continue on its own
 (auto-continuation, or a hook that resumes it), so treat the attention dot as "probably your turn,"
@@ -84,19 +84,31 @@ not a hard stop.
 
 ### How the daemon knows (and what it never sees)
 
-The daemon points each `claude` session at a small **loopback-only** listener — bound to
-`127.0.0.1` on a random port, reachable only from your own machine — and `claude` posts a one-line
-notice to it at each turn boundary. Each session gets its own unguessable token; a request without it
-is refused. The listener does exactly one thing — report a session's activity — and can touch nothing
-else: not your projects, not session input, not the catalog. It is wired up through a per-session
-settings file the daemon writes, so **your own `claude` configuration is never modified**. The
-notices are never written to a log (they can carry file paths and prompt metadata).
+Each CLI reports differently, and the daemon takes each one's own mechanism rather than a common
+guess:
 
-The session **title** shown in the sidebar comes from the same terminal stream: `claude` continuously
-sets the terminal title to the session's generated name, and the daemon reads it directly and pushes
-it to every window — replacing an older approach that repeatedly re-scanned a transcript file. A
-leading status glyph (the little spinner) is stripped before display; the title text itself is
-treated as untrusted and length-bounded.
+- **Claude Code posts to a loopback listener.** The daemon points each `claude` session at a small
+  **loopback-only** listener — bound to `127.0.0.1` on a random port, reachable only from your own
+  machine — and `claude` posts a one-line notice to it at each turn boundary. Each session gets its
+  own unguessable token; a request without it is refused. It is wired up through a per-session
+  settings file the daemon writes, so **your own `claude` configuration is never modified**.
+- **GitHub Copilot writes an event log.** `copilot` appends a line to its own session event file as
+  it works, and the daemon reads the bytes appended since it last looked, woken by the operating
+  system's file-change notification. Nothing is polled on a timer, and no work at all is scheduled
+  for an idle session.
+
+Either way the listener or the reader does exactly one thing — report a session's activity — and can
+touch nothing else: not your projects, not session input, not the catalog. The notices are never
+written to a log (they can carry file paths and prompt metadata). A session the app merely
+*discovered* on disk is never watched at all; its dot stays blank until you start it.
+
+The session **title** shown in the sidebar comes from the same terminal stream: the AI CLI
+continuously sets the terminal title to the session's generated name, and the daemon reads it
+directly and pushes it to every window — replacing an older approach that repeatedly re-scanned a
+transcript file. A leading status glyph (the little spinner) is stripped before display; the title
+text itself is treated as untrusted and length-bounded. For a session found on disk rather than
+started here, there is no live terminal to read, so the title comes from the CLI's own record of the
+conversation — `claude`'s transcript or `copilot`'s session state — if it has written one yet.
 
 ## Project and worktree operations run through the daemon (User Story 3)
 
@@ -140,10 +152,11 @@ is attached — and it does. The behaviour is **identical** attended and unatten
 never changes how a session's exit is handled.
 
 - **A crash restarts automatically.** If a session's process exits unexpectedly (a nonzero exit or a
-  signal — a crash, an out-of-memory kill), the daemon relaunches it. For a `claude` session that
-  means resuming the same conversation, so a crash mid-task is recovered on its own.
+  signal — a crash, an out-of-memory kill), the daemon relaunches it. For an AI CLI session that
+  means resuming the same conversation — the app asks that CLI to resume the session id it owns —
+  so a crash mid-task is recovered on its own.
 
-- **A normal exit just stops it.** If the process ends cleanly — you quit `claude`, or a shell
+- **A normal exit just stops it.** If the process ends cleanly — you quit the AI CLI, or a shell
   `exit` — the session is left **stopped**, not restarted. Reopening it starts it again on demand.
 
 - **A crash *loop* gives up, loudly.** If a session keeps crashing, the daemon retries a bounded

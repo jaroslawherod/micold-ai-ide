@@ -6,7 +6,7 @@ use micold_client::app::{
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
-use micold_core::session::{Session, SessionLocation};
+use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
@@ -75,16 +75,38 @@ fn drag_width_is_clamped_to_bounds() {
 #[test]
 fn worktree_menu_toggles_replaces_and_dismisses() {
     let mut state = State::default();
-    // Toggle open.
-    state.update(Message::WorktreeMenuToggled("feat-a".to_string()));
-    assert_eq!(state.worktree_menu_open.as_deref(), Some("feat-a"));
+    let open_dir = |s: &State| s.worktree_menu_open.as_ref().map(|m| m.dir_name.clone());
+    // Toggle open, at the point the row was pressed (018 FR-029d).
+    state.update(Message::WorktreeMenuToggled(
+        "feat-a".to_string(),
+        (120, 300),
+    ));
+    assert_eq!(open_dir(&state).as_deref(), Some("feat-a"));
+    assert_eq!(
+        state.worktree_menu_open.as_ref().unwrap().anchor,
+        (120, 300)
+    );
     // Toggling the same one closes it.
-    state.update(Message::WorktreeMenuToggled("feat-a".to_string()));
+    state.update(Message::WorktreeMenuToggled(
+        "feat-a".to_string(),
+        (120, 300),
+    ));
     assert_eq!(state.worktree_menu_open, None);
-    // Opening a different one while one is open replaces it (only one open at a time).
-    state.update(Message::WorktreeMenuToggled("feat-a".to_string()));
-    state.update(Message::WorktreeMenuToggled("feat-b".to_string()));
-    assert_eq!(state.worktree_menu_open.as_deref(), Some("feat-b"));
+    // Opening a different one while one is open replaces it (only one open at a time) — and
+    // re-anchors at its own press point rather than keeping the first one's (BUG-008).
+    state.update(Message::WorktreeMenuToggled(
+        "feat-a".to_string(),
+        (120, 300),
+    ));
+    state.update(Message::WorktreeMenuToggled(
+        "feat-b".to_string(),
+        (140, 610),
+    ));
+    assert_eq!(open_dir(&state).as_deref(), Some("feat-b"));
+    assert_eq!(
+        state.worktree_menu_open.as_ref().unwrap().anchor,
+        (140, 610)
+    );
     // Dismiss clears.
     state.update(Message::WorktreeMenuDismissed);
     assert_eq!(state.worktree_menu_open, None);
@@ -96,7 +118,10 @@ fn worktree_menu_toggles_replaces_and_dismisses() {
 fn text_copy_requested_is_a_no_op_in_the_pure_reducer() {
     // The binary performs the actual clipboard write; the reducer has no state to update.
     let mut state = State::default();
-    state.update(Message::WorktreeMenuToggled("feat-a".to_string()));
+    state.update(Message::WorktreeMenuToggled(
+        "feat-a".to_string(),
+        (120, 300),
+    ));
     let before = state.clone();
     state.update(Message::TextCopyRequested("Login page".to_string()));
     assert_eq!(state, before);
@@ -108,12 +133,12 @@ fn text_copy_requested_is_a_no_op_in_the_pure_reducer() {
 fn worktree_rename_seeds_edits_and_applies() {
     let mut state = state_with_active();
     state.update(Message::WorktreeRenameStarted(
-        "feat-abc-123-login-page".to_string(),
+        "feat-abc-123_login-page".to_string(),
     ));
     assert_eq!(open_dialog(&state), Some("rename_worktree"));
     assert!(state.worktree_menu_open.is_none());
     let draft = state.worktree_rename_draft.as_ref().unwrap();
-    assert_eq!(draft.dir_name, "feat-abc-123-login-page");
+    assert_eq!(draft.dir_name, "feat-abc-123_login-page");
     assert_eq!(draft.text, "Login page"); // seeded from the derived name
 
     state.update(Message::WorktreeRenameTextChanged("My Login".to_string()));
@@ -126,7 +151,7 @@ fn worktree_rename_seeds_edits_and_applies() {
     assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_rename_draft.is_none());
     assert_eq!(
-        state.worktree_display_name("feat-abc-123-login-page"),
+        state.worktree_display_name("feat-abc-123_login-page"),
         "My Login"
     );
 }
@@ -278,7 +303,12 @@ fn escape_prefers_an_open_overlay_over_the_filter_panel() {
         worktree_form: Some(Default::default()),
         ..Default::default()
     };
-    assert_eq!(on_escape(&state), Some(Message::AddWorktreeCancelled));
+    assert_eq!(
+        on_escape(&state),
+        Some(Message::WorktreeForm(
+            micold_client::features::worktree_form::Msg::Cancelled
+        ))
+    );
 }
 
 #[test]
@@ -291,7 +321,9 @@ fn opening_an_overlay_closes_the_filter_panel() {
     state.update(Message::SidebarFilterMenuToggled);
     assert!(state.sidebar_filter_open);
 
-    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
     assert!(
         !state.sidebar_filter_open,
         "opening an overlay must close the filter panel"
@@ -345,14 +377,20 @@ fn default_entry_stays_visible_with_an_active_tag_filter() {
 fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
     let mut state = state_with_active();
     let path = state.workspace.active.clone().unwrap();
-    state.set_worktrees(vec![Worktree {
-        dir_name: "feat-a".to_string(),
-        path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
-        branch: Some("feat/feat-a".to_string()),
-        status: WorktreeStatus::Valid,
-        included: false,
-    }]);
-    let session = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    micold_client::app::drain(
+        state.set_worktrees(vec![Worktree {
+            dir_name: "feat-a".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+            branch: Some("feat/feat-a".to_string()),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
     state.active_session = Some(id);
@@ -363,22 +401,25 @@ fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
     );
 
     // A worktree created elsewhere, reported by a fresh discovery: the whole list is replaced.
-    state.set_worktrees(vec![
-        Worktree {
-            dir_name: "feat-a".to_string(),
-            path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
-            branch: Some("feat/feat-a".to_string()),
-            status: WorktreeStatus::Valid,
-            included: false,
-        },
-        Worktree {
-            dir_name: "feat-new".to_string(),
-            path: PathBuf::from("/repo/.claude/worktrees/feat-new"),
-            branch: Some("feat/feat-new".to_string()),
-            status: WorktreeStatus::Valid,
-            included: false,
-        },
-    ]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![
+            Worktree {
+                dir_name: "feat-a".to_string(),
+                path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
+                branch: Some("feat/feat-a".to_string()),
+                status: WorktreeStatus::Valid,
+                included: false,
+            },
+            Worktree {
+                dir_name: "feat-new".to_string(),
+                path: PathBuf::from("/repo/.claude/worktrees/feat-new"),
+                branch: Some("feat/feat-new".to_string()),
+                status: WorktreeStatus::Valid,
+                included: false,
+            },
+        ]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
 
     assert!(
         state.location_open(&location),

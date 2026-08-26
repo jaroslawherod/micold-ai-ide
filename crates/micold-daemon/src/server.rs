@@ -20,8 +20,8 @@ use micold_core::protocol::messages::{
 };
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
-    branch_candidates, create_worktree, parse_worktrees, preflight, remove_worktree,
-    remove_worktree_dir, CreateError, CreateProgressEvent, Leftover,
+    branch_candidates, create_worktree, explain_directory_taken, parse_worktrees, preflight,
+    remove_worktree, remove_worktree_dir, CreateError, CreateProgressEvent, Leftover,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
@@ -476,9 +476,15 @@ where
                             },
                         );
                         // Discover this project's worktrees from git now that a client is looking at
-                        // it, and send the refreshed catalog to *this* client only (FR-018, T053).
-                        // Attach is per-client and exclusive, so a broadcast would be both wrong
-                        // (others aren't in this project) and disruptive to their message stream.
+                        // it, then the sessions its CLIs recorded there that we have no record of
+                        // (feature 026, FR-014 — research R15), and send the refreshed catalog to
+                        // *this* client only (FR-018, T053). Attach is per-client and exclusive, so
+                        // a broadcast would be both wrong (others aren't in this project) and
+                        // disruptive to their message stream.
+                        //
+                        // The order is load-bearing: discovery reads the worktree cache the refresh
+                        // just filled, and both must land before the snapshot is built or a
+                        // discovered session appears only on the *next* open.
                         refresh_worktrees_and_send(state, id, project).await;
                     }
                     Err(reason) => {
@@ -601,11 +607,12 @@ where
                 req,
                 project,
                 worktree_dir,
+                provider,
             } => {
                 // The catalog write stays on the loop: it is a small atomic file write, and it is
                 // what mints the id every later message refers to. Only the spawn — the slow half
                 // — is deferred (BUG-009, T125).
-                match state.create_session(&project, &worktree_dir) {
+                match state.create_session(&project, &worktree_dir, provider) {
                     Ok(session) => {
                         // A brand-new session starts fresh (`claude --session-id`), never `--resume`
                         // against a conversation that does not exist yet.
@@ -675,7 +682,13 @@ where
                         tracing::warn!(session = %session.0, instance = instance.0, %err, "open shell failed")
                     }
                     Ok(()) => {
-                        tracing::info!(session = %session.0, instance = instance.0, "shell instance opened")
+                        tracing::info!(session = %session.0, instance = instance.0, "shell instance opened");
+                        // The set of live shell instances just changed, so say so (`012` FR-008,
+                        // BUG-003). Publishing `live_shells` in the snapshot is not enough on its
+                        // own: nothing else broadcasts on this path, so without this the client
+                        // holds the instance at `Starting` until some unrelated change happens to
+                        // push a snapshot — which is exactly what the visual pass found.
+                        state.broadcast_catalog();
                     }
                 }
             }
@@ -683,6 +696,8 @@ where
                 if let Some((pty, framer)) = state.close_shell(session, instance) {
                     restart_view(state, id, &mut view_stream, pty, framer);
                 }
+                // Closed or not (the id may name nothing), the live set may have changed.
+                state.broadcast_catalog();
             }
             ClientMsg::SessionRestartShell { session, instance } => {
                 // `close_shell` returns the primary it reattached to iff this instance was attached.
@@ -707,6 +722,8 @@ where
                         }
                     }
                 }
+                // A restart is a death and a birth; both change the live set (`012` BUG-003).
+                state.broadcast_catalog();
             }
             ClientMsg::SessionResize {
                 session,
@@ -735,6 +752,7 @@ where
                 env_include_enabled,
                 env_include_script_path,
                 env_include_timeout_secs,
+                default_ai_cli,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),
@@ -753,6 +771,10 @@ where
                             env_include_timeout_secs,
                         )
                     }
+                })
+                .and_then(|()| match default_ai_cli {
+                    Some(which) => state.set_default_ai_cli(which),
+                    None => Ok(()),
                 });
                 match result {
                     Ok(()) => state.send(
@@ -1458,11 +1480,29 @@ async fn refresh_worktrees_and_send(
     );
 }
 
-/// Run the (blocking) git worktree discovery off the async runtime, updating the cache.
+/// Run the (blocking) git worktree discovery off the async runtime, updating the cache — and, in
+/// the same hop, the FR-014 pass that finds sessions started outside this application.
+///
+/// One `spawn_blocking` rather than two: the second step reads the worktree cache the first just
+/// filled, so they are one unit of blocking work and splitting them would add a runtime round trip
+/// for nothing (research R15).
 async fn refresh_worktrees_off_runtime(state: &Arc<DaemonState>, project: &std::path::Path) {
     let st = Arc::clone(state);
     let proj = project.to_path_buf();
-    let _ = tokio::task::spawn_blocking(move || st.refresh_worktrees(&proj)).await;
+    let discovered = tokio::task::spawn_blocking(move || {
+        st.refresh_worktrees(&proj);
+        st.discover_external_sessions(&proj)
+    })
+    .await;
+    if let Ok(count) = discovered {
+        if count > 0 {
+            tracing::info!(
+                project = %project.display(),
+                count,
+                "adopted sessions started outside this application"
+            );
+        }
+    }
 }
 
 /// Run empty-session pruning (which stats the provider's conversation store) off the async runtime.
@@ -1519,9 +1559,13 @@ fn describe_create_error(err: CreateError) -> (ErrorKind, String, Option<String>
             "the branch changed while you were deciding, so nothing was done".into(),
             None,
         ),
-        CreateError::DuplicateDir => (
+        // Feature 016 (FR-022), BUG-003 item 3: the arm left behind when `BranchInUse` was fixed
+        // after BUG-001, and the same defect. The sentence comes from core, so this reads exactly
+        // as the form's own pre-flight refusal — including the half that says what to do about it,
+        // which the hand-written wording here did not have.
+        CreateError::DuplicateDir { dir } => (
             ErrorKind::AlreadyExists,
-            "a worktree with that name already exists".into(),
+            explain_directory_taken(&dir).to_string(),
             None,
         ),
         CreateError::RolledBack(stderr) => (
@@ -1598,8 +1642,15 @@ fn spawn_session_start(
         let gate = task_state.session_gate(session);
         let _serialized = gate.lock().await;
         let worker = Arc::clone(&task_state);
-        let outcome =
-            tokio::task::spawn_blocking(move || worker.start_session(session, launch)).await;
+        let outcome = tokio::task::spawn_blocking(move || {
+            worker.start_session(session, launch)?;
+            // Watch this session's own event log, for a provider that reports one (feature 026,
+            // T064). In the same blocking hop as the spawn, and **only** for a session the daemon
+            // has just started — that is what keeps a merely discovered session unwatched.
+            worker.open_event_log_tail(session);
+            Ok::<(), std::io::Error>(())
+        })
+        .await;
         match outcome {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
@@ -1694,5 +1745,42 @@ async fn stream_view(
                 return;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod create_error_tests {
+    //! BUG-003 item 3 — the drift gate.
+    //!
+    //! Both surfaces that report a directory clash build their text from `explain_directory_taken`,
+    //! and this is what says so of *this* one. The form's half is structural — it renders the two
+    //! fields — but nothing stopped an edit here from writing a sentence again, which is exactly
+    //! what had happened: `BranchInUse` was moved into core after BUG-001 and the arm one lower was
+    //! left saying "a worktree with that name already exists", naming neither the folder nor the
+    //! remedy.
+
+    use super::*;
+
+    #[test]
+    fn a_directory_clash_is_reported_in_cores_own_words() {
+        let dir = std::path::PathBuf::from("/repo/.claude/worktrees/feat-login");
+        let (kind, message, detail) =
+            describe_create_error(CreateError::DuplicateDir { dir: dir.clone() });
+
+        assert_eq!(kind, ErrorKind::AlreadyExists);
+        assert_eq!(message, explain_directory_taken(&dir).to_string());
+        assert_eq!(detail, None);
+    }
+
+    /// …which means it names the folder and says what to do — the two things the hand-written
+    /// version did not. Asserted against the *content* as well as against the source, because an
+    /// equality with core would still pass if core's sentence lost either half.
+    #[test]
+    fn a_directory_clash_names_the_folder_and_offers_a_remedy() {
+        let (_, message, _) = describe_create_error(CreateError::DuplicateDir {
+            dir: std::path::PathBuf::from("/repo/.claude/worktrees/feat-login"),
+        });
+        assert!(message.contains("feat-login"), "{message}");
+        assert!(message.contains("Choose a different name"), "{message}");
     }
 }

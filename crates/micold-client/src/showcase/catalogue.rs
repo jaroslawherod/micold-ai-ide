@@ -219,9 +219,9 @@ pub const COMPONENTS: &[Entry] = &[
     Entry {
         module: "material/activity_badge.rs",
         component: "ActivityBadge",
-        variants: &["Working", "Attention", "Ended"],
+        variants: &["Working", "Attention", "Ended", "Stopped"],
         density: &[],
-        posed: &["Unknown", "Working", "AwaitingInput", "Ended"],
+        posed: &["Unknown", "Working", "AwaitingInput", "Ended", "Stopped"],
         live: &[],
         interactive: false,
         section: Section::Components,
@@ -258,6 +258,35 @@ pub const COMPONENTS: &[Entry] = &[
         section: Section::Components,
         layout: Layout::Inline,
         render: sections::controls::icon_button,
+    },
+    Entry {
+        module: "material/split_action.rs",
+        component: "SplitAction",
+        variants: &[],
+        density: &[],
+        posed: &[
+            "with a choice",
+            "nothing to choose between",
+            "compact, in a dense row",
+            "disabled",
+        ],
+        live: &["hover", "pressed", "focus"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::controls::split_action,
+    },
+    Entry {
+        module: "material/labelled_toggle.rs",
+        component: "LabelledToggle",
+        variants: &[],
+        density: &[],
+        posed: &["default", "a longer word", "tinted", "disabled"],
+        live: &["hover", "pressed", "focus"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::controls::labelled_toggle,
     },
     Entry {
         module: "material/checkbox.rs",
@@ -407,7 +436,7 @@ pub const COMPONENTS: &[Entry] = &[
     Entry {
         module: "material/scrollable.rs",
         component: "Scrollable",
-        variants: &[],
+        variants: &["Vertical", "Horizontal"],
         density: &[],
         posed: &[],
         live: &["hover over the scrollbar", "the scroll itself"],
@@ -528,6 +557,47 @@ pub const COMPONENTS: &[Entry] = &[
         layout: Layout::FullWidth,
         render: sections::terminal::terminal_pane,
     },
+    Entry {
+        module: "material/edge_fade.rs",
+        component: "EdgeFade",
+        variants: &[],
+        density: &[],
+        posed: &[
+            "nothing beyond either edge",
+            "more that way",
+            "both edges",
+            "the marked tab is out there",
+        ],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::terminal::edge_fade,
+    },
+    Entry {
+        module: "material/tab.rs",
+        component: "Tab",
+        variants: &["Top", "Bottom"],
+        density: &[],
+        posed: &["marked", "unmarked", "stopped"],
+        live: &["hover — a rectangular state layer, never a pill", "press"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::terminal::tab,
+    },
+    Entry {
+        module: "material/tab_strip.rs",
+        component: "TabStrip",
+        variants: &["Top", "Bottom"],
+        density: &[],
+        posed: &["indicator on the top edge", "indicator on the bottom edge"],
+        live: &["hover along the strip"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::terminal::tab_strip,
+    },
     // ---- floating surfaces and their triggers -----------------------------------------------
     // `MenuItem` and `TreeItem` are deliberately absent: they are *records* the caller
     // fills in, not components — no element conversion, public fields — and the builder-API gate
@@ -580,10 +650,15 @@ an unavailable row",
     Entry {
         module: "material/menu.rs",
         component: "ContextMenu",
-        // `Anchor::Point` — a context menu's corner sits at the cursor.
-        variants: &["Point"],
+        // `Anchor::Point` — a context menu's corner sits at the cursor. `Anchor::BottomStart` —
+        // the same panel opened from a control in a bar pinned to the window's bottom edge, which
+        // has no room to hang a panel downward.
+        variants: &["Point", "BottomStart"],
         density: &[],
-        posed: &["open at a fixed window point (a real one opens at the cursor)"],
+        posed: &[
+            "open at a fixed window point (a real one opens at the cursor)",
+            "rising from the window's bottom edge, for a menu opened out of a bottom bar",
+        ],
         live: &["hover and press its items", "Escape dismisses it"],
         interactive: true,
         section: Section::Components,
@@ -754,5 +829,15 @@ pub const EXEMPTIONS: &[Exemption] = &[
                  Its field and its list arrive already drawn — what they look like is \
                  `material/picker.rs`, which the controls section poses through both of the \
                  controls built on it.",
+    },
+    Exemption {
+        module: "cdk/context_area.rs",
+        component: "ContextArea",
+        reason: "a behaviour-layer wrapper, for the same reason as the three above: it delegates \
+                 layout, draw, operate and overlay to its single child and intercepts one event — a \
+                 secondary press over its own bounds — publishing the point so a caller can open a \
+                 menu there (`012` BUG-005, FR-010b). It names no colour, size or spacing and adds \
+                 no pixel to what it wraps. What a secondary press *produces* is the `ContextMenu` \
+                 the floating section poses, on both of its anchors.",
     },
 ];

@@ -72,11 +72,23 @@ Open the project, select a session already in Regular Terminal mode (one instanc
 
 ### 4. Independent lifecycle and restart — SC-005 (US4)
 
-- Open two instances. In one, type `exit`. **Expect**: only that instance shows a not-running
-  state with its own restart affordance; the other instance and the AI CLI process are
-  unaffected.
-- Press that instance's restart affordance. **Expect**: only that instance starts a fresh shell;
-  the sibling instance is not restarted, the AI CLI process is not restarted.
+- Open two instances. In one, type `exit`. **Expect**: only that instance stops; the other
+  instance and the AI CLI process are unaffected.
+- Right-click that instance's tab. **Expect**: a context menu at the pointer offering **Restart**
+  and **Close**. Restart is offered because that instance's own lifecycle is `Exited` — right-click
+  a *running* tab and the menu offers **Close** only (FR-010b).
+- Press **Restart**. **Expect**: only that instance starts a fresh shell; the sibling instance is
+  not restarted, the AI CLI process is not restarted.
+- **Do all of this on the instance that is *not* the active one** (bugfix BUG-005, FR-010a).
+  Restarting a background instance without selecting it first is the whole point of addressing the
+  restart by instance id, and it is the case that was broken: the affordance used to live *in* the
+  tab, where it was laid out at zero width inside a tab too narrow to hold it — present in the tree,
+  correctly conditioned, dispatching the right message, and impossible to press. **Expect**: the
+  right-click lands on the tab under the pointer, not the active one, and the menu restarts that
+  instance without selecting it. **Also expect**: the tab itself now carries only its label and its
+  close control, and that close control is a full 48dp target.
+- The tab's own primary click must still select the instance — the secondary-click wrapper must not
+  swallow it.
 
 ### 5. The keyboard shortcut and its mode gating — FR-019
 
@@ -100,25 +112,35 @@ Open the project, select a session already in Regular Terminal mode (one instanc
   not restored (same restart behavior feature 010 already established for the single-instance
   case).
 
-### 8. The switcher reads as a tab strip — FR-004a, FR-011a, SC-007, SC-008 (BUG-001)
+### 8. The switcher reads as a tab strip — FR-004a, FR-004b, FR-011a, SC-007, SC-008, SC-009
 
 Scenario 2 above checks that you can tell *which* instance is active. These check that the row
 looks like a tab strip while you do — the half no automated gate can see, and the half BUG-001
 shipped without. Run each in **both** the light and the dark theme; the original defect was far
 worse in one of them.
 
+*(Rewritten by BUG-002. This section previously asked that every tab sit "in a container of the
+same shape and size", which is now false **by design**: a tab strip draws no containers and marks
+its active member with an indicator. The checks below are the same four properties — form,
+alignment, stability, legibility — restated for the corrected idiom.)*
+
 With two or more instances open:
 
-- **Every entry is a tab.** Each one sits in a container of the same shape and size — active and
-  inactive alike. No entry is bare text with a close glyph floating beside it. The active tab
-  differs by *emphasis* (a filled background) and by nothing structural.
-- **Label centred, close trailing.** Within each tab, the number is horizontally centred and the
-  close control sits at the tab's right edge — not immediately beside the number.
-- **Nothing reflows.** Select a different tab. Every tab keeps its position and size; only the
-  emphasis moves. Nothing shifts under the pointer, so a second press lands where you aimed the
-  first. Open a tenth instance if you can, and confirm a two-digit label does not resize its tab
-  either.
-- **The close control is visible on the *active* tab.** This is the one to look at hardest: the
-  close glyph on the highlighted tab must read at the same strength as that tab's own number. If
-  it is a faint ghost against the fill, that is the original bug — the glyph kept the bar's
-  foreground colour instead of the tab's (FR-011a).
+- **No tab draws a container.** Every entry is a bare label — no background, no outline, no pill.
+  If a tab looks like a button, the strip has regressed to the BUG-001 form.
+- **Exactly one tab carries an indicator, and it is at the top.** An accent bar spans the active
+  tab's width along its **upper** edge, pointing at the terminal pane above it. No other tab has
+  one. A bar along the bottom edge is wrong here even though Material puts it there — this bar sits
+  at the window's bottom, so the pane it selects is above.
+- **The active tab is legible as active at a glance.** Its label takes the accent colour as well as
+  carrying the bar, so the cue is doubled. Squint at it: you should still be able to say which tab
+  is selected without reading the numbers (SC-009).
+- **Label centred, close trailing.** Within each tab the label sits on the tab's midline and the
+  close control is at its right edge.
+- **The close control is visible on the *active* tab.** The `×` follows the tab's own colour, so on
+  the active tab it takes the accent. If it is a faint ghost, that is BUG-001's defect returning by
+  a different route (FR-011a).
+- **Nothing reflows.** Select a different tab. Every tab keeps its position and size; only colour
+  moves. This is the trap specific to the indicator design — a bar drawn only on the active tab
+  would grow it by 3dp and shove every tab after it, under the pointer, between a press and its
+  release (SC-008).

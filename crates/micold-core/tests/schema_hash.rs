@@ -123,3 +123,70 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
          derived from the other and the gap above is not covered"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// Feature 026 — one hash move for the whole feature (T020)
+// ---------------------------------------------------------------------------------------
+
+/// The protocol version feature 026 bumped to.
+///
+/// Pinned, not read from a constant, because that is what makes this a gate rather than a mirror.
+/// Feature 026 makes **five** wire changes — `provider` on `ClientMsg::SessionCreate` and on
+/// `SessionSummary`, and `default_ai_cli` on `DaemonSettings`, `SettingsSet` and `SettingsChanged`
+/// — and the whole point of doing them in one edit is that the hash moves **once**. A second bump
+/// later in the feature, when US3 comes to consume the outbound field, fails here.
+///
+/// It read 6 while this branch was based on a `main` at 5. Rebasing onto a `main` that had since
+/// bumped 5 → 6 for `SessionSummary::live_shells` (feature 012, BUG-003) moved this feature's one
+/// bump up to 7 — which is exactly the "another feature's bump" case the assertion below names,
+/// and the constant follows it rather than the feature bumping twice.
+///
+/// It moved again, 7 → 8, when feature 027 merged: 027 had developed against 6 and 7 of its own
+/// while 026 was taking those same numbers here, so the merged wire carries both features'
+/// changes and both cannot be 7. Same case, same answer — the constant follows the bump, and 026
+/// still costs exactly one.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 8;
+
+#[test]
+fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
+    assert_eq!(
+        PROTOCOL_VERSION, FEATURE_026_PROTOCOL_VERSION,
+        "the protocol version moved. If that is another feature's bump, update this constant \
+         along with the rest of that feature's wire change. If it is feature 026 bumping a second \
+         time, it should not be: US3 consumes `SessionSummary::provider`, which T029 already put \
+         on the wire, and consuming a field is not a wire change"
+    );
+}
+
+#[test]
+fn every_field_this_feature_added_is_present_in_one_protocol_source() {
+    // The other half of "one bump": the bump has to *cover* all five. A version that moved while
+    // one of the additions was still to come would satisfy the test above and still cost a second
+    // move later.
+    //
+    // Read from the source text rather than from the types, deliberately — this file's whole
+    // subject is the text `build.rs` hashes, and a field added to a *different* file would not
+    // change the hash however correct the type looked.
+    let (messages, _grid, _envelope) = read_protocol_source();
+    for anchor in [
+        // Inbound: the client's resolved choice.
+        "SessionCreate {",
+        // Outbound: the label a row reads (FR-016).
+        "pub provider: AiCli,",
+        // The service-owned preference, in all three of its shapes.
+        "pub default_ai_cli: AiCli,",
+        "default_ai_cli: Option<AiCli>,",
+    ] {
+        assert!(
+            messages.contains(anchor),
+            "`{anchor}` is not in messages.rs — feature 026's wire change is incomplete, so the \
+             single bump this feature is allowed does not yet cover all of it"
+        );
+    }
+    assert_eq!(
+        canonicalize(&messages).matches("provider: AiCli,").count(),
+        2,
+        "exactly two `provider: AiCli` fields ride the wire: one inbound on `SessionCreate`, one \
+         outbound on `SessionSummary`"
+    );
+}

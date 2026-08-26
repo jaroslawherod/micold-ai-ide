@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-17
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "Refinement of worktree sidebar — minimal left/right padding, remove the git icon next to worktrees, show a worktree name with type/Jira tags below it (color-coded, later filterable), right-click actions to delete (worktree + all sessions + branch) and rename (displayed name only), and a smaller sidebar font at 80% of current size."
 
@@ -12,7 +12,7 @@
 
 ### Session 2026-07-17
 
-- Q: When a worktree has no custom rename, what friendly name shows on line 1? → A: The descriptive remainder only — type prefix and Jira key removed, dashes turned into spaces, sentence case (e.g. `feat/abc-123-login-page` → "Login page"); the type and ticket appear only as tags.
+- Q: When a worktree has no custom rename, what friendly name shows on line 1? → A: The descriptive remainder only — type prefix and Jira key removed, dashes turned into spaces, sentence case (e.g. `feat/abc-123-login-page` → "Login page"); the type and ticket appear only as tags. *(Superseded in part by FR-017a: "Jira key removed" was a shape rule, and no shape rule can separate a ticket from a name that ends in a number. The ticket is now marked by an explicit `_` boundary, so the example reads `feat/abc-123_login-page`.)*
 - Q: How should a worktree whose name does not match the convention be tagged/filtered? → A: Show no tag on the row, but offer an "untyped" bucket in the filter so these worktrees are still findable.
 - Q: When multiple tag filters are active at once, what shows? → A: Match ANY — a worktree is shown if it matches any active filter (OR).
 - Q: When Delete targets a worktree that has a running session (live terminal process), what happens? → A: After confirmation, terminate the running session processes, then remove the directory, sessions, and branch.
@@ -41,10 +41,13 @@ any branch or directory name on disk.
 
 **Acceptance Scenarios**:
 
-1. **Given** a worktree whose branch is `feat/abc-123-login-page`, **When** it is shown in
-   the sidebar, **Then** the row displays the friendly name "Login page" plus a `feat` type
-   tag and an `ABC-123` issue tag, each color-coded, while the branch and directory on disk
-   remain `feat/abc-123-login-page` and `feat-abc-123-login-page`.
+1. **Given** a worktree whose branch is `feat/abc-123_login-page` and whose directory is
+   `feat-abc-123_login-page`, **When** it is shown in the sidebar, **Then** the row displays
+   the friendly name "Login page" plus a `feat` type tag and an `ABC-123` issue tag, each
+   color-coded, while the branch and directory on disk are unchanged.
+1a. **Given** a worktree whose directory is `feat-reporting-2` — no ticket boundary — **When**
+   it is shown, **Then** the row displays "Reporting 2" with a `feat` tag and **no** issue tag
+   (BUG-003).
 2. **Given** a worktree whose branch is `fix/crash-on-open` (no Jira key), **When** it is
    shown, **Then** the row displays a friendly name plus a `fix` type tag and no issue tag.
 3. **Given** two worktrees of different types, **When** they are shown together, **Then**
@@ -262,10 +265,24 @@ smaller (80%), while remaining legible in light and dark themes.
 - **FR-016**: Type and issue tags MUST continue to derive from the underlying branch and MUST
   be unaffected by a rename.
 - **FR-017**: When no custom name is set, the system MUST derive the friendly name from the
-  worktree's descriptive name portion only — removing the conventional type prefix and any
-  Jira-style issue key, replacing separators with spaces, and applying sentence case (e.g.
-  `feat/abc-123-login-page` → "Login page"). The removed type and issue key appear only as
-  tags.
+  worktree's descriptive name portion only — removing the conventional type prefix and the
+  ticket, replacing separators with spaces, and applying sentence case (e.g.
+  `feat-abc-123_login-page` → "Login page"). The removed type and ticket appear only as tags.
+- **FR-017a** (bugfix BUG-003): The descriptive portion and the ticket MUST be separated by an
+  explicit boundary (`_`) in the branch and the directory alike, and a name without one MUST be
+  read as having no ticket. Carrying it on the branch is what makes the branch→directory inverse
+  (feature 016, FR-014) exact, so a worktree re-created by *picking* an app-derived branch keeps
+  its ticket instead of silently losing it. The cost is that a `snake_case` branch from outside
+  this app reads as ticketed; `_` means one thing everywhere and nothing can tell the two
+  apart. Nothing may infer a ticket from the *shape* of a name segment: a bare
+  ticket (`feat-abc-123`) and a descriptive name with a disambiguator (`feat-reporting-2`) are
+  the same pattern, so any shape rule reads one of them wrong — and the rule that existed read
+  `feat-reporting-2` as issue `REPORTING-2`, which emptied the descriptive portion and made the
+  label fall back to "Feat reporting 2", type prefix and all, violating this requirement.
+- **FR-017b** (bugfix BUG-003): A ticket that is only digits MUST be preserved and displayed as
+  an issue number (`#123`), so a GitHub/GitLab reference is as usable as a Jira-style key. The
+  previous shape rule required a leading letter, so `#123` was accepted by the form, slugified to
+  `123`, matched nothing, and was discarded — while its digits remained in the friendly name.
 
 **Context menu — Delete**
 

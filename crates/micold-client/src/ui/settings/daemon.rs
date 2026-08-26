@@ -18,9 +18,10 @@
 //!
 //! [`DaemonDraft`]: crate::features::settings::DaemonDraft
 
-use crate::app::{FieldId, Message};
+use crate::app::Message;
 use crate::features::sandbox::SandboxLimit;
 use crate::features::settings::{SettingsDraft, SettingsSection};
+use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{Checkbox, Select, TextField};
 use crate::ui::settings::{caution, group, name_of, note, page, Named};

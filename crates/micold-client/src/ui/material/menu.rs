@@ -23,10 +23,19 @@ use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
 use crate::ui::material::{menu_panel, IconButton, Text, TypeRole};
-use iced::widget::{button, column, mouse_area, opaque, row, Space};
+use iced::widget::{button, column, opaque, row, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
 use micold_core::tokens::{anatomy, density, motion::duration, shape, spacing, Rgb, Roles};
+
+/// What a right-press on a menu item becomes: a message built from the press point, in window
+/// pixels.
+///
+/// `tree_view::OnRightPress` is the same shape for a sidebar row, and `cdk::ContextArea` publishes
+/// it for anything else. One gesture, one shape — a second one is how the sidebar came to answer a
+/// right-click differently from the switcher (BUG-008). No lifetime: the closure captures what the
+/// message names (a project's path, cloned), never the state it was read from.
+type OnContext<M> = Box<dyn Fn((u16, u16)) -> M>;
 
 /// One entry in a menu — a plain record the caller fills in, generic over the message type.
 ///
@@ -59,8 +68,12 @@ pub struct MenuItem<M> {
     pub trailing_text: Option<String>,
     /// Trailing badge glyph and its tint (the switcher's unavailable marker).
     pub trailing_icon: Option<(Icon, Rgb)>,
-    /// Message emitted on right-press, opening the item's own context menu (feature 015).
-    pub on_context: Option<M>,
+    /// What a right-press on the item becomes, built from the **press point** in window pixels —
+    /// the item's own context menu (feature 015; the point since BUG-008, 018 FR-029d).
+    ///
+    /// `'static` rather than borrowed: the closure captures what the message names (a project's
+    /// path, cloned), never the state it was read from.
+    pub on_context: Option<OnContext<M>>,
 }
 
 impl<M> MenuItem<M> {
@@ -208,7 +221,7 @@ pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) 
                 left: anatomy::menu::ITEM_PADDING,
                 right: anatomy::menu::ITEM_PADDING,
             })
-            .style(style::text_button(r));
+            .style(style::text_button(r, None));
         // An item with no message is shown and not pressable — `on_press` is what makes a `button`
         // interactive, so withholding it is the whole of "listed but not selectable".
         let inert = item.message.is_none();
@@ -216,8 +229,13 @@ pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) 
             pressable = pressable.on_press(message);
         }
         let entry = super::Ripple::new(pressable, r.on_surface, shape::FULL);
+        // `cdk::ContextArea`, not `mouse_area`: the latter's `on_right_press` takes a bare message
+        // and drops the press point, which is how a context menu comes to open somewhere other
+        // than where it was asked for (BUG-008).
         let entry: Element<'a, M> = match item.on_context {
-            Some(message) => mouse_area(entry).on_right_press(message).into(),
+            Some(build) => crate::ui::cdk::context_area::ContextArea::new(entry)
+                .on_secondary_press(build)
+                .into(),
             None => entry.into(),
         };
         // …and "not pressable" has to mean the press stops here. A button without `on_press`
@@ -371,6 +389,7 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
 pub struct ContextMenu<'a, M> {
     items: Vec<MenuItem<M>>,
     origin: (u16, u16),
+    rising_above: Option<f32>,
     on_dismiss: M,
     roles: Roles,
     lifetime: std::marker::PhantomData<&'a ()>,
@@ -383,10 +402,26 @@ impl<'a, M: Clone + 'a> ContextMenu<'a, M> {
         Self {
             items,
             origin,
+            rising_above: None,
             on_dismiss,
             roles,
             lifetime: std::marker::PhantomData,
         }
+    }
+
+    /// Open **upward**, with the panel's bottom edge `bottom` above the window's bottom edge, at the
+    /// press point's x. For a menu opened from a control in a bar pinned to that edge.
+    ///
+    /// The default hangs the panel *down* from the press point, which `Anchor::Point` says plainly
+    /// and leaves the caller to clamp. A bottom bar cannot clamp it: the room below any press in the
+    /// bar is at most the bar's own height, and a one-item panel is already taller than that. The
+    /// 2026-08-19 visual pass found the terminal tab menu opening into 27px of window with its
+    /// single item cut in half, and a second item would have been off-screen entirely — the same
+    /// shape as the defect that moved the item into this menu in the first place: present in the
+    /// tree, correctly conditioned, impossible to press.
+    pub fn rising_above(mut self, bottom: f32) -> Self {
+        self.rising_above = Some(bottom);
+        self
     }
 }
 
@@ -395,6 +430,7 @@ impl<'a, M: Clone + 'a> From<ContextMenu<'a, M>> for Surface<'a, M> {
         let ContextMenu {
             items,
             origin,
+            rising_above,
             on_dismiss,
             roles: r,
             ..
@@ -407,11 +443,13 @@ impl<'a, M: Clone + 'a> From<ContextMenu<'a, M>> for Surface<'a, M> {
             true,
             panel_padding(),
         );
-        Surface::new(
-            Layer::ContextMenu,
-            panel,
-            Anchor::Point(iced::Point::new(origin.0 as f32, origin.1 as f32)),
-        )
-        .on_dismiss(on_dismiss)
+        let anchor = match rising_above {
+            Some(bottom) => Anchor::BottomStart {
+                bottom,
+                start: origin.0 as f32,
+            },
+            None => Anchor::Point(iced::Point::new(origin.0 as f32, origin.1 as f32)),
+        };
+        Surface::new(Layer::ContextMenu, panel, anchor).on_dismiss(on_dismiss)
     }
 }

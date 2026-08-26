@@ -18,20 +18,45 @@ use iced::widget::{scrollable, Sensor};
 use iced::{Element, Length, Size};
 use micold_core::tokens::Roles;
 
+/// A subscription to the offset, the viewport's extent and the content's, all along the
+/// scrollable's own axis and all in whole pixels — see [`Scrollable::on_scroll_metrics`].
+///
+/// Its own name because the three arguments have no meaning in an inline `Box<dyn Fn(u32, u32, u32)>`
+/// and every reader would have to go and find out which is which.
+type ScrollMetrics<'a, M> = Box<dyn Fn(u32, u32, u32) -> M + 'a>;
+
 /// The scrollbar's width and its scroller's, in pixels, plus the margin holding it off the edge.
 /// Matches the sidebar's hand-rolled values exactly (FR-005).
 const BAR_WIDTH: f32 = 4.0;
 const BAR_MARGIN: f32 = 1.0;
+
+/// The axis a viewport scrolls along (feature 026 FR-002a).
+///
+/// The wrapper built a vertical viewport and only a vertical one, because both call sites wanted
+/// one. The tab strip wants the other axis, and it wants it **from this component**: the themed 4px
+/// scrollbar and the dismiss-on-scroll report both live here, so a hand-rolled horizontal scroller
+/// at the call site would reintroduce exactly the divergence the wrapper was created to end — and
+/// would silently drop the scroll-dismissal the tab menu depends on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScrollDirection {
+    /// Top to bottom. The default, and what the sidebar's list and the folder browser have always
+    /// had.
+    Vertical,
+    /// Leading to trailing. The tab strip's axis.
+    Horizontal,
+}
 
 /// Scrollable content with the design system's scrollbar. Builder form (Principle VIII):
 /// `Scrollable::new(list, roles).height(Length::Fill).on_scroll(Message::Scrolled).into()`.
 pub struct Scrollable<'a, M> {
     content: Element<'a, M>,
     roles: Roles,
+    direction: ScrollDirection,
     height: Option<Length>,
     width: Option<Length>,
     on_scroll: Option<M>,
     on_scroll_offset: Option<Box<dyn Fn(u32) -> M + 'a>>,
+    on_scroll_metrics: Option<ScrollMetrics<'a, M>>,
     id: Option<Id>,
     on_viewport_resize: Option<Box<dyn Fn(Size) -> M + 'a>>,
 }
@@ -42,13 +67,25 @@ impl<'a, M: Clone + 'a> Scrollable<'a, M> {
         Self {
             content: content.into(),
             roles,
+            direction: ScrollDirection::Vertical,
             height: None,
             width: None,
             on_scroll: None,
             on_scroll_offset: None,
+            on_scroll_metrics: None,
             id: None,
             on_viewport_resize: None,
         }
+    }
+
+    /// Scroll along `direction` instead of the default [`ScrollDirection::Vertical`].
+    ///
+    /// A step rather than a second constructor, and defaulted rather than required, because the two
+    /// existing call sites must not have to say what they already meant. Every other property of the
+    /// viewport — the themed scrollbar, the offset report, the dismissal — is unchanged by it.
+    pub fn direction(mut self, direction: ScrollDirection) -> Self {
+        self.direction = direction;
+        self
     }
 
     /// Lay the viewport out at a given height — `Length::Fill` to take the space its parent has.
@@ -85,6 +122,23 @@ impl<'a, M: Clone + 'a> Scrollable<'a, M> {
         self
     }
 
+    /// Report the offset, the viewport's extent and the content's, all along this scrollable's own
+    /// axis and all in whole pixels (feature 026 FR-002e).
+    ///
+    /// Three numbers in one call because they answer **one** question — "does anything lie beyond
+    /// this edge" — and the rendering stack delivers them together in a single `Viewport`. Split
+    /// across subscriptions there would be frames where one is stale, and a fade computed from a
+    /// stale pair points at nothing or fails to point at something.
+    ///
+    /// Along the scrollable's own axis, not always vertically: this component now has two
+    /// ([`ScrollDirection`]), and a horizontal viewport reporting its `y` would report zero forever.
+    /// [`Self::on_scroll_offset`] is the older, one-number form, kept because the sidebar's
+    /// elevate-on-scroll asks a strictly smaller question.
+    pub fn on_scroll_metrics(mut self, f: impl Fn(u32, u32, u32) -> M + 'a) -> Self {
+        self.on_scroll_metrics = Some(Box::new(f));
+        self
+    }
+
     /// Make this viewport addressable, so it can be scrolled by
     /// [`iced::widget::operation::scroll_to`] (feature 024, FR-008).
     ///
@@ -116,13 +170,18 @@ impl<'a, M: Clone + 'a> Scrollable<'a, M> {
 
 impl<'a, M: Clone + 'a> From<Scrollable<'a, M>> for Element<'a, M> {
     fn from(s: Scrollable<'a, M>) -> Self {
+        // One scrollbar description, placed on whichever axis was asked for: the 4px themed bar is
+        // the appearance this component exists to give, and it does not become a different bar
+        // because the content runs the other way.
+        let bar = scrollable::Scrollbar::new()
+            .width(BAR_WIDTH)
+            .scroller_width(BAR_WIDTH)
+            .margin(BAR_MARGIN);
         let mut widget = scrollable(s.content)
-            .direction(scrollable::Direction::Vertical(
-                scrollable::Scrollbar::new()
-                    .width(BAR_WIDTH)
-                    .scroller_width(BAR_WIDTH)
-                    .margin(BAR_MARGIN),
-            ))
+            .direction(match s.direction {
+                ScrollDirection::Vertical => scrollable::Direction::Vertical(bar),
+                ScrollDirection::Horizontal => scrollable::Direction::Horizontal(bar),
+            })
             .style(style::scrollbar(s.roles));
         if let Some(height) = s.height {
             widget = widget.height(height);
@@ -133,9 +192,30 @@ impl<'a, M: Clone + 'a> From<Scrollable<'a, M>> for Element<'a, M> {
         // One subscription, because the rendering stack gives a scrollable one. The offset form
         // wins when both are set: it carries strictly more information, and its reducer arm runs
         // the dismissal too, so nothing is lost by preferring it.
-        if let Some(f) = s.on_scroll_offset {
+        if let Some(f) = s.on_scroll_metrics {
+            let axis = s.direction;
             widget = widget.on_scroll(move |viewport| {
-                f(crate::app::scroll_offset_px(viewport.absolute_offset().y))
+                let offset = viewport.absolute_offset();
+                let window = viewport.bounds();
+                let content = viewport.content_bounds();
+                let (o, w, c) = match axis {
+                    ScrollDirection::Vertical => (offset.y, window.height, content.height),
+                    ScrollDirection::Horizontal => (offset.x, window.width, content.width),
+                };
+                f(
+                    crate::app::scroll_offset_px(o),
+                    crate::app::scroll_offset_px(w),
+                    crate::app::scroll_offset_px(c),
+                )
+            });
+        } else if let Some(f) = s.on_scroll_offset {
+            let axis = s.direction;
+            widget = widget.on_scroll(move |viewport| {
+                let offset = viewport.absolute_offset();
+                f(crate::app::scroll_offset_px(match axis {
+                    ScrollDirection::Vertical => offset.y,
+                    ScrollDirection::Horizontal => offset.x,
+                }))
             });
         } else if let Some(message) = s.on_scroll {
             widget = widget.on_scroll(move |_| message.clone());
@@ -165,5 +245,38 @@ impl<'a, M: Clone + 'a> From<Scrollable<'a, M>> for Element<'a, M> {
             }
             None => widget.into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iced::widget::Space;
+
+    fn roles() -> Roles {
+        micold_core::tokens::roles(micold_core::theme::ColorScheme::Dark)
+    }
+
+    /// FR-002a needs a horizontally scrolling viewport, and this component only ever built a
+    /// vertical one. Both halves are asserted, and the **default** is the half that matters most:
+    /// two call sites — the sidebar's list and the folder browser's — depend on it and must not
+    /// move because a third one wanted the other axis.
+    #[test]
+    fn a_scrollable_takes_its_axis_and_still_defaults_to_vertical() {
+        let vertical: Scrollable<'_, ()> = Scrollable::new(Space::new(), roles());
+        assert_eq!(
+            vertical.direction,
+            ScrollDirection::Vertical,
+            "a scrollable built without an axis must still be the vertical one the sidebar and \
+             the folder browser have always got"
+        );
+
+        let horizontal: Scrollable<'_, ()> =
+            Scrollable::new(Space::new(), roles()).direction(ScrollDirection::Horizontal);
+        assert_eq!(
+            horizontal.direction,
+            ScrollDirection::Horizontal,
+            "the axis a caller asked for is not the axis the scrollable carries"
+        );
     }
 }

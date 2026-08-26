@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-09
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "change focuse management for terminal to be more natural and not require double click in some cases . E.g. if terminal is focused and I want to switch to regular I need to click once to release the focuse from terminal and click second time to switch. it should be done in one click. The other case is when I switch between windows or sessions often focuse is not set to terminal and requires a explicit click to gain focuse. That should happen automatically"
 
@@ -46,15 +46,18 @@ press the same thing twice: once to "get out of" the terminal, once to actually 
 feel unresponsive. Every control outside the terminal pane is affected, so fixing it lifts the whole
 application; nothing else in this feature matters if a press still has to be repeated.
 
-**Independent Test**: With the terminal focused, press each class of control once — the regular/AI
-mode toggle in the terminal's status bar, a Regular Terminal instance tab, a session in the sidebar,
+**Independent Test**: With the terminal focused, press each class of control once — the AI tab in
+the terminal's status bar ~~regular/AI mode toggle~~ (feature 027 replaced the toggle with it), a
+Regular Terminal instance tab, a session in the sidebar,
 a toolbar action, a menu item, a text field — and confirm each one performs its action on that
 single press.
 
 **Acceptance Scenarios**:
 
-1. **Given** a focused terminal in AI CLI mode, **When** the user presses the mode toggle in the
-   terminal's status bar once, **Then** the terminal switches to Regular Terminal mode on that press.
+1. **Given** a focused terminal in AI CLI mode, **When** the user presses a terminal tab in the
+   status bar once ~~the mode toggle~~, **Then** the terminal switches to Regular Terminal mode on
+   that press. *(Feature 027 removed the toggle; the tab is the control that now takes this press,
+   and the single-press requirement is unchanged.)*
 2. **Given** a focused terminal, **When** the user presses a different session in the sidebar once,
    **Then** that session becomes the displayed session on that press.
 3. **Given** a focused terminal and several open Regular Terminal instances, **When** the user

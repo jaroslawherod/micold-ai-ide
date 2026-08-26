@@ -5,8 +5,12 @@ description: Capture a bug and trace it back to the relevant spec, plan, and tas
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
   author: github-spec-kit
-  source: bugfix:commands/speckit.bugfix.report.md
+  source: extension:bugfix
+user-invocable: true
+disable-model-invocation: false
 ---
+
+# Bugfix Report Skill
 
 # Report Bug
 

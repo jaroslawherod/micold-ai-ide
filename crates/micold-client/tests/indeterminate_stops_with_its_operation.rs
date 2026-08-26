@@ -140,7 +140,9 @@ fn test_renderer() -> iced::Renderer {
 /// A state with the add-worktree form open and nothing in flight.
 fn form_open() -> State {
     let mut state = State::default();
-    state.update(Message::AddWorktreeOpened);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
     state
 }
 
@@ -178,7 +180,9 @@ fn an_idle_form_asks_for_no_frames() {
 #[test]
 fn a_running_create_animates_its_indicator() {
     let mut state = form_open();
-    state.update(Message::WorktreeCreateStarted(Default::default()));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(Default::default()),
+    ));
     assert_eq!(
         state.worktree_form.as_ref().map(|f| f.status),
         Some(WorktreeFormStatus::Creating),

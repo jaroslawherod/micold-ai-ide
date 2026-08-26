@@ -28,6 +28,9 @@ pub enum NoticeLevel {
 }
 
 impl NoticeLevel {
+    /// Every level, so a gate that reads the set cannot silently miss one added later.
+    pub const ALL: [NoticeLevel; 2] = [NoticeLevel::Info, NoticeLevel::Error];
+
     /// The queue level this severity corresponds to.
     ///
     /// The one place the banner's vocabulary meets the core's. Written as a method on the source
@@ -39,4 +42,25 @@ impl NoticeLevel {
             NoticeLevel::Error => notify::Level::Error,
         }
     }
+}
+
+/// A failure worth telling the user about, as an outcome (T067a, group E).
+///
+/// The translation from the banner's `NoticeLevel` to the queue's own level stays here, where
+/// `to_queue_level` already lives — a feature emitting this should not have to know the queue has
+/// a different vocabulary. `State::notify_error` remains for code that is not a feature reducer.
+pub fn error(message: impl Into<String>) -> crate::features::Outcome {
+    raised(NoticeLevel::Error, message.into())
+}
+
+/// Something the user should know about that is not a failure (T067a, group E).
+pub fn info(message: impl Into<String>) -> crate::features::Outcome {
+    raised(NoticeLevel::Info, message.into())
+}
+
+fn raised(level: NoticeLevel, message: String) -> crate::features::Outcome {
+    crate::features::Outcome::NotificationRaised(notify::Notification::new(
+        level.to_queue_level(),
+        message,
+    ))
 }

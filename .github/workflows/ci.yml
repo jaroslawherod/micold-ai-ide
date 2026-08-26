@@ -145,17 +145,23 @@ jobs:
       # Ensure the full workspace (client GUI binary + daemon) compiles on every platform.
       - name: Build (workspace)
         run: cargo build --workspace
-      # Feature 020's gates, the 017 gates it widened, BUG-001's, and feature 027's two client-side
-      # §A gates. These read source text, one `const` slice and a reducer — they open no window — so
-      # they run wherever the crate compiles, and this step is the authoritative list of them. Path
+      # Feature 020's gates, the 017 gates it widened, BUG-001's, feature 021's architecture guards,
+      # and feature 027's two client-side §A gates. These read source text, one `const` slice and a
+      # reducer — they open no window — so they run wherever the crate compiles, and this step is the authoritative list of them. Path
       # handling (`\` vs `/` in the scanners' display keys) is exactly the kind of difference a
       # Linux-only run would miss: several of these walk the source tree from `CARGO_MANIFEST_DIR`
       # and report findings by path.
       #
+      # The feature-021 block was added at T079, and the reason it is here rather than in the
+      # Linux-only step below is SC-006: "the complete pre-existing test suite passes on all three
+      # supported platforms" is not met by a matrix that builds everywhere and runs a feature's own
+      # guards in one place. Verified display-free before being widened — all 20 targets pass with
+      # `DISPLAY` and `WAYLAND_DISPLAY` unset — and none constructs an iced runtime or a window.
+      #
       # This list is enumerated, so it drifts silently: a §A gate added to the quickstart's table and
       # not added here still runs — on Linux, in the job below — and the three-platform claim quietly
       # stops being true. `micold-core/tests/quickstart_a_runs_everywhere.rs` compares the two.
-      - name: Test (component library + showcase gates, all platforms)
+      - name: Test (component library, showcase, and architecture gates, all platforms)
         # Windows defaults to `pwsh`, which does not treat `\` as a line continuation; pin bash so the
         # one readable multi-line invocation below parses identically on all three runners.
         shell: bash
@@ -172,23 +178,32 @@ jobs:
             --test material_builder_api \
             --test idle_requests_no_frames \
             --test animated_layout_relayouts \
+            --test feature_write_isolation \
+            --test root_is_routing_only \
+            --test features_are_render_free \
+            --test no_concrete_implementations \
+            --test overlay_registration \
+            --test feature_registration_cost \
+            --test surface_registration_cost \
+            --test service_capability_fakes \
+            --test outcome_termination \
+            --test popover_displacement \
+            --test features_connection \
+            --test features_help \
+            --test features_notifications \
+            --test features_project \
+            --test features_session \
             --test features_settings \
+            --test features_sidebar \
+            --test features_window \
+            --test features_worktree \
+            --test features_worktree_form \
             --test anatomy_call_sites
       # Run the client + daemon test suites where the iced system deps are present.
       - name: Test (full workspace)
         if: runner.os == 'Linux'
         run: cargo test --workspace
 
-  # Constitution Principle VII: documentation ships and is verified in CI.
-  # Feature 021 (FR-027): the restructuring treats the existing suite as its behavior
-  # specification, which only works while the assertions are frozen.
-  #
-  # The job runs on every branch, but the rule it enforces does not apply to every branch: FR-027
-  # binds changes made *for feature 021*, and every other feature owns its own expectations. The
-  # script decides that for itself and reports without failing when out of scope (spec.md Q3), so
-  # this job no longer has to be advisory to avoid blocking concurrent features -- what it still
-  # cannot do is fail a *false* positive within 021, which is what `continue-on-error` is now
-  # buying, and what T074 weighs before removing it.
   # Feature 027. The sandbox adapter layer is tested on all three platforms by the `test` job
   # above, against an injected fake runner with nothing installed -- that is what keeps Principle
   # VI's coverage of it honest. This job covers the part a fake cannot: that the argv we construct
@@ -217,16 +232,38 @@ jobs:
       - name: Test (real runtime)
         run: cargo test -p micold-core --features sandbox-real-runtime sandbox_real_ -- --test-threads=1
 
+  # Constitution Principle VII: documentation ships and is verified in CI.
+  # Feature 021 (FR-027): the restructuring treats the existing suite as its behavior
+  # specification, which only works while the assertions are frozen.
+  #
+  # The job runs on every branch, but the rule it enforces does not apply to every branch: FR-027
+  # binds changes made *for feature 021*, and every other feature owns its own expectations. The
+  # script decides that for itself and reports without failing when out of scope (spec.md Q3).
+  #
+  # Blocking as of T074, and the thing that made that possible is not a lower false-positive rate
+  # -- it is that a false positive can now be answered. FR-027 forbids expectations being relaxed,
+  # rewritten or deleted; it cannot forbid an assertion's *spelling* changing when the thing it
+  # names changes shape, and spec.md Q3 refuses to let the check guess which is which. So a removal
+  # is either reinstated or adjudicated in specs/021-mvu-slice-architecture/assertion-adjudications.md,
+  # under a heading naming the task and with the reason, and the check re-verifies every entry
+  # against the current tree on every run: an adjudication whose assertion is no longer missing
+  # fails just as loudly. Scope still applies -- out of scope this reports in full and exits 0, so
+  # a concurrent feature is told what it did to the suite without being blocked.
+
   assertions:
-    name: assertion freeze (advisory)
+    name: assertion freeze
     needs: classify
     if: needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # needs history to diff against the base ref
+      # The gate's own cases, before the gate runs. They existed and nothing ran them, which is how
+      # a staleness rule that failed on every branch cut from main reached main: the suite is the
+      # only place that mistake is cheap to catch, and it was being asked on no machine at all.
+      - name: The check's own cases
+        run: scripts/tests/check-assertions-frozen.test.sh
       - name: Assertions frozen since base
         env:
           # A pull request checks out a detached merge commit, so the branch name is not in the
@@ -258,6 +295,7 @@ jobs:
       # developers rather than in the user guide (its FR-024), and the doc ships in the same change.
       - name: Required developer docs exist
         run: |
+          test -f docs/development/architecture.md
           test -f docs/development/component-library.md
           test -f docs/development/component-showcase.md
           # Feature 023 is developer-facing, so Principle VII is satisfied here rather than in the
@@ -306,9 +344,7 @@ jobs:
           check test "$TEST"
           check sandbox "$SANDBOX"
           check docs "$DOCS"
-          # `assertions` is advisory by design (continue-on-error, see its comment above), so it is
-          # reported but never gates. Promoting it means moving it into check() above.
-          printf 'advisory %-12s %s (not gated)\n' assertions "$ASSERTIONS"
+          check assertions "$ASSERTIONS"
           {
             echo "### ci complete"
             echo
@@ -319,6 +355,6 @@ jobs:
             echo "| test | \`$TEST\` | yes |"
             echo "| sandbox-runtime | \`$SANDBOX\` | yes |"
             echo "| docs | \`$DOCS\` | yes |"
-            echo "| assertions | \`$ASSERTIONS\` | no (advisory) |"
+            echo "| assertions | \`$ASSERTIONS\` | yes |"
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status

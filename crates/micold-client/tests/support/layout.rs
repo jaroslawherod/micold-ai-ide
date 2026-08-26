@@ -304,8 +304,6 @@ pub fn resolve_pressing<'a, M: 'a>(
     renderer: &iced::Renderer,
     press_at: Option<&[usize]>,
 ) -> Vec<LayoutRecord> {
-    use iced::advanced::{clipboard, mouse, Shell};
-
     let mut element = element;
     let mut tree = Tree::new(element.as_widget());
     let limits = layout::Limits::new(Size::ZERO, WINDOW);
@@ -313,92 +311,7 @@ pub fn resolve_pressing<'a, M: 'a>(
     let mut node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
 
     if let Some(path) = press_at {
-        // Settle the entrance transition before pressing anything.
-        //
-        // A dialog mounts at progress 0 on purpose — `Motion::enter`, "a dialog is mounted
-        // precisely because it is opening" — and `Fade::update` returns early below `HIDDEN` for
-        // every event that is not a `Window` event. A press dispatched into a freshly built tree is
-        // therefore swallowed before it reaches anything. That is not a defect; it is a modal
-        // refusing clicks it has not finished appearing for. It cost a probe over all 128 nodes of
-        // the add-worktree dialog, every one of which changed nothing, to notice.
-        //
-        // Redraws are pumped without re-laying out between them. `Fade` is layout-neutral, so
-        // there is nothing to recompute, and eight full layouts per state per scheme would cost
-        // more than the state is worth. The assumption is not load-bearing: if the settle were
-        // insufficient the control would stay shut, and the covered state would produce no overlay
-        // records — which `every_overlay_state_records_an_overlay` fails on.
-        const SETTLE_FRAMES: u32 = 8;
-        let origin = std::time::Instant::now();
-        let mut settle_messages: Vec<M> = Vec::new();
-        for frame in 0..SETTLE_FRAMES {
-            let mut shell = Shell::new(&mut settle_messages);
-            element.as_widget_mut().update(
-                &mut tree,
-                &iced::Event::Window(iced::window::Event::RedrawRequested(origin + FRAME * frame)),
-                Layout::new(&node),
-                mouse::Cursor::Unavailable,
-                renderer,
-                &mut clipboard::Null,
-                &mut shell,
-                &Rectangle::with_size(WINDOW),
-            );
-        }
-
-        let target = walk(Layout::new(&node), Layer::Base)
-            .into_iter()
-            .find(|r| r.path == path)
-            .unwrap_or_else(|| {
-                panic!(
-                    "no node at {} to press — the tree changed shape, so re-point the path \
-                     against layout_snapshot.txt",
-                    path_token(path),
-                )
-            });
-        assert!(
-            target.width > 0.0 && target.height > 0.0,
-            "the node at {} has no area, so a press lands on nothing and the control this covered \
-             state means to open will stay shut while every assertion still passes",
-            path_token(path),
-        );
-
-        let mut messages: Vec<M> = Vec::new();
-        let mut shell = Shell::new(&mut messages);
-        element.as_widget_mut().update(
-            &mut tree,
-            &iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
-            Layout::new(&node),
-            mouse::Cursor::Available(iced::Point::new(
-                target.x + target.width / 2.0,
-                target.y + target.height / 2.0,
-            )),
-            renderer,
-            &mut clipboard::Null,
-            &mut shell,
-            &Rectangle::with_size(WINDOW),
-        );
-
-        node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
-
-        // …and settle again, because a picker's list does not exist the instant it is opened.
-        // `cdk::picker` returns an overlay for as long as its own visibility track says there is
-        // any of the list on screen, and that track only moves on a frame tick — so a list opened
-        // between ticks is still at zero and `overlay()` correctly reports nothing. The rendering
-        // stack delivers the tick because the track asks for one; here it has to be handed over,
-        // exactly as the pre-press settle above hands over the dialog's entrance.
-        for frame in SETTLE_FRAMES..SETTLE_FRAMES * 2 {
-            let mut shell = Shell::new(&mut settle_messages);
-            element.as_widget_mut().update(
-                &mut tree,
-                &iced::Event::Window(iced::window::Event::RedrawRequested(origin + FRAME * frame)),
-                Layout::new(&node),
-                mouse::Cursor::Unavailable,
-                renderer,
-                &mut clipboard::Null,
-                &mut shell,
-                &Rectangle::with_size(WINDOW),
-            );
-        }
-        node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+        press_and_settle(&mut element, &mut tree, &mut node, renderer, &limits, path);
     }
 
     let mut records = walk(Layout::new(&node), Layer::Base);
@@ -415,6 +328,122 @@ pub fn resolve_pressing<'a, M: 'a>(
     }
 
     records
+}
+
+/// Press the node at `path` the way a person would, and leave the tree laid out as it ends up.
+///
+/// Shared by [`resolve_pressing`] and [`painted`], which ask two different questions of the same
+/// moment — where the opened control's nodes are, and what it painted — and must not answer them
+/// from two different sequences of events.
+/// How many redraws it takes for an entrance to be over.
+const SETTLE_FRAMES: u32 = 8;
+
+/// Hand the tree `frames` worth of redraws, timed from `origin`.
+///
+/// Redraws are pumped without re-laying out between them. `Fade` is layout-neutral, so there is
+/// nothing to recompute, and eight full layouts per state per scheme would cost more than the state
+/// is worth.
+fn settle<'a, M: 'a>(
+    element: &mut Element<'a, M>,
+    tree: &mut Tree,
+    node: &layout::Node,
+    renderer: &iced::Renderer,
+    origin: std::time::Instant,
+    frames: std::ops::Range<u32>,
+) {
+    use iced::advanced::{clipboard, mouse, Shell};
+
+    let mut messages: Vec<M> = Vec::new();
+    for frame in frames {
+        let mut shell = Shell::new(&mut messages);
+        element.as_widget_mut().update(
+            tree,
+            &iced::Event::Window(iced::window::Event::RedrawRequested(origin + FRAME * frame)),
+            Layout::new(node),
+            mouse::Cursor::Unavailable,
+            renderer,
+            &mut clipboard::Null,
+            &mut shell,
+            &Rectangle::with_size(WINDOW),
+        );
+    }
+}
+
+fn press_and_settle<'a, M: 'a>(
+    element: &mut Element<'a, M>,
+    tree: &mut Tree,
+    node: &mut layout::Node,
+    renderer: &iced::Renderer,
+    limits: &layout::Limits,
+    path: &[usize],
+) {
+    use iced::advanced::{clipboard, mouse, Shell};
+
+    // Settle the entrance transition before pressing anything.
+    //
+    // A dialog mounts at progress 0 on purpose — `Motion::enter`, "a dialog is mounted
+    // precisely because it is opening" — and `Fade::update` returns early below `HIDDEN` for
+    // every event that is not a `Window` event. A press dispatched into a freshly built tree is
+    // therefore swallowed before it reaches anything. That is not a defect; it is a modal
+    // refusing clicks it has not finished appearing for. It cost a probe over all 128 nodes of
+    // the add-worktree dialog, every one of which changed nothing, to notice.
+    //
+    // The assumption that eight frames is enough is not load-bearing: if the settle were
+    // insufficient the control would stay shut, and the covered state would produce no overlay
+    // records — which `every_overlay_state_records_an_overlay` fails on.
+    let origin = std::time::Instant::now();
+    settle(element, tree, node, renderer, origin, 0..SETTLE_FRAMES);
+
+    let target = walk(Layout::new(node), Layer::Base)
+        .into_iter()
+        .find(|r| r.path == path)
+        .unwrap_or_else(|| {
+            panic!(
+                "no node at {} to press — the tree changed shape, so re-point the path \
+                 against layout_snapshot.txt",
+                path_token(path),
+            )
+        });
+    assert!(
+        target.width > 0.0 && target.height > 0.0,
+        "the node at {} has no area, so a press lands on nothing and the control this covered \
+         state means to open will stay shut while every assertion still passes",
+        path_token(path),
+    );
+
+    let mut messages: Vec<M> = Vec::new();
+    let mut shell = Shell::new(&mut messages);
+    element.as_widget_mut().update(
+        tree,
+        &iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        Layout::new(node),
+        mouse::Cursor::Available(iced::Point::new(
+            target.x + target.width / 2.0,
+            target.y + target.height / 2.0,
+        )),
+        renderer,
+        &mut clipboard::Null,
+        &mut shell,
+        &Rectangle::with_size(WINDOW),
+    );
+
+    *node = element.as_widget_mut().layout(tree, renderer, limits);
+
+    // …and settle again, because a picker's list does not exist the instant it is opened.
+    // `cdk::picker` returns an overlay for as long as its own visibility track says there is
+    // any of the list on screen, and that track only moves on a frame tick — so a list opened
+    // between ticks is still at zero and `overlay()` correctly reports nothing. The rendering
+    // stack delivers the tick because the track asks for one; here it has to be handed over,
+    // exactly as the pre-press settle above hands over the dialog's entrance.
+    settle(
+        element,
+        tree,
+        node,
+        renderer,
+        origin,
+        SETTLE_FRAMES..SETTLE_FRAMES * 2,
+    );
+    *node = element.as_widget_mut().layout(tree, renderer, limits);
 }
 
 // --- Covered states, anchors and the fixture (T018, T021) -------------------------------------
@@ -803,7 +832,20 @@ pub struct Overflow {
     pub allowed_width: f32,
     /// The layout node the text was attributed to — the deepest one containing its origin.
     /// Written as a fixture path (`0/2/1`), so it can be looked up in `layout_snapshot.txt`.
+    ///
+    /// Attribution is by *clip*, not by depth alone: a node whose box equals the clip rectangle
+    /// wins over a deeper one, because the question this field was grown for is "what width was
+    /// this text allowed", and that is the clip's answer. Text inside a scrollable therefore
+    /// attributes to the scrollable's content node rather than to the widget that drew it. For
+    /// "where on screen is this glyph" — locating a control to press by what it paints — read
+    /// [`Overflow::origin`] instead.
     pub node_path: String,
+    /// Where the renderer put the paragraph, in window pixels.
+    ///
+    /// The point the draw call was given, so it lies inside the widget that drew the text however
+    /// the text is aligned within it. A test that presses a control it found by its glyph presses
+    /// here (feature 026, T085).
+    pub origin: iced::Point,
 }
 
 impl Overflow {
@@ -827,13 +869,109 @@ pub fn text_overflows<'a, M: 'a>(
     element: Element<'a, M>,
     renderer: &mut iced::Renderer,
 ) -> Vec<Overflow> {
+    // Set `LAYOUT_OVERFLOW_DEBUG=1` to report every piece of drawn text with its attribution,
+    // not only the ones that overflow. The question "why did this *not* fire?" is otherwise
+    // unanswerable from the outside, which is how a false positive survived once already.
+    painted(
+        element,
+        renderer,
+        std::env::var("LAYOUT_OVERFLOW_DEBUG").is_ok(),
+        Before::Mounted,
+    )
+}
+
+/// Every piece of text the renderer painted, with the width it wanted and the width it was allowed
+/// — the same measurement [`text_overflows`] filters, unfiltered.
+///
+/// For asserting what a layout *keeps* rather than what it spills: a row under width pressure
+/// degrades in a declared order, and the only way to see which piece shortened is to read what was
+/// actually drawn. An `Ellipsized` label rewrites its own content before shaping, so a shortened
+/// title arrives here as the shortened string rather than as an overflow (feature 026, T058d).
+pub fn painted_text<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &mut iced::Renderer,
+) -> Vec<Overflow> {
+    painted(element, renderer, true, Before::Mounted)
+}
+
+/// As [`painted_text`], but pressing the node at `press_at` first — and reporting what the
+/// resulting **overlay** painted as well as the base tree.
+///
+/// A control that opens a list paints nothing extra until it is open, and `material::Select`'s list
+/// is not in the element tree at all: it is floated from `Widget::overlay`, which is why
+/// [`resolve_pressing`] grew its own overlay pass for the geometry fixture. The same two facts
+/// apply to what is *drawn*, so the same two answers apply — cause the press the way a person
+/// would, then draw both layers into the same renderer (feature 026, T071).
+pub fn painted_text_pressing<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &mut iced::Renderer,
+    press_at: &[usize],
+) -> Vec<Overflow> {
+    painted(element, renderer, true, Before::Pressed(press_at))
+}
+
+/// As [`painted_text`], but letting entrance transitions finish first — and reporting the overlay
+/// as well as the base tree.
+///
+/// For a surface the *state* opens rather than a press: the menu is in the tree the first frame it
+/// is asked for, but it mounts at progress 0 like everything else here, and a `Fade` that has not
+/// begun paints nothing at all. Geometry never showed this, because the entrance is layout-neutral
+/// by construction — so [`resolve`] needs no settle and this does (feature 026, T071).
+pub fn painted_text_settled<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &mut iced::Renderer,
+) -> Vec<Overflow> {
+    painted(element, renderer, true, Before::Settled)
+}
+
+/// What a paint pass does to the element before drawing it.
+#[derive(Clone, Copy)]
+enum Before<'p> {
+    /// Nothing: draw the tree as it mounts. What the overflow gate has always measured, and right
+    /// for it — a screen with no entrance of its own looks the same on frame 0 as on frame 8.
+    Mounted,
+    /// Settle entrance transitions first.
+    Settled,
+    /// Settle, press the node at this path, then settle again — [`press_and_settle`].
+    Pressed(&'p [usize]),
+}
+
+fn painted<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &mut iced::Renderer,
+    report_everything: bool,
+    before: Before<'_>,
+) -> Vec<Overflow> {
     use iced::advanced::Renderer as _;
 
     let mut element = element;
     let mut tree = Tree::new(element.as_widget());
     let limits = layout::Limits::new(Size::ZERO, WINDOW);
-    let node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+    let mut node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
     let viewport = Rectangle::with_size(WINDOW);
+
+    match before {
+        Before::Mounted => {}
+        Before::Settled => {
+            settle(
+                &mut element,
+                &mut tree,
+                &node,
+                &*renderer,
+                std::time::Instant::now(),
+                0..SETTLE_FRAMES,
+            );
+            node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+        }
+        Before::Pressed(path) => press_and_settle(
+            &mut element,
+            &mut tree,
+            &mut node,
+            &*renderer,
+            &limits,
+            path,
+        ),
+    }
 
     renderer.reset(viewport);
     element.as_widget().draw(
@@ -845,6 +983,60 @@ pub fn text_overflows<'a, M: 'a>(
         iced::advanced::mouse::Cursor::Unavailable,
         &viewport,
     );
+
+    // The overlay layer, drawn into the same renderer so one pass over `layers()` sees both. Its
+    // nodes join `boxes` below for the same reason: text floated over the window still has to be
+    // attributed to the node that drew it, and the base tree does not contain one.
+    //
+    // Only for a pass that interacted. `Before::Mounted` is what the overflow gate runs, and
+    // nothing it renders has floated a list yet — so this stays out of that measurement entirely
+    // rather than adding a pass whose result is always empty.
+    //
+    // The overlay gets its **own** settle, and that is the part that is easy to miss: the frames
+    // pumped above go through `Widget::update`, which never reaches an overlay — the runtime
+    // dispatches to those separately. So a list opened by a press arrives here with its entrance
+    // still at zero, drawing its panel's geometry and none of its rows' text. That reads exactly
+    // like a list of options that was never offered, which is the one thing this measurement exists
+    // to tell apart from the real thing.
+    let mut overlay_boxes = Vec::new();
+    if !matches!(before, Before::Mounted) {
+        if let Some(mut overlay) = element.as_widget_mut().overlay(
+            &mut tree,
+            Layout::new(&node),
+            &*renderer,
+            &viewport,
+            Vector::ZERO,
+        ) {
+            use iced::advanced::{clipboard, mouse, Shell};
+
+            let mut overlay_node = overlay.as_overlay_mut().layout(&*renderer, WINDOW);
+            let origin = std::time::Instant::now();
+            let mut messages: Vec<M> = Vec::new();
+            for frame in 0..SETTLE_FRAMES {
+                let mut shell = Shell::new(&mut messages);
+                overlay.as_overlay_mut().update(
+                    &iced::Event::Window(iced::window::Event::RedrawRequested(
+                        origin + FRAME * frame,
+                    )),
+                    Layout::new(&overlay_node),
+                    mouse::Cursor::Unavailable,
+                    &*renderer,
+                    &mut clipboard::Null,
+                    &mut shell,
+                );
+            }
+            overlay_node = overlay.as_overlay_mut().layout(&*renderer, WINDOW);
+
+            overlay.as_overlay_mut().draw(
+                renderer,
+                &iced::Theme::Light,
+                &iced::advanced::renderer::Style::default(),
+                Layout::new(&overlay_node),
+                iced::advanced::mouse::Cursor::Unavailable,
+            );
+            overlay_boxes = walk(Layout::new(&overlay_node), Layer::Overlay);
+        }
+    }
 
     let inner = match renderer {
         iced_renderer::fallback::Renderer::Secondary(tiny_skia) => tiny_skia,
@@ -879,7 +1071,8 @@ pub fn text_overflows<'a, M: 'a>(
     // Text that overhangs so far that its origin falls outside its own node resolves to an
     // ancestor, which is wider, so this errs toward silence rather than toward crying wolf. That
     // is the right direction for a gate whose findings are meant to be trusted.
-    let boxes = walk(Layout::new(&node), Layer::Base);
+    let mut boxes = walk(Layout::new(&node), Layer::Base);
+    boxes.extend(overlay_boxes);
     let contains = |b: &LayoutRecord, p: iced::Point| {
         p.x >= b.x - 0.5
             && p.x <= b.x + b.width + 0.5
@@ -907,11 +1100,6 @@ pub fn text_overflows<'a, M: 'a>(
                     .max_by_key(|b| b.path.len())
             })
     };
-
-    // Set `LAYOUT_OVERFLOW_DEBUG=1` to report every piece of drawn text with its attribution,
-    // not only the ones that overflow. The question "why did this *not* fire?" is otherwise
-    // unanswerable from the outside, which is how a false positive survived once already.
-    let report_everything = std::env::var("LAYOUT_OVERFLOW_DEBUG").is_ok();
 
     let mut found = Vec::new();
     for layer in inner.layers() {
@@ -954,6 +1142,7 @@ pub fn text_overflows<'a, M: 'a>(
 
                         found.push(Overflow {
                             content,
+                            origin: *position,
                             natural_width: paragraph.min_bounds.width,
                             allowed_width: allowed,
                             node_path,

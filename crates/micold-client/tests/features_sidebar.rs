@@ -13,12 +13,12 @@
 //! eroded.
 
 use micold_client::features::sidebar::{
-    current_session_row, effective_open, matches_filters, row_heights, scroll_target,
-    worktree_location_label, DefaultNode, SidebarEntry, TagFilter, WorktreeNode,
-    DEFAULT_LOCATION_LABEL,
+    current_session_row, effective_open, filters_from_env_value, matches_filters, row_heights,
+    scroll_target, worktree_location_label, DefaultNode, SidebarEntry, TagFilter, WorktreeNode,
+    DEFAULT_LOCATION_LABEL, FILTER_ENV_VAR,
 };
 use micold_core::naming::{ConventionalType, Tag};
-use micold_core::session::{Session, SessionLocation};
+use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -186,7 +186,7 @@ fn a_location_holding_no_current_session_is_open_only_if_the_user_opened_it() {
 // is the whole reason these are functions over the projection rather than code inside the view.
 
 fn session(location: SessionLocation) -> Session {
-    Session::start_new(location)
+    Session::start_new(location, AiCli::ClaudeCode)
 }
 
 fn default_entry(sessions: Vec<Session>) -> SidebarEntry {
@@ -363,4 +363,240 @@ fn the_current_sessions_row_is_found_by_walking_the_rows_as_drawn() {
         None,
         "and with no current session there is no row to scroll to (FR-013)"
     );
+}
+
+// --- the §B5 test hook (MICOLD_SIDEBAR_FILTER) ------------------------------------------------
+//
+// Parsing only. What the value is *applied to* is `Message::SidebarFilterToggled`, which the rest
+// of this file and `sidebar_state.rs` already cover — the hook deliberately owns no state of its
+// own, so that what a visual pass then photographs is the real filter.
+
+/// Absent, empty, or whitespace: the ordinary launch. This is the case every developer who has
+/// never heard of the hook is in, so it must not be a failure.
+#[test]
+fn no_value_means_no_filters() {
+    assert_eq!(filters_from_env_value(None), Ok(Vec::new()));
+    assert_eq!(filters_from_env_value(Some("")), Ok(Vec::new()));
+    assert_eq!(filters_from_env_value(Some("   ")), Ok(Vec::new()));
+}
+
+#[test]
+fn a_conventional_type_parses_to_its_filter() {
+    assert_eq!(
+        filters_from_env_value(Some("fix")),
+        Ok(vec![TagFilter::Type(ConventionalType::Fix)])
+    );
+}
+
+/// The two filters that are not types. `untyped` is the one §B5 step 4 leans on.
+#[test]
+fn issue_and_untyped_are_spelled_out() {
+    assert_eq!(
+        filters_from_env_value(Some("issue")),
+        Ok(vec![TagFilter::HasIssue])
+    );
+    assert_eq!(
+        filters_from_env_value(Some("untyped")),
+        Ok(vec![TagFilter::Untyped])
+    );
+}
+
+/// Several filters, in the order given, with whitespace tolerated — a command line is typed by
+/// hand, and `fix, docs` should not be a different value from `fix,docs`.
+#[test]
+fn a_list_parses_in_order() {
+    assert_eq!(
+        filters_from_env_value(Some(" fix , docs ,, issue ")),
+        Ok(vec![
+            TagFilter::Type(ConventionalType::Fix),
+            TagFilter::Type(ConventionalType::Docs),
+            TagFilter::HasIssue,
+        ])
+    );
+}
+
+/// A typo is refused, not ignored. An unfiltered panel that was *asked* to be filtered is the one
+/// outcome that would be recorded as evidence and be wrong.
+#[test]
+fn an_unknown_token_is_an_error_naming_itself_and_the_variable() {
+    let err = filters_from_env_value(Some("feature")).expect_err("expected a refusal");
+    assert!(
+        err.contains(FILTER_ENV_VAR),
+        "{err:?} does not name the variable"
+    );
+    assert!(
+        err.contains("feature"),
+        "{err:?} does not name the bad token"
+    );
+    assert!(
+        err.contains("untyped"),
+        "{err:?} does not state the grammar"
+    );
+}
+
+/// One bad token spoils the list: a half-applied filter is a state nobody asked for, and it would
+/// photograph as a successful pass of a filter that is not the one requested.
+#[test]
+fn a_bad_token_among_good_ones_refuses_the_whole_value() {
+    assert!(filters_from_env_value(Some("fix,nonsense,docs")).is_err());
+}
+// ---------------------------------------------------------------------------------------
+// Feature 026 (T058, T058e, T073) — the row names its session's AI CLI
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn a_session_row_stays_one_line_when_it_gains_a_cli_label() {
+    // The one place in the sidebar where a wrong answer is silent, by `row_heights`' own doc: the
+    // computed scroll target drifts from the rendered rows and nothing complains.
+    //
+    // FR-016's label changes a session row's *content*, never its *height*. It is rendered as an
+    // inline annotation, not as a tag chip — chips open a second line, which is exactly the shape
+    // this must not take. Asserted here because this file is already the only test over
+    // `row_heights`/`scroll_target`, so the assertion costs a line and has nowhere else to live.
+    let claude = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+    let copilot = Session::start_new(SessionLocation::Default, AiCli::Copilot);
+
+    let entries = vec![SidebarEntry::Default(DefaultNode {
+        display_name: DEFAULT_LOCATION_LABEL,
+        expanded: true,
+        sessions: vec![claude, copilot],
+    })];
+    let heights = row_heights(&entries);
+
+    assert_eq!(heights.len(), 3, "the location row and its two sessions");
+    assert_eq!(
+        heights[1], heights[2],
+        "two sessions on different CLIs are the same height as each other"
+    );
+    assert_eq!(
+        heights[1], heights[0],
+        "and the same height as the untagged location row above them — one line, as \
+         `row_heights` says and the scroll arithmetic believes"
+    );
+}
+
+#[test]
+fn the_activity_badge_is_the_same_for_both_clis() {
+    // FR-018: one badge, no per-provider styling and no "less certain" variant for the CLI whose
+    // signal arrives by a different mechanism. A Copilot session's busy/idle comes from a tailed
+    // event log and a Claude session's from an HTTP hook receiver, and the user should be unable
+    // to tell — the signal is the same `ActivitySignal`, and the row renders it the same way.
+    //
+    // True by shape rather than by discipline: `session_tree_item` builds the badge from
+    // `session.activity` alone and never consults `session.provider`, so there is no input a
+    // per-provider variant could branch on. Asserted as the projection those rows are built from.
+    let claude = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+    let copilot = Session::start_new(SessionLocation::Default, AiCli::Copilot);
+
+    assert_eq!(
+        claude.activity, copilot.activity,
+        "both start `Unknown` — the honest state before either mechanism has reported anything"
+    );
+    assert_ne!(
+        claude.provider, copilot.provider,
+        "and they differ only in CLI"
+    );
+}
+
+#[test]
+fn a_row_names_its_cli_by_command_name_not_by_its_menu_name() {
+    // T058e — the two naming registers, from the sidebar's side. `features_settings.rs` holds the
+    // other end: menus and failure messages take `display_name()`.
+    //
+    // The register is what is asserted, not the rendering: a row label lives in a width budget, so
+    // "GitHub Copilot" is the wrong string there whatever it looks like.
+    let copilot = Session::start_new(SessionLocation::Default, AiCli::Copilot);
+    let label = copilot.provider.provider().command();
+
+    assert_eq!(label, "copilot");
+    assert_ne!(
+        label,
+        copilot.provider.provider().display_name(),
+        "the two registers are distinct strings, so a leak in either direction is observable"
+    );
+    assert!(
+        label.len() <= "copilot".len(),
+        "short enough to sit in a row beside a name and an action cluster"
+    );
+}
+
+#[test]
+fn a_session_on_an_uninstalled_cli_is_still_listed_and_still_identified() {
+    // T073 / US4 scenario 3. Availability is a property of the *machine*, not of the session, and
+    // the sidebar is a list of what exists. A session whose CLI is currently missing must not
+    // vanish and must not be relabelled as the other one — the user's work is still there, and the
+    // row is how they find out which tool it belongs to.
+    //
+    // Nothing in the projection consults availability at all, which is what makes this true rather
+    // than a rule someone has to remember. This asserts that shape: the same row is produced
+    // whatever is installed.
+    let session = Session::start_new(SessionLocation::Default, AiCli::Copilot);
+    let entries = vec![SidebarEntry::Default(DefaultNode {
+        display_name: DEFAULT_LOCATION_LABEL,
+        expanded: true,
+        sessions: vec![session.clone()],
+    })];
+
+    assert_eq!(row_heights(&entries).len(), 2, "the row is drawn");
+    assert_eq!(
+        entries
+            .iter()
+            .flat_map(|e| match e {
+                SidebarEntry::Default(node) => node.sessions.clone(),
+                SidebarEntry::Worktree(node) => node.sessions.clone(),
+            })
+            .map(|s| s.provider)
+            .collect::<Vec<_>>(),
+        vec![AiCli::Copilot],
+        "and it is still a Copilot session"
+    );
+}
+
+#[test]
+fn a_location_holding_a_long_history_costs_no_more_per_row() {
+    // T058c / SC-009. With discovery running on every project open, ~250 sessions in one location
+    // is a routine size rather than an outlier — it is what the development machine's Copilot
+    // store holds for a single directory.
+    //
+    // Structural, not timed: SC-009 is deliberately not a stopwatch bound, for the same reason
+    // SC-006 isn't one. What it asserts is that the per-row work does not grow — every row is
+    // present, every row is one line, and nothing in the projection is per-session I/O or a
+    // per-session watcher.
+    let sessions: Vec<Session> = (0..250)
+        .map(|i| {
+            Session::start_new(
+                SessionLocation::Default,
+                if i % 2 == 0 {
+                    AiCli::ClaudeCode
+                } else {
+                    AiCli::Copilot
+                },
+            )
+        })
+        .collect();
+    let entries = vec![SidebarEntry::Default(DefaultNode {
+        display_name: DEFAULT_LOCATION_LABEL,
+        expanded: true,
+        sessions: sessions.clone(),
+    })];
+
+    let heights = row_heights(&entries);
+    assert_eq!(
+        heights.len(),
+        251,
+        "every session is a row — nothing is capped, paged or dropped by age"
+    );
+    let one_line = heights[0];
+    assert!(
+        heights.iter().all(|h| *h == one_line),
+        "and every one of them is the same single line, so the scroll target stays exact at any \
+         length"
+    );
+
+    // The scroll target for the last session is arithmetic over those heights and nothing else —
+    // no per-session lookup, no I/O, no growth beyond the list itself.
+    let last = sessions.last().unwrap().id;
+    let row = current_session_row(&entries, Some(last)).expect("the last session has a row");
+    assert_eq!(row, 250);
+    assert!(scroll_target(&heights, row, 400.0, 0.0).is_some());
 }

@@ -21,12 +21,14 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use crate::app::FieldId;
+use crate::app::State;
+use crate::features::window::FieldId;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::RuntimeCapabilities;
 use micold_core::sandbox::{
     Bytes, MilliCpus, SandboxProfile, MIN_MEMORY, MIN_MILLI_CPUS, MIN_PIDS, MIN_STORAGE,
 };
+use micold_core::session::AiCli;
 use micold_core::settings::{DaemonConfig, Settings};
 use micold_core::theme::ThemePreference;
 
@@ -100,6 +102,16 @@ pub struct EnvironmentDraft {
     pub script_path: String,
     /// Its timeout, in seconds as text (FR-003).
     pub timeout_secs: String,
+    /// Which AI CLI a new session runs when nothing is chosen for it (feature 026, FR-003).
+    ///
+    /// Not a `String`, unlike the two fields above it, and the difference is the point: those hold
+    /// what the user *typed*, which may not yet be a valid setting. This is a closed enum picked
+    /// from a list, so there is no half-typed state to represent and nothing to validate on save.
+    ///
+    /// It sits in this section rather than a fifth one because the section's own line says what it
+    /// governs — "what each session inherits before the agent starts" — and which agent starts is
+    /// the first thing in that sentence.
+    pub default_ai_cli: AiCli,
 }
 
 /// The Session service section's fields (feature 027, FR-028).
@@ -171,6 +183,8 @@ pub struct ValidSettings {
     pub env_include_script_path: String,
     /// Environment.
     pub env_include_timeout_secs: u64,
+    /// Environment.
+    pub default_ai_cli: AiCli,
     /// Session service.
     pub daemon: DaemonConfig,
 }
@@ -184,6 +198,7 @@ impl ValidSettings {
             env_include_enabled: self.env_include_enabled,
             env_include_script_path: self.env_include_script_path,
             env_include_timeout_secs: self.env_include_timeout_secs,
+            default_ai_cli: self.default_ai_cli,
             daemon: self.daemon,
         }
     }
@@ -284,6 +299,7 @@ impl SettingsDraft {
             env_include_enabled: self.environment.enabled,
             env_include_script_path: self.environment.script_path.clone(),
             env_include_timeout_secs,
+            default_ai_cli: self.environment.default_ai_cli,
             daemon: DaemonConfig {
                 placement: self.daemon.placement,
                 sandbox: profile,
@@ -453,6 +469,7 @@ impl SettingsDraft {
                 enabled: settings.env_include_enabled,
                 script_path: settings.env_include_script_path.clone(),
                 timeout_secs: settings.env_include_timeout_secs.to_string(),
+                default_ai_cli: settings.default_ai_cli,
             },
             daemon: DaemonDraft {
                 placement: settings.daemon.placement,
@@ -508,4 +525,180 @@ impl SettingsDraft {
     pub fn shared_credentials(&self) -> &BTreeSet<micold_core::sandbox::CredentialShare> {
         &self.daemon.profile.credentials
     }
+}
+
+/// The theme mode was advanced one step (feature 003, FR-005).
+///
+/// The menu stays open, so repeated clicks cycle.
+pub fn theme_mode_cycled(state: &mut State) {
+    state.theme_pref = state.theme_pref.next();
+}
+
+/// A theme preference was chosen outright.
+///
+/// Pure state change; the shell persists it at the I/O boundary (FR-009).
+pub fn theme_preference_changed(state: &mut State, pref: ThemePreference) {
+    state.theme_pref = pref;
+}
+
+/// The OS reported its light/dark preference (feature 003).
+///
+/// `observe_system_scheme` is what decides whether a detection is believed: an OS that answers
+/// "unknown" must not overwrite a scheme already observed, or a single unanswered probe would
+/// flip the whole UI. The rule lives in core; this arm only records its answer.
+pub fn system_theme_changed(
+    state: &mut State,
+    detected: Result<micold_core::theme::SystemScheme, ()>,
+) {
+    state.system_scheme = micold_core::theme::observe_system_scheme(detected, state.system_scheme);
+}
+
+/// Settings was opened (feature 006, FR-020; feature 027, FR-026).
+///
+/// The shell seeds the current values; a draft is ensured here so the reducer path alone is
+/// enough to open the view in a test.
+pub fn opened(state: &mut State) {
+    state.clear_for_dialog();
+    if state.settings_draft.is_none() {
+        state.settings_draft = Some(SettingsDraft::default());
+    }
+}
+
+/// A section was chosen from the rail (feature 027, FR-026).
+///
+/// Not an `edit`: moving between sections is navigation, and it must not clear a validation error
+/// the user is being asked to act on — FR-029 reports the error *in the section that owns it*, so
+/// clearing it on the way there would empty the page they were sent to.
+pub fn section_shown(state: &mut State, section: SettingsSection) {
+    if let Some(draft) = &mut state.settings_draft {
+        draft.show(section);
+    }
+}
+
+/// Appearance: the theme was chosen (feature 027, FR-026).
+pub fn theme_changed(state: &mut State, theme: ThemePreference) {
+    edit(state, |draft| draft.appearance.theme = theme);
+}
+
+/// Terminal: the scrollback field was edited.
+pub fn scrollback_changed(state: &mut State, text: String) {
+    edit(state, |draft| draft.terminal.scrollback_lines = text);
+}
+
+/// Environment: the include toggle was flipped (feature 011).
+pub fn env_include_enabled_toggled(state: &mut State, enabled: bool) {
+    edit(state, |draft| draft.environment.enabled = enabled);
+}
+
+/// Environment: the include script path was edited (feature 011).
+pub fn env_include_path_changed(state: &mut State, text: String) {
+    edit(state, |draft| draft.environment.script_path = text);
+}
+
+/// Environment: the include timeout was edited (feature 011).
+pub fn env_include_timeout_changed(state: &mut State, text: String) {
+    edit(state, |draft| draft.environment.timeout_secs = text);
+}
+
+/// Environment: the **Default AI CLI** select changed (feature 026, FR-003).
+pub fn default_ai_cli_changed(state: &mut State, which: AiCli) {
+    edit(state, |draft| draft.environment.default_ai_cli = which);
+}
+
+/// Session service: where sessions run (feature 027, FR-001).
+pub fn placement_changed(state: &mut State, placement: PlacementKind) {
+    edit(state, |draft| draft.daemon.placement = placement);
+}
+
+/// Session service: which container runtime the sandbox uses (feature 027, FR-002).
+pub fn runtime_changed(state: &mut State, runtime: micold_core::sandbox::runtime::RuntimeKind) {
+    edit(state, |draft| draft.daemon.profile.runtime = runtime);
+}
+
+/// Session service: where the sandbox image comes from (feature 027, FR-006).
+pub fn image_kind_changed(state: &mut State, kind: micold_core::sandbox::image::ImageSourceKind) {
+    edit(state, |draft| draft.daemon.profile.image.kind = kind);
+}
+
+/// Session service: the image's reference (feature 027, FR-006).
+pub fn image_reference_changed(state: &mut State, text: String) {
+    edit(state, |draft| draft.daemon.profile.image.reference = text);
+}
+
+/// Session service: the archive an imported image is loaded from (feature 027, FR-006).
+pub fn image_path_changed(state: &mut State, text: String) {
+    edit(state, |draft| draft.daemon.image_path = text);
+}
+
+/// Session service: one host credential's share opt-in (feature 027, FR-004c).
+pub fn credential_toggled(
+    state: &mut State,
+    share: micold_core::sandbox::CredentialShare,
+    shared: bool,
+) {
+    edit(state, |draft| {
+        // A set, so opting in twice is opting in once (rule N-2) and the order the section lists
+        // them in is the order it always lists them in.
+        if shared {
+            draft.daemon.profile.credentials.insert(share);
+        } else {
+            draft.daemon.profile.credentials.remove(&share);
+        }
+    });
+}
+
+/// Session service: whether sessions outlive the sign-out that started them (feature 027, FR-014).
+pub fn survive_logout_toggled(state: &mut State, survive: bool) {
+    edit(state, |draft| {
+        draft.daemon.profile.survive_logout = survive;
+    });
+}
+
+/// Session service: the sandbox's network posture (feature 027, FR-011).
+pub fn network_changed(state: &mut State, posture: micold_core::sandbox::NetworkPosture) {
+    edit(state, |draft| draft.daemon.profile.network = posture);
+}
+
+/// Session service: the processor limit, in cores (feature 027, FR-012).
+pub fn cpu_limit_changed(state: &mut State, text: String) {
+    edit(state, |draft| draft.daemon.cpus = text);
+}
+
+/// Session service: the memory limit, in MiB (feature 027, FR-013).
+pub fn memory_limit_changed(state: &mut State, text: String) {
+    edit(state, |draft| draft.daemon.memory_mib = text);
+}
+
+/// Session service: the process-count limit (feature 027, FR-014).
+pub fn pid_limit_changed(state: &mut State, text: String) {
+    edit(state, |draft| draft.daemon.pids = text);
+}
+
+/// Session service: the writable-storage limit, in MiB (feature 027, FR-015).
+pub fn storage_limit_changed(state: &mut State, text: String) {
+    edit(state, |draft| draft.daemon.storage_mib = text);
+}
+
+/// Apply an edit to the open draft, if there is one, and clear the pending error.
+///
+/// Every field edit did these two things and the second was easy to forget: a stale validation
+/// error left beside a field the user has since corrected is the form telling them they are wrong
+/// after they have fixed it. One place, so a new field cannot omit it.
+fn edit(state: &mut State, change: impl FnOnce(&mut SettingsDraft)) {
+    if let Some(draft) = &mut state.settings_draft {
+        change(draft);
+        draft.edited();
+    }
+}
+
+/// The form was saved (feature 006).
+///
+/// Validation and persistence happen in the shell; the reducer closes the view.
+pub fn saved(state: &mut State) {
+    state.settings_draft = None;
+}
+
+/// The form was dismissed without saving.
+pub fn cancelled(state: &mut State) {
+    state.settings_draft = None;
 }

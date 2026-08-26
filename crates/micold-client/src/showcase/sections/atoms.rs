@@ -200,6 +200,12 @@ pub fn icon_label<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, 
 
 /// `ActivityBadge` — one instance per signal, including the ones that deliberately render nothing, so
 /// "this signal is invisible on purpose" is on the page rather than inferred from an absence.
+///
+/// The last instance is not a signal. `Stopped` is feature 026's tab mark, which reaches this
+/// component through `for_emphasis` because a process lifecycle is not daemon activity — so it is
+/// posed through the same door, rather than through a signal that does not map to it. Posing it
+/// beside the other three is also the check the variant exists for: `Attention` and `Stopped` are
+/// both in the error role and must not read as the same dot.
 pub fn activity_badge<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     let signals: Vec<(&str, ActivitySignal)> = vec![
         ("Unknown", ActivitySignal::Unknown),
@@ -212,17 +218,23 @@ pub fn activity_badge<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<
             },
         ),
     ];
-    arrange(
-        signals
-            .into_iter()
-            .map(|(label, signal)| {
-                posed(
-                    label,
-                    material::ActivityBadge::<Message>::new(signal, roles),
-                    roles,
-                )
-            })
-            .collect(),
-        Layout::Inline,
-    )
+    let mut instances: Vec<Element<'a, Message>> = signals
+        .into_iter()
+        .map(|(label, signal)| {
+            posed(
+                label,
+                material::ActivityBadge::<Message>::new(signal, roles),
+                roles,
+            )
+        })
+        .collect();
+    instances.push(posed(
+        "Stopped",
+        material::ActivityBadge::<Message>::for_emphasis(
+            Some(material::BadgeEmphasis::Stopped),
+            roles,
+        ),
+        roles,
+    ));
+    arrange(instances, Layout::Inline)
 }

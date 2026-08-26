@@ -1,5 +1,13 @@
 # Contract: bottom-bar mode toggle + restart affordance
 
+> **RETIRED for the toggle half, 2026-08-21 (feature 027 FR-001).** The control this contract
+> governs no longer exists: feature 026 put the AI CLI process in the bar's tab strip, and 027
+> deleted the button that had been the other way there. Everything below about the toggle — its
+> placement, its icon-as-mode-indicator, its press behaviour — describes the application as it was
+> up to 027 and is kept for that record only. **The restart affordance half is still live** and
+> still governs `pane()`; nothing in 027 touches it. What replaces the toggle is specified by
+> `specs/027-tabs-only-switching/spec.md` and by 026's `ai-session-tab-ui.md`.
+
 Governs FR-001, FR-002, FR-009, and the spec Clarifications (2026-07-18: toggle placement).
 Applies to `pane()` in `src/ui/terminal.rs`, the function that already builds the terminal's
 bottom status bar (`bottom_bar`: session title left, status right, ~~conditional "release focus"

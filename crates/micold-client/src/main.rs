@@ -14,6 +14,7 @@ use crate::shell::capabilities::Capabilities;
 use crate::shell::daemon_sync::PendingOp;
 use micold_client::app::{Message, State};
 use micold_client::features::session::SelectKind;
+use micold_client::features::worktree_form::Msg as FormMsg;
 use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
 use micold_client::overlay::registry::Closing;
@@ -278,6 +279,7 @@ fn compose_scene(app: &mut App) -> Task<Message> {
         if !creating && app.daemon.is_some() {
             steps.push(Task::done(Message::SessionStartRequested {
                 location: SessionLocation::Default,
+                provider: app.core.provider_for_start(None),
             }));
         }
     }
@@ -379,6 +381,13 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
         None => task,
     };
 
+    // Feature 026 FR-002d: the same shape, one scroll region over. Drained here for the same
+    // reason — the viewport's width arrives with layout, not with the selection.
+    let task = match tab_reveal_scroll(app) {
+        Some(scroll) => Task::batch([task, scroll]),
+        None => task,
+    };
+
     // Hand a closing overlay's snapshot to the renderer so its exit has something to draw (US1).
     // The transition itself belongs to `material::Modal`, which reports back with
     // `OverlayTransitionFinished` once it is over; the snapshot is released there.
@@ -451,16 +460,78 @@ fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
         || app.core.sidebar_viewport_height == 0
         || !app.core.current_session_is_listed()
     {
+        if app.core.pending_reveal_scroll && micold_client::reveal_trace::enabled() {
+            micold_client::reveal_trace::line(format_args!(
+                "armed, waiting: viewport_h={} listed={}",
+                app.core.sidebar_viewport_height,
+                app.core.current_session_is_listed()
+            ));
+        }
         return None;
     }
     app.core.pending_reveal_scroll = false;
-    let offset = app.core.reveal_scroll_offset()?;
+    let offset = app.core.reveal_scroll_offset();
+    if micold_client::reveal_trace::enabled() {
+        match offset {
+            Some(y) => micold_client::reveal_trace::line(format_args!(
+                "drained: viewport_h={} scroll_offset={} -> scrolling to {y}",
+                app.core.sidebar_viewport_height, app.core.sidebar_scroll_offset,
+            )),
+            None => micold_client::reveal_trace::line(format_args!(
+                "drained: viewport_h={} scroll_offset={} -> no scroll, the row is already visible \
+                 (FR-009)",
+                app.core.sidebar_viewport_height, app.core.sidebar_scroll_offset,
+            )),
+        }
+    }
+    let offset = offset?;
+    // Record where the list was sent, rather than waiting to be told (BUG-002).
+    //
+    // `sidebar_scroll_offset` is a mirror of the scrollable's position whose only writer is
+    // `Message::SidebarScrolled` — and the rendering stack publishes that from `notify_viewport`,
+    // which returns *without publishing* whenever the content fits the viewport
+    // (`iced_widget/src/scrollable.rs`). A reveal in a project whose sidebar fits therefore moves
+    // the list silently, and the mirror keeps the offset of the project before it. The next
+    // arrival then measures its row against a position the panel is nowhere near, concludes the
+    // row is already visible, and consumes the arm under FR-009 — the deepest row in a 30-location
+    // list left below the fold with nothing to move it.
+    //
+    // The application does not need to be told what it just did. `offset` is already clamped into
+    // this list's own scrollable range by `scroll_target`, so it is the position the panel will
+    // hold whether or not a notification follows.
+    app.core.sidebar_scroll_offset = offset;
     Some(iced::widget::operation::scroll_to(
         micold_client::ui::SIDEBAR_SCROLL_ID.clone(),
         iced::widget::scrollable::AbsoluteOffset {
             x: 0.0,
             y: offset as f32,
         },
+    ))
+}
+
+/// Scroll the marked tab into view, once there is a viewport to scroll it in (feature 026 FR-002d).
+///
+/// Deferred for the same two reasons [`reveal_scroll`] is: the viewport reports its width only once
+/// laid out, and `0` there means "unknown", never "nothing fits" — nothing is scrolled on a guess.
+///
+/// The offset may still be `None` once it drains: the marked tab was already fully visible, and
+/// FR-002d's whole point is that a user may scroll away from it by hand. A reveal that fired on
+/// every selection would yank them back each time, including on selections made with the mode
+/// toggle rather than with the strip.
+fn tab_reveal_scroll(app: &mut App) -> Option<Task<Message>> {
+    if !app.core.pending_tab_reveal || app.core.tab_strip_viewport_width == 0 {
+        return None;
+    }
+    app.core.pending_tab_reveal = false;
+    let index = micold_client::ui::terminal::marked_tab_index(&app.core)?;
+    let offset = micold_client::ui::terminal::scroll_into_view(
+        index,
+        app.core.tab_strip_scroll_offset as f32,
+        app.core.tab_strip_viewport_width as f32,
+    )?;
+    Some(iced::widget::operation::scroll_to(
+        micold_client::ui::terminal::TAB_STRIP_SCROLL_ID.clone(),
+        iced::widget::scrollable::AbsoluteOffset { x: offset, y: 0.0 },
     ))
 }
 
@@ -613,25 +684,38 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::ThemePreferenceChanged(_) | Message::ThemeModeCycled => {
             shell::persist::on_theme_changed(app, message)
         }
-        Message::AddWorktreeSubmitted => shell::daemon_sync::on_add_worktree_submitted(app),
-        Message::AddWorktreeResolutionChosen(mode) => {
+        Message::WorktreeForm(FormMsg::Submitted) => {
+            shell::daemon_sync::on_add_worktree_submitted(app)
+        }
+        Message::WorktreeForm(FormMsg::ResolutionChosen(mode)) => {
             shell::daemon_sync::on_add_worktree_resolution_chosen(app, mode)
         }
-        Message::AddWorktreeOverwriteConfirmed => {
+        Message::WorktreeForm(FormMsg::OverwriteConfirmed) => {
             shell::daemon_sync::on_add_worktree_overwrite_confirmed(app)
         }
-        Message::AddWorktreeSourceChanged(source) => {
+        Message::WorktreeForm(FormMsg::SourceChanged(source)) => {
             shell::daemon_sync::on_add_worktree_source_changed(app, source)
         }
-        Message::SessionStartRequested { location } => {
-            shell::daemon_sync::on_session_start_requested(app, location)
+        Message::SessionStartRequested { location, provider } => {
+            shell::daemon_sync::on_session_start_requested(app, location, provider)
+        }
+        // The override list is opening: refresh the availability set first (feature 026, T014a).
+        // This and `SettingsOpened` are the two named events research R11 means by "when the choice
+        // is offered" — the set is never re-probed per frame, which would be a `PATH` lookup per
+        // render and exactly the scheduled work SC-006 forbids.
+        Message::SessionStartMenuOpened(location) => {
+            app.core.available_providers = app.caps.available_providers();
+            app.core.update(Message::SessionStartMenuOpened(location));
+            Task::none()
         }
         Message::SessionSelected(id) => shell::daemon_sync::on_session_selected(app, id),
         Message::SessionCloseRequested(id) => {
             shell::daemon_sync::on_session_close_requested(app, id)
         }
         Message::SessionRemoveConfirmed => shell::daemon_sync::on_session_remove_confirmed(app),
-        Message::TerminalModeToggled => shell::daemon_sync::on_terminal_mode_toggled(app),
+        Message::TerminalAiCliSelected(id) => {
+            shell::daemon_sync::on_terminal_ai_cli_selected(app, id)
+        }
         Message::TerminalRestartRequested => shell::daemon_sync::on_terminal_restart_requested(app),
         Message::ShellInstanceRestartRequested(id, shell_id) => {
             shell::daemon_sync::on_shell_instance_restart_requested(app, id, shell_id)
@@ -973,6 +1057,7 @@ pub(crate) mod tests {
     // import them back rather than keep a second copy.
     use crate::shell::daemon_sync::tests::{snapshot_with, summary, summary_at};
     use micold_client::features::settings::{EnvironmentDraft, SettingsDraft, TerminalDraft};
+    use micold_core::session::AiCli;
     // These tests drive whole messages through `update_inner`, which is this file's dispatcher, so
     // they stay here even though what they assert about is the daemon's: they are tests of the
     // routing reaching the right arm as much as of the arm itself.
@@ -1229,6 +1314,7 @@ pub(crate) mod tests {
             env_include_enabled: false,
             env_include_script_path: String::new(),
             env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
+            default_ai_cli: AiCli::ClaudeCode,
         }
     }
 
@@ -1422,6 +1508,71 @@ pub(crate) mod tests {
             sent.iter()
                 .any(|m| matches!(m, ClientMsg::SetViewedSession { session: None, .. })),
             "the daemon is still told that no session is viewed"
+        );
+    }
+
+    /// BUG-002 (024): a drained reveal must record where it sent the list, because the list will
+    /// not always tell us.
+    ///
+    /// `sidebar_scroll_offset` is a mirror of the scrollable's position, and its only writer is
+    /// `Message::SidebarScrolled` — which iced publishes from `notify_viewport`, and
+    /// `notify_viewport` returns without publishing when the content fits the viewport
+    /// (`iced_widget/src/scrollable.rs`). So a reveal that runs in a project whose sidebar fits —
+    /// the short project you pass through on the way somewhere — moves the list and is never told,
+    /// and the mirror keeps the *previous* project's offset.
+    ///
+    /// What that costs is the whole feature: on the next arrival the drain measures the row against
+    /// an offset the list is nowhere near, decides it is already visible, and consumes the arm
+    /// under FR-009. Reproduced on screen 2026-08-20 — the panel sat at the top with the marked row
+    /// 1,968px below the fold, and the trace read `scroll_offset=734 -> no scroll, the row is
+    /// already visible` immediately followed by `the scrollable reports offset 0`.
+    #[test]
+    fn a_drained_reveal_records_where_it_sent_the_list() {
+        use micold_core::project::{Availability, Project};
+        use micold_core::session::{AiCli, Session};
+        use micold_core::worktree::{Worktree, WorktreeStatus};
+
+        let mut app = base_app();
+        let path = PathBuf::from("/repo");
+        app.core.workspace.projects.push(Project {
+            path: path.clone(),
+            display_name: "repo".to_string(),
+            is_git_repo: true,
+            availability: Availability::Available,
+        });
+        app.core.workspace.active = Some(path.clone());
+        app.core.worktrees = vec![Worktree {
+            dir_name: "only".to_string(),
+            path: PathBuf::from("/repo/.claude/worktrees/only"),
+            branch: Some("feat/only".to_string()),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }];
+        let session = Session::start_new(
+            SessionLocation::Worktree("only".to_string()),
+            AiCli::ClaudeCode,
+        );
+        let id = session.id;
+        app.core.workspace.sessions.insert(path, vec![session]);
+        app.core.active_session = Some(id);
+        // Everything here fits: one location in a tall panel. This is the project that scrolls
+        // without reporting.
+        app.core.sidebar_viewport_height = 400;
+        // Left behind by the project we just came from, whose list was long enough to scroll.
+        app.core.sidebar_scroll_offset = 734;
+        app.core.pending_reveal_scroll = true;
+
+        assert!(
+            reveal_scroll(&mut app).is_some(),
+            "precondition: the reveal drains and asks for a scroll — 734 is not where this \
+             one-location list can be"
+        );
+
+        assert_eq!(
+            app.core.sidebar_scroll_offset, 0,
+            "the reveal knows where it sent the list, so it must not wait to be told: leaving 734 \
+             here is BUG-002, and the next arrival measures its row against a position the panel \
+             left long ago"
         );
     }
 
@@ -1729,6 +1880,7 @@ pub(crate) mod tests {
                 enabled: false,
                 script_path: "/tmp/does-not-exist.sh".into(),
                 timeout_secs: "15".into(),
+                default_ai_cli: AiCli::Copilot,
             },
             ..SettingsDraft::default()
         });
@@ -1773,6 +1925,7 @@ pub(crate) mod tests {
                 enabled: true,
                 script_path: String::new(),
                 timeout_secs: "15".into(),
+                default_ai_cli: AiCli::ClaudeCode,
             },
             ..SettingsDraft::default()
         });
@@ -1804,6 +1957,7 @@ pub(crate) mod tests {
                 outbox: micold_client::daemon::Outbox::new(tx),
                 catalog: snapshot_with("/repo/demo", Vec::new()),
                 settings: micold_core::protocol::messages::DaemonSettings {
+                    default_ai_cli: AiCli::ClaudeCode,
                     scrollback_lines: 12_345,
                     env_include_enabled: false,
                     env_include_script_path: "/authoritative/from-daemon.sh".into(),
@@ -1832,6 +1986,7 @@ pub(crate) mod tests {
             &mut app,
             Message::DaemonEvent(DaemonMsg::SettingsChanged {
                 settings: micold_core::protocol::messages::DaemonSettings {
+                    default_ai_cli: AiCli::ClaudeCode,
                     scrollback_lines: 5_000,
                     env_include_enabled: false,
                     env_include_script_path: "/tmp/after.sh".into(),

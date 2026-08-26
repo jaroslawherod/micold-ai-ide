@@ -55,7 +55,7 @@ repository (`git init` it beforehand) and one that is not.
 | 2 | Open the project selector | In-app folder browser opens; lists folders only | C2, C3 |
 | 3 | Browse to the two prepared folders | The git folder shows a **git icon**; the non-git folder does not | C3 / FR-006 |
 | 4 | Navigate into a folder, then up | Enters/leaves folders; reaches roots at the top | C3 (research R5) |
-| 5 | Choose the **non-git** folder | Project created (git not required); becomes active; shell shows its name (= folder name) | C3, C4 / FR-003, FR-004, FR-005 |
+| 5 | ~~Choose the **non-git** folder~~ **Stale** — FR-003 was amended on 2026-07-20 to git-only (feature 005 FR-001a). Choose it to confirm the refusal instead. | The folder is **refused**, visibly: the picker closes and a dismissible notice reads "Only git repositories can be opened as projects." | C3, C4 / FR-003 (amended), 005 FR-001a |
 | 6 | Open the selector again; choose the **git** folder | New project active; replaces previous active; shell name updates | C4 / FR-013, FR-014 |
 | 7 | Choose the **same** git folder again | No duplicate entry appears; existing entry activated | C4 / FR-012 |
 | 8 | Rename a project to `My Project` | Display name updates everywhere; the folder on disk is unchanged | C6 / FR-017, FR-018 |
@@ -93,6 +93,10 @@ Steps 1–12 must produce identical results on Linux, macOS, and Windows (the on
 difference is the roots presentation — Windows drive letters vs `/`, step 4). CI
 (`.github/workflows/ci.yml`) runs the logic-core tests + GUI build on all three platforms; repeat
 the manual walkthrough per platform before the feature is considered "done".
+
+**Recorded runs**: Linux, 2026-08-21 — steps 1–4 and 6–11 pass, step 12 partial, plus both spot
+checks; see [evidence/T047-manual-walkthrough.md](./evidence/T047-manual-walkthrough.md). macOS and
+Windows: never run.
 
 ## Documentation check (Principle VII)
 

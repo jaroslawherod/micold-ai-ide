@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-09
 
-**Status**: Draft
+**Status**: Closed
 
 **Input**: User description: "the changes done only to spec or docs should not trigger the full CI"
 

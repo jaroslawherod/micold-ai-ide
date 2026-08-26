@@ -82,21 +82,33 @@ fn the_snackbar_clock_is_subscribed_only_while_a_notification_is_showing() {
     );
 }
 
-/// The pointer is tracked only while the project switcher is open.
+/// The pointer is not tracked **at all**.
 ///
-/// Its one purpose is anchoring a switcher row's right-click menu at the cursor (feature 015).
-/// Left subscribed, every mouse move through the window becomes an `update` — the busiest
-/// possible subscription, on an application whose idle guarantee is that it schedules nothing.
+/// This test used to say "only while the project switcher is open" (015 FR-010), and the
+/// subscription it guarded existed for one reason: a switcher row handed over a bare message with
+/// no press point in it, so the point had to be collected on the side. Since 018's BUG-008 the
+/// point rides on the message — every context menu's, not just the switcher's — and the side
+/// channel has no caller left.
+///
+/// So the requirement is satisfied by construction rather than by a guard: there is no window
+/// state that can make this application listen to mouse moves, which is the strongest form of
+/// "the idle window schedules nothing" (FR-025, SC-017). Asserting the absence, rather than
+/// deleting the test with the code, is what stops the subscription quietly coming back the next
+/// time something wants a pointer position.
 #[test]
-fn the_pointer_is_tracked_only_while_the_project_switcher_is_open() {
+fn the_pointer_is_not_subscribed_at_all() {
     let src = fs::read_to_string(subscriptions_rs()).expect("read src/shell/subscriptions.rs");
-    let guard = enclosing_block(&src, "subs.push(cursor_move_events())")
-        .expect("cursor moves are subscribed unconditionally — they must be inside an `if`");
-    assert!(
-        guard.contains("project_switcher_open"),
-        "cursor tracking is inside `{guard}`, which does not test whether the switcher is open. \
-         Every pointer move through the window would become an `update` (FR-025, SC-017)."
-    );
+    let code = code_only(&src);
+    for banned in ["cursor_move", "CursorMoved"] {
+        assert!(
+            !code.contains(banned),
+            "`{banned}` is back in src/shell/subscriptions.rs. A pointer subscription makes every \
+             mouse move through the window an `update` — the busiest subscription there is, on an \
+             application whose idle guarantee is that it schedules nothing. If a surface needs a \
+             press point, take it from the gesture that raised it (`cdk::ContextArea`), which is \
+             what BUG-008 established (018 FR-029d, 015 FR-010)."
+        );
+    }
 }
 
 /// The frame clock, checked here too — and this one is the control.

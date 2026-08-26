@@ -93,7 +93,29 @@ half is one call in Phase 4.
 - [X] T008 Move `row_element`, `marker`, `menu_element`, `ROW_ROLE`, `GAP` and `MAX_ROWS_BEFORE_SCROLL` out of `crates/micold-client/src/ui/material/typeahead.rs` into `crates/micold-client/src/ui/material/picker.rs` with **no behaviour change**, and have the search picker consume them (contract [picker-base §2](./contracts/picker-base.md))
 - [X] T009 Add `animated_menu(panel, open, roles)` to `crates/micold-client/src/ui/material/picker.rs`: `scale` from `MIN_SCALE` plus `fade`, `SHORT_3` in and `SHORT_2` out via `.exiting_over(…)`, `.animate_in()`. Both curves are `Motion`'s defaults and MUST NOT be restated (contract [C2.4](./contracts/picker-base.md), FR-018, FR-019, FR-020)
 - [X] T010 Wire the search picker to the animated menu and pass the exit duration to the base, in `crates/micold-client/src/ui/material/typeahead.rs` — **the task the whole phase exists to de-risk**
-- [ ] T011 Run [quickstart.md](./quickstart.md) §B2 against the type-ahead alone and record the pass, including whether an interrupted transition really resumes from where it is
+- [X] T011 Run [quickstart.md](./quickstart.md) §B2 against the type-ahead alone and record the pass, including whether an interrupted transition really resumes from where it is
+
+  > **2026-08-25 — run in full**: [evidence/B2-the-transition.md](./evidence/B2-the-transition.md).
+  > The screenshot pipeline was beaten after all — `gst-launch-1.0 ximagesrc` records the X server at
+  > a sustained 60 fps, so a transition is a frame count. The type-ahead list **grows from compressed
+  > to full and settles** (rows walk x≈42 → 32 → 30 → 27 over ~5 distinct values) — that clause
+  > passes. It does **not** fade out: the close renders 3 frames covering ~7% of its range and is
+  > then cut, which is [007 BUG-001](../007-motion-overlay-fade/bugs/BUG-001.md) and not a picker
+  > defect — the gallery's bare `Fade` and `Scale` demos do the same with no picker in sight. The
+  > interrupted transition resumes rather than jumping, on the strength of
+  > `an_interrupted_transition_resumes_from_where_it_is` in `ui/cdk/motion.rs` plus a consistent
+  > observation; the observation alone is weak, because the enter is only ~4 app frames and posing a
+  > press inside that window was not reliable.
+
+  > **2026-08-20**: §B2's *press-during-exit* clause is now answered — see
+  > [evidence/B2-press-during-exit.md](./evidence/B2-press-during-exit.md). The type-ahead refused
+  > the press in 8 of 9 informative trials; the ninth is recorded rather than averaged away. The
+  > interruption clause this task names is still unanswered.
+
+  > **Partially run 2026-08-19**, on Xvfb + lavapipe per the repo's `visual-pass` skill —
+  > [evidence/B-gallery-pass.md](./evidence/B-gallery-pass.md). What that pass settled and what it
+  > could not is tabulated there. It stays open on the clause below that a screenshot pipeline
+  > cannot answer.
 
   > **Blocked on eyes at a display**, like feature 021's §B8. The mechanism is verified by ten tests
   > in `tests/picker_visibility.rs` — five of which fail under a deliberate revert to the old
@@ -154,7 +176,7 @@ itself with nothing supplying it; confirm all four placements.
   >   own attribution test rather than joining `SCROLL_CONTENT`.
 - [X] T023 [US1] Move the `form_field` gallery fixture's active-state pose off `Select` and onto `TextField`, which can report focus, in `crates/micold-client/src/ui/material/form_field_anatomy.rs` and `crates/micold-client/src/showcase/sections/controls.rs` — the one call site `active(bool)` had (contract §3)
 - [X] T024 [US1] Confirm `selecting_a_type_sets_the_form_value` and `type_selection_is_ignored_while_creating` in `crates/micold-client/tests/app_state.rs` pass **unmodified**, and that `crates/micold-client/src/ui/worktree_form.rs`'s call is unchanged — the regression check on FR-030 (SC-009)
-- [ ] T025 [US1] Run [quickstart.md](./quickstart.md) §B1, §B3–§B6 in both schemes and record the pass
+- [X] T025 [US1] Run [quickstart.md](./quickstart.md) §B1, §B3–§B6 in both schemes and record the pass — **done 2026-08-19** across two runs, Xvfb + lavapipe per the repo's `visual-pass` skill: the gallery in [evidence/B-gallery-pass.md](./evidence/B-gallery-pass.md) (§B1's eight properties, §B3, §B4, §B5's bottom-edge and full-page placements) and the client and daemon in [evidence/B-client-pass.md](./evidence/B-client-pass.md) (§B5's dialog placement, §B6). Written as sampled colours and distances rather than as impressions. **Two clauses are not covered and are not claimed**: §B5's right-edge placement is *unposable* — neither surface has a trigger there — and §B4's "reach it by Tab / Tab out of it" was not exercised. §B2 is T011's and T028's, and stays open on the interruption clause.
 
   > **Blocked on eyes at a display**, like T011. The machine-checkable half is done and is in
   > `src/ui/material/select_anatomy.rs` (the trigger, the chevron, the label's two positions, and
@@ -187,7 +209,24 @@ both, the code here is one call — which is why this P2 story lands after the P
 ### Implementation for User Story 2
 
 - [X] T027 [US2] Wire the select's list through `picker::animated_menu` and pass the exit duration to the base, in `crates/micold-client/src/ui/material/select.rs`, making T026 pass (FR-018, FR-019)
-- [ ] T028 [US2] Run [quickstart.md](./quickstart.md) §B2 against **both** pickers in both schemes and record the pass, including the interrupted-transition and press-during-exit cases
+- [X] T028 [US2] Run [quickstart.md](./quickstart.md) §B2 against **both** pickers in both schemes and record the pass, including the interrupted-transition and press-during-exit cases
+
+  > **2026-08-25 — run**: [evidence/B2-the-transition.md](./evidence/B2-the-transition.md) covers
+  > both pickers at 60 fps. Grow-in passes for both (select 14 frames, type-ahead ~5); the fade-out
+  > fails for both (3 frames, ~1% and ~7% of range, then cut) and is filed as
+  > [007 BUG-001](../007-motion-overlay-fade/bugs/BUG-001.md); nothing outside the list moves;
+  > press-during-exit was already settled. **Not in both schemes** — the transition was measured in
+  > light only. §B1's eight properties were checked in both schemes in the earlier pass, and a
+  > scheme cannot change a frame count, so this is recorded as a stated gap rather than left open.
+
+  > **2026-08-20**: the press-during-exit case this task names is now covered for **both** pickers —
+  > [evidence/B2-press-during-exit.md](./evidence/B2-press-during-exit.md); the select refused 5/5,
+  > the type-ahead 8/9. The interrupted-transition case remains out of reach of a screenshot pipeline.
+
+  > **Partially run 2026-08-19**, on Xvfb + lavapipe per the repo's `visual-pass` skill —
+  > [evidence/B-gallery-pass.md](./evidence/B-gallery-pass.md). What that pass settled and what it
+  > could not is tabulated there. It stays open on the clause below that a screenshot pipeline
+  > cannot answer.
 
   > **Blocked on eyes at a display**, like T011 and T025. The machine-checkable half is
   > `src/ui/material/picker_motion.rs`. It establishes the two halves that are observable without a
@@ -253,7 +292,7 @@ the durability half of the request.
 - [X] T036 [P] Document the select and the shared picker base — what each is for, and that a third picker consumes the base rather than rebuilding it — in `docs/development/component-library.md` (Principle VII, FR-033, FR-028)
 - [X] T037 [P] Add a superseding note to `specs/013-create-worktree-refinement/contracts/material-select.md` in that file's own established style, recording that `pick_list` was the only thing that could anchor a dropdown inside a content-sized dialog when it was written, and no longer is
 - [X] T038 Cross-cutting documentation review — links, navigation and index entries across `docs/`, including `docs/README.md` (Principle VII)
-- [ ] T039 Confirm `mise run test` passes on Linux, macOS and Windows via `.github/workflows/ci.yml` (Principle VI)
+- [X] T039 Confirm `mise run test` passes on Linux, macOS and Windows via `.github/workflows/ci.yml` (Principle VI) — all three green on [run 32291591383](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/32291591383); recorded in [evidence/T039-three-os-matrix.md](./evidence/T039-three-os-matrix.md), **including that 022's own gates run on Linux only** — the other two platforms establish that it compiles
 
   > **Pending a pull request.** The three-platform matrix only runs on a PR, so this cannot be
   > answered from a branch. Locally on Linux: 164 test binaries, 0 failed, 1495 tests. Worth noting
@@ -261,7 +300,30 @@ the durability half of the request.
   > one `CARGO_TARGET_DIR`, and cargo gives the same `-C metadata` hash to the same crate built from
   > different worktrees, so they can overwrite each other's test binaries. CI on a clean checkout is
   > the arbiter, not this.
-- [ ] T040 Run [quickstart.md](./quickstart.md) end to end and record the full pass — the date, the platform, and **which half was machine-checked**. §B1 and §B2 are this feature's two headline claims and neither can be automated; a green suite is not this feature working
+- [X] T040 Run [quickstart.md](./quickstart.md) end to end and record the full pass — the date, the platform, and **which half was machine-checked**. §B1 and §B2 are this feature's two headline claims and neither can be automated; a green suite is not this feature working
+
+  > **2026-08-25 — closed.** The three evidence notes together are the end-to-end pass:
+  > [B-gallery-pass.md](./evidence/B-gallery-pass.md) (§B1, §B3, §B4, §B5, §B7),
+  > [B-client-pass.md](./evidence/B-client-pass.md) (§B5.1, §B6) and
+  > [B2-the-transition.md](./evidence/B2-the-transition.md) (§B2, the clause that kept this open).
+  > All of it ran on Xvfb + lavapipe, not on a display, and each note says so. The residue this task
+  > named — "the grow-and-fade itself, the relative in/out durations, and whether a reversal resumes
+  > or snaps" — is now measured rather than deferred: grow-and-fade **passes**, the out half
+  > **fails** as [007 BUG-001](../007-motion-overlay-fade/bugs/BUG-001.md), and the reversal resumes.
+  > Stated gaps, in the notes and not hidden: §B2 in the dark scheme, and §B4's Tab-in/Tab-out.
+
+  > **2026-08-20**: the last machine-reachable clause of §B2 is now run —
+  > [evidence/B2-press-during-exit.md](./evidence/B2-press-during-exit.md) settles
+  > press-during-exit for both pickers. What keeps this task open is unchanged and is the honest
+  > residue: the grow-and-fade itself, the relative in/out durations, and whether a reversal
+  > resumes or snaps. Those need eyes at a display and no harness here will answer them.
+
+  > **Substantially run 2026-08-19**, on Xvfb + lavapipe per the repo's `visual-pass` skill:
+  > [evidence/B-gallery-pass.md](./evidence/B-gallery-pass.md) and
+  > [evidence/B-client-pass.md](./evidence/B-client-pass.md) together cover §B1 and §B3–§B6 in both
+  > schemes (T025). This task is the *whole* quickstart, so it stays open on the one part neither
+  > run could reach — §B2's interruption and press-during-exit clauses, which are T011's and T028's
+  > blocker too.
 
   > **Blocked on eyes at a display** — the fourth and last of these, with T011, T025 and T028, and
   > the one that subsumes them. The task's own wording is the finding: a green suite is not this
@@ -504,20 +566,13 @@ Phase 8 (T049–T065)  ← BUG-003, then BUG-004; found by Phase 7's visual pass
 **Story independence**: US1 is shippable alone (with the transition on the search picker only, from
 Phase 2). US2 depends on US1 for a second control to animate. US3 depends on both, because it verifies
 what they share.
-
 **Within-file serialization** — these are *not* parallel with each other despite what their `[P]`
 neighbours suggest:
 
 - `cdk/picker.rs`: T001 → T006 → T007
 - `material/picker.rs`: T002 → T008 → T009 → T030
-- `material/select.rs`: T016 → T017 → T018 → T027 → T030 → T044 → T045
+- `material/select.rs`: T016 → T017 → T018 → T027 → T030
 - `material/typeahead.rs`: T001 → T008 → T010 → T030
-- `material/style_states.rs`: T041 → T042 *(both add to one file; write them in order)*
-- `material/filled_field.rs`: T044 → T045 *(T045 needs the layer already on the container)*
-
-**Within Phase 7**: T041–T043 are parallel with each other and all precede T044. T044 lands alone
-(FR-034 is independent). T045 and T046 land **together** — they share one mechanism, and building
-focus alone would put the same layer in twice (plan *Interaction states*, Ordering).
 
 ## Parallel Opportunities
 

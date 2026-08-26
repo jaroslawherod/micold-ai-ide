@@ -26,7 +26,8 @@
 //! caller to find out what to say, and where to keep it; this is the application's answer, and it
 //! lives in the application because the choice of where the fact is held is the application's.
 
-use crate::app::{FieldId, Message};
+use crate::app::Message;
+use crate::features::window::FieldId;
 use crate::ui::material::{Checkbox, TextField};
 
 use iced::advanced::widget::operation::scrollable::{AbsoluteOffset, Scrollable};

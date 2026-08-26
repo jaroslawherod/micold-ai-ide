@@ -1,7 +1,7 @@
 # Worktrees & Sessions
 
 Micold AI IDE organizes your work into **worktrees** (isolated git branches checked out under
-your project) and **sessions** (interactive `claude` runs inside a worktree). The left sidebar
+your project) and **sessions** (interactive AI CLI runs inside a worktree). The left sidebar
 shows worktrees at the top level and their sessions as sub-items; the right side hosts the
 embedded terminal for the active session. The sidebar also always shows one **Default** entry —
 a session location that isn't a worktree at all, for work you don't want to isolate onto its own
@@ -32,13 +32,25 @@ color-coded **tags** beneath it:
 - A **type tag** — the Conventional-Commits type from the worktree's branch (`feat`, `fix`,
   `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `perf`, `style`). Each type has its own
   fixed color, so you can recognize what a worktree is for at a glance.
-- An **issue tag** — the Jira-style key (e.g. `ABC-123`) when the worktree's name embeds one.
+- An **issue tag** — the ticket you entered when you created the worktree. A Jira-style key is
+  shown upper-cased (`ABC-123`); a GitHub or GitLab issue number is shown as `#123`.
 - A **status tag** — `missing` or `invalid` for a worktree that is not usable (see above).
 
-The name is derived from the descriptive part of the branch: `feat/abc-123-login-page` shows as
-**Login page** with `feat` and `ABC-123` tags. The tags are display-only — the underlying branch
-and directory names are unchanged, and a worktree that does not follow the naming convention
+The name is derived from the descriptive part of the worktree's folder: `feat-abc-123_login-page`
+shows as **Login page** with `feat` and `ABC-123` tags. The tags are display-only — the underlying
+branch and directory names are unchanged, and a worktree that does not follow the naming convention
 simply shows no type tag.
+
+The `_` is what separates the ticket from the description, so the app never has to guess where one
+ends. A name without one has no ticket, which is exactly right for something like
+`feat-reporting-2` — the trailing `2` is part of the name, not an issue number. Two consequences
+worth knowing:
+
+- Worktrees created before this rule existed have no `_`, so their issue tag is gone. Their names
+  read correctly, and you can always [rename](#managing-a-worktree-right-click) one.
+- A branch from elsewhere that uses `snake_case` is read as having a ticket: `fix/some_bug` shows
+  as **Bug** with a `SOME` tag. The separator means one thing everywhere, and nothing can tell a
+  stray underscore from a deliberate one. Rename the worktree if it bothers you.
 
 The sidebar is intentionally compact — tight left/right padding and a slightly smaller font — so
 long names and their tags get as much width as possible. It stays legible in both light and dark
@@ -157,18 +169,26 @@ With **New branch** selected:
 
 The form shows the derived names before you create:
 
-- **Directory**: `.claude/worktrees/${type}-${ticket}-${name}`
-- **Branch**: `${type}/${ticket}-${name}`
+- **Directory**: `.claude/worktrees/${type}-${ticket}_${name}`
+- **Branch**: `${type}/${ticket}_${name}`
 
-For example, `feat` + `ABC-123` + `Login page` creates the branch `feat/abc-123-login-page` and a
-worktree at `.claude/worktrees/feat-abc-123-login-page`. With no ticket, `chore` + `cleanup` gives
-`chore/cleanup`. Illegal characters in the ticket or name are automatically simplified (slugified).
+For example, `feat` + `ABC-123` + `Login page` creates the branch `feat/abc-123_login-page` and a
+worktree at `.claude/worktrees/feat-abc-123_login-page`. With no ticket, `chore` + `cleanup` gives
+`chore/cleanup` — no `_` anywhere. Illegal characters in the ticket or name are automatically
+simplified (slugified), so `#123` is a perfectly good ticket; it shows up as a `#123` tag in the
+sidebar.
+
+The `_` separates the ticket from the description, and it is on the branch as well as the folder.
+That is what lets the app read the ticket back later: delete a worktree and re-create it from the
+branch and the tag comes back, instead of the app having to guess where the ticket ended.
 
 Creating a worktree makes the new git branch and worktree for you — no manual git commands. If the
 derived name collides with a branch that already exists, the app asks what you want to do rather
 than refusing — see [Working from an existing branch](#working-from-an-existing-branch). If the
-worktree *folder* already exists, creation is blocked with a message, because no branch choice can
-resolve that. If anything fails partway, the app rolls back so no half-created branch or directory
+worktree *folder* already exists, creation is blocked with a message that names the folder and tells
+you to pick a different name or remove that folder — no branch choice can resolve it, so there is
+only the one answer. You get the same sentence whether the app catches the clash while you are
+filling the form in or only when it tries to create. If anything fails partway, the app rolls back so no half-created branch or directory
 is left behind.
 
 If the project uses git submodules, they're fetched automatically as part of creating the
@@ -236,7 +256,7 @@ came from:
 | `feat/login` | A local branch, ready to use. |
 | `feat/reporting · origin` | Exists on `origin`, not yet on this machine. |
 | `feat/login · in use by feat-login` | Already checked out in that worktree — not available. |
-| `feat/login · in use by a hidden agent worktree` | Held by an assistant's worktree, which the sidebar hides by default. |
+| `feat/login · in use by a hidden agent worktree` | Held by an agent worktree, which the sidebar hides by default. |
 | `fix/olx · in use outside this app` | Held by a worktree the app doesn't manage — see below. |
 | `main · in use by the project checkout` | The project's own current branch — not available. |
 
@@ -246,8 +266,10 @@ rather than hidden so you can read *where* it is in use instead of wondering why
 If nothing matches what you typed, the list says so. Clear the field or shorten your search to see
 everything again.
 
-The worktree folder is derived from the branch name — `feat/abc-123-login` becomes
-`.claude/worktrees/feat-abc-123-login` — and the form shows it before you create.
+The worktree folder is derived from the branch name — `feat/abc-123_login` becomes
+`.claude/worktrees/feat-abc-123_login` — and the form shows it before you create. A branch this app
+created keeps its ticket through the trip, so the worktree comes back with the same `ABC-123` tag it
+had before. A branch without a `_` gets no ticket tag; the app does not guess one.
 
 > **Remote branches reflect your last fetch.** The app never contacts a remote here; it reads
 > only what's already in your repository. Run `git fetch` yourself first if you want the list to
@@ -283,7 +305,7 @@ Where it is can be one of four places, and the message tells you which:
 
 - **Another of your worktrees** — named by its folder, which is its row in the sidebar.
 - **The project's own checkout** — the branch the project directory itself is on.
-- **A hidden assistant worktree** — one of the app's own, but not currently listed. Turn on
+- **A hidden agent worktree** — one of the app's own, but not currently listed. Turn on
   **Show agent worktrees** in the sidebar to see it.
 - **A worktree outside this app** — one git knows about that this app doesn't manage: another
   tool's worktree directory (`.git-paw/worktrees/…` and the like), or a checkout in some unrelated
@@ -333,7 +355,7 @@ Right-click a worktree in the sidebar to open its context menu:
   label itself isn't a text field you can select from directly.
 - **Rename** — changes only the name shown for the worktree in the sidebar. It does **not**
   rename the folder on disk or the git branch, and the type/issue tags are unaffected (they
-  keep deriving from the branch). The custom name is remembered across app restarts. Clearing
+  keep deriving from the folder name). The custom name is remembered across app restarts. Clearing
   it is not needed — just rename again.
 - **Stop showing** — only on a worktree you *included* (see
   [Including a worktree that already exists](#including-a-worktree-that-already-exists)). Removes
@@ -355,22 +377,85 @@ Right-click a worktree in the sidebar to open its context menu:
 ## Starting, switching, and closing sessions
 
 - Select a valid worktree and use its **start session** action to launch a session. It appears as
-  a sub-item and its terminal opens on the right.
+  a sub-item and its terminal opens on the right. Which AI CLI it runs is your default, or whatever
+  you pick from the chevron beside that action — see
+  [Choosing which AI CLI a session runs](#choosing-which-ai-cli-a-session-runs).
 - A worktree can host **multiple concurrent sessions** — start as many as you need for parallel,
   non-interfering tasks.
 - **Switch** between sessions by selecting them in the sidebar. Background sessions keep running;
   only the displayed terminal changes.
 - Right-click a session for **Close** and **Remove**:
-  - **Close** stops its `claude` process and hides it from the sidebar. It does not reappear —
-    including on a later restart, even though the underlying `claude` conversation itself still
-    exists on disk. There is no way to bring a closed session back through the UI.
+  - **Close** stops its AI CLI process and hides it from the sidebar. It does not reappear —
+    including on a later restart, even though the underlying conversation itself still exists on
+    disk in the CLI's own storage. There is no way to bring a closed session back through the UI.
   - **Remove** permanently deletes the session's record, after a confirmation step. Unlike Close,
     there is no possible recovery path back into the sidebar either. Remove is only offered on a
     still-visible session — a closed session can't be removed separately, since it's already
     hidden.
 
-Session labels come from `claude` itself (its session title); until a title is available a
+Session labels come from the AI CLI itself (its own session title); until a title is available a
 placeholder is shown.
+
+## Choosing which AI CLI a session runs
+
+A session runs one AI coding CLI — Claude Code or GitHub Copilot — and which one is decided when
+the session is created.
+
+- **Press the start-session action** and you get the CLI set as your
+  [Default AI CLI](./settings.md#default-ai-cli), in one press, exactly as before.
+- **Press the small chevron beside it** to pick a different CLI for this session only. Your default
+  is not changed.
+- **If only one CLI is installed, the chevron is not there at all.** There is nothing to choose
+  between, so the affordance is the plain button it always was.
+- Only CLIs you actually have installed are ever offered.
+- **If your default CLI is not installed, pressing start offers the ones that are** instead of
+  trying to run something that isn't there. Nothing is created until you pick — your default stays
+  as you set it, and the list is checked against your `PATH` at that moment, so a CLI you installed
+  since opening the app is in it.
+
+**The choice is fixed for the session's lifetime.** There is no way to switch a running session to
+the other CLI, and nothing switches it for you — not changing your default, not restarting the app,
+not restarting your machine. A session is a conversation with one tool, and the two tools keep their
+conversations in different places.
+
+**Two sessions in the same worktree can run different CLIs at once.** They do not interfere: each
+has its own process, its own terminal, its own conversation record, and its own title.
+
+### What the sidebar shows
+
+Each session row carries a short text label naming its CLI — `claude` or `copilot`. It is text, not
+a colour or an icon alone, so it reads the same way for everyone and survives a narrow sidebar: if
+the row runs out of room the *title* is what shortens, never the CLI label.
+
+Open a session and its terminal bar names the CLI too — on the AI tab at the bottom-right, beside
+its sparkle, reading `claude` or `copilot` — so you can tell what you are talking to without going
+back to the sidebar. It is there whichever pane the session is showing.
+
+The busy/idle indicator works the same way for both CLIs — same shape, same states, no "less
+certain" variant for one of them.
+
+### Sessions you started outside this app
+
+If you run `claude` or `copilot` yourself in a worktree, this app finds that conversation the next
+time you open the project and lists it as a session of that CLI. This happens on **every** open, not
+just the first, so a conversation you start while the project is open shows up when you come back
+to it.
+
+Two things worth knowing about discovered sessions:
+
+- **A session you closed here stays closed.** Closing writes a durable marker in the CLI's own
+  storage, so it is not re-listed later even if this app's own records are lost.
+- **A discovered session shows no busy/idle indicator until you start it here.** The app is not
+  supervising it, so it makes no claim about what it is doing — it reads as unknown rather than
+  guessing at idle. Select it and start it and it becomes an ordinary session, indicator included.
+
+### When a CLI isn't installed
+
+- It is never offered — not in Settings, not in the per-session list.
+- Sessions that already run it are **still listed and still labelled with it**. They do not
+  disappear and they are not relabelled as something else.
+- Starting one tells you which CLI is missing, by name, and starts nothing. You get a clear failure
+  rather than a terminal that never comes to life.
 
 ### Reopening where you left off
 
@@ -426,80 +511,140 @@ You keep control of the panel:
 
 ## The embedded terminal, resume & restart
 
-- The terminal runs `claude` with its working directory set to the session's worktree, so each
-  session is scoped to its own branch.
-- Type in the input line and press **Enter** to send input to `claude`; its output streams above.
-- If a session's `claude` process exits unexpectedly, it is **automatically restarted** (resuming
-  the prior conversation via `claude --resume`). Repeated rapid failures stop the auto-restart and
-  mark the session **failed** so you can retry manually.
+- The terminal runs the session's AI CLI with its working directory set to the session's worktree,
+  so each session is scoped to its own branch.
+- Type in the input line and press **Enter** to send input to the CLI; its output streams above.
+- If a session's process exits unexpectedly, it is **automatically restarted**, resuming the prior
+  conversation — the app asks the CLI to resume the session id it owns, so you come back to the
+  same conversation rather than a fresh one. Repeated rapid failures stop the auto-restart and mark
+  the session **failed** so you can retry manually.
 - **Closing** the active project (or quitting the app) stops that project's session processes but
-  keeps the sessions; reopening the project restores them and resumes them via `claude --resume`.
+  keeps the sessions; reopening the project restores them and resumes the same conversations.
   **Switching** to another project does not stop them — see below.
 
-> Requires the `claude` CLI on your `PATH`. If it is missing, starting a session reports an error.
+> Requires the session's CLI — `claude` or `copilot` — on your `PATH`. If it is missing, starting
+> the session reports which one could not be found.
 
 ## Switching to a regular terminal
 
-Each session's terminal can also run a plain shell instead of `claude` — useful for running git
+Each session's terminal can also run a plain shell instead of the AI CLI — useful for running git
 commands, scripts, or anything else scoped to that session's worktree without leaving the app.
 
-- The toggle button in the terminal's bottom bar switches the pane between **AI CLI** mode
-  (`claude`) and **Regular Terminal** mode (a plain shell). Its icon changes to show which mode
-  you're currently in, and hovering it shows a tooltip naming the current mode and what pressing
-  it switches to. This icon+tooltip is the single place to check which process your keystrokes
-  are going to — there is no separate indicator, and it always reflects the current mode
-  immediately after a switch.
-- The shell starts with its working directory set to the session's worktree, same as `claude` —
+- The **tab strip** in the terminal's bottom bar is how you move between the AI CLI (`claude` or
+  `copilot`) and a plain shell: press the AI tab at the right-hand end to talk to the CLI, press a
+  numbered tab to get a shell. The marked tab is the one the pane is showing, so the strip is the
+  single place to check which process your keystrokes are going to — it names where each press
+  takes you rather than just saying "the other one".
+- The shell starts with its working directory set to the session's worktree, same as the AI CLI —
   so `git status`, build scripts, and so on all run against the right branch.
-- **Both processes keep running** while you switch — toggling away from AI CLI mode never stops
-  or restarts `claude`, and toggling away from Regular mode leaves the shell running in the
-  background. Switching back reattaches to whichever process was already there, exactly as you
-  left it.
+- **Both processes keep running** while you switch — leaving the AI tab never stops or restarts
+  the CLI, and leaving a shell's tab leaves that shell running in the background. Switching back
+  reattaches to whichever process was already there, exactly as you left it.
 - If the shell exits (you typed `exit`, or it crashed), a **restart** control appears in the same
-  bar so you can start a fresh one; unlike `claude`, the shell never restarts on its own.
-- Switching to Regular mode never stops, restarts, or otherwise touches your `claude`
-  conversation — even mid-turn. It keeps running in the background exactly as it was, including
-  its own crash-auto-restart if it happens to exit while you're looking at the shell, and
-  switching back reattaches to that same conversation with nothing lost.
+  bar so you can start a fresh one; unlike the AI CLI, the shell never restarts on its own.
+- Switching to a shell never stops, restarts, or otherwise touches your AI conversation —
+  even mid-turn. It keeps running in the background exactly as it was, including its own
+  crash-auto-restart if it happens to exit while you're looking at the shell, and switching back
+  reattaches to that same conversation with nothing lost.
 
 ### Running more than one Regular Terminal instance
 
 A session isn't limited to a single Regular Terminal — you can open as many independent shell
 instances as you need, side by side.
 
-- Whenever a session is in Regular Terminal mode, an **open a new instance** button sits in the
-  bottom bar next to the mode toggle. Press it (or use **Ctrl+Shift+T** / **Cmd+Shift+T** on
-  macOS while the terminal has focus) to start another independent shell, scoped to the same
-  session working directory as the first. The button is there even when only one instance is
-  open, so you can always go from one to two.
+- An **open a new instance** button — the "+" — sits in the bottom bar at the end of the numbered
+  tabs. Press it (or use **Ctrl+Shift+T** / **Cmd+Shift+T** on macOS while the terminal has focus)
+  to start another independent shell, scoped to the same session working directory as the first.
+  The button is there even when only one instance is open, so you can always go from one to two.
 - The keyboard shortcut only opens a new instance while the session is already showing a Regular
-  Terminal — pressing it in AI CLI mode does nothing and does not switch modes.
+  Terminal — pressing it while the AI tab is marked does nothing and does not change tabs.
 - Each instance is a fully separate shell process: running a long command in one never affects
-  the others, and closing or restarting one instance never touches its siblings or your `claude`
+  the others, and closing or restarting one instance never touches its siblings or your AI
   conversation.
-- Once a session has two or more open instances, a numbered switcher appears in the bottom bar
-  (numbered in the order you opened them) — the currently active one is highlighted. Click any
-  entry to bring that instance's shell to the front; the one you switch away from keeps running
-  untouched in the background. With only one instance open, the switcher stays hidden — the
-  terminal looks exactly as it did before this feature.
-- The primary AI CLI/Regular toggle always shows whichever instance was last active when you
-  switch back into Regular mode — not an arbitrary one.
-- Each entry in the switcher has its own close button. Closing a background instance leaves
-  everything else exactly as it was. Closing the instance you're currently looking at
-  automatically brings up the next instance in the list (or the previous one, if you closed the
-  last one in the list) — the pane is never left showing a closed instance. Closing your very
-  last remaining instance falls back to AI CLI mode, same as today's single-terminal behavior.
-- Each instance tracks its own running/exited state independently, including instances you're
-  not currently looking at. If a background instance exits (or crashes) while you're viewing a
-  different one, its switcher entry gains its own **restart** button — press it to start a fresh
-  shell for just that instance, without switching to it first and without touching any sibling
-  instance or your `claude` conversation.
+- Each instance tracks its own running/exited state independently, including ones you're not
+  currently looking at — see **the tab strip** below, which is where that state is reported.
+- Closing a background instance leaves everything else exactly as it was. Closing the instance
+  you're currently looking at automatically brings up the next one in the list (or the previous one,
+  if you closed the last) — the pane is never left showing a closed instance. Closing your very last
+  instance marks the AI tab.
+- Coming back from the AI tab always returns you to whichever instance was last active — not an
+  arbitrary one.
+
+### The tab strip
+
+The bottom bar carries a **tab strip** of everything the session can show you: one numbered tab per
+open Regular Terminal instance, in the order you opened them, and then the AI conversation's own tab
+at the right-hand end.
+
+**Exactly one tab is always marked**, and it is the one whose content the pane is displaying — so
+the strip tells you where you are without your having to press anything. Click a tab to bring that
+pane to the front; whatever you switch away from keeps running untouched in the background.
+
+The strip is **always there**, even in a session with one Regular Terminal or none at all. A
+brand-new session shows a single tab — the AI conversation's — marked, because that is what you are
+looking at.
+
+#### The AI conversation's tab
+
+It sits at the right-hand end and stays there as you open and close instances, so it is always one
+press away. Three things make it different from its neighbours, and all three are deliberate:
+
+- **It has no close button.** A session has exactly one AI CLI process, and ending it is not
+  something this control offers — by any press. Every instance tab has one; the AI tab keeps the
+  space and leaves it empty, so all the tabs stay the same size and the strip still reads as a strip.
+- **Clicking it only switches the view.** It never starts, stops or restarts anything — not
+  the AI CLI, and not any terminal instance — and clicking it while you are already looking at the AI
+  conversation does nothing at all. Switching away and back returns you to the same terminal
+  instance you left.
+- **Its right-click menu is a terminal tab's minus Close** (see below).
+
+#### What a right-click offers
+
+**Right-click any tab** for what you can do to that process. On an instance tab that is **Restart**
+(offered only while that instance's own shell is stopped) and **Close**; on the AI tab it is the
+same menu without Close. The menu acts on the tab you clicked, not on whichever pane you happen to
+be looking at.
+
+If a right-click **does nothing**, that is the answer rather than a fault: the only thing the menu
+could have offered is a restart, the process is running, and an empty panel would say there is
+something to do here and then withhold it.
+
+#### Which processes aren't running
+
+**A tab whose process isn't running wears a small red ring** at its leading edge. It means "there is
+something you can do here" — right-click that tab and **Restart** will be waiting. It appears on the
+AI conversation's tab in exactly the same place and for the same reason, so one glance along the
+strip tells you what is and isn't running.
+
+- It shows for a process that has **stopped** — exited, crashed, or never started — and **not** for
+  one that is still starting up. A starting process is on its way and there is nothing to do to it;
+  the mark would only send you to a right-click that does nothing.
+- It is independent of which tab is selected, so a tab can be both the one you're looking at and the
+  one that isn't running, and it says both.
+- It appears on a **background** instance without your having to select it. If one exits or crashes
+  while you're viewing a different one, its tab gains the ring where you can see it — right-click
+  and choose **Restart** to start a fresh shell for just that instance, without switching to it
+  first, and without touching any sibling or your AI conversation.
+
+#### When there are more tabs than fit
+
+Past about five open instances the tabs need more width than the bar can give them. They **scroll**
+rather than shrink: turn the mouse wheel over the strip to move along it. No tab is ever made
+narrower, ellipsised or dropped, and the "+" and the AI tab keep their full size and position
+however many instances are open — the AI tab in particular stays one press away rather
+than being something you have to scroll to.
+
+- **A faded edge means there is more that way.** When the tab you are *looking at* is the one out of
+  sight, that edge takes the marked tab's own accent colour instead — so the fade tells you not just
+  that there is more, but which way the pane you are in has gone.
+- **Selecting a tab scrolls it into view**, so you never end up looking at a pane whose tab you
+  cannot see. If you then scroll away by hand, it stays where you put it.
 
 ## Sessions in the background
 
 Switching to a different project **does not stop your sessions**. When you change the active
 project — from the top-bar project switcher, the **Known projects** list, or the folder browser —
-the project you leave keeps all its sessions running in the background: their `claude` processes
+the project you leave keeps all its sessions running in the background: their AI CLI processes
 stay alive and their output keeps accumulating while you are away.
 
 When you switch back, the project's sessions are still running and the session that was in the
@@ -512,11 +657,11 @@ project a short **notice** tells you a background session was restarted — the 
 silently. Dismiss it with its **Dismiss** button.
 
 > Background sessions live for as long as the app is running. Quitting the app stops every session;
-> on the next launch they are restored and resume via `claude --resume` when selected.
+> on the next launch they are restored and resume the same conversations when selected.
 
 ## Colored, real-terminal output
 
-The embedded terminal renders `claude`'s output like a real terminal, not as flat text:
+The embedded terminal renders the AI CLI's output like a real terminal, not as flat text:
 
 - **Colors and styles** — ANSI foreground/background colors (the standard 16, bright, 256-color,
   and 24-bit truecolor) and text styles (bold, dim, italic, underline, strikethrough, and
@@ -524,7 +669,7 @@ The embedded terminal renders `claude`'s output like a real terminal, not as fla
 - **Theme-aware defaults** — when output specifies no explicit color, the terminal's default
   text and background follow the app's light/dark theme and update when you switch themes. The 16
   ANSI colors use a fixed conventional palette so programs look as their authors intended.
-- **Full-screen interfaces** — `claude`'s interactive UI and other full-screen (alternate-screen)
+- **Full-screen interfaces** — the CLI's interactive UI and other full-screen (alternate-screen)
   programs redraw cleanly, with the cursor shown at its current position.
 - **Focus** — the terminal you are looking at is where the keyboard goes, unless you have handed
   it away or something that types has taken it (a colored border marks the focused terminal).
@@ -533,20 +678,20 @@ The embedded terminal renders `claude`'s output like a real terminal, not as fla
 
 Start a session, or select one in the sidebar, and its terminal is focused right away — just type,
 no click needed. (You can also click the terminal to focus it, e.g. after releasing focus.)
-Keystrokes stream straight to `claude` as you press them, exactly like a standalone terminal:
+Keystrokes stream straight to the CLI as you press them, exactly like a standalone terminal:
 
-- **Everything reaches `claude`**: printable characters, Enter, Backspace, Tab, arrow keys,
+- **Everything reaches the CLI**: printable characters, Enter, Backspace, Tab, arrow keys,
   Home/End/PageUp/PageDown, Insert/Delete, function keys, and control chords (Ctrl+C to
   interrupt, Ctrl+D, Ctrl+R, Ctrl+U, …). There is no "type a line and press Enter" box any more.
 - **Paste** with the platform paste shortcut (Ctrl+Shift+V, or Cmd+V on macOS); the text is
-  inserted into `claude` as input.
+  inserted into the CLI as input.
 - **Select** text by dragging with the mouse (double-click selects a word, triple-click a line);
   the selection is copied to the clipboard automatically on release. **Copy** the current
   selection with Ctrl+Shift+C (Cmd+C on macOS); **middle-click** pastes.
 - **Mouse-driven programs**: when the running program turns on mouse reporting, mouse clicks are
   forwarded to it; hold **Shift** while dragging to select text instead.
-- **Keys route to `claude` only while the terminal is focused.** When focused, every key —
-  including Escape and shortcuts the app would otherwise use — goes to `claude`; when not focused,
+- **Keys route to the terminal's process only while the terminal is focused.** When focused, every
+  key — including Escape and shortcuts the app would otherwise use — goes to it; when not focused,
   those keys drive the application instead. Input is only delivered while the session's process
   is running (otherwise keystrokes are ignored and the header shows the session status).
 - **Leaving focus**: press **Ctrl+Shift+E** (Cmd+Shift+E on macOS). Releasing focus never
@@ -558,7 +703,7 @@ Keystrokes stream straight to `claude` as you press them, exactly like a standal
 ### One press does what you pressed
 
 Every control in the window acts on the **first** press, whatever the terminal was holding. Press
-the mode toggle and the mode switches; press a session in the sidebar and it opens; press a toolbar
+a tab and the pane switches to it; press a session in the sidebar and it opens; press a toolbar
 button and it fires. You never press something twice — once to get out of the terminal, once to
 actually use it.
 
@@ -619,7 +764,7 @@ program at the cell you pressed. No press is spent purely on focusing.
 
 ## Sizing, resize & scrollback
 
-- The terminal tells `claude` how many rows and columns are actually visible, so its interface
+- The terminal tells the CLI how many rows and columns are actually visible, so its interface
   lays out to fit. **Resizing** the window or dragging the sidebar reflows the terminal and the
   running interface to the new size.
 - **Scroll** with the mouse wheel *or* a touchpad to move back through earlier output (up to the

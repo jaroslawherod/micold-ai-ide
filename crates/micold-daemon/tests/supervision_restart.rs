@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use alacritty_terminal::grid::Dimensions;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::WireLifecycle;
-use micold_core::session::{Session, SessionId, SessionLocation, TerminalMode};
+use micold_core::session::{AiCli, Session, SessionId, SessionLocation, TerminalMode};
 use micold_core::settings::FakeSettingsStore;
 use micold_core::store::FakeProjectStore;
 use micold_core::workspace::Workspace;
@@ -35,7 +35,7 @@ fn sh(script: &str) -> CommandBuilder {
 
 /// A daemon hosting one `Regular`-mode session at the project root, and its id.
 fn state_with_regular_session(project: &Path) -> (Arc<DaemonState>, SessionId) {
-    let mut session = Session::start_new(SessionLocation::Default);
+    let mut session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     session.set_mode(TerminalMode::Regular);
     let id = session.id;
     let workspace = Workspace {

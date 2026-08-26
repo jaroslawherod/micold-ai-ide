@@ -41,6 +41,33 @@ impl fmt::Display for SessionId {
     }
 }
 
+/// Which AI coding CLI backs a session (feature 026, FR-001).
+///
+/// A closed enum, not a string: the set of supported CLIs is known at compile time, and "some
+/// string a session record happens to contain" is not a provider (Principle V). It carries no
+/// behaviour — that lives behind [`crate::provider::AiCliProvider`], which
+/// [`AiCli::provider`] resolves this name to. This is the name you persist and look up.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+pub enum AiCli {
+    /// Anthropic's `claude` CLI — the default, and every session written before feature 026
+    /// (FR-003, FR-013). Being the `Default` is what satisfies both, by never writing anything
+    /// down.
+    #[default]
+    ClaudeCode,
+    /// GitHub's `copilot` CLI.
+    Copilot,
+}
+
+impl AiCli {
+    /// Every variant, in the order the application offers them.
+    ///
+    /// The UI's menus are built from this, so the order is not incidental — it is what the user
+    /// sees. Kept sorted, so this and any `BTreeSet<AiCli>` agree.
+    pub const ALL: [AiCli; 2] = [AiCli::ClaudeCode, AiCli::Copilot];
+}
+
 /// The sidebar label for a session — extracted from `claude`, never user-entered (FR-011a).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SessionLabel {
@@ -106,15 +133,9 @@ pub enum TerminalMode {
     Regular,
 }
 
-impl TerminalMode {
-    /// The mode a single toggle press switches *to*.
-    pub const fn other(self) -> TerminalMode {
-        match self {
-            TerminalMode::AiCli => TerminalMode::Regular,
-            TerminalMode::Regular => TerminalMode::AiCli,
-        }
-    }
-}
+// `TerminalMode::other()` — "the mode a single toggle press switches *to*" — was removed with the
+// toggle in feature 027. Nothing else ever wanted it: a tab names the mode it selects, so every
+// remaining caller assigns a mode outright rather than asking what the opposite one is.
 
 /// Runtime state of a session's shell process (feature 010). Deliberately **not** a copy of
 /// [`SessionLifecycle`] — no crash-loop, no `Failed`; restart is always manual (spec
@@ -219,6 +240,17 @@ pub struct Session {
     pub id: SessionId,
     /// Where this session's working directory lives — a worktree or the project root.
     pub location: SessionLocation,
+    /// Which AI CLI backs this session (feature 026, FR-001). Set at construction by **both**
+    /// constructors and never changed afterwards: there is no setter, and no message that
+    /// mutates it. That is what makes FR-005 — "changing the default affects nothing already
+    /// open" — true by shape rather than by discipline.
+    ///
+    /// The shape only holds because it is a constructor *argument*. This struct's fields are
+    /// `pub`, and two callers already write to them after construction (`store.rs`'s
+    /// `into_session` sets `archived`; the client's `reconcile_catalog` sets `lifecycle` and
+    /// `activity`, from another crate) — so a `provider` assigned the same way would satisfy the
+    /// field list while contradicting the sentence above it.
+    pub provider: AiCli,
     /// Sidebar label (from `claude`).
     pub label: SessionLabel,
     /// Runtime state of the AI CLI process (transient — not persisted).
@@ -251,10 +283,14 @@ pub struct Session {
 impl Session {
     /// A brand-new session at `location`, starting immediately (FR-010). Always starts
     /// attached to the AI CLI (feature 010 FR-010 — today's only behavior for a fresh session).
-    pub fn start_new(location: SessionLocation) -> Self {
+    ///
+    /// `provider` is the resolved default-or-override the caller already decided (feature 026,
+    /// FR-004); it is fixed for the session's whole life from here.
+    pub fn start_new(location: SessionLocation, provider: AiCli) -> Self {
         Self {
             id: SessionId::new(),
             location,
+            provider,
             label: SessionLabel::Pending,
             lifecycle: SessionLifecycle::Starting,
             activity: crate::protocol::messages::ActivitySignal::Unknown,
@@ -267,6 +303,9 @@ impl Session {
     }
 
     /// A persisted session restored from disk — `Idle` until reopened (FR-020, FR-023a).
+    /// `provider` is the persisted value too (feature 026, FR-012/FR-013), which is why it is an
+    /// argument here and not only on [`Session::start_new`]: this is how a session comes back
+    /// from the store *and* how a daemon-reported one enters the client.
     /// `mode` is the persisted value (feature 010 FR-011); `shells` is always empty since no
     /// process survives an app restart (feature 011 FR-017 — at most one instance is ever
     /// restored, lazily, on first switch into Regular mode).
@@ -275,10 +314,12 @@ impl Session {
         location: SessionLocation,
         label: SessionLabel,
         mode: TerminalMode,
+        provider: AiCli,
     ) -> Self {
         Self {
             id,
             location,
+            provider,
             label,
             lifecycle: SessionLifecycle::Idle,
             activity: crate::protocol::messages::ActivitySignal::Unknown,

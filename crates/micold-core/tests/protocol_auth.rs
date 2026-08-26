@@ -150,16 +150,21 @@ fn the_two_new_refusals_are_distinct_values() {
 
 /// P-6: the version moved, and it moved *with* these fields rather than ahead of them.
 ///
-/// Six was the sandbox handshake (the auth token and the stale-dev-image refusal). Seven is
-/// `ClientMsg::RepoRootQuery` / `OperationResult::RepoRoot`, which moves the open-project gate to
-/// whichever side can actually see the folder (feature 027, research R2 part 2).
+/// This feature's whole wire delta is one number: the sandbox handshake (the auth token, the build
+/// fingerprint and the stale-dev-image refusal) and `ClientMsg::RepoRootQuery` /
+/// `OperationResult::RepoRoot`, which moves the open-project gate to whichever side can actually
+/// see the folder (research R2 part 2).
+///
+/// It was 6 and then 7 while the feature was in flight, and is 8 on the merge: feature 026 took 7
+/// on main for its own five additions, and both wire changes are present here, so both cannot be
+/// 7. See the constant's own comment.
 ///
 /// The literal is the point. `SCHEMA_HASH` is generated and moves on its own; this integer does
 /// not, so a message added without touching it ships a wire change under an unchanged version and
 /// two builds that disagree will shake hands anyway. Failing here is the reminder.
 #[test]
-fn the_protocol_version_is_seven() {
-    assert_eq!(PROTOCOL_VERSION, 7);
+fn the_protocol_version_is_eight() {
+    assert_eq!(PROTOCOL_VERSION, 8);
 }
 
 /// The daemon finds its token where the image says it will. If these two drift, a sandbox starts

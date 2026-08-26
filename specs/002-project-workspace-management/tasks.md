@@ -173,8 +173,16 @@ compiles them.
 - [X] T043 [P] Cross-cutting docs review and `docs/README.md` index/navigation update (no per-feature docs deferred here — those shipped in their stories).
 - [X] T044 [P] Add edge-case unit tests: path-canonicalization equivalence dedupes `/foo` vs `/foo/` (FR-012); `up()` at a drive/`/` boundary presents roots (Windows drive letters vs `/`) (research R5); corrupt-store `.bak` preservation (research R8), in `tests/`.
 - [X] T045 Run `cargo fmt --all -- --check`, `cargo clippy --no-default-features --all-targets -- -D warnings`, and `cargo clippy --features gui --all-targets -- -D warnings` clean.
-- [ ] T046 Verify `cargo test --no-default-features --all-targets` and `cargo build --features gui` pass on Linux, macOS, and Windows via CI (Principle VI, SC-010).
-- [ ] T047 Run the `quickstart.md` manual walkthrough (steps 1–12) on each platform and confirm parity.
+- [X] T046 Verify `cargo test --no-default-features --all-targets` and `cargo build --features gui` pass on Linux, macOS, and Windows via CI (Principle VI, SC-010). *(2026-08-20: satisfied by the three-OS CI matrix added in `10a1fe7` (2026-07-20) — `.github/workflows/ci.yml` builds the whole workspace and runs the render-free core suite plus the component gates on ubuntu/macos/windows for every code-affecting change, and has been green on all three since. Latest run: [32302430171](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/32302430171). The full GUI suite and clippy stay Linux-only by design — that is the only runner with the iced system deps.)*
+- [X] T047 Run the `quickstart.md` manual walkthrough (steps 1–12) on each platform and confirm parity.
+  Run 2026-08-21 on Linux — [evidence](./evidence/T047-manual-walkthrough.md). Steps 1–4 and 6–11
+  pass, plus both spot checks. Step 5 is stale text (FR-003 was amended to git-only on
+  2026-07-20) and the run closes the silent-refusal defect that alignment note left open — the
+  refusal is now a visible notification. Step 12 is partial. Two defects found and filed,
+  neither blocking: [BUG-003](./bugs/BUG-003.md) (reopening from the list never updates the
+  persisted last-active, so a relaunch restores the wrong project) and
+  [BUG-004](./bugs/BUG-004.md) (boot activates a last-active project whose folder is gone —
+  FR-023). macOS/Windows parity remains unrun and is not reachable from here.
 
 ---
 
@@ -339,9 +347,10 @@ After Foundational: one developer takes US1 (unblocks the shared selector/worksp
 - **T046 (open)**: `cargo test --no-default-features --all-targets` + `cargo build
   --features gui` + fmt + clippy verified on **Linux** locally. The
   `.github/workflows/ci.yml` matrix (macOS + Windows) has not executed — it runs on push.
-- **T047 (open)**: app boot + window creation verified on Linux (no panic); the full
-  12-step manual click-through and macOS/Windows parity remain to be run (no headless UI
-  driving in this environment). Every step's underlying logic is covered by the unit tests.
+- **T047 (done on Linux, 2026-08-21)**: the note above was written when headless UI driving was
+  believed impossible here; it is not (see the repo's `visual-pass` skill). The 12-step
+  click-through ran on Xvfb + lavapipe — [evidence](./evidence/T047-manual-walkthrough.md).
+  macOS/Windows parity is still unrun.
 
 **Bugfix**: 2026-07-21 — BUG-001 Added Phase 8 (T048–T053): split the shared `projects.json`
 catalog from per-project state (sessions, worktree names, mode) so a storage fault is isolated to

@@ -4,7 +4,7 @@ use micold_client::app::{Message, State};
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::project::{Availability, Project};
-use micold_core::session::{Session, SessionLocation};
+use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
@@ -35,11 +35,19 @@ fn state_with_active_project() -> State {
     // A session on feat-a.
     state.workspace.sessions.insert(
         path,
-        vec![Session::start_new(SessionLocation::Worktree(
-            "feat-a".to_string(),
-        ))],
+        vec![Session::start_new(
+            SessionLocation::Worktree("feat-a".to_string()),
+            AiCli::ClaudeCode,
+        )],
     );
     state
+}
+
+/// Change the current session the way the root does (T067a-6): the commit of the outgoing row is
+/// an outcome now, so dropping it would assert against half a move.
+fn set_current(state: &mut State, next: Option<micold_core::session::SessionId>) {
+    let outcomes = state.set_current_session(next);
+    micold_client::app::drain(outcomes, |o| micold_client::app::interpret(state, o));
 }
 
 #[test]
@@ -126,9 +134,9 @@ fn node<'a>(
 
 #[test]
 fn worktree_node_exposes_type_and_issue_tags() {
-    let state = state_with_named_worktrees(&[("feat-abc-123-login-page", WorktreeStatus::Valid)]);
+    let state = state_with_named_worktrees(&[("feat-abc-123_login-page", WorktreeStatus::Valid)]);
     let tree = state.worktree_tree();
-    let n = node(&tree, "feat-abc-123-login-page");
+    let n = node(&tree, "feat-abc-123_login-page");
     assert_eq!(
         n.tags,
         vec![
@@ -177,12 +185,12 @@ fn worktree_node_type_only_and_untyped() {
 #[test]
 fn worktree_node_display_name_derived_when_no_override() {
     let state = state_with_named_worktrees(&[
-        ("feat-abc-123-login-page", WorktreeStatus::Valid),
+        ("feat-abc-123_login-page", WorktreeStatus::Valid),
         ("my-experiment", WorktreeStatus::Valid),
     ]);
     let tree = state.worktree_tree();
     assert_eq!(
-        node(&tree, "feat-abc-123-login-page").display_name,
+        node(&tree, "feat-abc-123_login-page").display_name,
         "Login page"
     );
     assert_eq!(node(&tree, "my-experiment").display_name, "My experiment");
@@ -219,9 +227,9 @@ fn dirs(tree: &[micold_client::features::sidebar::WorktreeNode]) -> Vec<String> 
 
 fn filtered_state() -> State {
     state_with_named_worktrees(&[
-        ("feat-abc-123-login", WorktreeStatus::Valid),
+        ("feat-abc-123_login", WorktreeStatus::Valid),
         ("fix-crash", WorktreeStatus::Valid),
-        ("fix-def-9-thing", WorktreeStatus::Valid),
+        ("fix-def-9_thing", WorktreeStatus::Valid),
         ("my-experiment", WorktreeStatus::Valid),
     ])
 }
@@ -240,7 +248,7 @@ fn type_filter_selects_only_that_type() {
     )));
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
-        vec!["fix-crash", "fix-def-9-thing"]
+        vec!["fix-crash", "fix-def-9_thing"]
     );
 }
 
@@ -270,7 +278,7 @@ fn filters_combine_with_or() {
     // feat + untyped ⇒ the feat worktree and the non-conforming one.
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
-        vec!["feat-abc-123-login", "my-experiment"]
+        vec!["feat-abc-123_login", "my-experiment"]
     );
 }
 
@@ -280,7 +288,7 @@ fn has_issue_filter_selects_issue_bearing() {
     state.update(Message::SidebarFilterToggled(TagFilter::HasIssue));
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
-        vec!["feat-abc-123-login", "fix-def-9-thing"]
+        vec!["feat-abc-123_login", "fix-def-9_thing"]
     );
 }
 
@@ -319,10 +327,12 @@ fn filter_recomputes_after_delete(/* FR-028 / C1 */) {
         .filter(|w| w.dir_name != "fix-crash")
         .cloned()
         .collect();
-    state.set_worktrees(surviving);
+    micold_client::app::drain(state.set_worktrees(surviving), |o| {
+        micold_client::app::interpret(&mut state, o)
+    });
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
-        vec!["fix-def-9-thing"]
+        vec!["fix-def-9_thing"]
     );
 }
 
@@ -381,7 +391,10 @@ fn default_sessions_are_attached_to_the_default_entry_only() {
         .sessions
         .get_mut(&path)
         .unwrap()
-        .push(Session::start_new(SessionLocation::Default));
+        .push(Session::start_new(
+            SessionLocation::Default,
+            AiCli::ClaudeCode,
+        ));
 
     let entries = state.sidebar_entries();
     let SidebarEntry::Default(default_node) = &entries[0] else {
@@ -577,9 +590,10 @@ fn a_session_in_a_hidden_worktree_renders_nowhere_but_is_not_pruned() {
     let path = state.workspace.active.clone().unwrap();
     state.workspace.sessions.insert(
         path,
-        vec![Session::start_new(SessionLocation::Worktree(
-            agent_dir.clone(),
-        ))],
+        vec![Session::start_new(
+            SessionLocation::Worktree(agent_dir.clone()),
+            AiCli::ClaudeCode,
+        )],
     );
 
     // Rendered nowhere: no row carries it.
@@ -698,10 +712,13 @@ fn no_other_location_is_opened_on_the_users_behalf() {
 fn replacing_the_worktree_list_does_not_close_the_current_sessions_row() {
     let mut state = state_with_current_session();
 
-    state.set_worktrees(vec![
-        worktree("feat-a", WorktreeStatus::Valid),
-        worktree("feat-c", WorktreeStatus::Valid),
-    ]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![
+            worktree("feat-a", WorktreeStatus::Valid),
+            worktree("feat-c", WorktreeStatus::Valid),
+        ]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
 
     let feat_a = state
         .worktree_tree()
@@ -719,7 +736,10 @@ fn replacing_the_worktree_list_does_not_close_the_current_sessions_row() {
 fn a_current_session_whose_worktree_is_gone_opens_nothing() {
     let mut state = state_with_current_session();
 
-    state.set_worktrees(vec![worktree("feat-b", WorktreeStatus::Valid)]);
+    micold_client::app::drain(
+        state.set_worktrees(vec![worktree("feat-b", WorktreeStatus::Valid)]),
+        |o| micold_client::app::interpret(&mut state, o),
+    );
 
     assert!(
         state.worktree_tree().into_iter().all(|n| !n.expanded),
@@ -732,7 +752,7 @@ fn a_current_session_whose_worktree_is_gone_opens_nothing() {
 fn a_current_session_in_the_project_root_opens_the_default_row() {
     let mut state = state_with_active_project();
     let path = state.workspace.active.clone().unwrap();
-    let default_session = Session::start_new(SessionLocation::Default);
+    let default_session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     let id = default_session.id;
     state
         .workspace
@@ -792,7 +812,10 @@ fn state_with_filterable_worktrees(dir: &str) -> State {
         // agent-owned and so hidden by default (feature 014).
         agent_worktree("00112233445566aa", WorktreeStatus::Valid),
     ];
-    let session = Session::start_new(SessionLocation::Worktree(dir.to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree(dir.to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
     state.active_session = Some(id);
@@ -926,11 +949,14 @@ fn the_exemption_ends_when_the_location_stops_holding_the_current_session() {
         .insert(TagFilter::Type(ConventionalType::Feat));
     assert!(listed(&state).contains(&"fix-b".to_string()));
 
-    let moved = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let moved = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let moved_id = moved.id;
     let path = state.workspace.active.clone().unwrap();
     state.workspace.sessions.get_mut(&path).unwrap().push(moved);
-    state.set_current_session(Some(moved_id));
+    set_current(&mut state, Some(moved_id));
 
     assert!(
         !listed(&state).contains(&"fix-b".to_string()),
@@ -959,7 +985,10 @@ fn an_exempt_row_conjures_no_filter_chip() {
 fn exactly_one_session_row_carries_the_mark_when_a_location_holds_several() {
     let mut state = state_with_active_project();
     let path = state.workspace.active.clone().unwrap();
-    let sibling = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let sibling = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let sibling_id = sibling.id;
     state
         .workspace
@@ -995,7 +1024,7 @@ fn exactly_one_session_row_carries_the_mark_when_a_location_holds_several() {
 #[test]
 fn nothing_is_marked_when_no_session_is_current() {
     let mut state = state_with_active_project();
-    state.set_current_session(None);
+    set_current(&mut state, None);
 
     let node = state
         .worktree_tree()
