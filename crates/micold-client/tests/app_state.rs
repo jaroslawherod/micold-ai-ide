@@ -2,6 +2,7 @@
 
 use micold_client::app::{on_escape, Message, State};
 use micold_client::features::settings::Msg as SettingsMsg;
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::window::FieldId;
 use micold_client::features::window::Msg as WindowMsg;
 use micold_client::ui::terminal::StripTab;
@@ -634,15 +635,17 @@ fn toggling_reveal_changes_only_that_field() {
     // FR-010d: the reveal control and the tag filters are independent. Clobbering the filters
     // would silently discard the user's filtering work every time they peeked at agent worktrees.
     let mut state = state_with_worktree_and_session("feat-x");
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Feat,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Feat),
     )));
-    state.update(Message::WorktreeExpansionToggled("feat-x".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-x".to_string(),
+    )));
     let filters_before = state.sidebar_filters.clone();
     let expanded_before = state.expanded.clone();
     let dialog_before = open_dialog(&state);
 
-    state.update(Message::ShowAgentWorktreesToggled);
+    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
 
     assert!(state.show_agent_worktrees);
     assert_eq!(state.sidebar_filters, filters_before);
@@ -660,9 +663,9 @@ fn two_toggles_restore_the_prior_list() {
         .map(|n| n.worktree.dir_name.clone())
         .collect();
 
-    state.update(Message::ShowAgentWorktreesToggled);
+    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
     assert_eq!(state.worktree_tree().len(), 2, "revealed");
-    state.update(Message::ShowAgentWorktreesToggled);
+    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
 
     let after: Vec<String> = state
         .worktree_tree()
@@ -686,7 +689,7 @@ fn switching_projects_resets_the_reveal_control() {
         availability: Availability::Available,
     });
 
-    state.update(Message::ShowAgentWorktreesToggled);
+    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
     assert!(state.show_agent_worktrees);
 
     assert!(switch(&mut state, &other));
@@ -1867,7 +1870,9 @@ fn collapsing_the_revealed_row_closes_it_and_it_stays_closed() {
         "precondition: the row is open because it holds the current session"
     );
 
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
 
     assert!(
         !state.location_open(&location),
@@ -1902,8 +1907,12 @@ fn re_expanding_a_suppressed_row_lifts_the_suppression() {
     let mut state = state_with_current_session_in("feat-a");
     let location = SessionLocation::Worktree("feat-a".to_string());
 
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
 
     assert!(
         state.location_open(&location),
@@ -1933,7 +1942,7 @@ fn the_default_rows_twisty_suppresses_the_same_way() {
     state.active_session = Some(id);
     assert!(state.location_open(&SessionLocation::Default));
 
-    state.update(Message::DefaultExpansionToggled);
+    state.update(Message::Sidebar(SidebarMsg::DefaultExpansionToggled));
 
     assert!(
         !state.location_open(&SessionLocation::Default),
@@ -1971,7 +1980,9 @@ fn a_location_that_stops_holding_the_current_session_stays_open() {
 fn a_row_the_user_closed_is_not_re_opened_by_the_commit() {
     let mut state = state_with_current_session_in("feat-a");
     let location = SessionLocation::Worktree("feat-a".to_string());
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
 
     set_current(&mut state, None);
 
@@ -2000,7 +2011,9 @@ fn clearing_the_current_session_arms_no_scroll() {
 #[test]
 fn a_change_of_current_session_lifts_a_suppression_made_against_the_old_one() {
     let mut state = state_with_current_session_in("feat-a");
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
     assert_eq!(state.reveal_suppressed_for, state.active_session);
 
     let next = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));

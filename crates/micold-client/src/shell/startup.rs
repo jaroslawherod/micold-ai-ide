@@ -27,6 +27,7 @@
 //! subprocess, git discovery, the OS theme — and those move in T051–T054. Until then it reaches
 //! back up to the crate root for them, which is why the imports below are `crate::`.
 
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
@@ -138,7 +139,7 @@ fn boot() -> (App, Task<Message>) {
     match filters_from_env_value(std::env::var(FILTER_ENV_VAR).ok().as_deref()) {
         Ok(filters) => {
             for filter in filters {
-                core.update(Message::SidebarFilterToggled(filter));
+                core.update(Message::Sidebar(SidebarMsg::FilterToggled(filter)));
             }
         }
         Err(message) => {

@@ -16,11 +16,14 @@
 //! with what is under it — so the derivation is asserted here as a pure function of one offset.
 
 use micold_client::app::{scroll_offset_px, Message, State};
+use micold_client::features::sidebar::Msg as SidebarMsg;
 
 /// A state with the sidebar scrolled to `offset`.
 fn scrolled_to(reported: f32) -> State {
     let mut state = State::default();
-    state.update(Message::SidebarScrolled(scroll_offset_px(reported)));
+    state.update(Message::Sidebar(SidebarMsg::Scrolled(scroll_offset_px(
+        reported,
+    ))));
     state
 }
 
@@ -51,7 +54,9 @@ fn returning_to_the_top_lowers_the_bar_again() {
     let mut state = scrolled_to(120.0);
     assert!(state.app_bar_elevated());
 
-    state.update(Message::SidebarScrolled(scroll_offset_px(0.0)));
+    state.update(Message::Sidebar(SidebarMsg::Scrolled(scroll_offset_px(
+        0.0,
+    ))));
     assert!(
         !state.app_bar_elevated(),
         "the bar stayed raised after the sidebar returned to the top"
@@ -83,14 +88,16 @@ fn an_unsettled_viewport_reads_as_the_top() {
 #[test]
 fn the_flag_follows_the_offset_and_not_the_last_unrelated_message() {
     let mut state = scrolled_to(80.0);
-    state.update(Message::SidebarToggled);
+    state.update(Message::Sidebar(SidebarMsg::Toggled));
     assert!(
         state.app_bar_elevated(),
         "an unrelated message cleared the app bar's elevation"
     );
 
-    state.update(Message::SidebarScrolled(scroll_offset_px(0.0)));
-    state.update(Message::SidebarToggled);
+    state.update(Message::Sidebar(SidebarMsg::Scrolled(scroll_offset_px(
+        0.0,
+    ))));
+    state.update(Message::Sidebar(SidebarMsg::Toggled));
     assert!(
         !state.app_bar_elevated(),
         "an unrelated message raised the app bar"

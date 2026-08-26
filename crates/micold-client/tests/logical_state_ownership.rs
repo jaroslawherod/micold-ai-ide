@@ -18,6 +18,7 @@
 use micold_client::app::{Message, State, SIDEBAR_MIN_WIDTH};
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::TagFilter;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
@@ -46,7 +47,7 @@ fn with_project() -> State {
 fn sidebar_visibility_is_application_owned() {
     let mut state = State::default();
     assert!(!state.sidebar_hidden);
-    state.update(Message::SidebarToggled);
+    state.update(Message::Sidebar(SidebarMsg::Toggled));
     assert!(state.sidebar_hidden, "the flag must live on State");
 }
 
@@ -55,7 +56,7 @@ fn sidebar_visibility_is_application_owned() {
 #[test]
 fn sidebar_width_is_application_owned_and_clamped_here() {
     let mut state = State::default();
-    state.update(Message::SidebarDragMoved(10));
+    state.update(Message::Sidebar(SidebarMsg::DragMoved(10)));
     assert_eq!(
         state.sidebar_width_px(),
         SIDEBAR_MIN_WIDTH,
@@ -102,9 +103,13 @@ fn open_menu_identity_is_application_owned() {
 #[test]
 fn expanded_nodes_are_application_owned() {
     let mut state = with_project();
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
     assert!(state.expanded.contains("feat-a"));
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
     assert!(!state.expanded.contains("feat-a"));
 }
 
@@ -114,9 +119,9 @@ fn expanded_nodes_are_application_owned() {
 fn tag_filters_are_application_owned() {
     let mut state = State::default();
     let feature = TagFilter::Type(ConventionalType::Feat);
-    state.update(Message::SidebarFilterToggled(feature));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feature)));
     assert!(state.sidebar_filters.contains(&feature));
-    state.update(Message::SidebarFilterToggled(feature));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feature)));
     assert!(!state.sidebar_filters.contains(&feature));
 }
 

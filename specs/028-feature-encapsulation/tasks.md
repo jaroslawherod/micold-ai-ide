@@ -106,7 +106,7 @@ reaches the 37-variant feature.
 - [X] T007 [US1] Nest `window` — 2 variants → `window::Msg` in `crates/micold-client/src/features/window.rs`
 - [X] T008 [US1] Nest `notifications` — 2 variants → `notifications::Msg` in `crates/micold-client/src/features/notifications.rs`
 - [X] T009 [US1] Nest `settings` — 10 variants → `settings::Msg` in `crates/micold-client/src/features/settings.rs`, with the effectful arms in `crates/micold-client/src/shell/settings.rs`
-- [ ] T010 [US1] Nest `sidebar` — 10 variants → `sidebar::Msg` in `crates/micold-client/src/features/sidebar.rs`
+- [X] T010 [US1] Nest `sidebar` — 10 variants → `sidebar::Msg` in `crates/micold-client/src/features/sidebar.rs`
 - [ ] T011 [US1] Nest `connection` — 12 variants → `connection::Msg` in `crates/micold-client/src/features/connection.rs` with the entry point in `crates/micold-client/src/shell/connection.rs` (shape B only); this is the task that exercises the two-shape rule on a 12-variant feature rather than discovering it on the 37-variant one
 - [ ] T012 [US1] Nest `worktree` — 18 variants → `worktree::Msg` in `crates/micold-client/src/features/worktree.rs`, **including `Message::TextCopyRequested`**, which is attributed to `worktree` despite its generic name: its single emit site is `crates/micold-client/src/ui/mod.rs:470` ([research.md](./research.md) §R2)
 - [ ] T013 [US1] Nest `project` — 19 variants → `project::Msg` in `crates/micold-client/src/features/project.rs`

@@ -41,6 +41,7 @@ pub(crate) mod worktree_rename;
 use crate::app::{Message, State};
 use crate::features::help::Msg as HelpMsg;
 use crate::features::notifications::Msg as NotificationsMsg;
+use crate::features::sidebar::Msg as SidebarMsg;
 use crate::icons::{icon_role, Icon, IconSurface};
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length, Subscription};
@@ -181,7 +182,7 @@ pub fn view<'a>(
         .open(!state.sidebar_hidden)
         .handle(
             material::ResizeHandle::new(roles)
-                .on_resize(|x| Message::SidebarDragMoved(x.max(0.0) as u16)),
+                .on_resize(|x| Message::Sidebar(SidebarMsg::DragMoved(x.max(0.0) as u16))),
         )
         .into();
         row![left, main]

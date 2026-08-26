@@ -16,6 +16,7 @@
 use micold_client::app::{route_key, KeyRouting, State};
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::window::Msg as WindowMsg;
 use micold_client::keymap::KeyOutput;
 use micold_core::session::SessionLocation;
@@ -613,8 +614,8 @@ fn keyboard_taking_surfaces() -> Vec<(&'static str, Message, Message)> {
         ),
         (
             "sidebar filter panel",
-            Message::SidebarFilterMenuToggled,
-            Message::SidebarFilterMenuToggled,
+            Message::Sidebar(SidebarMsg::FilterMenuToggled),
+            Message::Sidebar(SidebarMsg::FilterMenuToggled),
         ),
     ]
 }

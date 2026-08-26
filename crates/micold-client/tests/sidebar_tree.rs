@@ -1,6 +1,7 @@
 //! T017 — sidebar tree building + expand/collapse (FR-002/003).
 
 use micold_client::app::{Message, State};
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::project::{Availability, Project};
@@ -77,7 +78,9 @@ fn sessions_are_joined_to_their_worktree_by_dir_name() {
 #[test]
 fn toggling_expands_then_collapses() {
     let mut state = state_with_active_project();
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
     let expanded = state
         .worktree_tree()
         .into_iter()
@@ -86,7 +89,9 @@ fn toggling_expands_then_collapses() {
         .expanded;
     assert!(expanded);
 
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
     let collapsed = !state
         .worktree_tree()
         .into_iter()
@@ -99,7 +104,9 @@ fn toggling_expands_then_collapses() {
 #[test]
 fn reloading_worktrees_drops_stale_expansion_state() {
     let mut state = state_with_active_project();
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
     // Reload without feat-a.
     state.update(Message::WorktreesLoaded(vec![worktree(
         "feat-b",
@@ -242,8 +249,8 @@ fn empty_filter_shows_all() {
 #[test]
 fn type_filter_selects_only_that_type() {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Fix,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Fix),
     )));
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
@@ -256,24 +263,26 @@ fn filtered_tree_is_unaffected_by_the_filter_panels_open_state() {
     // Feature 009 FR-007/FR-008: showing/hiding the filter panel is purely a display change and
     // must never affect which worktrees are considered filtered.
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Fix,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Fix),
     )));
     let expected = dirs(&state.filtered_worktree_tree());
 
-    state.update(Message::SidebarFilterMenuToggled); // open
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled)); // open
     assert_eq!(dirs(&state.filtered_worktree_tree()), expected);
-    state.update(Message::SidebarFilterMenuToggled); // close
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled)); // close
     assert_eq!(dirs(&state.filtered_worktree_tree()), expected);
 }
 
 #[test]
 fn filters_combine_with_or() {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Feat,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Feat),
     )));
-    state.update(Message::SidebarFilterToggled(TagFilter::Untyped));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Untyped,
+    )));
     // feat + untyped ⇒ the feat worktree and the non-conforming one.
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
@@ -284,7 +293,9 @@ fn filters_combine_with_or() {
 #[test]
 fn has_issue_filter_selects_issue_bearing() {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::HasIssue));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::HasIssue,
+    )));
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
         vec!["feat-abc-123_login", "fix-def-9_thing"]
@@ -294,7 +305,9 @@ fn has_issue_filter_selects_issue_bearing() {
 #[test]
 fn untyped_filter_selects_non_conforming() {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Untyped));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Untyped,
+    )));
     assert_eq!(dirs(&state.filtered_worktree_tree()), vec!["my-experiment"]);
 }
 
@@ -312,8 +325,8 @@ fn available_filters_reflect_present_tags() {
 #[test]
 fn filter_recomputes_after_delete(/* FR-028 / C1 */) {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Fix,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Fix),
     )));
     assert_eq!(state.filtered_worktree_tree().len(), 2);
     // Delete one fix worktree. Confirming only dismisses the dialog — the daemon performs the
@@ -497,7 +510,7 @@ fn hidden_worktrees_are_not_reachable_as_action_targets() {
 fn revealing_adds_agent_rows_in_unchanged_order() {
     // US4 acceptance #1: the user's own rows are unaffected and unmoved; the agent rows join them.
     let mut state = mixed_state();
-    state.update(Message::ShowAgentWorktreesToggled);
+    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
     let listed = dirs(&state.worktree_tree());
     assert_eq!(listed.len(), 6);
     // Revealing must not reorder: the tree preserves `State::worktrees` order (which `reconcile()`
@@ -515,7 +528,7 @@ fn revealed_rows_carry_the_agent_badge() {
     // FR-010b: every revealed row is badged, unconditionally — not depending on its health, name,
     // or session count — so it can never be mistaken for the user's own work.
     let mut state = mixed_state();
-    state.update(Message::ShowAgentWorktreesToggled);
+    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
     let tree = state.worktree_tree();
     for hex in AGENT_HEXES {
         let n = node(&tree, &format!("agent-{hex}"));
@@ -534,20 +547,22 @@ fn tag_filters_apply_to_revealed_rows_the_same_way() {
     // FR-010d: revealed entries flow through the same `matches_filters()` call as everyone else.
     // An agent worktree carries no conventional type, so `Untyped` matches it and `feat` does not.
     let mut state = mixed_state();
-    state.update(Message::ShowAgentWorktreesToggled);
+    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
 
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Feat,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Feat),
     )));
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
         vec!["feat-a", "feat-b"]
     );
 
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Feat,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Feat),
     ))); // clear it
-    state.update(Message::SidebarFilterToggled(TagFilter::Untyped));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Untyped,
+    )));
     let untyped = dirs(&state.filtered_worktree_tree());
     for hex in AGENT_HEXES {
         assert!(untyped.contains(&format!("agent-{hex}")));
@@ -640,8 +655,8 @@ fn hiding_does_not_disturb_the_underlying_worktree_list() {
 #[test]
 fn filter_recomputes_after_rename(/* FR-028 / C1 */) {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Fix,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Fix),
     )));
     // Renaming changes only the display name; tags (and thus the filter result) are unchanged.
     state.update(Message::WorktreeRenameStarted("fix-crash".to_string()));

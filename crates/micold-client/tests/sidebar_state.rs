@@ -4,6 +4,7 @@ use micold_client::app::{
     on_escape, Message, State, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
 };
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
@@ -41,9 +42,9 @@ fn defaults_visible_with_default_width() {
 #[test]
 fn toggling_hides_and_shows() {
     let mut state = State::default();
-    state.update(Message::SidebarToggled);
+    state.update(Message::Sidebar(SidebarMsg::Toggled));
     assert!(state.sidebar_hidden);
-    state.update(Message::SidebarToggled);
+    state.update(Message::Sidebar(SidebarMsg::Toggled));
     assert!(!state.sidebar_hidden);
 }
 
@@ -53,7 +54,7 @@ fn toggling_hides_and_shows() {
 #[test]
 fn a_reported_width_is_adopted() {
     let mut state = State::default();
-    state.update(Message::SidebarDragMoved(250));
+    state.update(Message::Sidebar(SidebarMsg::DragMoved(250)));
     assert_eq!(state.sidebar_width_px(), 250);
 }
 
@@ -64,10 +65,10 @@ fn a_reported_width_is_adopted() {
 fn drag_width_is_clamped_to_bounds() {
     let mut state = State::default();
 
-    state.update(Message::SidebarDragMoved(10)); // below min
+    state.update(Message::Sidebar(SidebarMsg::DragMoved(10))); // below min
     assert_eq!(state.sidebar_width_px(), SIDEBAR_MIN_WIDTH);
 
-    state.update(Message::SidebarDragMoved(5000)); // above max
+    state.update(Message::Sidebar(SidebarMsg::DragMoved(5000))); // above max
     assert_eq!(state.sidebar_width_px(), SIDEBAR_MAX_WIDTH);
 }
 
@@ -208,16 +209,18 @@ fn worktree_hover_sets_and_clears() {
 fn sidebar_filter_toggles_and_clears() {
     let mut state = State::default();
     let feat = TagFilter::Type(ConventionalType::Feat);
-    state.update(Message::SidebarFilterToggled(feat));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
     assert!(state.sidebar_filters.contains(&feat));
     // Toggling again removes it.
-    state.update(Message::SidebarFilterToggled(feat));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
     assert!(!state.sidebar_filters.contains(&feat));
     // Multiple filters accumulate; clear empties them all.
-    state.update(Message::SidebarFilterToggled(feat));
-    state.update(Message::SidebarFilterToggled(TagFilter::HasIssue));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::HasIssue,
+    )));
     assert_eq!(state.sidebar_filters.len(), 2);
-    state.update(Message::SidebarFiltersCleared);
+    state.update(Message::Sidebar(SidebarMsg::FiltersCleared));
     assert!(state.sidebar_filters.is_empty());
 }
 
@@ -236,27 +239,27 @@ fn sidebar_filter_menu_toggle_opens_and_closes_and_excludes_siblings() {
         ..Default::default()
     };
 
-    state.update(Message::SidebarFilterMenuToggled);
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
     assert!(state.sidebar_filter_open);
     // Opening the filter panel closes the sibling popovers (mutual exclusion, symmetric with
     // the existing HelpMenuToggled/ProjectSwitcherToggled pair).
     assert!(!state.help_menu_open);
     assert!(!state.project_switcher_open);
 
-    state.update(Message::SidebarFilterMenuToggled);
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
     assert!(!state.sidebar_filter_open);
 }
 
 #[test]
 fn opening_help_menu_or_project_switcher_closes_the_filter_panel() {
     let mut state = State::default();
-    state.update(Message::SidebarFilterMenuToggled);
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
     assert!(state.sidebar_filter_open);
 
     state.update(Message::Help(HelpMsg::MenuToggled));
     assert!(!state.sidebar_filter_open);
 
-    state.update(Message::SidebarFilterMenuToggled);
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
     assert!(state.sidebar_filter_open);
 
     state.update(Message::ProjectSwitcherToggled);
@@ -267,12 +270,12 @@ fn opening_help_menu_or_project_switcher_closes_the_filter_panel() {
 fn closing_the_filter_panel_never_changes_active_filters() {
     let mut state = State::default();
     let feat = TagFilter::Type(ConventionalType::Feat);
-    state.update(Message::SidebarFilterToggled(feat));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
     assert!(state.sidebar_filters.contains(&feat));
 
-    state.update(Message::SidebarFilterMenuToggled); // open
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled)); // open
     assert!(state.sidebar_filters.contains(&feat));
-    state.update(Message::SidebarFilterMenuToggled); // close
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled)); // close
     assert!(
         state.sidebar_filters.contains(&feat),
         "toggling panel visibility must not alter the active filter set (FR-007/FR-008)"
@@ -287,7 +290,7 @@ fn escape_dismisses_the_open_filter_panel_when_no_overlay_is_open() {
     state.sidebar_filter_open = true;
     assert_eq!(
         on_escape(&state),
-        Some(Message::SidebarFilterMenuToggled),
+        Some(Message::Sidebar(SidebarMsg::FilterMenuToggled)),
         "Escape must dismiss the filter panel while it's open"
     );
 }
@@ -319,7 +322,7 @@ fn opening_an_overlay_closes_the_filter_panel() {
     // the live keyboard subscription disagreed about what Escape should dismiss. Every
     // overlay-open now routes through `State::open_overlay`, which resets it unconditionally.
     let mut state = State::default();
-    state.update(Message::SidebarFilterMenuToggled);
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
     assert!(state.sidebar_filter_open);
 
     state.update(Message::WorktreeForm(
@@ -346,8 +349,10 @@ fn default_entry_stays_visible_with_an_active_tag_filter() {
     }];
 
     // Sanity: a filter matching nothing still leaves worktree entries empty...
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Fix, // no `fix` worktree exists — this filter matches nothing
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(
+            ConventionalType::Fix, // no `fix` worktree exists — this filter matches nothing
+        ),
     )));
     assert!(
         !state.available_tag_filters().is_empty(),

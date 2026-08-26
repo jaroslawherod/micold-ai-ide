@@ -26,6 +26,7 @@
 
 use micold_client::app::{Message, State};
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::ui::terminal::StripTab;
 use micold_core::session::{SessionId, ShellInstanceId};
 use std::path::PathBuf;
@@ -73,7 +74,7 @@ fn opener(id: &str) -> Message {
     match id {
         "help_menu" => Message::Help(HelpMsg::MenuToggled),
         "project_switcher" => Message::ProjectSwitcherToggled,
-        "sidebar_filter" => Message::SidebarFilterMenuToggled,
+        "sidebar_filter" => Message::Sidebar(SidebarMsg::FilterMenuToggled),
         "project_menu" => Message::ProjectMenuToggled(PathBuf::from("/a"), (10, 10)),
         "worktree_menu" => Message::WorktreeMenuToggled("w1".into(), (20, 20)),
         "session_menu" => Message::SessionMenuToggled(SessionId::new(), (30, 30)),

@@ -10,6 +10,7 @@
 use micold_client::app::{Message, State};
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::clamp_menu_anchor;
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::window::Msg as WindowMsg;
 use std::path::PathBuf;
 
@@ -67,7 +68,7 @@ fn opening_any_other_popover_closes_the_project_menu() {
     for opener in [
         Message::Help(HelpMsg::MenuToggled),
         Message::ProjectSwitcherToggled,
-        Message::SidebarFilterMenuToggled,
+        Message::Sidebar(SidebarMsg::FilterMenuToggled),
         Message::WorktreeMenuToggled("w1".into(), (100, 100)),
     ] {
         let mut st = State::default();

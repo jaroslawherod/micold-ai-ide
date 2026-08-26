@@ -106,11 +106,9 @@ pub enum Message {
     ProjectOpenRefused(String),
     /// The binary discovered/re-discovered the active project's worktrees (FR-018).
     WorktreesLoaded(Vec<Worktree>),
-    /// Expand/collapse a worktree's session sub-items (FR-003), by `dir_name`.
-    WorktreeExpansionToggled(String),
-    /// Expand/collapse the "Default" (project-root) entry's session sub-items (feature 010,
-    /// mirrors `WorktreeExpansionToggled`).
-    DefaultExpansionToggled,
+    /// Everything the user can do to the sidebar (feature 028, FR-001). Ten variants moved
+    /// behind this one; see [`crate::features::sidebar::Msg`].
+    Sidebar(crate::features::sidebar::Msg),
 
     // ---- Feature 008: worktree sidebar refinement ----
     /// Open (or close, if already open) a worktree's right-click context menu, by `dir_name`,
@@ -150,16 +148,6 @@ pub enum Message {
     WorktreeRenameConfirmed,
     /// Dismiss the worktree-rename dialog without applying.
     WorktreeRenameCancelled,
-    /// Toggle a tag filter on/off in the sidebar (FR-024).
-    SidebarFilterToggled(TagFilter),
-    /// Clear all active tag filters, restoring the full list (FR-026).
-    SidebarFiltersCleared,
-    /// Toggle the sidebar's tag-filter panel open/closed (feature 009). Mutually exclusive
-    /// with `help_menu_open` and `project_switcher_open`.
-    SidebarFilterMenuToggled,
-    /// Toggle whether agent-owned worktrees are included in the sidebar list (feature 014,
-    /// FR-010). Sole mutation: `show_agent_worktrees`. Never touches the tag filters (FR-010d).
-    ShowAgentWorktreesToggled,
     /// Content scrolled underneath an open floating surface (feature 017, FR-009). The third of
     /// the three dismissal triggers, and the one no widget used to report — see
     /// [`micold_core::overlay::Trigger::ScrollBeneath`]. Emitted unconditionally by the scrollable
@@ -176,12 +164,6 @@ pub enum Message {
     /// made against the state Escape actually lands in rather than the state that was last
     /// rendered.
     EscapePressed,
-    /// The worktree sidebar scrolled to this vertical offset.
-    ///
-    /// Carries the offset rather than being a bare notification, because the app bar's elevation
-    /// derives from it (FR-025a) — and the sidebar is the only scroll region beneath the bar, so it
-    /// is the only thing that can answer "is content passing under it".
-    SidebarScrolled(u32),
     /// The terminal tab strip scrolled; carries the offset, the viewport's width and its content's,
     /// all in whole pixels (feature 026 FR-002e).
     ///
@@ -204,14 +186,6 @@ pub enum Message {
     /// **first** frame, where nothing has scrolled yet and a strip that already overflows still has
     /// to fade its edge.
     TabStripViewportResized { width: u32 },
-    /// The sidebar's scroll viewport was laid out at this height, in whole logical pixels
-    /// (feature 024).
-    ///
-    /// Distinct from [`Self::SidebarScrolled`] because the two answer different questions and fire
-    /// at different times: an offset changes when the user scrolls, and a viewport height changes
-    /// when the window does — including on the very first layout, where nothing has scrolled and
-    /// the reveal still has to decide whether its row is on screen.
-    SidebarViewportResized(u32),
     /// A dialog has finished animating out (feature 017, FR-011). Emitted by the `Modal` component
     /// itself, which owns the transition, so the binary can release the snapshot it was rendering
     /// from ([`crate::overlay::registry::Closing`]). The binary used to watch a central progress
@@ -343,11 +317,6 @@ pub enum Message {
 
     /// Periodic redraw tick while a terminal is live (drives streamed-output repaint).
     TerminalTick,
-    /// Hide or show the sidebar (toggle).
-    SidebarToggled,
-    /// The resize handle was dragged; carries the pointer x in pixels. The handle owns the drag
-    /// itself, so there is no start or end to report — only where the edge now is.
-    SidebarDragMoved(u16),
     /// The OS window gained (`true`) or lost (`false`) input focus. Handled by the binary,
     /// which gates the terminal/OS-theme poll subscriptions on it so a backgrounded window
     /// doesn't keep burning CPU on ticks nothing is looking at (idle-CPU fix).
@@ -894,12 +863,8 @@ impl State {
                 let outcomes = crate::features::worktree::loaded(self, worktrees);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::WorktreeExpansionToggled(dir) => {
-                let outcomes = self.toggle_location(SessionLocation::Worktree(dir));
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::DefaultExpansionToggled => {
-                let outcomes = self.toggle_location(SessionLocation::Default);
+            Message::Sidebar(msg) => {
+                let outcomes = crate::features::sidebar::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::WorktreeMenuToggled(dir, anchor) => {
@@ -940,29 +905,14 @@ impl State {
             }
             Message::WorktreeRenameConfirmed => crate::features::worktree::rename_confirmed(self),
             Message::WorktreeRenameCancelled => crate::features::worktree::rename_cancelled(self),
-            Message::SidebarFilterToggled(filter) => {
-                crate::features::sidebar::filter_toggled(self, filter)
-            }
-            Message::SidebarFiltersCleared => crate::features::sidebar::filters_cleared(self),
-            Message::SidebarViewportResized(height) => {
-                crate::features::sidebar::viewport_resized(self, height)
-            }
             Message::TabStripScrolled { offset, width } => {
                 crate::features::session::tab_strip_scrolled(self, offset, width)
             }
             Message::TabStripViewportResized { width } => {
                 crate::features::session::tab_strip_viewport_resized(self, width)
             }
-            Message::SidebarScrolled(offset) => crate::features::sidebar::scrolled(self, offset),
             Message::ScrolledBeneathOverlay => self.dismiss_on_scroll_beneath(),
             Message::EscapePressed => self.dismiss_topmost(),
-            Message::SidebarFilterMenuToggled => {
-                let outcomes = crate::features::sidebar::filter_menu_toggled(self);
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::ShowAgentWorktreesToggled => {
-                crate::features::sidebar::show_agent_worktrees_toggled(self)
-            }
             Message::WorktreeHovered(dir) => crate::features::worktree::hovered(self, dir),
             Message::WorktreeUnhovered(dir) => crate::features::worktree::unhovered(self, dir),
             Message::WorktreeForm(msg) => {
@@ -1043,11 +993,9 @@ impl State {
             }
             Message::SessionRemoveCancelled => crate::features::session::remove_cancelled(self),
             Message::TerminalTick => {}
-            Message::SidebarToggled => crate::features::sidebar::toggled(self),
             // The handle only speaks while it is being dragged, so there is no flag to consult:
             // an arriving width *is* the drag. Clamped here — how wide the sidebar may be is the
             // application's decision, not the edge's.
-            Message::SidebarDragMoved(x) => crate::features::sidebar::drag_moved(self, x),
 
             // ---- Feature 006 ----
             Message::TerminalFocused => {

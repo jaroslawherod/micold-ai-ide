@@ -637,7 +637,7 @@ impl FloatingSurface for SidebarFilterPanel {
 
     fn dismissal(&self) -> DismissalRules {
         DismissalRules::for_layer(Layer::Popover)
-            .cancelled_by(crate::app::Message::SidebarFilterMenuToggled)
+            .cancelled_by(crate::app::Message::Sidebar(Msg::FilterMenuToggled))
     }
 }
 
@@ -714,4 +714,50 @@ pub fn drag_moved(state: &mut State, x: u16) {
 /// first entry converted out of `tests/feature_write_isolation.rs`'s allowlist.
 pub fn worktrees_replaced(state: &mut State, names: &std::collections::BTreeSet<String>) {
     state.expanded.retain(|dir| names.contains(dir));
+}
+
+/// Everything the user can do to the sidebar (feature 028, FR-001).
+///
+/// # The variants kept their meaning and lost their prefix
+///
+/// The six that began with `Sidebar` do not any more — the type says which surface (contract M1),
+/// so `SidebarFilterMenuToggled` is `Msg::FilterMenuToggled`. The other four keep their names:
+/// `WorktreeExpansionToggled` and `DefaultExpansionToggled` say *which row* expanded, and
+/// `ShowAgentWorktreesToggled` says which filter — none of them is this feature's name, and
+/// dropping the word would leave `ExpansionToggled` twice over.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Msg {
+    WorktreeExpansionToggled(String),
+    DefaultExpansionToggled,
+    FilterToggled(TagFilter),
+    FiltersCleared,
+    FilterMenuToggled,
+    ShowAgentWorktreesToggled,
+    Scrolled(u32),
+    ViewportResized(u32),
+    Toggled,
+    DragMoved(u16),
+}
+
+/// This feature's whole reducer surface: one entry point, shape A (contract M2).
+///
+/// Two of the ten report something back — expanding a row can reveal the current session, and
+/// opening the filter panel displaces the other popovers — so this returns outcomes rather than
+/// swallowing them. The other eight write fields this module owns and have nothing to say.
+pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+    match msg {
+        Msg::WorktreeExpansionToggled(dir) => {
+            return state.toggle_location(SessionLocation::Worktree(dir));
+        }
+        Msg::DefaultExpansionToggled => return state.toggle_location(SessionLocation::Default),
+        Msg::FilterMenuToggled => return filter_menu_toggled(state),
+        Msg::FilterToggled(filter) => filter_toggled(state, filter),
+        Msg::FiltersCleared => filters_cleared(state),
+        Msg::ShowAgentWorktreesToggled => show_agent_worktrees_toggled(state),
+        Msg::Scrolled(offset) => scrolled(state, offset),
+        Msg::ViewportResized(height) => viewport_resized(state, height),
+        Msg::Toggled => toggled(state),
+        Msg::DragMoved(x) => drag_moved(state, x),
+    }
+    Vec::new()
 }

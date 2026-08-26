@@ -32,6 +32,7 @@
 
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{on_escape, Message, State};
@@ -161,7 +162,7 @@ fn escape_closes_the_open_dialog_in_every_state() {
     // of.
     for (dialog, filter, state) in every_state() {
         let cancel = dialog.as_ref().map(|d| d.cancel.clone());
-        let panel = filter.then_some(Message::SidebarFilterMenuToggled);
+        let panel = filter.then_some(Message::Sidebar(SidebarMsg::FilterMenuToggled));
         // A dialog outranks the panel; with no dialog open the panel is the topmost surface.
         let want = cancel.or(panel);
         let (name, filter) = (label(&dialog), if filter { "open" } else { "closed" });
@@ -321,7 +322,7 @@ fn a_modal_keeps_escape_whatever_floats_above_it() {
     let popover_alone = state(None, true);
     assert_eq!(
         registry::escape(&popover_alone),
-        Some(Message::SidebarFilterMenuToggled),
+        Some(Message::Sidebar(SidebarMsg::FilterMenuToggled)),
         "with no modal the popover is the topmost surface, and Escape is its own"
     );
 }
@@ -333,7 +334,7 @@ fn a_scroll_beneath_reaches_every_menu_and_no_dialog() {
     // not a modal is over them.
     assert_eq!(
         registry::scroll_beneath(&state(Some(&dialogs()[0]), true)),
-        vec![Message::SidebarFilterMenuToggled],
+        vec![Message::Sidebar(SidebarMsg::FilterMenuToggled)],
         "a scroll behind an open modal still invalidates the menu anchored beneath it, and does \
          not touch the modal"
     );
@@ -374,7 +375,7 @@ fn a_surface_is_registered_by_naming_it_once_and_nothing_else() {
     assert_eq!(open.layer(), Layer::Popover);
     assert_eq!(
         open.on(Trigger::Escape),
-        Some(&Message::SidebarFilterMenuToggled)
+        Some(&Message::Sidebar(SidebarMsg::FilterMenuToggled))
     );
 }
 

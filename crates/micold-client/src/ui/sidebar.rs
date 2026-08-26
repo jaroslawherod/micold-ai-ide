@@ -2,6 +2,7 @@
 //! shared [`tree_view`] primitive (FR-002, FR-003, Constitution Principle VIII).
 
 use crate::app::{Message, State};
+use crate::features::sidebar::Msg as SidebarMsg;
 use crate::features::sidebar::TagFilter;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::icons::Icon;
@@ -37,7 +38,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // Toggles the filter accordion below (feature 009); tinted to show whether any filter is
     // currently active even while the accordion is collapsed (FR-005, US2).
     let filter_toggle: Element<'_, Message> =
-        FilterTrigger::new(Message::SidebarFilterMenuToggled, r)
+        FilterTrigger::new(Message::Sidebar(SidebarMsg::FilterMenuToggled), r)
             .active(!state.sidebar_filters.is_empty())
             .into();
     let add_worktree = Tooltip::new(
@@ -52,7 +53,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         IconButton::new(Icon::HideSidebar, r)
             .compact()
             .tint(r.on_surface_variant)
-            .on_press(Message::SidebarToggled),
+            .on_press(Message::Sidebar(SidebarMsg::Toggled)),
         "Hide sidebar",
         r,
     );
@@ -121,7 +122,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
                     r
                 )
                 .padding(spacing::XS)
-                .on_press(Message::SidebarFiltersCleared),
+                .on_press(Message::Sidebar(SidebarMsg::FiltersCleared)),
             ]
             .spacing(spacing::XS)
             .into(),
@@ -170,13 +171,15 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // (FR-025a), and the sidebar is the only scroll region beneath the bar. The reducer runs the
     // dismissal from this message too, so the third dismissal trigger (feature 017, FR-009) is
     // unchanged — a scrollable gets one subscription, not two.
-    .on_scroll_offset(Message::SidebarScrolled)
+    .on_scroll_offset(|offset| Message::Sidebar(SidebarMsg::Scrolled(offset)))
     // Feature 024: the reveal has to know whether its row is inside the viewport, and iced reports
     // no child position — so the geometry is computed, and this is the one input that is not
     // already in state. Reported from a sensor rather than from `on_scroll`, which fires only when
     // something scrolls; the frame that matters is the first one after a switch, where nothing has.
     .on_viewport_resize(|size| {
-        Message::SidebarViewportResized(crate::app::scroll_offset_px(size.height))
+        Message::Sidebar(SidebarMsg::ViewportResized(crate::app::scroll_offset_px(
+            size.height,
+        )))
     })
     // Addressable so `operation::scroll_to` can reach it. On the scrollable itself, never on the
     // sensor wrapping it — a wrapper that does not forward `operate` swallows scroll operations for
@@ -211,7 +214,7 @@ pub fn collapsed_strip(scheme: micold_core::theme::ColorScheme) -> Element<'stat
         IconButton::new(Icon::ShowSidebar, r)
             .compact()
             .tint(r.on_surface_variant)
-            .on_press(Message::SidebarToggled),
+            .on_press(Message::Sidebar(SidebarMsg::Toggled)),
         "Show sidebar",
         r,
     );
@@ -253,7 +256,7 @@ fn filter_chip(filter: TagFilter, active: bool, r: Roles) -> Element<'static, Me
     };
     ToggleChip::new(
         filter_label(filter),
-        Message::SidebarFilterToggled(filter),
+        Message::Sidebar(SidebarMsg::FilterToggled(filter)),
         r,
     )
     .active(active)
@@ -271,7 +274,7 @@ fn filter_chip(filter: TagFilter, active: bool, r: Roles) -> Element<'static, Me
 fn reveal_chip(state: &State, r: Roles) -> Element<'static, Message> {
     ToggleChip::new(
         "Show agent worktrees",
-        Message::ShowAgentWorktreesToggled,
+        Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled),
         r,
     )
     .active(state.show_agent_worktrees)
@@ -310,7 +313,7 @@ fn filter_bar(state: &State, r: Roles) -> Element<'static, Message> {
                 r,
             )
             .padding(spacing::XS)
-            .on_press(Message::SidebarFiltersCleared),
+            .on_press(Message::Sidebar(SidebarMsg::FiltersCleared)),
         );
     }
     col.into()
@@ -464,7 +467,7 @@ fn build_items(
             )
             .expandable(
                 node.expanded,
-                Message::WorktreeExpansionToggled(dir.clone()),
+                Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(dir.clone())),
             );
         // Location tooltip (feature 010, FR-010): the worktree's path relative to the project.
         if let Some(root) = project_root {
@@ -560,7 +563,10 @@ fn build_default_item(
     let item = TreeItem::new(0, node.display_name.to_string(), r.on_surface)
         // Distinct icon (FR-006): never the git/branch iconography used for worktree rows.
         .with_icon(Icon::ProjectRoot)
-        .expandable(node.expanded, Message::DefaultExpansionToggled)
+        .expandable(
+            node.expanded,
+            Message::Sidebar(SidebarMsg::DefaultExpansionToggled),
+        )
         .trailing_element(start_session)
         // Location tooltip (FR-010): fixed, since the Default entry is always the project root.
         .row_tooltip(crate::features::sidebar::DEFAULT_LOCATION_LABEL);

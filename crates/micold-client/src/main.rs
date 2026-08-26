@@ -471,7 +471,7 @@ fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
     // Record where the list was sent, rather than waiting to be told (BUG-002).
     //
     // `sidebar_scroll_offset` is a mirror of the scrollable's position whose only writer is
-    // `Message::SidebarScrolled` — and the rendering stack publishes that from `notify_viewport`,
+    // `Message::Sidebar(SidebarMsg::Scrolled)` — and the rendering stack publishes that from `notify_viewport`,
     // which returns *without publishing* whenever the content fits the viewport
     // (`iced_widget/src/scrollable.rs`). A reveal in a project whose sidebar fits therefore moves
     // the list silently, and the mirror keeps the offset of the project before it. The next
@@ -1353,7 +1353,7 @@ pub(crate) mod tests {
     /// not always tell us.
     ///
     /// `sidebar_scroll_offset` is a mirror of the scrollable's position, and its only writer is
-    /// `Message::SidebarScrolled` — which iced publishes from `notify_viewport`, and
+    /// `Message::Sidebar(SidebarMsg::Scrolled)` — which iced publishes from `notify_viewport`, and
     /// `notify_viewport` returns without publishing when the content fits the viewport
     /// (`iced_widget/src/scrollable.rs`). So a reveal that runs in a project whose sidebar fits —
     /// the short project you pass through on the way somewhere — moves the list and is never told,

@@ -18,6 +18,7 @@
 
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{on_escape, Message, State};
@@ -131,12 +132,12 @@ fn modal_and_popover(open: fn(&mut State)) -> State {
 #[test]
 fn escape_belongs_to_the_popover_when_nothing_modal_is_open() {
     let mut state = State::default();
-    state.update(Message::SidebarFilterMenuToggled);
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
     assert!(state.sidebar_filter_open, "precondition: the panel is open");
 
     assert_eq!(
         on_escape(&state),
-        Some(Message::SidebarFilterMenuToggled),
+        Some(Message::Sidebar(SidebarMsg::FilterMenuToggled)),
         "the everyday case: one lightweight surface open, and Escape closes it"
     );
 }
@@ -162,7 +163,7 @@ fn a_popover_alone_and_a_popover_over_a_modal_are_not_the_same_case() {
     // Guards against a dispatch that "simplifies" by treating any open popover as the Escape
     // target -- which would pass the everyday test above while silently changing the tie-break.
     let mut alone = State::default();
-    alone.update(Message::SidebarFilterMenuToggled);
+    alone.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
     let over_modal = modal_and_popover(|s| s.about_open = true);
 
     assert_ne!(
@@ -247,15 +248,17 @@ fn closing_the_filter_panel_leaves_the_active_filters_alone() {
     use micold_core::naming::ConventionalType;
 
     let mut state = State::default();
-    state.update(Message::SidebarFilterMenuToggled);
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Feat,
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Feat),
     )));
-    state.update(Message::SidebarFilterToggled(TagFilter::HasIssue));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::HasIssue,
+    )));
     let chosen = state.sidebar_filters.clone();
     assert_eq!(chosen.len(), 2, "precondition: two filters are active");
 
-    state.update(Message::SidebarFilterMenuToggled);
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
 
     assert!(!state.sidebar_filter_open, "precondition: the panel closed");
     assert_eq!(
@@ -271,7 +274,9 @@ fn dismissing_a_modal_leaves_the_filters_it_never_owned_alone() {
 
     for (name, open, cancel) in MODALS {
         let mut state = State::default();
-        state.update(Message::SidebarFilterToggled(TagFilter::Untyped));
+        state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+            TagFilter::Untyped,
+        )));
         let chosen = state.sidebar_filters.clone();
 
         state.clear_for_dialog();
