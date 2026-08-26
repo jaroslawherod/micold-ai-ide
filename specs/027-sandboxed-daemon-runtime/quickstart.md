@@ -76,14 +76,20 @@ Start from no image present (`docker rmi` the tag first). Settings → Session s
 
 This is the feature. In a sandboxed session's terminal:
 
-- [ ] `ls /` shows the container's root, not the host's
-- [ ] A registered project is present **at its host absolute path** (R2)
-- [ ] `ls ~` does **not** show the host home directory's contents
-- [ ] An unregistered directory outside every project is unreachable
-- [ ] `ls /var/run/docker.sock` — absent. The sandbox cannot drive its own runtime (C-3)
-- [ ] With no credential opt-ins: `cat ~/.gitconfig`, `ssh-add -l`, and the AI CLI's auth path all
+Covered twice, and the second pass is the one that counts: `evidence/us1-isolation.md` probed the
+container with `docker exec` and a replaced entrypoint, `evidence/us1-isolation-from-a-session.md`
+probes it through a session the daemon spawned, over the control channel, as
+`crates/micold-daemon/tests/sandbox_real_boundary.rs` — so these boxes now re-check themselves on
+every `sandbox-runtime` CI run.
+
+- [x] `ls /` shows the container's root, not the host's
+- [x] A registered project is present **at its host absolute path** (R2)
+- [x] `ls ~` does **not** show the host home directory's contents
+- [x] An unregistered directory outside every project is unreachable
+- [x] `ls /var/run/docker.sock` — absent. The sandbox cannot drive its own runtime (C-3)
+- [x] With no credential opt-ins: `cat ~/.gitconfig`, `ssh-add -l`, and the AI CLI's auth path all
       come back empty or absent (FR-004a)
-- [ ] `touch <project>/probe && ls -l` on the **host** shows the file owned by your user, not root
+- [x] `touch <project>/probe && ls -l` on the **host** shows the file owned by your user, not root
       (R3, C-4). Delete it afterwards
 
 ### B.3 — Network posture
