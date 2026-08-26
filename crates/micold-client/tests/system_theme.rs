@@ -9,13 +9,17 @@
 //! instead of an already-resolved scheme. This test exercises that reducer logic directly.
 
 use micold_client::app::{Message, State};
+use micold_client::features::settings;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_core::theme::SystemScheme;
 
 #[test]
 fn a_successful_detection_updates_the_scheme() {
     let mut state = State {
-        system_scheme: SystemScheme::Light,
+        settings: settings::State {
+            system_scheme: SystemScheme::Light,
+            ..Default::default()
+        },
         ..State::default()
     };
 
@@ -23,20 +27,23 @@ fn a_successful_detection_updates_the_scheme() {
         SystemScheme::Dark,
     ))));
 
-    assert_eq!(state.system_scheme, SystemScheme::Dark);
+    assert_eq!(state.settings.system_scheme, SystemScheme::Dark);
 }
 
 #[test]
 fn a_transient_detection_failure_keeps_the_last_known_scheme() {
     let mut state = State {
-        system_scheme: SystemScheme::Dark,
+        settings: settings::State {
+            system_scheme: SystemScheme::Dark,
+            ..Default::default()
+        },
         ..State::default()
     };
 
     state.update(Message::Settings(SettingsMsg::SystemThemeChanged(Err(()))));
 
     assert_eq!(
-        state.system_scheme,
+        state.settings.system_scheme,
         SystemScheme::Dark,
         "a transient dark_light::detect() failure must not overwrite the last-known scheme"
     );
@@ -45,7 +52,10 @@ fn a_transient_detection_failure_keeps_the_last_known_scheme() {
 #[test]
 fn a_genuine_unspecified_reading_is_applied_like_any_other_successful_read() {
     let mut state = State {
-        system_scheme: SystemScheme::Dark,
+        settings: settings::State {
+            system_scheme: SystemScheme::Dark,
+            ..Default::default()
+        },
         ..State::default()
     };
 
@@ -54,7 +64,7 @@ fn a_genuine_unspecified_reading_is_applied_like_any_other_successful_read() {
     ))));
 
     assert_eq!(
-        state.system_scheme,
+        state.settings.system_scheme,
         SystemScheme::Unspecified,
         "Ok(Unspecified) is a genuine OS reading, not a failure — it must still update the scheme"
     );

@@ -17,6 +17,7 @@ use micold_client::app::{route_key, KeyRouting, State};
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::settings;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::window::Msg as WindowMsg;
@@ -37,7 +38,7 @@ fn base_state_defaults() {
         !s.terminal_focused(),
         "terminal must start unfocused (FR-010)"
     );
-    assert!(s.settings_draft.is_none());
+    assert!(s.settings.settings_draft.is_none());
     assert_eq!(open_dialog(&s), None);
 }
 
@@ -86,7 +87,10 @@ fn new_terminal_instance_chord_never_yields_pty_bytes() {
 fn escape_closes_the_settings_overlay() {
     use micold_client::app::{on_escape, Message};
     let s = State {
-        settings_draft: Some(Default::default()),
+        settings: settings::State {
+            settings_draft: Some(Default::default()),
+            ..Default::default()
+        },
         ..State::default()
     };
     assert_eq!(

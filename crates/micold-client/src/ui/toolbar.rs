@@ -31,8 +31,8 @@ pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
     #[allow(unused_mut)]
     let mut items = vec![
         MenuItem::new(
-            mode_icon(state.theme_pref),
-            state.theme_pref.label(),
+            mode_icon(state.settings.theme_pref),
+            state.settings.theme_pref.label(),
             Message::Settings(SettingsMsg::ThemeModeCycled),
         ),
         MenuItem::new(

@@ -132,11 +132,11 @@ fn tag_filters_are_application_owned() {
 #[test]
 fn theme_preference_is_application_owned() {
     let mut state = State::default();
-    let before = state.theme_pref;
+    let before = state.settings.theme_pref;
     state.update(Message::Settings(SettingsMsg::ThemeModeCycled));
-    assert_ne!(state.theme_pref, before);
+    assert_ne!(state.settings.theme_pref, before);
     assert!(matches!(
-        state.theme_pref,
+        state.settings.theme_pref,
         ThemePreference::FollowSystem | ThemePreference::Light | ThemePreference::Dark
     ));
 }

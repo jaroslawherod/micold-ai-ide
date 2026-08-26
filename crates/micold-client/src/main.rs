@@ -1608,7 +1608,7 @@ pub(crate) mod tests {
         let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
         let mut app = base_app();
         app.daemon = Some(micold_client::daemon::Outbox::new(tx));
-        app.core.settings_draft = Some(SettingsDraft {
+        app.core.settings.settings_draft = Some(SettingsDraft {
             scrollback_lines: "20000".into(),
             env_include_enabled: false,
             env_include_script_path: "/tmp/does-not-exist.sh".into(),
@@ -1649,7 +1649,7 @@ pub(crate) mod tests {
     fn settings_saved_is_a_silent_no_op_toward_the_daemon_when_disconnected() {
         let mut app = base_app();
         assert!(app.daemon.is_none());
-        app.core.settings_draft = Some(SettingsDraft {
+        app.core.settings.settings_draft = Some(SettingsDraft {
             scrollback_lines: "20000".into(),
             env_include_enabled: true,
             env_include_script_path: String::new(),

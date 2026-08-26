@@ -191,7 +191,7 @@ fn escape_still_reaches_exactly_what_it_used_to() {
         ),
         (
             "settings",
-            |s| s.settings_draft = Some(Default::default()),
+            |s| s.settings.settings_draft = Some(Default::default()),
             Message::Settings(SettingsMsg::Cancelled),
         ),
         (

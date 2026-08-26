@@ -30,10 +30,25 @@
 //! which is the narrowing described above; the validation it delegates to `shell/persist.rs` is
 //! what is left of the split.
 
-use crate::app::{Message, State};
+use crate::app::Message;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::overlay::Layer;
+use micold_core::theme::{SystemScheme, ThemePreference};
+
+/// What this feature remembers (feature 028, contract S1).
+///
+/// The fields keep the names they had as flat members of `app::State`, and the reducers below
+/// spell the root's type `crate::app::State` now that `State` here means this struct.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct State {
+    /// In-progress Settings form, present only while the Settings overlay is shown (feature 006).
+    pub settings_draft: Option<SettingsDraft>,
+    /// The last light/dark scheme reported by the OS poll (transient, not persisted).
+    pub system_scheme: SystemScheme,
+    /// How the app chooses its theme (persisted); defaults to following the OS (FR-005).
+    pub theme_pref: ThemePreference,
+}
 
 /// In-progress Settings form state, present only while the Settings overlay is open (feature
 /// 006, FR-020). The scrollback field is edited as text and validated/parsed on save.
@@ -75,8 +90,12 @@ impl FloatingSurface for SettingsDialog {
 }
 
 impl Registered for SettingsDialog {
-    fn open_in(state: &State) -> Option<Self> {
-        state.settings_draft.as_ref().map(|_| SettingsDialog)
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .settings
+            .settings_draft
+            .as_ref()
+            .map(|_| SettingsDialog)
     }
 }
 
@@ -130,7 +149,7 @@ pub enum Msg {
 /// `shell/settings.rs`’s `update`, which runs the effect and routes the rest here. Splitting
 /// by effect rather than by variant is what M2 asks for: nothing about opening the form is
 /// duplicated between the two, the shell simply has something extra to do afterwards.
-pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::ThemePreferenceChanged(pref) => theme_preference_changed(state, pref),
         Msg::ThemeModeCycled => theme_mode_cycled(state),
@@ -149,15 +168,18 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
 /// The theme mode was advanced one step (feature 003, FR-005).
 ///
 /// The menu stays open, so repeated clicks cycle.
-pub fn theme_mode_cycled(state: &mut State) {
-    state.theme_pref = state.theme_pref.next();
+pub fn theme_mode_cycled(state: &mut crate::app::State) {
+    state.settings.theme_pref = state.settings.theme_pref.next();
 }
 
 /// A theme preference was chosen outright.
 ///
 /// Pure state change; the shell persists it at the I/O boundary (FR-009).
-pub fn theme_preference_changed(state: &mut State, pref: micold_core::theme::ThemePreference) {
-    state.theme_pref = pref;
+pub fn theme_preference_changed(
+    state: &mut crate::app::State,
+    pref: micold_core::theme::ThemePreference,
+) {
+    state.settings.theme_pref = pref;
 }
 
 /// The OS reported its light/dark preference (feature 003).
@@ -166,40 +188,41 @@ pub fn theme_preference_changed(state: &mut State, pref: micold_core::theme::The
 /// "unknown" must not overwrite a scheme already observed, or a single unanswered probe would
 /// flip the whole UI. The rule lives in core; this arm only records its answer.
 pub fn system_theme_changed(
-    state: &mut State,
+    state: &mut crate::app::State,
     detected: Result<micold_core::theme::SystemScheme, ()>,
 ) {
-    state.system_scheme = micold_core::theme::observe_system_scheme(detected, state.system_scheme);
+    state.settings.system_scheme =
+        micold_core::theme::observe_system_scheme(detected, state.settings.system_scheme);
 }
 
 /// The Settings dialog was opened (feature 006, FR-020).
 ///
 /// The shell seeds the current values; a draft is ensured here so the reducer path alone is
 /// enough to open the form in a test.
-pub fn opened(state: &mut State) {
+pub fn opened(state: &mut crate::app::State) {
     state.clear_for_dialog();
-    if state.settings_draft.is_none() {
-        state.settings_draft = Some(SettingsDraft::default());
+    if state.settings.settings_draft.is_none() {
+        state.settings.settings_draft = Some(SettingsDraft::default());
     }
 }
 
 /// The scrollback field was edited.
-pub fn scrollback_changed(state: &mut State, text: String) {
+pub fn scrollback_changed(state: &mut crate::app::State, text: String) {
     edit(state, |draft| draft.scrollback_lines = text);
 }
 
 /// The environment-include toggle was flipped (feature 011).
-pub fn env_include_enabled_toggled(state: &mut State, enabled: bool) {
+pub fn env_include_enabled_toggled(state: &mut crate::app::State, enabled: bool) {
     edit(state, |draft| draft.env_include_enabled = enabled);
 }
 
 /// The environment-include script path was edited (feature 011).
-pub fn env_include_path_changed(state: &mut State, text: String) {
+pub fn env_include_path_changed(state: &mut crate::app::State, text: String) {
     edit(state, |draft| draft.env_include_script_path = text);
 }
 
 /// The environment-include timeout was edited (feature 011).
-pub fn env_include_timeout_changed(state: &mut State, text: String) {
+pub fn env_include_timeout_changed(state: &mut crate::app::State, text: String) {
     edit(state, |draft| draft.env_include_timeout = text);
 }
 
@@ -208,8 +231,8 @@ pub fn env_include_timeout_changed(state: &mut State, text: String) {
 /// Every field edit did these two things and the second was easy to forget: a stale validation
 /// error left beside a field the user has since corrected is the form telling them they are wrong
 /// after they have fixed it. One place, so a new field cannot omit it.
-fn edit(state: &mut State, change: impl FnOnce(&mut SettingsDraft)) {
-    if let Some(draft) = &mut state.settings_draft {
+fn edit(state: &mut crate::app::State, change: impl FnOnce(&mut SettingsDraft)) {
+    if let Some(draft) = &mut state.settings.settings_draft {
         change(draft);
         draft.error = None;
     }
@@ -218,11 +241,11 @@ fn edit(state: &mut State, change: impl FnOnce(&mut SettingsDraft)) {
 /// The form was saved (feature 006).
 ///
 /// Validation and persistence happen in the shell; the reducer closes the form.
-pub fn saved(state: &mut State) {
-    state.settings_draft = None;
+pub fn saved(state: &mut crate::app::State) {
+    state.settings.settings_draft = None;
 }
 
 /// The form was dismissed without saving.
-pub fn cancelled(state: &mut State) {
-    state.settings_draft = None;
+pub fn cancelled(state: &mut crate::app::State) {
+    state.settings.settings_draft = None;
 }

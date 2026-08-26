@@ -13,14 +13,13 @@
 use crate::features::notifications::NoticeLevel;
 use crate::features::project::{ProjectMenu, RenameDraft, SwitcherEntry};
 use crate::features::session::SessionMenu;
-use crate::features::settings::SettingsDraft;
 use crate::features::sidebar::TagFilter;
 use crate::features::worktree::{WorktreeMenu, WorktreeRenameDraft};
 use micold_core::notify;
 use micold_core::project::Availability;
 use micold_core::selector::Selector;
 use micold_core::session::SessionId;
-use micold_core::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
+use micold_core::theme::{resolve, ColorScheme};
 use micold_core::worktree::Worktree;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -130,10 +129,8 @@ pub struct State {
     pub rename_draft: Option<RenameDraft>,
     /// What the window feature remembers -- see [`crate::features::window::State`].
     pub window: crate::features::window::State,
-    /// How the app chooses its theme (persisted); defaults to following the OS (FR-005).
-    pub theme_pref: ThemePreference,
-    /// The last light/dark scheme reported by the OS poll (transient, not persisted).
-    pub system_scheme: SystemScheme,
+    /// What the settings feature remembers -- see [`crate::features::settings::State`].
+    pub settings: crate::features::settings::State,
     /// Worktrees discovered for the active project (feature 005, FR-018). Re-derived from git
     /// on open and after each mutation — never persisted.
     pub worktrees: Vec<Worktree>,
@@ -227,8 +224,6 @@ pub struct State {
     /// one is drawn on the pane's own overlay because a pane's origin is not known at render time,
     /// and this one is drawn on the window's, where the anchor is already in the right space.
     pub shell_instance_menu: Option<(crate::ui::terminal::StripTab, u16, u16)>,
-    /// In-progress Settings form, present only while the Settings overlay is shown (feature 006).
-    pub settings_draft: Option<SettingsDraft>,
     /// Why entering a project landed on the session it did, from the most recent switch.
     ///
     /// Diagnostic only — nothing renders from it and nothing branches on it. It exists because
@@ -322,7 +317,7 @@ impl State {
     /// The color scheme to render, resolved from the user's preference and the OS scheme
     /// (FR-005, FR-007, FR-018). See [`micold_core::theme::resolve`].
     pub fn color_scheme(&self) -> ColorScheme {
-        resolve(self.theme_pref, self.system_scheme)
+        resolve(self.settings.theme_pref, self.settings.system_scheme)
     }
 
     /// Whether the app bar sits raised over content passing beneath it (FR-025a, contract §7.1).

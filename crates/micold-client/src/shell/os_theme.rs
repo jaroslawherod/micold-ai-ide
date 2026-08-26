@@ -49,7 +49,7 @@ pub(crate) fn map_system_scheme(mode: dark_light::Mode) -> SystemScheme {
 /// iced panics on boot if a subscription's mapping closure captures anything, since a capturing
 /// closure can't have the stable identity iced needs to avoid restarting the underlying timer
 /// every frame. The fallback now happens in the reducer (`Message::Settings(SettingsMsg::SystemThemeChanged)`,
-/// `src/app.rs`), which already has the previous scheme in `self.system_scheme`.
+/// `src/app.rs`), which already has the previous scheme in `self.settings.system_scheme`.
 ///
 /// `pub(crate)`, not `pub`, and the difference is a lint rather than a design: in a binary the two
 /// reach exactly as far, but clippy's `result_unit_err` fires on an exported `Result<_, ()>`.

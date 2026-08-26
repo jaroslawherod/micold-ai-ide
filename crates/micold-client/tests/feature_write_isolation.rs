@@ -152,9 +152,7 @@ const OWNERS: &[(&str, &str)] = &[
     // state and contrasts it with `sidebar_filters` beside it.
     ("show_agent_worktrees", "sidebar"),
     // --- settings -----------------------------------------------------------------------------
-    ("theme_pref", "settings"),
-    ("system_scheme", "settings"),
-    ("settings_draft", "settings"),
+    ("settings", "settings"),
     // --- notifications ------------------------------------------------------------------------
     // The path and the owner are the same word from feature 028 T028 onward: the field is the
     // feature's own `State`, so what used to be `notify` owned by `notifications` is now
@@ -964,6 +962,8 @@ struct Scan {
     unclassified: BTreeSet<String>,
     /// Mutating operations found under `src/features/`.
     feature_ops: usize,
+    /// Fields a write can resolve to: `app::State`'s own, plus the members of every
+    /// feature struct it holds. Both levels, so feature 028's moves leave it unchanged.
     state_fields: usize,
 }
 
@@ -1023,6 +1023,23 @@ fn scan() -> Scan {
         .expect("src/app.rs");
     let state_field_list = struct_fields(&app, "State");
     let fields: BTreeSet<String> = state_field_list.iter().cloned().collect();
+
+    // What a write can resolve to, for the non-vacuity floor below. Feature 028 moves each
+    // feature's fields behind a struct of its own, so the *root's* field count falls as the
+    // refactor lands — 60 before it started, headed for the ten-odd members left once every
+    // feature owns its own. Counting only the root would turn the floor into a countdown, and a
+    // floor lowered every commit stops catching what it was for. So count both levels: the root's
+    // fields, plus the members of every feature struct the root holds. The move preserves that
+    // total, which is the point of the move.
+    let resolvable_fields = state_field_list.len()
+        + sources
+            .iter()
+            .filter(|(file, src)| {
+                feature_of(file).is_some_and(|n| fields.contains(&n))
+                    && src.contains("pub struct State {")
+            })
+            .map(|(_, src)| struct_fields(src, "State").len())
+            .sum::<usize>();
 
     let ops: Vec<Operation> = sources
         .iter()
@@ -1132,7 +1149,7 @@ fn scan() -> Scan {
         core_mediated,
         unclassified,
         feature_ops: ops.iter().filter(|o| feature_of(&o.file).is_some()).count(),
-        state_fields: state_field_list.len(),
+        state_fields: resolvable_fields,
     }
 }
 
@@ -1339,7 +1356,8 @@ fn the_scan_finds_the_operations_it_is_meant_to_read() {
     );
     assert!(
         scan.state_fields >= 40,
-        "`State` parsed to only {} fields — the struct scan is not reading what it thinks it is",
+        "`State` and the feature structs it holds parsed to only {} fields between them — the \
+         struct scan is not reading what it thinks it is",
         scan.state_fields
     );
 }

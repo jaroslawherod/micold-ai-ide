@@ -99,7 +99,7 @@ pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core:
         // (feature 011) when saving a theme change — this function only ever changes `theme`.
         let existing = store.load().settings;
         if let Err(err) = store.save(&Settings {
-            theme: core.theme_pref,
+            theme: core.settings.theme_pref,
             ..existing
         }) {
             core.notify_error(format!("Couldn't save your settings: {err}"));
@@ -123,7 +123,7 @@ pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core:
 /// scrollback value (FR-019/FR-020).
 pub fn on_settings_opened(app: &mut App) -> Task<Message> {
     app.core.update(Message::Settings(SettingsMsg::Opened));
-    if let Some(draft) = app.core.settings_draft.as_mut() {
+    if let Some(draft) = app.core.settings.settings_draft.as_mut() {
         draft.scrollback_lines = app.scrollback_lines.to_string();
         draft.env_include_enabled = app.env_include_enabled;
         draft.env_include_script_path = app.env_include_script_path.clone();
@@ -136,7 +136,7 @@ pub fn on_settings_opened(app: &mut App) -> Task<Message> {
 /// success persist + apply + refresh + close, on failure keep the form open with an error
 /// (FR-020/FR-021; environment-include: FR-014, contracts/settings-ui.md).
 pub fn on_settings_saved(app: &mut App) -> Task<Message> {
-    let Some(draft) = app.core.settings_draft.clone() else {
+    let Some(draft) = app.core.settings.settings_draft.clone() else {
         return Task::none();
     };
 
@@ -145,7 +145,7 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
     let scrollback_lines = match draft.scrollback_lines.trim().parse::<usize>() {
         Ok(n) if (scrollback_min..=scrollback_max).contains(&n) => n,
         Ok(_) => {
-            if let Some(d) = app.core.settings_draft.as_mut() {
+            if let Some(d) = app.core.settings.settings_draft.as_mut() {
                 d.error = Some(format!(
                     "Enter a number between {scrollback_min} and {scrollback_max}."
                 ));
@@ -153,7 +153,7 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
             return Task::none();
         }
         Err(_) => {
-            if let Some(d) = app.core.settings_draft.as_mut() {
+            if let Some(d) = app.core.settings.settings_draft.as_mut() {
                 d.error = Some("Enter a whole number of lines.".to_string());
             }
             return Task::none();
@@ -165,7 +165,7 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
     let env_include_timeout_secs = match draft.env_include_timeout.trim().parse::<u64>() {
         Ok(t) if (timeout_min..=timeout_max).contains(&t) => t,
         Ok(_) => {
-            if let Some(d) = app.core.settings_draft.as_mut() {
+            if let Some(d) = app.core.settings.settings_draft.as_mut() {
                 d.error = Some(format!(
                     "Enter a timeout between {timeout_min} and {timeout_max} seconds."
                 ));
@@ -173,7 +173,7 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
             return Task::none();
         }
         Err(_) => {
-            if let Some(d) = app.core.settings_draft.as_mut() {
+            if let Some(d) = app.core.settings.settings_draft.as_mut() {
                 d.error = Some("Enter a whole number of seconds.".to_string());
             }
             return Task::none();
@@ -186,7 +186,7 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
     app.env_include_timeout_secs = env_include_timeout_secs;
     if let Some(store) = app.caps.settings() {
         if let Err(err) = store.save(&Settings {
-            theme: app.core.theme_pref,
+            theme: app.core.settings.theme_pref,
             scrollback_lines,
             env_include_enabled: app.env_include_enabled,
             env_include_script_path: app.env_include_script_path.clone(),
@@ -235,6 +235,7 @@ pub fn on_theme_changed(app: &mut App, message: Message) -> Task<Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use micold_client::features::settings;
     use micold_core::provider::FakeAiCliProvider;
     use micold_core::session::{Session, SessionLocation};
     use micold_core::settings::FakeSettingsStore;
@@ -322,7 +323,10 @@ mod tests {
         };
         let store = FakeSettingsStore::loaded(stored.clone());
         let mut core = State {
-            theme_pref: ThemePreference::Dark,
+            settings: settings::State {
+                theme_pref: ThemePreference::Dark,
+                ..Default::default()
+            },
             ..State::default()
         };
 

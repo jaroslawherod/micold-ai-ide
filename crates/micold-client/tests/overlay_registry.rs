@@ -96,7 +96,7 @@ fn dialogs() -> Vec<Dialog> {
         Dialog {
             id: "settings",
             cancel: Message::Settings(SettingsMsg::Cancelled),
-            open: |state| state.settings_draft = Some(Default::default()),
+            open: |state| state.settings.settings_draft = Some(Default::default()),
         },
         Dialog {
             id: "confirm_worktree_delete",

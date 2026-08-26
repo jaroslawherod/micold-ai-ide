@@ -114,7 +114,7 @@ fn boot() -> (App, Task<Message>) {
     let mut env_include_timeout_secs = micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS;
     if let Some(store) = caps.settings() {
         let loaded = store.load().settings;
-        core.theme_pref = loaded.theme;
+        core.settings.theme_pref = loaded.theme;
         scrollback_lines = loaded.scrollback_lines;
         env_include_enabled = loaded.env_include_enabled;
         env_include_script_path = loaded.env_include_script_path;
@@ -131,7 +131,8 @@ fn boot() -> (App, Task<Message>) {
     let env_include_last_outcome = boot_snapshot.outcome.clone();
     let mut env_include_cache = HashMap::new();
     env_include_cache.insert(boot_cwd, boot_snapshot);
-    core.system_scheme = observe_system_scheme(detect_system_scheme(), core.system_scheme);
+    core.settings.system_scheme =
+        observe_system_scheme(detect_system_scheme(), core.settings.system_scheme);
     // The §B5 test hook. Applied through the same message the filter popover sends, so a visual
     // pass photographs the real filter rather than a second implementation of one — and refused
     // loudly on a typo, for the reason `MICOLD_FRAME_PROBE` is: a value that was asked for and

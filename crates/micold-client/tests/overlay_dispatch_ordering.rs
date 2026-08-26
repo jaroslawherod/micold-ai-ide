@@ -66,7 +66,7 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
     ),
     (
         "settings",
-        |s| s.settings_draft = Some(Default::default()),
+        |s| s.settings.settings_draft = Some(Default::default()),
         Message::Settings(SettingsMsg::Cancelled),
     ),
     (

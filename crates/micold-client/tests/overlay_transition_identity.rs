@@ -65,7 +65,7 @@ const DIALOGS: &[(&str, fn(&mut State))] = &[
         state.worktree_form.form = Some(Default::default())
     }),
     ("settings", |state| {
-        state.settings_draft = Some(Default::default())
+        state.settings.settings_draft = Some(Default::default())
     }),
     ("confirm_worktree_delete", |state| {
         state.worktree_delete_target = Some("wt".to_string())

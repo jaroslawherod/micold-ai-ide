@@ -576,7 +576,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "settings-dialog-with-validation-error",
             build: || {
                 let mut state = with_project();
-                state.settings_draft = Some(SettingsDraft {
+                state.settings.settings_draft = Some(SettingsDraft {
                     scrollback_lines: "12000".to_string(),
                     env_include_enabled: true,
                     env_include_script_path: "~/.config/micold/session-env.sh".to_string(),

@@ -489,7 +489,7 @@ pub fn records_for(
     scheme: micold_core::theme::ColorScheme,
 ) -> Vec<LayoutRecord> {
     let mut under = (covered.build)();
-    under.state.theme_pref = match scheme {
+    under.state.settings.theme_pref = match scheme {
         micold_core::theme::ColorScheme::Light => micold_core::theme::ThemePreference::Light,
         micold_core::theme::ColorScheme::Dark => micold_core::theme::ThemePreference::Dark,
     };
@@ -564,7 +564,7 @@ pub fn resolve_revealing(
     use iced::advanced::Shell;
 
     let mut under = (revealing.build)();
-    under.state.theme_pref = match scheme {
+    under.state.settings.theme_pref = match scheme {
         micold_core::theme::ColorScheme::Light => micold_core::theme::ThemePreference::Light,
         micold_core::theme::ColorScheme::Dark => micold_core::theme::ThemePreference::Dark,
     };
@@ -629,7 +629,7 @@ pub fn resolve_revealed(
     scheme: micold_core::theme::ColorScheme,
 ) -> Vec<LayoutRecord> {
     let mut under = (revealing.build)();
-    under.state.theme_pref = match scheme {
+    under.state.settings.theme_pref = match scheme {
         micold_core::theme::ColorScheme::Light => micold_core::theme::ThemePreference::Light,
         micold_core::theme::ColorScheme::Dark => micold_core::theme::ThemePreference::Dark,
     };

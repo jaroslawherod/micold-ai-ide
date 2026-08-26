@@ -113,7 +113,7 @@ fn with_project(sessions: Vec<Session>) -> State {
         // Clamping is only meaningful against a window whose size the application knows.
         ..State::default()
     };
-    state.theme_pref = match RECORDED_SCHEME {
+    state.settings.theme_pref = match RECORDED_SCHEME {
         ColorScheme::Light => ThemePreference::Light,
         ColorScheme::Dark => ThemePreference::Dark,
     };

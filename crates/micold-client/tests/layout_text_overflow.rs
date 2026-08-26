@@ -82,7 +82,7 @@ fn no_text_is_drawn_wider_than_its_clip() {
 
     for covered in covered_states() {
         let mut under = (covered.build)();
-        under.state.theme_pref = micold_core::theme::ThemePreference::Light;
+        under.state.settings.theme_pref = micold_core::theme::ThemePreference::Light;
         let _ = ColorScheme::Light;
 
         let element = micold_client::ui::view(

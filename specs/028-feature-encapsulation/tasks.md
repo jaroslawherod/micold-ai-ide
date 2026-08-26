@@ -179,7 +179,7 @@ today, it does for none of them.
 - [X] T029 [US2] Move `help`'s 2 fields (`about_open`, `help_menu_open`) into `features::help::State` in `crates/micold-client/src/features/help.rs`
 - [X] T030 [US2] Move `window`'s 2 fields (`focused_field`, `window_size`) into `features::window::State` in `crates/micold-client/src/features/window.rs`
 - [X] T031 [US2] Move `worktree_form`'s 2 fields (`worktree_error`, `worktree_form`) into the existing `WorktreeForm` grouping in `crates/micold-client/src/features/worktree_form.rs`
-- [ ] T032 [US2] Move `settings`' 3 fields (`settings_draft`, `system_scheme`, `theme_pref`) into `features::settings::State` in `crates/micold-client/src/features/settings.rs`
+- [X] T032 [US2] Move `settings`' 3 fields (`settings_draft`, `system_scheme`, `theme_pref`) into `features::settings::State` in `crates/micold-client/src/features/settings.rs`
 - [ ] T033 [US2] Move `project`'s 5 fields (`forget_target`, `project_menu_open`, `project_switcher_open`, `rename_draft`, `selector`) into `features::project::State` in `crates/micold-client/src/features/project.rs`
 - [ ] T034 [US2] Move `worktree`'s 6 fields (`hovered_worktree`, `worktree_delete_keep_branch`, `worktree_delete_target`, `worktree_menu_open`, `worktree_rename_draft`, `worktrees`) into `features::worktree::State` in `crates/micold-client/src/features/worktree.rs`
 - [ ] T035 [US2] Move `sidebar`'s 10 fields (`default_expanded`, `expanded`, `pending_reveal_scroll`, `show_agent_worktrees`, `sidebar_filter_open`, `sidebar_filters`, `sidebar_hidden`, `sidebar_scroll_offset`, `sidebar_viewport_height`, `sidebar_width`) into `features::sidebar::State` in `crates/micold-client/src/features/sidebar.rs`
