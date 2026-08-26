@@ -161,9 +161,12 @@ never changes how a session's exit is handled.
 
 - **A crash *loop* gives up, loudly.** If a session keeps crashing, the daemon retries a bounded
   number of times (three consecutive restarts) and then settles it in a **Failed** state instead of
-  restarting forever. Failed is durable: it shows up in the session list the next time a window
-  attaches — with the attempt count — and you can restart it manually once you've addressed the
-  cause. This is the same limit whether or not a window was open while it was crashing.
+  restarting forever. Failed carries a sentence saying how many attempts were spent and what the
+  last exit was — `Gave up after 3 restart attempts — last exit: exit status 1.` — and a window that
+  attaches afterwards is shown it, so a loop that ran while nobody was watching is not reduced to
+  the word `failed`. It survives until the daemon itself stops (the state is held in memory, not
+  written to disk), and you can restart the session manually once you've addressed the cause. This
+  is the same limit whether or not a window was open while it was crashing.
 
 - **Teardown reaps the whole process tree.** Closing or deleting a session terminates not just its
   top-level process but any helpers it spawned, so nothing is orphaned in the background.

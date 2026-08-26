@@ -88,7 +88,12 @@ impl SessionLabel {
 }
 
 /// Runtime state of a session's `claude` process (FR-016, FR-022/022a). Never persisted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// Not `Copy`: `Failed` carries the sentence explaining it (010 BUG-017). The alternative was to
+/// keep the reason somewhere beside the state, which is what the daemon had to do for start
+/// failures precisely because this enum had nowhere to put one — two records of the same fact, able
+/// to disagree.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionLifecycle {
     /// Persisted but no process running (after restart / project close). Reopen resumes it.
     Idle,
@@ -100,7 +105,23 @@ pub enum SessionLifecycle {
     /// consecutive failed (re)starts for the crash-loop guard.
     Restarting { attempts: u8 },
     /// Auto-restart gave up after repeated quick failures (FR-022a); user may retry manually.
-    Failed,
+    ///
+    /// Both fields are measurements, not decoration (FR-005: *record the give-up state and reason*;
+    /// 010 BUG-017). `reason` is the sentence shown to a user who was not watching — it is also the
+    /// whole trigger for announcing the failure at all, since the client announces exactly when the
+    /// reason is non-empty. `attempts` is what the budget actually spent.
+    ///
+    /// It outlives the process and every client, but not the daemon: this enum is not persisted
+    /// (see above), so a give-up survives an unobserved period and a reattach, and not a restart of
+    /// the service.
+    Failed {
+        /// Why it gave up, in one sentence: how many attempts were spent and what the last exit
+        /// was. Assembled in [`Session::on_unexpected_exit`], which owns the budget half, from the
+        /// caller's account of the exit, which owns the other.
+        reason: String,
+        /// Consecutive failed (re)starts spent before giving up.
+        attempts: u8,
+    },
     /// The service restarted (reboot, crash, or a deliberate contract-mismatch restart) and found a
     /// durable record of a session that had a recorded conversation. Presented distinctly from both
     /// `Running` and a deliberately stopped (`Idle`) session, and **never auto-relaunched** — only a
@@ -434,7 +455,7 @@ impl Session {
         if matches!(
             self.lifecycle,
             SessionLifecycle::Idle
-                | SessionLifecycle::Failed
+                | SessionLifecycle::Failed { .. }
                 | SessionLifecycle::InterruptedResumable
         ) {
             self.lifecycle = SessionLifecycle::Starting;
@@ -462,14 +483,25 @@ impl Session {
 
     /// Handle an UNEXPECTED process exit (crash / external kill), applying the crash-loop
     /// guard (FR-022/022a). Returns whether to resume or give up.
-    pub fn on_unexpected_exit(&mut self) -> RestartDecision {
+    ///
+    /// `how` is the caller's short account of the exit — `exit status 1`, `killed by SIGSEGV`. The
+    /// caller owns it because only the caller has the exit status; this owns the budget, so the
+    /// sentence a give-up records is assembled here from both halves and there is exactly one of
+    /// it, shared by the attended and unattended paths (010 BUG-017, FR-005).
+    ///
+    /// It is only *kept* on a give-up. A crash still under budget is about to be restarted, and a
+    /// reason for a state the session is leaving is a reason nobody reads.
+    pub fn on_unexpected_exit(&mut self, how: &str) -> RestartDecision {
         let attempts = match self.lifecycle {
             SessionLifecycle::Restarting { attempts } => attempts,
             _ => 0,
         };
         let next = attempts + 1;
         if next >= MAX_RESTART_ATTEMPTS {
-            self.lifecycle = SessionLifecycle::Failed;
+            self.lifecycle = SessionLifecycle::Failed {
+                reason: format!("Gave up after {next} restart attempts — last exit: {how}."),
+                attempts: next,
+            };
             RestartDecision::GiveUp
         } else {
             self.lifecycle = SessionLifecycle::Restarting { attempts: next };

@@ -43,7 +43,7 @@ fn find_session_mut_allows_lifecycle_mutation() {
 
     let (owner, s) = ws.find_session_mut(id).expect("resolved mutably");
     assert_eq!(owner, Path::new("/a"));
-    let _ = s.on_unexpected_exit();
+    let _ = s.on_unexpected_exit("exit status 1");
 
     assert!(matches!(
         ws.sessions[Path::new("/a")][0].lifecycle,

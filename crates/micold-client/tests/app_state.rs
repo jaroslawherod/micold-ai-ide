@@ -2277,7 +2277,7 @@ fn applying_the_memory_starts_only_the_session_it_displays() {
     let before: Vec<_> = state
         .active_sessions()
         .iter()
-        .map(|s| (s.id, s.lifecycle))
+        .map(|s| (s.id, s.lifecycle.clone()))
         .collect();
 
     let choice = state.explain_foreground(&path).session();
@@ -2286,7 +2286,7 @@ fn applying_the_memory_starts_only_the_session_it_displays() {
     let after: Vec<_> = state
         .active_sessions()
         .iter()
-        .map(|s| (s.id, s.lifecycle))
+        .map(|s| (s.id, s.lifecycle.clone()))
         .collect();
     assert_eq!(
         before, after,

@@ -289,7 +289,7 @@ fn a_stopped_or_failed_session_that_is_current_is_still_marked() {
                 .unwrap();
             session.mark_running();
             for _ in 0..drive {
-                if session.on_unexpected_exit() == RestartDecision::GiveUp {
+                if session.on_unexpected_exit("exit status 1") == RestartDecision::GiveUp {
                     break;
                 }
             }

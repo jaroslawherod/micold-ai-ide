@@ -580,7 +580,7 @@ fn session_tree_item(
     r: Roles,
 ) -> TreeItem<'static, Message> {
     let tint = match session.lifecycle {
-        SessionLifecycle::Failed => r.error,
+        SessionLifecycle::Failed { .. } => r.error,
         SessionLifecycle::Idle => r.on_surface_variant,
         // Interrupted-but-resumable reads as needing attention, distinct from a plain idle stop
         // (FR-006a: "visibly different from both running and a deliberately stopped session").
@@ -677,6 +677,16 @@ mod tests {
     use micold_core::session::{AiCli, Session};
     use micold_core::theme::ColorScheme;
 
+    /// A `Failed` in the shape supervision produces one. These cases are about the *variant* — the
+    /// tint, the status word, whether restart is offered — not about the sentence, but the variant
+    /// has carried one since `010` BUG-017 and something has to fill it.
+    fn failed() -> SessionLifecycle {
+        SessionLifecycle::Failed {
+            reason: "Gave up after 3 restart attempts — last exit: exit status 1.".into(),
+            attempts: 3,
+        }
+    }
+
     fn session(activity: ActivitySignal, lifecycle: SessionLifecycle) -> Session {
         let mut s = Session::start_new(
             SessionLocation::Worktree("feat-a".to_string()),
@@ -698,10 +708,10 @@ mod tests {
             SessionLifecycle::Starting,
             SessionLifecycle::Running,
             SessionLifecycle::Restarting { attempts: 1 },
-            SessionLifecycle::Failed,
+            failed(),
             SessionLifecycle::InterruptedResumable,
         ] {
-            let s = session(ActivitySignal::Unknown, lifecycle);
+            let s = session(ActivitySignal::Unknown, lifecycle.clone());
             let item: TreeItem<'_, Message> = session_tree_item(&s, None, r);
             assert!(
                 item.icon.is_none(),
@@ -721,7 +731,7 @@ mod tests {
         let r = tokens::roles(ColorScheme::Dark);
         let tint = |l| session_tree_item(&session(ActivitySignal::Unknown, l), None, r).tint;
 
-        assert_eq!(tint(SessionLifecycle::Failed), r.error);
+        assert_eq!(tint(failed()), r.error);
         assert_eq!(tint(SessionLifecycle::Idle), r.on_surface_variant);
         assert_eq!(tint(SessionLifecycle::InterruptedResumable), r.primary);
         assert_eq!(tint(SessionLifecycle::Running), r.on_surface);

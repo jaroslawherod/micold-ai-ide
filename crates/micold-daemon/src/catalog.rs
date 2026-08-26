@@ -764,7 +764,7 @@ fn session_summary(session: &Session) -> SessionSummary {
         // happens to collide across two providers' stores must not be able to change which CLI a
         // known session runs (data-model invariant 3).
         provider: session.provider,
-        lifecycle: wire_lifecycle(session.lifecycle),
+        lifecycle: wire_lifecycle(session.lifecycle.clone()),
         activity: ActivitySignal::Unknown,
         input_serial: 0,
         live_shells: Vec::new(),
@@ -772,17 +772,15 @@ fn session_summary(session: &Session) -> SessionSummary {
 }
 
 /// Map the in-process lifecycle to its wire form. The wire `Failed { reason, attempts }` carries a
-/// reason the in-process enum does not yet track; a plain `Failed` maps with an empty reason here.
+/// reason the in-process enum did not track until `010` BUG-017; both fields now map straight
+/// through, and nothing here synthesises either.
 fn wire_lifecycle(lifecycle: SessionLifecycle) -> WireLifecycle {
     match lifecycle {
         SessionLifecycle::Idle => WireLifecycle::Idle,
         SessionLifecycle::Starting => WireLifecycle::Starting,
         SessionLifecycle::Running => WireLifecycle::Running,
         SessionLifecycle::Restarting { attempts } => WireLifecycle::Restarting { attempts },
-        SessionLifecycle::Failed => WireLifecycle::Failed {
-            reason: String::new(),
-            attempts: micold_core::session::MAX_RESTART_ATTEMPTS,
-        },
+        SessionLifecycle::Failed { reason, attempts } => WireLifecycle::Failed { reason, attempts },
         SessionLifecycle::InterruptedResumable => WireLifecycle::InterruptedResumable,
     }
 }

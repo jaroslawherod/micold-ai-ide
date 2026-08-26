@@ -90,10 +90,12 @@ struct Inner {
     /// now, not about the session, and a `PATH` fixed between runs must not leave a stale
     /// complaint behind. Cleared the moment the session starts.
     ///
-    /// It lives here rather than on the domain `SessionLifecycle` because that enum's `Failed` is a
-    /// **unit variant** meaning "auto-restart gave up after repeated quick failures" — it has
-    /// nowhere to put a message. The wire's `Failed { reason, attempts }` does, and this is what
-    /// fills it.
+    /// It lives here rather than on the domain `SessionLifecycle` because that enum's `Failed`
+    /// means one specific thing — "auto-restart gave up after repeated quick failures" — and a
+    /// start that never got as far as a first process is not that. `010` BUG-017 gave that variant
+    /// a `reason` of its own, so the reason this is separate is no longer "there is nowhere to put
+    /// the text"; it is that the two failures are different failures. This one spends no restart
+    /// budget (`attempts: 0`) and is cleared by a start rather than by a survival.
     start_failures: HashMap<SessionId, String>,
     /// Per-directory cache of the environment-include-resolved variables (feature 011), already
     /// merged with the hardcoded `TERM` pair — ready to hand straight to a spawn site's `env`
@@ -1360,7 +1362,12 @@ impl DaemonState {
                 } else {
                     // A reaped-but-unclassifiable exit is treated as a crash so supervision still
                     // runs rather than the session lingering as a dead-but-alive entry.
-                    exited.push((*id, proc.pty.exit_outcome().unwrap_or(ExitOutcome::Crashed)));
+                    exited.push((
+                        *id,
+                        proc.pty
+                            .exit_outcome()
+                            .unwrap_or_else(|| ExitOutcome::crashed("exit status not observed")),
+                    ));
                 }
             }
             for (id, outcome) in exited {

@@ -241,6 +241,7 @@ fn a_session_the_daemon_starts_reaches_the_clients_state_as_running() {
             .find(|s| s.id == sid)
             .expect("session")
             .lifecycle
+            .clone()
     };
 
     let mut core = State::default();
@@ -307,9 +308,10 @@ impl Drop for NoCliOnPath {
 /// The daemon has computed this sentence since T076 and `session_start.rs` has gated its wording
 /// since then. What §B's manual pass found was that it stops at the wire: the bar reads `failed`,
 /// and the sentence naming the CLI is in the row, the terminal and the hover state exactly nowhere.
-/// `wire_to_lifecycle` maps `Failed { reason, .. }` onto a **unit** `SessionLifecycle::Failed`, so
-/// the text was dropped at the boundary and every per-side test stayed green — the shape this file
-/// exists for.
+/// `wire_to_lifecycle` mapped `Failed { reason, .. }` onto a then-unit `SessionLifecycle::Failed`,
+/// so the text was dropped at the boundary and every per-side test stayed green — the shape this
+/// file exists for. (`010` BUG-017 later gave the domain variant the fields, so the text now
+/// survives the crossing; the notification below is still what a user can actually read.)
 ///
 /// So the assertion is on what a user can read, not on the lifecycle: the client's notification
 /// queue, whose visible message must be the daemon's own sentence, naming the CLI in the

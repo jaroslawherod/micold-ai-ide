@@ -72,11 +72,11 @@ pub struct PtySession {
     size: Arc<Mutex<WindowSize>>,
     /// Set true when the reader thread sees EOF on the PTY (the child's output ended).
     reader_done: Arc<AtomicBool>,
-    /// The child's exit outcome once reaped — `Some(success)` after [`Self::is_alive`] or
+    /// The child's exit outcome once reaped — `Some(outcome)` after [`Self::is_alive`] or
     /// [`Self::exit_outcome`] observes the child gone, `None` while it is still running. Cached
     /// because `try_wait` only yields the status once; the supervisor reads it after the child dies
     /// to classify a clean exit vs a crash (US4, FR-005).
-    exit: Arc<Mutex<Option<bool>>>,
+    exit: Arc<Mutex<Option<ExitOutcome>>>,
     /// The reader thread handle, joined on drop.
     reader: Option<JoinHandle<()>>,
 }
@@ -315,14 +315,14 @@ impl PtySession {
         match self.child.lock() {
             Ok(mut child) => match child.try_wait() {
                 Ok(Some(status)) => {
-                    self.cache_exit(status.success());
+                    self.cache_exit(ExitOutcome::from_status(&status));
                     false
                 }
                 Ok(None) => true,
                 // A reap error means we can no longer track the child; treat it as gone (a crash,
                 // so supervision can react) rather than pretend it is alive forever.
                 Err(_) => {
-                    self.cache_exit(false);
+                    self.cache_exit(ExitOutcome::crashed("could not be reaped"));
                     false
                 }
             },
@@ -330,11 +330,11 @@ impl PtySession {
         }
     }
 
-    /// Record the child's exit success bit the first time it is observed (idempotent — later reaps
-    /// never overwrite the first-seen outcome).
-    fn cache_exit(&self, success: bool) {
+    /// Record how the child exited the first time it is observed (idempotent — later reaps never
+    /// overwrite the first-seen outcome).
+    fn cache_exit(&self, outcome: ExitOutcome) {
         if let Ok(mut e) = self.exit.lock() {
-            e.get_or_insert(success);
+            e.get_or_insert(outcome);
         }
     }
 
@@ -342,15 +342,11 @@ impl PtySession {
     /// [`Self::is_alive`] if not yet observed, so a caller can poll this directly. Drives the
     /// restart supervision policy (US4, FR-005): a clean exit stops the session, a crash restarts.
     pub fn exit_outcome(&self) -> Option<ExitOutcome> {
-        if self.exit.lock().ok().and_then(|e| *e).is_none() {
+        if self.exit.lock().ok().is_some_and(|e| e.is_none()) {
             // Not yet observed — attempt a reap now.
             let _ = self.is_alive();
         }
-        self.exit
-            .lock()
-            .ok()
-            .and_then(|e| *e)
-            .map(ExitOutcome::from_success)
+        self.exit.lock().ok().and_then(|e| e.clone())
     }
 
     /// Whether the PTY reader has seen EOF (the child's output stream ended). A hint for the framer;
@@ -441,9 +437,27 @@ mod tests {
     }
 
     #[test]
-    fn a_nonzero_exit_is_classified_crashed() {
+    fn a_nonzero_exit_is_classified_crashed_and_keeps_the_status() {
         let s = PtySession::spawn(SessionId::new(), sh("exit 3"), 100, None).unwrap();
-        assert_eq!(wait_for_exit(&s), ExitOutcome::Crashed);
+        // The status, not just the classification: it is the only place the give-up reason can come
+        // from, and it is gone the moment this cache drops it (BUG-017).
+        assert_eq!(wait_for_exit(&s), ExitOutcome::crashed("exit status 3"));
+    }
+
+    #[test]
+    fn a_signalled_child_is_named_by_its_signal() {
+        let s = PtySession::spawn(SessionId::new(), sh("kill -TERM $$"), 100, None).unwrap();
+        let ExitOutcome::Crashed { how } = wait_for_exit(&s) else {
+            panic!("a signalled child is not a clean exit");
+        };
+        // `portable_pty` gives the signal's *description*, not its `SIG…` name — a `kill -TERM`
+        // reads `killed by Terminated`. Asserting the prefix rather than that exact word keeps
+        // this from depending on libc's wording, while still failing if the signal is reduced to
+        // the code 1 the same child also reports (which is what `exit status 1` would say).
+        assert!(
+            how.starts_with("killed by ") && !how.contains("exit status"),
+            "a signal reported as a bare code reads as an ordinary failure; got {how:?}"
+        );
     }
 
     #[test]
@@ -459,7 +473,7 @@ mod tests {
         let s = PtySession::spawn(SessionId::new(), sh("exit 0"), 100, None).unwrap();
         let first = wait_for_exit(&s);
         // Repeated reads never flip the outcome (try_wait only yields the status once).
-        assert_eq!(s.exit_outcome(), Some(first));
+        assert_eq!(s.exit_outcome(), Some(first.clone()));
         assert_eq!(s.exit_outcome(), Some(ExitOutcome::Clean));
     }
 
