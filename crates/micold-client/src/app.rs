@@ -368,63 +368,15 @@ pub enum Message {
     Notifications(crate::features::notifications::Msg),
 
     // ---- Feature 010: daemon connection (client of the daemon-hosted sessions) ----
-    /// The daemon connection is up: the binary stores the [`Outbox`] to drive sessions and adopts
-    /// the welcome catalog/settings. Handled by the binary (the `Outbox` is runtime, not core).
-    DaemonConnected {
-        /// Handle for sending `ClientMsg`s to the daemon.
-        outbox: crate::daemon::Outbox,
-        /// The catalog as of the handshake.
-        catalog: micold_core::protocol::messages::CatalogSnapshot,
-        /// The service-owned settings.
-        settings: micold_core::protocol::messages::DaemonSettings,
-    },
-    /// A control message pushed by the daemon (catalog/settings changes, operation results, …).
-    /// Handled by the binary.
-    DaemonEvent(micold_core::protocol::messages::DaemonMsg),
-    /// A grid frame for the viewed session (full snapshot or delta). Handled by the binary, applied
-    /// into the per-session grid cache.
-    DaemonGridFrame(micold_core::protocol::grid::GridFrame),
-    /// The daemon connection dropped; the binary clears its outbox until it reconnects.
-    DaemonDisconnected,
-    /// Connecting to (or spawning) the daemon failed, with a human-facing reason.
-    DaemonConnectFailed(String),
-    /// The user asked to take the active project back after being displaced (US5, FR-024): re-attach
-    /// with `force`. Handled by the binary (attachment is runtime).
-    ConnectionTakeoverRequested,
-    /// The daemon refused the handshake on a contract mismatch (US6, FR-021): carries both protocol
-    /// versions and the daemon build so the client can render an actionable diagnostic. Handled by
-    /// the binary.
-    DaemonVersionMismatch {
-        /// This client's protocol version.
-        client: u32,
-        /// The running daemon's protocol version.
-        daemon: u32,
-        /// The running daemon's human-facing build string.
-        daemon_build: String,
-    },
-    /// The daemon refused the handshake on a same-contract package-version difference (US6,
-    /// FR-022a, BUG-002): the wire contract matches, but a `.deb` upgrade installed a newer build
-    /// than the one still running. Carries both build strings so the client can render a distinct,
-    /// lower-severity diagnostic than [`Message::DaemonVersionMismatch`]. Handled by the binary.
-    DaemonBuildMismatch {
-        /// This client's human-facing build string.
-        client_build: String,
-        /// The running daemon's human-facing build string.
-        daemon_build: String,
-    },
-    /// The user chose "restart service" after a version or build mismatch (US6, FR-022/022a): stop
-    /// the mismatched daemon so the auto-reconnect spawns a matching one. Handled by the binary.
-    ConnectionRestartServiceRequested,
+    /// Everything the daemon connection reports or is asked to do (feature 028, FR-001). Twelve
+    /// variants moved behind this one; see [`crate::features::connection::Msg`].
+    ///
+    /// All twelve are effects, so this is the one feature whose reducer entry is only in the shell
+    /// (data-model §1.1, shape B). `State::update` declines it, as it declined each of the twelve.
+    Connection(crate::features::connection::Msg),
+
     /// A completed side-effecting task that carries nothing to apply (e.g. the daemon-stop task).
     NoOp,
-    /// The user asked to see where the session service logs and its recent errors (Phase 10, FR-046).
-    /// Handled by the binary: it requests both from the daemon and shows the answers as notices.
-    DiagnosticsRequested,
-    /// The user asked to make sessions survive logout (US7, FR-038; Linux only). Handled by the
-    /// binary, which runs the enable flow off-thread. Never triggered by install — a deliberate choice.
-    LogoutSurvivalRequested,
-    /// The logout-survival enable flow finished; carries a ready-to-show message (info or error).
-    LogoutSurvivalOutcome(String),
 }
 
 /// Root application state for the single main window.
@@ -794,19 +746,13 @@ impl State {
             // Daemon connection messages are runtime, not pure state — the binary handles them in
             // `update_inner` and never routes them here. Listed explicitly (not a catch-all) so the
             // core reducer stays exhaustive over `Message` and a future variant is a compile error.
-            Message::DaemonConnected { .. }
-            | Message::DaemonEvent(_)
-            | Message::DaemonGridFrame(_)
-            | Message::DaemonDisconnected
-            | Message::DaemonConnectFailed(_)
-            | Message::ConnectionTakeoverRequested
-            | Message::DaemonVersionMismatch { .. }
-            | Message::DaemonBuildMismatch { .. }
-            | Message::ConnectionRestartServiceRequested
-            | Message::NoOp
-            | Message::DiagnosticsRequested
-            | Message::LogoutSurvivalRequested
-            | Message::LogoutSurvivalOutcome(_) => {}
+            //
+            // Since T011 the whole connection vocabulary arrives under one wrapper, so declining it
+            // is one arm rather than twelve. That is not a weaker statement: `Message` is still
+            // matched exhaustively, and a thirteenth connection message is a compile error in
+            // `shell/connection.rs` — which is the file that would have to decide what to do with
+            // it — rather than here, where the answer is and always was "nothing".
+            Message::Connection(_) | Message::NoOp => {}
             Message::Help(msg) => {
                 let outcomes = crate::features::help::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));

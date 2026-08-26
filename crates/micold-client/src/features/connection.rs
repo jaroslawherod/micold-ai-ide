@@ -94,3 +94,78 @@ pub fn connection_status(
         ConnectionStatus::Connected
     }
 }
+
+/// Everything the daemon connection reports or is asked to do (feature 028, FR-001).
+///
+/// # The variants kept their meaning and lost their prefix
+///
+/// Seven began with `Daemon` and two with `Connection`; neither prefix survives, because the type
+/// now says which connection (contract M1). The result reads the way [`ConnectionStatus`] beside it
+/// already did — `Connected`, `Disconnected`, `VersionMismatch` — which is the same vocabulary
+/// about the same thing, and the duplication of names between the two is the point: a status is
+/// what a message leaves behind. `DiagnosticsRequested` and the two `LogoutSurvival` variants
+/// carried no prefix to drop.
+///
+/// # Every arm of this one is an effect
+///
+/// This is the feature data-model §1.1 calls shape B: the reducer entry is
+/// `shell/connection.rs`'s `update`, and there is no pure half. The connection is binary-owned
+/// runtime — an outbox handle, a socket that dropped, a service to restart — so `State::update`
+/// has never done anything with these but decline them, and it still declines them, now in one arm
+/// instead of twelve.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Msg {
+    /// The daemon connection is up: the binary stores the `Outbox` to drive sessions and adopts
+    /// the welcome catalog/settings.
+    Connected {
+        /// Handle for sending `ClientMsg`s to the daemon.
+        outbox: crate::daemon::Outbox,
+        /// The catalog as of the handshake.
+        catalog: micold_core::protocol::messages::CatalogSnapshot,
+        /// The service-owned settings.
+        settings: micold_core::protocol::messages::DaemonSettings,
+    },
+    /// A control message pushed by the daemon (catalog/settings changes, operation results, …).
+    Event(micold_core::protocol::messages::DaemonMsg),
+    /// A grid frame for the viewed session (full snapshot or delta), applied into the per-session
+    /// grid cache.
+    GridFrame(micold_core::protocol::grid::GridFrame),
+    /// The daemon connection dropped; the binary clears its outbox until it reconnects.
+    Disconnected,
+    /// Connecting to (or spawning) the daemon failed, with a human-facing reason.
+    ConnectFailed(String),
+    /// The user asked to take the active project back after being displaced (US5, FR-024):
+    /// re-attach with `force`.
+    TakeoverRequested,
+    /// The daemon refused the handshake on a contract mismatch (US6, FR-021): carries both protocol
+    /// versions and the daemon build so the client can render an actionable diagnostic.
+    VersionMismatch {
+        /// This client's protocol version.
+        client: u32,
+        /// The running daemon's protocol version.
+        daemon: u32,
+        /// The running daemon's human-facing build string.
+        daemon_build: String,
+    },
+    /// The daemon refused the handshake on a same-contract package-version difference (US6,
+    /// FR-022a, BUG-002): the wire contract matches, but a `.deb` upgrade installed a newer build
+    /// than the one still running. Carries both build strings so the client can render a distinct,
+    /// lower-severity diagnostic than [`Msg::VersionMismatch`].
+    BuildMismatch {
+        /// This client's human-facing build string.
+        client_build: String,
+        /// The running daemon's human-facing build string.
+        daemon_build: String,
+    },
+    /// The user chose "restart service" after a version or build mismatch (US6, FR-022/022a): stop
+    /// the mismatched daemon so the auto-reconnect spawns a matching one.
+    RestartServiceRequested,
+    /// The user asked to see where the session service logs and its recent errors (Phase 10,
+    /// FR-046): the binary requests both from the daemon and shows the answers as notices.
+    DiagnosticsRequested,
+    /// The user asked to make sessions survive logout (US7, FR-038; Linux only). The binary runs
+    /// the enable flow off-thread. Never triggered by install — a deliberate choice.
+    LogoutSurvivalRequested,
+    /// The logout-survival enable flow finished; carries a ready-to-show message (info or error).
+    LogoutSurvivalOutcome(String),
+}

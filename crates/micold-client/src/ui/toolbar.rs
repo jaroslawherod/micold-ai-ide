@@ -4,6 +4,7 @@
 //! overlay (see [`crate::ui::material::menu_overlay`], rendered in `ui::view`).
 
 use crate::app::{Message, State};
+use crate::features::connection::Msg as ConnectionMsg;
 use crate::features::help::help_actions;
 use crate::features::help::Msg as HelpMsg;
 use crate::features::settings::Msg as SettingsMsg;
@@ -41,7 +42,7 @@ pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
         MenuItem::new(
             Icon::Help,
             "Session service diagnostics",
-            Message::DiagnosticsRequested,
+            Message::Connection(ConnectionMsg::DiagnosticsRequested),
         ),
     ];
     // Surviving a full logout is a Linux-only, explicitly user-enabled action (US7, FR-038) — never
@@ -50,7 +51,7 @@ pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
     items.push(MenuItem::new(
         Icon::AutoMode,
         "Keep sessions after logout",
-        Message::LogoutSurvivalRequested,
+        Message::Connection(ConnectionMsg::LogoutSurvivalRequested),
     ));
     items.push(MenuItem::new(
         Icon::About,

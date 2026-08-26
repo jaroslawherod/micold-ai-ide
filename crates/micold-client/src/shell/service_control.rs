@@ -22,6 +22,7 @@ use iced::Task;
 use micold_client::app::Message;
 
 use crate::App;
+use micold_client::features::connection::Msg as ConnectionMsg;
 
 /// "Restart service" (FR-022/022a): stop the mismatched daemon by its recorded pid.
 ///
@@ -49,9 +50,9 @@ pub(crate) fn on_restart_service_requested(app: &mut App) -> Task<Message> {
         },
         |r: Result<bool, String>| match r {
             Ok(_) => Message::NoOp,
-            Err(e) => {
-                Message::DaemonConnectFailed(format!("could not stop the mismatched service: {e}"))
-            }
+            Err(e) => Message::Connection(ConnectionMsg::ConnectFailed(format!(
+                "could not stop the mismatched service: {e}"
+            ))),
         },
     )
 }
@@ -79,7 +80,7 @@ pub(crate) fn on_logout_survival_requested() -> Task<Message> {
             micold_core::logout_survival::SurvivalOutcome,
         >| {
             let outcome = r.unwrap_or_else(|e| e);
-            Message::LogoutSurvivalOutcome(outcome.user_message())
+            Message::Connection(ConnectionMsg::LogoutSurvivalOutcome(outcome.user_message()))
         },
     )
 }

@@ -521,44 +521,9 @@ fn tab_reveal_scroll(app: &mut App) -> Option<Task<Message>> {
 fn update_inner(app: &mut App, message: Message) -> Task<Message> {
     match message {
         // ---- Feature 010: daemon connection lifecycle (binary-owned runtime state) ----
-        Message::DaemonConnected {
-            outbox,
-            catalog,
-            settings,
-        } => shell::daemon_sync::on_connected(app, outbox, catalog, settings),
-        Message::DaemonEvent(event) => shell::daemon_sync::on_daemon_event(app, event),
-        Message::DaemonGridFrame(frame) => shell::daemon_sync::on_grid_frame(app, frame),
-        Message::DaemonDisconnected => shell::daemon_sync::on_disconnected(app),
-        Message::DaemonConnectFailed(reason) => shell::daemon_sync::on_connect_failed(app, reason),
-        Message::ConnectionTakeoverRequested => shell::daemon_sync::on_takeover_requested(app),
-        // The daemon refused us on a contract mismatch (US6, FR-021): record it so the banner can
-        // name both versions and offer the restart action. The connection subscription keeps
-        // retrying in the background; each retry re-sets this identically until the user acts.
-        Message::DaemonVersionMismatch {
-            client,
-            daemon,
-            daemon_build,
-        } => {
-            app.version_mismatch = Some((client, daemon, daemon_build));
-            Task::none()
-        }
-        // Same contract, different package version (US6, FR-022a, BUG-002): record it so the banner
-        // can name both builds and offer the restart action, distinct from a contract mismatch.
-        Message::DaemonBuildMismatch {
-            client_build,
-            daemon_build,
-        } => {
-            app.build_mismatch = Some((client_build, daemon_build));
-            Task::none()
-        }
-        Message::ConnectionRestartServiceRequested => {
-            shell::service_control::on_restart_service_requested(app)
-        }
-        Message::LogoutSurvivalRequested => shell::service_control::on_logout_survival_requested(),
-        Message::LogoutSurvivalOutcome(message) => {
-            shell::service_control::on_logout_survival_outcome(app, message)
-        }
-        Message::DiagnosticsRequested => shell::daemon_sync::on_diagnostics_requested(app),
+        // Twelve arms until T011. All twelve were effects, so all twelve are `shell/connection.rs`
+        // now (contract M2) and the routing decision is stated once, next to them.
+        Message::Connection(msg) => shell::connection::update(app, msg),
 
         // The closing dialog has finished animating out; its snapshot has served its purpose.
         Message::OverlayTransitionFinished => {
@@ -937,6 +902,7 @@ pub(crate) mod tests {
     // mostly what they were for; the stamper-seeding tests below still build a snapshot, so they
     // import them back rather than keep a second copy.
     use crate::shell::daemon_sync::tests::{snapshot_with, summary, summary_at};
+    use micold_client::features::connection::Msg as ConnectionMsg;
     use micold_client::features::settings::Msg as SettingsMsg;
     use micold_client::features::settings::SettingsDraft;
     // These tests drive whole messages through `update_inner`, which is this file's dispatcher, so
@@ -1200,11 +1166,11 @@ pub(crate) mod tests {
         let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
         let _ = update_inner(
             app,
-            Message::DaemonConnected {
+            Message::Connection(ConnectionMsg::Connected {
                 outbox: micold_client::daemon::Outbox::new(tx),
                 catalog,
                 settings: quiet_settings(),
-            },
+            }),
         );
         let mut sent = Vec::new();
         while let Ok(msg) = rx.try_recv() {
@@ -1458,7 +1424,7 @@ pub(crate) mod tests {
     }
 
     fn feed(app: &mut App, msg: DaemonMsg) {
-        let _ = update_inner(app, Message::DaemonEvent(msg));
+        let _ = update_inner(app, Message::Connection(ConnectionMsg::Event(msg)));
     }
 
     #[test]
@@ -1683,7 +1649,7 @@ pub(crate) mod tests {
 
         let _ = update_inner(
             &mut app,
-            Message::DaemonConnected {
+            Message::Connection(ConnectionMsg::Connected {
                 outbox: micold_client::daemon::Outbox::new(tx),
                 catalog: snapshot_with("/repo/demo", Vec::new()),
                 settings: micold_core::protocol::messages::DaemonSettings {
@@ -1692,7 +1658,7 @@ pub(crate) mod tests {
                     env_include_script_path: "/authoritative/from-daemon.sh".into(),
                     env_include_timeout_secs: 30,
                 },
-            },
+            }),
         );
 
         assert_eq!(app.scrollback_lines, 12_345);
@@ -1713,14 +1679,14 @@ pub(crate) mod tests {
 
         let _ = update_inner(
             &mut app,
-            Message::DaemonEvent(DaemonMsg::SettingsChanged {
+            Message::Connection(ConnectionMsg::Event(DaemonMsg::SettingsChanged {
                 settings: micold_core::protocol::messages::DaemonSettings {
                     scrollback_lines: 5_000,
                     env_include_enabled: false,
                     env_include_script_path: "/tmp/after.sh".into(),
                     env_include_timeout_secs: 45,
                 },
-            }),
+            })),
         );
 
         assert_eq!(app.scrollback_lines, 5_000);

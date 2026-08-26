@@ -39,6 +39,7 @@ pub(crate) mod worktree_form;
 pub(crate) mod worktree_rename;
 
 use crate::app::{Message, State};
+use crate::features::connection::Msg as ConnectionMsg;
 use crate::features::help::Msg as HelpMsg;
 use crate::features::notifications::Msg as NotificationsMsg;
 use crate::features::sidebar::Msg as SidebarMsg;
@@ -98,7 +99,10 @@ fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a,
             format!("{by} is now attached — this window is read-only until you take it back."),
             roles,
         )
-        .action("Take over", Message::ConnectionTakeoverRequested),
+        .action(
+            "Take over",
+            Message::Connection(ConnectionMsg::TakeoverRequested),
+        ),
         ConnectionStatus::VersionMismatch {
             client,
             daemon,
@@ -114,7 +118,7 @@ fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a,
         )
         .action(
             "Restart service",
-            Message::ConnectionRestartServiceRequested,
+            Message::Connection(ConnectionMsg::RestartServiceRequested),
         ),
         ConnectionStatus::BuildMismatch {
             client_build,
@@ -130,7 +134,7 @@ fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a,
         )
         .action(
             "Restart service",
-            Message::ConnectionRestartServiceRequested,
+            Message::Connection(ConnectionMsg::RestartServiceRequested),
         ),
     };
     container(banner)

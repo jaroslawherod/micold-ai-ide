@@ -18,6 +18,7 @@
 
 pub mod capabilities;
 pub mod clipboard;
+pub mod connection;
 pub mod daemon_sync;
 pub mod env_include;
 pub mod os_theme;
