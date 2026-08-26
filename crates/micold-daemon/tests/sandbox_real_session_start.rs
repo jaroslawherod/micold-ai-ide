@@ -47,7 +47,9 @@ use micold_core::project::{Availability, Project};
 use micold_core::protocol::auth::Token;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, PresentedToken};
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::store::ProjectStore;
 use micold_core::workspace::Workspace;
 
@@ -99,6 +101,9 @@ fn seed(data_home: &Path, project: &Path) -> Vec<SessionId> {
                 SessionLocation::Default,
                 SessionLabel::Named(format!("round-{i}")),
                 TerminalMode::Regular,
+                // Feature 026: the persisted AI CLI. The default one — what is timed is a shell
+                // reaching its first prompt, which no provider choice takes part in.
+                AiCli::default(),
             )
         })
         .collect();
