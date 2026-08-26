@@ -7,7 +7,9 @@
 every intermediate value and reached its target — in about a third of its stated duration, because
 `Progress` stepped by frame count against an assumed 16 ms frame while this window renders uncapped
 at ~200 fps. The frame counts below stand as measurements; what they mean is in
-[BUG-001's root cause](../bugs/BUG-001.md#root-cause), and the clock is now elapsed-time.
+[BUG-001's root cause](../bugs/BUG-001.md#root-cause), and the clock is now elapsed-time. The exits
+were re-measured after the fix, along with the two clauses this pass could not answer —
+[BUG-001-exits-after-the-fix.md](BUG-001-exits-after-the-fix.md).
 **Ran on**: Xvfb `:83` at 1600×1400, Mesa lavapipe software Vulkan, no window manager —
 not a real display. See "What this does and does not transfer" at the end.
 
