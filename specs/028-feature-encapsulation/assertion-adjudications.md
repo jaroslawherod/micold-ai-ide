@@ -372,5 +372,39 @@ was: assert!(state.help_menu_open)
 was: assert!(state.help_menu_open,"precondition:themenuisopen")
 ```
 
+## T030 — the window's size and focus moved behind `state.window`
+
+Two renames, applied everywhere: `state.focused_field` is `state.window.focused_field` and
+`state.window_size` is `state.window.window_size`, because both fields are now members of
+`features::window::State` rather than flat fields of `app::State`. Twenty assertions changed
+spelling and none changed meaning — each still asks the same field the same question, reached one
+segment further in. Every one is a plain field-path rename, across `tests/app_state.rs`,
+`tests/features_window.rs`, `tests/switcher_forget_menu.rs` and `tests/terminal_focus.rs`.
+
+The first one below is worth naming because it is not a bare field read: `terminal_focus.rs`
+compares a four-tuple of `(terminal_focused(), terminal_released, focused_field, active_session)`
+against the tuple it captured before a window-focus round trip. The rename reaches inside the tuple
+and nowhere else — the same four facts are compared to the same four, and the round trip it pins
+(FR-013–FR-015) is untouched.
+
+```
+was: assert_eq!((s.terminal_focused(),s.terminal_released,s.focused_field,s.active_session),before,"awindowfocusroundtripmustleavethekeyboardexactlywhereitwas\(released={released};FR-013–FR-015)")
+was: assert_eq!(s.focused_field,None,"andthefieldmustnotstillbelieveitholdsit")
+was: assert_eq!(s.focused_field,Some(FieldIAddWorktreeName))
+was: assert_eq!(s.focused_field,Some(FieldIAddWorktreeName),"thefieldtheuseristypingintostillholdsit(FR-018)")
+was: assert_eq!(st.focused_field,None)
+was: assert_eq!(st.focused_field,None,"thefieldthatdoesholditisbelieved")
+was: assert_eq!(st.focused_field,Some(FieldIAddWorktreeTicket),"thefieldthatalreadylostfocuscannottakeitawayfromtheonethathasit")
+was: assert_eq!(st.focused_field,Some(FieldIRenameProjectName))
+was: assert_eq!(st.focused_field,Some(FieldISettingsEnvIncludeTimeout),"thelaterclaimreplacestheearlierone—thereisoneslot")
+was: assert_eq!(st.window_size,(0,0),"unknownuntilreported")
+was: assert_eq!(st.window_size,(0,0),"unknownuntilthewindowsays")
+was: assert_eq!(st.window_size,(1280,720))
+was: assert_eq!(state.focused_field,None)
+was: assert_eq!(state.focused_field,None,"nothingisfocusedtobeginwith")
+was: assert_eq!(state.focused_field,Some(FieldIAddWorktreeName))
+was: assert_eq!(state.focused_field,Some(FieldIRenameProjectName))
+```
+
 T040 rolls these up for the phase; each move is adjudicated as it lands, so the freeze is green at
 every commit rather than only at the end (contract C.1).
