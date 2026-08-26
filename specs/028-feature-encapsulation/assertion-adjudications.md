@@ -192,3 +192,17 @@ was: assert_eq!(on_escape(&state),Some(MWorktreeDeleteCancelled))
 ```
 was: assert_eq!(on_escape(&state),Some(MWorktreeRenameCancelled))
 ```
+
+## T013 — `project`'s nineteen variants moved behind `Message::Project`
+
+One constructor renamed: `Message::ProjectForgetCancelled` became
+`Message::Project(project::Msg::ForgetCancelled)`. Read as Q3 requires — the subject is
+`on_escape(&state)`, the predicate is `assert_eq!`, and the state is a forget confirmation opened
+by `ForgetRequested`, all unchanged. It still says what it said: Escape cancels the forget
+confirmation, and cancels *that* rather than any other open surface, which is why the test names
+the message instead of asserting the dialog merely closed. The message it names is the same
+message, spelled through the wrapper that now owns it.
+
+```
+was: assert_eq!(on_escape(&state),Some(MProjectForgetCancelled))
+```
