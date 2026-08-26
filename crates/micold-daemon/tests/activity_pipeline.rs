@@ -388,3 +388,111 @@ fn a_copilot_event_log_and_the_shared_spinner_scan_cannot_contradict_each_other(
 
     session.kill().expect("kill");
 }
+
+#[test]
+fn an_event_log_append_pushes_the_new_badge_to_connected_clients() {
+    // T086 (SC-005, FR-018). The state half of this is already proven above — an append reaches the
+    // machine and the *snapshot* changes. What no test asked was whether anyone is **told**, and the
+    // answer was no: the tail's callback discarded `note_activity`'s `bool`, and unlike the hook
+    // receiver (`hooks.rs`) and the supervisor tick (`drain_signals`) there is nothing behind it to
+    // push. A client that does not re-attach kept the old badge until some unrelated broadcast
+    // happened to run — which is what §B measured at the display: eight frames spanning 0.24 s to
+    // 0.76 s after the prompt, byte-identical, and identical again long after the reply finished.
+    //
+    // So the assertion is deliberately about the *push* and not about the state: reading
+    // `catalog_snapshot()` here would pass against the defect.
+    use micold_core::protocol::codec::Frame;
+    use micold_core::protocol::messages::DaemonMsg;
+
+    let home = CopilotHome::new();
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
+
+    // Empty first: the tail starts at the file's current end, so a line written before the watch
+    // exists is never seen.
+    let events = home
+        .path()
+        .join("session-state")
+        .join(id.0.to_string())
+        .join("events.jsonl");
+    std::fs::create_dir_all(events.parent().unwrap()).unwrap();
+    std::fs::write(&events, "").unwrap();
+
+    let state = Arc::new(DaemonState::new(catalog_with_session(
+        project.path(),
+        store.path(),
+        AiCli::Copilot,
+    )));
+    let session = register_cat(&state, id);
+    let (_client, mut rx) = state.register("test".to_string());
+    state.open_event_log_tail(id);
+
+    let append = |line: &str| {
+        use std::io::Write as _;
+        let mut f = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&events)
+            .unwrap();
+        writeln!(f, "{line}").unwrap();
+    };
+    // Every `CatalogChanged` this client has been sent, as the badge it carried for our session.
+    let badges = |rx: &mut tokio::sync::mpsc::UnboundedReceiver<Frame<DaemonMsg>>| {
+        let mut seen = Vec::new();
+        while let Ok(frame) = rx.try_recv() {
+            if let Frame::Control(DaemonMsg::CatalogChanged { catalog }) = frame {
+                if let Some(summary) = catalog
+                    .projects
+                    .iter()
+                    .flat_map(|p| &p.sessions)
+                    .find(|s| s.id == id)
+                {
+                    seen.push(summary.activity.clone());
+                }
+            }
+        }
+        seen
+    };
+
+    // One append that changes the signal: the client must hear about it, with nothing else running.
+    // No `drain_signals`, no supervisor tick, no start — the tail is the only thing that can speak.
+    append(r#"{"type":"user.message","data":{}}"#);
+    let mut pushed = Vec::new();
+    // Generous against SC-005's one-second budget on purpose: what is under test is that a push
+    // happens at all, and a deadline tight enough to be the *measurement* would fail on a loaded
+    // runner for a reason that is not the defect.
+    assert!(
+        wait_until(Duration::from_secs(10), || {
+            pushed.extend(badges(&mut rx));
+            !pushed.is_empty()
+        }),
+        "an event-log append that moves the badge must reach connected clients"
+    );
+    assert_eq!(
+        pushed,
+        vec![ActivitySignal::Working],
+        "and it must carry the new signal"
+    );
+
+    // An event the machine ignores must **not** push. `tool.execution_complete` is a no-op from
+    // Working (the model is still going), so an unconditional broadcast beside `note_activity`
+    // would send a snapshot nobody needs — the receiver's `if changed` is what this pins down.
+    // Ordering makes the absence testable: the no-op is followed by a change, and if the tail has
+    // delivered the second it has delivered the first.
+    append(r#"{"type":"tool.execution_complete","data":{}}"#);
+    append(r#"{"type":"assistant.turn_end","data":{}}"#);
+    assert!(
+        wait_until(Duration::from_secs(10), || {
+            pushed.extend(badges(&mut rx));
+            pushed.contains(&ActivitySignal::AwaitingInput)
+        }),
+        "the turn end must reach the client too"
+    );
+    assert_eq!(
+        pushed,
+        vec![ActivitySignal::Working, ActivitySignal::AwaitingInput],
+        "the no-op in between must push nothing"
+    );
+
+    session.kill().expect("kill");
+}

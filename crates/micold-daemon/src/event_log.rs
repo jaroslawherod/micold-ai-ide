@@ -66,8 +66,11 @@ impl Drop for EventLogTail {
 impl EventLogTail {
     /// Watch `path`'s directory and deliver each newly appended, recognised line to `on_event`.
     ///
-    /// `on_event` runs on the watcher's own thread, so it must not block: the daemon's
-    /// `note_activity` takes the state lock briefly and returns, which is what it is sized for.
+    /// `on_event` runs on the watcher's own thread, so it must not block: the daemon's callback
+    /// takes the state lock briefly — `note_activity`, then a `broadcast_catalog` only when the
+    /// signal actually moved (T086) — and returns, which is what it is sized for. The broadcast
+    /// itself is a `send` on each client's unbounded channel, so it does not wait on a slow client
+    /// either.
     ///
     /// Starts from the file's **current end**, not its beginning. A resumed session's log holds its
     /// whole history, and replaying it would walk the badge through every turn the conversation
