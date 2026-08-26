@@ -30,3 +30,11 @@ specs/**      micold-docs
 # view with no filesystem or network access (Constitution Principle IV). Changing it changes the
 # artifact, so it takes the full pipeline. Must stay after `/*.md`, which sets the attribute.
 /CHANGELOG.md -micold-docs
+
+# Read by a test, so a test input rather than documentation: feature 027's §A table is the list of
+# gates the three-platform matrix is claimed to run, and
+# `crates/micold-core/tests/quickstart_a_runs_everywhere.rs` compares it against `ci.yml`. If this
+# stayed documentation, editing the table would skip the whole pipeline -- so the one edit the gate
+# exists to catch would be the one edit it never sees. Must stay after `specs/**`, which sets the
+# attribute.
+/specs/027-sandboxed-daemon-runtime/quickstart.md -micold-docs

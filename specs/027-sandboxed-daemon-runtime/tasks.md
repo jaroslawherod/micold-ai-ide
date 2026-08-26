@@ -351,6 +351,26 @@ does a session start unsandboxed without an explicit choice.
       repository. Where the client has no local git that stream is not a faster copy of something
       it could compute; it is the only list it will ever have.
 - [ ] T115 [P] Verify the full quickstart.md §A suite is green on Linux, macOS and Windows with **no** runtime installed, from the CI matrix in `.github/workflows/` (Principle VI, the fake runtime's whole purpose)
+      — **Two of §A's own gates were not running on macOS or Windows.** The matrix covers `micold-core`
+      wholesale (`cargo test -p micold-core --all-targets`), so every core row is included by
+      construction, and none of them is platform-gated — no `#[cfg(unix)]`, `#[cfg(windows)]` or
+      `target_os` in any of the seven targets or in `argv.rs`'s unit tests — so what runs on Linux is
+      what runs everywhere. The `micold-client` rows are different: that suite needs the iced system
+      dependencies and runs in full on Linux only, so the render-free exceptions are named one
+      `--test` flag at a time. `features_settings` and `anatomy_call_sites` were in §A's table and
+      not in the flags. They ran, they passed, nothing failed — and the *three-platform* claim, which
+      is the only claim the table is making, was false.
+      Both are render-free (a reducer and a source-text scanner; `anatomy_call_sites` already
+      normalises `\` to `/` in its display keys, the Windows hazard the step's own comment names) and
+      both pass standalone the way CI invokes them — 9 and 10 tests. Added to the cross-platform step.
+      `crates/micold-core/tests/quickstart_a_runs_everywhere.rs` now holds `ci.yml` to §A's table, so
+      an enumerated list cannot drift out of the claim in silence again; reverting the two flags fails
+      it by name. That gate reads the quickstart, so the file is `-micold-docs` in `.gitattributes`
+      for the same reason `CHANGELOG.md` is — otherwise editing the table would skip the pipeline
+      that checks the table.
+      **Still open**: the run. Whether §A is *green* on macOS and Windows is a fact only the matrix
+      can produce, and the branch has no upstream — nothing has executed it. Coverage is fixed and
+      enforced; the verification is not done.
 - [x] T116 [P] Measure SC-003 — sandboxed session start no more than 2s slower than unsandboxed — recording the numbers in `specs/027-sandboxed-daemon-runtime/evidence/performance.md`
       — **0ms** against a 2000ms budget: both placements 2ms median over 7 timed rounds, both showing a real `$` prompt.
       Three earlier revisions of the measurement passed while measuring nothing (an unmounted catalogue, a snapshot

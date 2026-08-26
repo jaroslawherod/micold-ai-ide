@@ -29,6 +29,7 @@ Green is the gate. What each gate is watching:
 | `micold-core/src/sandbox/argv.rs` (unit) | the escalation denylist: no `--privileged`, `--cap-add`, `--pid=host`, `--network=host`, `seccomp=unconfined`, no host path outside the `MountSet` (K-11) |
 | `micold-core/tests/sandbox_argv.rs` | the **Windows** mapping, on whatever platform runs: mapped container paths under `/mnt/host`, host paths unrewritten, rule M-1 under both mappings, and `argv` agreeing with `Placement::git_routing_for` about whether the two halves differ (T114) |
 | `micold-core/tests/sandbox_needs_no_runtime.rs` | nothing outside a feature-gated `sandbox_real_*` target reaches `docker`/`podman`, and the process boundary stays in `exec.rs` — the property the three-platform matrix depends on (T115) |
+| `micold-core/tests/quickstart_a_runs_everywhere.rs` | the `micold-client` rows below are each named in ci.yml's cross-platform step. That suite runs in full on Linux only, so those rows are enumerated one `--test` flag at a time — and an enumerated list drifts silently. This table's "on every platform" is therefore checked rather than asserted (T115) |
 | `micold-core/tests/sandbox_runtime.rs` | each canned runtime failure maps to its `RuntimeError` variant (K-8); malformed JSON classifies rather than panics (K-12) |
 | `micold-core/tests/sandbox_runtime.rs` | stop/remove/start are idempotent (K-9); `acquire_image` emits progress more than once (K-10) |
 | `micold-core/tests/sandbox_runtime.rs` | podman's dialect passes K-1…K-12 too — an abstraction with one implementation is a guess |

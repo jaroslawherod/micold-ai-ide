@@ -145,11 +145,16 @@ jobs:
       # Ensure the full workspace (client GUI binary + daemon) compiles on every platform.
       - name: Build (workspace)
         run: cargo build --workspace
-      # Feature 020's gates, the 017 gates it widened, and BUG-001's. These read source text, one
-      # `const` slice and a reducer — they open no window — so they run wherever the crate compiles,
-      # and this step is the authoritative list of them. Path handling (`\` vs `/` in the scanners'
-      # display keys) is exactly the kind of difference a Linux-only run would miss: several of these
-      # walk the source tree from `CARGO_MANIFEST_DIR` and report findings by path.
+      # Feature 020's gates, the 017 gates it widened, BUG-001's, and feature 027's two client-side
+      # §A gates. These read source text, one `const` slice and a reducer — they open no window — so
+      # they run wherever the crate compiles, and this step is the authoritative list of them. Path
+      # handling (`\` vs `/` in the scanners' display keys) is exactly the kind of difference a
+      # Linux-only run would miss: several of these walk the source tree from `CARGO_MANIFEST_DIR`
+      # and report findings by path.
+      #
+      # This list is enumerated, so it drifts silently: a §A gate added to the quickstart's table and
+      # not added here still runs — on Linux, in the job below — and the three-platform claim quietly
+      # stops being true. `micold-core/tests/quickstart_a_runs_everywhere.rs` compares the two.
       - name: Test (component library + showcase gates, all platforms)
         # Windows defaults to `pwsh`, which does not treat `\` as a line continuation; pin bash so the
         # one readable multi-line invocation below parses identically on all three runners.
@@ -166,7 +171,9 @@ jobs:
             --test material_boundary \
             --test material_builder_api \
             --test idle_requests_no_frames \
-            --test animated_layout_relayouts
+            --test animated_layout_relayouts \
+            --test features_settings \
+            --test anatomy_call_sites
       # Run the client + daemon test suites where the iced system deps are present.
       - name: Test (full workspace)
         if: runner.os == 'Linux'
