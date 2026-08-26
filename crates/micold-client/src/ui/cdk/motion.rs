@@ -24,10 +24,11 @@ use std::time::{Duration, Instant};
 /// One nominal frame at ~60fps.
 ///
 /// A track steps by the wall-clock time elapsed since its own previous frame, so a transition takes
-/// the duration it states whatever rate the window happens to render at. This is the estimate for
-/// the *first* frame of a transition, which has no previous frame to measure against: its clock
-/// started on the between-frames event that set the destination, and the last redraw this widget
-/// saw may have been minutes ago in a quiescent window.
+/// the duration it states whatever rate the window happens to render at. This is the ceiling on the
+/// *first* frame of a transition, which has no previous frame of its own to measure against: the
+/// last redraw the widget saw belongs to whatever the window was doing before, and in a quiescent
+/// one it was minutes ago. A window already rendering steps that first frame by its real gap, which
+/// is smaller; an idle one steps by this.
 ///
 /// It used to be the step itself. A track advanced a fixed `FRAME / duration` per redraw — what the
 /// central animator this feature replaced did, one step per 16ms clock tick — which made a
@@ -334,32 +335,47 @@ impl Progress {
         over: Duration,
         shell: &mut Shell<'_, M>,
     ) -> f32 {
+        // Learn where it is going before deciding how far to move, whatever kind of event this is.
+        //
+        // Between frames that is a press, a hover, an overlay opening: start the transition now
+        // rather than waiting for a tick nothing has asked for yet, and start it *properly* —
+        // through `retarget`, so the eased clock rewinds. See its docs for what assigning `target`
+        // alone here used to cost.
+        //
+        // On a frame it is almost every transition this application runs. An Escape or a click
+        // becomes application state, the view is rebuilt, and the track is handed its new
+        // destination by the redraw that follows — so `t` is still `1.0` from the last transition
+        // when the step below is chosen, and the frame it would measure itself against belongs to
+        // whatever the window was doing before. Rewinding first is what tells the two apart.
+        self.retarget(target);
+
         if let Event::Window(window::Event::RedrawRequested(now)) = event {
             // Once per frame, not once per delivery: a track that invalidates the layout gets this
             // same event handed to it again in the same frame, and stepping again would make the
             // transition run at a multiple of its stated duration.
             if self.last_frame != Some(*now) {
                 let step = match self.last_frame {
-                    // Mid-transition: step by the time that actually passed, so the transition
-                    // takes `over` and not a frame count (007 BUG-001).
-                    Some(previous) if self.t > 0.0 => {
-                        step_across(now.saturating_duration_since(previous), over)
+                    Some(previous) => {
+                        let elapsed = now.saturating_duration_since(previous);
+                        if self.t > 0.0 {
+                            // Mid-transition: step by the time that actually passed, so the
+                            // transition takes `over` and not a frame count (007 BUG-001).
+                            step_across(elapsed, over)
+                        } else {
+                            // The first frame of a transition has no previous frame *of its own*.
+                            // The gap since the window's last one is an upper bound at best and
+                            // nonsense at worst — a dialog that sat open for a minute would start
+                            // its exit [`MAX_STEP`] of the way out. One nominal frame is the
+                            // honest ceiling; a window already busy rendering gives its real gap.
+                            step_across(elapsed.min(FRAME), over)
+                        }
                     }
-                    // The first frame of a transition has no previous frame of its own. `t == 0.0`
-                    // means the clock was rewound by `retarget` on some between-frames event, and
-                    // `last_frame` is whatever redraw this widget last saw — in a window that has
-                    // been quiescent, minutes ago. One nominal frame is the honest estimate.
-                    _ => step_for(over),
+                    // Nothing to measure against at all.
+                    None => step_for(over),
                 };
                 self.last_frame = Some(*now);
                 self.advance_to(target, step);
             }
-        } else {
-            // The destination may have changed between frames — a press, a hover, an overlay
-            // opening. Start the transition now rather than waiting for a tick nothing has asked
-            // for yet, and start it *properly*: through `retarget`, so the eased clock rewinds. See
-            // its docs for what assigning `target` alone here used to cost.
-            self.retarget(target);
         }
         self.request_frame(shell);
         self.value
@@ -596,6 +612,61 @@ mod tests {
             slow_frames > 1,
             "even at {FRAME:?} a frame the exit drew only {slow_frames} intermediate values"
         );
+    }
+
+    /// A transition that begins on a frame starts at its beginning (007 BUG-001).
+    ///
+    /// Nothing in the application hands a track its destination between frames. A press or an
+    /// Escape becomes application state, the view is rebuilt, and the track first sees the new
+    /// `target` on a redraw — so the frame it would measure itself against is whatever the window
+    /// last drew, which for a dialog that has been sitting open is seconds ago. Stepping by that
+    /// gap starts the transition part-way through: [`MAX_STEP`] bounds it at four frames, which is
+    /// a third of a 200ms exit.
+    ///
+    /// Measured on the client before this was fixed: the About dialog's 200ms exit was visibly
+    /// over in ~140ms, its first drawn frame already a third of the way out. The test above misses
+    /// it because it sets the destination on a mouse event, which rewinds the clock first — the
+    /// path the tests take and the application does not.
+    #[test]
+    fn a_transition_that_begins_on_a_frame_starts_at_its_beginning() {
+        const OVER: Duration = Duration::from_millis(200);
+        /// Long enough that the gap is bounded by [`MAX_STEP`] rather than by itself.
+        const IDLE: Duration = Duration::from_secs(2);
+        /// The cadence an uncapped window really renders at, measured on this client.
+        const CADENCE: Duration = Duration::from_millis(5);
+
+        fn redraw(p: &mut Progress, at: Instant, target: f32, messages: &mut Vec<()>) {
+            p.on_event(
+                &Event::Window(iced::window::Event::RedrawRequested(at)),
+                target,
+                OVER,
+                &mut Shell::new(messages),
+            );
+        }
+
+        let mut p = Progress::new(1.0);
+        let mut messages: Vec<()> = Vec::new();
+        let start = Instant::now();
+
+        // One frame, and then the window sits still with the dialog open on it.
+        redraw(&mut p, start, 1.0, &mut messages);
+        assert!(!p.animating(), "a settled track is not animating");
+
+        // The destination changes, and the track learns it on the next frame it is handed.
+        let dismissed = start + IDLE;
+        for i in 1..10_000u32 {
+            redraw(&mut p, dismissed + CADENCE * i, 0.0, &mut messages);
+            if !p.animating() {
+                let took = CADENCE * i;
+                assert!(
+                    took.abs_diff(OVER) <= FRAME,
+                    "a {OVER:?} exit that began after {IDLE:?} of quiet took {took:?} — it \
+                     stepped by the gap since a frame that was not part of it"
+                );
+                return;
+            }
+        }
+        panic!("the exit never arrived");
     }
 
     /// Rapid toggling leaves nothing stuck part-way (007 §5).
