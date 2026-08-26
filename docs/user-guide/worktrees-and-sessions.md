@@ -517,7 +517,11 @@ You keep control of the panel:
 - If a session's process exits unexpectedly, it is **automatically restarted**, resuming the prior
   conversation — the app asks the CLI to resume the session id it owns, so you come back to the
   same conversation rather than a fresh one. Repeated rapid failures stop the auto-restart and mark
-  the session **failed** so you can retry manually.
+  the session **failed** so you can retry manually. The pane then says why it gave up and what the
+  last exit was — *"Gave up after 3 restart attempts — last exit: exit status 1."* — beside the
+  **restart** control that resumes it, and the status bar under it reads `failed after 3 attempts`.
+  A window you open afterwards is shown both, so a loop that ran while you were away is not reduced
+  to the word *failed*.
 - **Closing** the active project (or quitting the app) stops that project's session processes but
   keeps the sessions; reopening the project restores them and resumes the same conversations.
   **Switching** to another project does not stop them — see below.
