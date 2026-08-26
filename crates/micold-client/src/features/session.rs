@@ -972,7 +972,8 @@ impl State {
 /// The "start a session on…" list, and where it hangs from (feature 026, FR-004).
 ///
 /// Mirrors [`SessionMenu`]: what the surface acts on, plus the press point it was opened at. The
-/// anchor arrives a message later than the location — see [`start_menu_anchored`].
+/// point arrives a message *earlier* than the location and is held on [`State`] until the open
+/// reads it — see [`start_menu_anchored`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StartMenu {
     /// Where a session started from this list would run.
@@ -987,9 +988,12 @@ pub struct StartMenu {
 /// A second press on the same row's chevron closes it, like every other menu here — the same
 /// replace-or-close rule `menu_toggled` applies to the session context menu.
 ///
-/// It opens at the origin and is moved by [`start_menu_anchored`], which the same press publishes
-/// immediately after this one. Deciding *whether* the list is open has to happen before the point
-/// is known, because the decision is a toggle and the point is the same for both answers.
+/// It opens at the point [`start_menu_anchored`] recorded, which the *same click* published first:
+/// the anchor comes from `ContextArea` on `ButtonPressed`, this one from the button it wraps on the
+/// release. Writing a constant here and letting the anchor correct it afterwards is what feature
+/// 026 shipped — the correction never ran, because there was nothing open when the point arrived
+/// and by the time there was, the point had been dropped, so both halves of the split opened the
+/// list over the sidebar header (T089).
 pub fn start_menu_toggled(state: &mut State, location: SessionLocation) {
     state.session_start_menu = if state
         .session_start_menu
@@ -1000,20 +1004,24 @@ pub fn start_menu_toggled(state: &mut State, location: SessionLocation) {
     } else {
         Some(StartMenu {
             location,
-            anchor: (0, 0),
+            anchor: state.session_start_press.unwrap_or_default(),
         })
     };
 }
 
-/// Where the chevron that opened the list was pressed (018 BUG-008, FR-029d).
+/// Where a press on the start affordance landed (018 BUG-008, FR-029d).
 ///
-/// A no-op when nothing is open, which is what the *closing* half of the toggle above leaves
-/// behind: the same press publishes both messages, and iced applies every queued message before it
-/// draws, so the panel is never rendered at the origin the toggle opened it at.
+/// It records the point and nothing else. The list is not open yet when this runs — the press is
+/// this, the open is the release — so there is nothing here to move; [`start_menu_toggled`] is
+/// what reads the point back. Every primary press reports one, including the ones that start a
+/// session outright and the one that *closes* an open list, which is why this decides nothing: what
+/// a press meant is the toggle's answer, and a recorded point that is never read costs nothing.
+///
+/// It deliberately does not also move an already-open list. Pressing another row's chevron while
+/// one is open would then slide the open panel to the new row for the frame between the press and
+/// the release, before the toggle replaced it — a visible twitch for no gain.
 pub fn start_menu_anchored(state: &mut State, anchor: (u16, u16)) {
-    if let Some(open) = &mut state.session_start_menu {
-        open.anchor = anchor;
-    }
+    state.session_start_press = Some(anchor);
 }
 
 /// The "start a session on…" list was dismissed without choosing.
