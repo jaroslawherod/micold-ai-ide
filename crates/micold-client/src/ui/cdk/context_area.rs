@@ -74,9 +74,11 @@ impl<'a, M: 'a> ContextArea<'a, M> {
     /// the press belongs to the child; a wrapper that swallowed it would leave the button inert
     /// and, being an ordinary enabled button, still drawn as though it were not.
     ///
-    /// The two messages arrive from one press, child first, and iced applies every queued message
-    /// before it draws again — so the surface is never rendered at the point the opening message
-    /// left it.
+    /// The two messages arrive from one click, **this one first**: a press and its release are
+    /// separate events, this is published on the press, and the child button — an ordinary iced
+    /// button — publishes on the release. So a reducer cannot treat the point as a correction
+    /// applied after the surface opens; it has to hold it and read it back when the open arrives.
+    /// Feature 026's start menu had it the other way round and opened at the window origin (T089).
     pub fn on_primary_press(mut self, f: impl Fn((u16, u16)) -> M + 'a) -> Self {
         self.on_primary_press = Some(Box::new(f));
         self

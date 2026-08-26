@@ -226,3 +226,74 @@ fn the_choice_is_offered_from_the_availability_set_the_press_can_still_refresh()
          on it happens for this press too. Published: {published:?}"
     );
 }
+
+/// Where a glyph is drawn, in window pixels, asserting it is the only one of its kind on screen.
+///
+/// [`start_glyph`]'s rule, generalised so the chevron can be found the same way: by what it paints
+/// rather than by a node path.
+fn only_glyph(state: &State, icon: Icon) -> Point {
+    let mut renderer = lay::renderer();
+    let glyph = icon.glyph().to_string();
+    let painted = lay::painted_text_settled(view(state), &mut renderer);
+    let drawn: Vec<&lay::Overflow> = painted.iter().filter(|t| t.content == glyph).collect();
+    assert_eq!(
+        drawn.len(),
+        1,
+        "exactly one {icon:?} is expected on screen; painted: {:?}",
+        painted.iter().map(|t| &t.content).collect::<Vec<_>>()
+    );
+    drawn[0].origin
+}
+
+/// Press at `at`, apply everything it published in the order it published it, and return the state.
+///
+/// The order is the whole subject of these two tests, so it is a real reducer run rather than a
+/// scan of the message list: `press_at` returns what the widgets emitted, and `State::update` is
+/// what the runtime would do with it.
+fn state_after_press(mut state: State, at: Point) -> State {
+    for message in press_at(&state, at) {
+        state.update(message);
+    }
+    state
+}
+
+#[test]
+fn the_list_the_primary_half_opens_hangs_from_the_press() {
+    // The stored default is not installed, so the primary half opens the list rather than starting
+    // anything — the same press that opens it is the only thing that knows where the row is.
+    let state = with_project(AiCli::Copilot, &[AiCli::ClaudeCode]);
+    let at = only_glyph(&state, Icon::AddSession);
+
+    let state = state_after_press(state, at);
+
+    let menu = state
+        .session_start_menu
+        .expect("the press opens the list (the assertions above); this reads where it hung it");
+    assert_eq!(
+        menu.anchor,
+        (at.x as u16, at.y as u16),
+        "the list hangs from the press that opened it, not from the window origin (FR-029d). \
+         `SessionStartMenuAnchored` is published on the *press* and `SessionStartMenuOpened` on the \
+         *release*, so a reducer that writes an anchor when it opens overwrites the point with a \
+         constant and the panel lands over the sidebar header."
+    );
+}
+
+#[test]
+fn the_list_the_chevron_opens_hangs_from_the_press() {
+    // Both installed, so the chevron is drawn and is the half that offers the choice.
+    let state = with_project(AiCli::Copilot, &[AiCli::ClaudeCode, AiCli::Copilot]);
+    let at = only_glyph(&state, Icon::SelectChevron);
+
+    let state = state_after_press(state, at);
+
+    let menu = state
+        .session_start_menu
+        .expect("the chevron opens the list; this reads where it hung it");
+    assert_eq!(
+        menu.anchor,
+        (at.x as u16, at.y as u16),
+        "and the chevron's press point is the chevron's, for the same reason: both halves of the \
+         split can open this list and neither position is something the view holds."
+    );
+}

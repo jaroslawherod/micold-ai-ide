@@ -107,6 +107,9 @@ const OWNERS: &[(&str, &str)] = &[
     // The "start a session on…" list is opened from a sidebar row and starts a session; what it
     // holds is a session's location (feature 026, FR-004).
     ("session_start_menu", "session"),
+    // And where the press that opens it landed. Separate from the menu because it is known one
+    // event phase earlier — see `features/session.rs::start_menu_anchored` (feature 026, T089).
+    ("session_start_press", "session"),
     ("session_remove_target", "session"),
     // The terminal is the session's pane: both fields are written only by `focus_terminal` /
     // `release_terminal`, and `tests/terminal_bar_stability.rs` already holds that line.

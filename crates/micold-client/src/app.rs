@@ -250,9 +250,11 @@ pub enum Message {
     /// refreshes the availability set first — this is one of the two named events research R11
     /// means by "when the choice is offered".
     SessionStartMenuOpened(SessionLocation),
-    /// Where the chevron that opened the list was pressed, in window pixels (018 BUG-008,
-    /// FR-029d). Arrives from the same press as [`Message::SessionStartMenuOpened`], immediately
-    /// after it: that one says the list was asked for, this one says where to hang it.
+    /// Where a press on the start affordance landed, in window pixels (018 BUG-008, FR-029d).
+    /// Arrives from the same click as [`Message::SessionStartMenuOpened`] and **before** it — this
+    /// one is published on `ButtonPressed`, that one on the release, because it comes from the
+    /// wrapped button's own `on_press`. So this says where the click was, and the open that
+    /// follows it is what hangs the list there (feature 026, T089).
     SessionStartMenuAnchored((u16, u16)),
     /// Dismiss the "start a session on…" list without choosing.
     SessionStartMenuDismissed,
@@ -776,6 +778,17 @@ pub struct State {
     /// Transient, and deliberately not persisted: it records what this window has said, and a
     /// window that has said nothing yet should say it.
     pub announced_start_failures: BTreeMap<SessionId, String>,
+    /// Where the last press on a start affordance landed, in window pixels (feature 026, T089,
+    /// FR-029d).
+    ///
+    /// The point and the decision arrive in separate messages and, unavoidably, in separate event
+    /// phases: `ContextArea` reports the point on `ButtonPressed`, while the `IconButton` it wraps
+    /// publishes its own message on the *release*. So the point is known first and has to outlive
+    /// the message that carried it — [`crate::features::session::start_menu_toggled`] reads it
+    /// when it opens the list. `None` before the first press; a list is only ever opened by one.
+    ///
+    /// Transient: where a row was a moment ago is worth nothing after a restart.
+    pub session_start_press: Option<(u16, u16)>,
 }
 
 /// The sidebar's reported offset as the app bar reads it: whole pixels, never above the top.
