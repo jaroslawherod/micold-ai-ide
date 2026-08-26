@@ -140,7 +140,7 @@ describe, deliberately.
 - [X] T021 [P] [US3] Give G1 its `ALLOWED: &[(&str, &str)]` allowlist plus the reverse check that the allowlist names only live violations, following `crates/micold-client/tests/feature_write_isolation.rs`'s `the_allowlist_names_only_live_violations` (FR-016)
 - [X] T022 [US3] Non-vacuity probe for G1 — add a variant to `app::Message` in `crates/micold-client/src/app.rs` whose only arm calls `features::help::about_opened`, run `cargo test -p micold-client --test root_vocabulary_is_cross_cutting`, observe the failure naming `help`, revert with `git checkout -- crates/micold-client`, and record the message in `specs/028-feature-encapsulation/assertion-adjudications.md`
 - [X] T023 [US3] Extend `crates/micold-client/tests/feature_registration_cost.rs` with G3 — every module under `src/features/` other than `mod.rs` that declares `pub enum Msg` must expose shape A or shape B; a module declaring no `Msg` passes with no allowlist entry (FR-005, FR-015)
-- [ ] T024 [US3] Non-vacuity probe for G3 — add `crates/micold-client/src/features/probe.rs` declaring `pub enum Msg { Tick }` and no `update`, run `cargo test -p micold-client --test feature_registration_cost`, observe the failure naming `probe`, revert, and record the message
+- [X] T024 [US3] Non-vacuity probe for G3 — add `crates/micold-client/src/features/probe.rs` declaring `pub enum Msg { Tick }` and no `update`, run `cargo test -p micold-client --test feature_registration_cost`, observe the failure naming `probe`, revert, and record the message
 
 ### Implementation for User Story 3, part 1
 

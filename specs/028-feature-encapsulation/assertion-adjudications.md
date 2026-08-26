@@ -269,3 +269,29 @@ not_failed` reported it as unrecorded, and the vocabulary count moved from 15 to
 tests passed, so the run was a real run — an injection that fails to compile demonstrates nothing.
 
 Reverted with `git checkout -- crates/micold-client`; the six tests pass again.
+
+## T024 — G3's non-vacuity probe (FR-017)
+
+`src/features/probe.rs` was added declaring `pub enum Msg { Tick }` and no `update`, then removed.
+`cargo test -p micold-client --test feature_registration_cost` failed:
+
+```
+thread 'every_feature_with_a_vocabulary_has_a_reducer_entry_point' panicked at
+crates/micold-client/tests/feature_registration_cost.rs:471:5:
+a feature declares a vocabulary with nowhere to handle it (FR-015):
+  `probe` declares `pub enum Msg` and no `update`
+
+Add `pub fn update(&mut State, Msg) -> Vec<Outcome>` to the feature module (shape A), or
+`pub fn update(&mut App, Msg) -> Task<Message>` to `src/shell/<feature>.rs` when the transitions
+must return an `iced::Task` (shape B). A vocabulary answered by the root instead is the coupling
+FR-001 exists to remove.
+```
+
+Two of the file's existing guards fired alongside it, which is worth recording rather than tidying
+away: the probe was not named in `features/mod.rs`, so `every_feature_module_is_registered_exactly_once`
+reported the disagreement between that file and the directory, and `every_feature_module_has_an_isolation_test`
+reported the missing `tests/features_probe.rs`. A half-added feature trips every guard it is half of.
+G3 is the one that names the missing reducer, and it is the only one of the three that would still
+have fired had the probe been fully registered.
+
+No assertion text changed; the working tree was restored with `rm`.
