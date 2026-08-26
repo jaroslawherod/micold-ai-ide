@@ -165,6 +165,7 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
     for id in newly_restarting {
         core.note_background_restart(id);
     }
+    announce_start_failures(core, snapshot);
     // Mirror the active project's worktrees from the daemon's git discovery into the render state
     // (the sidebar reads `core.worktrees` + `worktree_names`). Only on `CatalogChanged` pushes, not
     // the initial welcome: the welcome's worktree cache is empty until the post-attach refresh, so
@@ -228,6 +229,65 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
 /// Project the wire [`WorktreeStatus`] back onto the client's core status enum (T055). The inverse of
 /// the daemon's mapping; `Locked`/`Prunable` both collapse to `Invalid` (the client renders both as
 /// an unusable/removable worktree).
+/// Say, once, why a session's start failed (feature 026, FR-010, T088).
+///
+/// # Why a notification, and not the pane, the row or the bar
+///
+/// FR-010 asks for a **sentence** naming the CLI — "the command-name form FR-016 uses is for labels
+/// in a width budget; a message is a sentence" — and `notify::Queue` is this application's only
+/// surface for one. The alternatives were each considered and each has a hole:
+///
+/// - The **terminal pane**'s empty-state text ([`crate::ui::terminal`]) reads well and is
+///   persistent, but it renders only when there is no grid. A session that had been running and is
+///   restarted keeps its last screen in client memory, so in the commonest route to this failure —
+///   press restart on a session that was up before — the message would never be drawn at all.
+/// - The **bar** already says `failed` and is where the persistent half of the report belongs, but
+///   it is a row with a width budget: the sentence does not fit, and truncating it drops exactly
+///   the CLI name FR-010 is about.
+/// - A **row tooltip** carries the sentence but has to be hunted for by hovering the thing that
+///   just did nothing, which is the state §B's manual pass found and reported.
+///
+/// The queue is documented as rendered unconditionally "so no failure can be swallowed by an
+/// unreachable render path", which is precisely the property the other three lack.
+///
+/// # Once
+///
+/// `reconcile_catalog` runs on every `CatalogChanged`, and since T086 an activity badge moving is
+/// one of those — so this is level-triggered against [`State::announced_start_failures`] rather
+/// than fired per snapshot. A failure is announced when it is first reported or when its sentence
+/// changes, and the record is cleared the moment the daemon reports that session as anything else,
+/// so the next failure is announced too.
+///
+/// **What this does not do**: pressing restart twice against an unchanged world announces once. The
+/// second attempt produces a byte-identical snapshot — `attempts` stays `0` deliberately (a missing
+/// binary is not a crash loop), so nothing on the wire distinguishes the second report from the
+/// first — and the client cannot invent the distinction. Within the ten seconds an error stays up
+/// the banner is still on screen; after that, the second press is silent and the bar's `failed` is
+/// what remains. Recorded rather than glossed: closing it needs the daemon to publish the attempt,
+/// which is a wire change and a task of its own.
+fn announce_start_failures(core: &mut State, snapshot: &CatalogSnapshot) {
+    for summary in snapshot.projects.iter().flat_map(|p| &p.sessions) {
+        let reason = match &summary.lifecycle {
+            // An empty reason is not a sentence, and a banner with nothing in it is worse than the
+            // bar's `failed` — the crash-loop give-up reaches this variant too, and it has no text.
+            WireLifecycle::Failed { reason, .. } if !reason.trim().is_empty() => reason,
+            _ => {
+                core.announced_start_failures.remove(&summary.id);
+                continue;
+            }
+        };
+        if core.announced_start_failures.get(&summary.id) == Some(reason) {
+            continue;
+        }
+        core.announced_start_failures
+            .insert(summary.id, reason.clone());
+        core.notify.push(micold_core::notify::Notification::new(
+            micold_core::notify::Level::Error,
+            reason.clone(),
+        ));
+    }
+}
+
 pub fn wire_to_worktree_status(
     status: micold_core::protocol::messages::WorktreeStatus,
 ) -> micold_core::worktree::WorktreeStatus {
