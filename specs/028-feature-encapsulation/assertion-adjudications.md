@@ -627,5 +627,112 @@ was: assert_eq!(state.sidebar_filters.len(),2)
 was: assert_eq!(state.sidebar_viewport_height,0,"precondition:nolayouthashappenedyet")
 ```
 
+## T036 — the session's twelve fields moved behind `state.session`
+
+Twelve fields became members of `features::session::State`. Nine keep their names. Three do not:
+the qualifier already says `session`, so `active_session`, `session_menu_open` and
+`session_remove_target` are `session.active`, `session.menu_open` and `session.remove_target`.
+That is the trim `worktree.menu_open` and `worktree.delete_target` took in T034, and the two
+menus those doc comments call mirrors of each other are now spelled as mirrors too.
+
+The nine that kept their names had nothing for the qualifier to absorb. Six name a sub-surface
+*inside* a session rather than the feature — `terminal_released`, `terminal_context_menu`,
+`shell_instance_menu`, `tab_strip_scroll_offset`, `tab_strip_viewport_width`,
+`pending_tab_reveal` — the same reasoning the module header already gives for keeping `Terminal`,
+`ShellInstance` and `TabStrip` in the message vocabulary while dropping the `Session` prefix.
+The other three name no feature at all: `last_foreground_choice`, `restarted_while_inactive`,
+`reveal_suppressed_for`.
+
+Seventy-eight assertions changed spelling across `tests/app_state.rs`,
+`tests/background_restart.rs`, `tests/features_session.rs`, `tests/forget_project.rs`,
+`tests/logical_state_ownership.rs`, `tests/overlay_dismissal_delta.rs`,
+`tests/session_isolation.rs`, `tests/sidebar_state.rs`, `tests/sidebar_tree.rs`,
+`tests/switch_active.rs`, `tests/tab_reveal.rs`, `tests/terminal_focus.rs`,
+`tests/terminal_size_reporting.rs`, `src/main.rs` and `src/shell/daemon_sync.rs`. None changed
+meaning.
+
+The `active_session` reads are the ones whose `closest surviving` percentage dips into the
+seventies and eighties, lower than any earlier move's. That is the trim, not a rewrite: dropping
+eight characters from a short assertion like `assert!(state.active_session.is_none())` moves a
+larger fraction of its text than the same trim does inside a long one. Every such loss has a
+survivor differing only by `.session` and the dropped suffix, and no loss in this task lacks a
+near match.
+
+One name is not unique in this codebase and did not move: `session_tree_item` in
+`src/ui/sidebar.rs` takes an `active_session` parameter. It is a function argument, not a field
+read, so it still spells the name it always did; only its two call sites now pass
+`state.session.active`.
+
+```
+was: assert!(core.restarted_while_inactive.contains(&a),"abackgroundsession'stransitionintoRestartingmustbedetectedandmarked")
+was: assert!(core.restarted_while_inactive.is_empty())
+was: assert_eq!(app.core.active_session,None)
+was: assert_eq!(app.core.active_session,None,"thememoryresolvedtonothing")
+was: assert_eq!(core.active_session,None,"danglingactivepointercleared")
+was: assert_eq!(core.restarted_while_inactive.len(),1)
+was: assert_eq!(s.active_session,Some(id))
+was: assert_eq!(st.active_session,None)
+was: assert_eq!(st.active_session,Some(a[0]),"anditmustleavetheforegroundalonetoo")
+was: assert_eq!(st.active_session,Some(a[0]),"restored")
+was: assert_eq!(st.active_session,Some(a[1]),"theoutgoingforegroundisrecordedBEFOREactivation(data-model.mdI1);recordit\afterandyoustoretheincomingproject'ssessionundertheoutgoingproject'skey,\whichlooksrightuntilyouswitchback")
+was: assert_eq!(st.active_session,Some(b[0]),"afirstvisithasnothingstored,sotheprojectshowsitsfirstrunningsession\ratherthananemptyshell")
+was: assert_eq!(st.active_session,Some(b_second),"thememoryloadedfromdiskisthesamemap`record_foreground`writes,soaprojectyou\havenotvisitedthisrunbehavesexactlylikeoneyouhave.Fallingbacktothefirst\runningsessionherewouldmeanthepersistedmemoryonlyworkedatlaunch")
+was: assert_eq!(st.active_session,Some(expected),"nocross-projectleakofforeground")
+was: assert_eq!(st.active_session,Some(fg_a))
+was: assert_eq!(st.active_session,Some(ids_a[0]),"thesessionthedaemonwashostingallalongisnowthecurrentone,whichisalsowhat\opensitsrowinthesidebar")
+was: assert_eq!(st.active_session,Some(ids_a[1]),"areconnectmustnotrelocatetheusertoadifferentsession")
+was: assert_eq!(st.active_session,Some(st.workspace.sessions[Pnew("/b")][0].id))
+was: assert_eq!(state.active_session,marked,"themarksayswhichsessionthemainareaisshowing,notwherethekeyboardis\going.Thetwoareindependentfacts:areleasedterminalisstillthesessionyou\arelookingat,andtyingthemtogetherwouldleavethepanelunmarkedinexactly\thecasethisfeatureexistsfor(FR-014)")
+was: assert_eq!(state.active_session,Some(id))
+was: assert_eq!(state.active_session,Some(id),"andexactlyonesessionismadecurrent—theonethestartwillname")
+was: assert_eq!(state.active_session,Some(id),"foregroundsessionuntouched")
+was: assert_eq!(state.active_session,Some(id),"reopeninglandsonthesessionyouwerelastusing,whichisthewholefeature")
+was: assert_eq!(state.active_session,Some(id),"runstateandbeingcurrentareindependent:asessionyouarelookingatistheone\youarelookingat,whetheritisrunning,stopped,interruptedorfailed(FR-015)")
+was: assert_eq!(state.active_session,Some(id),"theapplicationalreadylistsasessionwhoseworktreeismissingandletsyouselectit,sorefusingto*return*youtoitwouldbethesameinconsistencyBUG-001wasabout.Decliningwouldalsoneedtheworktreelistatresolvetime,whichaprojectswitchdoesnothaveyet—onerulethatbreaksswitchingtohandleacasetheusercansee")
+was: assert_eq!(state.active_session,Some(id),"thepremiseisthatthissessionisdisplayed")
+was: assert_eq!(state.active_session,Some(other_id),"itisnowcurrent")
+was: assert_eq!(state.reveal_suppressed_for,state.active_session)
+was: assert_eq!(state.reveal_suppressed_for,state.active_session,"andthecloseisrememberedagainstthesessionitwasmadefor,soalaterrevealfor\adifferentsessionisnotswallowedbyit(invariantI2)")
+was: assert_eq!(state.shell_instance_menu,None)
+was: assert_eq!(state.shell_instance_menu,None,"amenuthatoutlivesthedialogopeningoveritclaimsthenextclick")
+was: assert_eq!(state.shell_instance_menu,Some((StripTAi,880,761)),"theAItab'smenuisthesamesurface,moved—notasecondonebesideit")
+was: assert_eq!(state.shell_instance_menu,Some((StripTInstance(active),880,761)))
+was: assert_eq!(state.shell_instance_menu,Some((StripTInstance(background),742,761)),"themenumustrecordtheinstancewhosetabwasclicked,nottheactiveone")
+was: assert_eq!(state.shell_instance_menu,Some((StripTInstance(shell),742,761)))
+was: assert_eq!(s.terminal_context_menu,None,"anoutsideclickorachosenitemclosesthecontextmenu")
+was: assert_eq!(s.terminal_context_menu,None,"theterminalcontextmenustartsclosed(FR-013)")
+was: assert_eq!(s.terminal_context_menu,Some((48,16)),"right-clickopensthecontextmenuanchoredattheclickedpoint")
+was: assert_eq!(st.last_foreground_choice,Some(ForegroundCNoSessionsForKey),"withnosessionsfiledunderthekey,thisisthehonestanswer—thebugisthatitisfinal")
+was: assert_eq!(st.last_foreground_choice,Some(ForegroundCRemembered(a[0])),"thereducerdecides;thebinarylogs.Keepingthereasononthestateiswhatletsthe\loglinesaywhywithoutthedecisionleakingintotheI/Oboundary")
+was: assert!(matches!(st.last_foreground_choice,Some(ForegroundCNoneActive{..})),"got{:?}",st.last_foreground_choice)
+was: assert!(node.sessions.iter().all(|s|state.active_session!=Some(s.id)),"andnonecarriesitwhenthereisnocurrentsession—thepanelmustnotclaim\otherwise(FR-002,FR-013)")
+was: assert!(s.active_session.is_none())
+was: assert!(s.active_session.is_none(),"precondition")
+was: assert!(!Sdefault().terminal_released,"theapplicationstartswiththeterminalnotreleased,soarestoredsessionisfocused")
+was: assert!(s.pending_tab_reveal,"{name}changeswhichtabismarked,soitmustaskforthattabtobescrolledinto\view(feature026FR-002d).\n\n\Unarmed,themarkcanlandoutsidethestrip'sviewportandstaythere:thetabis\selected,thepaneswitches,theprocessattaches—andtheonecuethatsayswhich\tabtheuserisonistheonethingoffscreen.Feature027madethatreachablewith\apress,becausethe\"+\"nowsitsbesidethestripandcreatesthetabithides.")
+was: assert!(!s.pending_tab_reveal,"{name}:precondition—nothingarmedyet")
+was: assert!(st.active_session.is_none())
+was: assert!(st.active_session.is_some())
+was: assert!(state.active_session.is_none())
+was: assert!(state.active_session.is_none(),"aclosedsessionisnotlistedatall,sorestoringonewoulddisplaysomethingthepanel\cannotshow(FR-005).Nothingischoseninitsplaceeither(FR-007)")
+was: assert!(state.active_session.is_none(),"activesessioncleared")
+was: assert!(state.active_session.is_none(),"theprojectholdingitisgone,sonosessioniscurrent")
+was: assert!(state.active_session.is_none(),"thisfeaturerevealswhereyouare;itdoesnotdecidewhereyougonext.Asibling\sessioninthesamelocationisnotpromoted(FR-001a)")
+was: assert!(state.active_session.is_some(),"precondition:thememorywashonoured")
+was: assert!(state.reveal_suppressed_for.is_none(),"andnothingabouttheuser'sownchoicesisresetbyabackgrounddiscoveryeither")
+was: assert!(state.reveal_suppressed_for.is_none(),"re-openingitbyhandwithdrawstheclose,ratherthanleavingasuppressionthatonly\achangeofsessioncanclear")
+was: assert!(state.reveal_suppressed_for.is_none(),"theclosewasmadeagainstasessionthatisnolongercurrent;keepingitwouldswallow\thenextrevealforareasontheusercouldnotsee(invariantI2)")
+was: assert!(state.session_menu_open.is_none(),"sessioncontextmenu")
+was: assert!(state.shell_instance_menu.is_some())
+was: assert!(!s.terminal_released,"{name}putsaterminalinfrontoftheuser,soitmustcleartherelease(FR-011,\FR-021a)")
+was: assert!(!st.restarted_while_inactive.contains(&a[0]),"theuserwatchedithappen—tellingthemaboutitonreturnwouldbenoise")
+was: assert!(st.restarted_while_inactive.contains(&a_id))
+was: assert!(st.restarted_while_inactive.contains(&b[0]),"ithappenedoutofsight,soitisowedanotice")
+was: assert!(!st.restarted_while_inactive.contains(&b[0]),"themarkerisconsumedonarrival,orthesamenoticereappearsoneverylatervisit")
+was: assert!(!st.restarted_while_inactive.contains(&b_id))
+was: assert!(st.restarted_while_inactive.is_empty())
+was: assert!(st.reveal_suppressed_for.is_none(),"andarowclosedagainstthesessionyouwereondoesnotkeepthenextproject's\revealclosed(invariantI2)")
+```
+
 T040 rolls these up for the phase; each move is adjudicated as it lands, so the freeze is green at
 every commit rather than only at the end (contract C.1).
