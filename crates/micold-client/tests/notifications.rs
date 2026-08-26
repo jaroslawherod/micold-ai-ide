@@ -23,8 +23,8 @@ use micold_core::notify::Level;
 #[test]
 fn a_fresh_application_shows_nothing() {
     let state = State::default();
-    assert!(state.notify.visible().is_none());
-    assert_eq!(state.notify.pending(), 0);
+    assert!(state.notifications.queue.visible().is_none());
+    assert_eq!(state.notifications.queue.pending(), 0);
 }
 
 /// Both entry points reach the queue, at their own severities.
@@ -32,11 +32,17 @@ fn a_fresh_application_shows_nothing() {
 fn both_entry_points_reach_the_queue() {
     let mut error = State::default();
     error.notify_error("could not create the worktree");
-    assert_eq!(error.notify.visible().map(|n| n.level), Some(Level::Error));
+    assert_eq!(
+        error.notifications.queue.visible().map(|n| n.level),
+        Some(Level::Error)
+    );
 
     let mut info = State::default();
     info.notify_info("a background session was restarted");
-    assert_eq!(info.notify.visible().map(|n| n.level), Some(Level::Info));
+    assert_eq!(
+        info.notifications.queue.visible().map(|n| n.level),
+        Some(Level::Info)
+    );
 }
 
 /// One at a time (FR-032a). The rest wait rather than stacking up the screen.
@@ -48,10 +54,10 @@ fn only_one_is_visible_and_the_rest_wait() {
     st.notify_info("third");
 
     assert_eq!(
-        st.notify.visible().map(|n| n.message.as_str()),
+        st.notifications.queue.visible().map(|n| n.message.as_str()),
         Some("first")
     );
-    assert_eq!(st.notify.pending(), 2);
+    assert_eq!(st.notifications.queue.pending(), 2);
 }
 
 /// Dismissal clears the visible one and promotes the next immediately (FR-032b).
@@ -67,11 +73,11 @@ fn dismissing_promotes_the_next_one() {
     st.update(Message::Notifications(NotificationsMsg::Dismissed));
 
     assert_eq!(
-        st.notify.visible().map(|n| n.message.as_str()),
+        st.notifications.queue.visible().map(|n| n.message.as_str()),
         Some("second"),
         "dismissing left a gap instead of promoting what was waiting"
     );
-    assert_eq!(st.notify.pending(), 0);
+    assert_eq!(st.notifications.queue.pending(), 0);
 }
 
 /// Dismissing the last one leaves nothing, and dismissing nothing is harmless — the message can
@@ -81,10 +87,10 @@ fn dismissing_the_last_one_is_safe_and_so_is_dismissing_none() {
     let mut st = State::default();
     st.notify_info("only");
     st.update(Message::Notifications(NotificationsMsg::Dismissed));
-    assert!(st.notify.visible().is_none());
+    assert!(st.notifications.queue.visible().is_none());
 
     st.update(Message::Notifications(NotificationsMsg::Dismissed));
-    assert!(st.notify.visible().is_none());
+    assert!(st.notifications.queue.visible().is_none());
 }
 
 /// Dedup survives the move (FR-032a). Repeating an action that keeps failing must not queue the
@@ -95,7 +101,7 @@ fn a_repeated_failure_does_not_queue_behind_itself() {
     st.notify_error("could not reach the daemon");
     st.notify_error("could not reach the daemon");
 
-    assert_eq!(st.notify.pending(), 0);
+    assert_eq!(st.notifications.queue.pending(), 0);
 }
 
 /// Time clears the visible one, and the application drives that clock explicitly — nothing here
@@ -109,7 +115,7 @@ fn elapsed_time_clears_the_visible_notification() {
     st.update(Message::Notifications(NotificationsMsg::Advanced(ms)));
 
     assert!(
-        st.notify.visible().is_none(),
+        st.notifications.queue.visible().is_none(),
         "an info notice outlived its own duration"
     );
 }
@@ -124,7 +130,7 @@ fn an_error_survives_an_info_s_duration() {
         Level::Info.duration().as_millis() as u32,
     )));
     assert!(
-        st.notify.visible().is_some(),
+        st.notifications.queue.visible().is_some(),
         "the error was cleared after the info duration — it is being timed by the wrong severity"
     );
 }
@@ -134,11 +140,11 @@ fn an_error_survives_an_info_s_duration() {
 #[test]
 fn the_queue_wants_the_clock_only_while_it_has_something_to_show() {
     let mut st = State::default();
-    assert!(!st.notify.is_active());
+    assert!(!st.notifications.queue.is_active());
 
     st.notify_error("something");
-    assert!(st.notify.is_active());
+    assert!(st.notifications.queue.is_active());
 
     st.update(Message::Notifications(NotificationsMsg::Dismissed));
-    assert!(!st.notify.is_active());
+    assert!(!st.notifications.queue.is_active());
 }

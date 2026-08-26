@@ -85,7 +85,7 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     // The snackbar's clock, subscribed **only while something is on screen** (FR-032a, SC-017).
     // A timer that ran at rest would hold the loop awake for the life of the process to count down
     // a notification that does not exist; `Queue::is_active` is what keeps it off.
-    if app.core.notify.is_active() {
+    if app.core.notifications.queue.is_active() {
         subs.push(every(SNACKBAR_TICK).map(|_| {
             Message::Notifications(NotificationsMsg::Advanced(SNACKBAR_TICK.as_millis() as u32))
         }));

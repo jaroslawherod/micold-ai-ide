@@ -127,7 +127,7 @@ mod tests {
         let _ = on_restart_service_requested(&mut app);
 
         assert!(
-            app.core.notify.is_active(),
+            app.core.notifications.queue.is_active(),
             "restarting the service must tell the user what it costs"
         );
     }
@@ -139,6 +139,6 @@ mod tests {
 
         let _ = on_logout_survival_outcome(&mut app, "it worked".to_string());
 
-        assert!(app.core.notify.is_active());
+        assert!(app.core.notifications.queue.is_active());
     }
 }

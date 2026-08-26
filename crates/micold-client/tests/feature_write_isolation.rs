@@ -154,7 +154,11 @@ const OWNERS: &[(&str, &str)] = &[
     ("system_scheme", "settings"),
     ("settings_draft", "settings"),
     // --- notifications ------------------------------------------------------------------------
-    ("notify", "notifications"),
+    // The path and the owner are the same word from feature 028 T028 onward: the field is the
+    // feature's own `State`, so what used to be `notify` owned by `notifications` is now
+    // `notifications` owned by `notifications`. The queue inside it is reached as
+    // `notifications.queue`, and this scan resolves a write by its first segment.
+    ("notifications", "notifications"),
     // --- window -------------------------------------------------------------------------------
     // T063 named these. They were `root` until T062 left three arms in the root reducer writing
     // them and nothing else, at which point "no feature owns it" stopped being an answer: FR-002

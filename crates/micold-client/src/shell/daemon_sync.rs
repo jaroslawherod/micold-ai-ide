@@ -1586,7 +1586,8 @@ pub(crate) mod tests {
 
         let notice = app
             .core
-            .notify
+            .notifications
+            .queue
             .visible()
             .expect("a dropped op must be reported");
         assert!(
@@ -1720,7 +1721,7 @@ pub(crate) mod tests {
 
         switch_daemon_attachment(&mut app, Some(PathBuf::from("/a")), Path::new("/b"));
         assert!(
-            app.core.notify.visible().is_none(),
+            app.core.notifications.queue.visible().is_none(),
             "an ordinary project switch must not report the connection"
         );
 
@@ -1733,7 +1734,7 @@ pub(crate) mod tests {
             }
         });
         assert!(
-            app.core.notify.visible().is_some(),
+            app.core.notifications.queue.visible().is_some(),
             "a dropped op is still reported"
         );
     }
@@ -1972,7 +1973,8 @@ pub(crate) mod tests {
             .expect("the switch happened");
         micold_client::app::drain(arrival, |o| micold_client::app::interpret(&mut core, o));
         let visible = core
-            .notify
+            .notifications
+            .queue
             .visible()
             .expect("the return notice reached the queue");
         assert_eq!(visible.level, micold_core::notify::Level::Info);

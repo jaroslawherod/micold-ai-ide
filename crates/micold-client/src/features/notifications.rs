@@ -23,7 +23,26 @@ use std::time::Duration;
 
 use micold_core::notify;
 
-use crate::app::State;
+/// What this feature remembers.
+///
+/// One member, and it is not a field this module invented: the queue is `micold_core::notify`'s,
+/// because which notification is visible, how long it stays and what is behind it are decisions
+/// with no pixels in them. What moved here is *whose* queue it is.
+///
+/// Spelled `crate::app::State` in the signatures below rather than imported, now that `State` in
+/// this module means this struct. The fully-qualified form is deliberate: the scans in
+/// `tests/feature_write_isolation.rs` resolve a parameter type by its last `::` segment, so
+/// `&mut crate::app::State` is still a root-state operation to them, where `as AppState` would
+/// have made every reducer here invisible to the guard that checks what it writes.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct State {
+    /// Global messages, newest last: one visible, the rest waiting (FR-032a). Never persisted.
+    ///
+    /// A message stays until the user dismisses it or it is evicted by newer ones. Nothing clears
+    /// these implicitly: a report that vanishes on unrelated activity — a background worktree
+    /// re-scan, say — is how these failures became invisible in the first place.
+    pub queue: notify::Queue,
+}
 
 /// How prominently a notification is presented.
 ///
@@ -98,9 +117,9 @@ pub enum Msg {
 /// This feature's whole reducer surface: one entry point, shape A (contract M2).
 ///
 /// Both arms drive the queue this module owns, so nothing comes back. They were the root's last
-/// two inline bodies — written straight against `state.notify` in `app.rs` rather than through a
+/// two inline bodies — written straight against `state.notifications.queue` in `app.rs` rather than through a
 /// function here — which is why the module had no reducer to route to before now.
-pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::Dismissed => dismissed(state),
         Msg::Advanced(elapsed_ms) => advanced(state, elapsed_ms),
@@ -109,13 +128,14 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
 }
 
 /// The visible notification was dismissed; the next one, if any, takes its place at once.
-pub fn dismissed(state: &mut State) {
-    state.notify.dismiss();
+pub fn dismissed(state: &mut crate::app::State) {
+    state.notifications.queue.dismiss();
 }
 
 /// A tick of the snackbar clock, in milliseconds, which may retire the visible notification.
-pub fn advanced(state: &mut State, elapsed_ms: u32) {
+pub fn advanced(state: &mut crate::app::State, elapsed_ms: u32) {
     state
-        .notify
+        .notifications
+        .queue
         .advance(Duration::from_millis(u64::from(elapsed_ms)));
 }

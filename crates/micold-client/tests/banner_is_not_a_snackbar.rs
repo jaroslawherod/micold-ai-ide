@@ -97,11 +97,11 @@ fn an_ordinary_notification_still_reaches_the_queue() {
     state.notify_error("could not create the worktree");
 
     assert!(
-        state.notify.visible().is_some(),
+        state.notifications.queue.visible().is_some(),
         "no notification reached the queue at all, so every assertion above is vacuous"
     );
     assert_eq!(
-        state.notify.pending(),
+        state.notifications.queue.pending(),
         0,
         "one message should not queue behind itself"
     );

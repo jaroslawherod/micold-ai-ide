@@ -85,7 +85,7 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[(
 ///
 /// `notifications` is the one the contract names outright — "emitted by: any feature" — and the
 /// reason is that a notification is nobody's feature: every path that can fail wants one, and
-/// `state.notify` belongs to none of them. `mod.rs` holds `Outcome` itself and the helpers over it.
+/// `state.notifications.queue` belongs to none of them. `mod.rs` holds `Outcome` itself and the helpers over it.
 const SHARED_VOCABULARY: &[&str] = &["notifications", "mod"];
 
 fn src_dir() -> PathBuf {
@@ -149,7 +149,9 @@ fn feature_modules() -> BTreeSet<String> {
 ///
 /// Both spellings, because Tier 1 left some operations as `impl State` methods and Tier 3 made the
 /// rest free functions: `&mut self` and `&mut State` are the same thing to a caller that wants to
-/// change something.
+/// change something. The second is resolved by its last `::` segment rather than matched as a
+/// substring — feature 028 gave feature modules a `State` of their own, so the root's is spelled
+/// `crate::app::State` there, and a substring match would have reported every module reducer-free.
 fn mutating_fns(src: &str) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     let mut rest = src;
@@ -162,7 +164,7 @@ fn mutating_fns(src: &str) -> BTreeSet<String> {
         if let Some(open) = after.find('(') {
             if let Some(close) = after[open..].find(')') {
                 let params = &after[open..open + close];
-                if params.contains("&mut self") || params.contains("&mut State") {
+                if params.contains("&mut self") || takes_mut(params, "State") {
                     out.insert(name.to_string());
                 }
             }
@@ -401,7 +403,29 @@ fn every_feature_module_has_an_isolation_test() {
 
 // ---- G3: every feature module has a reducer entry point (FR-015) --------------------------------
 
-/// Whether `code` declares a `pub fn update` whose parameters and return type match.
+/// Whether some parameter in `args` is declared `&mut <struct_name>`, however the type is spelled.
+///
+/// The last `::` segment, as `feature_write_isolation.rs` resolves it: a feature module that now
+/// declares its own `State` spells the root's as `&mut crate::app::State`, and a substring match
+/// on `&mut State` would read that as no reducer at all.
+fn takes_mut(args: &str, struct_name: &str) -> bool {
+    args.split(',').any(|arg| {
+        let Some((_, ty)) = arg.split_once(':') else {
+            return false;
+        };
+        let ty = ty.replace([' ', '\n'], "");
+        let Some(rest) = ty.strip_prefix('&') else {
+            return false;
+        };
+        let rest = match rest.find("mut") {
+            Some(at) => &rest[at + 3..],
+            None => return false,
+        };
+        rest.rsplit("::").next() == Some(struct_name)
+    })
+}
+
+/// Whether `code` declares a `pub fn update` taking `&mut <takes>` and returning `<returns>`.
 fn declares_update(code: &str, takes: &str, returns: &str) -> bool {
     let mut rest = code;
     while let Some(at) = rest.find("pub fn update") {
@@ -419,7 +443,7 @@ fn declares_update(code: &str, takes: &str, returns: &str) -> bool {
             .map(|i| open + close + i)
             .unwrap_or(after.len());
         let ret = &after[open + close..signature_end];
-        if params.contains(takes) && params.contains("Msg") && ret.contains(returns) {
+        if takes_mut(params, takes) && params.contains("Msg") && ret.contains(returns) {
             return true;
         }
     }
@@ -430,13 +454,13 @@ fn declares_update(code: &str, takes: &str, returns: &str) -> bool {
 fn entry_shape(module: &str, sources: &BTreeMap<String, String>) -> Option<&'static str> {
     let pure = sources
         .get(&format!("features/{module}.rs"))
-        .is_some_and(|code| declares_update(code, "&mut State", "Outcome"));
+        .is_some_and(|code| declares_update(code, "State", "Outcome"));
     if pure {
         return Some("A");
     }
     let effectful = sources
         .get(&format!("shell/{module}.rs"))
-        .is_some_and(|code| declares_update(code, "&mut App", "Task<Message>"));
+        .is_some_and(|code| declares_update(code, "App", "Task<Message>"));
     effectful.then_some("B")
 }
 

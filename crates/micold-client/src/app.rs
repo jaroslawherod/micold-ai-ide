@@ -262,18 +262,12 @@ pub struct State {
     /// Sessions that were auto-restarted while their project was inactive, pending a return
     /// notification. Cleared when the user returns to the owner.
     pub restarted_while_inactive: BTreeSet<SessionId>,
-    /// Global messages, newest last. Rendered unconditionally so no failure can be swallowed by
-    /// an unreachable render path — see [`notify::Notification`]. Never persisted.
+    /// What the notifications feature remembers — see
+    /// [`crate::features::notifications::State`].
     ///
-    /// A message stays until the user dismisses it or it is evicted by newer ones. Nothing
-    /// clears these implicitly: a report that vanishes on unrelated activity (a background
-    /// worktree re-scan, say) is how these failures became invisible in the first place.
-    /// The notification queue: one visible, the rest waiting (FR-032a).
-    ///
-    /// A `micold_core::notify::Queue` rather than a `Vec` that renders all at once. Which one is
-    /// visible, how long it stays and what is behind it are decisions with no pixels in them, so
-    /// they live in the render-free core and the view draws whatever is currently visible.
-    pub notify: notify::Queue,
+    /// Rendered unconditionally so no failure can be swallowed by an unreachable render path (see
+    /// [`notify::Notification`]).
+    pub notifications: crate::features::notifications::State,
     /// How far the worktree sidebar is scrolled, in logical pixels.
     ///
     /// The app bar's elevation derives from this and nothing else (FR-025a) — see
@@ -410,7 +404,8 @@ impl State {
         // Dedup and the retention cap moved into the queue with the rest of the discipline, so
         // this is now only the level translation: `NoticeLevel` stays the *banner's* vocabulary
         // (FR-032c keeps that a separate component) while the queue speaks the core's.
-        self.notify
+        self.notifications
+            .queue
             .push(notify::Notification::new(level.to_queue_level(), message));
     }
 
@@ -653,7 +648,7 @@ pub fn interpret(
         Outcome::SessionsClosed(ids) => return crate::features::session::closed(state, &ids),
         Outcome::OverlayDismissed(id) => crate::overlay::registry::dismiss(state, id),
         Outcome::SurfaceOpened(id) => crate::overlay::registry::displace(state, id),
-        Outcome::NotificationRaised(notification) => state.notify.push(notification),
+        Outcome::NotificationRaised(notification) => state.notifications.queue.push(notification),
         Outcome::WorktreesReplaced(names) => {
             crate::features::sidebar::worktrees_replaced(state, &names);
             crate::features::worktree_form::worktree_list_changed(state);

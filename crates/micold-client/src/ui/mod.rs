@@ -452,7 +452,7 @@ pub fn view<'a>(
     // above the dialog just as well — and changed the root's shape, which every recorded layout
     // anchor is expressed against. The band is what the overlay exists for.
     let snackbar: Option<cdk::overlay::Surface<'a, Message>> =
-        state.notify.visible().map(|visible| {
+        state.notifications.queue.visible().map(|visible| {
             cdk::overlay::Surface::new(
                 micold_core::overlay::Layer::Snackbar,
                 material::Snackbar::new(visible, roles)

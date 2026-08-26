@@ -357,7 +357,8 @@ mod tests {
             "the write was refused, so nothing was recorded"
         );
         let notice = core
-            .notify
+            .notifications
+            .queue
             .visible()
             .expect("a refused write must be reported");
         assert!(
@@ -375,6 +376,6 @@ mod tests {
     fn no_settings_store_is_not_an_error() {
         let mut core = State::default();
         persist_settings(None, &mut core);
-        assert!(core.notify.visible().is_none());
+        assert!(core.notifications.queue.visible().is_none());
     }
 }

@@ -27,17 +27,18 @@ fn non_git_directory_fails_the_gate() {
 #[test]
 fn refusal_message_is_surfaced_to_the_user() {
     let mut state = State::default();
-    assert!(state.notify.visible().is_none());
+    assert!(state.notifications.queue.visible().is_none());
     state.update(Message::Project(ProjectMsg::OpenRefused(
         "Only git repositories can be opened".to_string(),
     )));
     let visible = state
-        .notify
+        .notifications
+        .queue
         .visible()
         .expect("the refusal reached the queue");
     assert_eq!(visible.level, micold_core::notify::Level::Error);
     assert_eq!(visible.message, "Only git repositories can be opened");
-    assert_eq!(state.notify.pending(), 0);
+    assert_eq!(state.notifications.queue.pending(), 0);
     // Not stashed in the modal-owned field that made it unreachable.
     assert!(state.worktree_error.is_none());
 }
@@ -51,8 +52,8 @@ fn refusal_persists_until_dismissed() {
         "nope".to_string(),
     )));
     state.update(Message::Worktree(WorktreeMsg::Loaded(vec![])));
-    assert!(state.notify.visible().is_some());
+    assert!(state.notifications.queue.visible().is_some());
 
     state.update(Message::Notifications(NotificationsMsg::Dismissed));
-    assert!(state.notify.visible().is_none());
+    assert!(state.notifications.queue.visible().is_none());
 }

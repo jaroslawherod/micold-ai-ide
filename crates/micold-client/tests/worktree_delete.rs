@@ -180,7 +180,8 @@ fn fr_023_failed_delete_is_reported_and_the_worktree_survives() {
 
     // The failure reached the user through the surface that always renders.
     let visible = state
-        .notify
+        .notifications
+        .queue
         .visible()
         .expect("the refusal reached the queue");
     assert_eq!(visible.level, micold_core::notify::Level::Error);
@@ -369,9 +370,9 @@ fn fr_023a_successful_delete_is_silent_when_git_already_removed_the_dir() {
     }
 
     assert!(
-        state.notify.visible().is_none(),
+        state.notifications.queue.visible().is_none(),
         "a fully successful delete must report nothing, got: {:?}",
-        state.notify.visible()
+        state.notifications.queue.visible()
     );
 }
 
@@ -393,12 +394,14 @@ fn fr_023_leftover_directory_is_still_reported() {
     }
 
     assert_eq!(
-        state.notify.pending() + usize::from(state.notify.visible().is_some()),
+        state.notifications.queue.pending()
+            + usize::from(state.notifications.queue.visible().is_some()),
         1,
         "a genuine leftover must still reach the user"
     );
     let visible = state
-        .notify
+        .notifications
+        .queue
         .visible()
         .expect("the failure reached the queue");
     assert_eq!(visible.level, micold_core::notify::Level::Error);

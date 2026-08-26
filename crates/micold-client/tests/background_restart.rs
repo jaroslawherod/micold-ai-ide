@@ -58,11 +58,12 @@ fn returning_to_project_notifies_the_user_and_clears_markers() {
     let a_id = st.workspace.sessions[Path::new("/a")][0].id;
     st.note_background_restart(a_id);
 
-    assert!(st.notify.visible().is_none());
+    assert!(st.notifications.queue.visible().is_none());
     assert!(switch(&mut st, "/a"));
 
     let visible = st
-        .notify
+        .notifications
+        .queue
         .visible()
         .expect("the return notice reached the queue");
     assert_eq!(visible.level, micold_core::notify::Level::Info);
