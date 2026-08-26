@@ -438,5 +438,35 @@ was: assert_eq!(state.worktree_form.as_ref().unwrap().type_,None)
 was: assert_eq!(state.worktree_form.as_ref().unwrap().type_,Some(ConventionalTFeat))
 ```
 
+## T032 — the Settings form and the theme moved behind `state.settings`
+
+Three fields became members of `features::settings::State`: `state.settings_draft` is
+`state.settings.settings_draft`, `state.system_scheme` is `state.settings.system_scheme`, and
+`state.theme_pref` is `state.settings.theme_pref`. All three keep their flat names — no stutter to
+drop, since none of them repeats the word `settings` — so six assertions gained one segment and
+none changed what it asks, across `tests/logical_state_ownership.rs`, `tests/system_theme.rs` and
+`tests/terminal_focus.rs`.
+
+The seventh is not a rename. `feature_write_isolation.rs`'s non-vacuity floor counted the fields
+`app::State` declares and required at least 40 — a check that the struct scan is parsing a real
+declaration rather than returning an empty list. This feature takes that count down on purpose:
+after T032 the root parses to 39 fields, and by T036 it will be far fewer. As a root-only measure
+the floor had become a countdown, lowered at every commit, and a floor lowered to fit stops
+catching what it was for. It now counts both levels — the root's fields plus the members of every
+feature struct the root holds — and keeps the same threshold of 40. That total is what a write can
+resolve to, it is the number that was ~60 before this feature started, and the moves leave it
+unchanged. The floor asks strictly more than it did: it is now vacuous only if *both* scans go
+quiet, where before the feature structs were not read at all.
+
+```
+was: assert!(s.settings_draft.is_none())
+was: assert!(scan.state_fields>=40,"`State`parsedtoonly{}fields—thestructscanisnotreadingwhatitthinksitis",scan.state_fields)
+was: assert!(matches!(state.theme_pref,ThemePFollowSystem|ThemePLight|ThemePDark))
+was: assert_eq!(state.system_scheme,SystemSDark)
+was: assert_eq!(state.system_scheme,SystemSDark,"atransientdetect()failuremustnotoverwritethelast-knownscheme")
+was: assert_eq!(state.system_scheme,SystemSUnspecified,"Ok(Unspecified)isagenuineOSreading,notafailure—itmuststillupdatethescheme")
+was: assert_ne!(state.theme_pref,before)
+```
+
 T040 rolls these up for the phase; each move is adjudicated as it lands, so the freeze is green at
 every commit rather than only at the end (contract C.1).
