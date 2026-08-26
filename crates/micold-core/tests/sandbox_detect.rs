@@ -107,6 +107,19 @@ fn rootless_podman_without_a_subuid_range_is_a_permission_problem_not_an_unknown
 }
 
 #[test]
+fn a_subuid_range_too_small_to_use_is_the_same_answer_as_none_at_all() {
+    // The same problem one step along: the user has a range, it is too short, and podman 5.8.4
+    // says so in completely different words — mid-unpack, without "subuid" or "rootless" anywhere
+    // in the sentence. Both fixtures were captured from podman 5.8.4 (T098); the first spelling
+    // was the one the classifier knew, and this one was reaching the user as `Unknown` while the
+    // remedy for both is the same `usermod`.
+    match spoke(RuntimeKind::Podman, "podman_err_subuid_range_too_small.txt") {
+        RuntimeError::PermissionDenied { kind } => assert_eq!(kind, RuntimeKind::Podman),
+        other => panic!("expected PermissionDenied, got {other:?}"),
+    }
+}
+
+#[test]
 fn the_three_answers_are_distinct_and_each_carries_its_own_next_step() {
     // The point of the classification, asserted as the property rather than as three separate
     // string checks: a remedy shared between two of them would send half the users somewhere

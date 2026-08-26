@@ -507,11 +507,18 @@ fn first_line(s: &str) -> String {
 fn port_in(text: &str) -> Option<u16> {
     text.split(|c: char| c.is_whitespace() || c == '"' || c == '\'')
         .filter(|token| token.contains('.'))
-        .filter_map(|token| token.rsplit(':').next())
-        .filter_map(|tail| {
-            let digits: String = tail.chars().take_while(|c| c.is_ascii_digit()).collect();
-            digits.parse::<u16>().ok()
-        })
+        // Trailing punctuation first, then either separator. Both runtimes put the address at the
+        // end of a clause, so the token is `...:7727/tcp:` or `...127.0.0.1/7727:` — colon-
+        // terminated — and splitting on `:` from the right then reads the empty string after it
+        // and gives up. The result was "Port 0 is already in use" for *both* runtimes, which is
+        // exactly the false statement the comment at the call site says this must never produce.
+        // Podman adds the second separator: 5.8.4 rootless goes through pasta, which writes the
+        // address as `127.0.0.1/7727`. T098 found this — not by classifying podman's message,
+        // which was already landing in the right variant, but because asking a real podman for its
+        // wording is what prompted asserting the number as well as the variant.
+        .map(|token| token.trim_end_matches(|c: char| !c.is_ascii_digit()))
+        .filter_map(|token| token.rsplit_once([':', '/']))
+        .filter_map(|(_, tail)| tail.parse::<u16>().ok())
         .find(|p| *p != 0)
 }
 
