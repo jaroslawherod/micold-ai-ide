@@ -24,20 +24,30 @@ use micold_core::protocol::auth::Token;
 use micold_core::protocol::messages::PresentedToken;
 
 const IMAGE: &str = "micold-daemon:dev";
-const CONTAINER: &str = "micold-sandbox-realtest";
-const NETWORK: &str = "micold-sandbox-realtest-net";
-/// Not the default 7727: a developer running this while their own sandbox is up must not have the
-/// two fight over the port, and must not accidentally test against theirs.
-const PORT: u16 = 17727;
 
+/// Each test takes its **own** container, network and published port.
+///
+/// The tests in this file run concurrently by default, and each one begins by clearing away any
+/// leftovers under its own names. Sharing a set meant the second test to start tore down the first
+/// test's container — which surfaced as `network ... already exists` from whichever lost the race,
+/// a failure that reads like a broken sandbox and is nothing of the kind. `sandbox_real_lifecycle`
+/// was written this way from the start; this file predates it.
+///
+/// None of the ports is the default 7727: a developer running these while their own sandbox is up
+/// must neither fight it for the port nor accidentally test against it.
 struct Sandbox {
     _dir: tempfile::TempDir,
     token: Token,
+    container: String,
+    network: String,
+    port: u16,
 }
 
 impl Sandbox {
-    fn start() -> Self {
-        teardown();
+    fn start(label: &str, port: u16) -> Self {
+        let container = format!("micold-sandbox-realtest-{label}");
+        let network = format!("{container}-net");
+        teardown(&container, &network);
 
         let dir = tempfile::tempdir().expect("temp dir");
         let state = dir.path().join("state");
@@ -49,11 +59,11 @@ impl Sandbox {
         let token_path = state.join("sandbox.token");
         token.write_to(&token_path).unwrap();
 
-        run(&["network", "create", "--driver", "bridge", NETWORK]);
+        run(&["network", "create", "--driver", "bridge", &network]);
 
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
         let uid_gid = format!("{}:{}", uid(), gid());
-        let publish = format!("127.0.0.1:{PORT}:7727");
+        let publish = format!("127.0.0.1:{port}:7727");
         let project_mount = format!("{0}:{0}:rw", project.display());
         let state_mount = format!("{}:/var/lib/micold-ai-ide:rw", state.display());
         let token_mount = format!("{}:/run/micold/token:ro", token_path.display());
@@ -62,13 +72,13 @@ impl Sandbox {
         run(&[
             "create",
             "--name",
-            CONTAINER,
+            &container,
             "--user",
             &uid_gid,
             "--restart",
             "no",
             "--network",
-            NETWORK,
+            &network,
             "-p",
             &publish,
             "-e",
@@ -81,24 +91,39 @@ impl Sandbox {
             &token_mount,
             IMAGE,
         ]);
-        run(&["start", CONTAINER]);
+        run(&["start", &container]);
 
-        Self { _dir: dir, token }
+        Self {
+            _dir: dir,
+            token,
+            container,
+            network,
+            port,
+        }
+    }
+
+    fn address(&self) -> DialAddress {
+        DialAddress::Loopback { port: self.port }
+    }
+
+    fn credentials(&self) -> Credentials {
+        Credentials {
+            auth_token: Some(PresentedToken::new(self.token.as_str())),
+            require_fingerprint_match: false,
+        }
     }
 }
 
 impl Drop for Sandbox {
     fn drop(&mut self) {
-        teardown();
+        teardown(&self.container, &self.network);
     }
 }
 
-fn teardown() {
+fn teardown(container: &str, network: &str) {
+    let _ = Command::new("docker").args(["rm", "-f", container]).output();
     let _ = Command::new("docker")
-        .args(["rm", "-f", CONTAINER])
-        .output();
-    let _ = Command::new("docker")
-        .args(["network", "rm", NETWORK])
+        .args(["network", "rm", network])
         .output();
 }
 
@@ -123,10 +148,11 @@ fn gid() -> u32 {
 
 /// Poll until the daemon accepts, or give up with its logs attached — a bare timeout here would
 /// report "did not start" for four different causes.
-async fn wait_for_accept(address: &DialAddress, credentials: &Credentials) -> Connected {
+async fn wait_for_accept(sandbox: &Sandbox, credentials: &Credentials) -> Connected {
+    let address = sandbox.address();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     loop {
-        match connect_at(address, "real-test-client", credentials).await {
+        match connect_at(&address, "real-test-client", credentials).await {
             Ok(Some(connected)) => return connected,
             Ok(None) | Err(_) if std::time::Instant::now() < deadline => {
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -141,7 +167,7 @@ async fn wait_for_accept(address: &DialAddress, credentials: &Credentials) -> Co
                     Err(e) => format!("io error: {e}"),
                 };
                 let logs = Command::new("docker")
-                    .args(["logs", CONTAINER])
+                    .args(["logs", &sandbox.container])
                     .output()
                     .map(|o| {
                         format!(
@@ -159,14 +185,10 @@ async fn wait_for_accept(address: &DialAddress, credentials: &Credentials) -> Co
 
 #[tokio::test]
 async fn sandbox_real_handshake_succeeds_with_the_mounted_token() {
-    let sandbox = Sandbox::start();
-    let address = DialAddress::Loopback { port: PORT };
-    let credentials = Credentials {
-        auth_token: Some(PresentedToken::new(sandbox.token.as_str())),
-        require_fingerprint_match: false,
-    };
+    let sandbox = Sandbox::start("handshake", 17727);
+    let credentials = sandbox.credentials();
 
-    match wait_for_accept(&address, &credentials).await {
+    match wait_for_accept(&sandbox, &credentials).await {
         Connected::Ready(_conn, welcome) => {
             assert!(
                 welcome.daemon_build.contains("micold-daemon"),
@@ -182,22 +204,17 @@ async fn sandbox_real_handshake_succeeds_with_the_mounted_token() {
 /// daemon, so a wrong secret must be refused by a *real* daemon and not only by the evaluator.
 #[tokio::test]
 async fn sandbox_real_handshake_refuses_a_wrong_token() {
-    let sandbox = Sandbox::start();
-    let address = DialAddress::Loopback { port: PORT };
+    let sandbox = Sandbox::start("wrong-token", 17728);
 
     // Wait for it to be up using the right token first, so a refusal below is a refusal and not a
     // "not listening yet".
-    let good = Credentials {
-        auth_token: Some(PresentedToken::new(sandbox.token.as_str())),
-        require_fingerprint_match: false,
-    };
-    let _ = wait_for_accept(&address, &good).await;
+    let _ = wait_for_accept(&sandbox, &sandbox.credentials()).await;
 
     let bad = Credentials {
         auth_token: Some(PresentedToken::new(Token::generate().as_str())),
         require_fingerprint_match: false,
     };
-    match connect_at(&address, "real-test-client", &bad).await {
+    match connect_at(&sandbox.address(), "real-test-client", &bad).await {
         Ok(Some(Connected::Refused(
             micold_core::protocol::messages::RefusalReason::AuthRejected,
         ))) => {}
@@ -217,13 +234,9 @@ async fn sandbox_real_handshake_refuses_a_wrong_token() {
 /// runtime-managed volume.
 #[tokio::test]
 async fn sandbox_real_state_is_written_where_the_host_can_read_it() {
-    let sandbox = Sandbox::start();
-    let address = DialAddress::Loopback { port: PORT };
-    let credentials = Credentials {
-        auth_token: Some(PresentedToken::new(sandbox.token.as_str())),
-        require_fingerprint_match: false,
-    };
-    let _ = wait_for_accept(&address, &credentials).await;
+    let sandbox = Sandbox::start("state", 17729);
+    let credentials = sandbox.credentials();
+    let _ = wait_for_accept(&sandbox, &credentials).await;
 
     let state: PathBuf = sandbox._dir.path().join("state");
     assert!(state.is_dir(), "the state directory must exist on the host");
