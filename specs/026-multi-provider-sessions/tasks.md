@@ -1442,7 +1442,7 @@ a path only a second press exercises, or a pixel position.
   not the defect; what is under test is that a push happens at all. §B's frames remain the timing
   evidence.
 
-- [ ] T087 Report a failed **resume** to the client (FR-010). `ClientMsg::SessionStart` — the restart
+- [X] T087 Report a failed **resume** to the client (FR-010). `ClientMsg::SessionStart` — the restart
   a user presses on an existing session — calls `spawn_session_start(…, LaunchMode::Resume, None, …)`
   in `micold-daemon/src/server.rs`. That `None` is the reply channel, and the whole of the outcome
   handling sits behind `if let Some((client, req)) = reply`: the start failure is logged at `warn`
@@ -1452,6 +1452,44 @@ a path only a second press exercises, or a pixel position.
   fine, which is why every test of the failure message passes. Note the asymmetry is deliberate for
   the *success* case (a resume has no `SessionCreated` to send); the fix is to broadcast and report
   the error regardless, not to invent a reply for the success.
+
+  **Done 2026-08-26.** The fix is one line in each failure arm of `spawn_session_start`:
+  `task_state.broadcast_catalog()`, outside the `if let Some(reply)` that held every other outcome
+  path. Neither of the two obvious alternatives is right. An `OperationError` cannot be addressed to
+  this message at all — `ClientMsg::SessionStart` carries no `req` — and inventing one would be a
+  wire change for a report the catalog already carries; and the missing reply is *correct* for the
+  success case, which is the trap the diagnosis above warns about. What was actually asymmetric was
+  the announcement, not the reply: `start_session` records the sentence in `start_failures`,
+  `overlay_live_summaries` projects it as `Failed { reason, attempts: 0 }`, and the only
+  `broadcast_catalog` on the success path sits *after* `mark_session_running` — which a failed start
+  returns before reaching. The `SessionCreate` path has been relying on exactly this broadcast for
+  the same case all along, which is why every test of the failure *message* passed.
+
+  The gate (`crates/micold-daemon/tests/resume_failure_reported.rs`) drives `SessionStart` through a
+  real `serve_connection` and asserts on the frames the client receives. That is deliberate and it is
+  the whole difficulty of the task: the state half is already correct and already gated, so a test
+  that reads `welcome_payload()` — or calls `start_session` directly, as every existing test of this
+  refusal does — passes against the defect. Nothing else in the test can broadcast: the supervisor
+  tick belongs to the daemon binary rather than to `serve_connection`, and the `Welcome` snapshot is
+  drained before the start is sent, so a `CatalogChanged` arriving afterwards came from the start.
+  One provider (Copilot) rather than a sweep over `AiCli::ALL` — the per-provider wording is already
+  gated in `session_start.rs`; what was missing here is delivery.
+
+  Probed on `c96af25` by deleting the two broadcasts and running `cargo test --workspace
+  --no-fail-fast`: 221 binaries, **2168 pass and 1 fails**, and the failure is
+  `a_resume_that_fails_reaches_the_client` alone. `--no-fail-fast` again for the reason recorded
+  under T086 — a fail-fast run stops at the first failing binary and cannot distinguish "alone" from
+  "first". The red run before the fix failed at the ten-second receive timeout rather than on a
+  wrong value, which is the defect's actual shape: not a bad announcement, no announcement.
+
+  The ten seconds is a timeout and not a measurement — the start is a single `PATH` lookup and the
+  green run takes 0.00 s — so nothing here asserts latency; a deadline tight enough to *be* the
+  measurement would fail on a loaded runner for a reason that is not the defect.
+
+  What this does **not** do is put the reason in front of the user: the client now receives
+  `Failed { reason }` for a resume as it already did for a create, and T088 is where that sentence
+  gets somewhere readable. Restart on a missing CLI moves the bar to `failed` after this; it does
+  not yet say why.
 
 - [ ] T088 Surface the reason a start failed, somewhere a user can read it (FR-010). The daemon
   already computes the sentence — "GitHub Copilot isn't installed. Install it, or start this session
