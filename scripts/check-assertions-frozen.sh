@@ -153,6 +153,9 @@ fi
 # nothing enforcing it -- the failure mode the feature exists to correct.
 FEATURE_DIRS=("specs/021-mvu-slice-architecture/" "specs/028-feature-encapsulation/")
 FEATURE_NAMES=("021" "028")
+# How the report names the rule it is enforcing. 028 does not have an FR-027; its FR-021 restates
+# the freeze, and a report citing the wrong requirement id sends the reader to the wrong document.
+FEATURE_RULES=("feature 021's FR-027" "feature 028's FR-021")
 FEATURE_DIR="${FEATURE_DIRS[0]}"
 
 # On a pull request CI checks out a detached merge commit, so there is no branch name to read from
@@ -164,12 +167,14 @@ BRANCH="${FREEZE_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo H
 # directory as well as the sentence -- the adjudication file lives in the feature that is in scope,
 # and reading it out of the other one would silently ignore every entry.
 MATCH_DIR=""
+MATCH_RULE=""
 MATCH_REASON=""
 detect_scope() {
   local i
   for i in "${!FEATURE_DIRS[@]}"; do
     if git diff --name-only "$MERGE_BASE" HEAD -- "${FEATURE_DIRS[$i]}" | grep -q .; then
       MATCH_DIR="${FEATURE_DIRS[$i]}"
+      MATCH_RULE="${FEATURE_RULES[$i]}"
       MATCH_REASON="it touches ${FEATURE_DIRS[$i]}"
       return 0
     fi
@@ -178,6 +183,7 @@ detect_scope() {
     case "$BRANCH" in
       *"${FEATURE_NAMES[$i]}"*)
         MATCH_DIR="${FEATURE_DIRS[$i]}"
+        MATCH_RULE="${FEATURE_RULES[$i]}"
         MATCH_REASON="its branch '${BRANCH}' names feature ${FEATURE_NAMES[$i]}"
         return 0
         ;;
@@ -207,6 +213,7 @@ esac
 # which case MODE is report and the file is not consulted for a verdict anyway).
 ADJUDICATIONS="${FREEZE_ADJUDICATIONS:-${MATCH_DIR:-${FEATURE_DIRS[0]}}assertion-adjudications.md}"
 export FREEZE_MODE="$MODE" FREEZE_REASON="$SCOPE_REASON" FREEZE_ADJUDICATIONS="$ADJUDICATIONS"
+export FREEZE_RULE="${MATCH_RULE:-${FEATURE_RULES[0]}}"
 
 # Path selection is done here rather than by pathspec, because `git ls-tree` does not accept
 # ':(glob)' magic -- it fails outright, and a check that dies on its own pathspec is a check that
@@ -246,6 +253,7 @@ from collections import Counter, defaultdict
 MODE = os.environ.get("FREEZE_MODE", "enforce")
 REASON = os.environ.get("FREEZE_REASON", "")
 ADJUDICATIONS = os.environ.get("FREEZE_ADJUDICATIONS", "")
+RULE = os.environ.get("FREEZE_RULE", "feature 021's FR-027")
 
 
 def adjudications(path):
@@ -492,7 +500,7 @@ if MODE != "enforce":
     print("and confirm each says what you now mean. Nothing here fails the build.", file=sys.stderr)
     sys.exit(0)
 
-print("FR-027 freezes the existing suite for the duration of feature 021.", file=sys.stderr)
+print(f"{RULE} freezes the existing suite for that feature's duration.", file=sys.stderr)
 print(f"This change is in scope: {REASON}.", file=sys.stderr)
 print("Tests may be ADDED or RELOCATED; expectations may not be relaxed, rewritten or deleted.", file=sys.stderr)
 print(file=sys.stderr)
