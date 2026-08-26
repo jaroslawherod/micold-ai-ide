@@ -113,13 +113,16 @@ found a real defect: `overlayfs` was classified as enforcing a storage limit it 
 
 ### B.5 — Lifecycle and failure
 
-- [ ] Register a new project while the sandbox runs: it is marked **stale** with an explicit restart
-      action; running sessions keep working; nothing restarts on its own (R9, M-4)
+- [x] Register a new project while the sandbox runs: it is marked **stale** with an explicit restart
+      action; running sessions keep working; nothing restarts on its own (R9, M-4) —
+      `sandbox_real_staleness.rs`, which also measures the premise staleness rests on: the project
+      is genuinely unreachable inside the running container
 - [x] `docker stop` the container from outside: the client shows a persistent failure with a reason
       and a remedy, and does **not** fall back to an unsandboxed daemon (FR-035, FR-035b, S-2)
 - [ ] Accept the offered fallback explicitly: it works, and the unsandboxed state stays visible for
       as long as it lasts (FR-035a/b)
-- [ ] Sessions survive a client restart while sandboxed (FR-014)
+- [x] Sessions survive a client restart while sandboxed (FR-014) — same shell process, same shell
+      state, over a new connection (`sandbox_real_staleness.rs`)
 - [ ] With survive-logout enabled, the sandbox comes back after a reboot (FR-014a/b, R6)
 - [x] Daemon state survives container recreation: stop, remove, restart — projects are still there
       (FR-011, M-3)

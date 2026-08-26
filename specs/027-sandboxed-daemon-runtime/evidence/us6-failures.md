@@ -121,3 +121,70 @@ Reported honestly rather than ticked:
 
 The three unrun items are the ones that require a display or a reboot. Everything in §B.3 and every
 container-level item in §B.5 was exercised against a real Docker daemon.
+
+---
+
+## Addendum, 2026-08-26 — the two §B.5 boxes that were not about failure
+
+Two boxes of §B.5 were left over because they are not failures: registering a project while the
+sandbox runs, and a client restart. Both are now in
+`crates/micold-daemon/tests/sandbox_real_staleness.rs`, driven through a **real session** rather
+than through `CliRuntime`, because both claims are about what the user's session experiences.
+
+```
+$ cargo test -p micold-daemon --features sandbox-real-runtime --test sandbox_real_staleness
+running 2 tests
+test sandbox_real_sessions_survive_a_client_restart ... ok
+test sandbox_real_a_project_registered_after_boot_is_outside_the_running_container ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+### Registering a project while the sandbox runs (R9, M-4)
+
+The state model's half — `Running` becomes `Stale`, `Stale` still accepts sessions, the only edge
+back into bring-up takes a `RestartRequested` — was already held by
+`micold-core/tests/sandbox_state.rs`. What no unit test can say is whether `Stale` is *necessary*.
+The whole design (mark, do not act; make the user ask) rests on a container's bind mounts being
+fixed at creation. If that premise were false, staleness would be an interruption offered to a user
+whose sandbox could already see the project.
+
+So the premise is measured: with a session open, the probe sends `ProjectAdd` for a directory that
+exists on the host the whole time, waits for the daemon to report it in the catalogue, and then
+tries to read it from inside the session. It cannot. The session that was running keeps working, and
+the runtime's own record shows nothing restarted — same `State.StartedAt`, `RestartCount` 0, still
+running. That last assertion is deliberately taken from Docker rather than from our state machine,
+which is the half that could be lying.
+
+### A client restart (FR-014)
+
+Not a reconnect: the connection is dropped and the object holding the grid is gone. The probe writes
+state into the *shell* — a variable, and the shell's own pid — and asks for it back over a new
+connection. Asserting on the pid is what makes this more than a session-id lookup: a daemon that had
+quietly restarted the shell would keep the id and lose the user's work, which is the failure FR-014
+is about. Same pid, same variable.
+
+### Two harness defects found in the writing, both of which had made probes lie
+
+**The sentinel counter was per-`Terminal`.** Sessions outlive clients, so a reattached probe gets
+the scrollback back — old sentinels included. The new `Terminal` numbered from 1 again, matched the
+*previous* connection's `MICOLDPROBEE1` still on screen, and returned the empty range above it. The
+command had run perfectly and the probe reported nothing. Sentinels are now numbered per process.
+
+**The harness never seeded its input serial.** Input serials are per-session, monotonic, and the
+daemon's position is authoritative — which is why the client seeds its stamper from the catalogue
+(`SessionInputStamper::seed_from_catalog`, BUG-006/FR-028a). The harness started at zero, so on
+reattach the daemon logged
+
+```
+WARN micold_daemon::state: dropping stale/duplicate input; these keystrokes are discarded
+  session=9524edc7… serial=1 expected=3
+```
+
+and the probe timed out with a session that looked dead and was perfectly healthy. The daemon was
+right both times. `wait_for_accept` now returns the welcome catalogue and `Terminal` takes the
+serial from it, which also removes the `input loss detected across a reconnect` warning every
+earlier probe was provoking on its *first* keystroke.
+
+Worth recording because of what the second one implies for the feature rather than for the tests:
+the reattach path's correctness depends on a field travelling in the catalogue, and a client that
+forgets to read it types into a void with no error anywhere the user can see.

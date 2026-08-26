@@ -62,7 +62,7 @@ async fn sandbox_real_a_freshly_built_image_passes_the_strict_fingerprint_check(
 
     // Lenient first, so a failure below is a *fingerprint* refusal and not "the daemon is not up
     // yet" wearing one.
-    let _lenient = wait_for_accept(PORT, &credentials(&token)).await;
+    let (_lenient, _) = wait_for_accept(PORT, &credentials(&token)).await;
 
     // Then the check the client arms for a `LocalBuild` image (`startup.rs`:
     // `image.refuses_fingerprint_mismatch()`).

@@ -24,7 +24,7 @@ use micold_core::project::{Availability, Project};
 use micold_core::protocol::auth::Token;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::grid::GridFrame;
-use micold_core::protocol::messages::{ClientMsg, PresentedToken};
+use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, PresentedToken};
 use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
 use micold_core::store::ProjectStore;
 use micold_core::workspace::Workspace;
@@ -37,6 +37,14 @@ pub const IMAGE: &str = "micold-daemon:dev";
 // ---------------------------------------------------------------------------------------------
 
 const SENTINEL_STEM: &str = "MICOLDPROBE";
+
+/// Sentinels are numbered per **process**, not per `Terminal`.
+///
+/// A session outlives the client that was viewing it, so a test that drops its connection and
+/// reattaches gets the scrollback back — sentinels and all. Numbering per `Terminal` restarted at 1
+/// on the new connection, `sentinel_line` matched the *old* line still on screen, and `output`
+/// returned the empty range above it. The command had run perfectly; the probe reported nothing.
+static SENTINEL_SEQ: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
 /// The screen as the client would hold it: stable `LineId` to text, full frames replacing, deltas
 /// updating. Small, but it has to be real — the daemon sends deltas, so keeping only the last frame
@@ -112,7 +120,6 @@ pub struct Terminal<'a> {
     pub session: SessionId,
     pub screen: Screen,
     serial: u64,
-    nth: u32,
     container: String,
     /// The containerised daemon's own log, on the host side of the state mount.
     ///
@@ -123,19 +130,21 @@ pub struct Terminal<'a> {
 }
 
 impl<'a> Terminal<'a> {
+    /// `serial` is the daemon's expected next input serial for this session, from the catalogue —
+    /// see [`input_serial`]. Not zero, and not a fresh counter.
     pub fn new(
         conn: &'a mut DaemonConnection,
         session: SessionId,
         screen: Screen,
         container: &str,
         log: &Path,
+        serial: u64,
     ) -> Self {
         Self {
             conn,
             session,
             screen,
-            serial: 0,
-            nth: 0,
+            serial,
             container: container.to_string(),
             log: log.to_path_buf(),
         }
@@ -153,8 +162,8 @@ impl<'a> Terminal<'a> {
     /// `run`, with a timeout of your own — a probe that is *expected* to be killed by a limit needs
     /// longer than one that is expected to answer at once.
     pub async fn run_within(&mut self, cmd: &str, budget: Duration) -> String {
-        self.nth += 1;
-        let sentinel = format!("{SENTINEL_STEM}E{}", self.nth);
+        let nth = SENTINEL_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        let sentinel = format!("{SENTINEL_STEM}E{nth}");
         // `echo ""` between the command and the sentinel guarantees the sentinel starts a line of
         // its own. Without it, output with no trailing newline — `cat` of a file that lacks one —
         // shares a line with the sentinel, and the completion check never matches.
@@ -162,14 +171,15 @@ impl<'a> Terminal<'a> {
         // `\r`, not `\n`: this is what the client's keymap sends for `NamedKey::Enter`
         // (`keymap.rs`), and what a terminal sends. A line ended with a bare line feed reaches the
         // shell as a line that was never submitted, so the command sits typed-but-unrun.
-        let typed = format!("{cmd} 2>&1; echo \"\"; echo {SENTINEL_STEM}\"E{}\"\r", self.nth);
+        let typed = format!("{cmd} 2>&1; echo \"\"; echo {SENTINEL_STEM}\"E{nth}\"\r");
         let baseline = self.screen.snapshot();
 
+        let serial = self.serial;
         self.serial += 1;
         self.conn
             .send(Frame::Control(ClientMsg::SessionInput {
                 session: self.session,
-                serial: self.serial,
+                serial,
                 bytes: typed.clone().into_bytes(),
             }))
             .await
@@ -377,12 +387,36 @@ pub fn credentials(token: &Token) -> Credentials {
     }
 }
 
-pub async fn wait_for_accept(port: u16, credentials: &Credentials) -> DaemonConnection {
+/// The daemon's expected next input serial for `session`, from an authoritative catalogue.
+///
+/// The client's own `SessionInputStamper::seed_from_catalog` reads exactly this field for exactly
+/// this reason (BUG-006, FR-028a): input serials are per-session and monotonic, the daemon's
+/// position is authoritative, and a client that starts its counter at zero for a session it did not
+/// create has every keystroke discarded as stale — silently, from the client's point of view.
+///
+/// A probe that reattaches to a session is that client. Without this it typed into a void and
+/// reported that the session had lost its shell.
+pub fn input_serial(catalog: &CatalogSnapshot, session: SessionId) -> u64 {
+    catalog
+        .projects
+        .iter()
+        .flat_map(|p| &p.sessions)
+        .find(|s| s.id == session)
+        .map(|s| s.input_serial)
+        .unwrap_or_default()
+}
+
+/// Connect, returning the connection **and the welcome catalogue** — the latter because the input
+/// serial travels in it and a probe cannot type without one. See [`input_serial`].
+pub async fn wait_for_accept(
+    port: u16,
+    credentials: &Credentials,
+) -> (DaemonConnection, CatalogSnapshot) {
     let address = DialAddress::Loopback { port };
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
         match connect_at(&address, "sandbox-real-probe", credentials).await {
-            Ok(Some(Connected::Ready(conn, _))) => return *conn,
+            Ok(Some(Connected::Ready(conn, welcome))) => return (*conn, welcome.catalog),
             Ok(Some(Connected::Refused(reason))) => {
                 panic!("the sandboxed daemon refused this client: {reason:?}")
             }

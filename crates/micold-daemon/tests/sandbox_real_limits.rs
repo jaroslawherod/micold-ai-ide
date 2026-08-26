@@ -25,8 +25,8 @@ use std::time::Duration;
 use micold_core::protocol::auth::Token;
 
 use sandbox_real_support::{
-    credentials, docker_out, open_session, seed, start_sandbox, wait_for_accept, SandboxSpec,
-    Terminal,
+    credentials, docker_out, input_serial, open_session, seed, start_sandbox, wait_for_accept,
+    SandboxSpec, Terminal,
 };
 
 const CONTAINER: &str = "micold-limits-probe";
@@ -91,9 +91,10 @@ async fn sandbox_real_limits_stop_the_session_not_the_daemon() {
         "the runtime must report the limit it was asked for, in bytes"
     );
 
-    let mut conn = wait_for_accept(PORT, &credentials(&token)).await;
+    let (mut conn, catalog) = wait_for_accept(PORT, &credentials(&token)).await;
+    let serial = input_serial(&catalog, session);
     let screen = open_session(&mut conn, &project, session, &daemon_log).await;
-    let mut term = Terminal::new(&mut conn, session, screen, CONTAINER, &daemon_log);
+    let mut term = Terminal::new(&mut conn, session, screen, CONTAINER, &daemon_log, serial);
 
     // A session cannot exceed the memory it was given (FR-016) ----------------------------------
     //
@@ -137,7 +138,7 @@ async fn sandbox_real_limits_stop_the_session_not_the_daemon() {
         "true",
         "the container must still be running after the limit was reached"
     );
-    let _second = wait_for_accept(PORT, &credentials(&token)).await;
+    let (_second, _) = wait_for_accept(PORT, &credentials(&token)).await;
 }
 
 /// The third §B.4 box: change a limit, restart the sandbox, confirm it took effect.
@@ -197,5 +198,5 @@ async fn sandbox_real_limits_change_only_by_recreating_the_container() {
 
     // The daemon still comes up under the new limit — a limit that takes effect by making the
     // sandbox unstartable is not an improvement.
-    let _ = wait_for_accept(port, &credentials(&token)).await;
+    let (_conn, _) = wait_for_accept(port, &credentials(&token)).await;
 }

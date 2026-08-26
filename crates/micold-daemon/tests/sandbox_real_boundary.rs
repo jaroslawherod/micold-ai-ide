@@ -24,7 +24,8 @@ mod sandbox_real_support;
 use micold_core::protocol::auth::Token;
 
 use sandbox_real_support::{
-    credentials, open_session, seed, start_sandbox, wait_for_accept, SandboxSpec, Terminal,
+    credentials, input_serial, open_session, seed, start_sandbox, wait_for_accept, SandboxSpec,
+    Terminal,
 };
 
 const CONTAINER: &str = "micold-boundary-probe";
@@ -76,9 +77,10 @@ async fn sandbox_real_boundary_holds_from_inside_a_session() {
         home: &host_home,
         extra: &[],
     });
-    let mut conn = wait_for_accept(PORT, &credentials(&token)).await;
+    let (mut conn, catalog) = wait_for_accept(PORT, &credentials(&token)).await;
+    let serial = input_serial(&catalog, session);
     let screen = open_session(&mut conn, &project, session, &daemon_log).await;
-    let mut term = Terminal::new(&mut conn, session, screen, CONTAINER, &daemon_log);
+    let mut term = Terminal::new(&mut conn, session, screen, CONTAINER, &daemon_log, serial);
 
     // The project is reachable at its own host absolute path (research R2) ---------------------
     let seen = term.run(&format!("cat {}/marker.txt", project.display())).await;
