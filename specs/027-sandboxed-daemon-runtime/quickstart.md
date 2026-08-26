@@ -128,8 +128,9 @@ found a real defect: `overlayfs` was classified as enforcing a storage limit it 
       is genuinely unreachable inside the running container
 - [x] `docker stop` the container from outside: the client shows a persistent failure with a reason
       and a remedy, and does **not** fall back to an unsandboxed daemon (FR-035, FR-035b, S-2)
-- [ ] Accept the offered fallback explicitly: it works, and the unsandboxed state stays visible for
-      as long as it lasts (FR-035a/b)
+- [x] Accept the offered fallback explicitly: it works, and the unsandboxed state stays visible for
+      as long as it lasts (FR-035a/b) — and it did **not**, until `8ee7741`: the consent was
+      recorded and nothing re-dialled. `evidence/us6-failures.md` §B.5 box 3
 - [x] Sessions survive a client restart while sandboxed (FR-014) — same shell process, same shell
       state, over a new connection (`sandbox_real_staleness.rs`)
 - [ ] With survive-logout enabled, the sandbox comes back after a reboot (FR-014a/b, R6)
