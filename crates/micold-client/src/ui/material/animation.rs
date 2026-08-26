@@ -1245,6 +1245,12 @@ mod tests {
             }
         }
 
+        /// Sit still for `gap` without drawing a frame, the way a window with a dialog open on
+        /// it does. What follows is the first frame the track has seen in that long.
+        fn idle(&mut self, gap: Duration) {
+            self.clock += (gap.as_nanos() / interval().as_nanos()) as u32;
+        }
+
         fn frame(&mut self, shown: bool) -> (f32, Vec<Msg>, bool) {
             self.element = view(shown);
             self.element.as_widget().diff(&mut self.tree);
@@ -1300,6 +1306,11 @@ mod tests {
         }
         let shown = scrim_value(&run.tree).expect("the modal's scrim is in the tree");
         assert_eq!(shown, 1.0, "the entrance never arrived; measuring nothing");
+
+        // Then the window sits still, because a dialog is a thing people read before dismissing.
+        // A settled track asks for no frames, so the redraw that carries the dismissal is the
+        // first one it has seen in seconds — and the gap since that one is not part of the exit.
+        run.idle(Duration::from_secs(2));
 
         // Now close it, and record every frame of the way out.
         let began = run.clock;
