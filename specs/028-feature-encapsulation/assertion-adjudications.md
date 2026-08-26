@@ -468,5 +468,47 @@ was: assert_eq!(state.system_scheme,SystemSUnspecified,"Ok(Unspecified)isagenuin
 was: assert_ne!(state.theme_pref,before)
 ```
 
+## T033 — the project switcher, its menu and the rename moved behind `state.project`
+
+Five fields became members of `features::project::State`. Three keep their flat names —
+`project.forget_target`, `project.rename_draft`, `project.selector` — and two are trimmed, because
+the qualifier already says `project`: `project_menu_open` is `project.menu_open` and
+`project_switcher_open` is `project.switcher_open`, the same stutter `notifications.queue` (T028)
+and `worktree_form.form` (T031) dropped. Thirty-one assertions changed spelling across
+`tests/forget_project.rs`, `tests/logical_state_ownership.rs`, `tests/overlay_dismissal_delta.rs`,
+`tests/overlay_dispatch_ordering.rs`, `tests/project_switcher.rs`, `tests/sidebar_state.rs`,
+`tests/switcher_forget_menu.rs` and one in `src/shell/workspace.rs`; none changed meaning. The two
+renames are visible in the text of the assertion rather than only in its path, which is why they
+are called out here: an assertion that read `st.project_menu_open` now reads `st.project.menu_open`,
+and it is asking the same question of the same bit.
+
+```
+was: assert!(!st.project_switcher_open)
+was: assert!(!st.project_switcher_open,"openingtheconfirmmodalclosestheswitcher(open_overlay)")
+was: assert!(!st.project_switcher_open,"openingtheoverflowmenuclosestheswitcher")
+was: assert!(!state.project_switcher_open)
+was: assert!(!state.project_switcher_open,"projectswitcher")
+was: assert!(!state.project_switcher_open,"theprojectswitchersurvived{name}opening")
+was: assert!(choose_a_non_repository().core.selector.is_none(),"thepickermustclosebeforetherefusalisreported,orthenotificationrenders\behindthemodal'sscrimandtheuserseesnothinghappen")
+was: assert!(st.project_menu_open.is_some())
+was: assert!(st.project_switcher_open)
+was: assert!(st.project_switcher_open,"theswitcherpanelstaysopenbehindtherowcontextmenu,sotherowliststaysvisible")
+was: assert!(state.forget_target.is_none())
+was: assert!(state.project_menu_open.is_none(),"projectcontextmenu")
+was: assert!(state.project_menu_open.is_none(),"theprojectcontextmenusurvived{name}opening")
+was: assert!(state.rename_draft.is_none())
+was: assert_eq!(st.forget_target,None,"nothingwasstagedforremoval")
+was: assert_eq!(st.forget_target,Some(PathBfrom("/a")))
+was: assert_eq!(st.project_menu_open,None)
+was: assert_eq!(st.project_menu_open,None,"openinganotherpopoverclosestheprojectcontextmenu")
+was: assert_eq!(st.project_menu_open,None,"sameprojecttogglesoff")
+was: assert_eq!(st.project_menu_open,None,"thecontextmenucloses")
+was: assert_eq!(st.project_menu_open.as_ref().expect("menuopen").anchor,(412,233),"thepanel'stop-leftcornersitsattheclickpoint,soitopensbelow-rightofthepointer")
+was: assert_eq!(st.project_menu_open.as_ref().map(|m|m.path.clone()),Some(PathBfrom("/a")))
+was: assert_eq!(st.project_menu_open.as_ref().map(|m|m.path.clone()),Some(PathBfrom("/b")),"adifferentprojectreplacesit—onlyonemenuiseveropen")
+was: assert_eq!(st.project_menu_open.as_ref().unwrap().anchor,(100,100))
+was: assert_eq!(state.forget_target.as_deref(),Some(Pnew("/a")))
+```
+
 T040 rolls these up for the phase; each move is adjudicated as it lands, so the freeze is green at
 every commit rather than only at the end (contract C.1).
