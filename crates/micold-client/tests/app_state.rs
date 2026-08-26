@@ -1811,7 +1811,7 @@ fn a_new_attempt_never_inherits_the_previous_attempts_line() {
 fn a_field_that_takes_the_keyboard_is_the_one_the_view_draws_focused() {
     let mut state = State::default();
     assert_eq!(
-        state.focused_field, None,
+        state.window.focused_field, None,
         "nothing is focused to begin with"
     );
 
@@ -1820,7 +1820,7 @@ fn a_field_that_takes_the_keyboard_is_the_one_the_view_draws_focused() {
         true,
     )));
 
-    assert_eq!(state.focused_field, Some(FieldId::RenameProjectName));
+    assert_eq!(state.window.focused_field, Some(FieldId::RenameProjectName));
 }
 
 #[test]
@@ -1844,7 +1844,7 @@ fn moving_between_two_fields_leaves_the_second_focused_whichever_order_the_repor
         false,
     )));
 
-    assert_eq!(state.focused_field, Some(FieldId::AddWorktreeName));
+    assert_eq!(state.window.focused_field, Some(FieldId::AddWorktreeName));
 }
 
 #[test]
@@ -1860,7 +1860,7 @@ fn a_field_losing_the_keyboard_leaves_nothing_focused() {
         false,
     )));
 
-    assert_eq!(state.focused_field, None);
+    assert_eq!(state.window.focused_field, None);
 }
 
 #[test]
@@ -1876,7 +1876,7 @@ fn opening_a_dialog_forgets_the_field_that_had_focus() {
     // over an input nobody has clicked.
     state.update(Message::Settings(SettingsMsg::Opened));
 
-    assert_eq!(state.focused_field, None);
+    assert_eq!(state.window.focused_field, None);
 }
 
 // --- Feature 024: collapsing the row the app opened -------------------------------------------

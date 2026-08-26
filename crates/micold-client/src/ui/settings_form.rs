@@ -114,8 +114,12 @@ pub fn dialog<'a>(
     scheme: ColorScheme,
     env_include_outcome: &'a EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
-    state
-        .settings_draft
-        .as_ref()
-        .map(|draft| modal(draft, scheme, env_include_outcome, state.focused_field))
+    state.settings_draft.as_ref().map(|draft| {
+        modal(
+            draft,
+            scheme,
+            env_include_outcome,
+            state.window.focused_field,
+        )
+    })
 }

@@ -297,7 +297,7 @@ pub fn view<'a>(
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(1),
-                state.window_size,
+                state.window.window_size,
             );
             material::MenuOverlay::new(
                 vec![material::MenuItem::new(
@@ -330,7 +330,7 @@ pub fn view<'a>(
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(items.len()),
-                state.window_size,
+                state.window.window_size,
             );
             material::MenuOverlay::new(items, Message::Worktree(WorktreeMsg::MenuDismissed), roles)
                 .anchor(iced::Point::new(x as f32, y as f32))
@@ -345,7 +345,7 @@ pub fn view<'a>(
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(items.len()),
-                state.window_size,
+                state.window.window_size,
             );
             material::MenuOverlay::new(items, Message::Session(SessionMsg::MenuDismissed), roles)
                 .anchor(iced::Point::new(x as f32, y as f32))

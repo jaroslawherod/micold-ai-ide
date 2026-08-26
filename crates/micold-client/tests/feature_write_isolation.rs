@@ -164,13 +164,13 @@ const OWNERS: &[(&str, &str)] = &[
     // asks the root for routing only, so a field the root still decides about is a feature nobody
     // has named. `focused_field`'s own doc — "one fact about the application, not four" — argues
     // for a single owner; it does not argue that the owner must be the root.
-    ("focused_field", "window"),
+    //
     // `cursor` was the third of the three fields T063 created this feature for. `main`'s 018
     // BUG-008 fix deleted it: a context menu now anchors at the point its own press landed on,
     // carried by the message, rather than at a pointer position tracked separately and read later.
     // That is a better answer than the one this feature was defending, and the window feature is
     // two fields rather than three.
-    ("window_size", "window"),
+    ("window", "window"),
 ];
 
 /// Cross-feature writes that exist today, each with the feature that performs it and the path it

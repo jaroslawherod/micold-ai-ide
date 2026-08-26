@@ -75,5 +75,5 @@ pub fn dialog<'a>(
     state
         .rename_draft
         .as_ref()
-        .map(|draft| modal(draft, scheme, state.focused_field))
+        .map(|draft| modal(draft, scheme, state.window.focused_field))
 }

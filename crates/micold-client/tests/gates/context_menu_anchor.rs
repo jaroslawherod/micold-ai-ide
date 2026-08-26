@@ -44,6 +44,7 @@ use crate::panel_placement::anchored_panels;
 use crate::support::layout::{self as lay, LayoutRecord};
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
+use micold_client::features::window;
 use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
 use micold_core::theme::{ColorScheme, ThemePreference};
 use micold_core::tokens::{anatomy, density};
@@ -100,13 +101,17 @@ fn with_project(sessions: Vec<Session>) -> State {
     workspace.active = workspace.projects.first().map(|p| p.path.clone());
 
     let mut state = State {
+        window: window::State {
+            window_size: (lay::WINDOW.width as u16, lay::WINDOW.height as u16),
+            ..Default::default()
+        },
+
         workspace,
         worktrees: (0..WORKTREE_COUNT)
             .map(|i| worktree(&format!("feat-{i:02}"), &format!("feat/{i:02}")))
             .collect(),
         sidebar_width: 260,
         // Clamping is only meaningful against a window whose size the application knows.
-        window_size: (lay::WINDOW.width as u16, lay::WINDOW.height as u16),
         ..State::default()
     };
     state.theme_pref = match RECORDED_SCHEME {

@@ -153,14 +153,14 @@ fn reopening_on_another_row_re_anchors_at_the_new_press_point() {
 #[test]
 fn window_resize_is_recorded_for_clamping() {
     let mut st = State::default();
-    assert_eq!(st.window_size, (0, 0), "unknown until reported");
+    assert_eq!(st.window.window_size, (0, 0), "unknown until reported");
 
     st.update(Message::Window(WindowMsg::Resized {
         width: 1280,
         height: 720,
     }));
 
-    assert_eq!(st.window_size, (1280, 720));
+    assert_eq!(st.window.window_size, (1280, 720));
 }
 
 // --- Clamping: the menu can never open off-screen ---

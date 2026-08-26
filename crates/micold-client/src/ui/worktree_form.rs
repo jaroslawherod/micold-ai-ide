@@ -504,7 +504,7 @@ pub fn dialog<'a>(
             form,
             state.worktree_error.as_deref(),
             scheme,
-            state.focused_field,
+            state.window.focused_field,
         )
     })
 }

@@ -368,7 +368,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // sidebar precisely because the defect was invisible at the top of the list: the
                 // panel used to be recorded at 24, 96 whichever row it belonged to, and a fixture
                 // that only ever opened it near there could not tell the two apart.
-                state.window_size = (1280, 800);
+                state.window.window_size = (1280, 800);
                 state.worktree_menu_open = Some(WorktreeMenu {
                     dir_name: LONG_NAME.to_string(),
                     anchor: (120, 420),
@@ -399,7 +399,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 let mut state = with_project();
                 state.workspace = workspace;
                 state.expanded.insert("feat-short".to_string());
-                state.window_size = (1280, 800);
+                state.window.window_size = (1280, 800);
                 state.session_menu_open = Some(SessionMenu {
                     id,
                     anchor: (120, 760),

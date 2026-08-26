@@ -411,7 +411,7 @@ fn pressing_the_pane_wins_over_a_field_that_held_the_keyboard() {
         "a press on the pane takes the keyboard from a field on that press (FR-008b)"
     );
     assert_eq!(
-        s.focused_field, None,
+        s.window.focused_field, None,
         "and the field must not still believe it holds it"
     );
 }
@@ -452,7 +452,7 @@ fn window_focus_changes_no_focus_term() {
         let before = (
             s.terminal_focused(),
             s.terminal_released,
-            s.focused_field,
+            s.window.focused_field,
             s.active_session,
         );
 
@@ -463,7 +463,7 @@ fn window_focus_changes_no_focus_term() {
             (
                 s.terminal_focused(),
                 s.terminal_released,
-                s.focused_field,
+                s.window.focused_field,
                 s.active_session
             ),
             before,
@@ -497,7 +497,7 @@ fn a_field_still_holds_the_keyboard_after_a_window_round_trip() {
     )));
     s.update(Message::WindowFocusChanged(false));
     s.update(Message::WindowFocusChanged(true));
-    assert_eq!(s.focused_field, Some(FieldId::AddWorktreeName));
+    assert_eq!(s.window.focused_field, Some(FieldId::AddWorktreeName));
     assert!(
         !s.terminal_focused(),
         "and the terminal has not taken it back"
@@ -720,7 +720,7 @@ fn output_and_lifecycle_never_change_the_holder() {
         "output, a session reaching Running, and a tick must not move the keyboard (FR-019)"
     );
     assert_eq!(
-        s.focused_field,
+        s.window.focused_field,
         Some(FieldId::AddWorktreeName),
         "the field the user is typing into still holds it (FR-018)"
     );

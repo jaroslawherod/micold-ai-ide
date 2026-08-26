@@ -15,7 +15,6 @@ use crate::features::project::{ProjectMenu, RenameDraft, SwitcherEntry};
 use crate::features::session::SessionMenu;
 use crate::features::settings::SettingsDraft;
 use crate::features::sidebar::TagFilter;
-use crate::features::window::FieldId;
 use crate::features::worktree::{WorktreeMenu, WorktreeRenameDraft};
 use crate::features::worktree_form::WorktreeForm;
 use micold_core::notify;
@@ -130,11 +129,8 @@ pub struct State {
     pub selector: Option<Selector>,
     /// The in-progress rename; its presence *is* the rename dialog being shown (T037).
     pub rename_draft: Option<RenameDraft>,
-    /// Which text field holds the keyboard, if any (BUG-003). Transient — never persisted.
-    ///
-    /// Held here rather than on each draft because it is one fact about the application, not four:
-    /// see [`FieldId`]. Every filled field's focus chrome is drawn from this and nothing else.
-    pub focused_field: Option<FieldId>,
+    /// What the window feature remembers -- see [`crate::features::window::State`].
+    pub window: crate::features::window::State,
     /// How the app chooses its theme (persisted); defaults to following the OS (FR-005).
     pub theme_pref: ThemePreference,
     /// The last light/dark scheme reported by the OS poll (transient, not persisted).
@@ -265,9 +261,6 @@ pub struct State {
     /// the press point to draw it at. At most one is open. Mutually exclusive with the other
     /// popovers, but the switcher panel itself stays open behind it. Transient — not persisted.
     pub project_menu_open: Option<ProjectMenu>,
-    /// Last known window size in pixels (feature 015), used to clamp a context menu so it cannot
-    /// open off-screen. `(0, 0)` means "not reported yet", which disables clamping. Transient.
-    pub window_size: (u16, u16),
     /// The worktree whose right-click context menu is open, and where it was opened from
     /// (feature 008). At most one is open at a time; `None` means no menu is showing.
     pub worktree_menu_open: Option<WorktreeMenu>,
@@ -436,7 +429,7 @@ impl State {
     pub fn terminal_focused(&self) -> bool {
         self.active_session.is_some()
             && !self.terminal_released
-            && self.focused_field.is_none()
+            && self.window.focused_field.is_none()
             && !self.any_surface_takes_keyboard()
     }
 

@@ -106,7 +106,7 @@ pub fn dialog<'a>(
             outside,
             state.worktree_delete_keep_branch,
             scheme,
-            state.focused_field,
+            state.window.focused_field,
         )
     })
 }

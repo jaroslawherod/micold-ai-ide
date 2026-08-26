@@ -177,7 +177,7 @@ today, it does for none of them.
 
 - [X] T028 [US2] Move `notifications`' 1 field (`notify`) into `features::notifications::State` in `crates/micold-client/src/features/notifications.rs`, held as one field of `app::State`
 - [X] T029 [US2] Move `help`'s 2 fields (`about_open`, `help_menu_open`) into `features::help::State` in `crates/micold-client/src/features/help.rs`
-- [ ] T030 [US2] Move `window`'s 2 fields (`focused_field`, `window_size`) into `features::window::State` in `crates/micold-client/src/features/window.rs`
+- [X] T030 [US2] Move `window`'s 2 fields (`focused_field`, `window_size`) into `features::window::State` in `crates/micold-client/src/features/window.rs`
 - [ ] T031 [US2] Move `worktree_form`'s 2 fields (`worktree_error`, `worktree_form`) into the existing `WorktreeForm` grouping in `crates/micold-client/src/features/worktree_form.rs`
 - [ ] T032 [US2] Move `settings`' 3 fields (`settings_draft`, `system_scheme`, `theme_pref`) into `features::settings::State` in `crates/micold-client/src/features/settings.rs`
 - [ ] T033 [US2] Move `project`'s 5 fields (`forget_target`, `project_menu_open`, `project_switcher_open`, `rename_draft`, `selector`) into `features::project::State` in `crates/micold-client/src/features/project.rs`
