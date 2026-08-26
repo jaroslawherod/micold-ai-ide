@@ -120,7 +120,7 @@ it did — the value they name is the same value, spelled through the wrapper th
 was: assert_eq!(on_escape(&s),Some(MSettingsCancelled))
 ```
 ```
-was: assert_eq!(rules.on(TEscape),Some(&MSettingsCancelled),"dispatchasksonequestion—whathappensonthistrigger—andgetsthepairing,soit\cannotmismatchasurface'srule")
+was: assert_eq!(rules.on(TEscape),Some(&MSettingsCancelled),"dispatchasksonequestion—whathappensonthistrigger—andgetsthepairing,soit\cannotmismatchasurface'srulewithanother'smessage")
 ```
 
 ### The third is a floor that this feature made false (FR-020)
