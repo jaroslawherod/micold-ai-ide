@@ -350,7 +350,7 @@ does a session start unsandboxed without an explicit choice.
       daemon's streamed worktree list equals `worktree::discover(&GitCli::new(), …)` for the same
       repository. Where the client has no local git that stream is not a faster copy of something
       it could compute; it is the only list it will ever have.
-- [ ] T115 [P] Verify the full quickstart.md §A suite is green on Linux, macOS and Windows with **no** runtime installed, from the CI matrix in `.github/workflows/` (Principle VI, the fake runtime's whole purpose)
+- [X] T115 [P] Verify the full quickstart.md §A suite is green on Linux, macOS and Windows with **no** runtime installed, from the CI matrix in `.github/workflows/` (Principle VI, the fake runtime's whole purpose)
       — **Two of §A's own gates were not running on macOS or Windows.** The matrix covers `micold-core`
       wholesale (`cargo test -p micold-core --all-targets`), so every core row is included by
       construction, and none of them is platform-gated — no `#[cfg(unix)]`, `#[cfg(windows)]` or
@@ -368,9 +368,18 @@ does a session start unsandboxed without an explicit choice.
       it by name. That gate reads the quickstart, so the file is `-micold-docs` in `.gitattributes`
       for the same reason `CHANGELOG.md` is — otherwise editing the table would skip the pipeline
       that checks the table.
-      **Still open**: the run. Whether §A is *green* on macOS and Windows is a fact only the matrix
-      can produce, and the branch has no upstream — nothing has executed it. Coverage is fixed and
-      enforced; the verification is not done.
+      **The run**: green on all three, run 33003036028, recorded in
+      `evidence/t115-three-platform-matrix.md`. It took five attempts and four of them were red, none
+      a flake. The Windows leg found that `pathmap::map_for` built the container path with
+      `PathBuf::push`, which writes `\` on a Windows host — so `docker -v` was handed
+      `/mnt/host\c\Users/u/p` and **sandboxed mode was broken on Windows outright**. T114's
+      `windows_host: bool` parameter carries the mapping's logic to a Linux runner but not its
+      `PathBuf`, and the mapping's own tests compare `PathBuf`s, which Windows considers equal
+      either way; only `sandbox_argv.rs`, which asserts on rendered argv strings, could see it. Two
+      more were the same class in the suite itself — the scans in `quickstart_a_runs_everywhere.rs`
+      and `anatomy_call_sites.rs` mis-parse under CRLF and blame the documents, now settled by
+      `* text=auto eol=lf` in `.gitattributes` rather than in thirty readers. The fourth was the
+      `sandbox-runtime` job never building `micold-daemon:dev`.
 - [x] T116 [P] Measure SC-003 — sandboxed session start no more than 2s slower than unsandboxed — recording the numbers in `specs/027-sandboxed-daemon-runtime/evidence/performance.md`
       — **0ms** against a 2000ms budget: both placements 2ms median over 7 timed rounds, both showing a real `$` prompt.
       Three earlier revisions of the measurement passed while measuring nothing (an unmounted catalogue, a snapshot
