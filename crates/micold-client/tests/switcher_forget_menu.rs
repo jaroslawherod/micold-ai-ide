@@ -10,6 +10,7 @@
 use micold_client::app::{Message, State};
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::clamp_menu_anchor;
+use micold_client::features::window::Msg as WindowMsg;
 use std::path::PathBuf;
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
@@ -124,10 +125,10 @@ fn window_resize_is_recorded_for_clamping() {
     let mut st = State::default();
     assert_eq!(st.window_size, (0, 0), "unknown until reported");
 
-    st.update(Message::WindowResized {
+    st.update(Message::Window(WindowMsg::Resized {
         width: 1280,
         height: 720,
-    });
+    }));
 
     assert_eq!(st.window_size, (1280, 720));
 }

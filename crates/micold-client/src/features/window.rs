@@ -74,6 +74,38 @@ pub enum FieldId {
     SettingsEnvIncludeTimeout,
 }
 
+/// What the window reports about itself (feature 028, FR-001).
+///
+/// # The variants kept their meaning and lost their prefix
+///
+/// The root's `WindowResized` is `Msg::Resized` here — the type says which thing resized, so the
+/// variant does not have to (contract M1). `FieldFocusChanged` carried no prefix to drop.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Msg {
+    /// A text field took or lost the keyboard (BUG-003). Emitted by the field's own container,
+    /// which asks the input rather than guessing from the pointer — see
+    /// `material::FormField::on_focus_change`. Sole mutation: [`State::focused_field`].
+    FieldFocusChanged(FieldId, bool),
+    /// The window was resized (or reported its initial size). Feeds context-menu clamping.
+    Resized {
+        /// The window's new width, in logical pixels.
+        width: u16,
+        /// The window's new height, in logical pixels.
+        height: u16,
+    },
+}
+
+/// This feature's whole reducer surface: one entry point, shape A (contract M2).
+///
+/// Both arms are pure writes to fields this module owns, so nothing comes back.
+pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+    match msg {
+        Msg::FieldFocusChanged(field, focused) => field_focus_changed(state, field, focused),
+        Msg::Resized { width, height } => resized(state, width, height),
+    }
+    Vec::new()
+}
+
 /// A text field gained or lost the keyboard (BUG-003).
 ///
 /// **A blur is only believed from the field that currently holds focus.** Gaining and losing are

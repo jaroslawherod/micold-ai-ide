@@ -2,6 +2,7 @@
 
 use micold_client::app::{on_escape, Message, State};
 use micold_client::features::window::FieldId;
+use micold_client::features::window::Msg as WindowMsg;
 use micold_client::ui::terminal::StripTab;
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
@@ -1752,7 +1753,10 @@ fn a_field_that_takes_the_keyboard_is_the_one_the_view_draws_focused() {
         "nothing is focused to begin with"
     );
 
-    state.update(Message::FieldFocusChanged(FieldId::RenameProjectName, true));
+    state.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::RenameProjectName,
+        true,
+    )));
 
     assert_eq!(state.focused_field, Some(FieldId::RenameProjectName));
 }
@@ -1760,17 +1764,23 @@ fn a_field_that_takes_the_keyboard_is_the_one_the_view_draws_focused() {
 #[test]
 fn moving_between_two_fields_leaves_the_second_focused_whichever_order_the_reports_arrive() {
     let mut state = State::default();
-    state.update(Message::FieldFocusChanged(FieldId::AddWorktreeTicket, true));
+    state.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::AddWorktreeTicket,
+        true,
+    )));
 
     // Gaining and losing are reported by two different widgets, in whichever order the frame
     // produced them. The late blur is from the field that no longer holds focus and must be
     // ignored — believing it would leave both fields at rest, which is the bug reappearing on
     // every click from one field to the next.
-    state.update(Message::FieldFocusChanged(FieldId::AddWorktreeName, true));
-    state.update(Message::FieldFocusChanged(
+    state.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::AddWorktreeName,
+        true,
+    )));
+    state.update(Message::Window(WindowMsg::FieldFocusChanged(
         FieldId::AddWorktreeTicket,
         false,
-    ));
+    )));
 
     assert_eq!(state.focused_field, Some(FieldId::AddWorktreeName));
 }
@@ -1778,15 +1788,15 @@ fn moving_between_two_fields_leaves_the_second_focused_whichever_order_the_repor
 #[test]
 fn a_field_losing_the_keyboard_leaves_nothing_focused() {
     let mut state = State::default();
-    state.update(Message::FieldFocusChanged(
+    state.update(Message::Window(WindowMsg::FieldFocusChanged(
         FieldId::SettingsScrollback,
         true,
-    ));
+    )));
 
-    state.update(Message::FieldFocusChanged(
+    state.update(Message::Window(WindowMsg::FieldFocusChanged(
         FieldId::SettingsScrollback,
         false,
-    ));
+    )));
 
     assert_eq!(state.focused_field, None);
 }
@@ -1794,7 +1804,10 @@ fn a_field_losing_the_keyboard_leaves_nothing_focused() {
 #[test]
 fn opening_a_dialog_forgets_the_field_that_had_focus() {
     let mut state = State::default();
-    state.update(Message::FieldFocusChanged(FieldId::RenameProjectName, true));
+    state.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::RenameProjectName,
+        true,
+    )));
 
     // The fields that reported focus belong to a widget tree being torn down, and will never report
     // losing it. A remembered focus would outlive them and draw the next dialog's field focused

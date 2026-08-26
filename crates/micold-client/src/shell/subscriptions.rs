@@ -37,6 +37,7 @@ use iced::time::every;
 use iced::Subscription;
 
 use micold_client::app::Message;
+use micold_client::features::window::Msg as WindowMsg;
 
 use crate::shell::os_theme::detect_system_scheme;
 use crate::{probe_config, App};
@@ -70,9 +71,11 @@ pub fn subscription(app: &App) -> Subscription<Message> {
         window_focus_events(),
         // The daemon connection: one long-lived socket to the session host (feature 010, T041).
         micold_client::daemon::connection(),
-        iced::window::resize_events().map(|(_id, size)| Message::WindowResized {
-            width: size.width.max(0.0) as u16,
-            height: size.height.max(0.0) as u16,
+        iced::window::resize_events().map(|(_id, size)| {
+            Message::Window(WindowMsg::Resized {
+                width: size.width.max(0.0) as u16,
+                height: size.height.max(0.0) as u16,
+            })
         }),
     ];
     // Always polled — see [`BACKGROUND_OS_THEME_POLL`]. Only the cadence follows focus.

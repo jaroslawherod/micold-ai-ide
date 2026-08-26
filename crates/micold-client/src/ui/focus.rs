@@ -23,6 +23,7 @@
 
 use crate::app::Message;
 use crate::features::window::FieldId;
+use crate::features::window::Msg as WindowMsg;
 use crate::ui::material::{Checkbox, TextField};
 
 /// Wire an input's focus to the application's [`FieldId`].
@@ -35,7 +36,9 @@ pub trait TrackFocus {
 impl<'a> TrackFocus for TextField<'a, Message> {
     fn track_focus(self, id: FieldId, focused: Option<FieldId>) -> Self {
         self.active(focused == Some(id))
-            .on_focus_change(move |focused| Message::FieldFocusChanged(id, focused))
+            .on_focus_change(move |focused| {
+                Message::Window(WindowMsg::FieldFocusChanged(id, focused))
+            })
     }
 }
 
@@ -45,6 +48,8 @@ impl<'a> TrackFocus for TextField<'a, Message> {
 impl<'a> TrackFocus for Checkbox<'a, Message> {
     fn track_focus(self, id: FieldId, focused: Option<FieldId>) -> Self {
         self.focused(focused == Some(id))
-            .on_focus_change(move |focused| Message::FieldFocusChanged(id, focused))
+            .on_focus_change(move |focused| {
+                Message::Window(WindowMsg::FieldFocusChanged(id, focused))
+            })
     }
 }

@@ -35,6 +35,7 @@ use std::sync::Arc;
 use iced::Task;
 use micold_client::app::{Message, State};
 use micold_client::features::sidebar::{filters_from_env_value, FILTER_ENV_VAR};
+use micold_client::features::window::Msg as WindowMsg;
 use micold_client::input::SessionInputStamper;
 use micold_core::settings::Settings;
 
@@ -202,9 +203,11 @@ fn boot() -> (App, Task<Message>) {
         // against (feature 015).
         iced::window::latest()
             .and_then(iced::window::size)
-            .map(|size| Message::WindowResized {
-                width: size.width.max(0.0) as u16,
-                height: size.height.max(0.0) as u16,
+            .map(|size| {
+                Message::Window(WindowMsg::Resized {
+                    width: size.width.max(0.0) as u16,
+                    height: size.height.max(0.0) as u16,
+                })
             }),
     )
 }

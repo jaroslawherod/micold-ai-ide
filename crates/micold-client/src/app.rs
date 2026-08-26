@@ -64,10 +64,6 @@ pub enum Message {
     KnownProjectReopened(PathBuf),
     /// Begin renaming the given project; opens the rename dialog (FR-017).
     RenameStarted(PathBuf),
-    /// A text field took or lost the keyboard (BUG-003). Emitted by the field's own container,
-    /// which asks the input rather than guessing from the pointer — see
-    /// `material::FormField::on_focus_change`. Sole mutation: [`State::focused_field`].
-    FieldFocusChanged(FieldId, bool),
     /// The rename dialog's text changed.
     RenameTextChanged(String),
     /// Confirm the rename. Applies it if valid (FR-020); the binary then persists.
@@ -85,9 +81,11 @@ pub enum Message {
     /// Dismiss the forget confirmation without removing anything (FR-004).
     ProjectForgetCancelled,
 
+    /// What the window reports about itself (feature 028, FR-001). Two variants moved behind this
+    /// one; see [`crate::features::window::Msg`].
+    Window(crate::features::window::Msg),
+
     // ---- Feature 015: forget from the switcher's right-click menu ----
-    /// The window was resized (or reported its initial size). Feeds context-menu clamping.
-    WindowResized { width: u16, height: u16 },
     /// Open (or close, if already open) a project's switcher right-click context menu, by path,
     /// anchored at the press point in window pixels. The switcher panel stays open behind it; the
     /// other popovers are mutually exclusive.
@@ -898,16 +896,14 @@ impl State {
             }
             Message::ProjectSelectorClosed => crate::features::project::selector_closed(self),
             Message::RenameStarted(path) => crate::features::project::rename_started(self, path),
-            Message::FieldFocusChanged(field, focused) => {
-                crate::features::window::field_focus_changed(self, field, focused)
-            }
             Message::RenameTextChanged(text) => {
                 crate::features::project::rename_text_changed(self, text)
             }
             Message::RenameConfirmed => crate::features::project::rename_confirmed(self),
             Message::RenameCancelled => crate::features::project::rename_cancelled(self),
-            Message::WindowResized { width, height } => {
-                crate::features::window::resized(self, width, height)
+            Message::Window(msg) => {
+                let outcomes = crate::features::window::update(self, msg);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ProjectMenuToggled(path, anchor) => {
                 let outcomes = crate::features::project::menu_toggled(self, path, anchor);

@@ -15,6 +15,7 @@
 
 use micold_client::app::{route_key, KeyRouting, State};
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::window::Msg as WindowMsg;
 use micold_client::keymap::KeyOutput;
 use micold_core::session::SessionLocation;
 
@@ -343,12 +344,18 @@ fn an_explicit_release_outranks_the_default() {
 #[test]
 fn a_focused_text_field_takes_the_keyboard_and_gives_it_back() {
     let mut s = showing_a_terminal();
-    s.update(Message::FieldFocusChanged(FieldId::AddWorktreeName, true));
+    s.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::AddWorktreeName,
+        true,
+    )));
     assert!(
         !s.terminal_focused(),
         "a field that types holds the keyboard while it does (FR-004, FR-018)"
     );
-    s.update(Message::FieldFocusChanged(FieldId::AddWorktreeName, false));
+    s.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::AddWorktreeName,
+        false,
+    )));
     assert!(
         s.terminal_focused(),
         "when the field finishes the keyboard returns, with no restore stack (FR-010)"
@@ -382,7 +389,10 @@ fn pressing_the_pane_wins_over_a_field_that_held_the_keyboard() {
     // (FR-008b), which FR-018 permits precisely because it is a user press. If `focus_terminal()`
     // cleared only the release, this would depend on iced's blur arriving first.
     let mut s = showing_a_terminal();
-    s.update(Message::FieldFocusChanged(FieldId::RenameProjectName, true));
+    s.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::RenameProjectName,
+        true,
+    )));
     assert!(!s.terminal_focused(), "precondition: the field has it");
 
     s.update(Message::TerminalFocused);
@@ -401,12 +411,15 @@ fn a_late_blur_after_a_pane_press_is_a_no_op() {
     // `FieldFocusChanged(_, false)` is guarded on the field still being the focused one, so a blur
     // arriving after the press cannot undo it.
     let mut s = showing_a_terminal();
-    s.update(Message::FieldFocusChanged(FieldId::RenameProjectName, true));
+    s.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::RenameProjectName,
+        true,
+    )));
     s.update(Message::TerminalFocused);
-    s.update(Message::FieldFocusChanged(
+    s.update(Message::Window(WindowMsg::FieldFocusChanged(
         FieldId::RenameProjectName,
         false,
-    ));
+    )));
     assert!(
         s.terminal_focused(),
         "a stale blur must not disturb the holder the press already decided (FR-008a)"
@@ -468,7 +481,10 @@ fn a_release_survives_leaving_the_window() {
 fn a_field_still_holds_the_keyboard_after_a_window_round_trip() {
     // A half-typed dialog field has to survive an alt-tab (spec US2 scenario 3).
     let mut s = showing_a_terminal();
-    s.update(Message::FieldFocusChanged(FieldId::AddWorktreeName, true));
+    s.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::AddWorktreeName,
+        true,
+    )));
     s.update(Message::WindowFocusChanged(false));
     s.update(Message::WindowFocusChanged(true));
     assert_eq!(s.focused_field, Some(FieldId::AddWorktreeName));
@@ -659,13 +675,19 @@ fn output_and_lifecycle_never_change_the_holder() {
     // FR-019. The failure this forbids is the worst one available: a keystroke meant for a form
     // field delivered to a shell because a background session happened to finish starting.
     let mut s = showing_a_terminal();
-    s.update(Message::FieldFocusChanged(FieldId::AddWorktreeName, true));
+    s.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::AddWorktreeName,
+        true,
+    )));
     let before = s.terminal_focused();
 
     let other = Session::start_new(SessionLocation::Worktree("noisy".to_string()));
     let other_id = other.id;
     s.update(Message::SessionStarted(other));
-    s.update(Message::FieldFocusChanged(FieldId::AddWorktreeName, true));
+    s.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::AddWorktreeName,
+        true,
+    )));
     s.update(Message::SessionRunning(other_id));
     s.update(Message::TerminalTick);
 
