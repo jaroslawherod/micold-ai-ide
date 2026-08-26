@@ -26,7 +26,6 @@ use micold_core::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
 use micold_core::worktree::Worktree;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
-use std::time::Duration;
 
 /// Minimum sidebar width in pixels (resize lower bound).
 pub const SIDEBAR_MIN_WIDTH: u16 = 180;
@@ -423,18 +422,9 @@ pub enum Message {
     ProjectSwitcherToggled,
 
     // ---- Global notification surface ----
-    /// Dismiss the notification at this index. Out-of-range indices are ignored, so a stale
-    /// click delivered after the list shrank is harmless.
-    /// Dismiss the visible notification, promoting the next immediately (FR-032b).
-    ///
-    /// No index: exactly one is visible, so there is nothing to identify. The index this used to
-    /// carry was a position in a stack that no longer exists.
-    NotificationDismissed,
-    /// Time passed while a notification was on screen, in milliseconds.
-    ///
-    /// Subscribed to only while the queue is active (`Queue::is_active`), so nothing ticks at rest
-    /// (SC-017).
-    NotificationsAdvanced(u32),
+    /// What happens to the notification on screen (feature 028, FR-001). Two variants moved behind
+    /// this one; see [`crate::features::notifications::Msg`].
+    Notifications(crate::features::notifications::Msg),
 
     // ---- Feature 010: daemon connection (client of the daemon-hosted sessions) ----
     /// The daemon connection is up: the binary stores the [`Outbox`] to drive sessions and adopts
@@ -1123,9 +1113,9 @@ impl State {
             }
             Message::SettingsSaved => crate::features::settings::saved(self),
             Message::SettingsCancelled => crate::features::settings::cancelled(self),
-            Message::NotificationDismissed => self.notify.dismiss(),
-            Message::NotificationsAdvanced(elapsed_ms) => {
-                self.notify.advance(Duration::from_millis(u64::from(elapsed_ms)));
+            Message::Notifications(msg) => {
+                let outcomes = crate::features::notifications::update(self, msg);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
 
             // Performed by the binary at the I/O boundary (needs the home directory + a

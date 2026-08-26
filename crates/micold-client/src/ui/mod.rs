@@ -40,6 +40,7 @@ pub(crate) mod worktree_rename;
 
 use crate::app::{Message, State};
 use crate::features::help::Msg as HelpMsg;
+use crate::features::notifications::Msg as NotificationsMsg;
 use crate::icons::{icon_role, Icon, IconSurface};
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length, Subscription};
@@ -438,7 +439,8 @@ pub fn view<'a>(
         state.notify.visible().map(|visible| {
             cdk::overlay::Surface::new(
                 micold_core::overlay::Layer::Snackbar,
-                material::Snackbar::new(visible, roles).on_dismiss(Message::NotificationDismissed),
+                material::Snackbar::new(visible, roles)
+                    .on_dismiss(Message::Notifications(NotificationsMsg::Dismissed)),
                 cdk::overlay::Anchor::BottomCenter {
                     bottom: spacing::LG,
                 },

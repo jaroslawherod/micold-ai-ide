@@ -1,6 +1,7 @@
 //! T015 — open-project git-only gate (FR-001a, SC-003a).
 
 use micold_client::app::{Message, State};
+use micold_client::features::notifications::Msg as NotificationsMsg;
 use micold_core::git::{FakeGit, Git};
 use std::path::Path;
 
@@ -48,6 +49,6 @@ fn refusal_persists_until_dismissed() {
     state.update(Message::WorktreesLoaded(vec![]));
     assert!(state.notify.visible().is_some());
 
-    state.update(Message::NotificationDismissed);
+    state.update(Message::Notifications(NotificationsMsg::Dismissed));
     assert!(state.notify.visible().is_none());
 }

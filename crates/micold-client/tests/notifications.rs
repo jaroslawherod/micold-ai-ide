@@ -16,6 +16,7 @@
 //! `micold-core/tests/notify_queue.rs`, where it needs no renderer and no `State`.
 
 use micold_client::app::{Message, State};
+use micold_client::features::notifications::Msg as NotificationsMsg;
 use micold_core::notify::Level;
 
 /// Nothing is shown until something is reported.
@@ -63,7 +64,7 @@ fn dismissing_promotes_the_next_one() {
     st.notify_error("first");
     st.notify_error("second");
 
-    st.update(Message::NotificationDismissed);
+    st.update(Message::Notifications(NotificationsMsg::Dismissed));
 
     assert_eq!(
         st.notify.visible().map(|n| n.message.as_str()),
@@ -79,10 +80,10 @@ fn dismissing_promotes_the_next_one() {
 fn dismissing_the_last_one_is_safe_and_so_is_dismissing_none() {
     let mut st = State::default();
     st.notify_info("only");
-    st.update(Message::NotificationDismissed);
+    st.update(Message::Notifications(NotificationsMsg::Dismissed));
     assert!(st.notify.visible().is_none());
 
-    st.update(Message::NotificationDismissed);
+    st.update(Message::Notifications(NotificationsMsg::Dismissed));
     assert!(st.notify.visible().is_none());
 }
 
@@ -105,7 +106,7 @@ fn elapsed_time_clears_the_visible_notification() {
     st.notify_info("a background session was restarted");
 
     let ms = Level::Info.duration().as_millis() as u32;
-    st.update(Message::NotificationsAdvanced(ms));
+    st.update(Message::Notifications(NotificationsMsg::Advanced(ms)));
 
     assert!(
         st.notify.visible().is_none(),
@@ -119,9 +120,9 @@ fn an_error_survives_an_info_s_duration() {
     let mut st = State::default();
     st.notify_error("could not create the worktree");
 
-    st.update(Message::NotificationsAdvanced(
+    st.update(Message::Notifications(NotificationsMsg::Advanced(
         Level::Info.duration().as_millis() as u32,
-    ));
+    )));
     assert!(
         st.notify.visible().is_some(),
         "the error was cleared after the info duration — it is being timed by the wrong severity"
@@ -138,6 +139,6 @@ fn the_queue_wants_the_clock_only_while_it_has_something_to_show() {
     st.notify_error("something");
     assert!(st.notify.is_active());
 
-    st.update(Message::NotificationDismissed);
+    st.update(Message::Notifications(NotificationsMsg::Dismissed));
     assert!(!st.notify.is_active());
 }

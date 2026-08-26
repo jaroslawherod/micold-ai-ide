@@ -13,7 +13,11 @@
 //! a queue concern the banner has no business knowing (FR-032c keeps the two components separate,
 //! and `tests/banner_is_not_a_snackbar.rs` holds that line).
 
+use std::time::Duration;
+
 use micold_core::notify;
+
+use crate::app::State;
 
 /// How prominently a notification is presented.
 ///
@@ -63,4 +67,49 @@ fn raised(level: NoticeLevel, message: String) -> crate::features::Outcome {
         level.to_queue_level(),
         message,
     ))
+}
+
+/// What can happen to the notification currently on screen (feature 028, FR-001).
+///
+/// # The variants kept their meaning and lost their prefix
+///
+/// `Message::NotificationDismissed` is `Msg::Dismissed` here and `NotificationsAdvanced` is
+/// `Msg::Advanced` — the type says which surface, so the variants do not have to (contract M1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Msg {
+    /// Dismiss the visible notification, promoting the next immediately (FR-032b).
+    ///
+    /// No index: exactly one is visible, so there is nothing to identify. The index this used to
+    /// carry was a position in a stack that no longer exists.
+    Dismissed,
+    /// Time passed while a notification was on screen, in milliseconds.
+    ///
+    /// Subscribed to only while the queue is active (`Queue::is_active`), so nothing ticks at rest
+    /// (SC-017).
+    Advanced(u32),
+}
+
+/// This feature's whole reducer surface: one entry point, shape A (contract M2).
+///
+/// Both arms drive the queue this module owns, so nothing comes back. They were the root's last
+/// two inline bodies — written straight against `state.notify` in `app.rs` rather than through a
+/// function here — which is why the module had no reducer to route to before now.
+pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+    match msg {
+        Msg::Dismissed => dismissed(state),
+        Msg::Advanced(elapsed_ms) => advanced(state, elapsed_ms),
+    }
+    Vec::new()
+}
+
+/// The visible notification was dismissed; the next one, if any, takes its place at once.
+pub fn dismissed(state: &mut State) {
+    state.notify.dismiss();
+}
+
+/// A tick of the snackbar clock, in milliseconds, which may retire the visible notification.
+pub fn advanced(state: &mut State, elapsed_ms: u32) {
+    state
+        .notify
+        .advance(Duration::from_millis(u64::from(elapsed_ms)));
 }

@@ -37,6 +37,7 @@ use iced::time::every;
 use iced::Subscription;
 
 use micold_client::app::Message;
+use micold_client::features::notifications::Msg as NotificationsMsg;
 use micold_client::features::window::Msg as WindowMsg;
 
 use crate::shell::os_theme::detect_system_scheme;
@@ -84,10 +85,9 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     // A timer that ran at rest would hold the loop awake for the life of the process to count down
     // a notification that does not exist; `Queue::is_active` is what keeps it off.
     if app.core.notify.is_active() {
-        subs.push(
-            every(SNACKBAR_TICK)
-                .map(|_| Message::NotificationsAdvanced(SNACKBAR_TICK.as_millis() as u32)),
-        );
+        subs.push(every(SNACKBAR_TICK).map(|_| {
+            Message::Notifications(NotificationsMsg::Advanced(SNACKBAR_TICK.as_millis() as u32))
+        }));
     }
     // The terminal output poll is gone — the daemon streams grid frames over the connection. Worktree
     // create now runs on the daemon too, so there is no local progress buffer to drain (T055).
