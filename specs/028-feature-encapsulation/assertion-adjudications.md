@@ -106,3 +106,43 @@ was: assert_eq!(on_escape(&state),Some(MAboutClosed),"thescrimemitswhateverEscap
 ```
 was: assert_eq!(open.on(TEscape),Some(&MAboutClosed))
 ```
+
+## T009 — `settings`'s ten variants moved behind `Message::Settings`
+
+Two of the three are the same rename the previous entries describe: `Message::SettingsCancelled`
+became `Message::Settings(settings::Msg::Cancelled)`, so an assertion naming the constructor names
+it by its new path. `on_escape(&s)` still returns what Escape does to an open settings form, and
+`rules.on(Trigger::Escape)` still pairs that surface with that message; the subject, the predicate
+and the expected value are each unchanged. Read individually as Q3 requires, neither says less than
+it did — the value they name is the same value, spelled through the wrapper that now owns it.
+
+```
+was: assert_eq!(on_escape(&s),Some(MSettingsCancelled))
+```
+```
+was: assert_eq!(rules.on(TEscape),Some(&MSettingsCancelled),"dispatchasksonequestion—whathappensonthistrigger—andgetsthepairing,soit\cannotmismatchasurface'srule")
+```
+
+### The third is a floor that this feature made false (FR-020)
+
+`root_is_routing_only`'s vacuity probe asserted `total >= 85`. That number was not a property of the
+rule; it was 021's arithmetic, recorded when T064 folded 22 variants into one and the root still had
+89 arms. Feature 028 folds all ten features' vocabularies, and the root ends at 15 arms — 10 wrapper
+variants and 5 cross-cutting ones. A floor of 85 fails at the fourth conversion and would have to be
+re-derived nine more times to keep saying the one thing it exists to say: *the scan is still
+parsing*.
+
+**So the floor was lowered to 12 and its work handed to something that does not decay.** The probe
+now also asserts the scan finds the root's `ScrolledBeneathOverlay` and `EscapePressed` arms by
+name. Those two are cross-cutting — belonging to no feature is exactly why 028 leaves them at the
+root — and a scan that has stopped parsing produces neither name at any count. That is a stronger
+vacuity argument than the floor was, not a weaker one: 85 could be met by a scan reading the wrong
+`match` in the same file, and the named check cannot.
+
+The lowered floor is still doing its own share. It sits under the 15 the feature arrives at and far
+above the 0 a broken parse reports, so a scan that goes quiet mid-migration fails on the count
+before the names are even looked at.
+
+```
+was: assert!(total>=85,"thescanfoundonly{total}armsintherootreducer—itfound89afterT064,anda\scanthathasgonequietreportstherootasroutingonly")
+```
