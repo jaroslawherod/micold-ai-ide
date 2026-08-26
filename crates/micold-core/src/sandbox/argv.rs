@@ -60,6 +60,20 @@ pub fn network_create(spec: &SandboxSpec, dialect: &Dialect) -> Vec<OsString> {
 ///
 /// Total: every input has already been validated and reconciled (that is what a [`SandboxSpec`]
 /// *is*), so this cannot fail and does not report problems.
+/// The restart policy the session-survival opt-in selects (research R6).
+///
+/// `unless-stopped` rather than `always`, so a user who explicitly stops the sandbox stays stopped
+/// over a reboot. Named rather than written inline because the real-runtime harness has to create
+/// containers with the policy the application would choose, and a test that spelled the string
+/// itself would be checking its own copy of the decision rather than this one.
+pub fn restart_policy(survive_logout: bool) -> &'static str {
+    if survive_logout {
+        "unless-stopped"
+    } else {
+        "no"
+    }
+}
+
 pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     let dialect = Dialect::for_kind(caps.kind);
     let mut args: Vec<OsString> = vec!["create".into(), "--name".into(), (&spec.name).into()];
@@ -72,14 +86,9 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
             .map(Into::into),
     );
 
-    // Restart policy carries the existing session-survival opt-in (research R6). `unless-stopped`
-    // rather than `always`, so a user who explicitly stops the sandbox stays stopped over a reboot.
+    // Restart policy carries the existing session-survival opt-in (research R6).
     args.push("--restart".into());
-    args.push(if spec.profile.survive_logout {
-        "unless-stopped".into()
-    } else {
-        "no".into()
-    });
+    args.push(restart_policy(spec.profile.survive_logout).into());
 
     args.push("--network".into());
     args.push((&spec.network_name).into());

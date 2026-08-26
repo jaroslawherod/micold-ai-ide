@@ -94,6 +94,7 @@ async fn sandbox_real_boundary_holds_from_inside_a_session() {
         project: &project,
         token_path: &token_path,
         home: &host_home,
+        survive_logout: false,
         extra: &[],
     });
     let (mut conn, catalog) = wait_for_accept(PORT, &credentials(&token)).await;
