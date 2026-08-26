@@ -417,7 +417,7 @@ fn build_items(
     r: Roles,
 ) -> Vec<TreeItem<'static, Message>> {
     let mut items = Vec::new();
-    let hovered = state.hovered_worktree.as_deref();
+    let hovered = state.worktree.hovered.as_deref();
     let project_root = state.workspace.active.as_deref();
 
     for entry in entries {

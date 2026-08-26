@@ -324,7 +324,7 @@ impl State {
     /// expansion and open nothing: there is no current session; its record is gone from the active
     /// project; or its location is not among the project's known ones — a worktree removed or
     /// missing while the project was inactive (FR-013). The third is why this resolves against
-    /// `self.worktrees` rather than trusting the session's own `location`.
+    /// `self.worktree.worktrees` rather than trusting the session's own `location`.
     pub fn current_session_location(&self) -> Option<SessionLocation> {
         let id = self.active_session?;
         let location = self
@@ -336,6 +336,7 @@ impl State {
         match &location {
             SessionLocation::Default => Some(location),
             SessionLocation::Worktree(dir) => self
+                .worktree
                 .worktrees
                 .iter()
                 .any(|w| &w.dir_name == dir)
@@ -494,7 +495,7 @@ impl State {
     /// Two mechanisms hide a row and the exemption has to reach past both: the tag filters here,
     /// and the hidden-agent-worktree setting, which excludes rows *earlier* — in
     /// [`State::visible_worktrees`], before [`State::worktree_tree`] ever sees them. So the
-    /// re-admitted row is built from `self.worktrees` rather than from the tree above.
+    /// re-admitted row is built from `self.worktree.worktrees` rather than from the tree above.
     ///
     /// Exactly one row can be re-admitted, because there is one current session. That is what keeps
     /// this an exemption rather than a filter bypass (FR-012), and it is why the row carries
@@ -514,7 +515,7 @@ impl State {
             // Already listed on its own merits, so it needs no exemption and must not claim one.
             return tree;
         }
-        let Some(worktree) = self.worktrees.iter().find(|w| w.dir_name == dir) else {
+        let Some(worktree) = self.worktree.worktrees.iter().find(|w| w.dir_name == dir) else {
             return tree;
         };
         let sessions = self.active_sessions();
@@ -534,6 +535,7 @@ impl State {
         // which rows are listed, never their order (FR-012a). `worktrees` is the order the panel
         // draws, so its position in that list is the answer.
         let at = self
+            .worktree
             .worktrees
             .iter()
             .filter(|w| tree.iter().any(|n| n.worktree.dir_name == w.dir_name) || w.dir_name == dir)

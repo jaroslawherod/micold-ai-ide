@@ -14,7 +14,6 @@ use crate::features::notifications::NoticeLevel;
 use crate::features::project::SwitcherEntry;
 use crate::features::session::SessionMenu;
 use crate::features::sidebar::TagFilter;
-use crate::features::worktree::{WorktreeMenu, WorktreeRenameDraft};
 use micold_core::notify;
 use micold_core::project::Availability;
 use micold_core::session::SessionId;
@@ -127,9 +126,8 @@ pub struct State {
     pub window: crate::features::window::State,
     /// What the settings feature remembers -- see [`crate::features::settings::State`].
     pub settings: crate::features::settings::State,
-    /// Worktrees discovered for the active project (feature 005, FR-018). Re-derived from git
-    /// on open and after each mutation — never persisted.
-    pub worktrees: Vec<Worktree>,
+    /// What the worktree feature remembers -- see [`crate::features::worktree::State`].
+    pub worktree: crate::features::worktree::State,
     /// Which worktree rows are expanded to reveal their sessions (FR-003). By `dir_name`.
     pub expanded: BTreeSet<String>,
     /// Whether the "Default" (project-root) sidebar row is expanded to reveal its sessions
@@ -241,19 +239,6 @@ pub struct State {
     /// The app bar's elevation derives from this and nothing else (FR-025a) — see
     /// [`Self::app_bar_elevated`] for why a second source would be a defect rather than a feature.
     pub sidebar_scroll_offset: u32,
-    /// The worktree whose right-click context menu is open, and where it was opened from
-    /// (feature 008). At most one is open at a time; `None` means no menu is showing.
-    pub worktree_menu_open: Option<WorktreeMenu>,
-    /// The worktree pending deletion (its `dir_name`), shown in the confirm dialog (feature
-    /// 008, FR-018/FR-019). Its presence *is* the confirm dialog being shown (T037).
-    pub worktree_delete_target: Option<String>,
-    /// Whether the user has opted to also delete the branch when confirming a worktree delete
-    /// (feature 013). Defaults to `false` = delete (today's unconditional behavior), so an
-    /// unmodified confirm is unchanged. Reset to `false` on every `WorktreeDeleteRequested`.
-    pub worktree_delete_keep_branch: bool,
-    /// The in-progress worktree rename; its presence *is* the rename dialog being shown (T037)
-    /// (feature 008, FR-013/FR-014).
-    pub worktree_rename_draft: Option<WorktreeRenameDraft>,
     /// Active sidebar tag filters (feature 008, FR-024). Empty ⇒ all worktrees shown. Multiple
     /// filters combine with OR (FR-025). Transient — not persisted.
     pub sidebar_filters: BTreeSet<TagFilter>,
@@ -269,16 +254,13 @@ pub struct State {
     /// (FR-010e). Deliberately unlike `sidebar_filters`, which survives a switch — view state
     /// switched on for one project must not silently render in another.
     pub show_agent_worktrees: bool,
-    /// The worktree row the pointer is currently over, by `dir_name` (feature 008). Drives the
-    /// hover-revealed row actions (add-session + delete). Transient.
-    pub hovered_worktree: Option<String>,
     /// The session whose right-click context menu is open, and where it was opened from (bugfix
     /// BUG-003). At most one is open at a time; `None` means no menu is showing. Mirrors
-    /// `worktree_menu_open`.
+    /// `worktree.menu_open`.
     pub session_menu_open: Option<SessionMenu>,
     /// The session pending permanent removal, shown in the confirm dialog (bugfix BUG-003,
     /// FR-015c). Its presence *is* the confirm dialog being shown (T037). Mirrors
-    /// `worktree_delete_target`.
+    /// `worktree.delete_target`.
     pub session_remove_target: Option<SessionId>,
 }
 
@@ -373,7 +355,7 @@ impl State {
     /// about what to dismiss. Routing every dialog-open through here makes that reset
     /// unconditional. Since T031 the popovers are closed by asking the registry which are open
     /// rather than by assigning to four remembered fields — so the three that list had never
-    /// mentioned (`worktree_menu_open`, `session_menu_open`, `terminal_context_menu`) are closed
+    /// mentioned (`worktree.menu_open`, `session_menu_open`, `terminal_context_menu`) are closed
     /// too.
     ///
     /// **It now closes an open dialog as well** (T037), and that is the point of the rename: it
@@ -526,31 +508,39 @@ impl State {
     /// hover, context-menu, delete-confirmation, or rename-override state behind.
     #[must_use = "the sidebar's expansion is pruned by draining this, not by `set_worktrees` (T066)"]
     pub fn set_worktrees(&mut self, worktrees: Vec<Worktree>) -> Vec<crate::features::Outcome> {
-        self.worktrees = worktrees;
-        let names: BTreeSet<String> = self.worktrees.iter().map(|w| w.dir_name.clone()).collect();
+        self.worktree.worktrees = worktrees;
+        let names: BTreeSet<String> = self
+            .worktree
+            .worktrees
+            .iter()
+            .map(|w| w.dir_name.clone())
+            .collect();
 
         if self
-            .worktree_menu_open
+            .worktree
+            .menu_open
             .as_ref()
             .is_some_and(|m| !names.contains(&m.dir_name))
         {
-            self.worktree_menu_open = None;
+            self.worktree.menu_open = None;
         }
         if self
-            .hovered_worktree
+            .worktree
+            .hovered
             .as_deref()
             .is_some_and(|d| !names.contains(d))
         {
-            self.hovered_worktree = None;
+            self.worktree.hovered = None;
         }
         if self
-            .worktree_delete_target
+            .worktree
+            .delete_target
             .as_deref()
             .is_some_and(|d| !names.contains(d))
         {
             // Clearing the target *is* closing the dialog since T037; there is no second slot
             // left to reset.
-            self.worktree_delete_target = None;
+            self.worktree.delete_target = None;
         }
         // Prune rename overrides for the active project's worktrees that are gone (FR-015).
         if let Some(active) = self.workspace.active.clone() {

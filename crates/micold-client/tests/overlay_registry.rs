@@ -102,13 +102,13 @@ fn dialogs() -> Vec<Dialog> {
         Dialog {
             id: "confirm_worktree_delete",
             cancel: Message::Worktree(WorktreeMsg::DeleteCancelled),
-            open: |state| state.worktree_delete_target = Some("wt".to_string()),
+            open: |state| state.worktree.delete_target = Some("wt".to_string()),
         },
         Dialog {
             id: "rename_worktree",
             cancel: Message::Worktree(WorktreeMsg::RenameCancelled),
             open: |state| {
-                state.worktree_rename_draft = Some(WorktreeRenameDraft {
+                state.worktree.rename_draft = Some(WorktreeRenameDraft {
                     dir_name: "wt".to_string(),
                     text: String::new(),
                     error: None,
@@ -612,7 +612,7 @@ fn a_dialog_draws_from_its_own_state() {
                 availability: micold_core::project::Availability::Available,
             });
         state.workspace.active = Some(std::path::PathBuf::from("/p"));
-        state.worktrees = vec![micold_core::worktree::Worktree {
+        state.worktree.worktrees = vec![micold_core::worktree::Worktree {
             dir_name: "feat-x".to_string(),
             path: std::path::PathBuf::from("/p/.claude/worktrees/feat-x"),
             branch: Some("feat/x".to_string()),

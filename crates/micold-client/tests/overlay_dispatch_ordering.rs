@@ -72,13 +72,13 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
     ),
     (
         "confirm_worktree_delete",
-        |s| s.worktree_delete_target = Some("wt".to_string()),
+        |s| s.worktree.delete_target = Some("wt".to_string()),
         Message::Worktree(WorktreeMsg::DeleteCancelled),
     ),
     (
         "rename_worktree",
         |s| {
-            s.worktree_rename_draft = Some(WorktreeRenameDraft {
+            s.worktree.rename_draft = Some(WorktreeRenameDraft {
                 dir_name: "wt".to_string(),
                 text: String::new(),
                 error: None,

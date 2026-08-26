@@ -11,6 +11,7 @@
 //! and that is the diff to watch for.
 
 use micold_client::app::State;
+use micold_client::features::worktree;
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
@@ -34,7 +35,10 @@ fn agent_worktree() -> Worktree {
 
 fn with_worktrees(worktrees: Vec<Worktree>, reveal: bool) -> State {
     State {
-        worktrees,
+        worktree: worktree::State {
+            worktrees,
+            ..Default::default()
+        },
         show_agent_worktrees: reveal,
         ..Default::default()
     }
@@ -62,7 +66,7 @@ fn hiding_a_worktree_does_not_remove_it() {
     let st = with_worktrees(vec![agent_worktree()], false);
 
     assert_eq!(
-        st.worktrees.len(),
+        st.worktree.worktrees.len(),
         1,
         "visibility is a view concern — pruning, renaming and session lookup all reason about \
          existence, and a hidden worktree still exists"

@@ -30,7 +30,7 @@ fn state_with_active_project() -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    state.worktrees = vec![
+    state.worktree.worktrees = vec![
         worktree("feat-a", WorktreeStatus::Valid),
         worktree("feat-b", WorktreeStatus::Valid),
     ];
@@ -128,7 +128,7 @@ fn state_with_named_worktrees(dirs: &[(&str, WorktreeStatus)]) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path);
-    state.worktrees = dirs.iter().map(|(d, s)| worktree(d, *s)).collect();
+    state.worktree.worktrees = dirs.iter().map(|(d, s)| worktree(d, *s)).collect();
     state
 }
 
@@ -337,6 +337,7 @@ fn filter_recomputes_after_delete(/* FR-028 / C1 */) {
     )));
     state.update(Message::Worktree(WorktreeMsg::DeleteConfirmed));
     let surviving: Vec<_> = state
+        .worktree
         .worktrees
         .iter()
         .filter(|w| w.dir_name != "fix-crash")
@@ -369,7 +370,7 @@ fn default_entry_present_and_first_even_with_no_worktrees() {
     });
     state.workspace.active = Some(path);
     // No worktrees at all.
-    state.worktrees = vec![];
+    state.worktree.worktrees = vec![];
 
     let entries = state.sidebar_entries();
     assert_eq!(entries.len(), 1, "Default entry alone, no worktrees yet");
@@ -444,7 +445,7 @@ fn state_with(worktrees: Vec<Worktree>) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path);
-    state.worktrees = worktrees;
+    state.worktree.worktrees = worktrees;
     state
 }
 
@@ -519,7 +520,12 @@ fn revealing_adds_agent_rows_in_unchanged_order() {
     // Revealing must not reorder: the tree preserves `State::worktrees` order (which `reconcile()`
     // has already sorted by dir_name in production), so with the toggle on it equals that list
     // exactly.
-    let all: Vec<String> = state.worktrees.iter().map(|w| w.dir_name.clone()).collect();
+    let all: Vec<String> = state
+        .worktree
+        .worktrees
+        .iter()
+        .map(|w| w.dir_name.clone())
+        .collect();
     assert_eq!(listed, all);
     for hex in AGENT_HEXES {
         assert!(listed.contains(&format!("agent-{hex}")));
@@ -652,7 +658,7 @@ fn user_worktrees_sharing_the_reserved_prefix_stay_listed() {
 fn hiding_does_not_disturb_the_underlying_worktree_list() {
     // FR-008: hiding is presentation-only — `State::worktrees` still holds everything discovered.
     let state = mixed_state();
-    assert_eq!(state.worktrees.len(), 6);
+    assert_eq!(state.worktree.worktrees.len(), 6);
 }
 
 #[test]
@@ -810,7 +816,7 @@ fn state_with_filterable_worktrees(dir: &str) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    state.worktrees = vec![
+    state.worktree.worktrees = vec![
         Worktree {
             dir_name: "feat-a".to_string(),
             path: PathBuf::from("/repo/.claude/worktrees/feat-a"),

@@ -6,6 +6,7 @@ use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::window::FieldId;
 use micold_client::features::window::Msg as WindowMsg;
+use micold_client::features::worktree;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::ui::terminal::StripTab;
 
@@ -47,7 +48,7 @@ use std::path::PathBuf;
 #[test]
 fn defaults_are_empty() {
     let state = State::default();
-    assert!(state.worktrees.is_empty());
+    assert!(state.worktree.worktrees.is_empty());
     assert!(state.expanded.is_empty());
     assert!(state.active_session.is_none());
     assert!(state.worktree_form.form.is_none());
@@ -133,7 +134,7 @@ fn created_worktree_is_added_and_form_closed() {
     ));
     assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_form.form.is_none());
-    assert_eq!(state.worktrees.len(), 1);
+    assert_eq!(state.worktree.worktrees.len(), 1);
 }
 
 #[test]
@@ -252,7 +253,7 @@ fn an_include_clears_a_stale_create_failure_too() {
         included: true,
     })));
     assert!(state.worktree_form.worktree_error.is_none());
-    assert_eq!(state.worktrees.len(), 1, "the include still lands");
+    assert_eq!(state.worktree.worktrees.len(), 1, "the include still lands");
 }
 
 #[test]
@@ -431,7 +432,7 @@ fn state_with_worktree_and_session(dir: &str) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path);
-    state.worktrees.push(Worktree {
+    state.worktree.worktrees.push(Worktree {
         dir_name: dir.to_string(),
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("feat/{dir}")),
@@ -458,19 +459,23 @@ fn delete_requested_opens_confirm_then_confirmed_only_dismisses_the_dialog() {
         "feat-x".to_string(),
     )));
     assert_eq!(open_dialog(&state), Some("confirm_worktree_delete"));
-    assert_eq!(state.worktree_delete_target.as_deref(), Some("feat-x"));
-    assert!(state.worktree_menu_open.is_none());
+    assert_eq!(state.worktree.delete_target.as_deref(), Some("feat-x"));
+    assert!(state.worktree.menu_open.is_none());
 
     state.update(Message::Worktree(WorktreeMsg::DeleteConfirmed));
     assert_eq!(open_dialog(&state), None);
-    assert!(state.worktree_delete_target.is_none());
+    assert!(state.worktree.delete_target.is_none());
     assert_eq!(
         state.active_sessions().len(),
         1,
         "records stand until the daemon confirms the removal"
     );
     assert!(
-        state.worktrees.iter().any(|w| w.dir_name == "feat-x"),
+        state
+            .worktree
+            .worktrees
+            .iter()
+            .any(|w| w.dir_name == "feat-x"),
         "the row stands until the daemon confirms the removal"
     );
 }
@@ -483,9 +488,13 @@ fn delete_cancelled_changes_nothing() {
     )));
     state.update(Message::Worktree(WorktreeMsg::DeleteCancelled));
     assert_eq!(open_dialog(&state), None);
-    assert!(state.worktree_delete_target.is_none());
+    assert!(state.worktree.delete_target.is_none());
     assert_eq!(state.active_sessions().len(), 1, "session untouched");
-    assert!(state.worktrees.iter().any(|w| w.dir_name == "feat-x"));
+    assert!(state
+        .worktree
+        .worktrees
+        .iter()
+        .any(|w| w.dir_name == "feat-x"));
 }
 
 #[test]
@@ -511,14 +520,14 @@ fn delete_requested_resets_keep_branch_even_if_previously_set() {
     state.update(Message::Worktree(WorktreeMsg::DeleteKeepBranchToggled(
         true,
     )));
-    assert!(state.worktree_delete_keep_branch);
+    assert!(state.worktree.delete_keep_branch);
 
     // Cancel and request again on a different worktree — the choice must not carry over.
     state.update(Message::Worktree(WorktreeMsg::DeleteCancelled));
     state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
         "feat-x".to_string(),
     )));
-    assert!(!state.worktree_delete_keep_branch);
+    assert!(!state.worktree.delete_keep_branch);
 }
 
 #[test]
@@ -527,17 +536,17 @@ fn delete_keep_branch_toggled_sets_the_field() {
     state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
         "feat-x".to_string(),
     )));
-    assert!(!state.worktree_delete_keep_branch, "defaults to delete");
+    assert!(!state.worktree.delete_keep_branch, "defaults to delete");
 
     state.update(Message::Worktree(WorktreeMsg::DeleteKeepBranchToggled(
         true,
     )));
-    assert!(state.worktree_delete_keep_branch);
+    assert!(state.worktree.delete_keep_branch);
 
     state.update(Message::Worktree(WorktreeMsg::DeleteKeepBranchToggled(
         false,
     )));
-    assert!(!state.worktree_delete_keep_branch);
+    assert!(!state.worktree.delete_keep_branch);
 }
 
 // --- Feature 008 US3: worktree rename changes display only ---
@@ -546,6 +555,7 @@ fn delete_keep_branch_toggled_sets_the_field() {
 fn worktree_rename_changes_display_only_not_branch_or_path() {
     let mut state = state_with_worktree_and_session("feat-x");
     let before = state
+        .worktree
         .worktrees
         .iter()
         .find(|w| w.dir_name == "feat-x")
@@ -563,6 +573,7 @@ fn worktree_rename_changes_display_only_not_branch_or_path() {
 
     assert_eq!(state.worktree_display_name("feat-x"), "Renamed");
     let after = state
+        .worktree
         .worktrees
         .iter()
         .find(|w| w.dir_name == "feat-x")
@@ -606,7 +617,10 @@ fn hidden_worktrees_offer_no_tag_filters() {
     // leaving it in `available_tag_filters()` would conjure an `Untyped` chip that matches nothing
     // the user can see — the most confusing possible way for this to fail.
     let mut state = state_with_worktree_and_session("feat-x");
-    state.worktrees.push(agent_worktree("a885b42dc521fbda1"));
+    state
+        .worktree
+        .worktrees
+        .push(agent_worktree("a885b42dc521fbda1"));
 
     let filters = state.available_tag_filters();
     assert!(
@@ -621,7 +635,11 @@ fn empty_state_distinguishes_no_worktrees_from_none_visible() {
     // FR-003 / US1 acceptance #2: a project whose only worktrees are agent-owned must read as
     // "no worktrees yet", not "nothing matched the filter" — there is no filter to clear.
     let agent_only = State {
-        worktrees: vec![agent_worktree("a885b42dc521fbda1")],
+        worktree: worktree::State {
+            worktrees: vec![agent_worktree("a885b42dc521fbda1")],
+            ..Default::default()
+        },
+
         ..Default::default()
     };
     assert!(!agent_only.has_visible_worktrees());
@@ -640,7 +658,7 @@ fn rename_override_for_a_hidden_worktree_survives_reload() {
     let mut state = state_with_worktree_and_session("feat-x");
     let agent = agent_worktree("a885b42dc521fbda1");
     let agent_dir = agent.dir_name.clone();
-    state.worktrees.push(agent.clone());
+    state.worktree.worktrees.push(agent.clone());
 
     state.update(Message::Worktree(WorktreeMsg::RenameStarted(
         agent_dir.clone(),
@@ -652,7 +670,7 @@ fn rename_override_for_a_hidden_worktree_survives_reload() {
     assert_eq!(state.worktree_display_name(&agent_dir), "Scratch");
 
     // Re-discovery still reports both worktrees.
-    let all = state.worktrees.clone();
+    let all = state.worktree.worktrees.clone();
     state.update(Message::Worktree(WorktreeMsg::Loaded(all)));
     assert_eq!(
         state.worktree_display_name(&agent_dir),
@@ -695,7 +713,10 @@ fn toggling_reveal_changes_only_that_field() {
 #[test]
 fn two_toggles_restore_the_prior_list() {
     let mut state = state_with_worktree_and_session("feat-x");
-    state.worktrees.push(agent_worktree("a885b42dc521fbda1"));
+    state
+        .worktree
+        .worktrees
+        .push(agent_worktree("a885b42dc521fbda1"));
     let before: Vec<String> = state
         .worktree_tree()
         .iter()
@@ -1898,7 +1919,7 @@ fn state_with_current_session_in(dir: &str) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    state.worktrees = vec![Worktree {
+    state.worktree.worktrees = vec![Worktree {
         dir_name: dir.to_string(),
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("feat/{dir}")),
@@ -2101,7 +2122,7 @@ fn state_with_many_worktrees(count: usize) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    state.worktrees = (0..count)
+    state.worktree.worktrees = (0..count)
         .map(|i| Worktree {
             dir_name: format!("feat-{i:02}"),
             path: PathBuf::from(format!("/repo/.claude/worktrees/feat-{i:02}")),

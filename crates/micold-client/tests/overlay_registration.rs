@@ -72,8 +72,8 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
             anchor: (10, 10),
         })
     }),
-    ("worktree_menu_open", "worktree_menu", |s| {
-        s.worktree_menu_open = Some(micold_client::features::worktree::WorktreeMenu {
+    ("worktree.menu_open", "worktree_menu", |s| {
+        s.worktree.menu_open = Some(micold_client::features::worktree::WorktreeMenu {
             dir_name: "feature-x".to_string(),
             anchor: (120, 300),
         })

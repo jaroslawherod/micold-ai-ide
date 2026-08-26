@@ -91,14 +91,14 @@ fn open_menu_identity_is_application_owned() {
         "feat-a".to_string(),
         (120, 300),
     )));
-    let open = state.worktree_menu_open.as_ref().expect("the menu is open");
+    let open = state.worktree.menu_open.as_ref().expect("the menu is open");
     assert_eq!(open.dir_name, "feat-a");
     assert_eq!(open.anchor, (120, 300));
     state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-a".to_string(),
         (120, 300),
     )));
-    assert_eq!(state.worktree_menu_open, None);
+    assert_eq!(state.worktree.menu_open, None);
 }
 
 /// Expanded tree nodes decide what the sidebar contains, not how it looks getting there.

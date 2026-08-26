@@ -68,10 +68,10 @@ const DIALOGS: &[(&str, fn(&mut State))] = &[
         state.settings.settings_draft = Some(Default::default())
     }),
     ("confirm_worktree_delete", |state| {
-        state.worktree_delete_target = Some("wt".to_string())
+        state.worktree.delete_target = Some("wt".to_string())
     }),
     ("rename_worktree", |state| {
-        state.worktree_rename_draft = Some(WorktreeRenameDraft {
+        state.worktree.rename_draft = Some(WorktreeRenameDraft {
             dir_name: "wt".to_string(),
             text: String::new(),
             error: None,

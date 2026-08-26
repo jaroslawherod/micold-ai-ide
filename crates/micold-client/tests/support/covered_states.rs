@@ -12,6 +12,7 @@
 //! worktrees, configuration or session store — a fixture that recorded the author's own workspace
 //! would be unreproducible anywhere else, including on the same machine tomorrow.
 
+use micold_client::features::worktree;
 use std::path::PathBuf;
 
 use micold_client::app::State;
@@ -174,11 +175,14 @@ fn with_project() -> State {
 
     let state = State {
         workspace,
-        worktrees: vec![
-            worktree("feat-short", "feat/short"),
-            worktree(LONG_NAME, "feat/long"),
-            worktree("fix-a-bug", "fix/a-bug"),
-        ],
+        worktree: worktree::State {
+            worktrees: vec![
+                worktree("feat-short", "feat/short"),
+                worktree(LONG_NAME, "feat/long"),
+                worktree("fix-a-bug", "fix/a-bug"),
+            ],
+            ..Default::default()
+        },
         sidebar_width: 260,
         ..State::default()
     };
@@ -369,7 +373,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // panel used to be recorded at 24, 96 whichever row it belonged to, and a fixture
                 // that only ever opened it near there could not tell the two apart.
                 state.window.window_size = (1280, 800);
-                state.worktree_menu_open = Some(WorktreeMenu {
+                state.worktree.menu_open = Some(WorktreeMenu {
                     dir_name: LONG_NAME.to_string(),
                     anchor: (120, 420),
                 });
@@ -426,7 +430,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "empty-project-without-worktrees",
             build: || {
                 let mut state = with_project();
-                state.worktrees.clear();
+                state.worktree.worktrees.clear();
                 StateUnderTest::new(state)
             },
             anchors: &[Anchor {
@@ -513,7 +517,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "main-shell-sidebar-scrolled-to-top",
             build: || {
                 let mut state = with_project();
-                state.worktrees = (0..30)
+                state.worktree.worktrees = (0..30)
                     .map(|i| worktree(&format!("feat-{i:02}"), &format!("feat/{i:02}")))
                     .collect();
                 StateUnderTest::new(state)

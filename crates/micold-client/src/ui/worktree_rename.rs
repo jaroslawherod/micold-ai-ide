@@ -77,7 +77,8 @@ pub fn dialog<'a>(
     _env_include_outcome: &'a EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
     state
-        .worktree_rename_draft
+        .worktree
+        .rename_draft
         .as_ref()
         .map(|draft| modal(draft, scheme, state.window.focused_field))
 }

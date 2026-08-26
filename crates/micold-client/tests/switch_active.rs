@@ -115,7 +115,7 @@ fn switch_to_unavailable_is_rejected_and_leaves_state_unchanged() {
 /// open a location it knows about (contract §1.2).
 fn two_projects_with_worktrees() -> State {
     let mut st = two_projects_active_a();
-    st.worktrees = vec![Worktree {
+    st.worktree.worktrees = vec![Worktree {
         dir_name: "wa2".to_string(),
         path: PathBuf::from("/a/.claude/worktrees/wa2"),
         branch: Some("feat/wa2".to_string()),

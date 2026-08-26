@@ -320,9 +320,10 @@ pub fn view<'a>(
     // position "the view does not know", which was a description of a parameter the row's
     // right-press did not carry rather than a decision about where a menu belongs.
     let worktree_menu: Option<cdk::overlay::Surface<'a, Message>> =
-        state.worktree_menu_open.as_ref().map(|menu| {
+        state.worktree.menu_open.as_ref().map(|menu| {
             let dir = &menu.dir_name;
             let included = state
+                .worktree
                 .worktrees
                 .iter()
                 .any(|w| &w.dir_name == dir && w.included);

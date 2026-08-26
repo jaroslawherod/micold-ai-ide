@@ -158,7 +158,7 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
         core.note_background_restart(id);
     }
     // Mirror the active project's worktrees from the daemon's git discovery into the render state
-    // (the sidebar reads `core.worktrees` + `worktree_names`). Only on `CatalogChanged` pushes, not
+    // (the sidebar reads `core.worktree.worktrees` + `worktree_names`). Only on `CatalogChanged` pushes, not
     // the initial welcome: the welcome's worktree cache is empty until the post-attach refresh, so
     // syncing it would briefly blank the list boot-time local discovery had populated (T055).
     if sync_worktrees {

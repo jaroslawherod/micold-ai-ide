@@ -30,12 +30,42 @@
 //! `RenameConfirmed`, `TextCopyRequested` (M2).
 
 use crate::app::Message;
-use crate::app::State;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::naming::{display_name, parse_tags, Tag};
 use micold_core::overlay::Layer;
 use micold_core::worktree::{Worktree, WorktreeStatus};
+
+/// What this feature remembers (feature 028, contract S1).
+///
+/// Five of the six shed the `worktree` the qualifier now carries: `hovered_worktree` is
+/// `worktree.hovered`, and `worktree_delete_keep_branch`, `worktree_delete_target`,
+/// `worktree_menu_open` and `worktree_rename_draft` are `delete_keep_branch`, `delete_target`,
+/// `menu_open` and `rename_draft`. `worktrees` keeps its name because trimming it leaves nothing:
+/// it is the collection this feature is about, not a fact about one worktree. The reducers below
+/// spell the root's type `crate::app::State` now that `State` here means this struct.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct State {
+    /// The worktree row the pointer is currently over, by `dir_name` (feature 008). Drives the
+    /// hover-revealed row actions (add-session + delete). Transient.
+    pub hovered: Option<String>,
+    /// Whether the user has opted to also delete the branch when confirming a worktree delete
+    /// (feature 013). Defaults to `false` = delete (today's unconditional behavior), so an
+    /// unmodified confirm is unchanged. Reset to `false` on every `WorktreeDeleteRequested`.
+    pub delete_keep_branch: bool,
+    /// The worktree pending deletion (its `dir_name`), shown in the confirm dialog (feature
+    /// 008, FR-018/FR-019). Its presence *is* the confirm dialog being shown (T037).
+    pub delete_target: Option<String>,
+    /// The worktree whose right-click context menu is open, and where it was opened from
+    /// (feature 008). At most one is open at a time; `None` means no menu is showing.
+    pub menu_open: Option<WorktreeMenu>,
+    /// The in-progress worktree rename; its presence *is* the rename dialog being shown (T037)
+    /// (feature 008, FR-013/FR-014).
+    pub rename_draft: Option<WorktreeRenameDraft>,
+    /// Worktrees discovered for the active project (feature 005, FR-018). Re-derived from git
+    /// on open and after each mutation — never persisted.
+    pub worktrees: Vec<Worktree>,
+}
 
 /// In-progress worktree-rename state, present only while the worktree-rename dialog is open
 /// (feature 008, FR-013/FR-014). Mirrors `RenameDraft` but is keyed by worktree `dir_name`
@@ -70,7 +100,7 @@ pub(crate) fn worktree_tags(worktree: &Worktree) -> Vec<Tag> {
     tags
 }
 
-impl State {
+impl crate::app::State {
     /// The display name for a worktree (FR-017): the user's rename override when present,
     /// otherwise the friendly name derived from the directory name. Never touches the folder
     /// or branch on disk (FR-007, FR-014).
@@ -84,17 +114,18 @@ impl State {
     /// The worktrees currently shown to the user (feature 014, FR-002/FR-003): all of them while
     /// the reveal control is on, only user-owned ones while it is off.
     ///
-    /// The single source every worktree surface reads from — [`State::worktree_tree`],
-    /// [`State::available_tag_filters`], and the sidebar's empty-state hint — so hiding, counting,
+    /// The single source every worktree surface reads from — [`crate::app::State::worktree_tree`],
+    /// [`crate::app::State::available_tag_filters`], and the sidebar's empty-state hint — so hiding, counting,
     /// and filtering agree by construction instead of via three separate filters that can drift
     /// (contracts/agent-worktree-classification.md).
     ///
-    /// Note what does NOT read this: `set_worktrees`'s pruning and [`State::sessions_in_worktree`]
+    /// Note what does NOT read this: `set_worktrees`'s pruning and [`crate::app::State::sessions_in_worktree`]
     /// reason about *existence*, not visibility. A hidden worktree still exists, and its rename
     /// override must survive.
     pub fn visible_worktrees(&self) -> impl Iterator<Item = &Worktree> {
         let show_all = self.show_agent_worktrees;
-        self.worktrees
+        self.worktree
+            .worktrees
             .iter()
             .filter(move |w| show_all || !w.is_agent_owned())
     }
@@ -154,9 +185,10 @@ impl FloatingSurface for WorktreeContextMenu {
 }
 
 impl Registered for WorktreeContextMenu {
-    fn open_in(state: &State) -> Option<Self> {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
         state
-            .worktree_menu_open
+            .worktree
+            .menu_open
             .as_ref()
             .map(|_| WorktreeContextMenu)
     }
@@ -182,9 +214,10 @@ impl FloatingSurface for ConfirmWorktreeDeleteDialog {
 }
 
 impl Registered for ConfirmWorktreeDeleteDialog {
-    fn open_in(state: &State) -> Option<Self> {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
         state
-            .worktree_delete_target
+            .worktree
+            .delete_target
             .as_ref()
             .map(|_| ConfirmWorktreeDeleteDialog)
     }
@@ -210,16 +243,20 @@ impl FloatingSurface for RenameWorktreeDialog {
 }
 
 impl Registered for RenameWorktreeDialog {
-    fn open_in(state: &State) -> Option<Self> {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
         state
-            .worktree_rename_draft
+            .worktree
+            .rename_draft
             .as_ref()
             .map(|_| RenameWorktreeDialog)
     }
 }
 
 /// Discovery answered with the current worktree list (feature 005, FR-018).
-pub fn loaded(state: &mut State, worktrees: Vec<Worktree>) -> Vec<crate::features::Outcome> {
+pub fn loaded(
+    state: &mut crate::app::State,
+    worktrees: Vec<Worktree>,
+) -> Vec<crate::features::Outcome> {
     state.set_worktrees(worktrees)
 }
 
@@ -229,22 +266,31 @@ pub fn loaded(state: &mut State, worktrees: Vec<Worktree>) -> Vec<crate::feature
 /// its caller can vouch for. [`included`] keys on path instead because the daemon answers an
 /// include with one. Reached only through `Outcome::WorktreeCreated` — the form that ran the
 /// create does not own this list.
-pub fn created(state: &mut State, worktree: Worktree) -> Vec<crate::features::Outcome> {
+pub fn created(state: &mut crate::app::State, worktree: Worktree) -> Vec<crate::features::Outcome> {
     if !state
+        .worktree
         .worktrees
         .iter()
         .any(|w| w.dir_name == worktree.dir_name)
     {
-        state.worktrees.push(worktree);
-        state.worktrees.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
+        state.worktree.worktrees.push(worktree);
+        state
+            .worktree
+            .worktrees
+            .sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
     }
     vec![list_changed(state)]
 }
 
 /// What every path that alters the list reports: the `dir_name`s now in it.
-fn list_changed(state: &State) -> crate::features::Outcome {
+fn list_changed(state: &crate::app::State) -> crate::features::Outcome {
     crate::features::Outcome::WorktreesReplaced(
-        state.worktrees.iter().map(|w| w.dir_name.clone()).collect(),
+        state
+            .worktree
+            .worktrees
+            .iter()
+            .map(|w| w.dir_name.clone())
+            .collect(),
     )
 }
 
@@ -255,23 +301,23 @@ fn list_changed(state: &State) -> crate::features::Outcome {
 /// popover open elsewhere in the window survives a right-click in the sidebar (T067a-2).
 #[must_use = "what an opening menu displaces is the registry's business, not the caller's"]
 pub fn menu_toggled(
-    state: &mut State,
+    state: &mut crate::app::State,
     dir: String,
     anchor: (u16, u16),
 ) -> Vec<crate::features::Outcome> {
-    state.worktree_menu_open = match &state.worktree_menu_open {
+    state.worktree.menu_open = match &state.worktree.menu_open {
         Some(open) if open.dir_name == dir => None,
         _ => Some(WorktreeMenu {
             dir_name: dir,
             anchor,
         }),
     };
-    crate::features::surface_opened(state.worktree_menu_open.is_some(), WorktreeContextMenu::ID)
+    crate::features::surface_opened(state.worktree.menu_open.is_some(), WorktreeContextMenu::ID)
 }
 
 /// The worktree context menu was dismissed.
-pub fn menu_dismissed(state: &mut State) {
-    state.worktree_menu_open = None;
+pub fn menu_dismissed(state: &mut crate::app::State) {
+    state.worktree.menu_open = None;
 }
 
 /// The daemon answered an include request with the worktree as its own discovery sees it
@@ -279,32 +325,43 @@ pub fn menu_dismissed(state: &mut State) {
 ///
 /// Idempotent by path, and sorted by directory name so an included worktree lands where the list
 /// would have put it rather than at the end.
-pub fn included(state: &mut State, worktree: Worktree) -> Vec<crate::features::Outcome> {
-    if !state.worktrees.iter().any(|w| w.path == worktree.path) {
-        state.worktrees.push(worktree);
-        state.worktrees.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
+pub fn included(
+    state: &mut crate::app::State,
+    worktree: Worktree,
+) -> Vec<crate::features::Outcome> {
+    if !state
+        .worktree
+        .worktrees
+        .iter()
+        .any(|w| w.path == worktree.path)
+    {
+        state.worktree.worktrees.push(worktree);
+        state
+            .worktree
+            .worktrees
+            .sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
     }
     vec![list_changed(state)]
 }
 
 /// An exclude was requested; the menu it was chosen from closes (016 BUG-002).
-pub fn exclude_requested(state: &mut State) {
-    state.worktree_menu_open = None;
+pub fn exclude_requested(state: &mut crate::app::State) {
+    state.worktree.menu_open = None;
 }
 
 /// The daemon confirmed a worktree is no longer included (016 BUG-002).
-pub fn excluded(state: &mut State, path: std::path::PathBuf) {
-    state.worktrees.retain(|w| w.path != path);
+pub fn excluded(state: &mut crate::app::State, path: std::path::PathBuf) {
+    state.worktree.worktrees.retain(|w| w.path != path);
 }
 
 /// A delete was requested; the confirmation opens (feature 008, FR-018/FR-019).
 ///
 /// The keep-branch choice never carries over from a previously cancelled or confirmed dialog
 /// (feature 013).
-pub fn delete_requested(state: &mut State, dir: String) {
+pub fn delete_requested(state: &mut crate::app::State, dir: String) {
     state.clear_for_dialog();
-    state.worktree_delete_target = Some(dir);
-    state.worktree_delete_keep_branch = false;
+    state.worktree.delete_target = Some(dir);
+    state.worktree.delete_keep_branch = false;
 }
 
 /// A delete was confirmed — which *requests* it rather than performing it.
@@ -318,25 +375,25 @@ pub fn delete_requested(state: &mut State, dir: String) {
 /// the next catalog push restored it, which reads as the app resurrecting something the user
 /// deleted rather than as the failure it is. Leaving the row alone means a refusal simply leaves it
 /// in place, beside the error notification explaining why.
-pub fn delete_confirmed(state: &mut State) {
-    state.worktree_delete_target = None;
+pub fn delete_confirmed(state: &mut crate::app::State) {
+    state.worktree.delete_target = None;
 }
 
 /// The delete confirmation was dismissed.
-pub fn delete_cancelled(state: &mut State) {
-    state.worktree_delete_target = None;
+pub fn delete_cancelled(state: &mut crate::app::State) {
+    state.worktree.delete_target = None;
 }
 
 /// The "also delete the branch" choice was toggled (feature 013).
-pub fn delete_keep_branch_toggled(state: &mut State, keep: bool) {
-    state.worktree_delete_keep_branch = keep;
+pub fn delete_keep_branch_toggled(state: &mut crate::app::State, keep: bool) {
+    state.worktree.delete_keep_branch = keep;
 }
 
 /// A worktree rename was started, seeded with its current display name (feature 008, FR-013).
-pub fn rename_started(state: &mut State, dir: String) {
+pub fn rename_started(state: &mut crate::app::State, dir: String) {
     let text = state.worktree_display_name(&dir);
     state.clear_for_dialog();
-    state.worktree_rename_draft = Some(WorktreeRenameDraft {
+    state.worktree.rename_draft = Some(WorktreeRenameDraft {
         dir_name: dir,
         text,
         error: None,
@@ -344,8 +401,8 @@ pub fn rename_started(state: &mut State, dir: String) {
 }
 
 /// The rename field was edited; any pending error is cleared with it.
-pub fn rename_text_changed(state: &mut State, text: String) {
-    if let Some(draft) = &mut state.worktree_rename_draft {
+pub fn rename_text_changed(state: &mut crate::app::State, text: String) {
+    if let Some(draft) = &mut state.worktree.rename_draft {
         draft.text = text;
         draft.error = None;
     }
@@ -355,18 +412,19 @@ pub fn rename_text_changed(state: &mut State, text: String) {
 ///
 /// Changes only the stored display name — never the folder or the branch on disk. A rejected name
 /// leaves the dialog open carrying its reason.
-pub fn rename_confirmed(state: &mut State) {
+pub fn rename_confirmed(state: &mut crate::app::State) {
     let Some((dir, text)) = state
-        .worktree_rename_draft
+        .worktree
+        .rename_draft
         .as_ref()
         .map(|d| (d.dir_name.clone(), d.text.clone()))
     else {
         return;
     };
     match state.workspace.set_worktree_name(&dir, &text) {
-        Ok(()) => state.worktree_rename_draft = None,
+        Ok(()) => state.worktree.rename_draft = None,
         Err(error) => {
-            if let Some(draft) = &mut state.worktree_rename_draft {
+            if let Some(draft) = &mut state.worktree.rename_draft {
                 draft.error = Some(error);
             }
         }
@@ -374,22 +432,22 @@ pub fn rename_confirmed(state: &mut State) {
 }
 
 /// The rename was dismissed without saving.
-pub fn rename_cancelled(state: &mut State) {
-    state.worktree_rename_draft = None;
+pub fn rename_cancelled(state: &mut crate::app::State) {
+    state.worktree.rename_draft = None;
 }
 
 /// The pointer entered a worktree row (feature 008).
-pub fn hovered(state: &mut State, dir: String) {
-    state.hovered_worktree = Some(dir);
+pub fn hovered(state: &mut crate::app::State, dir: String) {
+    state.worktree.hovered = Some(dir);
 }
 
 /// The pointer left a worktree row (feature 008).
 ///
 /// Only clears when leaving the row that was thought to be hovered, so a stale exit from a
 /// previous row cannot clobber a fresh enter.
-pub fn unhovered(state: &mut State, dir: String) {
-    if state.hovered_worktree.as_deref() == Some(dir.as_str()) {
-        state.hovered_worktree = None;
+pub fn unhovered(state: &mut crate::app::State, dir: String) {
+    if state.worktree.hovered.as_deref() == Some(dir.as_str()) {
+        state.worktree.hovered = None;
     }
 }
 
@@ -462,7 +520,7 @@ pub enum Msg {
 /// second time in `main.rs`, which runs the effect and lets the message fall through to here.
 /// That is the split `worktree_form` established and M2 names as the reference: by *effect*, not
 /// by variant, so nothing about a delete is duplicated between the two halves.
-pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::Loaded(worktrees) => return loaded(state, worktrees),
         Msg::MenuToggled(dir, anchor) => return menu_toggled(state, dir, anchor),

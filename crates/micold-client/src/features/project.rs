@@ -48,7 +48,7 @@ use std::path::PathBuf;
 pub struct State {
     /// The project pending a forget confirmation, by path (feature 014). Its presence *is* the
     /// confirm dialog being shown (T037). Transient — never persisted. Mirrors
-    /// `worktree_delete_target`.
+    /// `worktree.delete_target`.
     pub forget_target: Option<PathBuf>,
     /// The open project right-click context menu (feature 015), with the project it acts on and
     /// the press point to draw it at. At most one is open. Mutually exclusive with the other

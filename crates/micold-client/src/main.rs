@@ -222,7 +222,7 @@ fn scene_facts(app: &App) -> SceneFacts {
         .map(|p| app.core.workspace.running_session_count(p))
         .unwrap_or(0);
     SceneFacts {
-        worktrees: app.core.worktrees.len(),
+        worktrees: app.core.worktree.worktrees.len(),
         running_sessions,
         dialog_open: micold_client::overlay::registry::open_dialog(&app.core).is_some(),
         context_menu_open: app.core.terminal_context_menu.is_some(),
@@ -1376,7 +1376,7 @@ pub(crate) mod tests {
             availability: Availability::Available,
         });
         app.core.workspace.active = Some(path.clone());
-        app.core.worktrees = vec![Worktree {
+        app.core.worktree.worktrees = vec![Worktree {
             dir_name: "only".to_string(),
             path: PathBuf::from("/repo/.claude/worktrees/only"),
             branch: Some("feat/only".to_string()),

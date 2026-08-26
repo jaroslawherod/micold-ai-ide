@@ -741,14 +741,15 @@ pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
 pub fn on_worktree_rename_confirmed(app: &mut App) -> Task<Message> {
     let draft = app
         .core
-        .worktree_rename_draft
+        .worktree
+        .rename_draft
         .as_ref()
         .map(|d| (d.dir_name.clone(), d.text.trim().to_string()));
     let project = app.core.workspace.active.clone();
     app.core
         .update(Message::Worktree(WorktreeMsg::RenameConfirmed));
     // Only send if the pure update accepted it (a rejected name leaves the draft in place).
-    if app.core.worktree_rename_draft.is_none() {
+    if app.core.worktree.rename_draft.is_none() {
         if let (Some((dir_name, display_name)), Some(project)) = (draft, project) {
             if !display_name.is_empty() {
                 send_op(
@@ -1190,6 +1191,7 @@ pub fn on_worktree_include_requested(app: &mut App, path: PathBuf) -> Task<Messa
 pub fn on_worktree_exclude_requested(app: &mut App, dir: String) -> Task<Message> {
     let path = app
         .core
+        .worktree
         .worktrees
         .iter()
         .find(|w| w.dir_name == dir && w.included)
@@ -1210,7 +1212,7 @@ pub fn on_worktree_exclude_requested(app: &mut App, dir: String) -> Task<Message
 }
 
 pub fn on_worktree_delete_confirmed(app: &mut App) -> Task<Message> {
-    let target = app.core.worktree_delete_target.clone();
+    let target = app.core.worktree.delete_target.clone();
     if let (Some(dir), Some(project)) = (target, app.core.workspace.active.clone()) {
         // Drop this path's cached env-include snapshot (BUG-002): a worktree recreated for
         // the same branch reuses the exact path, and a stale snapshot would linger forever.
@@ -1218,9 +1220,9 @@ pub fn on_worktree_delete_confirmed(app: &mut App) -> Task<Message> {
         app.env_include_cache.remove(&cwd);
         let (p, d) = (project, dir.clone());
         // Feature 013 (FR-011/FR-012): the user's explicit keep/delete choice from the
-        // confirm dialog, defaulting to "delete the branch" (`worktree_delete_keep_branch`
+        // confirm dialog, defaulting to "delete the branch" (`delete_keep_branch`
         // defaults to `false`).
-        let delete_branch = !app.core.worktree_delete_keep_branch;
+        let delete_branch = !app.core.worktree.delete_keep_branch;
         send_op(app, PendingOp::WorktreeDelete(dir), move |req| {
             ClientMsg::WorktreeDelete {
                 req,

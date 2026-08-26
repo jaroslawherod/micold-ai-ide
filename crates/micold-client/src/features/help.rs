@@ -27,8 +27,8 @@ pub struct State {
     ///
     /// The last remnant of the `Overlay` enum (feature 021, T037). That enum was a single slot
     /// naming which of nine dialogs was showing, and eight of the nine already had a field of
-    /// their own saying the same thing — `selector`, `rename_draft`, `worktree_form`,
-    /// `settings_draft`, and the four confirm-dialog targets. The slot was a second copy of a fact
+    /// their own saying the same thing — `project.selector`, `project.rename_draft`,
+    /// `worktree_form.form`, `settings.settings_draft`, and the four confirm-dialog targets. The slot was a second copy of a fact
     /// the state already held, kept in step by hand at twenty-five reducer sites. Each dialog now
     /// reads its own state, and About, which had none, gets this.
     ///

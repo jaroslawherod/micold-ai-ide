@@ -81,7 +81,7 @@ fn drag_width_is_clamped_to_bounds() {
 #[test]
 fn worktree_menu_toggles_replaces_and_dismisses() {
     let mut state = State::default();
-    let open_dir = |s: &State| s.worktree_menu_open.as_ref().map(|m| m.dir_name.clone());
+    let open_dir = |s: &State| s.worktree.menu_open.as_ref().map(|m| m.dir_name.clone());
     // Toggle open, at the point the row was pressed (018 FR-029d).
     state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-a".to_string(),
@@ -89,7 +89,7 @@ fn worktree_menu_toggles_replaces_and_dismisses() {
     )));
     assert_eq!(open_dir(&state).as_deref(), Some("feat-a"));
     assert_eq!(
-        state.worktree_menu_open.as_ref().unwrap().anchor,
+        state.worktree.menu_open.as_ref().unwrap().anchor,
         (120, 300)
     );
     // Toggling the same one closes it.
@@ -97,7 +97,7 @@ fn worktree_menu_toggles_replaces_and_dismisses() {
         "feat-a".to_string(),
         (120, 300),
     )));
-    assert_eq!(state.worktree_menu_open, None);
+    assert_eq!(state.worktree.menu_open, None);
     // Opening a different one while one is open replaces it (only one open at a time) — and
     // re-anchors at its own press point rather than keeping the first one's (BUG-008).
     state.update(Message::Worktree(WorktreeMsg::MenuToggled(
@@ -110,12 +110,12 @@ fn worktree_menu_toggles_replaces_and_dismisses() {
     )));
     assert_eq!(open_dir(&state).as_deref(), Some("feat-b"));
     assert_eq!(
-        state.worktree_menu_open.as_ref().unwrap().anchor,
+        state.worktree.menu_open.as_ref().unwrap().anchor,
         (140, 610)
     );
     // Dismiss clears.
     state.update(Message::Worktree(WorktreeMsg::MenuDismissed));
-    assert_eq!(state.worktree_menu_open, None);
+    assert_eq!(state.worktree.menu_open, None);
 }
 
 // --- Cross-app clipboard copy (worktree "Copy name" context-menu action) ---
@@ -144,8 +144,8 @@ fn worktree_rename_seeds_edits_and_applies() {
         "feat-abc-123_login-page".to_string(),
     )));
     assert_eq!(open_dialog(&state), Some("rename_worktree"));
-    assert!(state.worktree_menu_open.is_none());
-    let draft = state.worktree_rename_draft.as_ref().unwrap();
+    assert!(state.worktree.menu_open.is_none());
+    let draft = state.worktree.rename_draft.as_ref().unwrap();
     assert_eq!(draft.dir_name, "feat-abc-123_login-page");
     assert_eq!(draft.text, "Login page"); // seeded from the derived name
 
@@ -153,13 +153,13 @@ fn worktree_rename_seeds_edits_and_applies() {
         "My Login".to_string(),
     )));
     assert_eq!(
-        state.worktree_rename_draft.as_ref().unwrap().text,
+        state.worktree.rename_draft.as_ref().unwrap().text,
         "My Login"
     );
 
     state.update(Message::Worktree(WorktreeMsg::RenameConfirmed));
     assert_eq!(open_dialog(&state), None);
-    assert!(state.worktree_rename_draft.is_none());
+    assert!(state.worktree.rename_draft.is_none());
     assert_eq!(
         state.worktree_display_name("feat-abc-123_login-page"),
         "My Login"
@@ -179,7 +179,8 @@ fn worktree_rename_empty_keeps_prior_name_with_error() {
     // Stays open with an error; no override applied → still the derived name.
     assert_eq!(open_dialog(&state), Some("rename_worktree"));
     assert!(state
-        .worktree_rename_draft
+        .worktree
+        .rename_draft
         .as_ref()
         .unwrap()
         .error
@@ -212,17 +213,17 @@ fn worktree_hover_sets_and_clears() {
     state.update(Message::Worktree(WorktreeMsg::Hovered(
         "feat-a".to_string(),
     )));
-    assert_eq!(state.hovered_worktree.as_deref(), Some("feat-a"));
+    assert_eq!(state.worktree.hovered.as_deref(), Some("feat-a"));
     // A stale exit from a different row does not clear the current hover.
     state.update(Message::Worktree(WorktreeMsg::Unhovered(
         "feat-b".to_string(),
     )));
-    assert_eq!(state.hovered_worktree.as_deref(), Some("feat-a"));
+    assert_eq!(state.worktree.hovered.as_deref(), Some("feat-a"));
     // Leaving the hovered row clears it.
     state.update(Message::Worktree(WorktreeMsg::Unhovered(
         "feat-a".to_string(),
     )));
-    assert!(state.hovered_worktree.is_none());
+    assert!(state.worktree.hovered.is_none());
 }
 
 // --- Feature 008 US4: sidebar filter set ---
@@ -368,7 +369,7 @@ fn opening_an_overlay_closes_the_filter_panel() {
 #[test]
 fn default_entry_stays_visible_with_an_active_tag_filter() {
     let mut state = state_with_active();
-    state.worktrees = vec![Worktree {
+    state.worktree.worktrees = vec![Worktree {
         dir_name: "feat-a".to_string(),
         path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
         branch: Some("feat/a".to_string()),

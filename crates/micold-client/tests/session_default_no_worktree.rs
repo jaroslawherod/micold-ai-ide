@@ -5,7 +5,7 @@
 //! trigger the binary (`src/main.rs`) consumes to spawn a PTY, then dispatches
 //! `Message::Session(SessionMsg::Started(session))` once it has succeeded. That handler is where a session
 //! actually enters `State`, so it is the right boundary to assert against: dispatching it for a
-//! `Default` session must leave `state.worktrees` (the in-memory worktree list, sourced only
+//! `Default` session must leave `state.worktree.worktrees` (the in-memory worktree list, sourced only
 //! from git discovery / `|a0| Message::WorktreeForm(Msg::Created(a0))`) byte-for-byte unchanged. A `FakeGit` with a
 //! registered repo is also asserted untouched, matching `contracts/sidebar-default-entry.md`'s
 //! invariant 3 — this is possible to state precisely because `session_cwd_for_location`'s
@@ -30,14 +30,14 @@ fn starting_a_default_session_leaves_worktrees_untouched() {
         availability: Availability::Available,
     });
     state.workspace.active = Some(repo.clone());
-    state.worktrees = vec![]; // no worktrees exist yet — this is the interesting case (US1 AS1)
+    state.worktree.worktrees = vec![]; // no worktrees exist yet — this is the interesting case (US1 AS1)
 
-    let before = state.worktrees.clone();
+    let before = state.worktree.worktrees.clone();
     let session = Session::start_new(SessionLocation::Default);
     state.update(Message::Session(SessionMsg::Started(session)));
 
     assert_eq!(
-        state.worktrees, before,
+        state.worktree.worktrees, before,
         "starting a Default session must not create a worktree entry"
     );
     assert_eq!(state.active_sessions().len(), 1);

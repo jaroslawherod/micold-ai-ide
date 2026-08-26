@@ -7,6 +7,7 @@
 
 use micold_client::app::{Message, State};
 use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::worktree;
 use micold_core::git::{FakeGit, Git, GitCli};
 use micold_core::project::{Availability, Project};
 use micold_core::provider::{AiCliProvider, ClaudeProvider};
@@ -49,7 +50,7 @@ fn confirm_removes_worktree_branch_and_kills_only_matching_sessions() {
         availability: Availability::Available,
     });
     state.workspace.active = Some(repo.clone());
-    state.worktrees = vec![wt("feat-abc-123-x", &repo), wt("other", &repo)];
+    state.worktree.worktrees = vec![wt("feat-abc-123-x", &repo), wt("other", &repo)];
     let target_session =
         Session::start_new(SessionLocation::Worktree("feat-abc-123-x".to_string()));
     let other_session = Session::start_new(SessionLocation::Worktree("other".to_string()));
@@ -113,7 +114,7 @@ fn confirmed_delete_marks_the_worktrees_sessions_archived_but_not_others() {
         availability: Availability::Available,
     });
     state.workspace.active = Some(repo.clone());
-    state.worktrees = vec![wt("feat-abc-123-x", &repo), wt("other", &repo)];
+    state.worktree.worktrees = vec![wt("feat-abc-123-x", &repo), wt("other", &repo)];
     let target_session =
         Session::start_new(SessionLocation::Worktree("feat-abc-123-x".to_string()));
     let other_session = Session::start_new(SessionLocation::Worktree("other".to_string()));
@@ -170,7 +171,11 @@ fn fr_023_failed_delete_is_reported_and_the_worktree_survives() {
     git.worktree_add_new_branch(&repo, branch, &target).unwrap();
 
     let mut state = State {
-        worktrees: vec![wt("feat-locked", &repo)],
+        worktree: worktree::State {
+            worktrees: vec![wt("feat-locked", &repo)],
+            ..Default::default()
+        },
+
         ..Default::default()
     };
 
@@ -218,7 +223,7 @@ fn fr_023_failed_delete_leaves_its_sessions_running_and_unarchived() {
         availability: Availability::Available,
     });
     state.workspace.active = Some(repo.clone());
-    state.worktrees = vec![wt("feat-locked", &repo)];
+    state.worktree.worktrees = vec![wt("feat-locked", &repo)];
     let session = Session::start_new(SessionLocation::Worktree("feat-locked".to_string()));
     let session_id = session.id;
     state.update(Message::Session(SessionMsg::Started(session)));
@@ -357,7 +362,11 @@ fn fr_023a_successful_delete_is_silent_when_git_already_removed_the_dir() {
     git.worktree_add_new_branch(&repo, branch, &target).unwrap();
 
     let mut state = State {
-        worktrees: vec![wt("feat-gone", &repo)],
+        worktree: worktree::State {
+            worktrees: vec![wt("feat-gone", &repo)],
+            ..Default::default()
+        },
+
         ..Default::default()
     };
 

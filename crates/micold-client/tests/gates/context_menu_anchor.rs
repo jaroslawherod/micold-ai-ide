@@ -106,9 +106,12 @@ fn with_project(sessions: Vec<Session>) -> State {
             ..Default::default()
         },
         workspace,
-        worktrees: (0..WORKTREE_COUNT)
-            .map(|i| worktree(&format!("feat-{i:02}"), &format!("feat/{i:02}")))
-            .collect(),
+        worktree: micold_client::features::worktree::State {
+            worktrees: (0..WORKTREE_COUNT)
+                .map(|i| worktree(&format!("feat-{i:02}"), &format!("feat/{i:02}")))
+                .collect(),
+            ..Default::default()
+        },
         sidebar_width: 260,
         // Clamping is only meaningful against a window whose size the application knows.
         ..State::default()

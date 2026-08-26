@@ -143,7 +143,7 @@ fn every_non_modal_surface_closes_on_a_scroll_beneath() {
     assert!(!state.project.switcher_open, "project switcher");
     assert!(!state.sidebar_filter_open, "sidebar filter panel");
     assert!(state.project.menu_open.is_none(), "project context menu");
-    assert!(state.worktree_menu_open.is_none(), "worktree context menu");
+    assert!(state.worktree.menu_open.is_none(), "worktree context menu");
     assert!(state.session_menu_open.is_none(), "session context menu");
 }
 
@@ -201,13 +201,13 @@ fn escape_still_reaches_exactly_what_it_used_to() {
         ),
         (
             "confirm_worktree_delete",
-            |s| s.worktree_delete_target = Some("wt".to_string()),
+            |s| s.worktree.delete_target = Some("wt".to_string()),
             Message::Worktree(WorktreeMsg::DeleteCancelled),
         ),
         (
             "rename_worktree",
             |s| {
-                s.worktree_rename_draft = Some(WorktreeRenameDraft {
+                s.worktree.rename_draft = Some(WorktreeRenameDraft {
                     dir_name: "wt".to_string(),
                     text: String::new(),
                     error: None,

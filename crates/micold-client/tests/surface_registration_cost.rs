@@ -41,6 +41,7 @@ mod inventory;
 use micold_client::features::help;
 use micold_client::features::project;
 use micold_client::features::settings;
+use micold_client::features::worktree;
 use micold_client::features::worktree_form;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -333,6 +334,20 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
     // own state and several would otherwise be shadowed by nothing — they are independent, so a
     // single maximal state answers every probe.
     let all = State {
+        worktree: worktree::State {
+            delete_target: Some("wt".to_string()),
+            menu_open: Some(micold_client::features::worktree::WorktreeMenu {
+                dir_name: "wt".to_string(),
+                anchor: (120, 300),
+            }),
+            rename_draft: Some(WorktreeRenameDraft {
+                dir_name: "wt".to_string(),
+                text: String::new(),
+                error: None,
+            }),
+            ..Default::default()
+        },
+
         project: project::State {
             switcher_open: true,
             menu_open: Some(ProjectMenu {
@@ -364,21 +379,11 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
             ..Default::default()
         },
         sidebar_filter_open: true,
-        worktree_menu_open: Some(micold_client::features::worktree::WorktreeMenu {
-            dir_name: "wt".to_string(),
-            anchor: (120, 300),
-        }),
         session_menu_open: Some(micold_client::features::session::SessionMenu {
             id: SessionId::new(),
             anchor: (120, 340),
         }),
         terminal_context_menu: Some((4, 2)),
-        worktree_delete_target: Some("wt".to_string()),
-        worktree_rename_draft: Some(WorktreeRenameDraft {
-            dir_name: "wt".to_string(),
-            text: String::new(),
-            error: None,
-        }),
         session_remove_target: Some(SessionId::new()),
         ..State::default()
     };

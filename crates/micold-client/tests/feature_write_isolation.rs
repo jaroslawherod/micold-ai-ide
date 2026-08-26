@@ -62,7 +62,7 @@
 //! # What this cannot see, stated rather than discovered later
 //!
 //! - **Writes through a function that does not take `&mut State`.** A helper handed
-//!   `&mut state.worktrees` is flagged at the `&mut` site, but one handed an owned value that is
+//!   `&mut state.worktree.worktrees` is flagged at the `&mut` site, but one handed an owned value that is
 //!   later assigned back is not.
 //! - **Interior mutability.** Nothing in `State` uses it today; if that changes, this scan goes
 //!   quiet rather than loud.
@@ -114,15 +114,10 @@ const OWNERS: &[(&str, &str)] = &[
     // --- worktree -----------------------------------------------------------------------------
     ("workspace.worktree_names", "worktree"),
     ("workspace.included_worktrees", "worktree"),
-    ("worktrees", "worktree"),
-    ("worktree_menu_open", "worktree"),
-    ("worktree_delete_target", "worktree"),
-    ("worktree_delete_keep_branch", "worktree"),
-    ("worktree_rename_draft", "worktree"),
+    ("worktree", "worktree"),
     // Hover is on a *worktree* row and drives that row's actions (add-session, delete). It is
     // named here rather than under `sidebar` because what it identifies is a worktree; the sidebar
     // is where it happens to be drawn.
-    ("hovered_worktree", "worktree"),
     // --- worktree_form ------------------------------------------------------------------------
     // One entry for both fields since feature 028 T031: they are `worktree_form::State`'s two
     // members, reached as `worktree_form.form` and `worktree_form.worktree_error`, and this scan
