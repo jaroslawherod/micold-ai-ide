@@ -3,6 +3,7 @@
 use micold_client::app::{Message, State};
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::project::{Availability, Project};
 use micold_core::session::{Session, SessionLocation};
@@ -108,10 +109,10 @@ fn reloading_worktrees_drops_stale_expansion_state() {
         "feat-a".to_string(),
     )));
     // Reload without feat-a.
-    state.update(Message::WorktreesLoaded(vec![worktree(
+    state.update(Message::Worktree(WorktreeMsg::Loaded(vec![worktree(
         "feat-b",
         WorktreeStatus::Valid,
-    )]));
+    )])));
     assert!(!state.expanded.contains("feat-a"));
 }
 
@@ -331,8 +332,10 @@ fn filter_recomputes_after_delete(/* FR-028 / C1 */) {
     assert_eq!(state.filtered_worktree_tree().len(), 2);
     // Delete one fix worktree. Confirming only dismisses the dialog — the daemon performs the
     // removal and pushes git's refreshed truth, which the client adopts via `set_worktrees`.
-    state.update(Message::WorktreeDeleteRequested("fix-crash".to_string()));
-    state.update(Message::WorktreeDeleteConfirmed);
+    state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+        "fix-crash".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::DeleteConfirmed));
     let surviving: Vec<_> = state
         .worktrees
         .iter()
@@ -659,9 +662,13 @@ fn filter_recomputes_after_rename(/* FR-028 / C1 */) {
         TagFilter::Type(ConventionalType::Fix),
     )));
     // Renaming changes only the display name; tags (and thus the filter result) are unchanged.
-    state.update(Message::WorktreeRenameStarted("fix-crash".to_string()));
-    state.update(Message::WorktreeRenameTextChanged("Hotfix".to_string()));
-    state.update(Message::WorktreeRenameConfirmed);
+    state.update(Message::Worktree(WorktreeMsg::RenameStarted(
+        "fix-crash".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameTextChanged(
+        "Hotfix".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameConfirmed));
     assert_eq!(state.filtered_worktree_tree().len(), 2);
     let renamed = node(&state.filtered_worktree_tree(), "fix-crash")
         .display_name

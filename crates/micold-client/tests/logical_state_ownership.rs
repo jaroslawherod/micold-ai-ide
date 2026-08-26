@@ -20,6 +20,7 @@ use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::TagFilter;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
 use micold_core::theme::ThemePreference;
@@ -85,17 +86,17 @@ fn open_overlay_identity_is_application_owned() {
 #[test]
 fn open_menu_identity_is_application_owned() {
     let mut state = State::default();
-    state.update(Message::WorktreeMenuToggled(
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-a".to_string(),
         (120, 300),
-    ));
+    )));
     let open = state.worktree_menu_open.as_ref().expect("the menu is open");
     assert_eq!(open.dir_name, "feat-a");
     assert_eq!(open.anchor, (120, 300));
-    state.update(Message::WorktreeMenuToggled(
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-a".to_string(),
         (120, 300),
-    ));
+    )));
     assert_eq!(state.worktree_menu_open, None);
 }
 

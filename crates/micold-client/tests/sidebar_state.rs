@@ -6,6 +6,7 @@ use micold_client::app::{
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
 use micold_core::session::{Session, SessionLocation};
@@ -79,38 +80,38 @@ fn worktree_menu_toggles_replaces_and_dismisses() {
     let mut state = State::default();
     let open_dir = |s: &State| s.worktree_menu_open.as_ref().map(|m| m.dir_name.clone());
     // Toggle open, at the point the row was pressed (018 FR-029d).
-    state.update(Message::WorktreeMenuToggled(
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-a".to_string(),
         (120, 300),
-    ));
+    )));
     assert_eq!(open_dir(&state).as_deref(), Some("feat-a"));
     assert_eq!(
         state.worktree_menu_open.as_ref().unwrap().anchor,
         (120, 300)
     );
     // Toggling the same one closes it.
-    state.update(Message::WorktreeMenuToggled(
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-a".to_string(),
         (120, 300),
-    ));
+    )));
     assert_eq!(state.worktree_menu_open, None);
     // Opening a different one while one is open replaces it (only one open at a time) — and
     // re-anchors at its own press point rather than keeping the first one's (BUG-008).
-    state.update(Message::WorktreeMenuToggled(
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-a".to_string(),
         (120, 300),
-    ));
-    state.update(Message::WorktreeMenuToggled(
+    )));
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-b".to_string(),
         (140, 610),
-    ));
+    )));
     assert_eq!(open_dir(&state).as_deref(), Some("feat-b"));
     assert_eq!(
         state.worktree_menu_open.as_ref().unwrap().anchor,
         (140, 610)
     );
     // Dismiss clears.
-    state.update(Message::WorktreeMenuDismissed);
+    state.update(Message::Worktree(WorktreeMsg::MenuDismissed));
     assert_eq!(state.worktree_menu_open, None);
 }
 
@@ -120,12 +121,14 @@ fn worktree_menu_toggles_replaces_and_dismisses() {
 fn text_copy_requested_is_a_no_op_in_the_pure_reducer() {
     // The binary performs the actual clipboard write; the reducer has no state to update.
     let mut state = State::default();
-    state.update(Message::WorktreeMenuToggled(
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-a".to_string(),
         (120, 300),
-    ));
+    )));
     let before = state.clone();
-    state.update(Message::TextCopyRequested("Login page".to_string()));
+    state.update(Message::Worktree(WorktreeMsg::TextCopyRequested(
+        "Login page".to_string(),
+    )));
     assert_eq!(state, before);
 }
 
@@ -134,22 +137,24 @@ fn text_copy_requested_is_a_no_op_in_the_pure_reducer() {
 #[test]
 fn worktree_rename_seeds_edits_and_applies() {
     let mut state = state_with_active();
-    state.update(Message::WorktreeRenameStarted(
+    state.update(Message::Worktree(WorktreeMsg::RenameStarted(
         "feat-abc-123_login-page".to_string(),
-    ));
+    )));
     assert_eq!(open_dialog(&state), Some("rename_worktree"));
     assert!(state.worktree_menu_open.is_none());
     let draft = state.worktree_rename_draft.as_ref().unwrap();
     assert_eq!(draft.dir_name, "feat-abc-123_login-page");
     assert_eq!(draft.text, "Login page"); // seeded from the derived name
 
-    state.update(Message::WorktreeRenameTextChanged("My Login".to_string()));
+    state.update(Message::Worktree(WorktreeMsg::RenameTextChanged(
+        "My Login".to_string(),
+    )));
     assert_eq!(
         state.worktree_rename_draft.as_ref().unwrap().text,
         "My Login"
     );
 
-    state.update(Message::WorktreeRenameConfirmed);
+    state.update(Message::Worktree(WorktreeMsg::RenameConfirmed));
     assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_rename_draft.is_none());
     assert_eq!(
@@ -161,9 +166,13 @@ fn worktree_rename_seeds_edits_and_applies() {
 #[test]
 fn worktree_rename_empty_keeps_prior_name_with_error() {
     let mut state = state_with_active();
-    state.update(Message::WorktreeRenameStarted("feat-x".to_string()));
-    state.update(Message::WorktreeRenameTextChanged("   ".to_string()));
-    state.update(Message::WorktreeRenameConfirmed);
+    state.update(Message::Worktree(WorktreeMsg::RenameStarted(
+        "feat-x".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameTextChanged(
+        "   ".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameConfirmed));
     // Stays open with an error; no override applied → still the derived name.
     assert_eq!(open_dialog(&state), Some("rename_worktree"));
     assert!(state
@@ -179,9 +188,13 @@ fn worktree_rename_empty_keeps_prior_name_with_error() {
 fn duplicate_worktree_display_names_are_allowed() {
     let mut state = state_with_active();
     for dir in ["feat-a", "feat-b"] {
-        state.update(Message::WorktreeRenameStarted(dir.to_string()));
-        state.update(Message::WorktreeRenameTextChanged("Same".to_string()));
-        state.update(Message::WorktreeRenameConfirmed);
+        state.update(Message::Worktree(WorktreeMsg::RenameStarted(
+            dir.to_string(),
+        )));
+        state.update(Message::Worktree(WorktreeMsg::RenameTextChanged(
+            "Same".to_string(),
+        )));
+        state.update(Message::Worktree(WorktreeMsg::RenameConfirmed));
     }
     // Identity stays distinct even though the displayed names collide (spec Edge Cases).
     assert_eq!(state.worktree_display_name("feat-a"), "Same");
@@ -193,13 +206,19 @@ fn duplicate_worktree_display_names_are_allowed() {
 #[test]
 fn worktree_hover_sets_and_clears() {
     let mut state = State::default();
-    state.update(Message::WorktreeHovered("feat-a".to_string()));
+    state.update(Message::Worktree(WorktreeMsg::Hovered(
+        "feat-a".to_string(),
+    )));
     assert_eq!(state.hovered_worktree.as_deref(), Some("feat-a"));
     // A stale exit from a different row does not clear the current hover.
-    state.update(Message::WorktreeUnhovered("feat-b".to_string()));
+    state.update(Message::Worktree(WorktreeMsg::Unhovered(
+        "feat-b".to_string(),
+    )));
     assert_eq!(state.hovered_worktree.as_deref(), Some("feat-a"));
     // Leaving the hovered row clears it.
-    state.update(Message::WorktreeUnhovered("feat-a".to_string()));
+    state.update(Message::Worktree(WorktreeMsg::Unhovered(
+        "feat-a".to_string(),
+    )));
     assert!(state.hovered_worktree.is_none());
 }
 

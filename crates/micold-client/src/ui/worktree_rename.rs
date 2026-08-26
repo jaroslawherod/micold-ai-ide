@@ -4,6 +4,7 @@
 
 use crate::app::{Message, State};
 use crate::features::window::FieldId;
+use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree::WorktreeRenameDraft;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{self, Button, SurfaceKind, Text, TextField, TypeRole};
@@ -26,8 +27,8 @@ pub fn modal<'a>(
     let input = TextField::new("", &draft.text, r)
         .label("Worktree name")
         .track_focus(FieldId::RenameWorktreeName, focused)
-        .on_input(Message::WorktreeRenameTextChanged)
-        .on_submit(Message::WorktreeRenameConfirmed);
+        .on_input(|text| Message::Worktree(WorktreeMsg::RenameTextChanged(text)))
+        .on_submit(Message::Worktree(WorktreeMsg::RenameConfirmed));
 
     let mut fields = material::dialog::fields(column![
         Text::new("Rename worktree", TypeRole::Headline, r),
@@ -49,8 +50,8 @@ pub fn modal<'a>(
     }
 
     let actions = material::dialog::actions(row![
-        Button::filled("Rename", r).on_press(Message::WorktreeRenameConfirmed),
-        Button::outlined("Cancel", r).on_press(Message::WorktreeRenameCancelled),
+        Button::filled("Rename", r).on_press(Message::Worktree(WorktreeMsg::RenameConfirmed)),
+        Button::outlined("Cancel", r).on_press(Message::Worktree(WorktreeMsg::RenameCancelled)),
     ]);
 
     let dialog = material::Surface::new(

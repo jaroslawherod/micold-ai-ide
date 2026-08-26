@@ -23,6 +23,7 @@
 use iced::Task;
 
 use micold_client::app::Message;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::Outcome;
 use micold_client::selection;
 
@@ -84,6 +85,7 @@ pub fn on_paste_requested(app: &mut App) -> Task<Message> {
 /// feature for the display name), so there is nothing left here to decide and no second
 /// emitter to write. Translating it is all the shell does.
 pub fn on_text_copy_requested(app: &mut App, text: String) -> Task<Message> {
-    app.core.update(Message::WorktreeMenuDismissed);
+    app.core
+        .update(Message::Worktree(WorktreeMsg::MenuDismissed));
     interpret(Outcome::ClipboardWrite(text))
 }

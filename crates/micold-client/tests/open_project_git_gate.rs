@@ -2,6 +2,7 @@
 
 use micold_client::app::{Message, State};
 use micold_client::features::notifications::Msg as NotificationsMsg;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_core::git::{FakeGit, Git};
 use std::path::Path;
 
@@ -46,7 +47,7 @@ fn refusal_message_is_surfaced_to_the_user() {
 fn refusal_persists_until_dismissed() {
     let mut state = State::default();
     state.update(Message::ProjectOpenRefused("nope".to_string()));
-    state.update(Message::WorktreesLoaded(vec![]));
+    state.update(Message::Worktree(WorktreeMsg::Loaded(vec![])));
     assert!(state.notify.visible().is_some());
 
     state.update(Message::Notifications(NotificationsMsg::Dismissed));

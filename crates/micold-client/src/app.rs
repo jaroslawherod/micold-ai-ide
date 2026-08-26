@@ -104,50 +104,16 @@ pub enum Message {
     /// Opening a directory as a project was refused because it is not a git repo (FR-001a).
     /// The binary performs the `Git::is_repo_root` check and dispatches this on refusal.
     ProjectOpenRefused(String),
-    /// The binary discovered/re-discovered the active project's worktrees (FR-018).
-    WorktreesLoaded(Vec<Worktree>),
+    /// Everything the user or the daemon can say about a worktree (feature 028, FR-001).
+    /// Eighteen variants moved behind this one; see [`crate::features::worktree::Msg`].
+    Worktree(crate::features::worktree::Msg),
     /// Everything the user can do to the sidebar (feature 028, FR-001). Ten variants moved
     /// behind this one; see [`crate::features::sidebar::Msg`].
     Sidebar(crate::features::sidebar::Msg),
 
     // ---- Feature 008: worktree sidebar refinement ----
-    /// Open (or close, if already open) a worktree's right-click context menu, by `dir_name`,
-    /// anchored at the press point in window pixels (018 FR-029d).
-    WorktreeMenuToggled(String, (u16, u16)),
-    /// Dismiss the worktree context menu (outside click, or after an action is chosen).
-    WorktreeMenuDismissed,
-    /// Request deletion of a worktree; opens the confirm dialog (FR-018), by `dir_name`.
-    WorktreeDeleteRequested(String),
 
     // ---- 016 BUG-002: showing a worktree the app does not manage ----
-    /// Ask the daemon to show the worktree at this absolute path among the project's own
-    /// (FR-027). Raised from the blocked-branch explanation, which is where the user meets a
-    /// holder they cannot otherwise reach.
-    WorktreeIncludeRequested(PathBuf),
-    /// The daemon is now showing it. The row also arrives with the next catalog push; this is what
-    /// makes it appear at the moment the user asked rather than at the next refresh.
-    WorktreeIncluded(Worktree),
-    /// Stop showing an included worktree, by `dir_name` (FR-030). Nothing on disk is touched.
-    WorktreeExcludeRequested(String),
-    /// The daemon has stopped showing the worktree at this path.
-    WorktreeExcluded(PathBuf),
-    /// Confirm deletion. The binary terminates the worktree's sessions, removes its git
-    /// worktree + branch and directory, then persists (FR-020); the reducer drops the records.
-    WorktreeDeleteConfirmed,
-    /// Dismiss the delete confirmation without removing anything (FR-021).
-    WorktreeDeleteCancelled,
-    /// The delete confirmation's "also delete the branch" choice changed (feature 013,
-    /// FR-011/FR-012).
-    WorktreeDeleteKeepBranchToggled(bool),
-    /// Begin renaming a worktree's displayed name; opens the rename dialog (FR-013), by `dir_name`.
-    WorktreeRenameStarted(String),
-    /// The worktree-rename dialog's text changed.
-    WorktreeRenameTextChanged(String),
-    /// Confirm the worktree rename. Applies the display-name override if valid (FR-014); the
-    /// binary then persists (FR-015).
-    WorktreeRenameConfirmed,
-    /// Dismiss the worktree-rename dialog without applying.
-    WorktreeRenameCancelled,
     /// Content scrolled underneath an open floating surface (feature 017, FR-009). The third of
     /// the three dismissal triggers, and the one no widget used to report — see
     /// [`micold_core::overlay::Trigger::ScrollBeneath`]. Emitted unconditionally by the scrollable
@@ -192,13 +158,6 @@ pub enum Message {
     /// value for this; the
     /// component now says it, which is the only part of a transition an application still needs.
     OverlayTransitionFinished,
-    /// The pointer entered a worktree row (feature 008), by `dir_name`; reveals its row actions.
-    WorktreeHovered(String),
-    /// The pointer left a worktree row (feature 008), by `dir_name`; hides its row actions.
-    WorktreeUnhovered(String),
-    /// Copy arbitrary displayed text (e.g. a worktree name) to the system clipboard. The binary
-    /// performs the actual clipboard write; the reducer has no state to update.
-    TextCopyRequested(String),
     /// Everything the add-worktree wizard says about itself (feature 021, T064 — FR-003).
     ///
     /// **The only nested unit in the application**, and research.md §5 tested every feature against
@@ -803,54 +762,16 @@ impl State {
                 let outcomes = crate::features::project::open_refused(self, message);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::WorktreesLoaded(worktrees) => {
+            Message::Worktree(msg) => {
                 // The root is the only interpreter (FR-022, contract O3), and this is where the
                 // draining loop finally has something to drain.
-                let outcomes = crate::features::worktree::loaded(self, worktrees);
+                let outcomes = crate::features::worktree::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::Sidebar(msg) => {
                 let outcomes = crate::features::sidebar::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::WorktreeMenuToggled(dir, anchor) => {
-                let outcomes = crate::features::worktree::menu_toggled(self, dir, anchor);
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::WorktreeMenuDismissed => crate::features::worktree::menu_dismissed(self),
-            // 016 BUG-002. The request itself changes nothing here: the daemon owns the included
-            // set, as it owns every other piece of durable state, and answers with the worktree as
-            // its own discovery sees it.
-            Message::WorktreeIncludeRequested(_) => {}
-            Message::WorktreeIncluded(worktree) => {
-                let outcomes = crate::features::worktree::included(self, worktree);
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-
-            Message::WorktreeExcludeRequested(_) => crate::features::worktree::exclude_requested(self),
-            Message::WorktreeExcluded(path) => crate::features::worktree::excluded(self, path),
-            Message::WorktreeDeleteRequested(dir) => crate::features::worktree::delete_requested(self, dir),
-            // Confirming *requests* the delete; it does not perform it. The daemon owns the git
-            // removal and the session records, and answers with `OperationOk` (which is followed by
-            // a `CatalogChanged` carrying git's refreshed truth) or `OperationError`.
-            //
-            // So this only dismisses the dialog. Dropping the row here instead — the previous
-            // behaviour — made every delete *look* like it succeeded: a delete git refused showed
-            // the worktree vanishing, then silently reappearing when the next catalog push restored
-            // it, which reads as the app resurrecting something the user deleted rather than as the
-            // failure it is. Leaving the row alone means a refusal simply leaves it in place, next
-            // to the error notification explaining why.
-            Message::WorktreeDeleteConfirmed => crate::features::worktree::delete_confirmed(self),
-            Message::WorktreeDeleteCancelled => crate::features::worktree::delete_cancelled(self),
-            Message::WorktreeDeleteKeepBranchToggled(keep) => {
-                crate::features::worktree::delete_keep_branch_toggled(self, keep)
-            }
-            Message::WorktreeRenameStarted(dir) => crate::features::worktree::rename_started(self, dir),
-            Message::WorktreeRenameTextChanged(text) => {
-                crate::features::worktree::rename_text_changed(self, text)
-            }
-            Message::WorktreeRenameConfirmed => crate::features::worktree::rename_confirmed(self),
-            Message::WorktreeRenameCancelled => crate::features::worktree::rename_cancelled(self),
             Message::TabStripScrolled { offset, width } => {
                 crate::features::session::tab_strip_scrolled(self, offset, width)
             }
@@ -859,8 +780,6 @@ impl State {
             }
             Message::ScrolledBeneathOverlay => self.dismiss_on_scroll_beneath(),
             Message::EscapePressed => self.dismiss_topmost(),
-            Message::WorktreeHovered(dir) => crate::features::worktree::hovered(self, dir),
-            Message::WorktreeUnhovered(dir) => crate::features::worktree::unhovered(self, dir),
             Message::WorktreeForm(msg) => {
                 let outcomes = crate::features::worktree_form::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
@@ -984,7 +903,6 @@ impl State {
             | Message::TerminalResized { .. }
             | Message::TerminalCopyRequested
             | Message::TerminalPasteRequested
-            | Message::TextCopyRequested(_)
             // The closing dialog's snapshot is a binary-owned render detail (`App::dismissing`),
             // so releasing it is the binary's business; the pure core never knew about it.
             | Message::OverlayTransitionFinished

@@ -5,6 +5,7 @@
 
 use crate::app::{Message, State};
 use crate::features::window::FieldId;
+use crate::features::worktree::Msg as WorktreeMsg;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{self, Button, Checkbox, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, row};
@@ -63,13 +64,13 @@ pub fn modal<'a>(
                 r,
             )
             .track_focus(FieldId::ConfirmDeleteAlsoBranch, focused)
-            .on_toggle(|checked| Message::WorktreeDeleteKeepBranchToggled(!checked)),
+            .on_toggle(|checked| Message::Worktree(WorktreeMsg::DeleteKeepBranchToggled(!checked))),
         );
     }
 
     let actions = material::dialog::actions(row![
-        Button::filled("Delete", r).on_press(Message::WorktreeDeleteConfirmed),
-        Button::outlined("Cancel", r).on_press(Message::WorktreeDeleteCancelled),
+        Button::filled("Delete", r).on_press(Message::Worktree(WorktreeMsg::DeleteConfirmed)),
+        Button::outlined("Cancel", r).on_press(Message::Worktree(WorktreeMsg::DeleteCancelled)),
     ]);
 
     let dialog = material::Surface::new(

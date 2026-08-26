@@ -93,7 +93,7 @@ fn confirm_removes_worktree_branch_and_kills_only_matching_sessions() {
 /// worktree recreated later with the same `dir_name` (hence the same transcript `cwd` encoding)
 /// would have its old sessions resurrected by reconciliation from their still-existing `claude`
 /// transcripts. Mirrors the fixed binary's confirmed-delete flow (`src/main.rs`
-/// `Message::WorktreeDeleteConfirmed`), which cannot be linked from an integration test — same
+/// `Message::Worktree(WorktreeMsg::DeleteConfirmed)`), which cannot be linked from an integration test — same
 /// reasoning as `tests/session_reconciliation.rs`.
 #[test]
 fn confirmed_delete_marks_the_worktrees_sessions_archived_but_not_others() {

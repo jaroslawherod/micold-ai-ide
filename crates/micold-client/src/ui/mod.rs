@@ -43,6 +43,7 @@ use crate::features::connection::Msg as ConnectionMsg;
 use crate::features::help::Msg as HelpMsg;
 use crate::features::notifications::Msg as NotificationsMsg;
 use crate::features::sidebar::Msg as SidebarMsg;
+use crate::features::worktree::Msg as WorktreeMsg;
 use crate::icons::{icon_role, Icon, IconSurface};
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length, Subscription};
@@ -326,7 +327,7 @@ pub fn view<'a>(
                 material::menu_panel_size(items.len()),
                 state.window_size,
             );
-            material::MenuOverlay::new(items, Message::WorktreeMenuDismissed, roles)
+            material::MenuOverlay::new(items, Message::Worktree(WorktreeMsg::MenuDismissed), roles)
                 .anchor(iced::Point::new(x as f32, y as f32))
                 .into()
         });
@@ -475,12 +476,12 @@ fn worktree_menu_items(
         material::MenuItem::new(
             Icon::Copy,
             "Copy name",
-            Message::TextCopyRequested(display_name.to_string()),
+            Message::Worktree(WorktreeMsg::TextCopyRequested(display_name.to_string())),
         ),
         material::MenuItem::new(
             Icon::Rename,
             "Rename",
-            Message::WorktreeRenameStarted(dir.to_string()),
+            Message::Worktree(WorktreeMsg::RenameStarted(dir.to_string())),
         ),
     ];
     // 016 BUG-002 (FR-030): inclusion is reversible from the row it produced. Offered only for the
@@ -490,13 +491,13 @@ fn worktree_menu_items(
         items.push(material::MenuItem::new(
             Icon::Close,
             "Stop showing",
-            Message::WorktreeExcludeRequested(dir.to_string()),
+            Message::Worktree(WorktreeMsg::ExcludeRequested(dir.to_string())),
         ));
     }
     items.push(material::MenuItem::new(
         Icon::Unavailable,
         "Delete",
-        Message::WorktreeDeleteRequested(dir.to_string()),
+        Message::Worktree(WorktreeMsg::DeleteRequested(dir.to_string())),
     ));
     items
 }

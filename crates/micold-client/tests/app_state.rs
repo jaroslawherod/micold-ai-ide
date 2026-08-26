@@ -5,6 +5,7 @@ use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::window::FieldId;
 use micold_client::features::window::Msg as WindowMsg;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::ui::terminal::StripTab;
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
@@ -221,7 +222,7 @@ fn a_worktree_list_change_clears_a_stale_create_failure() {
     ));
     assert_eq!(state.worktree_error.as_deref(), Some("boom"));
 
-    state.update(Message::WorktreesLoaded(vec![]));
+    state.update(Message::Worktree(WorktreeMsg::Loaded(vec![])));
     assert!(
         state.worktree_error.is_none(),
         "discovery answering makes a failure against the previous list stale"
@@ -239,13 +240,13 @@ fn an_include_clears_a_stale_create_failure_too() {
         micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
     ));
 
-    state.update(Message::WorktreeIncluded(Worktree {
+    state.update(Message::Worktree(WorktreeMsg::Included(Worktree {
         dir_name: "feat-x".to_string(),
         path: PathBuf::from("/p/.claude/worktrees/feat-x"),
         branch: Some("feat/x".to_string()),
         status: WorktreeStatus::Valid,
         included: true,
-    }));
+    })));
     assert!(state.worktree_error.is_none());
     assert_eq!(state.worktrees.len(), 1, "the include still lands");
 }
@@ -449,12 +450,14 @@ fn delete_requested_opens_confirm_then_confirmed_only_dismisses_the_dialog() {
     let mut state = state_with_worktree_and_session("feat-x");
     assert_eq!(state.active_sessions().len(), 1);
 
-    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
+    state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+        "feat-x".to_string(),
+    )));
     assert_eq!(open_dialog(&state), Some("confirm_worktree_delete"));
     assert_eq!(state.worktree_delete_target.as_deref(), Some("feat-x"));
     assert!(state.worktree_menu_open.is_none());
 
-    state.update(Message::WorktreeDeleteConfirmed);
+    state.update(Message::Worktree(WorktreeMsg::DeleteConfirmed));
     assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_delete_target.is_none());
     assert_eq!(
@@ -471,8 +474,10 @@ fn delete_requested_opens_confirm_then_confirmed_only_dismisses_the_dialog() {
 #[test]
 fn delete_cancelled_changes_nothing() {
     let mut state = state_with_worktree_and_session("feat-x");
-    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
-    state.update(Message::WorktreeDeleteCancelled);
+    state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+        "feat-x".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::DeleteCancelled));
     assert_eq!(open_dialog(&state), None);
     assert!(state.worktree_delete_target.is_none());
     assert_eq!(state.active_sessions().len(), 1, "session untouched");
@@ -482,8 +487,13 @@ fn delete_cancelled_changes_nothing() {
 #[test]
 fn escape_cancels_confirm_delete() {
     let mut state = state_with_worktree_and_session("feat-x");
-    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
-    assert_eq!(on_escape(&state), Some(Message::WorktreeDeleteCancelled));
+    state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+        "feat-x".to_string(),
+    )));
+    assert_eq!(
+        on_escape(&state),
+        Some(Message::Worktree(WorktreeMsg::DeleteCancelled))
+    );
 }
 
 // --- Feature 013 US2: delete confirmation's branch-deletion choice ---
@@ -491,26 +501,38 @@ fn escape_cancels_confirm_delete() {
 #[test]
 fn delete_requested_resets_keep_branch_even_if_previously_set() {
     let mut state = state_with_worktree_and_session("feat-x");
-    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
-    state.update(Message::WorktreeDeleteKeepBranchToggled(true));
+    state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+        "feat-x".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::DeleteKeepBranchToggled(
+        true,
+    )));
     assert!(state.worktree_delete_keep_branch);
 
     // Cancel and request again on a different worktree — the choice must not carry over.
-    state.update(Message::WorktreeDeleteCancelled);
-    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
+    state.update(Message::Worktree(WorktreeMsg::DeleteCancelled));
+    state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+        "feat-x".to_string(),
+    )));
     assert!(!state.worktree_delete_keep_branch);
 }
 
 #[test]
 fn delete_keep_branch_toggled_sets_the_field() {
     let mut state = state_with_worktree_and_session("feat-x");
-    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
+    state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+        "feat-x".to_string(),
+    )));
     assert!(!state.worktree_delete_keep_branch, "defaults to delete");
 
-    state.update(Message::WorktreeDeleteKeepBranchToggled(true));
+    state.update(Message::Worktree(WorktreeMsg::DeleteKeepBranchToggled(
+        true,
+    )));
     assert!(state.worktree_delete_keep_branch);
 
-    state.update(Message::WorktreeDeleteKeepBranchToggled(false));
+    state.update(Message::Worktree(WorktreeMsg::DeleteKeepBranchToggled(
+        false,
+    )));
     assert!(!state.worktree_delete_keep_branch);
 }
 
@@ -527,9 +549,13 @@ fn worktree_rename_changes_display_only_not_branch_or_path() {
         .clone();
     let tags_before = state.worktree_tree()[0].tags.clone();
 
-    state.update(Message::WorktreeRenameStarted("feat-x".to_string()));
-    state.update(Message::WorktreeRenameTextChanged("Renamed".to_string()));
-    state.update(Message::WorktreeRenameConfirmed);
+    state.update(Message::Worktree(WorktreeMsg::RenameStarted(
+        "feat-x".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameTextChanged(
+        "Renamed".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameConfirmed));
 
     assert_eq!(state.worktree_display_name("feat-x"), "Renamed");
     let after = state
@@ -548,8 +574,13 @@ fn worktree_rename_changes_display_only_not_branch_or_path() {
 #[test]
 fn escape_cancels_worktree_rename() {
     let mut state = state_with_worktree_and_session("feat-x");
-    state.update(Message::WorktreeRenameStarted("feat-x".to_string()));
-    assert_eq!(on_escape(&state), Some(Message::WorktreeRenameCancelled));
+    state.update(Message::Worktree(WorktreeMsg::RenameStarted(
+        "feat-x".to_string(),
+    )));
+    assert_eq!(
+        on_escape(&state),
+        Some(Message::Worktree(WorktreeMsg::RenameCancelled))
+    );
 }
 
 // --- Feature 014 US3: everything derived from the list stays consistent ---
@@ -607,14 +638,18 @@ fn rename_override_for_a_hidden_worktree_survives_reload() {
     let agent_dir = agent.dir_name.clone();
     state.worktrees.push(agent.clone());
 
-    state.update(Message::WorktreeRenameStarted(agent_dir.clone()));
-    state.update(Message::WorktreeRenameTextChanged("Scratch".to_string()));
-    state.update(Message::WorktreeRenameConfirmed);
+    state.update(Message::Worktree(WorktreeMsg::RenameStarted(
+        agent_dir.clone(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameTextChanged(
+        "Scratch".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameConfirmed));
     assert_eq!(state.worktree_display_name(&agent_dir), "Scratch");
 
     // Re-discovery still reports both worktrees.
     let all = state.worktrees.clone();
-    state.update(Message::WorktreesLoaded(all));
+    state.update(Message::Worktree(WorktreeMsg::Loaded(all)));
     assert_eq!(
         state.worktree_display_name(&agent_dir),
         "Scratch",

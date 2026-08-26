@@ -9,6 +9,7 @@
 
 use crate::app::{Message, State};
 use crate::features::window::FieldId;
+use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::{
     BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
@@ -405,10 +406,9 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
             BranchSituation::Blocked { branch, reason } => {
                 let mut actions = row![].spacing(spacing::SM);
                 if let BlockReason::CheckedOutOutsideApp { path } = reason {
-                    actions = actions.push(
-                        Button::filled("Include that worktree", r)
-                            .on_press(Message::WorktreeIncludeRequested(path.clone())),
-                    );
+                    actions = actions.push(Button::filled("Include that worktree", r).on_press(
+                        Message::Worktree(WorktreeMsg::IncludeRequested(path.clone())),
+                    ));
                 }
                 column![
                     Text::new(reason.explain(branch), TypeRole::Body, r).tint(r.error),

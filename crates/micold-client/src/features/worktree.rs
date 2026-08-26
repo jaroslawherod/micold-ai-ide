@@ -134,7 +134,8 @@ impl FloatingSurface for WorktreeContextMenu {
     }
 
     fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::ContextMenu).cancelled_by(Message::WorktreeMenuDismissed)
+        DismissalRules::for_layer(Layer::ContextMenu)
+            .cancelled_by(Message::Worktree(Msg::MenuDismissed))
     }
 }
 
@@ -161,7 +162,8 @@ impl FloatingSurface for ConfirmWorktreeDeleteDialog {
     }
 
     fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::WorktreeDeleteCancelled)
+        DismissalRules::for_layer(Layer::Dialog)
+            .cancelled_by(Message::Worktree(Msg::DeleteCancelled))
     }
 }
 
@@ -188,7 +190,8 @@ impl FloatingSurface for RenameWorktreeDialog {
     }
 
     fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::WorktreeRenameCancelled)
+        DismissalRules::for_layer(Layer::Dialog)
+            .cancelled_by(Message::Worktree(Msg::RenameCancelled))
     }
 }
 
@@ -374,4 +377,101 @@ pub fn unhovered(state: &mut State, dir: String) {
     if state.hovered_worktree.as_deref() == Some(dir.as_str()) {
         state.hovered_worktree = None;
     }
+}
+
+/// Everything the user or the daemon can say about a worktree (feature 028, FR-001).
+///
+/// # The variants kept their meaning and lost their prefix
+///
+/// Seventeen began with `Worktree` and do not any more — the type says which thing (contract M1),
+/// so `WorktreeDeleteKeepBranchToggled` is `Msg::DeleteKeepBranchToggled`. The plural in
+/// `WorktreesLoaded` went with it: `Msg::Loaded` is the list arriving, and the list is what this
+/// feature is.
+///
+/// [`Msg::TextCopyRequested`] is the odd one and stays as it is. Its name says nothing about
+/// worktrees, but its single emit site copies a worktree's name from the sidebar
+/// (research.md §R2), so this is the feature that owns it. Renaming it to something
+/// worktree-shaped would claim a generality it does not have; leaving the name alone and letting
+/// the wrapper say who owns it is the honest version.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Msg {
+    /// The binary discovered/re-discovered the active project's worktrees (FR-018).
+    Loaded(Vec<Worktree>),
+    /// Open (or close, if already open) a worktree's right-click context menu, by `dir_name`,
+    /// anchored at the press point in window pixels (018 FR-029d).
+    MenuToggled(String, (u16, u16)),
+    /// Dismiss the worktree context menu (outside click, or after an action is chosen).
+    MenuDismissed,
+    /// Request deletion of a worktree; opens the confirm dialog (FR-018), by `dir_name`.
+    DeleteRequested(String),
+    /// Ask the daemon to show the worktree at this absolute path among the project's own
+    /// (016 BUG-002, FR-027). Raised from the blocked-branch explanation, which is where the user
+    /// meets a holder they cannot otherwise reach.
+    IncludeRequested(std::path::PathBuf),
+    /// The daemon is now showing it. The row also arrives with the next catalog push; this is what
+    /// makes it appear at the moment the user asked rather than at the next refresh.
+    Included(Worktree),
+    /// Stop showing an included worktree, by `dir_name` (FR-030). Nothing on disk is touched.
+    ExcludeRequested(String),
+    /// The daemon has stopped showing the worktree at this path.
+    Excluded(std::path::PathBuf),
+    /// Confirm deletion. The binary terminates the worktree's sessions, removes its git
+    /// worktree + branch and directory, then persists (FR-020); the reducer drops the records.
+    DeleteConfirmed,
+    /// Dismiss the delete confirmation without removing anything (FR-021).
+    DeleteCancelled,
+    /// The delete confirmation's "also delete the branch" choice changed (feature 013,
+    /// FR-011/FR-012).
+    DeleteKeepBranchToggled(bool),
+    /// Begin renaming a worktree's displayed name; opens the rename dialog (FR-013), by `dir_name`.
+    RenameStarted(String),
+    /// The worktree-rename dialog's text changed.
+    RenameTextChanged(String),
+    /// Confirm the worktree rename. Applies the display-name override if valid (FR-014); the
+    /// binary then persists (FR-015).
+    RenameConfirmed,
+    /// Dismiss the worktree-rename dialog without applying.
+    RenameCancelled,
+    /// The pointer entered a worktree row (feature 008), by `dir_name`; reveals its row actions.
+    Hovered(String),
+    /// The pointer left a worktree row (feature 008), by `dir_name`; hides its row actions.
+    Unhovered(String),
+    /// Copy arbitrary displayed text (a worktree name) to the system clipboard. The binary
+    /// performs the actual clipboard write; the reducer has no state to update.
+    TextCopyRequested(String),
+}
+
+/// The pure half of this feature's reducer surface: shape A (contract M2).
+///
+/// All eighteen arms are here. Five of them additionally need an effect — the daemon asked to
+/// include, exclude, delete or rename, and the clipboard written — and those five are matched a
+/// second time in `main.rs`, which runs the effect and lets the message fall through to here.
+/// That is the split `worktree_form` established and M2 names as the reference: by *effect*, not
+/// by variant, so nothing about a delete is duplicated between the two halves.
+pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+    match msg {
+        Msg::Loaded(worktrees) => return loaded(state, worktrees),
+        Msg::MenuToggled(dir, anchor) => return menu_toggled(state, dir, anchor),
+        Msg::Included(worktree) => return included(state, worktree),
+        Msg::MenuDismissed => menu_dismissed(state),
+        // The request itself changes nothing here: the daemon owns the included set, as it owns
+        // every other piece of durable state, and answers with the worktree as its own discovery
+        // sees it (016 BUG-002).
+        Msg::IncludeRequested(_) => {}
+        // The clipboard is the binary's; the reducer has no state to update.
+        Msg::TextCopyRequested(_) => {}
+        Msg::ExcludeRequested(_) => exclude_requested(state),
+        Msg::Excluded(path) => excluded(state, path),
+        Msg::DeleteRequested(dir) => delete_requested(state, dir),
+        Msg::DeleteConfirmed => delete_confirmed(state),
+        Msg::DeleteCancelled => delete_cancelled(state),
+        Msg::DeleteKeepBranchToggled(keep) => delete_keep_branch_toggled(state, keep),
+        Msg::RenameStarted(dir) => rename_started(state, dir),
+        Msg::RenameTextChanged(text) => rename_text_changed(state, text),
+        Msg::RenameConfirmed => rename_confirmed(state),
+        Msg::RenameCancelled => rename_cancelled(state),
+        Msg::Hovered(dir) => hovered(state, dir),
+        Msg::Unhovered(dir) => unhovered(state, dir),
+    }
+    Vec::new()
 }

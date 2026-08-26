@@ -15,6 +15,7 @@ use crate::shell::daemon_sync::PendingOp;
 use micold_client::app::{Message, State};
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::session::SelectKind;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::worktree_form::Msg as FormMsg;
 use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
@@ -540,7 +541,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::RenameConfirmed => shell::daemon_sync::on_rename_confirmed(app),
         Message::ProjectForgetConfirmed => shell::daemon_sync::on_project_forget_confirmed(app),
-        Message::WorktreeRenameConfirmed => shell::daemon_sync::on_worktree_rename_confirmed(app),
+        Message::Worktree(WorktreeMsg::RenameConfirmed) => {
+            shell::daemon_sync::on_worktree_rename_confirmed(app)
+        }
         Message::WorktreeForm(FormMsg::Submitted) => {
             shell::daemon_sync::on_add_worktree_submitted(app)
         }
@@ -631,7 +634,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::TerminalCopyRequested => shell::clipboard::on_copy_requested(app),
         Message::TerminalPasteRequested => shell::clipboard::on_paste_requested(app),
-        Message::TextCopyRequested(text) => shell::clipboard::on_text_copy_requested(app, text),
+        Message::Worktree(WorktreeMsg::TextCopyRequested(text)) => {
+            shell::clipboard::on_text_copy_requested(app, text)
+        }
         Message::Settings(msg) => shell::settings::update(app, msg),
         Message::TerminalTick => {
             // Obsolete under the daemon: output arrives as streamed grid frames, titles arrive via
@@ -654,11 +659,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             shell::os_theme::redetect_on_focus(app, focused);
             Task::none()
         }
-        Message::WorktreeDeleteConfirmed => shell::daemon_sync::on_worktree_delete_confirmed(app),
-        Message::WorktreeIncludeRequested(path) => {
+        Message::Worktree(WorktreeMsg::DeleteConfirmed) => {
+            shell::daemon_sync::on_worktree_delete_confirmed(app)
+        }
+        Message::Worktree(WorktreeMsg::IncludeRequested(path)) => {
             shell::daemon_sync::on_worktree_include_requested(app, path)
         }
-        Message::WorktreeExcludeRequested(dir) => {
+        Message::Worktree(WorktreeMsg::ExcludeRequested(dir)) => {
             shell::daemon_sync::on_worktree_exclude_requested(app, dir)
         }
         other => {

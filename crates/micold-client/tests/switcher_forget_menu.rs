@@ -12,6 +12,7 @@ use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::clamp_menu_anchor;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::window::Msg as WindowMsg;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::PathBuf;
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
@@ -69,7 +70,7 @@ fn opening_any_other_popover_closes_the_project_menu() {
         Message::Help(HelpMsg::MenuToggled),
         Message::ProjectSwitcherToggled,
         Message::Sidebar(SidebarMsg::FilterMenuToggled),
-        Message::WorktreeMenuToggled("w1".into(), (100, 100)),
+        Message::Worktree(WorktreeMsg::MenuToggled("w1".into(), (100, 100))),
     ] {
         let mut st = State::default();
         st.update(Message::ProjectMenuToggled(PathBuf::from("/a"), (100, 100)));

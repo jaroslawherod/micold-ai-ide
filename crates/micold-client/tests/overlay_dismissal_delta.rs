@@ -22,6 +22,7 @@
 
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{Message, State};
@@ -187,7 +188,7 @@ fn escape_still_reaches_exactly_what_it_used_to() {
         (
             "confirm_worktree_delete",
             |s| s.worktree_delete_target = Some("wt".to_string()),
-            Message::WorktreeDeleteCancelled,
+            Message::Worktree(WorktreeMsg::DeleteCancelled),
         ),
         (
             "rename_worktree",
@@ -198,7 +199,7 @@ fn escape_still_reaches_exactly_what_it_used_to() {
                     error: None,
                 })
             },
-            Message::WorktreeRenameCancelled,
+            Message::Worktree(WorktreeMsg::RenameCancelled),
         ),
         (
             "confirm_session_remove",

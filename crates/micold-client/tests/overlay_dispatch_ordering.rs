@@ -19,6 +19,7 @@
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{on_escape, Message, State};
@@ -68,7 +69,7 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
     (
         "confirm_worktree_delete",
         |s| s.worktree_delete_target = Some("wt".to_string()),
-        Message::WorktreeDeleteCancelled,
+        Message::Worktree(WorktreeMsg::DeleteCancelled),
     ),
     (
         "rename_worktree",
@@ -79,7 +80,7 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
                 error: None,
             })
         },
-        Message::WorktreeRenameCancelled,
+        Message::Worktree(WorktreeMsg::RenameCancelled),
     ),
     (
         "confirm_session_remove",

@@ -40,6 +40,7 @@
 //! way for the same reason — `App` is the binary's type. Each fixture sits with what it is *of*,
 //! not with who happens to call it.
 
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::{Path, PathBuf};
 
 use iced::Task;
@@ -408,19 +409,21 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // next catalog push — which also arrives, and agrees.
             Some(PendingOp::WorktreeInclude(_)) => {
                 if let OperationResult::WorktreeIncluded { worktree } = result {
-                    app.core
-                        .update(Message::WorktreeIncluded(micold_core::worktree::Worktree {
+                    app.core.update(Message::Worktree(WorktreeMsg::Included(
+                        micold_core::worktree::Worktree {
                             dir_name: worktree.dir_name,
                             path: worktree.path,
                             branch: worktree.branch,
                             status: wire_to_worktree_status(worktree.status),
                             included: worktree.included,
-                        }));
+                        },
+                    )));
                 }
             }
             Some(PendingOp::WorktreeExclude(_)) => {
                 if let OperationResult::WorktreeExcluded { path } = result {
-                    app.core.update(Message::WorktreeExcluded(path));
+                    app.core
+                        .update(Message::Worktree(WorktreeMsg::Excluded(path)));
                 }
             }
             // Same staleness guard: a listing for a project that is no longer the active
@@ -734,7 +737,8 @@ pub fn on_worktree_rename_confirmed(app: &mut App) -> Task<Message> {
         .as_ref()
         .map(|d| (d.dir_name.clone(), d.text.trim().to_string()));
     let project = app.core.workspace.active.clone();
-    app.core.update(Message::WorktreeRenameConfirmed);
+    app.core
+        .update(Message::Worktree(WorktreeMsg::RenameConfirmed));
     // Only send if the pure update accepted it (a rejected name leaves the draft in place).
     if app.core.worktree_rename_draft.is_none() {
         if let (Some((dir_name, display_name)), Some(project)) = (draft, project) {
@@ -1181,7 +1185,8 @@ pub fn on_worktree_exclude_requested(app: &mut App, dir: String) -> Task<Message
             }
         });
     }
-    app.core.update(Message::WorktreeExcludeRequested(dir));
+    app.core
+        .update(Message::Worktree(WorktreeMsg::ExcludeRequested(dir)));
     Task::none()
 }
 
@@ -1209,7 +1214,8 @@ pub fn on_worktree_delete_confirmed(app: &mut App) -> Task<Message> {
     }
     // Optimistically drop the records + dismiss the dialog; the daemon's `CatalogChanged`
     // reconciles the truth (re-adding the worktree on a failed delete).
-    app.core.update(Message::WorktreeDeleteConfirmed);
+    app.core
+        .update(Message::Worktree(WorktreeMsg::DeleteConfirmed));
     Task::none()
 }
 

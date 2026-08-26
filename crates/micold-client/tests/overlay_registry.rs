@@ -33,6 +33,7 @@
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{on_escape, Message, State};
@@ -96,12 +97,12 @@ fn dialogs() -> Vec<Dialog> {
         },
         Dialog {
             id: "confirm_worktree_delete",
-            cancel: Message::WorktreeDeleteCancelled,
+            cancel: Message::Worktree(WorktreeMsg::DeleteCancelled),
             open: |state| state.worktree_delete_target = Some("wt".to_string()),
         },
         Dialog {
             id: "rename_worktree",
-            cancel: Message::WorktreeRenameCancelled,
+            cancel: Message::Worktree(WorktreeMsg::RenameCancelled),
             open: |state| {
                 state.worktree_rename_draft = Some(WorktreeRenameDraft {
                     dir_name: "wt".to_string(),
@@ -619,10 +620,14 @@ fn a_dialog_draws_from_its_own_state() {
             s.update(Message::Settings(SettingsMsg::Opened))
         }),
         ("confirm_worktree_delete", |s| {
-            s.update(Message::WorktreeDeleteRequested("feat-x".to_string()))
+            s.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+                "feat-x".to_string(),
+            )))
         }),
         ("rename_worktree", |s| {
-            s.update(Message::WorktreeRenameStarted("feat-x".to_string()))
+            s.update(Message::Worktree(WorktreeMsg::RenameStarted(
+                "feat-x".to_string(),
+            )))
         }),
         ("confirm_forget_project", |s| {
             s.update(Message::ProjectForgetRequested(std::path::PathBuf::from(

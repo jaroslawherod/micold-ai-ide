@@ -4,6 +4,7 @@
 use crate::app::{Message, State};
 use crate::features::sidebar::Msg as SidebarMsg;
 use crate::features::sidebar::TagFilter;
+use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::icons::Icon;
 use crate::ui::material::{
@@ -393,7 +394,7 @@ fn row_actions_cluster(
     cluster = cluster.push(action_icon(
         Icon::Delete,
         r.error,
-        Message::WorktreeDeleteRequested(dir.to_string()),
+        Message::Worktree(WorktreeMsg::DeleteRequested(dir.to_string())),
         "Delete this worktree",
         active,
         r,
@@ -459,11 +460,11 @@ fn build_items(
             .tags(tags)
             .on_right_press({
                 let dir = dir.clone();
-                move |point| Message::WorktreeMenuToggled(dir.clone(), point)
+                move |point| Message::Worktree(WorktreeMsg::MenuToggled(dir.clone(), point))
             })
             .hover(
-                Message::WorktreeHovered(dir.clone()),
-                Message::WorktreeUnhovered(dir.clone()),
+                Message::Worktree(WorktreeMsg::Hovered(dir.clone())),
+                Message::Worktree(WorktreeMsg::Unhovered(dir.clone())),
             )
             .expandable(
                 node.expanded,
