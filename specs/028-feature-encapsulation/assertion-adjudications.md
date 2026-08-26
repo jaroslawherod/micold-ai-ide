@@ -248,3 +248,24 @@ was: assert_eq!(restart_message(&state,id),MTerminalRestartRequested)
 ```
 was: assert_eq!(restart_message(&state,id),MTerminalRestartRequested)
 ```
+
+## T022 — G1's non-vacuity probe (FR-017)
+
+Not an adjudication; a record. `Message::ProbeAboutOpened` was added to `app::Message` with one
+arm, `crate::features::help::about_opened(self)`, and
+`cargo test -p micold-client --test root_vocabulary_is_cross_cutting` was run. The guard failed,
+naming the feature:
+
+```
+thread 'no_root_variant_belongs_to_one_feature' panicked at
+crates/micold-client/tests/root_vocabulary_is_cross_cutting.rs:513:5:
+the root vocabulary holds 1 variant(s) produced and consumed by exactly one feature (FR-013):
+  `Message::ProbeAboutOpened` — `help`
+```
+
+Two of the guard's other tests failed alongside it, and both are the guard working rather than
+noise: nothing emits a variant that was just invented, so `variants_with_no_producer_are_reported_
+not_failed` reported it as unrecorded, and the vocabulary count moved from 15 to 16. Three of six
+tests passed, so the run was a real run — an injection that fails to compile demonstrates nothing.
+
+Reverted with `git checkout -- crates/micold-client`; the six tests pass again.
