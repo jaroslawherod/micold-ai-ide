@@ -406,5 +406,37 @@ was: assert_eq!(state.focused_field,Some(FieldIAddWorktreeName))
 was: assert_eq!(state.focused_field,Some(FieldIRenameProjectName))
 ```
 
+## T031 — the add-worktree form's two fields moved behind `state.worktree_form`
+
+Two renames: `state.worktree_form` is `state.worktree_form.form` and `state.worktree_error` is
+`state.worktree_form.worktree_error`, because both are now members of
+`features::worktree_form::State`. The first drops a stutter rather than adding a segment — the
+qualifier already names the form, so `worktree_form.worktree_form` would say it twice — and the
+second keeps its full name because it is not the form's error: it also carries a refused project
+open (FR-001a), which happens with no form on screen. Seventeen assertions changed spelling and
+none changed meaning, across `tests/app_state.rs`,
+`tests/indeterminate_stops_with_its_operation.rs` and `tests/open_project_git_gate.rs`.
+
+Two of them read `state.worktree_form.as_ref().unwrap().error`, which is a **different** field —
+`WorktreeForm`'s own error, inside the form — and they change only in the segment before it. Both
+still ask the form about its own error, and the field they ask about did not move.
+
+```
+was: assert!(state.worktree_error.is_none())
+was: assert!(state.worktree_error.is_none(),"discoveryansweringmakesafailureagainstthepreviousliststale")
+was: assert!(state.worktree_form.as_ref().unwrap().error.is_none())
+was: assert!(state.worktree_form.as_ref().unwrap().error.is_some())
+was: assert!(state.worktree_form.is_none())
+was: assert!(state.worktree_form.is_some())
+was: assert!(state.worktree_form.is_some(),"formstaysopenforretry")
+was: assert_eq!(state.worktree_error.as_deref(),Some("boom"))
+was: assert_eq!(state.worktree_form.as_ref().map(|f|f.status),Some(WorktreeFormSCreating),"thecreatedidnotstart,sothistestwouldprovenothing")
+was: assert_eq!(state.worktree_form.as_ref().map(|f|f.status),Some(WorktreeFormSEditing),"thefixtureismeanttobeanopenformwithnothinginflight")
+was: assert_eq!(state.worktree_form.as_ref().unwrap().status,WorktreeFormSCreating)
+was: assert_eq!(state.worktree_form.as_ref().unwrap().status,WorktreeFormSEditing)
+was: assert_eq!(state.worktree_form.as_ref().unwrap().type_,None)
+was: assert_eq!(state.worktree_form.as_ref().unwrap().type_,Some(ConventionalTFeat))
+```
+
 T040 rolls these up for the phase; each move is adjudicated as it lands, so the freeze is green at
 every commit rather than only at the end (contract C.1).
