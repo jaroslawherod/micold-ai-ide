@@ -232,7 +232,7 @@ pub fn view<'a>(
         Message::Help(HelpMsg::MenuToggled),
         roles,
     )
-    .open(state.help_menu_open)
+    .open(state.help.help_menu_open)
     .into();
 
     // The project switcher panel — the same `MenuOverlay` the ⋮ menu is, carrying different items

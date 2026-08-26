@@ -20,6 +20,7 @@
 //! one. Nine rows replace nine variants. No property changed, nothing was weakened, and the
 //! assertion-freeze check flags the file with this paragraph as its explanation.
 
+use micold_client::features::help;
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
@@ -42,7 +43,11 @@ fn open_dialog(state: &State) -> Option<&'static str> {
 /// Open the About dialog, the stand-in for "a dialog" throughout this file.
 fn with_about() -> State {
     State {
-        about_open: true,
+        help: help::State {
+            about_open: true,
+            ..Default::default()
+        },
+
         ..State::default()
     }
 }
@@ -51,7 +56,7 @@ fn with_about() -> State {
 fn with_help_menu() -> State {
     let mut state = State::default();
     state.update(Message::Help(HelpMsg::MenuToggled));
-    assert!(state.help_menu_open, "precondition: the menu is open");
+    assert!(state.help.help_menu_open, "precondition: the menu is open");
     state
 }
 
@@ -109,7 +114,7 @@ fn a_menu_now_closes_when_the_list_beneath_it_scrolls() {
     let mut state = with_help_menu();
     state.update(Message::ScrolledBeneathOverlay);
     assert!(
-        !state.help_menu_open,
+        !state.help.help_menu_open,
         "the overflow menu must close when content scrolls beneath it"
     );
 }
@@ -119,7 +124,11 @@ fn a_menu_now_closes_when_the_list_beneath_it_scrolls() {
 #[test]
 fn every_non_modal_surface_closes_on_a_scroll_beneath() {
     let mut state = State {
-        help_menu_open: true,
+        help: help::State {
+            help_menu_open: true,
+            ..Default::default()
+        },
+
         project_switcher_open: true,
         sidebar_filter_open: true,
         ..State::default()
@@ -127,7 +136,7 @@ fn every_non_modal_surface_closes_on_a_scroll_beneath() {
 
     state.update(Message::ScrolledBeneathOverlay);
 
-    assert!(!state.help_menu_open, "overflow menu");
+    assert!(!state.help.help_menu_open, "overflow menu");
     assert!(!state.project_switcher_open, "project switcher");
     assert!(!state.sidebar_filter_open, "sidebar filter panel");
     assert!(state.project_menu_open.is_none(), "project context menu");
@@ -147,7 +156,7 @@ fn outside_click_dismissal_of_a_menu_is_unchanged() {
 
     let mut state = with_help_menu();
     state.update(Message::Help(HelpMsg::MenuToggled));
-    assert!(!state.help_menu_open);
+    assert!(!state.help.help_menu_open);
 }
 
 /// Escape closes what it always closed. Feature 017 changed which *other* gestures close a
@@ -158,7 +167,7 @@ fn escape_still_reaches_exactly_what_it_used_to() {
     let dialogs: &[(&str, fn(&mut State), Message)] = &[
         (
             "about",
-            |s| s.about_open = true,
+            |s| s.help.about_open = true,
             Message::Help(HelpMsg::AboutClosed),
         ),
         (
@@ -238,6 +247,6 @@ fn scrolling_with_nothing_open_changes_nothing() {
         open_dialog(&before),
         "an idle scroll must not touch the overlay"
     );
-    assert!(!state.help_menu_open);
+    assert!(!state.help.help_menu_open);
     assert!(!state.project_switcher_open);
 }

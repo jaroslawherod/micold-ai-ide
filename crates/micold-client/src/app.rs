@@ -121,23 +121,8 @@ pub enum Message {
 /// Root application state for the single main window.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
-    /// Whether the About dialog is open.
-    ///
-    /// The last remnant of the `Overlay` enum (feature 021, T037). That enum was a single slot
-    /// naming which of nine dialogs was showing, and eight of the nine already had a field of
-    /// their own saying the same thing — `selector`, `rename_draft`, `worktree_form`,
-    /// `settings_draft`, and the four confirm-dialog targets. The slot was a second copy of a fact
-    /// the state already held, kept in step by hand at twenty-five reducer sites. Each dialog now
-    /// reads its own state, and About, which had none, gets this.
-    ///
-    /// **What the enum bought and this does not**: two dialogs open at once was unrepresentable
-    /// (FR-015, Principle V). That invariant now belongs to [`State::clear_for_dialog`], which
-    /// closes whatever dialog is open before the next one is set up, and to
-    /// `one_dialog_at_a_time` in `tests/overlay_registry.rs`. A mechanism where there was a type;
-    /// recorded rather than glossed.
-    pub about_open: bool,
-    /// Whether the Help menu is currently expanded (transient UI affordance).
-    pub help_menu_open: bool,
+    /// What the help feature remembers -- see [`crate::features::help::State`].
+    pub help: crate::features::help::State,
     /// The known-projects catalog and the active working space (persisted). Per-story
     /// selector/rename working state is added alongside those stories.
     pub workspace: micold_core::workspace::Workspace,

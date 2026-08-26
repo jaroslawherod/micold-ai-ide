@@ -16,6 +16,7 @@
 //! Read a failure here as: the generic dispatch does not preserve an ordering rule the special-case
 //! code got right.
 
+use micold_client::features::help;
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
@@ -39,7 +40,7 @@ use micold_core::session::SessionId;
 const MODALS: &[(&str, fn(&mut State), Message)] = &[
     (
         "about",
-        |s| s.about_open = true,
+        |s| s.help.about_open = true,
         Message::Help(HelpMsg::AboutClosed),
     ),
     (
@@ -167,7 +168,7 @@ fn a_popover_alone_and_a_popover_over_a_modal_are_not_the_same_case() {
     // target -- which would pass the everyday test above while silently changing the tie-break.
     let mut alone = State::default();
     alone.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
-    let over_modal = modal_and_popover(|s| s.about_open = true);
+    let over_modal = modal_and_popover(|s| s.help.about_open = true);
 
     assert_ne!(
         on_escape(&alone),
@@ -184,7 +185,11 @@ fn a_popover_alone_and_a_popover_over_a_modal_are_not_the_same_case() {
 /// A state with all four popovers that `open_overlay` is responsible for clearing.
 fn every_dismissible_popover_open() -> State {
     State {
-        help_menu_open: true,
+        help: help::State {
+            help_menu_open: true,
+            ..Default::default()
+        },
+
         project_switcher_open: true,
         sidebar_filter_open: true,
         project_menu_open: Some(micold_client::features::project::ProjectMenu {
@@ -209,7 +214,7 @@ fn opening_a_modal_closes_the_popovers_floating_above_it() {
             "precondition: the modal opened"
         );
         assert!(
-            !state.help_menu_open,
+            !state.help.help_menu_open,
             "the overflow menu survived {name} opening"
         );
         assert!(
@@ -232,7 +237,7 @@ fn opening_a_modal_over_nothing_is_not_a_special_case() {
     let mut state = State::default();
 
     state.clear_for_dialog();
-    state.about_open = true;
+    state.help.about_open = true;
 
     assert_eq!(
         open_dialog(&state),

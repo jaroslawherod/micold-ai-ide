@@ -82,8 +82,7 @@ use std::path::{Path, PathBuf};
 /// `features/window.rs` rather than leaving the root entitled to decide about them (FR-002).
 const OWNERS: &[(&str, &str)] = &[
     // --- help ---------------------------------------------------------------------------------
-    ("about_open", "help"),
-    ("help_menu_open", "help"),
+    ("help", "help"),
     // --- project ------------------------------------------------------------------------------
     ("workspace.projects", "project"),
     ("workspace.active", "project"),

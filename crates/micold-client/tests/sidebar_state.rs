@@ -3,6 +3,7 @@
 use micold_client::app::{
     on_escape, Message, State, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
 };
+use micold_client::features::help;
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
@@ -255,7 +256,11 @@ fn sidebar_filter_panel_starts_closed() {
 #[test]
 fn sidebar_filter_menu_toggle_opens_and_closes_and_excludes_siblings() {
     let mut state = State {
-        help_menu_open: true,
+        help: help::State {
+            help_menu_open: true,
+            ..Default::default()
+        },
+
         ..Default::default()
     };
 
@@ -263,7 +268,7 @@ fn sidebar_filter_menu_toggle_opens_and_closes_and_excludes_siblings() {
     assert!(state.sidebar_filter_open);
     // Opening the filter panel closes the sibling popovers (mutual exclusion, symmetric with
     // the existing help::Msg::MenuToggled/project::Msg::SwitcherToggled pair).
-    assert!(!state.help_menu_open);
+    assert!(!state.help.help_menu_open);
     assert!(!state.project_switcher_open);
 
     state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));

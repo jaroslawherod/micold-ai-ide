@@ -932,7 +932,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "toolbar-overflow-menu-open",
             build: || {
                 let mut state = with_project();
-                state.help_menu_open = true;
+                state.help.help_menu_open = true;
                 StateUnderTest::new(state)
             },
             anchors: &[

@@ -33,6 +33,7 @@
 use std::path::PathBuf;
 
 use micold_client::app::State;
+use micold_client::features::help;
 use micold_client::features::project::RenameDraft;
 use micold_client::features::worktree::WorktreeRenameDraft;
 use micold_client::overlay::registry::Closing;
@@ -49,7 +50,7 @@ use micold_core::session::SessionId;
 /// the state it draws from, so the row has to build that state.
 #[allow(clippy::type_complexity)]
 const DIALOGS: &[(&str, fn(&mut State))] = &[
-    ("about", |state| state.about_open = true),
+    ("about", |state| state.help.about_open = true),
     ("project_selector", |state| {
         state.selector = Some(Selector::open_at(PathBuf::from("/tmp")))
     }),
@@ -188,16 +189,19 @@ fn a_snapshot_still_knows_how_to_draw_itself() {
 #[test]
 fn a_snapshot_does_not_follow_the_state_it_came_from() {
     let mut state = State {
-        about_open: true,
+        help: help::State {
+            about_open: true,
+            ..Default::default()
+        },
         ..Default::default()
     };
     let closing = Closing::of(&state).expect("About is open");
 
-    state.about_open = false;
+    state.help.about_open = false;
 
     assert_eq!(closing.id(), SurfaceId::new("about"));
     assert!(
-        closing.state().about_open,
+        closing.state().help.about_open,
         "the snapshot must keep the state as it was, not track the live one"
     );
 }

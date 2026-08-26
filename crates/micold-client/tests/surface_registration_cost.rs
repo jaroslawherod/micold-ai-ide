@@ -38,6 +38,7 @@
 
 mod inventory;
 
+use micold_client::features::help;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -329,8 +330,12 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
     // own state and several would otherwise be shadowed by nothing — they are independent, so a
     // single maximal state answers every probe.
     let all = State {
-        about_open: true,
-        help_menu_open: true,
+        help: help::State {
+            about_open: true,
+            help_menu_open: true,
+            ..Default::default()
+        },
+
         project_switcher_open: true,
         sidebar_filter_open: true,
         project_menu_open: Some(ProjectMenu {

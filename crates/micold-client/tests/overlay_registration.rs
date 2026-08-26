@@ -57,7 +57,9 @@ use std::path::{Path, PathBuf};
 /// opening exactly one surface is what makes "registers as *itself*" testable at all.
 #[allow(clippy::type_complexity)]
 const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
-    ("help_menu_open", "help_menu", |s| s.help_menu_open = true),
+    ("help.help_menu_open", "help_menu", |s| {
+        s.help.help_menu_open = true
+    }),
     ("project_switcher_open", "project_switcher", |s| {
         s.project_switcher_open = true
     }),
@@ -106,11 +108,47 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
 /// to being true.
 #[allow(clippy::type_complexity)]
 const DIALOG_FLAGS: &[(&str, &str, fn(&mut State))] =
-    &[("about_open", "about", |s| s.about_open = true)];
+    &[("help.about_open", "about", |s| s.help.about_open = true)];
 
 /// Popover-shaped fields actually declared on `State`, so the lists above cannot go stale.
+///
+/// Feature 028 moves a feature's fields behind a struct of its own, so the scan follows them: a
+/// member whose type is `crate::features::<n>::State` is opened and its own popover-shaped fields
+/// are reported under the path they are written through now — `help.help_menu_open`, not
+/// `help_menu_open`. Qualifying them is the point of descending rather than flattening: once each
+/// feature declares its own state, two of them may each have a `menu_open`, and a bare-name set
+/// would let the second hide behind the first.
 fn declared_popovers() -> BTreeSet<String> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app.rs");
+    let mut found = BTreeSet::new();
+    for (name, ty) in struct_fields("src/app.rs") {
+        let feature = ty
+            .strip_prefix("crate::features::")
+            .and_then(|ty| ty.strip_suffix("::State"));
+        match feature {
+            Some(feature) => found.extend(
+                struct_fields(&format!("src/features/{feature}.rs"))
+                    .into_iter()
+                    .map(|(field, _)| field)
+                    .filter(|field| popover_shaped(field))
+                    .map(|field| format!("{name}.{field}")),
+            ),
+            None if popover_shaped(&name) => {
+                found.insert(name);
+            }
+            None => {}
+        }
+    }
+    found
+}
+
+/// A field name shaped like a popover flag — what the scan recognizes without being told.
+fn popover_shaped(name: &str) -> bool {
+    name.ends_with("_open") || name.contains("_menu")
+}
+
+/// The `pub` fields of the `State` declared in `<rel>`, as `(name, type)` pairs.
+fn struct_fields(rel: &str) -> Vec<(String, String)> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
     let src = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     let at = src.find("pub struct State {").expect("State has moved");
     let rest = &src[at..];
@@ -118,9 +156,9 @@ fn declared_popovers() -> BTreeSet<String> {
     rest[..end]
         .lines()
         .filter_map(|line| {
-            let line = line.trim();
-            let name = line.strip_prefix("pub ")?.split(':').next()?;
-            (name.ends_with("_open") || name.contains("_menu")).then(|| name.to_string())
+            let (name, ty) = line.trim().strip_prefix("pub ")?.split_once(':')?;
+            let ty = ty.trim().trim_end_matches(',');
+            Some((name.trim().to_string(), ty.to_string()))
         })
         .collect()
 }

@@ -30,6 +30,7 @@
 //! the message the subscription emits, and `the_keyboard_subscription_names_no_surface` reads the
 //! function to confirm it still emits only that one.
 
+use micold_client::features::help;
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
@@ -69,7 +70,7 @@ fn dialogs() -> Vec<Dialog> {
         Dialog {
             id: "about",
             cancel: Message::Help(HelpMsg::AboutClosed),
-            open: |state| state.about_open = true,
+            open: |state| state.help.about_open = true,
         },
         Dialog {
             id: "project_selector",
@@ -396,7 +397,10 @@ fn escape_now_reaches_every_popover() {
     // modal closes popovers; both still hold, and are asserted above. It does not require that a
     // surface Escape never reached keeps not being reached.
     let mut state = State {
-        help_menu_open: true,
+        help: help::State {
+            help_menu_open: true,
+            ..Default::default()
+        },
         ..Default::default()
     };
     assert_eq!(
@@ -406,7 +410,7 @@ fn escape_now_reaches_every_popover() {
     );
 
     // And the priority is unchanged: a modal over it still takes Escape for itself.
-    state.about_open = true;
+    state.help.about_open = true;
     assert_eq!(
         registry::escape(&state),
         Some(Message::Help(HelpMsg::AboutClosed)),
@@ -463,12 +467,15 @@ fn pressing_escape_closes_the_topmost_surface() {
 
     // A popover alone, including one the pre-T031 keyboard path never reached.
     let mut menu = State {
-        help_menu_open: true,
+        help: help::State {
+            help_menu_open: true,
+            ..Default::default()
+        },
         ..Default::default()
     };
     menu.update(Message::EscapePressed);
     assert!(
-        !menu.help_menu_open,
+        !menu.help.help_menu_open,
         "Escape now reaches the overflow menu, which the subscription's match never named"
     );
 }
@@ -550,7 +557,10 @@ fn a_popover_is_not_drawn_from_the_registry() {
     let mut drawn = Vec::new();
     for probe in registry::probes() {
         let state = State {
-            help_menu_open: true,
+            help: help::State {
+                help_menu_open: true,
+                ..Default::default()
+            },
             project_switcher_open: true,
             sidebar_filter_open: true,
             terminal_context_menu: Some((4, 2)),

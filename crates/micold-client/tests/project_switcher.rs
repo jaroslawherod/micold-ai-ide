@@ -27,12 +27,12 @@ fn toggling_switcher_opens_and_closes_it() {
 fn opening_switcher_closes_the_overflow_menu() {
     let mut st = State::default();
     st.update(Message::Help(HelpMsg::MenuToggled)); // menu open
-    assert!(st.help_menu_open);
+    assert!(st.help.help_menu_open);
 
     st.update(Message::Project(ProjectMsg::SwitcherToggled));
     assert!(st.project_switcher_open);
     assert!(
-        !st.help_menu_open,
+        !st.help.help_menu_open,
         "opening the switcher closes the overflow menu"
     );
 }
@@ -44,7 +44,7 @@ fn opening_the_overflow_menu_closes_the_switcher() {
     assert!(st.project_switcher_open);
 
     st.update(Message::Help(HelpMsg::MenuToggled));
-    assert!(st.help_menu_open);
+    assert!(st.help.help_menu_open);
     assert!(
         !st.project_switcher_open,
         "opening the overflow menu closes the switcher"
