@@ -206,3 +206,45 @@ message, spelled through the wrapper that now owns it.
 ```
 was: assert_eq!(on_escape(&state),Some(MProjectForgetCancelled))
 ```
+
+## T014 — `session`'s thirty-seven variants moved behind `Message::Session`
+
+Seven, and six of them are the plain case: one constructor renamed, nothing else touched.
+`restart_message` is still asked the same question with the same state and still has to answer
+with the same message — that the bar's restart control names the attached *shell instance* in
+Regular mode and the session's own process otherwise, which is `012` BUG-004 — and the pane's
+press handler still has to publish exactly `TerminalFocused` and exactly no focus message for a
+press outside it. Read individually as Q3 requires: subject, predicate and expected value are
+unchanged in all six; only the path to the constructor is longer.
+
+The seventh is the one worth stopping on. `the_bars_restart_control_asks_which_process_it_is_
+restarting` reads `ui/terminal.rs` as *source text* and greps it for the defect's spelling, so
+the constructor's name is not incidental to that assertion the way it is to the other six — it
+is the thing being matched. It was updated to the new spelling rather than left to pass
+vacuously against a string the file can no longer contain. The negation still forbids exactly
+what it forbade: a session-level restart written straight into the bar. FR-017's non-vacuity
+concern is the live one here, and the guard is checked by the positive assertion immediately
+above it, which requires `on_press(restart_message(` and would fail if the control stopped
+asking at all.
+
+```
+was: assert!(!code.contains("on_press(MTerminalRestartRequested)"),"abaresession-levelrestartinthebarisBUG-004:inRegularmodethesession'sprimary\isstillrunning,sotherequestisano-opandthecontroldoesnothing")
+```
+```
+was: assert!(!published.iter().any(|m|matches!(m,MTerminalFocusReleased|MTerminalFocused)),"apressoutsidethepanemustnotchangethekeyboardholder\(FR-005,FR-006,FR-008a):{published:?}")
+```
+```
+was: assert!(published.iter().any(|m|matches!(m,MTerminalFocused)),"apressinsideanunfocusedpanetakesthekeyboard(FR-008b):{published:?}")
+```
+```
+was: assert_eq!(restart_message(&state,SessionInew()),MTerminalRestartRequested)
+```
+```
+was: assert_eq!(restart_message(&state,id),MShellInstanceRestartRequested(id,instance),"inRegularmodethebardescribestheattachedshellinstance,soitsrestartmust\namethatinstance—restartingthesessionleavesthedeadshelldead")
+```
+```
+was: assert_eq!(restart_message(&state,id),MTerminalRestartRequested)
+```
+```
+was: assert_eq!(restart_message(&state,id),MTerminalRestartRequested)
+```
