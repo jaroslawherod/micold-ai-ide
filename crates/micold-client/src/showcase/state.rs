@@ -82,6 +82,12 @@ pub enum Message {
     /// the widget's and needs nothing here; the choice is not, and is the whole of what this entry
     /// has to hold.
     SelectChosen(String),
+    /// The section rail's current destination changed (feature 027, FR-026a).
+    ///
+    /// Like the select above, and for the same reason: a rail that does not move when pressed is
+    /// posing the *idea* of a navigation rail rather than being one, and "which row is current"
+    /// is the only thing it has to say.
+    SectionShown(usize),
 }
 
 /// The showcase's whole state.
@@ -118,6 +124,8 @@ pub struct Showcase {
     /// by its call site and cannot narrow under the marker. Held the same way anyway, so the two
     /// entries do not answer "what is chosen" two different ways on one page.
     select_choice: Option<String>,
+    /// The section rail's current destination.
+    section_shown: usize,
     /// The type-ahead example's own search text (feature 021, FR-020). Empty at rest, so the page
     /// looks the same on every launch (FR-022).
     typeahead_query: String,
@@ -157,6 +165,7 @@ impl Showcase {
             shown: vec![true; entries],
             grid: super::samples::grid(),
             select_choice: None,
+            section_shown: 0,
             typeahead_query: String::new(),
             typeahead_highlight: None,
             typeahead_selected: None,
@@ -200,6 +209,11 @@ impl Showcase {
     /// The select example's current choice, if one has been made.
     pub fn select_choice(&self) -> Option<&str> {
         self.select_choice.as_deref()
+    }
+
+    /// The section rail's current destination.
+    pub fn section_shown(&self) -> usize {
+        self.section_shown
     }
 
     pub fn typeahead_query(&self) -> &str {
@@ -338,6 +352,7 @@ impl Showcase {
             // published, because its openness is its own (data-model §2.2). An arm that also set an
             // `open` flag would be a second answer to a question the widget has already answered.
             Message::SelectChosen(choice) => self.select_choice = Some(choice),
+            Message::SectionShown(index) => self.section_shown = index,
             Message::TypeaheadFocused => self.typeahead_open = true,
             Message::TypeaheadDismissed => self.typeahead_open = false,
         }

@@ -291,7 +291,9 @@ register! {
     crate::features::session::SessionStartMenu,
     crate::features::session::TerminalContextMenu,
     crate::features::session::ShellInstanceMenu,
-    crate::features::settings::SettingsDialog => crate::ui::settings_form::dialog,
+    // Settings is deliberately absent as of feature 027: it is a full-surface view reached from
+    // the toolbar, not a floating surface, so it has no dismissal rules, no layer, and nothing to
+    // displace. `SettingsDialog` and `ui/settings_form.rs` went with the registration.
     crate::features::sidebar::SidebarFilterPanel {
         displaces:
             crate::features::help::HelpMenu,

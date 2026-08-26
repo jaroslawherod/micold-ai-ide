@@ -54,11 +54,6 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
         Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
     ),
     (
-        "settings",
-        |s| s.settings_draft = Some(Default::default()),
-        Message::SettingsCancelled,
-    ),
-    (
         "confirm_worktree_delete",
         |s| s.worktree_delete_target = Some("wt".to_string()),
         Message::WorktreeDeleteCancelled,

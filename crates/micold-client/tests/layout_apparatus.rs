@@ -35,6 +35,7 @@ fn view(state: &State) -> Element<'_, micold_client::app::Message> {
         None,
         &EnvIncludeOutcome::Disabled,
         &ConnectionStatus::Connected,
+        &micold_client::features::sandbox::Sandbox::default(),
     )
 }
 

@@ -4,14 +4,26 @@
 //! whole `Settings` struct at boot and calls itself its single writer; the client's
 //! `persist_settings` writes the whole struct too, for `theme` alone.
 //!
-//! That arrangement has a defect, and it is the reason this preference lives where it does:
-//! `set_scrollback` and `set_env_include` each persist from the catalog's **boot-time** copy, so
-//! anything the client has written to that file since is silently reverted the next time the user
-//! changes an unrelated setting. `theme` already carries this — a pre-existing defect, out of scope
-//! here — and one assertion below observes it in passing rather than pretending it does not exist.
+//! That arrangement had a defect, and it is the reason this preference lives where it does:
+//! `set_scrollback` and `set_env_include` each persisted from the catalog's **boot-time** copy, so
+//! anything the client had written to that file since was silently reverted the next time the user
+//! changed an unrelated setting. `theme` carried it too — recorded here as out of scope, with one
+//! assertion observing it rather than pretending it did not exist.
 //!
 //! Client-owned would have been the smaller diff. It would also have meant that changing the
 //! scrollback limit quietly put the user's AI CLI back to Claude Code.
+//!
+//! # The defect is fixed, and the argument survives it (feature 027)
+//!
+//! 027 gives the client a placement and a whole sandbox profile to own, which turns "the daemon
+//! reverts what the client wrote" from a theme-shaped annoyance into losing every credential the
+//! user shared. So `persist_service_settings` now re-reads the file and writes back only the five
+//! fields the service owns, and the theme survives — the assertion below says so, in the same
+//! place the defect used to be recorded.
+//!
+//! This does not make the placement question moot. A client-owned `default_ai_cli` would still be
+//! a field the daemon has no way to learn about, and `settings_wire` is what a session start reads
+//! to decide which CLI to run.
 
 use std::path::PathBuf;
 
@@ -98,14 +110,16 @@ fn setting_the_default_ai_cli_leaves_every_other_preference_intact() {
 }
 
 #[test]
-fn the_pre_existing_theme_defect_is_observed_rather_than_assumed_away() {
-    // Not a requirement of this feature, and deliberately not fixed by it — recorded because it is
-    // the whole argument for where `default_ai_cli` lives, and an argument nobody has checked is a
-    // story rather than a reason.
+fn a_client_written_theme_survives_a_service_owned_change() {
+    // This test recorded the *defect* on feature 026's branch: `theme` is client-owned, the daemon
+    // held its boot-time copy and persisted the whole struct on any service-owned change, so a
+    // theme written after the daemon booted was reverted by the next scrollback change. It was out
+    // of scope there and observed rather than assumed away, because an argument nobody has checked
+    // is a story rather than a reason.
     //
-    // `theme` is client-owned: the client writes it to `settings.json` directly. The daemon holds
-    // its boot-time copy and persists the whole struct on any service-owned change, so a theme the
-    // client wrote after the daemon booted is reverted by the next scrollback change.
+    // Feature 027 fixed it — `persist_service_settings` re-reads the file and writes back only the
+    // service's own fields — so the same sequence now checks the fix. Kept in this file, and named
+    // for what it asserts today, because this is where the reason it mattered is written down.
     let dir = tempfile::tempdir().unwrap();
     let store = JsonFileSettingsStore::at(dir.path().join("settings.json"));
     store.save(&Settings::default()).unwrap();
@@ -123,14 +137,14 @@ fn the_pre_existing_theme_defect_is_observed_rather_than_assumed_away() {
         .unwrap();
     assert_eq!(store.load().settings.theme, ThemePreference::Dark);
 
-    // Any service-owned change now rewrites the file from the stale copy.
+    // Any service-owned change. This is the operation that used to rewrite the file from the
+    // stale copy.
     catalog.set_scrollback(15_000).unwrap();
 
     assert_eq!(
         store.load().settings.theme,
-        ThemePreference::FollowSystem,
-        "the client-written theme was reverted — which is exactly what a client-owned \
-         `default_ai_cli` would have inherited"
+        ThemePreference::Dark,
+        "a service-owned change must leave the client's own fields exactly as the file has them"
     );
     assert_eq!(
         store.load().settings.default_ai_cli,

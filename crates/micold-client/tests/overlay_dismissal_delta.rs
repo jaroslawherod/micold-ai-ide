@@ -190,11 +190,6 @@ fn escape_still_reaches_exactly_what_it_used_to() {
             Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
         ),
         (
-            "settings",
-            |s| s.settings_draft = Some(Default::default()),
-            Message::SettingsCancelled,
-        ),
-        (
             "confirm_worktree_delete",
             |s| s.worktree_delete_target = Some("wt".to_string()),
             Message::WorktreeDeleteCancelled,

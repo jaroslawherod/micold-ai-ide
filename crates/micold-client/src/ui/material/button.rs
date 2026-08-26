@@ -12,10 +12,11 @@
 
 use crate::icons::Icon;
 use crate::ui::material::glyph::icon;
+use crate::ui::material::keyboard_focus::{Indicator, TakesTheKeyboard};
 use crate::ui::material::style;
 use crate::ui::material::text::{Text, TypeRole};
 use iced::widget::{button, container, row};
-use iced::{Alignment, Element, Length, Padding};
+use iced::{keyboard, Alignment, Element, Length, Padding};
 use micold_core::tokens::{anatomy, density, shape, spacing, Rgb, Roles};
 
 /// Each `impl Fn` returned by the style layer is a distinct opaque type, so the variants are boxed
@@ -311,6 +312,7 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         if let Some(width) = b.width {
             widget = widget.width(width);
         }
+        let on_key = b.on_press.clone();
         let pressable = b.on_press.is_some();
         if let Some(message) = b.on_press {
             widget = widget.on_press(message);
@@ -320,7 +322,7 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         // Except a disabled one. A button with no `on_press` cannot be pressed, and a ripple on it
         // would report a press that will never happen — worse than no feedback, because it says the
         // opposite of what the disabled styling says.
-        if pressable {
+        let pressed: Element<'a, M> = if pressable {
             // The ripple is clipped to the same corner the fill above draws, or a pill when
             // nobody said otherwise — a wrapper cannot see the shape its child draws, so getting
             // these two from one value is what stops them diverging silently.
@@ -332,6 +334,37 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
             .into()
         } else {
             widget.into()
+        };
+
+        // And the keyboard, which the rendering stack's button does not have either (FR-030). Every
+        // button in the application joins the traversal by being built, exactly as every one of
+        // them ripples by being built — a capability a call site has to remember to ask for is a
+        // capability most call sites will not have.
+        //
+        // Outside the ripple rather than inside it, so the focus indicator is drawn over the state
+        // layer and not under it.
+        let mut focusable = TakesTheKeyboard::new(pressed, pressable);
+        if let Some(message) = on_key {
+            // Both keys, unlike the checkbox beside it. Enter and Space are what a button answers
+            // everywhere it exists — WAI-ARIA names both — and a *focused* button answering Enter
+            // takes nothing from the dialog: the field whose `on_submit` saves the form does not
+            // hold the keyboard while this does.
+            focusable = focusable
+                .key(keyboard::key::Named::Enter, message.clone())
+                .key(keyboard::key::Named::Space, message);
         }
+        focusable
+            .indicator(Indicator {
+                // §5's ring is `secondary` against every variant, so a focused button is the same
+                // mark whether it is filled, outlined or text. The state layer under it is the
+                // variant's own content colour, because that is what a state layer is made of.
+                outline: b.roles.secondary,
+                layer: b.variant.content(b.roles, b.host),
+                // The same corner as the fill and the ripple, for the same reason: a focus ring
+                // drawn as a pill around a square button is the indicator disagreeing with the
+                // control it marks.
+                radius: b.shape.unwrap_or(shape::FULL),
+            })
+            .into()
     }
 }

@@ -129,6 +129,7 @@ fn records(state: &State) -> Vec<LayoutRecord> {
         None,
         &micold_core::env_include::EnvIncludeOutcome::Disabled,
         &ConnectionStatus::Connected,
+        &micold_client::features::sandbox::Sandbox::default(),
     );
     lay::resolve(element, &renderer)
 }
@@ -151,6 +152,7 @@ fn right_press_at(state: &mut State, point: (f32, f32)) -> usize {
         None,
         &micold_core::env_include::EnvIncludeOutcome::Disabled,
         &ConnectionStatus::Connected,
+        &micold_client::features::sandbox::Sandbox::default(),
     );
     let mut tree = Tree::new(element.as_widget());
     let limits = layout::Limits::new(Size::ZERO, lay::WINDOW);

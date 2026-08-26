@@ -36,15 +36,26 @@ use std::path::{Path, PathBuf};
 /// not a write and not a violation of FR-020 — FR-003a permits reads outright — but it is the
 /// coupling SC-002 is about: it is how "adding a feature" starts to mean "and edit that one too".
 ///
-/// One entry today, and it is a read of a pure helper: the sidebar renders a worktree's tags, and
-/// what a worktree's tags *are* is the worktree feature's to say. The alternative — the sidebar
-/// deriving tags itself — would be a second answer to the same question, which is worse.
-const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[(
-    "sidebar",
-    "worktree",
-    "worktree_tags — the sidebar renders a worktree row's tags and does not get to decide what \
-     they are (feature 021, T007)",
-)];
+/// Both entries today are reads of a pure type. The sidebar renders a worktree's tags, and what a
+/// worktree's tags *are* is the worktree feature's to say; settings names the field a rejected save
+/// is about, and which fields can hold the keyboard is the window's. In each case the alternative —
+/// the naming feature deriving it itself — would be a second answer to the same question, which is
+/// worse.
+const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
+    (
+        "sidebar",
+        "worktree",
+        "worktree_tags — the sidebar renders a worktree row's tags and does not get to decide what \
+         they are (feature 021, T007)",
+    ),
+    (
+        "settings",
+        "window",
+        "FieldId — a rejected save names the field it is about so the form can send the user to \
+         it (feature 027, FR-029), and which fields the window can focus is the window's to say. \
+         A second enum owned by settings would be the same list written twice (feature 027, T075)",
+    ),
+];
 
 /// The shared vocabulary any feature may name, because it belongs to no feature.
 ///
@@ -167,10 +178,19 @@ fn every_feature_module_is_registered_exactly_once() {
          and a declaration with no module does not compile."
     );
 
-    // ...and nowhere else declares one, which is what makes it *the* registration point.
+    // ...and nothing else under `features/` declares one, which is what makes it *the*
+    // registration point.
+    //
+    // Scoped to `features/`, plus any file anywhere that reaches in with `#[path]`. A module of the
+    // same name in another namespace is a different module, not a second registration: feature 027
+    // has both a `features::sandbox` (what the app knows about the sandbox) and a `shell::sandbox`
+    // (the impure bring-up that drives the container runtime), and `shell/mod.rs` declaring its own
+    // is the parent module doing its job.
     let elsewhere: Vec<String> = sources()
         .iter()
-        .filter(|(path, _)| *path != "features/mod.rs")
+        .filter(|(path, code)| {
+            (path.starts_with("features/") || code.contains("#[path")) && *path != "features/mod.rs"
+        })
         .flat_map(|(path, code)| {
             modules
                 .iter()

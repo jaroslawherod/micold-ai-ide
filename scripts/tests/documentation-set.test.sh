@@ -56,6 +56,17 @@ echo "== compiled into the binary, so NOT documentation =="
 expect CHANGELOG.md                               unset
 
 echo
+echo "== read by a test, so NOT documentation =="
+# `crates/micold-core/tests/quickstart_a_runs_everywhere.rs` reads feature 027's quickstart: its §A
+# table names the gates the three-platform matrix must run, and the test holds `ci.yml` to it. A
+# change to that table has to run the suite, or the gate never sees the edit it is there for. The
+# `-micold-docs` line must come after `specs/**`.
+expect specs/027-sandboxed-daemon-runtime/quickstart.md unset
+# Its neighbours are unaffected -- the exception is one file, not the feature's directory.
+expect specs/027-sandboxed-daemon-runtime/spec.md  set
+expect specs/027-sandboxed-daemon-runtime/tasks.md set
+
+echo
 echo "== code (everything not declared) =="
 expect crates/micold-core/src/lib.rs              unspecified
 expect crates/micold-client/tests/showcase_glue.rs unspecified

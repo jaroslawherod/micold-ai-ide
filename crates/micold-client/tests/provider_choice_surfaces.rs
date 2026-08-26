@@ -22,17 +22,19 @@ mod support;
 use micold_client::app::State;
 use micold_client::features::connection::ConnectionStatus;
 use micold_client::features::session::StartMenu;
-use micold_client::features::settings::SettingsDraft;
+use micold_client::features::settings::{EnvironmentDraft, SettingsDraft, SettingsSection};
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::session::{AiCli, SessionLocation};
 use support::layout as lay;
 
 const PROJECT: &str = "/fixture/providers";
 
-/// The Default AI CLI select inside the Settings dialog: the dialog's fields column is
-/// `[headline, scrollback field, this select, …]`, the same shape and depth the add-worktree
-/// dialog's type select sits at in `covered_states`.
-const SETTINGS_SELECT: &[usize] = &[6, 0, 0, 0, 2];
+/// The Default AI CLI select inside Settings' Environment section.
+///
+/// Settings is a full-surface view as of feature 027, not a dialog, so the path runs down the
+/// content area rather than an overlay: the section's controls column has the select first, above
+/// the environment-include toggle and its two fields.
+const SETTINGS_SELECT: &[usize] = &[0, 0, 1, 0, 1, 0, 0, 1];
 
 fn with_project() -> State {
     let mut workspace = support::workspace_with(vec![(PROJECT, vec![])]);
@@ -58,6 +60,7 @@ fn painted(state: &State, press_at: Option<&[usize]>) -> Vec<String> {
             None,
             &EnvIncludeOutcome::Disabled,
             &ConnectionStatus::Connected,
+            &micold_client::features::sandbox::Sandbox::default(),
         )
     };
     let drawn = match press_at {
@@ -79,7 +82,14 @@ fn settings_state(available: &[AiCli]) -> State {
     State {
         available_providers: available.to_vec(),
         settings_draft: Some(SettingsDraft {
-            default_ai_cli: available.first().copied().unwrap_or(AiCli::ClaudeCode),
+            // Feature 027 turned Settings into a sectioned full-surface view, and the Default AI
+            // CLI select lives in Environment — the section has to be the shown one, or the
+            // control this test presses is not on screen at all.
+            section: SettingsSection::Environment,
+            environment: EnvironmentDraft {
+                default_ai_cli: available.first().copied().unwrap_or(AiCli::ClaudeCode),
+                ..EnvironmentDraft::default()
+            },
             ..SettingsDraft::default()
         }),
         ..with_project()
@@ -106,7 +116,7 @@ fn the_settings_select_lists_only_the_installed_clis() {
     );
     assert!(
         !only_claude.iter().any(|s| s.contains("Copilot")),
-        "an uninstalled CLI must not be offered anywhere in the dialog — painted: {only_claude:?}"
+        "an uninstalled CLI must not be offered anywhere in Settings — painted: {only_claude:?}"
     );
 
     // The control: the same surface, the same press, with Copilot installed. Without this, the

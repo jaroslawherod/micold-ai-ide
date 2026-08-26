@@ -17,7 +17,9 @@ use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{
     CatalogSnapshot, ClientMsg, DaemonMsg, ErrorKind, OperationResult,
 };
-use micold_core::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
+use micold_core::protocol::version::{
+    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
+};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
@@ -121,6 +123,12 @@ async fn connect(state: &std::sync::Arc<DaemonState>) -> Client {
             schema_hash: SCHEMA_HASH,
             client_build: "test".into(),
             client_package_version: PACKAGE_VERSION.into(),
+            // Feature 027: the host-process placement presents no token, and a fingerprint
+            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
+            // against the same core as the daemon they drive.
+            auth_token: None,
+            client_fingerprint: BUILD_FINGERPRINT.into(),
+            require_fingerprint_match: false,
         }))
         .await
         .unwrap();
@@ -1403,5 +1411,142 @@ async fn including_and_excluding_are_both_idempotent_and_reversible() {
     assert!(
         outside.join(".git").exists(),
         "the worktree itself is untouched by either direction — only the app stopped showing it"
+    );
+}
+
+/// Feature 027, research R2 part 2: the daemon answers the open-project gate for a client that
+/// cannot see its filesystem at the same paths.
+///
+/// Both directions are asserted in one test on purpose. A handler that answered `true` for
+/// everything would pass a repository-only check, and one that answered `false` for everything
+/// would pass a non-repository-only check; neither could pass this. The echoed path is what lets
+/// a client that has moved on since asking discard the answer.
+#[tokio::test]
+async fn repo_root_query_is_answered_for_both_a_repository_and_a_plain_directory() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+    let plain = tempfile::tempdir().unwrap();
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    for (req, asked, expected) in [
+        (1_u64, project.path().to_path_buf(), true),
+        (2, plain.path().to_path_buf(), false),
+    ] {
+        client
+            .send(Frame::Control(ClientMsg::RepoRootQuery {
+                req,
+                path: asked.clone(),
+            }))
+            .await
+            .unwrap();
+
+        let reply = expect_control(
+            &mut client,
+            |m| matches!(m, DaemonMsg::OperationOk { req: r, .. } if *r == req),
+        )
+        .await;
+        match reply {
+            DaemonMsg::OperationOk {
+                result: OperationResult::RepoRoot { path, is_repo_root },
+                ..
+            } => {
+                assert_eq!(path, asked, "the answer must name the folder it is about");
+                assert_eq!(is_repo_root, expected, "for {}", asked.display());
+            }
+            other => panic!("expected a RepoRoot result, got {other:?}"),
+        }
+    }
+}
+
+/// T114 — the worktree list the daemon streams is the one local git discovery would produce.
+///
+/// This is what replaces R2's "the daemon-backed `Git` and `GitCli` agree" check, which cannot be
+/// written as stated because T113 removed the daemon-backed `Git` rather than adding one. The
+/// claim survives the change of mechanism, and it is the claim that matters: on Windows and for a
+/// remote daemon the client has no local git at all, so the streamed list is not a faster copy of
+/// something it could compute — it is the only list it will ever have. If it disagreed with what
+/// git says about the repository, nothing on the client side would notice.
+///
+/// Compared as *sets* of `(dir_name, branch)` and by count. Order is not asserted: `git worktree
+/// list --porcelain` emits in its own order, and pinning that here would fail on a git upgrade
+/// without anything being wrong.
+#[tokio::test]
+async fn the_streamed_worktree_list_matches_local_git_discovery() {
+    use micold_core::git::GitCli;
+
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    // Two, so the comparison is not satisfied by an empty list on both sides.
+    for (req, branch, dir) in [(1_u64, "feature/one", "one"), (2, "feature/two", "two")] {
+        client
+            .send(Frame::Control(ClientMsg::WorktreeCreate {
+                req,
+                project: project.path().to_path_buf(),
+                branch: branch.into(),
+                dir_name: dir.into(),
+                mode: CreateMode::NewBranch,
+            }))
+            .await
+            .unwrap();
+    }
+
+    // Read until the catalog reports both, rather than awaiting the two `WorktreeCreated` replies
+    // and then a push. The daemon pushes a snapshot per change, and `expect_control` *discards*
+    // every frame it does not match — so waiting for the replies first throws away the very pushes
+    // this test is about, and then blocks forever on one that will not come.
+    let snapshot = loop {
+        match client.next().await.expect("stream open").unwrap() {
+            Frame::Control(DaemonMsg::CatalogChanged { catalog }) => {
+                if worktrees_for(&catalog, project.path()).len() == 2 {
+                    break catalog;
+                }
+            }
+            Frame::Control(DaemonMsg::OperationError {
+                message, detail, ..
+            }) => panic!("a worktree create failed: {message} ({detail:?})"),
+            Frame::Control(_) | Frame::Grid(_) => continue,
+        }
+    };
+
+    let streamed: std::collections::BTreeSet<(String, Option<String>)> = snapshot
+        .projects
+        .iter()
+        .find(|p| p.path == project.path())
+        .expect("the project is in the snapshot")
+        .worktrees
+        .iter()
+        .map(|w| (w.dir_name.clone(), w.branch.clone()))
+        .collect();
+
+    let locally: std::collections::BTreeSet<(String, Option<String>)> =
+        micold_core::worktree::discover(&GitCli::new(), project.path(), &[])
+            .into_iter()
+            .map(|w| (w.dir_name, w.branch))
+            .collect();
+
+    assert_eq!(
+        streamed.len(),
+        2,
+        "both worktrees reached the snapshot: {streamed:?}"
+    );
+    assert_eq!(
+        streamed, locally,
+        "the daemon's list and local git discovery disagree about the same repository"
     );
 }

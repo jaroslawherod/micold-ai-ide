@@ -105,6 +105,23 @@ struct App {
     /// `DaemonConnected`). Drives the stale-content banner (FR-027). `daemon.is_none()` also implies
     /// this, but the flag is explicit for clarity at the render site.
     disconnected: bool,
+    /// Where the daemon runs, resolved once at boot from the settings the shell loaded.
+    ///
+    /// Held here rather than read by the connection subscription, because the shell is the single
+    /// place that chooses a real settings store (FR-017/FR-018) — a rule
+    /// `tests/no_concrete_implementations.rs` enforces, and which caught the first version of this.
+    placement: micold_client::daemon::Placement,
+    /// The sandbox's state, when the daemon is placed in one (feature 027).
+    ///
+    /// Always present, `Disabled` for the host placement — so the persistent-notice check is one
+    /// call rather than an `Option` every render site has to remember to unwrap.
+    sandbox: micold_client::features::sandbox::Sandbox,
+    /// What a restart of the sandbox would run, when there is a sandbox to restart (R9).
+    ///
+    /// `None` for the host placement. Its project list is refreshed from the daemon's catalog, so
+    /// a restart shares the projects registered *now* rather than the ones registered at boot
+    /// (M-4).
+    sandbox_boot: Option<shell::sandbox::BootPlan>,
     /// A pending contract-version mismatch (US6, FR-021/022): `(client_version, daemon_version,
     /// daemon_build)`. `Some` while the running daemon's contract differs from ours — drives the
     /// version-mismatch banner and its "restart service" action. Cleared on a successful connect.
@@ -530,6 +547,94 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::DaemonGridFrame(frame) => shell::daemon_sync::on_grid_frame(app, frame),
         Message::DaemonDisconnected => shell::daemon_sync::on_disconnected(app),
         Message::DaemonConnectFailed(reason) => shell::daemon_sync::on_connect_failed(app, reason),
+        // Feature 027. The sandbox's outcome is recorded, never acted on: a failure must not start
+        // a session somewhere else, and a success needs no prompting because the connection
+        // subscription is already retrying against the loopback port.
+        Message::SandboxStarted(started) => {
+            app.sandbox.started(*started);
+            Task::none()
+        }
+        Message::SandboxFailed(failure) => {
+            // Recorded and left standing. The banner draws it for as long as it lasts — the queue
+            // would show it once, for four seconds, while the sandbox stayed broken (FR-035b, S-3),
+            // which is exactly the edge case the spec calls out.
+            app.sandbox.failed(*failure);
+            Task::none()
+        }
+        Message::SandboxDiagnostics(lines) => {
+            match lines.last() {
+                // Phrased like the connected path's `RecentErrors` answer, because from the user's
+                // side it is the same question — only the route it took to be answered differs.
+                Some(latest) => app.core.notify_error(format!(
+                    "The session service logged {} line(s) inside the sandbox; most recent: {}",
+                    lines.len(),
+                    latest.trim()
+                )),
+                None => app.core.notify_info(
+                    "The sandbox is there, but the session service inside it has logged nothing.",
+                ),
+            }
+            Task::none()
+        }
+        Message::SandboxLost => {
+            app.sandbox.container_lost(shell::sandbox::CONTAINER_NAME);
+            Task::none()
+        }
+        // The one edge back into bring-up, and it is here because a person pressed something
+        // (R9, FR-035a). Both of these are user actions; neither is ever sent by the application
+        // to itself.
+        Message::SandboxRestartRequested => {
+            match app.sandbox_boot.clone() {
+                Some(plan)
+                    if app
+                        .sandbox
+                        .restart(micold_core::sandbox::lifecycle::RestartRequested) =>
+                {
+                    // Going back to the sandbox has to take the connection with it. If a fallback
+                    // was in force, `placement.kind` is the host process; left there, the sandbox
+                    // would come up and every session would still be running outside it — the
+                    // banner saying "sandboxed" over an unconfined shell, which is the one thing
+                    // FR-035b exists to prevent.
+                    app.placement.kind =
+                        micold_core::sandbox::placement::PlacementKind::LocalSandbox;
+                    shell::sandbox::boot(plan)
+                }
+                _ => Task::none(),
+            }
+        }
+        Message::SandboxFallbackAccepted => {
+            if let Some(offer) = app.sandbox.fallback_offer() {
+                // Consent is not the whole of it. `daemon::connection` dials from `app.placement`,
+                // and for `LocalSandbox` it deliberately never falls back to a host process
+                // (FR-035, and the comment in `daemon.rs` says so). So the *only* thing that can
+                // turn accepted consent into a working service is moving the placement here —
+                // without this the user presses "Run without it for now", the banner changes, and
+                // the client goes on dialling a port nothing is listening on, forever.
+                //
+                // In memory only: nothing writes it back to the settings store, which is what
+                // makes the choice last for this occurrence alone (FR-035a).
+                if app.sandbox.accept_fallback(offer) {
+                    app.placement.kind =
+                        micold_core::sandbox::placement::PlacementKind::HostProcess;
+                }
+            }
+            Task::none()
+        }
+        // Feature 027, FR-030. The one thing the reducer cannot do: focus belongs to the widget
+        // tree, so moving it is an operation issued from here. Every input in the application
+        // already implements iced's `Focusable` — what was missing was anyone asking.
+        // The move itself, then the second clause of FR-030: a control the traversal reached
+        // below the fold is focused-but-invisible until something scrolls to it, and iced's focus
+        // operations never look at a scrollable. Chained rather than batched, because the scroll
+        // has to read the focus the move just set.
+        Message::FocusMoved { forward } => {
+            let moved = if forward {
+                iced::widget::operation::focus_next()
+            } else {
+                iced::widget::operation::focus_previous()
+            };
+            moved.chain(micold_client::ui::scroll_focused_into_view())
+        }
         Message::ConnectionTakeoverRequested => shell::daemon_sync::on_takeover_requested(app),
         // The daemon refused us on a contract mismatch (US6, FR-021): record it so the banner can
         // name both versions and offer the restart action. The connection subscription keeps
@@ -776,6 +881,7 @@ fn render(app: &App) -> iced::Element<'_, Message> {
         app.dismissing.as_ref(),
         &app.env_include_last_outcome,
         &connection_status(app),
+        &app.sandbox,
     )
 }
 
@@ -950,7 +1056,7 @@ pub(crate) mod tests {
     // mostly what they were for; the stamper-seeding tests below still build a snapshot, so they
     // import them back rather than keep a second copy.
     use crate::shell::daemon_sync::tests::{snapshot_with, summary, summary_at};
-    use micold_client::features::settings::SettingsDraft;
+    use micold_client::features::settings::{EnvironmentDraft, SettingsDraft, TerminalDraft};
     use micold_core::session::AiCli;
     // These tests drive whole messages through `update_inner`, which is this file's dispatcher, so
     // they stay here even though what they assert about is the daemon's: they are tests of the
@@ -1043,6 +1149,9 @@ pub(crate) mod tests {
             daemon_catalog: None,
             displaced: HashMap::new(),
             disconnected: false,
+            placement: micold_client::daemon::Placement::default(),
+            sandbox: micold_client::features::sandbox::Sandbox::default(),
+            sandbox_boot: None,
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
@@ -1088,6 +1197,9 @@ pub(crate) mod tests {
             daemon_catalog: None,
             displaced: HashMap::new(),
             disconnected: false,
+            placement: micold_client::daemon::Placement::default(),
+            sandbox: micold_client::features::sandbox::Sandbox::default(),
+            sandbox_boot: None,
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
@@ -1225,6 +1337,42 @@ pub(crate) mod tests {
             sent.push(msg);
         }
         sent
+    }
+
+    /// The container's log is an *answer*, and an empty one is an answer too (FR-038).
+    ///
+    /// A user asks for diagnostics because something is wrong. Two outcomes are useful — "here is
+    /// what it said" and "it is running and has said nothing" — and neither is silence, which is
+    /// what the arm did before it existed.
+    #[test]
+    fn the_containers_log_is_reported_whether_or_not_it_has_anything_in_it() {
+        let mut app = base_app();
+        let _ = update_inner(
+            &mut app,
+            Message::SandboxDiagnostics(vec![
+                "starting session service".into(),
+                "bind /work/demo: permission denied".into(),
+            ]),
+        );
+        let said = app.core.notify.visible().expect("a notice was raised");
+        assert!(
+            said.message.contains("permission denied"),
+            "the most recent line is the one worth showing: {}",
+            said.message
+        );
+
+        let mut empty = base_app();
+        let _ = update_inner(&mut empty, Message::SandboxDiagnostics(Vec::new()));
+        let said = empty
+            .core
+            .notify
+            .visible()
+            .expect("an empty log still gets an answer");
+        assert!(
+            said.message.contains("logged nothing"),
+            "an empty log should say so rather than say nothing: {}",
+            said.message
+        );
     }
 
     /// Connecting must **start** the restored session, not only view it (FR-004a, contract §3.3a).
@@ -1452,6 +1600,9 @@ pub(crate) mod tests {
             daemon_catalog: None,
             displaced: HashMap::new(),
             disconnected: false,
+            placement: micold_client::daemon::Placement::default(),
+            sandbox: micold_client::features::sandbox::Sandbox::default(),
+            sandbox_boot: None,
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
@@ -1462,6 +1613,99 @@ pub(crate) mod tests {
             ripples_animating: Arc::new(AtomicUsize::new(0)),
             scene_ripple_frames: std::cell::Cell::new(0),
         }
+    }
+
+    // --- FR-035a: an accepted fallback has to reach the connection, not only the banner --------
+
+    /// An `App` configured for the sandbox, with the sandbox failed and a boot plan to restart.
+    fn app_with_a_failed_sandbox() -> App {
+        use micold_core::sandbox::lifecycle::{Failure, Stage};
+        let mut app = base_app();
+        app.placement.kind = micold_core::sandbox::placement::PlacementKind::LocalSandbox;
+        app.sandbox = micold_client::features::sandbox::Sandbox {
+            state: micold_core::sandbox::lifecycle::SandboxState::Failed(Failure {
+                stage: Stage::Probing,
+                error: micold_core::sandbox::runtime::RuntimeError::NotInstalled {
+                    kind: micold_core::sandbox::runtime::RuntimeKind::Docker,
+                },
+            }),
+            ..micold_client::features::sandbox::Sandbox::default()
+        };
+        app.sandbox_boot = Some(shell::sandbox::BootPlan {
+            profile: micold_core::sandbox::SandboxProfile::default(),
+            state_dir: PathBuf::from("/tmp/micold-test-state"),
+            projects: Vec::new(),
+        });
+        app
+    }
+
+    #[test]
+    fn accepting_the_fallback_moves_the_connection_to_a_host_process() {
+        // The defect this was written for: `SandboxFallbackAccepted` used to record consent and
+        // return `Task::none()`, and nothing else changed. But `daemon::connection` dials from
+        // `app.placement`, and its `LocalSandbox` arm never falls back to a host process by design
+        // (FR-035) — so the user pressed "Run without it for now", the banner said they were
+        // running unsandboxed, and the client kept dialling a port nothing was listening on. The
+        // offer worked as a statement and not as a service.
+        let mut app = app_with_a_failed_sandbox();
+
+        let _ = update_inner(&mut app, Message::SandboxFallbackAccepted);
+
+        assert!(
+            app.sandbox.fallback.is_some(),
+            "the consent must be recorded, or the persistent notice has nothing to show"
+        );
+        assert_eq!(
+            app.placement.kind,
+            micold_core::sandbox::placement::PlacementKind::HostProcess,
+            "accepting the fallback must move the connection to a host process — the subscription              is keyed on this value, and only changing it makes the client dial somewhere a daemon              can actually be"
+        );
+    }
+
+    #[test]
+    fn a_fallback_that_was_not_on_offer_leaves_the_connection_where_it_is() {
+        // The other half: consent is not a thing the application may take on its own behalf
+        // (FR-035). A running sandbox offers no fallback, so nothing here may move the placement —
+        // otherwise a stray message would quietly unsandbox a working session.
+        let mut app = base_app();
+        app.placement.kind = micold_core::sandbox::placement::PlacementKind::LocalSandbox;
+        app.sandbox = micold_client::features::sandbox::Sandbox {
+            state: micold_core::sandbox::lifecycle::SandboxState::Running(
+                micold_core::sandbox::runtime::ContainerId("x".into()),
+            ),
+            ..micold_client::features::sandbox::Sandbox::default()
+        };
+
+        let _ = update_inner(&mut app, Message::SandboxFallbackAccepted);
+
+        assert!(app.sandbox.fallback.is_none());
+        assert_eq!(
+            app.placement.kind,
+            micold_core::sandbox::placement::PlacementKind::LocalSandbox,
+            "a fallback nobody offered must not move a running sandbox's connection"
+        );
+    }
+
+    #[test]
+    fn trying_the_sandbox_again_brings_the_connection_back_with_it() {
+        // The return leg. Without it the restart succeeds, the container comes up, and every
+        // session keeps running on the host process the fallback moved us to — a banner claiming
+        // containment over an unconfined shell, which is precisely what FR-035b forbids.
+        let mut app = app_with_a_failed_sandbox();
+        let _ = update_inner(&mut app, Message::SandboxFallbackAccepted);
+        assert_eq!(
+            app.placement.kind,
+            micold_core::sandbox::placement::PlacementKind::HostProcess,
+            "precondition: the fallback moved us off the sandbox"
+        );
+
+        let _ = update_inner(&mut app, Message::SandboxRestartRequested);
+
+        assert_eq!(
+            app.placement.kind,
+            micold_core::sandbox::placement::PlacementKind::LocalSandbox,
+            "asking for the sandbox back must point the connection back at it"
+        );
     }
 
     // --- T117 / FR-024a / SC-021: the read-only state must end when the daemon says we hold the
@@ -1629,12 +1873,16 @@ pub(crate) mod tests {
         let mut app = base_app();
         app.daemon = Some(micold_client::daemon::Outbox::new(tx));
         app.core.settings_draft = Some(SettingsDraft {
-            scrollback_lines: "20000".into(),
-            env_include_enabled: false,
-            env_include_script_path: "/tmp/does-not-exist.sh".into(),
-            env_include_timeout: "15".into(),
-            default_ai_cli: AiCli::Copilot,
-            error: None,
+            terminal: TerminalDraft {
+                scrollback_lines: "20000".into(),
+            },
+            environment: EnvironmentDraft {
+                enabled: false,
+                script_path: "/tmp/does-not-exist.sh".into(),
+                timeout_secs: "15".into(),
+                default_ai_cli: AiCli::Copilot,
+            },
+            ..SettingsDraft::default()
         });
 
         let _ = update_inner(&mut app, Message::SettingsSaved);
@@ -1670,12 +1918,16 @@ pub(crate) mod tests {
         let mut app = base_app();
         assert!(app.daemon.is_none());
         app.core.settings_draft = Some(SettingsDraft {
-            scrollback_lines: "20000".into(),
-            env_include_enabled: true,
-            env_include_script_path: String::new(),
-            env_include_timeout: "15".into(),
-            default_ai_cli: AiCli::ClaudeCode,
-            error: None,
+            terminal: TerminalDraft {
+                scrollback_lines: "20000".into(),
+            },
+            environment: EnvironmentDraft {
+                enabled: true,
+                script_path: String::new(),
+                timeout_secs: "15".into(),
+                default_ai_cli: AiCli::ClaudeCode,
+            },
+            ..SettingsDraft::default()
         });
 
         let _ = update_inner(&mut app, Message::SettingsSaved);
@@ -1776,6 +2028,9 @@ pub(crate) mod tests {
             daemon_catalog: None,
             displaced: HashMap::new(),
             disconnected: false,
+            placement: micold_client::daemon::Placement::default(),
+            sandbox: micold_client::features::sandbox::Sandbox::default(),
+            sandbox_boot: None,
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,

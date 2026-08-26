@@ -89,6 +89,11 @@ pub enum PendingOp {
     BranchList {
         project: PathBuf,
     },
+    /// A read-only `RepoRootQuery` — the open-project gate asked over the wire, because this
+    /// client has no git view of the daemon's filesystem (feature 027, research R2 part 2).
+    /// Carries the folder it was asked about, so an answer that outlived the question (the user
+    /// cancelled, or chose another folder) is recognisable rather than acted upon.
+    RepoRootQuery(PathBuf),
     /// A `WorktreeInclude` / `WorktreeExclude` (016 BUG-002). Both carry the path so a failure can
     /// name what it was about, and so the reply is recognisable without re-deriving it.
     WorktreeInclude(PathBuf),
@@ -113,6 +118,9 @@ impl PendingOp {
             PendingOp::WorktreeCreate(d) => format!("create the worktree \"{d}\""),
             PendingOp::BranchPreflight { .. } => "check the branch".into(),
             PendingOp::BranchList { .. } => "list the branches".into(),
+            PendingOp::RepoRootQuery(p) => {
+                format!("check whether {} is a repository", p.display())
+            }
             PendingOp::WorktreeDelete(d) => format!("delete the worktree \"{d}\""),
             PendingOp::WorktreeRename(d) => format!("rename the worktree \"{d}\""),
             PendingOp::WorktreeInclude(p) => format!("include the worktree at {}", p.display()),
@@ -228,7 +236,15 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
             op.describe()
         ));
     }
-    Task::none()
+    // The connection went away. That is *usually* the daemon restarting and the subscription
+    // reconnecting on its own — but it is also what a container stopped from outside looks like
+    // from here, and the difference is one question to the runtime (FR-036, US6 scenario 3). Asked
+    // once, on the disconnect, rather than polled: the answer only changes when the connection
+    // does.
+    match (app.sandbox.state.accepts_sessions(), &app.sandbox_boot) {
+        (true, Some(plan)) => crate::shell::sandbox::check_alive(plan),
+        _ => Task::none(),
+    }
 }
 
 pub fn on_connect_failed(app: &mut App, reason: String) -> Task<Message> {
@@ -270,6 +286,11 @@ pub fn on_diagnostics_requested(app: &mut App) -> Task<Message> {
             req: req + 1,
             limit: 20,
         });
+    } else if let Some(plan) = &app.sandbox_boot {
+        // No connection — which is the state a user asking for diagnostics is most often in. The
+        // container kept the service's output regardless, so read it from there instead of
+        // reporting that there is nothing to show (FR-038, US6 scenario 6).
+        return crate::shell::sandbox::diagnostics(plan);
     } else {
         app.core
             .notify_error("Not connected to the session service — no diagnostics to show.");
@@ -277,7 +298,31 @@ pub fn on_diagnostics_requested(app: &mut App) -> Task<Message> {
     Task::none()
 }
 
+/// Take the daemon's project list as the set the sandbox should be sharing (R9, M-4).
+///
+/// A project registered after boot is not inside the running container's mount set, and no amount
+/// of restarting *inside* the sandbox will put it there — the bind mounts are fixed when the
+/// container is created. So the sandbox is marked stale and the plan updated, and the user is
+/// offered a restart. Nothing restarts on its own: a restart ends every session in the container,
+/// which is not a price to pay for a side effect of registering a project.
+fn adopt_mount_set(app: &mut App, catalog: &micold_core::protocol::messages::CatalogSnapshot) {
+    let Some(plan) = app.sandbox_boot.as_mut() else {
+        return;
+    };
+    let projects: Vec<std::path::PathBuf> =
+        catalog.projects.iter().map(|p| p.path.clone()).collect();
+    if projects == plan.projects {
+        return;
+    }
+    plan.projects = projects;
+    app.sandbox.mounts_changed();
+}
+
 pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
+    // Almost every arm here resolves entirely into `app`, which is why this function returned
+    // `Task::none()` unconditionally for its whole life. The open-project gate is the first reply
+    // that continues an interaction the user started, so one arm can hand work back.
+    let mut follow_up = Task::none();
     match event {
         DaemonMsg::CatalogChanged { catalog } => {
             reconcile_catalog(&mut app.core, &catalog, true);
@@ -285,6 +330,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // so seed here too (T111). Absent-only, so this never disturbs a counter this
             // client is already driving.
             app.stamper.seed_from_catalog(&catalog);
+            adopt_mount_set(app, &catalog);
             app.daemon_catalog = Some(catalog);
         }
         // A settings mutation reached the service — this client's own `SettingsSet` echoed
@@ -437,6 +483,19 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                     }
                 }
             }
+            // Feature 027 (research R2 part 2): the open-project gate, answered by the side
+            // that has a filesystem view of the project. The path is compared, not assumed —
+            // see `workspace::on_repo_root_answer`.
+            Some(PendingOp::RepoRootQuery(asked)) => {
+                if let OperationResult::RepoRoot { path, is_repo_root } = result {
+                    follow_up = crate::shell::workspace::on_repo_root_answer(
+                        app,
+                        asked,
+                        path,
+                        is_repo_root,
+                    );
+                }
+            }
             // Feature 013 (FR-015): the worktree directory and its sessions are already
             // gone by this point (that half always succeeds here) — a failed branch
             // deletion is reported as a distinct, non-blocking notice rather than
@@ -579,7 +638,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // Other control messages (Pong) are consumed as their flows land.
         _ => {}
     }
-    Task::none()
+    follow_up
 }
 
 pub fn on_connected(
@@ -631,6 +690,7 @@ pub fn on_connected(
     // (BUG-006). Part of the same resync as the flags and settings above: the daemon's
     // position is authoritative state, so re-read it rather than assume continuity.
     app.stamper.seed_from_catalog(&catalog);
+    adopt_mount_set(app, &catalog);
     app.daemon_catalog = Some(catalog);
     // Attach to the active project and view its active session so the daemon starts
     // streaming grid frames for it (FR-011/FR-016).

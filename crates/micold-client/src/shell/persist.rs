@@ -41,6 +41,8 @@ use micold_client::app::Message;
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::settings::{Settings, SettingsStore};
 
+use micold_client::features::settings::SettingsDraft;
+
 use crate::shell::daemon_sync::PendingOp;
 use crate::shell::env_include::{default_resolution_cwd, refresh_env_include};
 use crate::App;
@@ -129,86 +131,78 @@ pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core:
 /// scrollback value (FR-019/FR-020).
 pub fn on_settings_opened(app: &mut App) -> Task<Message> {
     app.core.update(Message::SettingsOpened);
-    // Refresh the availability set here, on the named event research R11 asks for —
-    // "when the choice is offered" — rather than per frame, which would be a `PATH` probe
+    // Refresh the availability set here, on the named event research R11 asks for --
+    // "when the choice is offered" -- rather than per frame, which would be a `PATH` probe
     // per render and exactly the scheduled work SC-006 forbids (feature 026, T014a).
     app.core.available_providers = app.caps.available_providers();
-    let default_ai_cli = app.core.default_ai_cli;
-    if let Some(draft) = app.core.settings_draft.as_mut() {
-        draft.scrollback_lines = app.scrollback_lines.to_string();
-        draft.env_include_enabled = app.env_include_enabled;
-        draft.env_include_script_path = app.env_include_script_path.clone();
-        draft.env_include_timeout = app.env_include_timeout_secs.to_string();
-        draft.default_ai_cli = default_ai_cli;
-    }
+    // Seeded from one `Settings` value rather than field by field, so that a setting added to the
+    // persisted shape is carried into the draft by `from_settings` instead of needing a line here
+    // that somebody has to remember to write.
+    //
+    // The daemon half comes from the store and the rest from `App`, because that is where each of
+    // them actually lives: the scrollback limit and the environment include are applied to running
+    // sessions and so are held in memory, while the placement was read once at boot by the
+    // connection subscription and never kept.
+    let daemon = app
+        .caps
+        .settings()
+        .map(|store| store.load().settings.daemon)
+        .unwrap_or_default();
+    let current = Settings {
+        theme: app.core.theme_pref,
+        scrollback_lines: app.scrollback_lines,
+        env_include_enabled: app.env_include_enabled,
+        env_include_script_path: app.env_include_script_path.clone(),
+        env_include_timeout_secs: app.env_include_timeout_secs,
+        daemon,
+        default_ai_cli: app.core.default_ai_cli,
+    };
+    let mut draft = SettingsDraft::from_settings(&current);
+    // What this machine's runtime can enforce is not a setting and is not in the file — it is the
+    // probe's answer, which lands on the sandbox state when a bring-up succeeds. The form needs it
+    // to decide which limits are editable (FR-015), so it is carried across here rather than
+    // guessed at inside the view.
+    draft.daemon.capabilities = app.sandbox.capabilities.clone();
+    app.core.settings_draft = Some(draft);
     Task::none()
 }
 
-/// Save Settings: validate the scrollback and environment-include timeout fields; on
-/// success persist + apply + refresh + close, on failure keep the form open with an error
-/// (FR-020/FR-021; environment-include: FR-014, contracts/settings-ui.md).
+/// Save Settings: validate every section together; on success persist + apply + refresh + close,
+/// on failure keep the view open showing the offending field's section (FR-020/FR-021, feature 027
+/// FR-029; environment-include: FR-014, contracts/settings-ui.md).
+///
+/// The validation itself is no longer here. It moved beside the draft with feature 027, because a
+/// rejection now has to name the *section* holding the field it is about, and this function has no
+/// business knowing which section a field is in — see [`SettingsDraft::validate`].
 pub fn on_settings_saved(app: &mut App) -> Task<Message> {
     let Some(draft) = app.core.settings_draft.clone() else {
         return Task::none();
     };
 
-    let scrollback_min = micold_core::settings::MIN_SCROLLBACK_LINES;
-    let scrollback_max = micold_core::settings::MAX_SCROLLBACK_LINES;
-    let scrollback_lines = match draft.scrollback_lines.trim().parse::<usize>() {
-        Ok(n) if (scrollback_min..=scrollback_max).contains(&n) => n,
-        Ok(_) => {
+    let valid = match draft.validate() {
+        Ok(valid) => valid,
+        Err(error) => {
             if let Some(d) = app.core.settings_draft.as_mut() {
-                d.error = Some(format!(
-                    "Enter a number between {scrollback_min} and {scrollback_max}."
-                ));
-            }
-            return Task::none();
-        }
-        Err(_) => {
-            if let Some(d) = app.core.settings_draft.as_mut() {
-                d.error = Some("Enter a whole number of lines.".to_string());
+                d.report(error);
             }
             return Task::none();
         }
     };
 
-    let timeout_min = micold_core::settings::MIN_ENV_INCLUDE_TIMEOUT_SECS;
-    let timeout_max = micold_core::settings::MAX_ENV_INCLUDE_TIMEOUT_SECS;
-    let env_include_timeout_secs = match draft.env_include_timeout.trim().parse::<u64>() {
-        Ok(t) if (timeout_min..=timeout_max).contains(&t) => t,
-        Ok(_) => {
-            if let Some(d) = app.core.settings_draft.as_mut() {
-                d.error = Some(format!(
-                    "Enter a timeout between {timeout_min} and {timeout_max} seconds."
-                ));
-            }
-            return Task::none();
-        }
-        Err(_) => {
-            if let Some(d) = app.core.settings_draft.as_mut() {
-                d.error = Some("Enter a whole number of seconds.".to_string());
-            }
-            return Task::none();
-        }
-    };
+    app.core.theme_pref = valid.theme;
+    app.scrollback_lines = valid.scrollback_lines;
+    app.env_include_enabled = valid.env_include_enabled;
+    app.env_include_script_path = valid.env_include_script_path.clone();
+    app.env_include_timeout_secs = valid.env_include_timeout_secs;
 
-    app.scrollback_lines = scrollback_lines;
-    app.env_include_enabled = draft.env_include_enabled;
-    app.env_include_script_path = draft.env_include_script_path;
-    app.env_include_timeout_secs = env_include_timeout_secs;
-    // Nothing to validate: the select offers only installed CLIs and the value is a closed
-    // enum. Deliberately **not** re-checked against availability here either — a default
-    // naming a CLI that has since been uninstalled is kept, not repaired (research R11).
-    app.core.default_ai_cli = draft.default_ai_cli;
+    // Nothing to validate: the select offers only installed CLIs and the value is a closed enum.
+    // Deliberately **not** re-checked against availability here either -- a default naming a CLI
+    // that has since been uninstalled is kept, not repaired (feature 026, research R11).
+    app.core.default_ai_cli = valid.default_ai_cli;
+
+    let settings = valid.into_settings();
     if let Some(store) = app.caps.settings() {
-        if let Err(err) = store.save(&Settings {
-            theme: app.core.theme_pref,
-            scrollback_lines,
-            env_include_enabled: app.env_include_enabled,
-            env_include_script_path: app.env_include_script_path.clone(),
-            env_include_timeout_secs,
-            default_ai_cli: app.core.default_ai_cli,
-        }) {
+        if let Err(err) = store.save(&settings) {
             app.core
                 .notify_error(format!("Couldn't save your settings: {err}"));
         }
@@ -225,11 +219,11 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
         app.next_req += 1;
         daemon.send(ClientMsg::SettingsSet {
             req,
-            scrollback_lines: Some(scrollback_lines),
-            env_include_enabled: Some(app.env_include_enabled),
-            env_include_script_path: Some(app.env_include_script_path.clone()),
-            env_include_timeout_secs: Some(env_include_timeout_secs),
-            default_ai_cli: Some(app.core.default_ai_cli),
+            scrollback_lines: Some(settings.scrollback_lines),
+            env_include_enabled: Some(settings.env_include_enabled),
+            env_include_script_path: Some(settings.env_include_script_path.clone()),
+            env_include_timeout_secs: Some(settings.env_include_timeout_secs),
+            default_ai_cli: Some(settings.default_ai_cli),
         });
         app.pending_ops.insert(req, PendingOp::SettingsSet);
     }
@@ -240,7 +234,7 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
     app.env_include_cache.clear();
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);
-    app.core.update(Message::SettingsSaved); // closes the overlay
+    app.core.update(Message::SettingsSaved); // closes the view
     Task::none()
 }
 
@@ -467,6 +461,7 @@ mod tests {
             env_include_enabled: false,
             env_include_script_path: "/custom/env.sh".to_string(),
             env_include_timeout_secs: 42,
+            daemon: Default::default(),
             default_ai_cli: AiCli::Copilot,
         };
         let store = FakeSettingsStore::loaded(stored.clone());

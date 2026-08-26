@@ -9,10 +9,12 @@
 //! - [`messages`] — the control-plane [`messages::ClientMsg`] / [`messages::DaemonMsg`] surface.
 //! - [`grid`] — the postcard-encoded [`grid::GridFrame`] streaming types.
 //! - [`version`] — [`version::PROTOCOL_VERSION`] and the generated [`version::SCHEMA_HASH`].
+//! - [`auth`] — the shared-secret token the sandbox transport needs (feature 027).
 //! - [`handshake`] — strict exact-match handshake evaluation.
 //! - [`hashing`] — the dependency-free hash shared by `build.rs` and the guard test.
 //! - [`keepalive`] — the client-side half-open-connection liveness deadline (FR-026).
 
+pub mod auth;
 pub mod codec;
 pub mod envelope;
 pub mod grid;

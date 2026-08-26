@@ -76,8 +76,10 @@ fn new_terminal_instance_chord_never_yields_pty_bytes() {
     }
 }
 
+/// Settings stopped being a floating surface with feature 027 (FR-026), so the registry no longer
+/// answers for it — Escape has to leave the view by a route of its own, and this is that route.
 #[test]
-fn escape_closes_the_settings_overlay() {
+fn escape_leaves_the_settings_view() {
     use micold_client::app::{on_escape, Message};
     let s = State {
         settings_draft: Some(Default::default()),

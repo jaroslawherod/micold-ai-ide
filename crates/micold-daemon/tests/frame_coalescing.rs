@@ -23,7 +23,9 @@ use std::time::{Duration, Instant};
 use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
-use micold_core::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
+use micold_core::protocol::version::{
+    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
+};
 use micold_core::session::SessionId;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::framer::Framer;
@@ -76,6 +78,12 @@ async fn a_flood_is_coalesced_to_at_most_one_frame_per_frame_interval() {
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
             client_package_version: PACKAGE_VERSION.into(),
+            // Feature 027: the host-process placement presents no token, and a fingerprint
+            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
+            // against the same core as the daemon they drive.
+            auth_token: None,
+            client_fingerprint: BUILD_FINGERPRINT.into(),
+            require_fingerprint_match: false,
         }))
         .await
         .unwrap();

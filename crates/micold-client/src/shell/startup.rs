@@ -29,6 +29,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
@@ -36,6 +37,7 @@ use iced::Task;
 use micold_client::app::{Message, State};
 use micold_client::features::sidebar::{filters_from_env_value, FILTER_ENV_VAR};
 use micold_client::input::SessionInputStamper;
+use micold_core::sandbox::placement::PlacementKind;
 use micold_core::settings::Settings;
 
 use crate::shell::capabilities::Capabilities;
@@ -49,14 +51,31 @@ use crate::{observe_system_scheme, probe_config, theme, update, view, App};
 /// `assets/icon/generate.py`). Embedded directly so no runtime image decoder is needed.
 const ICON_RGBA: &[u8] = include_bytes!("../../../../assets/icon/icon-64.rgba");
 
-/// Window settings carrying the app icon (taskbar / titlebar). On Linux the window app-id /
-/// WM_CLASS is set to match `StartupWMClass` in the `.desktop` entry so the running window groups
-/// under the launcher icon.
+/// The narrowest window the interface is supported at.
+///
+/// It exists so that "the narrowest supported window width" is a fact rather than a question. The
+/// settings surface puts a fixed 288dp rail beside a content column, and the rail never gives any
+/// of its width back — so below roughly 520dp the actions row runs off the right edge and the Save
+/// button loses first its edge and then its label, which is the primary action of the surface
+/// becoming an unlabelled circle. Every control renders at this size; see
+/// `the_window_declares_the_narrowest_size_it_supports`.
+const MIN_WINDOW_SIZE: iced::Size = iced::Size::new(640.0, 480.0);
+
+/// The floor stays above the width the layout was seen to break at, not at it: 520dp was the last
+/// width whose actions row still fitted, and 640x480 was checked by hand and renders every control.
+/// A compile-time check rather than a test, because both sides are constants and a test of two
+/// constants is a test of nothing.
+const _: () = assert!(MIN_WINDOW_SIZE.width >= 640.0 && MIN_WINDOW_SIZE.height >= 480.0);
+
+/// Window settings carrying the app icon (taskbar / titlebar) and the narrowest size the interface
+/// is supported at. On Linux the window app-id / WM_CLASS is set to match `StartupWMClass` in the
+/// `.desktop` entry so the running window groups under the launcher icon.
 fn window_settings() -> iced::window::Settings {
     let icon = iced::window::icon::from_rgba(ICON_RGBA.to_vec(), 64, 64).ok();
     #[allow(unused_mut)]
     let mut settings = iced::window::Settings {
         icon,
+        min_size: Some(MIN_WINDOW_SIZE),
         ..Default::default()
     };
     #[cfg(target_os = "linux")]
@@ -97,7 +116,12 @@ pub fn run() -> iced::Result {
 
 fn boot() -> (App, Task<Message>) {
     // The single assembly point (FR-018). Everything below takes what it needs from `caps`.
-    let caps = Capabilities::real();
+    //
+    // `mut` for one reason: whether this client may run git itself is a property of *where the
+    // daemon is*, and the placement comes out of the settings store — which is one of the
+    // capabilities. So the narrowing cannot happen at construction; it happens below, as soon as
+    // the placement is known and before anything asks git a question.
+    let mut caps = Capabilities::real();
     let mut core = State::default();
     if let Some(store) = caps.projects() {
         core.workspace = store.load().workspace;
@@ -126,6 +150,54 @@ fn boot() -> (App, Task<Message>) {
     // T014a). Refreshed when the choice is offered — the Settings overlay opening, the override
     // menu opening — and never per frame.
     core.available_providers = caps.available_providers();
+    // Feature 027: where the daemon runs. Read here rather than in the connection subscription
+    // because the *bring-up* is what the user watches, and it starts before the first dial.
+    let placement = caps
+        .settings()
+        .map(|store| store.load().settings.daemon.placement)
+        .unwrap_or_default();
+    let sandbox_state = micold_client::features::sandbox::Sandbox::for_placement(placement);
+    let sandbox_profile = caps
+        .settings()
+        .map(|store| store.load().settings.daemon.sandbox)
+        .unwrap_or_default();
+    // Research R2 part 2: if the daemon will not see this machine's projects at the paths this
+    // machine calls them by — a Linux container on a Windows host, and any remote daemon — then
+    // this client must not answer git questions for itself, because git stores absolute paths in
+    // worktree metadata and the two answers would be about different directories. Taking the
+    // capability away is what makes that a compile-time obligation at every call site rather than
+    // a rule someone has to remember.
+    if micold_core::sandbox::placement::Placement::resolve(placement, &sandbox_profile)
+        .git_routing()
+        == micold_core::sandbox::placement::GitRouting::ViaDaemon
+    {
+        caps = caps.without_local_git();
+    }
+    let state_dir = directories::ProjectDirs::from("", "", "micold-ai-ide")
+        .map(|d| d.data_dir().to_path_buf())
+        .unwrap_or_default();
+    let resolved_placement = micold_client::daemon::Placement {
+        kind: placement,
+        state_dir: state_dir.clone(),
+        strict_fingerprint: sandbox_profile.image.refuses_fingerprint_mismatch(),
+    };
+    // The mount set is the registered projects, read from the store this boot already loaded.
+    let projects_for_sandbox: Vec<PathBuf> = core
+        .workspace
+        .projects
+        .iter()
+        .map(|p| p.path.clone())
+        .collect();
+    // Kept for the whole run, not consumed by boot: a restart needs the same three inputs and has
+    // no way to re-derive them (R9). `None` for the host placement, which is what makes "restart
+    // the sandbox" unreachable when there is no sandbox.
+    let boot_plan =
+        (placement == PlacementKind::LocalSandbox).then(|| crate::shell::sandbox::BootPlan {
+            profile: sandbox_profile.clone(),
+            state_dir: state_dir.clone(),
+            projects: projects_for_sandbox,
+        });
+
     let boot_cwd = default_resolution_cwd(&core);
     let boot_snapshot = resolve_env_include(
         caps.env_include(),
@@ -195,6 +267,9 @@ fn boot() -> (App, Task<Message>) {
             daemon_catalog: None,
             displaced: HashMap::new(),
             disconnected: false,
+            placement: resolved_placement,
+            sandbox: sandbox_state,
+            sandbox_boot: boot_plan.clone(),
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
@@ -205,14 +280,44 @@ fn boot() -> (App, Task<Message>) {
             ripples_animating: Arc::new(AtomicUsize::new(0)),
             scene_ripple_frames: std::cell::Cell::new(0),
         },
-        // Ask for the initial window size up front: `resize_events` only fires on *changes*, so
-        // without this the first context menu before any resize would have nothing to clamp
-        // against (feature 015).
-        iced::window::latest()
-            .and_then(iced::window::size)
-            .map(|size| Message::WindowResized {
-                width: size.width.max(0.0) as u16,
-                height: size.height.max(0.0) as u16,
-            }),
+        Task::batch([
+            // Ask for the initial window size up front: `resize_events` only fires on *changes*, so
+            // without this the first context menu before any resize would have nothing to clamp
+            // against (feature 015).
+            iced::window::latest()
+                .and_then(iced::window::size)
+                .map(|size| Message::WindowResized {
+                    width: size.width.max(0.0) as u16,
+                    height: size.height.max(0.0) as u16,
+                }),
+            // And, when the daemon is sandboxed, start bringing it up. Batched rather than
+            // sequenced: the window has no reason to wait on a container image.
+            match boot_plan {
+                Some(plan) => crate::shell::sandbox::boot(plan),
+                None => Task::none(),
+            },
+        ]),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{window_settings, MIN_WINDOW_SIZE};
+
+    /// The window has a narrowest supported size, and it is the one the documentation names.
+    ///
+    /// Without one the settings surface can be dragged past the point where it works: the rail is
+    /// a fixed 288dp and never gives any of it back, so the content column beside it shrinks until
+    /// the actions row overflows. At 500dp wide the Save button is clipped by the window edge and
+    /// at 480 its label is gone entirely — the primary action of the surface becomes an unlabelled
+    /// circle (found by the T075 visual pass; quickstart §B.6 asks for "no truncated labels at the
+    /// narrowest supported window width" and there was no such width to test against).
+    #[test]
+    fn the_window_declares_the_narrowest_size_it_supports() {
+        assert_eq!(
+            window_settings().min_size,
+            Some(MIN_WINDOW_SIZE),
+            "no minimum window size, so there is no narrowest supported width to hold the layout to"
+        );
+    }
 }

@@ -353,6 +353,22 @@ pub fn chip(accent: Rgb) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
+/// A chip on an opaque fill — the accent as the *background*, with its own on-colour for the label.
+///
+/// [`chip`] above draws the accent at 20% over whatever is behind it, which reads as an accent only
+/// while "whatever is behind it" is a plain surface. Over a filled container — a current navigation
+/// row, drawn in `primary` — a 20% tint of `error` is neither the accent nor the surface, and the
+/// label sitting on it is close to unreadable. A chip that has to survive an unknown background
+/// brings its own (feature 027, T075).
+pub fn chip_solid(fill: Rgb, on_fill: Rgb) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(fill))),
+        text_color: Some(color(on_fill)),
+        border: radius(shape::FULL),
+        ..container::Style::default()
+    }
+}
+
 /// A result row inside a type-ahead menu (feature 021, contracts/typeahead-component.md §4.7).
 ///
 /// Three things can be true of one row at the same time, so each gets its own channel and none can
@@ -834,7 +850,12 @@ pub fn field_support(r: Roles, error: bool) -> Rgb {
 /// Leaving its old box in place would put a 1dp outline inside the filled container — the exact
 /// duplication the wrapper exists to remove.
 pub fn field_input(r: Roles) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
-    move |_theme, _status| text_input::Style {
+    // The status *is* read, and only for the disabled case. A field is disabled by having no
+    // `on_input` (see `TextField`), which is how a limit the runtime cannot enforce is rendered —
+    // and until this arm existed that field was pixel-identical to an editable one. The user
+    // clicked it, typed, saw nothing happen and had no way to tell a disabled control from a
+    // broken application (FR-015, SC-009).
+    move |_theme, status| text_input::Style {
         background: Background::Color(Color::TRANSPARENT),
         border: Border {
             color: Color::TRANSPARENT,
@@ -842,8 +863,14 @@ pub fn field_input(r: Roles) -> impl Fn(&Theme, text_input::Status) -> text_inpu
             radius: 0.0.into(),
         },
         icon: color(r.on_surface_variant),
-        placeholder: color(r.on_surface_variant),
-        value: color(r.on_surface),
+        placeholder: match status {
+            text_input::Status::Disabled => disabled_color(r.on_surface_variant),
+            _ => color(r.on_surface_variant),
+        },
+        value: match status {
+            text_input::Status::Disabled => disabled_color(r.on_surface),
+            _ => color(r.on_surface),
+        },
         selection: alpha(color(r.primary), 0.3),
     }
 }
@@ -863,6 +890,25 @@ mod tests {
         let r = tokens::roles(ColorScheme::Dark);
         let style = text_button(r, None)(&iced::Theme::Dark, Status::Disabled);
         assert_eq!(disabled_color(r.primary), style.text_color);
+    }
+
+    /// A disabled field has to *look* disabled.
+    ///
+    /// `TextField` expresses unavailability by omitting `on_input`, which is what the sandbox's
+    /// unenforceable limits do. This style function ignored its status until T086, so those fields
+    /// rendered identically to editable ones — the setting said "you cannot change this" in its
+    /// supporting line while looking exactly like one you could.
+    #[test]
+    fn a_disabled_field_greys_its_value() {
+        let r = tokens::roles(ColorScheme::Dark);
+        let disabled = field_input(r)(
+            &iced::Theme::Dark,
+            iced::widget::text_input::Status::Disabled,
+        );
+        let active = field_input(r)(&iced::Theme::Dark, iced::widget::text_input::Status::Active);
+        assert_eq!(disabled.value, disabled_color(r.on_surface));
+        assert_eq!(active.value, color(r.on_surface));
+        assert_ne!(disabled.value, active.value);
     }
 
     /// The enabled path must stay fully opaque — greying is the disabled state alone.

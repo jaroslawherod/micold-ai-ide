@@ -15,6 +15,14 @@ path = "src/lib.rs"
 name = "micold-daemon"
 path = "src/main.rs"
 
+# Mirrors `micold-core`'s gate (Principle VI): the default suite must need no container runtime
+# installed on any platform, or the adapter layer's cross-platform coverage stops meaning anything.
+# The one target behind this feature measures the two placements against each other, which needs
+# both the real daemon binary Cargo builds and a real Docker daemon.
+[features]
+default = []
+sandbox-real-runtime = []
+
 [dependencies]
 micold-core = { workspace = true }
 # Transport + runtime (plan W1, tasks T015-T020).

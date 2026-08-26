@@ -980,7 +980,7 @@ fn settings_env_include_enabled_toggled_updates_only_that_field() {
     state.update(Message::SettingsEnvIncludeEnabledToggled(false));
 
     let draft = state.settings_draft.as_ref().unwrap();
-    assert!(!draft.env_include_enabled);
+    assert!(!draft.environment.enabled);
 }
 
 #[test]
@@ -992,7 +992,7 @@ fn settings_env_include_path_changed_updates_only_that_field() {
     ));
 
     let draft = state.settings_draft.as_ref().unwrap();
-    assert_eq!(draft.env_include_script_path, "/custom/script.sh");
+    assert_eq!(draft.environment.script_path, "/custom/script.sh");
 }
 
 #[test]
@@ -1002,7 +1002,7 @@ fn settings_env_include_timeout_changed_updates_only_that_field() {
     state.update(Message::SettingsEnvIncludeTimeoutChanged("30".to_string()));
 
     let draft = state.settings_draft.as_ref().unwrap();
-    assert_eq!(draft.env_include_timeout, "30");
+    assert_eq!(draft.environment.timeout_secs, "30");
 }
 
 #[test]
@@ -1017,10 +1017,10 @@ fn env_include_field_changes_leave_other_draft_fields_untouched() {
     state.update(Message::SettingsEnvIncludeTimeoutChanged("30".to_string()));
 
     let draft = state.settings_draft.as_ref().unwrap();
-    assert_eq!(draft.scrollback_lines, "25000");
-    assert!(!draft.env_include_enabled);
-    assert_eq!(draft.env_include_script_path, "/custom/script.sh");
-    assert_eq!(draft.env_include_timeout, "30");
+    assert_eq!(draft.terminal.scrollback_lines, "25000");
+    assert!(!draft.environment.enabled);
+    assert_eq!(draft.environment.script_path, "/custom/script.sh");
+    assert_eq!(draft.environment.timeout_secs, "30");
 }
 
 // =======================================================================================

@@ -78,6 +78,12 @@ fn the_settings_version_does_not_move_for_this_field() {
     //
     // Asserted against the file rather than the constant: the constant is what a bump would change,
     // so reading it back is what catches one.
+    //
+    // The number is 4 on the merge rather than the 3 this test was written with, and *not* because
+    // of this field: feature 027 moved it for its nested `daemon` block, which is another additive
+    // defaulted change and is the only entry the constant's own doc comment adds after 3. What is
+    // still checked here is that a file naming a CLI declares the same schema as one that does not
+    // — `a_settings_file_written_before_this_feature_loads_as_claude_code` above is the other half.
     let dir = tempfile::tempdir().unwrap();
     store(&dir)
         .save(&Settings {
@@ -89,7 +95,7 @@ fn the_settings_version_does_not_move_for_this_field() {
     let written = std::fs::read_to_string(dir.path().join("settings.json")).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&written).unwrap();
     assert_eq!(
-        parsed["settings_version"], 3,
+        parsed["settings_version"], 4,
         "adding a defaulted preference is not a schema change"
     );
     assert!(written.contains("default_ai_cli"));

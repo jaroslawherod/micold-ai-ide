@@ -1,3 +1,21 @@
+# Line endings: LF everywhere, including in a Windows working tree.
+#
+# A Windows runner checks out with `core.autocrlf=true` by default, and roughly thirty gates in
+# this suite are text scans over the repository's own sources -- `anatomy_call_sites.rs` truncates
+# a file at a byte offset it counts line by line, `quickstart_a_runs_everywhere.rs` splits ci.yml
+# on "\n  test:\n". Under CRLF the offsets drift by one byte per line and the needles miss, so the
+# gates fail on Windows while reporting something else entirely: a file with two test modules that
+# has one, a ci.yml with no `test:` job that plainly has one.
+#
+# Normalising in each reader would be the same enumerated list those gates exist to replace, and it
+# would have to be maintained by whoever adds the thirty-first. One declaration instead. `eol=lf`
+# wins over `core.autocrlf`, so this holds regardless of how a contributor's git is configured, and
+# `text=auto` leaves git's own binary detection in charge of the .png and .ttf files below.
+#
+# The three-platform matrix is what pins it: drop this line and the Windows leg goes red again,
+# which is how it was found (feature 027, T115).
+* text=auto eol=lf
+
 # The documentation set (feature 023).
 #
 # `micold-docs` marks paths whose contents cannot affect what is built, linted, packaged or
@@ -30,3 +48,11 @@ specs/**      micold-docs
 # view with no filesystem or network access (Constitution Principle IV). Changing it changes the
 # artifact, so it takes the full pipeline. Must stay after `/*.md`, which sets the attribute.
 /CHANGELOG.md -micold-docs
+
+# Read by a test, so a test input rather than documentation: feature 027's §A table is the list of
+# gates the three-platform matrix is claimed to run, and
+# `crates/micold-core/tests/quickstart_a_runs_everywhere.rs` compares it against `ci.yml`. If this
+# stayed documentation, editing the table would skip the whole pipeline -- so the one edit the gate
+# exists to catch would be the one edit it never sees. Must stay after `specs/**`, which sets the
+# attribute.
+/specs/027-sandboxed-daemon-runtime/quickstart.md -micold-docs

@@ -18,10 +18,31 @@
 /// **once** for the whole feature: `provider` on `ClientMsg::SessionCreate` (inbound) and on
 /// `SessionSummary` (outbound), and `default_ai_cli` on `DaemonSettings`, `SettingsSet` and
 /// `SettingsChanged`. A second bump later in the feature would fail `tests/schema_hash.rs`.
-pub const PROTOCOL_VERSION: u32 = 7;
+/// Bumped 7 → 8 for feature 027, in one edit for the same reason 026 used one: the sandbox
+/// handshake gives `ClientMsg::Hello` an authentication token and a build fingerprint — together,
+/// because the sandbox transport is loopback TCP, which unlike the `0700`-guarded socket
+/// authenticates nobody (research R1/R8) — and `ClientMsg::RepoRootQuery` /
+/// `OperationResult::RepoRoot` let the open-project gate be answered by the side that will
+/// actually run git, which is the only side that can where the client cannot see the daemon's
+/// filesystem at the same paths: Windows, and the remote placement (research R2).
+///
+/// 027 developed against 6 and 7 of its own while 026 was taking the same two numbers on main.
+/// Both wire changes are present here, so both cannot be 7; the feature's whole delta is 8.
+pub const PROTOCOL_VERSION: u32 = 8;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
+
+// `build.rs` emits `BUILD_FINGERPRINT` — a value that changes on every build of this crate's
+// sources, not every release — into this file, carrying its own doc comment (the one above cannot
+// live here, because rustdoc does not document a macro invocation).
+//
+// The three constants above cannot detect a stale development image: within one released version, a
+// daemon rebuilt yesterday and a client built today present identical values for all of them, so the
+// handshake accepts a `:dev` image that is behind the tree and the daemon then misbehaves in ways
+// that look like bugs in the new code (feature 027, FR-024d, research R8). The comparison is
+// deliberately asymmetric — see `sandbox::image::ImageSource::refuses_fingerprint_mismatch`.
+include!(concat!(env!("OUT_DIR"), "/build_fingerprint.rs"));
 
 /// This build's package version (`CARGO_PKG_VERSION` of *this* crate). Every workspace member
 /// shares one version (`version.workspace = true`), so this is also the daemon's and the client's

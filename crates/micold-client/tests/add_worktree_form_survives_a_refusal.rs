@@ -146,7 +146,16 @@ impl<'a> Screen<'a> {
 
         // The view is built once and kept, exactly as the runtime keeps it between frames: a fresh
         // element each frame would restart every entrance and nothing would ever settle.
-        let mut element = ui::view(state, None, None, 0, None, &OUTCOME, &CONNECTION);
+        let mut element = ui::view(
+            state,
+            None,
+            None,
+            0,
+            None,
+            &OUTCOME,
+            &CONNECTION,
+            &micold_client::features::sandbox::Sandbox::default(),
+        );
         let mut tree = Tree::new(&element);
         let mut node = element
             .as_widget_mut()

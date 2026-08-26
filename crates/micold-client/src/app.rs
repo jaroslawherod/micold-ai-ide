@@ -90,7 +90,10 @@ pub enum Message {
 
     // ---- Feature 015: forget from the switcher's right-click menu ----
     /// The window was resized (or reported its initial size). Feeds context-menu clamping.
-    WindowResized { width: u16, height: u16 },
+    WindowResized {
+        width: u16,
+        height: u16,
+    },
     /// Open (or close, if already open) a project's switcher right-click context menu, by path,
     /// anchored at the press point in window pixels. The switcher panel stays open behind it; the
     /// other popovers are mutually exclusive.
@@ -190,6 +193,21 @@ pub enum Message {
     /// made against the state Escape actually lands in rather than the state that was last
     /// rendered.
     EscapePressed,
+    /// Tab (or Shift+Tab) asked for the keyboard's focus to move (feature 027, FR-030).
+    ///
+    /// Runtime, not state: the focused widget is the rendering stack's, and moving it is a widget
+    /// *operation* the binary issues — this reducer has nowhere to put it. What lives here is the
+    /// message, so the subscription that hears the key and the shell that acts on it agree about
+    /// what was asked for.
+    ///
+    /// The application had no traversal at all until T075's visual pass pressed Tab: every input
+    /// implemented iced's `Focusable`, focus order was whatever the view's order was, and nothing
+    /// ever issued the operation. The keyboard reached exactly the one control a pointer had last
+    /// clicked.
+    FocusMoved {
+        /// Forwards for Tab, backwards for Shift+Tab.
+        forward: bool,
+    },
     /// The worktree sidebar scrolled to this vertical offset.
     ///
     /// Carries the offset rather than being a bare notification, because the app bar's elevation
@@ -210,14 +228,19 @@ pub enum Message {
     /// exactly the stale pair this doc warns about — and it went stale for real, because this
     /// message is the only thing that ever wrote it and it fires only when something scrolls. The
     /// fade derives the width from the tab count instead (`ui::terminal::strip_overflow`).
-    TabStripScrolled { offset: u32, width: u32 },
+    TabStripScrolled {
+        offset: u32,
+        width: u32,
+    },
     /// The tab strip's viewport was laid out, or resized (feature 026 FR-002e).
     ///
     /// Separate from [`Self::TabStripScrolled`] because the two answer different questions and fire
     /// at different times — the same split the sidebar's pair makes. This one is what covers the
     /// **first** frame, where nothing has scrolled yet and a strip that already overflows still has
     /// to fade its edge.
-    TabStripViewportResized { width: u32 },
+    TabStripViewportResized {
+        width: u32,
+    },
     /// The sidebar's scroll viewport was laid out at this height, in whole logical pixels
     /// (feature 024).
     ///
@@ -283,7 +306,10 @@ pub enum Message {
     /// is a separate change from the one that made the daemon report the transition at all.
     SessionRunning(SessionId),
     /// The session's `claude` title became available/changed (FR-011a).
-    SessionTitleUpdated { id: SessionId, title: String },
+    SessionTitleUpdated {
+        id: SessionId,
+        title: String,
+    },
 
     // ---- Bugfix BUG-003: session Remove (distinct from Close/archive) ----
     /// Open (or close, if already open) a session's right-click context menu, anchored at the
@@ -401,7 +427,10 @@ pub enum Message {
         kind: SelectKind,
     },
     /// Extend the in-progress text selection to a viewport grid cell (FR-013).
-    TerminalSelectUpdate { col: u16, line: u16 },
+    TerminalSelectUpdate {
+        col: u16,
+        line: u16,
+    },
     /// Clear the current text selection.
     TerminalSelectCleared,
     /// Scroll the displayed terminal by N lines (+ up into scrollback) (FR-016).
@@ -411,13 +440,19 @@ pub enum Message {
     /// batched drag events set the target instead of accumulating relative deltas (drag flicker).
     TerminalScrolledTo(usize),
     /// The terminal pane's visible size changed; resize the PTY + grid (FR-014, FR-015).
-    TerminalResized { cols: u16, rows: u16 },
+    TerminalResized {
+        cols: u16,
+        rows: u16,
+    },
     /// Copy the current terminal selection to the clipboard (binary handles clipboard) (FR-013).
     TerminalCopyRequested,
     /// Paste clipboard text into the focused session's PTY (binary handles clipboard) (FR-013).
     TerminalPasteRequested,
     /// Open the terminal right-click context menu at a pane-local pixel point (FR-013).
-    TerminalContextMenuOpened { x: u16, y: u16 },
+    TerminalContextMenuOpened {
+        x: u16,
+        y: u16,
+    },
     /// Dismiss the terminal context menu (an outside click, or after an item is chosen) (FR-013).
     TerminalContextMenuClosed,
     /// Open the Settings form (from the toolbar menu) (FR-019). The binary seeds the draft with
@@ -426,6 +461,44 @@ pub enum Message {
     /// The Settings scrollback field changed.
     SettingsScrollbackChanged(String),
     /// The Settings environment-include enabled checkbox was toggled (feature 011, FR-001).
+    /// The "run the daemon in a container" checkbox was toggled (feature 027, FR-001).
+    /// The Settings view moved to another section (feature 027, FR-026).
+    SettingsSectionShown(crate::features::settings::SettingsSection),
+    /// The Settings theme picker changed (feature 027, FR-027).
+    ///
+    /// Distinct from [`Message::ThemePreferenceChanged`], which the app bar's cycle button emits
+    /// and which applies immediately. This one edits the draft and takes effect on save, like
+    /// every other control on the form.
+    SettingsThemeChanged(micold_core::theme::ThemePreference),
+    /// Where the session service runs (feature 027, FR-001).
+    SettingsPlacementChanged(micold_core::sandbox::placement::PlacementKind),
+    /// Which container runtime drives the sandbox (feature 027, FR-021).
+    SettingsRuntimeChanged(micold_core::sandbox::runtime::RuntimeKind),
+    /// How the sandbox image is obtained (feature 027, FR-024).
+    SettingsImageKindChanged(micold_core::sandbox::image::ImageSourceKind),
+    /// The sandbox image's reference changed (feature 027, FR-024).
+    SettingsImageReferenceChanged(String),
+    /// The archive an imported image is loaded from changed (feature 027, FR-024a).
+    SettingsImagePathChanged(String),
+    /// One host credential's share was opted into or out of (feature 027, FR-004c).
+    SettingsCredentialToggled(micold_core::sandbox::CredentialShare, bool),
+    /// Whether sessions outlive the user's sign-out (feature 027, FR-014a).
+    SettingsSurviveLogoutToggled(bool),
+    /// Whether the sandbox may open outbound connections (feature 027, FR-017, FR-018).
+    SettingsNetworkChanged(micold_core::sandbox::NetworkPosture),
+    /// The sandbox's processor limit changed, in cores as typed (feature 027, FR-012).
+    ///
+    /// Four variants rather than one carrying which limit it is, unlike
+    /// [`Message::SettingsCredentialToggled`]: the four credentials are one control repeated over
+    /// a set, while these four are four different quantities in three different units, and a
+    /// single variant would only move the `match` from here into the reducer.
+    SettingsCpuLimitChanged(String),
+    /// The sandbox's memory limit changed, in MiB as typed (feature 027, FR-013).
+    SettingsMemoryLimitChanged(String),
+    /// The sandbox's process-count limit changed, as typed (feature 027, FR-014).
+    SettingsPidLimitChanged(String),
+    /// The sandbox's writable-storage limit changed, in MiB as typed (feature 027, FR-015).
+    SettingsStorageLimitChanged(String),
     SettingsEnvIncludeEnabledToggled(bool),
     /// The Settings environment-include script path field changed (FR-002).
     SettingsEnvIncludePathChanged(String),
@@ -478,6 +551,28 @@ pub enum Message {
     DaemonDisconnected,
     /// Connecting to (or spawning) the daemon failed, with a human-facing reason.
     DaemonConnectFailed(String),
+    /// The sandbox came up (feature 027). Boxed because `Started` carries the capability probe,
+    /// and `Message` is cloned on every dispatch.
+    SandboxStarted(Box<micold_core::sandbox::lifecycle::Started>),
+    /// The service's own diagnostics, read out of the container (FR-038, US6 scenario 6). The
+    /// answer to "why did it not start?" when the service never came up far enough to be asked
+    /// directly.
+    SandboxDiagnostics(Vec<String>),
+    /// The container the sandbox was using is gone — stopped or removed from outside the
+    /// application (FR-036, US6 scenario 3). Sent by the liveness check, never by a person.
+    SandboxLost,
+    /// The user asked for the sandbox to be restarted (feature 027, R9). The one edge back into
+    /// bring-up: a project registered while the sandbox is up marks it stale and nothing restarts
+    /// on its own, because restarting would end the sessions inside it to service a settings
+    /// change made in another window.
+    SandboxRestartRequested,
+    /// The user accepted running unsandboxed for this occurrence (feature 027, FR-035a). Never
+    /// sent by the application to itself: the button *is* the consent, and there is no other way
+    /// out of a failed sandbox to a working service.
+    SandboxFallbackAccepted,
+    /// The sandbox could not be brought up. Carries the stage and the classified cause, so the
+    /// banner can name both without the shell formatting a string on the way past (FR-034).
+    SandboxFailed(Box<micold_core::sandbox::lifecycle::Failure>),
     /// The user asked to take the active project back after being displaced (US5, FR-024): re-attach
     /// with `force`. Handled by the binary (attachment is runtime).
     ConnectionTakeoverRequested,
@@ -915,6 +1010,10 @@ impl State {
             && !self.terminal_released
             && self.focused_field.is_none()
             && !self.any_surface_takes_keyboard()
+            // Settings is not a floating surface any more, so the registry cannot answer for it
+            // (feature 027, FR-026). Without this the terminal it replaced on screen would still
+            // be taking every key the user typed into a form.
+            && self.settings_draft.is_none()
     }
 
     /// Any floating surface that takes the keyboard while it is open (FR-004, FR-017).
@@ -947,11 +1046,22 @@ impl State {
             | Message::DaemonGridFrame(_)
             | Message::DaemonDisconnected
             | Message::DaemonConnectFailed(_)
+            // The sandbox's state lives on the binary's `App` beside the daemon connection, for the
+            // same reason: it is runtime, not pure state.
+            | Message::SandboxStarted(_)
+            | Message::SandboxFailed(_)
+            | Message::SandboxDiagnostics(_)
+            | Message::SandboxLost
+            | Message::SandboxRestartRequested
+            | Message::SandboxFallbackAccepted
             | Message::ConnectionTakeoverRequested
             | Message::DaemonVersionMismatch { .. }
             | Message::DaemonBuildMismatch { .. }
             | Message::ConnectionRestartServiceRequested
             | Message::NoOp
+            // Focus is the rendering stack's, and moving it is a widget operation — see
+            // [`Message::FocusMoved`].
+            | Message::FocusMoved { .. }
             | Message::DiagnosticsRequested
             | Message::LogoutSurvivalRequested
             | Message::LogoutSurvivalOutcome(_) => {}
@@ -1191,6 +1301,12 @@ impl State {
                 crate::features::session::shell_instance_menu_closed(self)
             }
             Message::SettingsOpened => crate::features::settings::opened(self),
+            Message::SettingsSectionShown(section) => {
+                crate::features::settings::section_shown(self, section)
+            }
+            Message::SettingsThemeChanged(theme) => {
+                crate::features::settings::theme_changed(self, theme)
+            }
             Message::SettingsScrollbackChanged(text) => {
                 crate::features::settings::scrollback_changed(self, text)
             }
@@ -1202,6 +1318,42 @@ impl State {
             }
             Message::SettingsEnvIncludeTimeoutChanged(text) => {
                 crate::features::settings::env_include_timeout_changed(self, text)
+            }
+            Message::SettingsPlacementChanged(placement) => {
+                crate::features::settings::placement_changed(self, placement)
+            }
+            Message::SettingsRuntimeChanged(runtime) => {
+                crate::features::settings::runtime_changed(self, runtime)
+            }
+            Message::SettingsImageKindChanged(kind) => {
+                crate::features::settings::image_kind_changed(self, kind)
+            }
+            Message::SettingsImageReferenceChanged(text) => {
+                crate::features::settings::image_reference_changed(self, text)
+            }
+            Message::SettingsImagePathChanged(text) => {
+                crate::features::settings::image_path_changed(self, text)
+            }
+            Message::SettingsCredentialToggled(share, shared) => {
+                crate::features::settings::credential_toggled(self, share, shared)
+            }
+            Message::SettingsSurviveLogoutToggled(survive) => {
+                crate::features::settings::survive_logout_toggled(self, survive)
+            }
+            Message::SettingsNetworkChanged(posture) => {
+                crate::features::settings::network_changed(self, posture)
+            }
+            Message::SettingsCpuLimitChanged(text) => {
+                crate::features::settings::cpu_limit_changed(self, text)
+            }
+            Message::SettingsMemoryLimitChanged(text) => {
+                crate::features::settings::memory_limit_changed(self, text)
+            }
+            Message::SettingsPidLimitChanged(text) => {
+                crate::features::settings::pid_limit_changed(self, text)
+            }
+            Message::SettingsStorageLimitChanged(text) => {
+                crate::features::settings::storage_limit_changed(self, text)
             }
             Message::SessionStartMenuOpened(location) => {
                 crate::features::session::start_menu_toggled(self, location)
@@ -1462,7 +1614,14 @@ where
 /// The function itself survives only as the name the scrim and the tests already call; T034
 /// collapses the keyboard subscription onto the same call and this goes with it.
 pub fn on_escape(state: &State) -> Option<Message> {
-    crate::overlay::registry::escape(state)
+    // The registry first: a dialog opened *over* the Settings view is the thing Escape is about,
+    // and Settings is no longer in that list to answer for itself (feature 027, FR-026).
+    crate::overlay::registry::escape(state).or_else(|| {
+        state
+            .settings_draft
+            .is_some()
+            .then_some(Message::SettingsCancelled)
+    })
 }
 
 /// Where a decoded key press should go (feature 006, FR-009/FR-011). Pure; see

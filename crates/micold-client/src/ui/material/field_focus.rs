@@ -156,6 +156,42 @@ impl<'a> Mounted<'a> {
         )
     }
 
+    /// The frame tick every widget sees. iced delivers `RedrawRequested` through `update` like any
+    /// other event, which is what gives a widget somewhere to publish from after an *operation* has
+    /// changed something — an operation carries no shell and can say nothing itself.
+    fn redraw(&mut self) -> Vec<String> {
+        self.send(
+            Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            )),
+            mouse::Cursor::Unavailable,
+        )
+    }
+
+    /// Move the keyboard forward through this element, the way `Message::FocusMoved` does.
+    ///
+    /// The loop is not ceremony. `focus_next` is two passes chained — count the focusables, then
+    /// move to the one after the focused — and a single `operate` call runs only the first, so a
+    /// test that made one call would prove nothing and pass either way. The runtime drives the
+    /// chain; here that is this loop.
+    fn focus_next(&mut self) {
+        use iced::advanced::widget::operation::{focusable, Operation, Outcome};
+
+        let mut current: Box<dyn Operation<()>> = Box::new(focusable::focus_next::<()>());
+        loop {
+            self.element.as_widget_mut().operate(
+                &mut self.tree,
+                Layout::new(&self.node),
+                &self.renderer,
+                current.as_mut(),
+            );
+            match current.finish() {
+                Outcome::Chain(next) => current = next,
+                Outcome::None | Outcome::Some(_) => break,
+            }
+        }
+    }
+
     /// Press a named key, with the pointer nowhere near — a keyboard interaction has to work
     /// without the mouse resting helpfully on the control, or it is not a keyboard interaction.
     fn press_key(&mut self, key: iced::keyboard::key::Named) -> Vec<String> {
@@ -489,4 +525,208 @@ fn the_focused_checkbox_is_shaded_and_focus_outranks_hover() {
             );
         }
     }
+}
+
+/// A focus traversal is not an event, so a control it lands on has no `update` to notice it in.
+/// The checkbox took the keyboard from the traversal, answered Space, and told the application
+/// nothing — so `focused_field` stayed empty and the box drew itself at rest. Found by the T075
+/// visual pass: tabbing onto a credential opt-in changed not one pixel, and Space then toggled it.
+///
+/// FR-030 asks for the focused element to be *visible*, and a control that holds the keyboard in
+/// secret is the half of that requirement nothing else here was checking.
+#[test]
+fn a_checkbox_reached_by_the_traversal_says_so() {
+    let r = roles();
+    let mut mounted =
+        Mounted::new(checkbox(false, r).on_focus_change(|focused| format!("focus={focused}")));
+
+    mounted.focus_next();
+    assert_eq!(
+        mounted.redraw(),
+        vec!["focus=true".to_string()],
+        "the traversal gave the checkbox the keyboard and nothing was published, so nothing in the \
+         application knows to draw it focused"
+    );
+}
+
+/// And only once. A report on every frame would be a message per repaint for as long as the box
+/// holds the keyboard — the defect `focus_is_reported_when_it_changes_and_not_on_every_event`
+/// guards against for the field beside it.
+#[test]
+fn the_checkbox_reports_the_traversal_once_and_not_every_frame() {
+    let r = roles();
+    let mut mounted =
+        Mounted::new(checkbox(false, r).on_focus_change(|focused| format!("focus={focused}")));
+
+    mounted.focus_next();
+    assert_eq!(mounted.redraw(), vec!["focus=true".to_string()]);
+    assert!(
+        mounted.redraw().is_empty(),
+        "the checkbox re-announced focus it had already reported"
+    );
+}
+
+// -------------------------------------------------------------------------------------------
+// The button and the select, which had no keyboard either (feature 027, FR-030)
+// -------------------------------------------------------------------------------------------
+//
+// The checkbox above was given a keyboard by feature 022 and the text field has always had one, so
+// a settings form of fields and opt-ins could be tabbed through. Feature 027's Settings is not that
+// form: it is a surface whose sections are chosen from a rail of *buttons*, whose theme is a
+// *select*, and whose Save and Cancel are buttons. Eight Tab presses on its Appearance section
+// changed zero pixels, because none of those controls is focusable at all — so the section could be
+// reached by pointer only, and FR-030 ("Sections and every control within them MUST be reachable by
+// keyboard alone, with the focused element visible") failed on its first clause.
+//
+// These drive both controls the way a person does. What they cannot see is the *indicator* — a
+// renderer here draws into nothing that can be read back — so its geometry is asserted beside it in
+// `keyboard_focus.rs` and its appearance is the visual pass's to confirm.
+
+/// A button that says what it was pressed for.
+fn button<'a>(r: Roles) -> super::Button<'a, String> {
+    super::Button::filled("Save", r).on_press("saved".to_string())
+}
+
+/// The options a test select offers. `static` rather than `const` so the slice outlives the
+/// builder's borrow of it.
+static OPTIONS: [&str; 2] = ["Light", "Dark"];
+
+/// A select over [`OPTIONS`], with nothing chosen yet.
+fn select<'a>(r: Roles) -> super::Select<'a, &'static str, String> {
+    super::Select::new(&OPTIONS, None, |chosen: &str| format!("picked={chosen}"), r).label("Theme")
+}
+
+#[test]
+fn a_button_reached_by_the_traversal_answers_enter() {
+    let r = roles();
+    let mut mounted = Mounted::new(button(r));
+
+    mounted.focus_next();
+
+    assert_eq!(
+        mounted.press_key(iced::keyboard::key::Named::Enter),
+        vec!["saved".to_string()],
+        "the rendering stack's button holds no focus and answers no key, so Save, Cancel and every \
+         row of the settings rail were reachable by pointer only (FR-030)",
+    );
+}
+
+#[test]
+fn a_button_answers_space_as_well() {
+    let r = roles();
+    let mut mounted = Mounted::new(button(r));
+
+    mounted.focus_next();
+
+    assert_eq!(
+        mounted.press_key(iced::keyboard::key::Named::Space),
+        vec!["saved".to_string()],
+        "a button answers both keys everywhere it exists — unlike the checkbox, which answers only \
+         Space because Enter is the dialog's",
+    );
+}
+
+#[test]
+fn an_unfocused_button_leaves_both_keys_alone() {
+    let r = roles();
+    let mut mounted = Mounted::new(button(r));
+
+    assert!(
+        mounted
+            .press_key(iced::keyboard::key::Named::Enter)
+            .is_empty()
+            && mounted
+                .press_key(iced::keyboard::key::Named::Space)
+                .is_empty(),
+        "a button nobody has focused must not fire on a keystroke aimed at whatever has — a form \
+         of eight buttons would save itself eight times on one Enter",
+    );
+}
+
+#[test]
+fn a_disabled_button_is_not_a_tab_stop() {
+    let r = roles();
+    // No `on_press`, which is how a button renders disabled everywhere in this library — beside a
+    // checkbox, so the traversal has somewhere else to land and the test can tell "skipped" from
+    // "nothing happened at all".
+    let row: Element<'_, String> = iced::widget::column![
+        Element::from(super::Button::<String>::filled("Save", r)),
+        Element::from(checkbox(false, r)),
+    ]
+    .into();
+    let mut mounted = Mounted::new(row);
+
+    mounted.focus_next();
+
+    assert_eq!(
+        mounted.redraw(),
+        vec!["focus=true".to_string()],
+        "the first Tab must reach the checkbox: a disabled control that takes the keyboard draws a \
+         focus indicator on something that cannot be operated and stands as a dead stop in the tab \
+         order",
+    );
+}
+
+#[test]
+fn a_select_reached_by_the_traversal_opens_and_can_be_chosen_from() {
+    let r = roles();
+    let mut mounted = Mounted::new(select(r));
+
+    mounted.focus_next();
+    // Enter opens the list. Nothing is published by opening — the list is the component's own
+    // state, which is the whole reason `Select::active` does not exist (FR-013).
+    assert!(mounted
+        .press_key(iced::keyboard::key::Named::Enter)
+        .is_empty());
+    mounted.press_key(iced::keyboard::key::Named::ArrowDown);
+    let published = mounted.press_key(iced::keyboard::key::Named::Enter);
+
+    assert_eq!(
+        published,
+        vec!["picked=Light".to_string()],
+        "a select the keyboard can reach but not open is a tab stop with nothing behind it — the \
+         Theme picker was exactly that (FR-030)",
+    );
+}
+
+#[test]
+fn an_unfocused_select_leaves_enter_alone() {
+    let r = roles();
+    let mut mounted = Mounted::new(select(r));
+
+    assert!(
+        mounted
+            .press_key(iced::keyboard::key::Named::Enter)
+            .is_empty(),
+        "a closed select nobody has focused must not open on a keystroke meant for something else \
+         — every select on the surface would drop its list at once",
+    );
+}
+
+#[test]
+fn a_select_that_loses_the_keyboard_closes_its_list() {
+    let r = roles();
+    // Two focusables, so the traversal has somewhere to go: a `focus_next` in a tree with one stop
+    // wraps back onto it and moves nothing.
+    let form: Element<'_, String> =
+        iced::widget::column![Element::from(select(r)), Element::from(checkbox(false, r))].into();
+    let mut mounted = Mounted::new(form);
+    mounted.focus_next();
+    mounted.press_key(iced::keyboard::key::Named::Enter);
+    mounted.press_key(iced::keyboard::key::Named::ArrowDown);
+
+    // Tab moves on, which unfocuses the select.
+    mounted.focus_next();
+    // The checkbox the keyboard landed on reports that on the next frame; flushing it here keeps
+    // the assertion below about the select and nothing else.
+    mounted.redraw();
+
+    let published = mounted.press_key(iced::keyboard::key::Named::Enter);
+
+    assert!(
+        !published.iter().any(|m| m.starts_with("picked=")),
+        "the list was still open and still taking rows after the keyboard had moved on — and a \
+         list nothing holds is a list nothing can dismiss: Escape now reaches whatever has the \
+         focus, and it is not this — published {published:?}",
+    );
 }

@@ -1,0 +1,1 @@
+{"host":{"arch":"amd64","cgroupVersion":"v2","security":{"rootless":true}},"store":{"graphDriverName":"overlay","graphRoot":"/home/u/.local/share/containers/storage"},"version":{"Version":"5.4.0"}}

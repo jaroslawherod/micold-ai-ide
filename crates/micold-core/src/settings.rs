@@ -7,6 +7,8 @@
 //! FR-019). On-disk format is the durable contract in
 //! `specs/003-material-design-layout/contracts/settings-schema.md`.
 
+use crate::sandbox::placement::PlacementKind;
+use crate::sandbox::{BudgetViolation, SandboxProfile};
 use crate::session::AiCli;
 use crate::store::LoadStatus;
 use crate::theme::ThemePreference;
@@ -17,8 +19,9 @@ use std::path::{Path, PathBuf};
 /// The current on-disk settings schema version (see the settings-schema contract). Bumped to
 /// `2` in feature 006 when `scrollback_lines` was added (missing field still defaults on read).
 /// Bumped to `3` in feature 011 when the environment-include fields were added (same
-/// missing-field-defaults contract).
-const SETTINGS_VERSION: u32 = 3;
+/// missing-field-defaults contract). Bumped to `4` in feature 027 for the nested `daemon` block —
+/// same contract again, so a v3 file still loads without a migration step.
+const SETTINGS_VERSION: u32 = 4;
 
 /// Default per-session terminal scrollback (lines). Matches `alacritty_terminal 0.25`'s
 /// `Config::scrolling_history` default (feature 006, FR-021).
@@ -82,6 +85,24 @@ pub fn clamp_env_include_timeout(secs: u64) -> u64 {
     secs.clamp(MIN_ENV_INCLUDE_TIMEOUT_SECS, MAX_ENV_INCLUDE_TIMEOUT_SECS)
 }
 
+/// Everything about the session daemon: where it runs, and how the sandbox is configured when it
+/// runs there (feature 027).
+///
+/// Nested rather than flattened with a `daemon_` prefix. The existing flat fields grew one feature
+/// at a time and the root is already six keys wide; the sectioned Settings view (FR-026) makes the
+/// grouping user-visible, and matching it on disk keeps the two readable together.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct DaemonConfig {
+    /// Where the daemon runs. Defaults to the host process, so upgrading never moves a user into
+    /// the sandbox (FR-001).
+    #[serde(default)]
+    pub placement: PlacementKind,
+    /// The sandbox configuration, whether or not the sandbox is currently selected — a user who
+    /// switches back keeps what they set.
+    #[serde(default)]
+    pub sandbox: SandboxProfile,
+}
+
 /// The persisted application settings document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -101,6 +122,9 @@ pub struct Settings {
     /// (FR-003/FR-004).
     #[serde(default = "default_env_include_timeout_secs")]
     pub env_include_timeout_secs: u64,
+    /// Where the session daemon runs, and its sandbox profile (feature 027).
+    #[serde(default)]
+    pub daemon: DaemonConfig,
     /// Which AI CLI a new session runs when nothing is chosen for it (feature 026, FR-003).
     ///
     /// **Not validated against availability.** A default naming an uninstalled CLI is kept, not
@@ -119,6 +143,7 @@ impl Default for Settings {
             env_include_enabled: DEFAULT_ENV_INCLUDE_ENABLED,
             env_include_script_path: default_env_include_script_path_string(),
             env_include_timeout_secs: DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
+            daemon: DaemonConfig::default(),
             default_ai_cli: AiCli::default(),
         }
     }
@@ -163,6 +188,9 @@ struct StoredSettings {
     /// Missing in pre-011 (v2) files → defaults to [`DEFAULT_ENV_INCLUDE_TIMEOUT_SECS`] (`10`).
     #[serde(default = "default_env_include_timeout_secs")]
     env_include_timeout_secs: u64,
+    /// Missing in pre-027 (v3) files → the host placement with a default sandbox profile.
+    #[serde(default)]
+    daemon: DaemonConfig,
     /// Missing in pre-026 files → defaults to `ClaudeCode`, which is the right answer for every
     /// settings file written before this feature (feature 026, FR-003).
     ///
@@ -182,6 +210,7 @@ impl StoredSettings {
             env_include_enabled: settings.env_include_enabled,
             env_include_script_path: settings.env_include_script_path.clone(),
             env_include_timeout_secs: settings.env_include_timeout_secs,
+            daemon: settings.daemon.clone(),
             default_ai_cli: settings.default_ai_cli,
         }
     }
@@ -193,6 +222,15 @@ impl StoredSettings {
             env_include_enabled: self.env_include_enabled,
             env_include_script_path: self.env_include_script_path,
             env_include_timeout_secs: clamp_env_include_timeout(self.env_include_timeout_secs),
+            daemon: {
+                let mut daemon = self.daemon;
+                // Clamp on read, refuse on save (rule S-7): a hand-edited file opens the app with
+                // a corrected value, while the same value typed into the view is refused with the
+                // accepted range named (FR-016). The two paths differ on purpose — one is the
+                // user's mistake, the other is a file they may not have written.
+                daemon.sandbox.budget.clamp();
+                daemon
+            },
             // Not clamped, and not checked against availability: unlike the two numbers above,
             // there is no invalid value to repair — only a CLI that may not be installed today,
             // which is the user's choice to keep (research R11).
@@ -227,6 +265,38 @@ impl JsonFileSettingsStore {
 
     fn backup_path(&self) -> PathBuf {
         self.path.with_extension("json.bak")
+    }
+
+    /// The document to write: this build's fields laid over whatever is already on disk.
+    ///
+    /// Rule S-5, new in v4. A settings file written by a newer build and opened by an older one
+    /// used to lose the newer build's keys on the next save, silently. The flat schema made that
+    /// cheap to ignore — one lost boolean; the nested `daemon` block does not, because one older
+    /// build opening the file would drop a whole section.
+    ///
+    /// Top-level keys only. Preserving unknown keys *nested inside* a block this build does know
+    /// about would mean merging recursively into a shape we are simultaneously rewriting, and the
+    /// result would be neither the old value nor the new one. Documented rather than attempted.
+    fn merged_with_existing(&self, stored: &StoredSettings) -> io::Result<serde_json::Value> {
+        let fresh = serde_json::to_value(stored)
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+
+        let Some(existing) = std::fs::read_to_string(&self.path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        else {
+            // No readable file, or one that is not JSON at all: nothing to preserve. A corrupt
+            // file is already handled by `load`, which moves it aside.
+            return Ok(fresh);
+        };
+
+        match (existing, fresh) {
+            (serde_json::Value::Object(mut base), serde_json::Value::Object(new)) => {
+                base.extend(new);
+                Ok(serde_json::Value::Object(base))
+            }
+            (_, fresh) => Ok(fresh),
+        }
     }
 }
 
@@ -266,11 +336,30 @@ impl SettingsStore for JsonFileSettingsStore {
     }
 
     fn save(&self, settings: &Settings) -> io::Result<()> {
+        // A limit below what the daemon needs to run is refused here rather than corrected, and
+        // the refusal names the accepted range (FR-016, US4 scenario 5). This is deliberately the
+        // opposite of what `load` does with the same value: a file the user did not write is
+        // clamped and reported (rule S-7), because opening the app must not fail. A number the
+        // user just typed is theirs, and silently replacing it is the application deciding it
+        // knows better and saying nothing.
+        //
+        // Refused *before* the directory is created and before anything is written, so a rejected
+        // save leaves the stored document exactly as it was.
+        let violations = settings.daemon.sandbox.budget.violations();
+        if !violations.is_empty() {
+            let message = violations
+                .iter()
+                .map(BudgetViolation::message)
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, message));
+        }
+
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let stored = StoredSettings::from_settings(settings);
-        let json = serde_json::to_string_pretty(&stored)
+        let json = serde_json::to_string_pretty(&self.merged_with_existing(&stored)?)
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
 
         // Atomic write: temp file in the same directory, then rename over the target.

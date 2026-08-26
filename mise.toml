@@ -49,6 +49,53 @@ run = "{{config_root}}/scripts/build-lock.sh cargo test -p micold-core --all-tar
 description = "Build the release GUI binary [build-locked]"
 run = "{{config_root}}/scripts/build-lock.sh cargo build --release -p micold-client"
 
+[tasks.image]
+description = "Build the :dev sandbox image from the working tree (feature 027, FR-024c) [build-locked]"
+run = """
+# The development loop the sandbox has to support. Without it, sandboxed mode would be testable
+# only by whoever can publish a release image -- so the people who build this feature could not
+# run it, and the failure would not surface until after release (FR-024c).
+set -e
+
+runtime="${MICOLD_RUNTIME:-docker}"
+command -v "$runtime" >/dev/null 2>&1 || { echo "image: $runtime is not installed" >&2; exit 1; }
+
+# The daemon inside the image is a Linux binary regardless of the host, because the sandbox is a
+# Linux container on all three platforms (Docker Desktop's VM on macOS and Windows).
+target="${MICOLD_IMAGE_TARGET:-x86_64-unknown-linux-gnu}"
+{{config_root}}/scripts/build-lock.sh cargo build --release -p micold-daemon --target "$target"
+
+out="$({{config_root}}/scripts/build-lock.sh --print-target-dir)/$target/release/micold-daemon"
+cp "$out" {{config_root}}/packaging/sandbox/micold-daemon
+trap 'rm -f {{config_root}}/packaging/sandbox/micold-daemon' EXIT
+
+# `-f` is required: the file is a Containerfile, which podman finds by name and docker
+# does not -- docker looks for `Dockerfile` and fails with "no such file or directory".
+"$runtime" build -f {{config_root}}/packaging/sandbox/Containerfile \
+  -t "${MICOLD_IMAGE_TAG:-micold-daemon:dev}" {{config_root}}/packaging/sandbox
+# Verify the binary can actually *execute* in the image. A successful `docker build` proves only
+# that the file was copied; whether it runs depends on the base's glibc being no older than the one
+# the host toolchain linked against. That mismatch does not fail the build -- it fails the first
+# time the daemon is started, as `version GLIBC_x.yy not found`, which is a terrible place to find
+# out and exactly what this check exists to prevent.
+#
+# The daemon is run with a short timeout and only *loader* failures are treated as fatal. It will
+# exit for its own reasons here -- no token is mounted, no endpoint is available -- and those are
+# correct behaviour, not a broken image. What matters is that it got far enough to have reasons.
+tag="${MICOLD_IMAGE_TAG:-micold-daemon:dev}"
+smoke="$("$runtime" run --rm --entrypoint /usr/local/bin/micold-daemon "$tag" 2>&1 | head -5 || true)"
+case "$smoke" in
+  *GLIBC*|*"cannot execute"*|*"exec format error"*|*"no such file or directory: unknown"*)
+    echo "image: the daemon cannot execute inside $tag:" >&2
+    echo "$smoke" >&2
+    echo "image: the base image is probably older than this host's toolchain." >&2
+    exit 1
+    ;;
+esac
+
+echo "Built $tag -- select it in Settings > Daemon > Image."
+"""
+
 [tasks.sweep]
 description = "Reclaim space in every target dir -- shared and per-worktree (default: artifacts unused for 7 days) [build-locked]"
 run = """

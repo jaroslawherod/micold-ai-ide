@@ -14,6 +14,7 @@
 //! Both binaries compile against this one definition; the `SCHEMA_HASH` guard (protocol.md §4) makes
 //! any wire-visible edit here refuse a mismatched peer.
 
+use std::fmt;
 use std::ops::Range;
 use std::path::PathBuf;
 
@@ -38,6 +39,44 @@ pub enum SessionProcess {
     Shell(ShellInstanceId),
 }
 
+/// The handshake secret as it travels on the wire, in a wrapper that will not print it.
+///
+/// This field used to be a bare `String`, and [`ClientMsg`] derives `Debug` — so one
+/// `tracing::debug!(?msg)` anywhere on the receive path would have written the token into the
+/// daemon's log verbatim, and a `{err:?}` on a decode failure could have carried it into a bug
+/// report. [`crate::protocol::auth::Token`] has had an opaque `Debug` since it was introduced, for
+/// exactly that reason; the protection was being dropped at the moment the value crossed onto the
+/// wire, which is the moment it reaches the most code (feature 027, T118 / rule P-3).
+///
+/// `#[serde(transparent)]`: the encoding is byte-for-byte what a `String` produced, in JSON and in
+/// postcard alike. This is a `Debug` fix, not a wire change.
+///
+/// Declared here rather than beside `Token` deliberately. `SCHEMA_HASH` is computed over the text
+/// of this file; a wire-visible type defined elsewhere could change its serde representation
+/// without moving the hash, and two builds that disagree would then shake hands.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PresentedToken(String);
+
+impl PresentedToken {
+    /// Wrap a token for presentation.
+    pub fn new(token: impl Into<String>) -> Self {
+        Self(token.into())
+    }
+
+    /// The secret itself. Every caller of this is a place to check when auditing P-3.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for PresentedToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Not even a prefix: a partial leak is still a leak when it shrinks the search space.
+        f.write_str("PresentedToken(<redacted>)")
+    }
+}
+
 /// A message from a client to the daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientMsg {
@@ -54,6 +93,20 @@ pub enum ClientMsg {
         /// release, wire-visible or not, so a same-contract `.deb` upgrade over an already-running
         /// daemon is still detected (FR-022a, BUG-002).
         client_package_version: String,
+        /// The shared secret, when the daemon is expected to require one (feature 027, R1).
+        ///
+        /// `None` for the host-process placement, whose `0700`-guarded socket authenticates by
+        /// filesystem permission already. `Some` for the sandbox, whose loopback TCP transport
+        /// authenticates nobody — which is why this field and the version bump arrive together.
+        auth_token: Option<PresentedToken>,
+        /// The client's compiled [`crate::protocol::version::BUILD_FINGERPRINT`] (feature 027, R8).
+        client_fingerprint: String,
+        /// Whether a fingerprint mismatch is a refusal.
+        ///
+        /// Set by the **client**, because the client is what knows where the daemon's image came
+        /// from: a locally built one shares this client's working tree and has no business
+        /// disagreeing, while a released one was built separately and legitimately differs.
+        require_fingerprint_match: bool,
     },
     /// Attach to a project. `force = true` is a confirmed takeover, only sent after explicit user
     /// confirmation (FR-023).
@@ -213,6 +266,22 @@ pub enum ClientMsg {
         branch: String,
         /// Worktree directory name that would be created, for the directory-clash check.
         dir_name: String,
+    },
+    /// Ask whether `path` is the ROOT of a git repository — the open-project gate (FR-001a) —
+    /// answered by the daemon's git rather than the client's (feature 027, research R2 part 2).
+    ///
+    /// Read-only: the daemon runs `git rev-parse --show-toplevel` and mutates nothing.
+    ///
+    /// The client asks this only when it has no git view of the daemon's filesystem: a Windows
+    /// host cannot mount `C:\Users\u\p` at that path inside a Linux container, so the two sides
+    /// see different absolute paths and git's worktree metadata — which stores absolute paths —
+    /// would disagree. A remote daemon has no shared filesystem at all. On Linux and macOS the
+    /// mount is the identity and the client answers this itself, without a round trip.
+    RepoRootQuery {
+        /// Correlation id.
+        req: u64,
+        /// The directory the user chose, **as the daemon will see it**.
+        path: PathBuf,
     },
     /// List every local and remote-tracking branch, annotated with why each is unavailable, for
     /// the existing-branch picker (feature 016, FR-011). Reads local ref storage only — the daemon
@@ -555,6 +624,25 @@ pub enum RefusalReason {
         /// The detail.
         detail: String,
     },
+    /// The handshake presented no token, or the wrong one (feature 027, R1).
+    ///
+    /// Carries nothing about *how* wrong the token was — no length, no prefix, no distinction
+    /// between absent and incorrect. A refusal that described the difference would be an oracle for
+    /// recovering the token one guess at a time.
+    AuthRejected,
+    /// The daemon was built from a different working tree than the client, and the client said that
+    /// was a refusal because the image is a local build (feature 027, FR-024d, research R8).
+    ///
+    /// Names the image so the remedy can point at something the user can act on: the three
+    /// constants the handshake already compares all match here, which is exactly why this exists.
+    StaleDevImage {
+        /// The client's fingerprint.
+        client_fingerprint: String,
+        /// The daemon's fingerprint.
+        daemon_fingerprint: String,
+        /// The image reference the daemon is running from, when the client knows it.
+        image: String,
+    },
 }
 
 /// The projected summary of a single session, sent for **every** session so the client can render
@@ -780,6 +868,16 @@ pub enum OperationResult {
     WorktreeExcluded {
         /// The path that is no longer shown.
         path: PathBuf,
+    },
+    /// The answer to [`ClientMsg::RepoRootQuery`] (feature 027, research R2 part 2).
+    ///
+    /// Carries the path back so a client that has moved on since asking — the user cancelled, or
+    /// chose a different folder — can tell that this answer is about something else.
+    RepoRoot {
+        /// The directory that was asked about.
+        path: PathBuf,
+        /// Whether the daemon's git calls it a repository root.
+        is_repo_root: bool,
     },
 }
 

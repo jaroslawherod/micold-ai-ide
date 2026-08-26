@@ -6,7 +6,9 @@
 use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, RefusalReason};
-use micold_core::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
+use micold_core::protocol::version::{
+    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
+};
 use tokio_util::codec::Framed;
 
 #[tokio::test]
@@ -24,6 +26,12 @@ async fn matching_handshake_gets_welcome_and_pong() {
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
             client_package_version: PACKAGE_VERSION.into(),
+            // Feature 027: the host-process placement presents no token, and a fingerprint
+            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
+            // against the same core as the daemon they drive.
+            auth_token: None,
+            client_fingerprint: BUILD_FINGERPRINT.into(),
+            require_fingerprint_match: false,
         }))
         .await
         .unwrap();
@@ -66,6 +74,12 @@ async fn mismatched_handshake_is_refused_naming_both_sides() {
             schema_hash: SCHEMA_HASH,
             client_build: "stale-client".into(),
             client_package_version: PACKAGE_VERSION.into(),
+            // Feature 027: the host-process placement presents no token, and a fingerprint
+            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
+            // against the same core as the daemon they drive.
+            auth_token: None,
+            client_fingerprint: BUILD_FINGERPRINT.into(),
+            require_fingerprint_match: false,
         }))
         .await
         .unwrap();
@@ -112,6 +126,9 @@ async fn build_mismatch_is_refused_distinctly_when_contract_still_matches() {
             schema_hash: SCHEMA_HASH,
             client_build: "micold-ai-ide/0.0.0-stale".into(),
             client_package_version: "0.0.0-stale".into(),
+            auth_token: None,
+            client_fingerprint: BUILD_FINGERPRINT.into(),
+            require_fingerprint_match: false,
         }))
         .await
         .unwrap();

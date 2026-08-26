@@ -68,6 +68,26 @@ pub enum FieldId {
     /// Settings: the environment-include on/off checkbox. Not a text field — the checkbox now
     /// takes the keyboard too, and this is the same fact about the same dialog (BUG-003).
     SettingsEnvIncludeEnabled,
+    /// Settings: the sandbox image's reference (feature 027).
+    SettingsImageReference,
+    /// Settings: the archive an imported image is loaded from (feature 027).
+    SettingsImagePath,
+    /// Settings: one host credential's share opt-in (feature 027, FR-004c).
+    ///
+    /// Parameterised rather than four variants, because the four are the *same* control repeated
+    /// over `CredentialShare::ALL` — spelling them out would mean a fifth share silently losing
+    /// its keyboard focus rather than failing to compile.
+    SettingsCredential(micold_core::sandbox::CredentialShare),
+    /// Settings: the "keep sessions running after I sign out" checkbox (feature 027).
+    SettingsSurviveLogout,
+    /// Settings: the sandbox's processor limit, in cores (feature 027, FR-012).
+    SettingsCpuLimit,
+    /// Settings: the sandbox's memory limit, in MiB (feature 027, FR-013).
+    SettingsMemoryLimit,
+    /// Settings: the sandbox's process-count limit (feature 027, FR-014).
+    SettingsPidLimit,
+    /// Settings: the sandbox's writable-storage limit, in MiB (feature 027, FR-015).
+    SettingsStorageLimit,
     /// Settings: the environment-include script path.
     SettingsEnvIncludePath,
     /// Settings: the environment-include timeout.

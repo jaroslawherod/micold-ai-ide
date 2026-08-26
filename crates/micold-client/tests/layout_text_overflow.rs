@@ -93,6 +93,7 @@ fn no_text_is_drawn_wider_than_its_clip() {
             None,
             &micold_core::env_include::EnvIncludeOutcome::Disabled,
             &under.connection,
+            &micold_client::features::sandbox::Sandbox::default(),
         );
 
         let overflows = lay::text_overflows(element, &mut renderer);
@@ -219,6 +220,7 @@ fn a_collapsed_panel_overlapping_the_sidebar_is_not_reported_as_an_overflow() {
             None,
             &micold_core::env_include::EnvIncludeOutcome::Disabled,
             &micold_client::features::connection::ConnectionStatus::Connected,
+            &micold_client::features::sandbox::Sandbox::default(),
         );
         lay::text_overflows(element, &mut renderer)
     };
@@ -300,6 +302,7 @@ fn a_narrow_session_row_shortens_the_title_and_never_the_cli_label() {
             None,
             &micold_core::env_include::EnvIncludeOutcome::Disabled,
             &micold_client::features::connection::ConnectionStatus::Connected,
+            &micold_client::features::sandbox::Sandbox::default(),
         );
         lay::painted_text(element, &mut renderer)
     };

@@ -58,7 +58,8 @@ fn mark_archived_durable(project: &Path, session: &Session) {
     }
 }
 
-/// The durable aggregate the daemon owns. The single writer of `projects.json` + `settings.json`.
+/// The durable aggregate the daemon owns. The single writer of `projects.json`, and one of two
+/// writers of `settings.json` — see [`Catalog::persist_service_settings`] for what that costs.
 pub struct Catalog {
     workspace: Workspace,
     settings: Settings,
@@ -211,10 +212,43 @@ impl Catalog {
     pub fn set_scrollback(&mut self, lines: usize) -> io::Result<usize> {
         let clamped = clamp_scrollback(lines);
         self.settings.scrollback_lines = clamped;
-        if let Some(store) = &self.settings_store {
-            store.save(&self.settings)?;
-        }
+        self.persist_service_settings()?;
         Ok(clamped)
+    }
+
+    /// Write the five service-owned fields into `settings.json`, leaving every other field as the
+    /// file has it.
+    ///
+    /// # Why this cannot write `self.settings` whole
+    ///
+    /// The client writes that file too, and it owns strictly more of it than this process does:
+    /// the theme, where the service is placed, and the whole sandbox profile — runtime, image,
+    /// resource budget, network posture, and the credential opt-ins. `self.settings` is whatever
+    /// *this daemon* read at its own boot, which for every field outside `settings_wire` is a
+    /// snapshot that only gets staler. `default_ai_cli` is on the service's side of that line
+    /// (feature 026, FR-003), which is why it is copied across here rather than left to the file.
+    ///
+    /// The two calls that reach here both arrive from `SettingsSet`, which the client sends
+    /// **immediately after** writing the file — so saving the whole struct reverts the save that
+    /// just happened, every time, and reliably enough that a save changing nothing at all still
+    /// wiped the theme and every credential the user had shared. That was invisible until feature
+    /// 027: before it, the Settings form held only the four fields this daemon carries, so writing
+    /// the struct whole wrote back the values it had just been sent.
+    ///
+    /// Re-reading is the fix rather than widening `SettingsSet`, because the extra fields are not
+    /// the service's to know. A theme is not a session-service setting, and a protocol that
+    /// carried one would make this daemon the authority on a question it has no opinion about.
+    fn persist_service_settings(&self) -> io::Result<()> {
+        if let Some(store) = &self.settings_store {
+            let mut on_disk = store.load().settings;
+            on_disk.scrollback_lines = self.settings.scrollback_lines;
+            on_disk.env_include_enabled = self.settings.env_include_enabled;
+            on_disk.env_include_script_path = self.settings.env_include_script_path.clone();
+            on_disk.env_include_timeout_secs = self.settings.env_include_timeout_secs;
+            on_disk.default_ai_cli = self.settings.default_ai_cli;
+            store.save(&on_disk)?;
+        }
+        Ok(())
     }
 
     /// Set any of the three service-owned environment-include settings (leaving a field unchanged
@@ -235,29 +269,27 @@ impl Catalog {
         if let Some(timeout_secs) = timeout_secs {
             self.settings.env_include_timeout_secs = clamp_env_include_timeout(timeout_secs);
         }
-        if let Some(store) = &self.settings_store {
-            store.save(&self.settings)?;
-        }
+        self.persist_service_settings()?;
         Ok(())
     }
 
     /// Set the default AI CLI for new sessions, persisting atomically (feature 026, FR-003).
     ///
-    /// Service-owned for the reason the whole settings file is split by field: `set_scrollback`
-    /// and `set_env_include` above each persist the **whole** `Settings` struct from the copy this
-    /// catalog loaded at boot, so a preference the client wrote directly would be silently reverted
-    /// by the next unrelated settings change. (That is already true of `theme` — a pre-existing
-    /// defect, out of scope here, and `default_ai_cli_survives_an_unrelated_settings_change`
-    /// observes it in passing.)
+    /// Service-owned for the reason the whole settings file is split by field: a preference the
+    /// client wrote directly would be reverted by the next unrelated settings change, because this
+    /// catalog's `Settings` is the copy it read at its own boot.
+    ///
+    /// It persists through [`Self::persist_service_settings`] like the other four. It did not on
+    /// feature 026's branch — it wrote `self.settings` whole, which was harmless while the four
+    /// service fields and the theme were nearly the whole file, and is not once feature 027 gives
+    /// the client a placement and an entire sandbox profile to own. Writing the struct whole here
+    /// would revert every one of them on a change of AI CLI.
     ///
     /// Deliberately **not** validated against availability: keeping a default that names an
     /// uninstalled CLI is the requirement, not an oversight (FR-004, research R11).
     pub fn set_default_ai_cli(&mut self, which: AiCli) -> io::Result<()> {
         self.settings.default_ai_cli = which;
-        if let Some(store) = &self.settings_store {
-            store.save(&self.settings)?;
-        }
-        Ok(())
+        self.persist_service_settings()
     }
 
     /// Create a new session in `project` at `worktree_dir` (empty = the project root / `Default`

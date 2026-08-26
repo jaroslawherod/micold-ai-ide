@@ -139,9 +139,11 @@ fn every_popover_is_in_the_table() {
     // in this file could notice. Counted against the registry rather than driven, because the
     // popovers displace each other and no state has them all open at once.
     //
-    // Nine of the eighteen registrations are dialogs; `overlay_registry.rs::every_dialog_is_in_the_list`
-    // is what holds that half.
-    const DIALOGS: usize = 9;
+    // Eight of the seventeen registrations are dialogs;
+    // `overlay_registry.rs::every_dialog_is_in_the_list` is what holds that half. It was nine until
+    // feature 027 made Settings a full-surface view rather than a floating one (FR-026), which took
+    // its registration with it.
+    const DIALOGS: usize = 8;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

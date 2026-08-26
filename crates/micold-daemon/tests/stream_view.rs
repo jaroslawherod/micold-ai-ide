@@ -15,7 +15,9 @@ use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::grid::GridFrame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
-use micold_core::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
+use micold_core::protocol::version::{
+    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
+};
 use micold_core::session::SessionId;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
@@ -76,6 +78,12 @@ async fn a_viewing_client_receives_frames_and_can_drive_the_session() {
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
             client_package_version: PACKAGE_VERSION.into(),
+            // Feature 027: the host-process placement presents no token, and a fingerprint
+            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
+            // against the same core as the daemon they drive.
+            auth_token: None,
+            client_fingerprint: BUILD_FINGERPRINT.into(),
+            require_fingerprint_match: false,
         }))
         .await
         .unwrap();
@@ -149,6 +157,12 @@ async fn session_resize_reframes_at_the_new_size() {
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
             client_package_version: PACKAGE_VERSION.into(),
+            // Feature 027: the host-process placement presents no token, and a fingerprint
+            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
+            // against the same core as the daemon they drive.
+            auth_token: None,
+            client_fingerprint: BUILD_FINGERPRINT.into(),
+            require_fingerprint_match: false,
         }))
         .await
         .unwrap();
@@ -235,6 +249,12 @@ async fn a_client_can_fetch_scrollback_history_over_the_wire() {
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
             client_package_version: PACKAGE_VERSION.into(),
+            // Feature 027: the host-process placement presents no token, and a fingerprint
+            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
+            // against the same core as the daemon they drive.
+            auth_token: None,
+            client_fingerprint: BUILD_FINGERPRINT.into(),
+            require_fingerprint_match: false,
         }))
         .await
         .unwrap();
@@ -388,6 +408,12 @@ async fn a_client_can_start_view_and_drive_a_session_from_cold_over_the_wire() {
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
             client_package_version: PACKAGE_VERSION.into(),
+            // Feature 027: the host-process placement presents no token, and a fingerprint
+            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
+            // against the same core as the daemon they drive.
+            auth_token: None,
+            client_fingerprint: BUILD_FINGERPRINT.into(),
+            require_fingerprint_match: false,
         }))
         .await
         .unwrap();

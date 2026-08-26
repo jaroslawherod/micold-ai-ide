@@ -10,8 +10,21 @@
 //! | Linux (`$XDG_RUNTIME_DIR` unset) | `/tmp/micold-<uid>/daemon.sock` | dir created `0700` **and verified** |
 //! | macOS | `$HOME/.micold/run/d.sock` | dir `0700`; `sun_path` length asserted at resolve time |
 //! | Windows | `\\.\pipe\Micold.Daemon.<user-SID>` | explicit protected DACL (applied at bind, T083) |
+//!
+//! # The sandbox's endpoint (feature 027)
+//!
+//! A containerised daemon cannot be reached this way. A bind-mounted Unix socket does not survive
+//! Docker Desktop's file sharing on macOS or Windows — the layer passes file *contents*, not socket
+//! semantics — so socket-only would mean Linux-only, which Principle VI forbids. The sandbox
+//! therefore listens on **loopback TCP**, published from the container to `127.0.0.1`.
+//!
+//! That transport carries none of the protection the table above describes: any local process can
+//! connect to a loopback port. What replaces it is [`crate::protocol::auth`]'s shared secret, which
+//! is mounted into the container as a `0600` file — so the guarantee moves from "you cannot reach
+//! it" to "you cannot answer for it", and the filesystem permission is still what enforces it.
 
 use std::io;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 
 /// A resolved endpoint: where to bind the socket/pipe and where the single-instance lock lives.
@@ -27,6 +40,46 @@ pub struct Endpoint {
 /// directory. A wrong owner or wrong mode on a predictable directory is an error, not a warning.
 pub fn resolve() -> io::Result<Endpoint> {
     imp::resolve()
+}
+
+/// The default loopback port the sandboxed daemon publishes its control channel on.
+///
+/// Fixed rather than ephemeral: the client has to know where to dial before the container exists,
+/// and a port chosen by the runtime would have to be read back out of `inspect` on every start.
+/// It is configurable for the case where something else already holds it.
+pub const DEFAULT_SANDBOX_PORT: u16 = 7727;
+
+/// Where a client dials to reach the daemon.
+///
+/// Two shapes because there are two transports, and the reason is Principle VI rather than taste:
+/// see this module's header.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DialAddress {
+    /// The Unix socket or Windows named pipe. Authenticated by filesystem permission.
+    Local(Endpoint),
+    /// Loopback TCP, for the sandbox. Authenticated by the shared secret, never by the transport.
+    Loopback { port: u16 },
+}
+
+impl DialAddress {
+    /// The loopback socket address for a TCP endpoint.
+    ///
+    /// `127.0.0.1`, never `0.0.0.0`: publishing the daemon on every interface would put session
+    /// input and terminal output on the network, which no part of this feature asks for.
+    pub fn socket_addr(&self) -> Option<SocketAddr> {
+        match self {
+            DialAddress::Local(_) => None,
+            DialAddress::Loopback { port } => Some(SocketAddr::from((Ipv4Addr::LOCALHOST, *port))),
+        }
+    }
+
+    /// A human-readable form for diagnostics.
+    pub fn describe(&self) -> String {
+        match self {
+            DialAddress::Local(e) => e.socket_path.display().to_string(),
+            DialAddress::Loopback { port } => format!("127.0.0.1:{port}"),
+        }
+    }
 }
 
 // macOS `sockaddr_un.sun_path` is 104 bytes, 103 usable (research R1.2). Overruns surface as an
