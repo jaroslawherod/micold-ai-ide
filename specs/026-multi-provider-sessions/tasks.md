@@ -1549,7 +1549,7 @@ a path only a second press exercises, or a pixel position.
   press instead was considered and rejected: the press path (`view_and_start`) lives in `shell/`,
   which is binary-only and unreachable from `tests/`, so the fix would have shipped ungated.
 
-- [ ] T089 Anchor the session-start list to the press that opened it. Both halves of `SplitAction`
+- [X] T089 Anchor the session-start list to the press that opened it. Both halves of `SplitAction`
   open the CLI list at the window origin, over the sidebar header, whatever row was pressed —
   `evidence/session-start-menu-anchors-at-origin.png`. The cause is an event-phase mismatch:
   `ContextArea::on_primary_press`/`on_secondary_anchor` publish the anchor from `reported_press`,
@@ -1563,6 +1563,50 @@ a path only a second press exercises, or a pixel position.
   `clamp_menu_anchor` problem. T085's `tests/session_start_press.rs` cannot see it because its
   assertion is `SessionStartMenuAnchored(_)`: the gate must assert the *point*, and the probe is to
   restore the `(0, 0)` write and watch that one assertion fail.
+
+  **Done 2026-08-26.** The diagnosis above is right about the cause and silent about the one thing
+  that had to be decided: which side to move. Reporting the point on the *release* instead would put
+  the two messages in the order the doc comments assumed, but `ContextArea` deliberately reports on
+  the press — `reported_press`'s own unit test argues it at length, and the terminal tab's context
+  menu, which opens from that press, depends on it. So the phase stays and the reducer stops
+  depending on an order it does not get: `start_menu_anchored` records the point on
+  `State::session_start_press` (owner `session`), and `start_menu_toggled` reads it back when it
+  opens. The `(0, 0)` was never a placeholder that got corrected — the correction ran while nothing
+  was open, did nothing, and the point was dropped; by the time a list existed there was no point
+  left to apply.
+
+  `start_menu_anchored` deliberately does **not** also move an already-open list, which is what it
+  used to do and all it used to do. Pressing another row's chevron while one is open would slide the
+  open panel to the new row for the frame between the press and the release, before the toggle
+  replaced it — a twitch bought for a case that cannot arise, since the toggle reads the same point
+  a moment later.
+
+  Three doc comments asserted the opposite phase order in so many words and are corrected with the
+  code, not just the one the task names: `features/session.rs::start_menu_anchored` ("the same press
+  publishes both messages"), `cdk::context_area::on_primary_press` ("child first … so the surface is
+  never rendered at the point the opening message left it"), and
+  `material::split_action::on_secondary_anchor` ("Two messages leave one press, in order: the
+  chevron's own … this says where"). All three described a correction-after-open that never
+  happened. `Message::SessionStartMenuAnchored`'s own doc said it too.
+
+  The gate is two tests in T085's `tests/session_start_press.rs`, which already has the harness that
+  presses the real widget. Both press a glyph located by what it paints — `only_glyph` generalises
+  `start_glyph`'s rule to the chevron — then feed **everything the press published, in the order it
+  published it**, through `State::update`, and read `session_start_menu.anchor`. Driving the real
+  reducer is the point: the defect is entirely an ordering one, and a test that inspected the
+  message list would have passed on the broken tree exactly as T085's `SessionStartMenuAnchored(_)`
+  did. Both halves are covered because both can open the list — the primary half when the stored
+  default is not installed (FR-004 scenario 4), the chevron always.
+
+  Probed on `976ca75` by restoring `anchor: (0, 0)` and running `cargo test --workspace
+  --no-fail-fast`: 222 binaries, **2174 pass and 2 fail**, and the two are the new gates alone. So
+  nothing else in the workspace was relying on the list opening at the origin, and the red run
+  before the fix failed on the value — `(0, 0)` against `(272, 129)` — rather than on a panic or a
+  missing message, which is the defect's actual shape.
+
+  The render half needs no change and was checked rather than assumed: `ui/mod.rs` positions this
+  surface from `menu.anchor` through `clamp_menu_anchor`, the same path the overflow menu and the
+  Settings dropdown take, which is why those two anchored correctly all along.
 
 ---
 
