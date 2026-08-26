@@ -23,6 +23,21 @@
 //! by `shell/connection.rs` and the root's arm is a deliberate no-op alongside `NoOp`. What lives
 //! here is the decision the feature does have — [`connection_status`] — which is why the module
 //! exists at all, per the paragraph above.
+//!
+//! # The state this feature remembers: none (feature 028, contract S1)
+//!
+//! **This module declares no `State` either**, and it is the only feature module that does not.
+//! Feature 028 gave each feature a struct of its own for what it remembers; this feature remembers
+//! nothing to put in one. It owns none of the forty-three fields data-model.md §3 attributes, and
+//! it is the one feature absent from `OWNERS` in `tests/feature_write_isolation.rs` — the daemon
+//! connection *is* binary-owned runtime state, per the header above, so what it would remember is
+//! held by the shell and recomputed into [`ConnectionStatus`] on every view.
+//!
+//! An empty `pub struct State;` would be a place for a reader to look and find nothing, plus a
+//! field on `app::State` that no reducer writes and no view reads. That is the same no-ceremony
+//! reasoning research.md §R3 applies to this feature's *vocabulary*, where the absent `update` is
+//! recorded in the paragraph above rather than shipped as an empty function. Nine feature structs
+//! and one shared member is the whole of `app::State` (T037, T038).
 
 /// The daemon-connection state, as it concerns the *active* project (US5, FR-024/027). Computed by
 /// the binary (the connection is binary-owned runtime state) and passed to `ui::view` so the shell

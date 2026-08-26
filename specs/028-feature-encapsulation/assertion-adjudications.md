@@ -734,5 +734,90 @@ was: assert!(st.restarted_while_inactive.is_empty())
 was: assert!(st.reveal_suppressed_for.is_none(),"andarowclosedagainstthesessionyouwereondoesnotkeepthenextproject's\revealclosed(invariantI2)")
 ```
 
+## T040 — the phase roll-up: every rename that changed an assertion's text
+
+The nine sections above adjudicate their own moves as they land. This one is the phase's ledger:
+the complete list of path renames Story 2 performed, so a reader can check any `was:` line in this
+file against the rename that caused it without reading nine sections to find which move owns it.
+
+`app::State` had **44 flat public fields** at the merge base. Forty-three moved into a feature's own
+struct; `workspace` stayed flat as the one declared shared member (T038). No field was added,
+removed, retyped, or given a different default. The whole of Story 2 is that the *path* to a field
+got one segment longer, and in sixteen cases one token shorter.
+
+| Was (flat on `app::State`) | Is | Task |
+|---|---|---|
+| `notify` | `notifications.queue` | T028 |
+| `about_open` | `help.about_open` | T029 |
+| `help_menu_open` | `help.help_menu_open` | T029 |
+| `focused_field` | `window.focused_field` | T030 |
+| `window_size` | `window.window_size` | T030 |
+| `worktree_form` | `worktree_form.form` | T031 |
+| `worktree_error` | `worktree_form.worktree_error` | T031 |
+| `settings_draft` | `settings.settings_draft` | T032 |
+| `system_scheme` | `settings.system_scheme` | T032 |
+| `theme_pref` | `settings.theme_pref` | T032 |
+| `forget_target` | `project.forget_target` | T033 |
+| `project_menu_open` | `project.menu_open` | T033 |
+| `project_switcher_open` | `project.switcher_open` | T033 |
+| `rename_draft` | `project.rename_draft` | T033 |
+| `selector` | `project.selector` | T033 |
+| `hovered_worktree` | `worktree.hovered` | T034 |
+| `worktree_delete_keep_branch` | `worktree.delete_keep_branch` | T034 |
+| `worktree_delete_target` | `worktree.delete_target` | T034 |
+| `worktree_menu_open` | `worktree.menu_open` | T034 |
+| `worktree_rename_draft` | `worktree.rename_draft` | T034 |
+| `worktrees` | `worktree.worktrees` | T034 |
+| `default_expanded` | `sidebar.default_expanded` | T035 |
+| `expanded` | `sidebar.expanded` | T035 |
+| `pending_reveal_scroll` | `sidebar.pending_reveal_scroll` | T035 |
+| `show_agent_worktrees` | `sidebar.show_agent_worktrees` | T035 |
+| `sidebar_filter_open` | `sidebar.filter_open` | T035 |
+| `sidebar_filters` | `sidebar.filters` | T035 |
+| `sidebar_hidden` | `sidebar.hidden` | T035 |
+| `sidebar_scroll_offset` | `sidebar.scroll_offset` | T035 |
+| `sidebar_viewport_height` | `sidebar.viewport_height` | T035 |
+| `sidebar_width` | `sidebar.width` | T035 |
+| `active_session` | `session.active` | T036 |
+| `last_foreground_choice` | `session.last_foreground_choice` | T036 |
+| `pending_tab_reveal` | `session.pending_tab_reveal` | T036 |
+| `restarted_while_inactive` | `session.restarted_while_inactive` | T036 |
+| `reveal_suppressed_for` | `session.reveal_suppressed_for` | T036 |
+| `session_menu_open` | `session.menu_open` | T036 |
+| `session_remove_target` | `session.remove_target` | T036 |
+| `shell_instance_menu` | `session.shell_instance_menu` | T036 |
+| `tab_strip_scroll_offset` | `session.tab_strip_scroll_offset` | T036 |
+| `tab_strip_viewport_width` | `session.tab_strip_viewport_width` | T036 |
+| `terminal_context_menu` | `session.terminal_context_menu` | T036 |
+| `terminal_released` | `session.terminal_released` | T036 |
+| `workspace` | `workspace` — unmoved, the one shared member | T038 |
+
+**The sixteen trims.** A field sheds whatever token the qualifier now carries, because
+`project.project_menu_open` says `project` twice. Those are the rows above where the right column is
+shorter than the left: two in `project`, five in `worktree`, six in `sidebar`, three in `session`,
+plus `worktree_form.form` and `notifications.queue`, whose sections state their own reasoning.
+
+**The two that could have been trimmed and were not**, each for a stated reason in its module's
+struct doc: `worktree.worktrees` — trimming leaves nothing, since the collection *is* what the
+feature is about — and `worktree_form.worktree_error`, where `worktree_form` is the name of the
+form and `worktree_error` names the thing that failed, not the form.
+
+**Why none of this relaxes an expectation.** A rename cannot, by construction: the assertion's
+predicate, its operands and its message are unchanged, and the field it reads is the same field with
+the same type, the same default and the same writers. What the freeze exists to catch is an
+expectation that says *less* than it did, and this phase's diff contains no `assert` whose operator,
+literal, or message text changed. Each section above carries the mechanical evidence — every removed
+key has a surviving near match differing only by the inserted segment.
+
+Where a `closest surviving` percentage drops below 90% it is always a trim, never a rewrite: the
+dropped token is a larger fraction of a short assertion than of a long one, which is why
+`assert!(state.active_session.is_none())` scores lower than any sentence-carrying assertion in the
+same task. The sections for T033 through T036 name each such case.
+
+**242 unique assertion keys** across the nine state-move sections, plus 24 from the six
+message-nesting tasks in Story 1 (T006–T014), whose sections adjudicate a different change: a
+variant moving behind its feature's wrapper. Three further sections (T005, T022, T024) are
+non-vacuity probe records rather than adjudications and carry no keys.
+
 T040 rolls these up for the phase; each move is adjudicated as it lands, so the freeze is green at
 every commit rather than only at the end (contract C.1).

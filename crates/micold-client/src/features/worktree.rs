@@ -28,6 +28,26 @@
 //! time in `main.rs`, because each additionally touches something outside the process — git, the
 //! catalog on disk, or the clipboard: `IncludeRequested`, `ExcludeRequested`, `DeleteConfirmed`,
 //! `RenameConfirmed`, `TextCopyRequested` (M2).
+//!
+//! # The state this feature remembers (feature 028, contract S1)
+//!
+//! Six fields in [`State`], reached as `state.worktree`: `worktrees`, the discovered list for the
+//! active project; `hovered` and `menu_open` for the row under the cursor and the row menu;
+//! `delete_target` and `delete_keep_branch` for the delete confirmation; and `rename_draft`.
+//!
+//! Five shed the `worktree` the qualifier now carries — `hovered_worktree`, `worktree_menu_open`,
+//! `worktree_delete_target`, `worktree_delete_keep_branch` and `worktree_rename_draft` (T034).
+//! `worktrees` keeps its name because trimming it leaves nothing: the collection *is* what this
+//! feature is about.
+//!
+//! **Rename overrides are not here.** The user-chosen display names live in
+//! `state.workspace.worktree_names`, keyed by project, because they are persisted with the catalog
+//! — see [`crate::app::State::workspace`]. What is here is the discovered listing and the surfaces
+//! open over it.
+//!
+//! Replacing `worktrees` reconciles the other five field by field rather than resetting them, so a
+//! re-discovery that finds the same worktrees leaves an open menu open. That is invariant S3, and
+//! [`crate::app::State::set_worktrees`] explains why the obvious shorthand is wrong.
 
 use crate::app::Message;
 use crate::overlay::registry::Registered;

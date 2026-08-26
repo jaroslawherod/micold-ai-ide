@@ -46,6 +46,21 @@
 //!
 //! The third arm this module was named for, `CursorMoved`, is gone rather than nested; the reason is
 //! the paragraph above about 018 BUG-008.
+//!
+//! # The state this feature remembers (feature 028, contract S1)
+//!
+//! Two fields in [`State`], reached as `state.window`: `window_size`, the last size the windowing
+//! system reported, and `focused_field`, which application field holds the keyboard — `None` when
+//! none does, which is the state a terminal needs before it can take input.
+//!
+//! Both keep the names they had flat on the root (T030). `window.window_size` stutters and is kept
+//! anyway: `window.size` would read as a geometry accessor on a window handle rather than as the
+//! last report received, and the distinction between the two is the whole of why this is stored
+//! rather than asked for.
+//!
+//! `focused_field` is written from more than this feature, which is why
+//! [`Outcome::FieldFocusCleared`](crate::features::Outcome) exists — the session clears it by
+//! reporting rather than by reaching in (T067a-9).
 
 /// What this feature remembers (feature 028, contract S1).
 ///

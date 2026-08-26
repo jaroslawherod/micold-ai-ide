@@ -29,6 +29,21 @@
 //! identical whether or not the shell was in the way. One routing table, one place to look —
 //! which is the narrowing described above; the validation it delegates to `shell/persist.rs` is
 //! what is left of the split.
+//!
+//! # The state this feature remembers (feature 028, contract S1)
+//!
+//! Three fields in [`State`], reached as `state.settings`: `settings_draft`, the edits in flight
+//! while the dialog is open (`None` when it is closed — its presence *is* the dialog being shown);
+//! `theme_pref`, what the user chose; and `system_scheme`, what the desktop most recently reported.
+//!
+//! All three keep the names they had flat on the root (T032). `settings_draft` reads as a stutter
+//! and is not one: `settings.draft` would lose that this is a draft *of the settings*, and the
+//! field is distinguished from `theme_pref` beside it precisely by being the dialog's copy rather
+//! than the live value.
+//!
+//! **Saved settings are not here.** These are read back from `settings.json` by `shell/persist.rs`
+//! at the I/O boundary; what this struct holds is the in-flight edit and the two theme inputs the
+//! resolution needs.
 
 use crate::app::Message;
 use crate::overlay::registry::Registered;

@@ -116,6 +116,25 @@ pub struct State {
     pub help: crate::features::help::State,
     /// The known-projects catalog and the active working space (persisted). Per-story
     /// selector/rename working state is added alongside those stories.
+    ///
+    /// **The one shared member** (feature 028, FR-008, contract S2). Every other field above is a
+    /// feature's own struct; this one stays flat because three features read and write it, and no
+    /// two of them read a disjoint part:
+    ///
+    /// - `project` — `workspace.projects`, `workspace.active`;
+    /// - `session` — `workspace.sessions`, `workspace.foreground_by_project`;
+    /// - `worktree` — `workspace.worktree_names`, `workspace.included_worktrees`.
+    ///
+    /// Six members, three owners, already keyed per path in `OWNERS`
+    /// (`tests/feature_write_isolation.rs`). Folding it into any one feature's struct would put the
+    /// other two behind that feature's name, which is the confusion FR-001 argues against; folding
+    /// it into three would split a type whose invariants span all six — `Workspace::forget` removes
+    /// a project by applying one rule across every member at once, which is why writes through it
+    /// are exempted as `CORE_MEDIATED` rather than attributed to a caller.
+    ///
+    /// So it is neither moved nor split: it is declared. That declaration is what G2
+    /// (`tests/root_state_is_shared.rs`) checks a flat root field against — a field that is neither
+    /// a feature struct nor named in `SHARED` fails, and names its single writer.
     pub workspace: micold_core::workspace::Workspace,
     /// What the project feature remembers -- see [`crate::features::project::State`].
     pub project: crate::features::project::State,
@@ -382,6 +401,29 @@ impl State {
     /// 008). The single path used by both the `WorktreesLoaded` reducer and the binary's direct
     /// re-discovery, so a worktree removed in-app OR externally cannot leave stale expansion,
     /// hover, context-menu, delete-confirmation, or rename-override state behind.
+    ///
+    /// # Why this stays field-by-field (feature 028, invariant S3 / FR-009)
+    ///
+    /// Its writes now cross three owners: five members of [`crate::features::worktree::State`],
+    /// one of the shared [`Self::workspace`], and the sidebar's `expanded`, which it does not write
+    /// at all but reports through [`Outcome::WorktreesReplaced`](crate::features::Outcome) for the
+    /// drain to prune. Once the worktree fields sit behind one struct, the tempting shorthand is
+    ///
+    /// ```text
+    /// self.worktree = worktree::State { worktrees, ..Default::default() };   // NOT this
+    /// ```
+    ///
+    /// which reads as the same thing and is not. This function reconciles: each of `menu_open`,
+    /// `hovered` and `delete_target` is cleared **only if** it names a worktree that is gone, and
+    /// otherwise survives untouched. A re-discovery that returns the same worktrees — which is most
+    /// of them, since the binary re-discovers on a filesystem event — leaves an open context menu
+    /// open and a hovered row hovered. The shorthand would close and unhover on every scan, and the
+    /// suite would still pass, because no test asserts what a *no-op* rediscovery preserves; the
+    /// user would just find menus closing under the cursor.
+    ///
+    /// So the resets are conditional and written one field at a time, and S3 forbids assigning a
+    /// feature struct whole precisely so that this distinction cannot be refactored away by
+    /// accident (research.md §R5).
     #[must_use = "the sidebar's expansion is pruned by draining this, not by `set_worktrees` (T066)"]
     pub fn set_worktrees(&mut self, worktrees: Vec<Worktree>) -> Vec<crate::features::Outcome> {
         self.worktree.worktrees = worktrees;

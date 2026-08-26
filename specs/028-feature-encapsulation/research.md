@@ -161,7 +161,8 @@ than discovered at task 40.
 - **Track 2A — feature-owned state structs (the substance).** Each feature's fields collapse into
   one struct owned by that feature's module, held as one field of the root `State`:
   `state.sidebar: sidebar::State`, `state.session: session::State`, and so on. Root `State` goes
-  from **44 flat public fields to 10 feature structs** plus `workspace` and the shared members.
+  from **44 flat public fields to 9 feature structs** plus `workspace`, the one shared member
+  (`connection` owns no state, so it gets no struct — T037).
   This is exactly the shape `worktree_form` already has — `state.worktree_form` is a
   `worktree_form`-owned type — and it is what SC-007 actually asks for: everything a feature
   remembers is named in that feature's module, in one place, without consulting a test file. It

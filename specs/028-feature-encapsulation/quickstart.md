@@ -41,7 +41,8 @@ awk 'NR>=506 && NR<=720' crates/micold-client/src/app.rs \
   | grep -cE '^    pub [a-z_]+:'
 ```
 
-Baseline **44 flat fields**. Target **10 feature structs + the declared shared members**. The
+Baseline **44 flat fields**. Target **9 feature structs + `workspace`**, the one declared shared
+member (`connection` owns no state, so it gets no struct — T037). The
 criterion is guard **G2**.
 
 ### A.3 Reproducing the attribution table

@@ -28,6 +28,28 @@
 //! [`update`] is pure (data-model.md §1.1 shape A) and routes all thirty-seven. Twenty are matched a
 //! second time in `main.rs` (M2), because each additionally spawns a process, writes to a PTY,
 //! scrolls or resizes it, or reaches the clipboard.
+//!
+//! # The state this feature remembers (feature 028, contract S1)
+//!
+//! Twelve fields in [`State`], reached as `state.session` — the largest of the nine feature
+//! structs, which matches this being the largest vocabulary. They fall into four groups:
+//!
+//! - **which session is in front**: `active`, and `reveal_suppressed_for`, the session whose revealed
+//!   sidebar row the user closed;
+//! - **the terminal surface**: `terminal_released` (has the user handed the keyboard back to the
+//!   application), `terminal_context_menu` (the right-click menu's anchor);
+//! - **the tab strip**: `shell_instance_menu`, `tab_strip_scroll_offset`, `tab_strip_viewport_width`,
+//!   `pending_tab_reveal`;
+//! - **the session's own surfaces and history**: `menu_open`, `remove_target`,
+//!   `restarted_while_inactive`, and the diagnostic `last_foreground_choice`.
+//!
+//! Nine keep the names they had flat on the root. Three shed the `session` the qualifier carries:
+//! `active_session`, `session_menu_open` and `session_remove_target` are `active`, `menu_open` and
+//! `remove_target` (T036).
+//!
+//! **The sessions themselves are not here.** The records, and which session each project was last
+//! on, live in `state.workspace` — see [`crate::app::State::workspace`]. What is here is which of
+//! them the user is looking at and what is open over it.
 
 use crate::app::Message;
 use crate::overlay::registry::Registered;
@@ -127,8 +149,8 @@ pub struct State {
     /// the release affordance sets it, and any navigation that displays a terminal clears it
     /// (FR-021a). It replaced a stored `terminal_focused: bool` that seven scattered assignments
     /// had to keep correct between them, which is how project switch, mode toggle and instance
-    /// switch each ended up missing a case. Written only by [`crate::app::State::focus_terminal`] and
-    /// [`crate::app::State::release_terminal`]; `tests/terminal_bar_stability.rs` fails if that stops being
+    /// switch each ended up missing a case. Written only by `focus_terminal` and
+    /// `release_terminal`; `tests/terminal_bar_stability.rs` fails if that stops being
     /// true.
     pub terminal_released: bool,
 }

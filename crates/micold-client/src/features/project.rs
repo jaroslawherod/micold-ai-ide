@@ -27,6 +27,22 @@
 //! folder scan, a `Git::is_repo_root` check, or the catalog written back to disk: `SelectorOpened`,
 //! `SelectorNavigatedInto`, `SelectorNavigatedUp`, `FolderChosen`, `Reopened`, `RenameConfirmed`,
 //! `ForgetConfirmed` (M2).
+//!
+//! # The state this feature remembers (feature 028, contract S1)
+//!
+//! Five fields in [`State`], reached as `state.project`: `selector` — the folder-picker's browsing
+//! position while adding a project — `switcher_open` and `menu_open` for the two surfaces,
+//! `rename_draft` for an in-progress rename, and `forget_target`, the project awaiting confirmation
+//! of a forget.
+//!
+//! Three keep the names they had flat on the root. Two shed the `project` the qualifier now
+//! carries: `project_switcher_open` and `project_menu_open` are `switcher_open` and `menu_open`
+//! (T033).
+//!
+//! **The catalog itself is not here.** The known projects and which one is active live in
+//! `state.workspace`, the one shared member, because `session` and `worktree` read it too — see the
+//! doc comment on [`crate::app::State::workspace`]. What is here is working state for the surfaces
+//! this feature draws over that catalog.
 
 use crate::app::Message;
 use crate::overlay::registry::Registered;

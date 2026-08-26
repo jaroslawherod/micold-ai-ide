@@ -22,6 +22,28 @@
 //! itself (`Toggled`, `DragMoved`). [`update`] routes all ten and is pure (data-model.md §1.1 shape
 //! A) — every one of them is a question about what the sidebar shows, answerable without leaving the
 //! process, so the binary matches none of them again.
+//!
+//! # The state this feature remembers (feature 028, contract S1)
+//!
+//! Ten fields in [`State`], reached as `state.sidebar`, in three groups:
+//!
+//! - **what is expanded**: `expanded` (the worktree rows the user has opened), `default_expanded`,
+//!   and `pending_reveal_scroll`, the flag that arms a scroll-into-view once layout knows the height;
+//! - **what is shown**: `filters`, `filter_open`, `show_agent_worktrees`;
+//! - **the panel's own geometry**: `hidden`, `width`, `scroll_offset`, `viewport_height`.
+//!
+//! Four kept the names they had flat on the root. Six shed the `sidebar` the qualifier carries:
+//! `sidebar_filters`, `sidebar_filter_open`, `sidebar_hidden`, `sidebar_width`,
+//! `sidebar_scroll_offset` and `sidebar_viewport_height` (T035).
+//!
+//! **The tree is not here.** Which projects, worktrees and sessions the sidebar lists is derived on
+//! every view from `state.workspace` and `state.worktree`, which is what lets a wholesale
+//! re-discovery of the worktrees leave this feature's expansion untouched — see
+//! [`crate::app::State::set_worktrees`]. `expanded` is a set of names, not of rows, for the same
+//! reason.
+//!
+//! Note that a `SidebarEntry`'s node carries an `expanded` of its own. That is one row's flag in a
+//! rendered tree and is not this field; the two are unrelated despite the shared name.
 
 use crate::features::worktree::worktree_tags;
 use crate::overlay::registry::Registered;

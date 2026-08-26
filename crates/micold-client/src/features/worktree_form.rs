@@ -7,6 +7,21 @@
 //! an ordinary feature module holding data and operations only.
 //!
 //! Render-free, like every module here: `tests/features_are_render_free.rs` holds that line.
+//!
+//! # The state this feature remembers (feature 028, contract S1)
+//!
+//! Two fields in [`State`], reached as `state.worktree_form`: `form`, the [`WorktreeForm`] itself
+//! when one is open (`None` when it is not — its presence *is* the form being shown), and
+//! `worktree_error`, the last failure to report back to the user.
+//!
+//! `form` sheds the `worktree_form` the qualifier now carries. `worktree_error` does not, and the
+//! distinction is the point: `worktree_form` names the *form*, while `worktree_error` names what
+//! failed — a worktree operation, which may have been started from somewhere other than this form
+//! (T031).
+//!
+//! This is the feature whose intermediate state no other feature reads, per the header above. The
+//! struct is where that claim becomes checkable: everything the form accumulates between opening
+//! and submitting is inside `form`, and nothing outside this module names any of it.
 
 use crate::app::Message;
 use crate::overlay::registry::Registered;
@@ -649,7 +664,7 @@ pub enum Msg {
     /// FR-001). Never dispatched for [`BranchSituation::Free`].
     ConflictDetected(BranchSituation),
     /// The user answered the prompt (feature 016, FR-002). The binary performs the create with
-    /// the chosen mode. `Overwrite` can only arrive via [`Message::OverwriteConfirmed`].
+    /// the chosen mode. `Overwrite` can only arrive via [`Msg::OverwriteConfirmed`].
     ResolutionChosen(CreateMode),
     /// The user chose Overwrite; show the destructive confirmation first (feature 016, FR-005).
     OverwriteRequested,

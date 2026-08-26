@@ -19,7 +19,9 @@ The technical approach, in three parts:
    root arm per feature. `worktree_form` is the worked precedent and needs no conversion.
 2. **Give each feature its own state struct.** Each feature's fields collapse into
    `features::<n>::State`, held as one field of `app::State`. Root state goes from 44 flat public
-   fields to ten feature structs plus one declared shared member (`workspace`).
+   fields to **nine feature structs plus one declared shared member** (`workspace`). Nine, not ten:
+   `connection` owns none of the attributed fields, so it gets no struct rather than an empty one
+   (T037) — the same no-ceremony rule shape C applies to a feature with no vocabulary.
 3. **Guard all of it.** G1 (no single-feature variant at the root), G2 (no single-owner path at the
    root), G3 (every feature with a `Msg` has an entry point) — each with an allowlist carrying a
    written reason per entry, each observed failing its own violation before it is trusted, and all

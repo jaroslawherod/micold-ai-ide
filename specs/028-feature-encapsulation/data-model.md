@@ -16,8 +16,8 @@ all 44 root state fields (§3).
 | **Feature message vocabulary** | 1 (`worktree_form::Msg`, 22 variants) | **10** — one `Msg` per feature module |
 | **Feature reducer** | 1 (`worktree_form::update`) | **10** entry points, in one of the three shapes below |
 | **Root message vocabulary** (`app::Message`) | 119 variants | **15** — 10 feature wrappers + 5 cross-cutting |
-| **Root application state** (`app::State`) | 44 flat public fields | **10 feature structs** + the declared shared members |
-| **Feature-owned state struct** | 1 (`worktree_form::WorktreeForm`, reached via `state.worktree_form`) | **10**, one per feature |
+| **Root application state** (`app::State`) | 44 flat public fields | **9 feature structs + `workspace`**, the one declared shared member |
+| **Feature-owned state struct** | 1 (`worktree_form::WorktreeForm`, reached via `state.worktree_form`) | **9** — one per feature that owns state; `connection` owns none and gets none |
 | **Outcome vocabulary** (`features::Outcome`) | 12 variants | unchanged in shape; extended only where a conversion needs it |
 | **Ownership map** (`OWNERS`, 51 entries) | hand-maintained `const` in a test | **derived from the feature structs**; entries remain only for the shared members |
 | **Component-owned state** | 13 `Widget` impls, all presentational | unchanged — see [research.md](./research.md) §R4 |
@@ -41,11 +41,17 @@ features/<n>.rs
     pub struct State { ...the fields OWNERS assigns to <n>... }   // feature-owned
 app.rs
     pub struct State {
-        pub <n>: <n>::State,      // one line per feature, 10 lines
-        pub workspace: Workspace, // declared shared members
-        ...
+        pub <n>: <n>::State,      // one line per feature that owns state, 9 lines
+        pub workspace: Workspace, // the one declared shared member
     }
 ```
+
+**Nine, not ten.** Every feature gets a vocabulary; not every feature gets a struct. `connection`
+owns none of the 43 attributed fields — it is the one feature absent from `OWNERS` (§3) — because
+the daemon connection is binary-owned runtime state that the shell recomputes into
+`ConnectionStatus` on every view. An empty struct would be a place to look and find nothing, plus a
+root field no reducer writes, so it gets none; its module header says so instead (T037). That is
+the same no-ceremony rule shape C above applies to a module with no `Msg`.
 
 **Invariant S3 (FR-009).** A feature struct is never assigned whole. No
 `state.<n> = <n>::State::default()` and no `..Default::default()` over one. Fields that are reset

@@ -11,6 +11,17 @@
 //! which is pure: `&mut State` in, `Vec<Outcome>` out (data-model.md §1.1 shape A). The root's
 //! `Message::Help` arm hands over the whole vocabulary and the binary matches none of it a second
 //! time, because opening a menu and opening an About dialog reach nothing outside the process.
+//!
+//! # The state this feature remembers (feature 028, contract S1)
+//!
+//! Two `bool`s in [`State`], reached as `state.help`: `help_menu_open` — whether the toolbar's
+//! overflow menu is showing — and `about_open`, whether the About dialog is. Both keep the names
+//! they had flat on the root: `help_menu_open` names the *menu*, a surface inside this feature
+//! rather than the feature itself, and `about_open` names the dialog, so neither stutters against
+//! the `help` qualifier (T029).
+//!
+//! That is the whole of it. Every action the menu offers is a message that leaves through
+//! [`Outcome`](crate::features::Outcome); nothing about what the menu *contains* is stored.
 
 use crate::app::Message;
 use crate::overlay::registry::Registered;

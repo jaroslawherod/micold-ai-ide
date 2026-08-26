@@ -18,6 +18,16 @@
 //! Two transitions in [`Msg`] — `Dismissed` and `Advanced`, the snackbar's two ways of leaving —
 //! routed by [`update`], which is pure (data-model.md §1.1 shape A). Advancing the queue is a
 //! decision about the queue, so nothing here is matched again in the binary.
+//!
+//! # The state this feature remembers (feature 028, contract S1)
+//!
+//! One field in [`State`], reached as `state.notifications`: `queue`, the snackbar's pending
+//! notifications in arrival order. It was the root's `notify` and is `queue` here, because
+//! `notifications.notify` would say the same thing twice (T028).
+//!
+//! The banner is not in here. It is derived on every view from what the queue's head says, which is
+//! why a wholesale replacement of the queue cannot leave a banner showing something that is no
+//! longer in it.
 
 use std::time::Duration;
 
