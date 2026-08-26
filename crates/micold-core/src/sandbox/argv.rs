@@ -275,7 +275,11 @@ mod tests {
             };
             assert_eq!(value_after("--cpus").as_deref(), Some("2.500"), "{kind}");
             assert_eq!(value_after("--memory").as_deref(), Some("4096m"), "{kind}");
-            assert_eq!(value_after("--pids-limit").as_deref(), Some("512"), "{kind}");
+            assert_eq!(
+                value_after("--pids-limit").as_deref(),
+                Some("512"),
+                "{kind}"
+            );
             assert_eq!(
                 value_after("--storage-opt").as_deref(),
                 Some("size=8192m"),

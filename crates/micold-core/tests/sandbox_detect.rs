@@ -114,7 +114,10 @@ fn the_three_answers_are_distinct_and_each_carries_its_own_next_step() {
     for kind in RuntimeKind::ALL {
         let three = [
             not_installed(kind),
-            spoke(kind, wording(kind, "err_daemon_down.txt", "podman_err_service_down.txt")),
+            spoke(
+                kind,
+                wording(kind, "err_daemon_down.txt", "podman_err_service_down.txt"),
+            ),
             spoke(
                 kind,
                 wording(
@@ -134,7 +137,10 @@ fn the_three_answers_are_distinct_and_each_carries_its_own_next_step() {
         let remedies: Vec<String> = three.iter().map(|e| e.remedy()).collect();
         for (i, j) in [(0, 1), (0, 2), (1, 2)] {
             assert_ne!(reasons[i], reasons[j], "{kind}: two answers read the same");
-            assert_ne!(remedies[i], remedies[j], "{kind}: two answers ask for the same fix");
+            assert_ne!(
+                remedies[i], remedies[j],
+                "{kind}: two answers ask for the same fix"
+            );
         }
     }
 }
@@ -174,9 +180,7 @@ fn the_runtime_the_user_did_not_select_is_never_invoked() {
             "{selected} was selected and {other} was invoked: {leaked:?}"
         );
         assert!(
-            calls
-                .iter()
-                .all(|c| c.program == *selected.program()),
+            calls.iter().all(|c| c.program == *selected.program()),
             "{selected}: something other than the selected runtime was invoked: {calls:?}"
         );
     }

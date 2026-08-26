@@ -402,7 +402,10 @@ fn only_an_explicit_request_restarts_the_sandbox() {
             }
             // Nothing to restart: a disabled sandbox is not broken, and one already coming up
             // would be abandoned mid-attempt and started again from the top.
-            _ => assert_eq!(after, None, "{before:?} restarted from a state with no sandbox"),
+            _ => assert_eq!(
+                after, None,
+                "{before:?} restarted from a state with no sandbox"
+            ),
         }
     }
 }

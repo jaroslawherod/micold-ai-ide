@@ -16,7 +16,9 @@ use micold_core::protocol::version::{
 use micold_core::sandbox::argv;
 use micold_core::sandbox::dialect::Dialect;
 use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
-use micold_core::sandbox::runtime::{IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind};
+use micold_core::sandbox::runtime::{
+    IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
+};
 use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
 use std::path::PathBuf;
 

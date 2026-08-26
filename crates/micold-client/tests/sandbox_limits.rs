@@ -22,9 +22,7 @@ use micold_client::ui::sandbox_limits;
 use micold_core::sandbox::runtime::{
     IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
 };
-use micold_core::sandbox::{
-    Bytes, MilliCpus, MIN_MEMORY, MIN_MILLI_CPUS, MIN_PIDS, MIN_STORAGE,
-};
+use micold_core::sandbox::{Bytes, MilliCpus, MIN_MEMORY, MIN_MILLI_CPUS, MIN_PIDS, MIN_STORAGE};
 
 /// A draft whose other sections validate, so a case about the limits fails for the limits.
 fn draft() -> SettingsDraft {
@@ -54,7 +52,9 @@ fn caps(storage: LimitSupport) -> RuntimeCapabilities {
 #[test]
 fn every_limit_is_offered_whatever_the_runtime_can_do() {
     let mut d = draft();
-    d.daemon.capabilities = Some(caps(LimitSupport::unsupported("the overlay2 driver cannot")));
+    d.daemon.capabilities = Some(caps(LimitSupport::unsupported(
+        "the overlay2 driver cannot",
+    )));
 
     let fields: Vec<FieldId> = sandbox_limits(&d).iter().map(|l| l.field).collect();
     assert_eq!(
@@ -78,7 +78,10 @@ fn every_limit_is_offered_whatever_the_runtime_can_do() {
 #[test]
 fn an_unprobed_runtime_leaves_every_limit_editable() {
     let d = draft();
-    assert!(d.daemon.capabilities.is_none(), "the fixture must be unprobed");
+    assert!(
+        d.daemon.capabilities.is_none(),
+        "the fixture must be unprobed"
+    );
 
     assert!(
         sandbox_limits(&d).iter().all(|l| l.editable()),
@@ -90,7 +93,9 @@ fn an_unprobed_runtime_leaves_every_limit_editable() {
 #[test]
 fn an_unsupported_limit_is_the_only_one_disabled() {
     let mut d = draft();
-    d.daemon.capabilities = Some(caps(LimitSupport::unsupported("the overlay2 driver cannot")));
+    d.daemon.capabilities = Some(caps(LimitSupport::unsupported(
+        "the overlay2 driver cannot",
+    )));
 
     let limits = sandbox_limits(&d);
     let disabled: Vec<FieldId> = limits
@@ -108,7 +113,9 @@ fn an_unsupported_limit_is_the_only_one_disabled() {
 #[test]
 fn a_disabled_limit_carries_the_runtimes_reason() {
     let mut d = draft();
-    d.daemon.capabilities = Some(caps(LimitSupport::unsupported("the overlay2 driver cannot")));
+    d.daemon.capabilities = Some(caps(LimitSupport::unsupported(
+        "the overlay2 driver cannot",
+    )));
 
     let limits = sandbox_limits(&d);
     let storage = limits
@@ -131,7 +138,9 @@ fn a_disabled_limit_carries_the_runtimes_reason() {
 fn a_disabled_limit_still_shows_the_stored_value() {
     let mut d = draft();
     d.daemon.storage_mib = "8192".into();
-    d.daemon.capabilities = Some(caps(LimitSupport::unsupported("the overlay2 driver cannot")));
+    d.daemon.capabilities = Some(caps(LimitSupport::unsupported(
+        "the overlay2 driver cannot",
+    )));
 
     let limits = sandbox_limits(&d);
     let storage = limits
@@ -154,7 +163,12 @@ fn an_empty_limit_saves_as_unset_rather_than_as_zero() {
     d.daemon.pids = String::new();
     d.daemon.storage_mib = String::new();
 
-    let budget = d.validate().expect("an empty limit is not a failure").daemon.sandbox.budget;
+    let budget = d
+        .validate()
+        .expect("an empty limit is not a failure")
+        .daemon
+        .sandbox
+        .budget;
     assert_eq!(budget.cpus_milli, None);
     assert_eq!(budget.memory_bytes, None);
     assert_eq!(budget.pids, None);
@@ -178,7 +192,10 @@ fn the_limits_round_trip_through_the_form() {
     assert_eq!(budget.storage_bytes, Some(Bytes::from_mib(4096)));
 
     let reopened = SettingsDraft::from_settings(&settings);
-    assert_eq!(reopened.daemon.cpus, "1.5", "a core count grew decimals it was not typed with");
+    assert_eq!(
+        reopened.daemon.cpus, "1.5",
+        "a core count grew decimals it was not typed with"
+    );
     assert_eq!(reopened.daemon.memory_mib, "2048");
     assert_eq!(reopened.daemon.pids, "256");
     assert_eq!(reopened.daemon.storage_mib, "4096");
@@ -191,7 +208,10 @@ fn a_whole_core_count_has_no_decimal_point() {
     d.daemon.cpus = "2".into();
 
     let settings = d.validate().expect("in range").into_settings();
-    assert_eq!(settings.daemon.sandbox.budget.cpus_milli, Some(MilliCpus(2000)));
+    assert_eq!(
+        settings.daemon.sandbox.budget.cpus_milli,
+        Some(MilliCpus(2000))
+    );
     assert_eq!(SettingsDraft::from_settings(&settings).daemon.cpus, "2");
 }
 
@@ -205,9 +225,21 @@ fn a_whole_core_count_has_no_decimal_point() {
 fn a_limit_below_the_workable_minimum_is_refused_by_its_own_field() {
     let cases: [(&str, FieldId, String); 4] = [
         ("cpus", FieldId::SettingsCpuLimit, "0.1".into()),
-        ("memory_mib", FieldId::SettingsMemoryLimit, (MIN_MEMORY.as_mib() - 1).to_string()),
-        ("pids", FieldId::SettingsPidLimit, (MIN_PIDS - 1).to_string()),
-        ("storage_mib", FieldId::SettingsStorageLimit, (MIN_STORAGE.as_mib() - 1).to_string()),
+        (
+            "memory_mib",
+            FieldId::SettingsMemoryLimit,
+            (MIN_MEMORY.as_mib() - 1).to_string(),
+        ),
+        (
+            "pids",
+            FieldId::SettingsPidLimit,
+            (MIN_PIDS - 1).to_string(),
+        ),
+        (
+            "storage_mib",
+            FieldId::SettingsStorageLimit,
+            (MIN_STORAGE.as_mib() - 1).to_string(),
+        ),
     ];
 
     for (name, field, value) in cases {
@@ -219,8 +251,13 @@ fn a_limit_below_the_workable_minimum_is_refused_by_its_own_field() {
             _ => d.daemon.storage_mib = value,
         }
 
-        let error = d.validate().expect_err("a limit below the minimum is refused");
-        assert_eq!(error.field, field, "{name} was reported against the wrong control");
+        let error = d
+            .validate()
+            .expect_err("a limit below the minimum is refused");
+        assert_eq!(
+            error.field, field,
+            "{name} was reported against the wrong control"
+        );
         assert_eq!(
             error.section,
             SettingsSection::Daemon,

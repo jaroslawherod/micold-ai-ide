@@ -410,7 +410,9 @@ pub fn restart(state: &SandboxState, _: RestartRequested) -> Option<SandboxState
         SandboxState::Stale(_) | SandboxState::Running(_) | SandboxState::Failed(_) => {
             Some(SandboxState::Probing)
         }
-        SandboxState::Disabled | SandboxState::Probing | SandboxState::Acquiring(_)
+        SandboxState::Disabled
+        | SandboxState::Probing
+        | SandboxState::Acquiring(_)
         | SandboxState::Starting => None,
     }
 }

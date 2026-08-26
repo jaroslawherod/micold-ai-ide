@@ -337,7 +337,9 @@ fn sandbox_real_an_explicit_stop_leaves_no_container_behind() {
     );
 
     // C-7: both are idempotent, which is what lets the app stop a sandbox it is unsure about.
-    fx.runtime.stop(&fx.id).expect("stopping twice must not fail");
+    fx.runtime
+        .stop(&fx.id)
+        .expect("stopping twice must not fail");
     fx.runtime
         .remove(&fx.id)
         .expect("removing twice must not fail");

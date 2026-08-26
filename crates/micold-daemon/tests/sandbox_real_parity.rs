@@ -74,9 +74,15 @@ const PROBES: &[(&str, &str)] = &[
     ("a failing command's exit status", "false; echo $?"),
     ("a succeeding command's exit status", "true; echo $?"),
     ("quoting and internal whitespace", "echo 'a   b'"),
-    ("a loop's multi-line output", "for i in 1 2 3; do echo \"line $i\"; done"),
+    (
+        "a loop's multi-line output",
+        "for i in 1 2 3; do echo \"line $i\"; done",
+    ),
     ("tab expansion", "printf 'a\\tb\\n'"),
-    ("SGR colour, as text on the grid", "printf '\\033[31mRED\\033[0m\\n'"),
+    (
+        "SGR colour, as text on the grid",
+        "printf '\\033[31mRED\\033[0m\\n'",
+    ),
     ("output with no trailing newline", "printf 'no-newline'"),
     ("a pipeline", "echo one two three | tr ' ' '\\n' | tail -1"),
 ];

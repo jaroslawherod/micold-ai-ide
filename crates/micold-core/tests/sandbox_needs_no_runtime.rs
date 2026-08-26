@@ -94,7 +94,10 @@ fn every_real_runtime_target_is_gated_on_the_feature() {
         );
         checked += 1;
     }
-    assert!(checked >= 2, "the real-runtime targets were found: {checked}");
+    assert!(
+        checked >= 2,
+        "the real-runtime targets were found: {checked}"
+    );
 }
 
 /// The seam itself: the adapter reaches the process boundary in exactly one module.

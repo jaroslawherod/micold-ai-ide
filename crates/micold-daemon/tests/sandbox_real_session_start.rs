@@ -39,7 +39,9 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
-use micold_core::connect::{connect_at, connect_or_spawn, Connected, Credentials, DaemonConnection};
+use micold_core::connect::{
+    connect_at, connect_or_spawn, Connected, Credentials, DaemonConnection,
+};
 use micold_core::endpoint::DialAddress;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::auth::Token;
@@ -245,7 +247,9 @@ fn docker(args: &[&str]) {
 }
 
 fn purge() {
-    let _ = Command::new("docker").args(["rm", "-f", CONTAINER]).output();
+    let _ = Command::new("docker")
+        .args(["rm", "-f", CONTAINER])
+        .output();
     let _ = Command::new("docker")
         .args(["network", "rm", NETWORK])
         .output();
@@ -401,8 +405,7 @@ async fn sandbox_real_session_start_is_within_two_seconds_of_the_host_placement(
         },
     )
     .await;
-    let sandboxed =
-        measure_all(&mut box_conn, &box_project, &box_ids, "container placement").await;
+    let sandboxed = measure_all(&mut box_conn, &box_project, &box_ids, "container placement").await;
     drop(box_conn);
 
     // --- the claim ---------------------------------------------------------------------------

@@ -506,8 +506,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SandboxLost => {
-            app.sandbox
-                .container_lost(shell::sandbox::CONTAINER_NAME);
+            app.sandbox.container_lost(shell::sandbox::CONTAINER_NAME);
             Task::none()
         }
         // The one edge back into bring-up, and it is here because a person pressed something
@@ -515,13 +514,18 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // to itself.
         Message::SandboxRestartRequested => {
             match app.sandbox_boot.clone() {
-                Some(plan) if app.sandbox.restart(micold_core::sandbox::lifecycle::RestartRequested) => {
+                Some(plan)
+                    if app
+                        .sandbox
+                        .restart(micold_core::sandbox::lifecycle::RestartRequested) =>
+                {
                     // Going back to the sandbox has to take the connection with it. If a fallback
                     // was in force, `placement.kind` is the host process; left there, the sandbox
                     // would come up and every session would still be running outside it — the
                     // banner saying "sandboxed" over an unconfined shell, which is the one thing
                     // FR-035b exists to prevent.
-                    app.placement.kind = micold_core::sandbox::placement::PlacementKind::LocalSandbox;
+                    app.placement.kind =
+                        micold_core::sandbox::placement::PlacementKind::LocalSandbox;
                     shell::sandbox::boot(plan)
                 }
                 _ => Task::none(),

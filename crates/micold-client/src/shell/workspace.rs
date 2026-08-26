@@ -219,8 +219,11 @@ mod tests {
         let (tx, rx) = iced::futures::channel::mpsc::unbounded();
         let mut app = base_app();
         app.daemon = Some(micold_client::daemon::Outbox::new(tx));
-        app.caps = std::mem::replace(&mut app.caps, crate::shell::capabilities::Capabilities::real())
-            .without_local_git();
+        app.caps = std::mem::replace(
+            &mut app.caps,
+            crate::shell::capabilities::Capabilities::real(),
+        )
+        .without_local_git();
         (app, rx)
     }
 

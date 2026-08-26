@@ -116,7 +116,8 @@ async fn sandbox_real_a_project_registered_after_boot_is_outside_the_running_con
             Err(_) => panic!(
                 "the daemon never reported the new project in its catalogue.\n\
                  --- daemon log ---\n{}",
-                std::fs::read_to_string(&daemon_log).unwrap_or_else(|e| format!("<unreadable: {e}>"))
+                std::fs::read_to_string(&daemon_log)
+                    .unwrap_or_else(|e| format!("<unreadable: {e}>"))
             ),
         }
     }
@@ -125,7 +126,9 @@ async fn sandbox_real_a_project_registered_after_boot_is_outside_the_running_con
 
     // The premise `Stale` rests on: the container cannot see it, and no restart *inside* would help
     // — the bind mounts were fixed when it was created (R9).
-    let seen = term.run(&format!("cat {}/marker.txt", late.display())).await;
+    let seen = term
+        .run(&format!("cat {}/marker.txt", late.display()))
+        .await;
     assert!(
         !seen.contains(LATE_MARKER),
         "a project registered after the container was created must not be reachable inside it — \

@@ -83,7 +83,9 @@ async fn sandbox_real_boundary_holds_from_inside_a_session() {
     let mut term = Terminal::new(&mut conn, session, screen, CONTAINER, &daemon_log, serial);
 
     // The project is reachable at its own host absolute path (research R2) ---------------------
-    let seen = term.run(&format!("cat {}/marker.txt", project.display())).await;
+    let seen = term
+        .run(&format!("cat {}/marker.txt", project.display()))
+        .await;
     assert!(
         seen.contains(MARKER),
         "the registered project must be readable at its host path; got:\n{seen}"
@@ -159,7 +161,8 @@ async fn sandbox_real_boundary_holds_from_inside_a_session() {
 
     // What a session writes comes back owned by the user, not by root (R3, C-4) ------------------
     let probe = "written-from-inside.txt";
-    term.run(&format!("touch {}/{probe}", project.display())).await;
+    term.run(&format!("touch {}/{probe}", project.display()))
+        .await;
     let written = project.join(probe);
     assert!(
         written.exists(),

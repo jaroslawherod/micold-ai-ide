@@ -121,7 +121,9 @@ impl Drop for Sandbox {
 }
 
 fn teardown(container: &str, network: &str) {
-    let _ = Command::new("docker").args(["rm", "-f", container]).output();
+    let _ = Command::new("docker")
+        .args(["rm", "-f", container])
+        .output();
     let _ = Command::new("docker")
         .args(["network", "rm", network])
         .output();

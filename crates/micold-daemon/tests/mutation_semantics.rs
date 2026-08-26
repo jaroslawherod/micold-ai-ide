@@ -1439,9 +1439,11 @@ async fn repo_root_query_is_answered_for_both_a_repository_and_a_plain_directory
             .await
             .unwrap();
 
-        let reply =
-            expect_control(&mut client, |m| matches!(m, DaemonMsg::OperationOk { req: r, .. } if *r == req))
-                .await;
+        let reply = expect_control(
+            &mut client,
+            |m| matches!(m, DaemonMsg::OperationOk { req: r, .. } if *r == req),
+        )
+        .await;
         match reply {
             DaemonMsg::OperationOk {
                 result: OperationResult::RepoRoot { path, is_repo_root },

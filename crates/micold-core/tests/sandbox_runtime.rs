@@ -251,7 +251,10 @@ fn idempotence_does_not_swallow_a_real_failure() {
         let err = rt
             .stop(&ContainerId("x".into()))
             .expect_err("a daemon-down stop is a real failure");
-        assert!(matches!(err, RuntimeError::NotRunning { .. }), "{kind}: {err:?}");
+        assert!(
+            matches!(err, RuntimeError::NotRunning { .. }),
+            "{kind}: {err:?}"
+        );
     }
 }
 

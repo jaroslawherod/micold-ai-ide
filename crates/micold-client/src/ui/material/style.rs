@@ -767,7 +767,10 @@ mod tests {
     #[test]
     fn a_disabled_field_greys_its_value() {
         let r = tokens::roles(ColorScheme::Dark);
-        let disabled = field_input(r)(&iced::Theme::Dark, iced::widget::text_input::Status::Disabled);
+        let disabled = field_input(r)(
+            &iced::Theme::Dark,
+            iced::widget::text_input::Status::Disabled,
+        );
         let active = field_input(r)(&iced::Theme::Dark, iced::widget::text_input::Status::Active);
         assert_eq!(disabled.value, disabled_color(r.on_surface));
         assert_eq!(active.value, color(r.on_surface));

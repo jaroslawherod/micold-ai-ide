@@ -38,9 +38,7 @@ use micold_core::sandbox::cli::CliRuntime;
 use micold_core::sandbox::exec::SystemRunner;
 use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
 use micold_core::sandbox::runtime::{ContainerRuntime, Progress, RuntimeKind};
-use micold_core::sandbox::{
-    CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount,
-};
+use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
 
 const IMAGE: &str = "micold-daemon:dev";
 /// A throwaway tag, so making a reference cold never touches the one a developer is using.
@@ -232,7 +230,10 @@ fn sandbox_real_first_enable_is_under_five_minutes_and_never_goes_quiet() {
         previous = *at;
     }
     longest = longest.max(acquired - previous);
-    println!("SC-004 longest silence during acquisition: {}ms", longest.as_millis());
+    println!(
+        "SC-004 longest silence during acquisition: {}ms",
+        longest.as_millis()
+    );
     assert!(
         longest <= MAX_SILENCE,
         "the progress indicator stood still for {}ms during acquisition",

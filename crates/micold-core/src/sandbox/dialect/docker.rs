@@ -24,7 +24,11 @@ pub fn dialect() -> Dialect {
         // path inside that sentence. "read-only file system" is here because a bind onto a
         // read-only mount is the same failure with a different cause, and the user needs the path
         // either way.
-        mount_rejected_phrases: &["mount source path", "invalid mount", "read-only file system"],
+        mount_rejected_phrases: &[
+            "mount source path",
+            "invalid mount",
+            "read-only file system",
+        ],
     }
 }
 

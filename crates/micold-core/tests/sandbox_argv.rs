@@ -124,7 +124,10 @@ fn volumes(args: &[std::ffi::OsString]) -> Vec<(String, String, String)> {
 /// `/run/micold/token` — because they are where the daemon inside the image looks, on every host.
 /// So they are never an identity mount, not even on Linux, and a test that demanded they were
 /// would be asserting the wrong invariant about the right code.
-fn mapped_volumes(spec: &SandboxSpec, args: &[std::ffi::OsString]) -> Vec<(String, String, String)> {
+fn mapped_volumes(
+    spec: &SandboxSpec,
+    args: &[std::ffi::OsString],
+) -> Vec<(String, String, String)> {
     let fixed = [
         spec.mounts.state.host.to_string_lossy().into_owned(),
         spec.mounts.secret.host.to_string_lossy().into_owned(),
@@ -162,9 +165,15 @@ fn a_windows_host_mounts_every_path_under_the_container_root() {
     // land under the container root. The state and token mounts do not: they have fixed container
     // paths the image dictates.
     let mapped = mapped_volumes(&spec, &argv::create(&spec, &caps()));
-    assert_eq!(mapped.len(), 4, "one project and three credentials: {mapped:?}");
+    assert_eq!(
+        mapped.len(),
+        4,
+        "one project and three credentials: {mapped:?}"
+    );
     assert!(
-        mapped.iter().all(|(_, c, _)| c.starts_with(WINDOWS_MOUNT_ROOT)),
+        mapped
+            .iter()
+            .all(|(_, c, _)| c.starts_with(WINDOWS_MOUNT_ROOT)),
         "every mapped path belongs under {WINDOWS_MOUNT_ROOT}: {mapped:?}"
     );
 
@@ -215,7 +224,11 @@ fn rule_m1_holds_under_both_mappings() {
 fn a_unix_host_mounts_every_path_at_itself() {
     let spec = spec_for(false);
     let mapped = mapped_volumes(&spec, &argv::create(&spec, &caps()));
-    assert_eq!(mapped.len(), 4, "one project and three credentials: {mapped:?}");
+    assert_eq!(
+        mapped.len(),
+        4,
+        "one project and three credentials: {mapped:?}"
+    );
     for (host, container, _) in mapped {
         assert_eq!(
             host, container,

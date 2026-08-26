@@ -329,7 +329,12 @@ impl SettingsDraft {
                 MIN_MEMORY,
                 MAX_MIB,
             )?,
-            pids: self.count(&self.daemon.pids, FieldId::SettingsPidLimit, MIN_PIDS, MAX_PIDS)?,
+            pids: self.count(
+                &self.daemon.pids,
+                FieldId::SettingsPidLimit,
+                MIN_PIDS,
+                MAX_PIDS,
+            )?,
             storage_bytes: self.mib(
                 &self.daemon.storage_mib,
                 FieldId::SettingsStorageLimit,
@@ -389,10 +394,7 @@ impl SettingsDraft {
                      runtime's default."
                 ),
             )),
-            Err(_) => Err(self.reject(
-                field,
-                "Enter a whole number of mebibytes.".to_string(),
-            )),
+            Err(_) => Err(self.reject(field, "Enter a whole number of mebibytes.".to_string())),
         }
     }
 
@@ -416,10 +418,7 @@ impl SettingsDraft {
                      runtime's default."
                 ),
             )),
-            Err(_) => Err(self.reject(
-                field,
-                "Enter a whole number of processes.".to_string(),
-            )),
+            Err(_) => Err(self.reject(field, "Enter a whole number of processes.".to_string())),
         }
     }
 

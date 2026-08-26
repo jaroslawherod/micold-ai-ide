@@ -89,7 +89,6 @@ fn sharing_summary(draft: &SettingsDraft) -> String {
     format!("Shared with the container: {}.", shared.join(", "))
 }
 
-
 /// What the user is told at the moment they choose to cut the sandbox off (FR-018).
 ///
 /// # Why this is a warning and not just a description

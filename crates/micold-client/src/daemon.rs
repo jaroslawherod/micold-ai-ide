@@ -397,6 +397,9 @@ mod tests {
         assert!(advice.contains("micold-daemon:dev"), "{advice}");
         assert!(advice.contains("mise run image"), "{advice}");
         // Both fingerprints, so "which side is stale" is answerable from the message alone.
-        assert!(advice.contains("aaaa1111") && advice.contains("bbbb2222"), "{advice}");
+        assert!(
+            advice.contains("aaaa1111") && advice.contains("bbbb2222"),
+            "{advice}"
+        );
     }
 }

@@ -104,9 +104,7 @@ async fn sandbox_real_limits_stop_the_session_not_the_daemon() {
     // nothing before perl ever saw it.
     let out = term
         .run_within(
-            &format!(
-                "perl -e '\\$x = \"A\" x ({ASK_MIB} * 1024 * 1024); print \"ALLOCATED\\n\"'"
-            ),
+            &format!("perl -e '\\$x = \"A\" x ({ASK_MIB} * 1024 * 1024); print \"ALLOCATED\\n\"'"),
             Duration::from_secs(60),
         )
         .await;

@@ -469,7 +469,8 @@ fn adopt_mount_set(app: &mut App, catalog: &micold_core::protocol::messages::Cat
     let Some(plan) = app.sandbox_boot.as_mut() else {
         return;
     };
-    let projects: Vec<std::path::PathBuf> = catalog.projects.iter().map(|p| p.path.clone()).collect();
+    let projects: Vec<std::path::PathBuf> =
+        catalog.projects.iter().map(|p| p.path.clone()).collect();
     if projects == plan.projects {
         return;
     }

@@ -10,12 +10,11 @@
 //! application being open: whether the user has taken a one-occurrence fallback in this run, and
 //! what the view needs to render about limits the runtime cannot enforce.
 
+use micold_core::protocol::messages::ExitStatus;
 use micold_core::sandbox::lifecycle::{Failure, RestartRequested, SandboxState, Started};
 use micold_core::sandbox::placement::{ConsentedFallback, PlacementKind};
-use micold_core::protocol::messages::ExitStatus;
 use micold_core::sandbox::runtime::{RuntimeCapabilities, UnsatisfiableLimit};
 use micold_core::sandbox::{Bytes, ResourceBudget};
-
 
 /// A limit that can stop a session, and the control that governs it (US4 scenario 3).
 ///
@@ -552,7 +551,9 @@ mod tests {
                 kind: RuntimeKind::Docker,
             },
         });
-        let offer = s.fallback_offer().expect("a failed sandbox offers the way back");
+        let offer = s
+            .fallback_offer()
+            .expect("a failed sandbox offers the way back");
         assert!(s.accept_fallback(offer));
 
         assert!(
@@ -566,7 +567,9 @@ mod tests {
             },
         });
 
-        let notice = s.persistent_notice().expect("a failed sandbox is a standing condition");
+        let notice = s
+            .persistent_notice()
+            .expect("a failed sandbox is a standing condition");
         assert!(
             notice.contains("getting the sandbox image"),
             "the banner should name the failure that just happened, not the one before it: {notice}"
@@ -620,7 +623,8 @@ mod tests {
     /// The report names the limit, the setting, and what it is set to.
     #[test]
     fn an_out_of_memory_stop_names_the_setting_that_governs_it() {
-        let stop = stopped_by_limit(killed(), "", &budget()).expect("a kill under a memory ceiling");
+        let stop =
+            stopped_by_limit(killed(), "", &budget()).expect("a kill under a memory ceiling");
 
         assert_eq!(stop.limit, SandboxLimit::Memory);
         let message = stop.message();
@@ -633,10 +637,7 @@ mod tests {
             "and say what it is currently set to, so the user knows what they are raising: \
              {message}"
         );
-        assert!(
-            message.contains("Settings"),
-            "and where to go: {message}"
-        );
+        assert!(message.contains("Settings"), "and where to go: {message}");
     }
 
     /// Docker's CLI reports the same kill as exit 137.
@@ -719,7 +720,11 @@ mod tests {
     /// session has not stopped, and that blaming the CPU share would be blaming nothing.
     #[test]
     fn the_processor_limit_is_never_blamed() {
-        for output in ["", "No space left on device", "Resource temporarily unavailable"] {
+        for output in [
+            "",
+            "No space left on device",
+            "Resource temporarily unavailable",
+        ] {
             let named = stopped_by_limit(killed(), output, &budget()).map(|s| s.limit.setting());
             assert_ne!(
                 named,
