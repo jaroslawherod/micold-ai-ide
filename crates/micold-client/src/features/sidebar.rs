@@ -13,6 +13,15 @@
 //!
 //! They are `impl State` blocks because `State` is still monolithic in Tier 1. Methods resolve on
 //! the type rather than the module, so relocating them changed no call site.
+//!
+//! # The vocabulary this feature declares
+//!
+//! Ten transitions in [`Msg`]: expansion (`WorktreeExpansionToggled`, `DefaultExpansionToggled`), the
+//! tag filters and their menu (`FilterToggled`, `FiltersCleared`, `FilterMenuToggled`,
+//! `ShowAgentWorktreesToggled`), the scroll position (`Scrolled`, `ViewportResized`), and the panel
+//! itself (`Toggled`, `DragMoved`). [`update`] routes all ten and is pure (data-model.md §1.1 shape
+//! A) — every one of them is a question about what the sidebar shows, answerable without leaving the
+//! process, so the binary matches none of them again.
 
 use crate::app::State;
 use crate::features::worktree::worktree_tags;

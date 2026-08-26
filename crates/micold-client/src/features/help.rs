@@ -4,6 +4,13 @@
 //! it is, and the answer for the toolbar's overflow menu was previously "two constants at the top
 //! of `app.rs` and a `bool` two hundred lines below them". The actions and the surface that shows
 //! them are one feature; they belong together.
+//!
+//! # The vocabulary this feature declares
+//!
+//! Three transitions in [`Msg`] — `MenuToggled`, `AboutOpened`, `AboutClosed` — routed by [`update`],
+//! which is pure: `&mut State` in, `Vec<Outcome>` out (data-model.md §1.1 shape A). The root's
+//! `Message::Help` arm hands over the whole vocabulary and the binary matches none of it a second
+//! time, because opening a menu and opening an About dialog reach nothing outside the process.
 
 use crate::app::{Message, State};
 use crate::overlay::registry::Registered;

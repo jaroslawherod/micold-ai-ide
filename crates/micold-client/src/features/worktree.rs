@@ -14,6 +14,20 @@
 //! These are `impl State` blocks because `State` is still monolithic in Tier 1. Methods resolve on
 //! the type rather than the module, so moving them here changed no call site. Tier 3 splits `State`
 //! itself, at which point these operate on the worktree feature's own state.
+//!
+//! # The vocabulary this feature declares
+//!
+//! Eighteen transitions in [`Msg`]: the listing (`Loaded`), the row menu (`MenuToggled`,
+//! `MenuDismissed`, `Hovered`, `Unhovered`), inclusion (`IncludeRequested`, `Included`,
+//! `ExcludeRequested`, `Excluded`), deletion and its confirmation (`DeleteRequested`,
+//! `DeleteConfirmed`, `DeleteCancelled`, `DeleteKeepBranchToggled`), the rename draft
+//! (`RenameStarted`, `RenameTextChanged`, `RenameConfirmed`, `RenameCancelled`), and
+//! `TextCopyRequested`.
+//!
+//! [`update`] is pure (data-model.md §1.1 shape A) and routes all eighteen. Five are matched a second
+//! time in `main.rs`, because each additionally touches something outside the process — git, the
+//! catalog on disk, or the clipboard: `IncludeRequested`, `ExcludeRequested`, `DeleteConfirmed`,
+//! `RenameConfirmed`, `TextCopyRequested` (M2).
 
 use crate::app::Message;
 use crate::app::State;

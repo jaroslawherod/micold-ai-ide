@@ -12,6 +12,12 @@
 //! fill and nothing else. `notify::Level` additionally decides how long a message lingers, which is
 //! a queue concern the banner has no business knowing (FR-032c keeps the two components separate,
 //! and `tests/banner_is_not_a_snackbar.rs` holds that line).
+//!
+//! # The vocabulary this feature declares
+//!
+//! Two transitions in [`Msg`] — `Dismissed` and `Advanced`, the snackbar's two ways of leaving —
+//! routed by [`update`], which is pure (data-model.md §1.1 shape A). Advancing the queue is a
+//! decision about the queue, so nothing here is matched again in the binary.
 
 use std::time::Duration;
 

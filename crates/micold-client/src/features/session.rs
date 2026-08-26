@@ -11,6 +11,23 @@
 //!
 //! These are `impl State` blocks because `State` is still monolithic in Tier 1. Methods resolve on
 //! the type rather than the module, so moving them changed no call site.
+//!
+//! # The vocabulary this feature declares
+//!
+//! Thirty-seven transitions in [`Msg`], the largest vocabulary in the application: the session
+//! lifecycle (`StartRequested`, `Started`, `Running`, `Selected`, `TitleUpdated`, `CloseRequested`,
+//! `RemoveRequested`, `RemoveConfirmed`, `RemoveCancelled`, `MenuToggled`, `MenuDismissed`), the
+//! shell instances attached to one (`ShellInstance*`, seven of them), the terminal surface
+//! (`Terminal*`, sixteen — bytes, selection, scroll, resize, focus, clipboard, context menu, tick,
+//! restart, and the AI CLI picker), and the tab strip's geometry (`TabStripScrolled`,
+//! `TabStripViewportResized`, `StripTabMenuRequested`).
+//!
+//! `Terminal`, `ShellInstance` and `TabStrip` name sub-surfaces inside a session rather than the
+//! feature, so they stay; the `Session` prefix eleven variants carried is what went.
+//!
+//! [`update`] is pure (data-model.md §1.1 shape A) and routes all thirty-seven. Twenty are matched a
+//! second time in `main.rs` (M2), because each additionally spawns a process, writes to a PTY,
+//! scrolls or resizes it, or reaches the clipboard.
 
 use crate::app::Message;
 use crate::app::State;

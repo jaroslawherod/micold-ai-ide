@@ -9,6 +9,24 @@
 //! selection (feature 006, FR-013) and has nothing to do with projects. Grouping it here would
 //! have followed the line range rather than the feature — the exact mistake FR-001 exists to
 //! correct — so it stays put for the session module (T021).
+//!
+//! # The vocabulary this feature declares
+//!
+//! Nineteen transitions in [`Msg`]: the folder selector (`SelectorOpened`, `SelectorNavigatedInto`,
+//! `SelectorNavigatedUp`, `SelectorListingReady`, `SelectorListingFailed`, `FolderChosen`,
+//! `SelectorClosed`), reopening a known project (`Reopened`, `OpenRefused`), the switcher and its row
+//! menu (`SwitcherToggled`, `MenuToggled`, `MenuDismissed`), the rename draft (`RenameStarted`,
+//! `RenameTextChanged`, `RenameConfirmed`, `RenameCancelled`), and forgetting (`ForgetRequested`,
+//! `ForgetConfirmed`, `ForgetCancelled`).
+//!
+//! The `Selector` and `Rename` prefixes are sub-surfaces inside this feature, not the feature's own
+//! name, so they stay; `Project` was the prefix that went.
+//!
+//! [`update`] is pure (data-model.md §1.1 shape A) and routes all nineteen. Seven are matched a
+//! second time in `main.rs` across six arms, because each additionally needs the home directory, a
+//! folder scan, a `Git::is_repo_root` check, or the catalog written back to disk: `SelectorOpened`,
+//! `SelectorNavigatedInto`, `SelectorNavigatedUp`, `FolderChosen`, `Reopened`, `RenameConfirmed`,
+//! `ForgetConfirmed` (M2).
 
 use crate::app::Message;
 use crate::app::State;

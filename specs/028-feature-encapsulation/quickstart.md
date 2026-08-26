@@ -19,12 +19,20 @@ one-liner over source text, so it needs no build.
 ### A.1 Root message vocabulary (SC-002)
 
 ```bash
-awk 'NR>=43 && NR<=504' crates/micold-client/src/app.rs \
+awk '/^pub enum Message \{/{s=NR} /^\}/{if (s && !e) e=NR} END{print s+1, e-1}' \
+  crates/micold-client/src/app.rs \
+  | { read -r from to; awk -v f="$from" -v t="$to" 'NR>=f && NR<=t' \
+      crates/micold-client/src/app.rs; } \
   | grep -oE '^    [A-Z][A-Za-z0-9_]*' | wc -l
 ```
 
-Baseline **119**. Target **15** (10 feature wrappers + 5 cross-cutting). The count is evidence; the
-criterion is guard **G1** ([contracts/guards.md](./contracts/guards.md)).
+Baseline **119** (the enum then spanned lines 43–504, which is why the range is derived rather
+than written down). Target **15** (10 feature wrappers + 5 cross-cutting). The count is evidence;
+the criterion is guard **G1** ([contracts/guards.md](./contracts/guards.md)).
+
+Observed at T016: **15** — `Help`, `Project`, `Window`, `Settings`, `Worktree`, `Sidebar`,
+`Session`, `WorktreeForm`, `Notifications`, `Connection`, then `ScrolledBeneathOverlay`,
+`EscapePressed`, `OverlayTransitionFinished`, `WindowFocusChanged`, `NoOp`.
 
 ### A.2 Root application state (SC-003)
 

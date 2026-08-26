@@ -37,6 +37,15 @@
 //! `terminal_released`, which is the session's, so T067a-7 moved the function into the session and
 //! T067a-9 converted its `focused_field` write into `Outcome::FieldFocusCleared`, applied by
 //! [`field_focus_cleared`] below.
+//!
+//! # The vocabulary this feature declares
+//!
+//! Two transitions in [`Msg`] — `FieldFocusChanged` and `Resized` — routed by [`update`], which is
+//! pure (data-model.md §1.1 shape A). Both are reports from the windowing system rather than choices,
+//! so neither needs an effect back: the binary matches nothing here a second time.
+//!
+//! The third arm this module was named for, `CursorMoved`, is gone rather than nested; the reason is
+//! the paragraph above about 018 BUG-008.
 
 use crate::app::State;
 

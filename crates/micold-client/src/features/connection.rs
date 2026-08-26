@@ -10,6 +10,19 @@
 //! So [`ConnectionStatus`] moves here whole, and [`connection_status`] takes the four facts it
 //! needs rather than the shell's `App`. What is left in `main.rs` is the lookup that turns the
 //! active project into a displacement, which is plumbing.
+//!
+//! # The vocabulary this feature declares
+//!
+//! Twelve transitions in [`Msg`]: the lifecycle (`Connected`, `Event`, `GridFrame`, `Disconnected`,
+//! `ConnectFailed`), the two mismatches a daemon can report (`VersionMismatch`, `BuildMismatch`), and
+//! the five things the user can ask of it (`TakeoverRequested`, `RestartServiceRequested`,
+//! `DiagnosticsRequested`, `LogoutSurvivalRequested`, `LogoutSurvivalOutcome`).
+//!
+//! **This module declares no `update`.** The entry shape is **B** and only B (data-model.md §1.1):
+//! every one of the twelve is a socket, a process, or a version handshake, so all of them are routed
+//! by `shell/connection.rs` and the root's arm is a deliberate no-op alongside `NoOp`. What lives
+//! here is the decision the feature does have — [`connection_status`] — which is why the module
+//! exists at all, per the paragraph above.
 
 /// The daemon-connection state, as it concerns the *active* project (US5, FR-024/027). Computed by
 /// the binary (the connection is binary-owned runtime state) and passed to `ui::view` so the shell

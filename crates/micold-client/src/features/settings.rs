@@ -13,6 +13,23 @@
 //! Feature 028 narrowed the split without closing it: the *routing* now has one home,
 //! `shell/settings.rs`, which decides which of the ten transitions need an effect. The validation
 //! it calls into is still `persist`'s.
+//!
+//! # The vocabulary this feature declares
+//!
+//! Ten transitions in [`Msg`]: the theme's three (`ThemePreferenceChanged`, `ThemeModeCycled`,
+//! `SystemThemeChanged`), the form's five (`Opened`, `ScrollbackChanged`,
+//! `EnvIncludeEnabledToggled`, `EnvIncludePathChanged`, `EnvIncludeTimeoutChanged`), and the two ways
+//! out (`Saved`, `Cancelled`).
+//!
+//! [`update`] routes all ten and is pure (data-model.md §1.1 shape A), but the feature's entry
+//! shape is **B**: `main.rs` has one `Message::Settings` arm and it goes to `shell/settings.rs`,
+//! because four of the ten additionally need `settings.json` written or read back
+//! (`Opened`, `Saved`, `ThemePreferenceChanged`, `ThemeModeCycled`). The other six reach
+//! [`update`] from there through the same wrapper variant they arrived under, so the pure path is
+//! identical whether or not the shell was in the way. One routing table, one place to look —
+//! which is the narrowing described above; the validation it delegates to `shell/persist.rs` is
+//! what is left of the split.
+
 use crate::app::{Message, State};
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
