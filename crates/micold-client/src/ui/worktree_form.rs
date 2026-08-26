@@ -499,10 +499,10 @@ pub fn dialog<'a>(
     scheme: ColorScheme,
     _env_include_outcome: &'a EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
-    state.worktree_form.as_ref().map(|form| {
+    state.worktree_form.form.as_ref().map(|form| {
         modal(
             form,
-            state.worktree_error.as_deref(),
+            state.worktree_form.worktree_error.as_deref(),
             scheme,
             state.window.focused_field,
         )

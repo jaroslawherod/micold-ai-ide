@@ -105,7 +105,6 @@ fn with_project(sessions: Vec<Session>) -> State {
             window_size: (lay::WINDOW.width as u16, lay::WINDOW.height as u16),
             ..Default::default()
         },
-
         workspace,
         worktrees: (0..WORKTREE_COUNT)
             .map(|i| worktree(&format!("feat-{i:02}"), &format!("feat/{i:02}")))

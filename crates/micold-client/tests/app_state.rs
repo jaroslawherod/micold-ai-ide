@@ -50,8 +50,8 @@ fn defaults_are_empty() {
     assert!(state.worktrees.is_empty());
     assert!(state.expanded.is_empty());
     assert!(state.active_session.is_none());
-    assert!(state.worktree_form.is_none());
-    assert!(state.worktree_error.is_none());
+    assert!(state.worktree_form.form.is_none());
+    assert!(state.worktree_form.worktree_error.is_none());
     assert_eq!(open_dialog(&state), None);
     assert!(state.active_sessions().is_empty());
 }
@@ -63,7 +63,7 @@ fn opening_the_form_sets_overlay_and_draft() {
         micold_client::features::worktree_form::Msg::Opened,
     ));
     assert_eq!(open_dialog(&state), Some("add_worktree"));
-    assert!(state.worktree_form.is_some());
+    assert!(state.worktree_form.form.is_some());
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn form_edits_build_a_derived_preview() {
         micold_client::features::worktree_form::Msg::NameChanged("Login".to_string()),
     ));
 
-    let form = state.worktree_form.as_ref().unwrap();
+    let form = state.worktree_form.form.as_ref().unwrap();
     let derived = form.preview().unwrap();
     // Both carry the ticket boundary, so the branch maps back to this directory exactly (BUG-003).
     assert_eq!(derived.dir_name, "feat-abc-1_login");
@@ -99,7 +99,7 @@ fn submitting_an_invalid_form_records_the_error() {
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::Submitted,
     ));
-    assert!(state.worktree_form.as_ref().unwrap().error.is_some());
+    assert!(state.worktree_form.form.as_ref().unwrap().error.is_some());
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn cancelling_the_form_clears_it() {
         micold_client::features::worktree_form::Msg::Cancelled,
     ));
     assert_eq!(open_dialog(&state), None);
-    assert!(state.worktree_form.is_none());
+    assert!(state.worktree_form.form.is_none());
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn created_worktree_is_added_and_form_closed() {
         micold_client::features::worktree_form::Msg::Created(wt),
     ));
     assert_eq!(open_dialog(&state), None);
-    assert!(state.worktree_form.is_none());
+    assert!(state.worktree_form.form.is_none());
     assert_eq!(state.worktrees.len(), 1);
 }
 
@@ -146,7 +146,7 @@ fn create_started_marks_form_creating() {
         micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
     ));
     assert_eq!(
-        state.worktree_form.as_ref().unwrap().status,
+        state.worktree_form.form.as_ref().unwrap().status,
         WorktreeFormStatus::Creating
     );
 }
@@ -179,7 +179,7 @@ fn field_edits_are_ignored_while_creating() {
         micold_client::features::worktree_form::Msg::NameChanged("Something else".to_string()),
     ));
 
-    let form = state.worktree_form.as_ref().unwrap();
+    let form = state.worktree_form.form.as_ref().unwrap();
     assert_eq!(form.type_, Some(ConventionalType::Feat));
     assert_eq!(form.ticket, "");
     assert_eq!(form.name, "Login");
@@ -197,10 +197,13 @@ fn create_failed_keeps_form_open_and_resets_status_to_editing() {
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
     ));
-    assert_eq!(state.worktree_error.as_deref(), Some("boom"));
-    assert!(state.worktree_form.is_some(), "form stays open for retry");
+    assert_eq!(state.worktree_form.worktree_error.as_deref(), Some("boom"));
+    assert!(
+        state.worktree_form.form.is_some(),
+        "form stays open for retry"
+    );
     assert_eq!(
-        state.worktree_form.as_ref().unwrap().status,
+        state.worktree_form.form.as_ref().unwrap().status,
         WorktreeFormStatus::Editing
     );
 }
@@ -221,11 +224,11 @@ fn a_worktree_list_change_clears_a_stale_create_failure() {
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
     ));
-    assert_eq!(state.worktree_error.as_deref(), Some("boom"));
+    assert_eq!(state.worktree_form.worktree_error.as_deref(), Some("boom"));
 
     state.update(Message::Worktree(WorktreeMsg::Loaded(vec![])));
     assert!(
-        state.worktree_error.is_none(),
+        state.worktree_form.worktree_error.is_none(),
         "discovery answering makes a failure against the previous list stale"
     );
 }
@@ -248,7 +251,7 @@ fn an_include_clears_a_stale_create_failure_too() {
         status: WorktreeStatus::Valid,
         included: true,
     })));
-    assert!(state.worktree_error.is_none());
+    assert!(state.worktree_form.worktree_error.is_none());
     assert_eq!(state.worktrees.len(), 1, "the include still lands");
 }
 
@@ -275,7 +278,7 @@ fn resubmitting_while_creating_is_a_no_op() {
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::Submitted,
     ));
-    assert!(state.worktree_form.as_ref().unwrap().error.is_none());
+    assert!(state.worktree_form.form.as_ref().unwrap().error.is_none());
 }
 
 // --- Feature 013 US1: type field is a Material select (wraps iced's `pick_list`) ---
@@ -286,13 +289,13 @@ fn selecting_a_type_sets_the_form_value() {
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::Opened,
     ));
-    assert_eq!(state.worktree_form.as_ref().unwrap().type_, None);
+    assert_eq!(state.worktree_form.form.as_ref().unwrap().type_, None);
 
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
     ));
     assert_eq!(
-        state.worktree_form.as_ref().unwrap().type_,
+        state.worktree_form.form.as_ref().unwrap().type_,
         Some(ConventionalType::Feat)
     );
 }
@@ -317,7 +320,7 @@ fn type_selection_is_ignored_while_creating() {
         micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Fix),
     ));
     assert_eq!(
-        state.worktree_form.as_ref().unwrap().type_,
+        state.worktree_form.form.as_ref().unwrap().type_,
         Some(ConventionalType::Feat)
     );
 }
@@ -1125,7 +1128,7 @@ fn form_state() -> State {
 }
 
 fn form(state: &State) -> &WorktreeForm {
-    state.worktree_form.as_ref().unwrap()
+    state.worktree_form.form.as_ref().unwrap()
 }
 
 // --- the state machine ----------------------------------------------------------------

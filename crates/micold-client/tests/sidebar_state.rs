@@ -9,6 +9,7 @@ use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_client::features::worktree::Msg as WorktreeMsg;
+use micold_client::features::worktree_form;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
 use micold_core::session::{Session, SessionLocation};
@@ -260,7 +261,6 @@ fn sidebar_filter_menu_toggle_opens_and_closes_and_excludes_siblings() {
             help_menu_open: true,
             ..Default::default()
         },
-
         ..Default::default()
     };
 
@@ -328,8 +328,11 @@ fn escape_prefers_an_open_overlay_over_the_filter_panel() {
     // keeps this combination from ever occurring (see the next test), but `on_escape` must not
     // silently disagree with the live subscription if that invariant is ever violated.
     let state = State {
+        worktree_form: worktree_form::State {
+            form: Some(Default::default()),
+            ..Default::default()
+        },
         sidebar_filter_open: true,
-        worktree_form: Some(Default::default()),
         ..Default::default()
     };
     assert_eq!(

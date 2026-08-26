@@ -258,7 +258,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "add-worktree-dialog-new-branch",
             build: || {
                 let mut state = with_project();
-                state.worktree_form = Some(WorktreeForm {
+                state.worktree_form.form = Some(WorktreeForm {
                     source: BranchSource::New,
                     name: "example".to_string(),
                     ..WorktreeForm::default()
@@ -285,7 +285,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "add-worktree-dialog-existing-branch",
             build: || {
                 let mut state = with_project();
-                state.worktree_form = Some(WorktreeForm {
+                state.worktree_form.form = Some(WorktreeForm {
                     source: BranchSource::Existing,
                     ..WorktreeForm::default()
                 });
@@ -337,7 +337,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // `branch_matches` could disagree with `candidates` in a way no reducer can
                 // produce, and the fixture would then pin a state that cannot happen.
                 let branch_matches = rank(&candidates, |c| c.name.as_str(), &Query::new(""));
-                state.worktree_form = Some(WorktreeForm {
+                state.worktree_form.form = Some(WorktreeForm {
                     source: BranchSource::Existing,
                     candidates,
                     branch_matches,
@@ -451,12 +451,12 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "error-add-worktree-failed",
             build: || {
                 let mut state = with_project();
-                state.worktree_form = Some(WorktreeForm {
+                state.worktree_form.form = Some(WorktreeForm {
                     source: BranchSource::New,
                     name: "example".to_string(),
                     ..WorktreeForm::default()
                 });
-                state.worktree_error =
+                state.worktree_form.worktree_error =
                     Some("could not create the worktree: branch already checked out".to_string());
                 StateUnderTest::new(state)
             },
@@ -539,7 +539,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "add-worktree-dialog-type-menu-open",
             build: || {
                 let mut state = with_project();
-                state.worktree_form = Some(WorktreeForm {
+                state.worktree_form.form = Some(WorktreeForm {
                     source: BranchSource::New,
                     name: "example".to_string(),
                     ..WorktreeForm::default()

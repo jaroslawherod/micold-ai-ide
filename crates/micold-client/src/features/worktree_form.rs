@@ -8,7 +8,7 @@
 //!
 //! Render-free, like every module here: `tests/features_are_render_free.rs` holds that line.
 
-use crate::app::{Message, State};
+use crate::app::Message;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::naming::{
@@ -17,6 +17,24 @@ use micold_core::naming::{
 use micold_core::overlay::Layer;
 use micold_core::typeahead::{move_highlight, rank, Direction, Match, Query};
 use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree};
+
+/// What this feature remembers (feature 028, contract S1).
+///
+/// The fields keep the names they had as flat members of `app::State`, and the reducers below
+/// spell the root's type `crate::app::State` now that `State` here means this struct.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct State {
+    /// The add-worktree form, present only while its overlay is shown (FR-005).
+    ///
+    /// Named `form` rather than keeping the flat `worktree_form`: the qualifier already says
+    /// which form it is, and `state.worktree_form.worktree_form` says it twice. Its sibling keeps
+    /// its full name because `worktree_error` is not the form's error — it also carries a refused
+    /// project open (FR-001a), which happens with no form on screen at all.
+    pub form: Option<WorktreeForm>,
+    /// A message shown when opening a non-git directory was refused (FR-001a), or a worktree
+    /// create failed (FR-017). Transient.
+    pub worktree_error: Option<String>,
+}
 
 /// Transient creation status for the add-worktree form (feature 010, research R4). Not
 /// persisted — reset to `Editing` whenever the form is (re)opened.
@@ -284,26 +302,26 @@ impl FloatingSurface for AddWorktreeDialog {
 }
 
 impl Registered for AddWorktreeDialog {
-    fn open_in(state: &State) -> Option<Self> {
-        state.worktree_form.as_ref().map(|_| AddWorktreeDialog)
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state.worktree_form.form.as_ref().map(|_| AddWorktreeDialog)
     }
 }
 
 /// The Add Worktree form was opened (feature 005, FR-005).
-pub fn opened(state: &mut State) {
+pub fn opened(state: &mut crate::app::State) {
     state.clear_for_dialog();
-    state.worktree_form = Some(WorktreeForm::default());
-    state.worktree_error = None;
+    state.worktree_form.form = Some(WorktreeForm::default());
+    state.worktree_form.worktree_error = None;
 }
 
 /// The form was dismissed.
-pub fn cancelled(state: &mut State) {
-    state.worktree_form = None;
+pub fn cancelled(state: &mut crate::app::State) {
+    state.worktree_form.form = None;
 }
 
 /// Apply a change to the open form, whatever it is doing.
-fn with_form(state: &mut State, change: impl FnOnce(&mut WorktreeForm)) {
-    if let Some(form) = &mut state.worktree_form {
+fn with_form(state: &mut crate::app::State, change: impl FnOnce(&mut WorktreeForm)) {
+    if let Some(form) = &mut state.worktree_form.form {
         change(form);
     }
 }
@@ -313,7 +331,7 @@ fn with_form(state: &mut State, change: impl FnOnce(&mut WorktreeForm)) {
 /// A create in flight makes the whole form inactive, not just its submit button (feature 010
 /// follow-up), so every input arm is guarded — which is why the guard is written once here rather
 /// than nine times.
-fn while_editing(state: &mut State, change: impl FnOnce(&mut WorktreeForm)) {
+fn while_editing(state: &mut crate::app::State, change: impl FnOnce(&mut WorktreeForm)) {
     with_form(state, |form| {
         if form.status == WorktreeFormStatus::Editing {
             change(form);
@@ -325,7 +343,7 @@ fn while_editing(state: &mut State, change: impl FnOnce(&mut WorktreeForm)) {
 ///
 /// Invariant 4 (feature 016): a resolution prompt and ordinary editing cannot both be live, so the
 /// inputs behind the prompt are inert while it is showing.
-fn while_editing_unprompted(state: &mut State, change: impl FnOnce(&mut WorktreeForm)) {
+fn while_editing_unprompted(state: &mut crate::app::State, change: impl FnOnce(&mut WorktreeForm)) {
     while_editing(state, |form| {
         if !form.resolution.is_prompting() {
             change(form);
@@ -334,7 +352,7 @@ fn while_editing_unprompted(state: &mut State, change: impl FnOnce(&mut Worktree
 }
 
 /// A conventional type was chosen.
-pub fn type_selected(state: &mut State, type_: ConventionalType) {
+pub fn type_selected(state: &mut crate::app::State, type_: ConventionalType) {
     while_editing(state, |form| {
         form.type_ = Some(type_);
         form.error = None;
@@ -342,7 +360,7 @@ pub fn type_selected(state: &mut State, type_: ConventionalType) {
 }
 
 /// The ticket field was edited.
-pub fn ticket_changed(state: &mut State, text: String) {
+pub fn ticket_changed(state: &mut crate::app::State, text: String) {
     while_editing(state, |form| {
         form.ticket = text;
         form.error = None;
@@ -350,7 +368,7 @@ pub fn ticket_changed(state: &mut State, text: String) {
 }
 
 /// The name field was edited.
-pub fn name_changed(state: &mut State, text: String) {
+pub fn name_changed(state: &mut crate::app::State, text: String) {
     while_editing(state, |form| {
         form.name = text;
         form.error = None;
@@ -362,7 +380,7 @@ pub fn name_changed(state: &mut State, text: String) {
 /// The shell performs the git create on a valid form and dispatches `WorktreeCreated` /
 /// `WorktreeCreateFailed`. A create already in flight makes this a no-op, so there is no
 /// double-submit.
-pub fn submitted(state: &mut State) {
+pub fn submitted(state: &mut crate::app::State) {
     while_editing(state, |form| {
         if let Err(error) = form.preview() {
             form.error = Some(error);
@@ -375,7 +393,7 @@ pub fn submitted(state: &mut State) {
 /// Leaving the picker drops its selection, so no stale branch can be submitted from the new-branch
 /// inputs — and takes the search with it, so returning never resumes someone else's half-finished
 /// query.
-pub fn source_changed(state: &mut State, source: BranchSource) {
+pub fn source_changed(state: &mut crate::app::State, source: BranchSource) {
     while_editing_unprompted(state, |form| {
         form.source = source;
         form.error = None;
@@ -389,7 +407,7 @@ pub fn source_changed(state: &mut State, source: BranchSource) {
 /// Branch candidates arrived (feature 016).
 ///
 /// Re-matched immediately, so the results describe the current query whenever they land.
-pub fn branches_listed(state: &mut State, candidates: Vec<BranchCandidate>) {
+pub fn branches_listed(state: &mut crate::app::State, candidates: Vec<BranchCandidate>) {
     with_form(state, |form| {
         form.candidates = candidates;
         form.rematch_branches();
@@ -401,7 +419,7 @@ pub fn branches_listed(state: &mut State, candidates: Vec<BranchCandidate>) {
 /// A branch held elsewhere cannot be chosen — silently, and without closing the list, because a
 /// press that does nothing must not look like a press that did something. The query is deliberately
 /// left alone.
-pub fn branch_selected(state: &mut State, candidate: BranchCandidate) {
+pub fn branch_selected(state: &mut crate::app::State, candidate: BranchCandidate) {
     while_editing_unprompted(state, |form| {
         if !candidate.is_available() {
             return;
@@ -413,12 +431,12 @@ pub fn branch_selected(state: &mut State, candidate: BranchCandidate) {
 }
 
 /// The branch field took focus, revealing the picker.
-pub fn branch_focused(state: &mut State) {
+pub fn branch_focused(state: &mut crate::app::State) {
     while_editing_unprompted(state, |form| form.branch_list_open = true);
 }
 
 /// The branch search query was edited (feature 021).
-pub fn branch_query_changed(state: &mut State, text: String) {
+pub fn branch_query_changed(state: &mut crate::app::State, text: String) {
     while_editing_unprompted(state, |form| {
         form.branch_query = text;
         form.branch_list_open = true;
@@ -430,7 +448,7 @@ pub fn branch_query_changed(state: &mut State, text: String) {
 ///
 /// Saturating, not wrapping, and the rule itself is `micold_core`'s rather than this module's. An
 /// empty list has nowhere to land, so the highlight is left exactly as it was.
-pub fn branch_highlight_moved(state: &mut State, direction: Direction) {
+pub fn branch_highlight_moved(state: &mut crate::app::State, direction: Direction) {
     with_form(state, |form| {
         let rows = form.branch_matches.len();
         if let Some(next) = move_highlight(form.branch_highlight, direction, rows) {
@@ -440,14 +458,14 @@ pub fn branch_highlight_moved(state: &mut State, direction: Direction) {
 }
 
 /// The branch picker was dismissed.
-pub fn branch_dismissed(state: &mut State) {
+pub fn branch_dismissed(state: &mut crate::app::State) {
     with_form(state, |form| form.branch_list_open = false);
 }
 
 /// A branch conflict was detected (feature 016).
 ///
 /// Invariant 4: a prompt and an in-flight create cannot coexist.
-pub fn conflict_detected(state: &mut State, situation: BranchSituation) {
+pub fn conflict_detected(state: &mut crate::app::State, situation: BranchSituation) {
     while_editing(state, |form| {
         form.resolution = ResolutionState::Choosing { situation };
     });
@@ -457,7 +475,7 @@ pub fn conflict_detected(state: &mut State, situation: BranchSituation) {
 ///
 /// Only ever from `Choosing`, and only for a situation that *has* a local branch to overwrite —
 /// invariant 1.
-pub fn overwrite_requested(state: &mut State) {
+pub fn overwrite_requested(state: &mut crate::app::State) {
     with_form(state, |form| {
         if let ResolutionState::Choosing { situation } = &form.resolution {
             if matches!(situation, BranchSituation::LocalAvailable { .. }) {
@@ -472,7 +490,7 @@ pub fn overwrite_requested(state: &mut State) {
 /// Overwrite was confirmed — the **only** route to `CreateMode::Overwrite`.
 ///
 /// The shell picks the resolution up and runs the create; this clears the prompt.
-pub fn overwrite_confirmed(state: &mut State) {
+pub fn overwrite_confirmed(state: &mut crate::app::State) {
     with_form(state, |form| {
         if matches!(form.resolution, ResolutionState::ConfirmingOverwrite { .. }) {
             form.resolution = ResolutionState::Idle;
@@ -484,7 +502,7 @@ pub fn overwrite_confirmed(state: &mut State) {
 ///
 /// Overwrite must go through the confirmation and never straight from the choice — rejected here
 /// rather than trusting call sites.
-pub fn resolution_chosen(state: &mut State, mode: CreateMode) {
+pub fn resolution_chosen(state: &mut crate::app::State, mode: CreateMode) {
     with_form(state, |form| {
         let allowed = !matches!(mode, CreateMode::Overwrite)
             && matches!(form.resolution, ResolutionState::Choosing { .. });
@@ -498,7 +516,7 @@ pub fn resolution_chosen(state: &mut State, mode: CreateMode) {
 ///
 /// Backing out of the confirmation returns to the choice, not to the form. Cancelling the choice
 /// leaves every input exactly as it was (FR-007).
-pub fn resolution_cancelled(state: &mut State) {
+pub fn resolution_cancelled(state: &mut crate::app::State) {
     with_form(state, |form| {
         form.resolution = match &form.resolution {
             ResolutionState::ConfirmingOverwrite { situation } => ResolutionState::Choosing {
@@ -512,7 +530,7 @@ pub fn resolution_cancelled(state: &mut State) {
 /// A create started (feature 010).
 ///
 /// A new attempt never inherits the previous one's stage.
-pub fn create_started(state: &mut State, mode: CreateMode) {
+pub fn create_started(state: &mut crate::app::State, mode: CreateMode) {
     with_form(state, |form| {
         form.status = WorktreeFormStatus::Creating;
         form.mode = mode;
@@ -525,7 +543,11 @@ pub fn create_started(state: &mut State, mode: CreateMode) {
 ///
 /// Entering a stage clears the previous stage's trailing line — it described work that is over. A
 /// detail-only push keeps the stage and replaces the line.
-pub fn create_stage_changed(state: &mut State, stage: CreateStage, detail: Option<String>) {
+pub fn create_stage_changed(
+    state: &mut crate::app::State,
+    stage: CreateStage,
+    detail: Option<String>,
+) {
     with_form(state, |form| {
         if form.stage != Some(stage) {
             form.stage = Some(stage);
@@ -540,9 +562,9 @@ pub fn create_stage_changed(state: &mut State, stage: CreateStage, detail: Optio
 /// A worktree was created (feature 005, FR-017).
 ///
 /// Idempotent by directory name, and sorted so it lands where the list would have put it.
-pub fn created(state: &mut State, worktree: Worktree) -> Vec<crate::features::Outcome> {
-    state.worktree_form = None;
-    state.worktree_error = None;
+pub fn created(state: &mut crate::app::State, worktree: Worktree) -> Vec<crate::features::Outcome> {
+    state.worktree_form.form = None;
+    state.worktree_form.worktree_error = None;
     vec![crate::features::Outcome::WorktreeCreated(worktree)]
 }
 
@@ -551,16 +573,16 @@ pub fn created(state: &mut State, worktree: Worktree) -> Vec<crate::features::Ou
 /// `worktree_error` is the add-worktree modal's error line — `crate::ui::worktree_form` is its only
 /// render site — so clearing it is the form's own business even when a *worktree* operation is what
 /// makes it stale. Reached from the root's `WorktreesReplaced` arm.
-pub fn worktree_list_changed(state: &mut State) {
-    state.worktree_error = None;
+pub fn worktree_list_changed(state: &mut crate::app::State) {
+    state.worktree_form.worktree_error = None;
 }
 
 /// A create failed (feature 005 FR-017, feature 010).
 ///
 /// The form stays open so the user can adjust, showing the error, and returns to `Editing` so a
 /// retry is possible instead of being stuck in `Creating`.
-pub fn create_failed(state: &mut State, message: String) {
-    state.worktree_error = Some(message);
+pub fn create_failed(state: &mut crate::app::State, message: String) {
+    state.worktree_form.worktree_error = Some(message);
     with_form(state, |form| {
         form.status = WorktreeFormStatus::Editing;
     });
@@ -574,7 +596,7 @@ pub fn create_failed(state: &mut State, message: String) {
 /// as a unit whose intermediate state no other feature reads". research.md §5 tested all ten
 /// features against that bar and exactly one cleared it *and* was large enough for nesting to pay:
 /// this one. Its 22 variants were 17% of the root enum, and nothing outside `ui/worktree_form.rs`
-/// and the generic overlay snapshot ever read `state.worktree_form`.
+/// and the generic overlay snapshot ever read `state.worktree_form.form`.
 ///
 /// Settings clears the same bar on the same evidence and is deliberately **not** nested: 7
 /// variants over a flat four-field draft, where a wrapper and a routing arm cost about what they
@@ -654,7 +676,7 @@ pub enum Msg {
 /// The root sees a single arm. Everything the wizard knows about its own steps — which are inert
 /// while a create is in flight, which are inert behind a conflict prompt, which reset the branch
 /// search — lives on this side of the boundary and never had to be said out there.
-pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::Opened => opened(state),
         Msg::TypeSelected(type_) => type_selected(state, type_),

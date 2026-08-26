@@ -16,7 +16,6 @@ use crate::features::session::SessionMenu;
 use crate::features::settings::SettingsDraft;
 use crate::features::sidebar::TagFilter;
 use crate::features::worktree::{WorktreeMenu, WorktreeRenameDraft};
-use crate::features::worktree_form::WorktreeForm;
 use micold_core::notify;
 use micold_core::project::Availability;
 use micold_core::selector::Selector;
@@ -197,11 +196,8 @@ pub struct State {
     /// until layout. The reducer arms it; the binary computes and applies the scroll on the first
     /// frame where the viewport has a width.
     pub pending_tab_reveal: bool,
-    /// The add-worktree form, present only while its overlay is shown (FR-005).
-    pub worktree_form: Option<WorktreeForm>,
-    /// A message shown when opening a non-git directory was refused (FR-001a), or a worktree
-    /// create failed (FR-017). Transient.
-    pub worktree_error: Option<String>,
+    /// What the worktree_form feature remembers -- see [`crate::features::worktree_form::State`].
+    pub worktree_form: crate::features::worktree_form::State,
     /// Whether the sidebar is collapsed/hidden. Default (`false`) is visible.
     pub sidebar_hidden: bool,
     /// The sidebar width in pixels. `0` means "use the default width" (see [`State::sidebar_width_px`]).

@@ -128,13 +128,16 @@ const OWNERS: &[(&str, &str)] = &[
     // is where it happens to be drawn.
     ("hovered_worktree", "worktree"),
     // --- worktree_form ------------------------------------------------------------------------
+    // One entry for both fields since feature 028 T031: they are `worktree_form::State`'s two
+    // members, reached as `worktree_form.form` and `worktree_form.worktree_error`, and this scan
+    // resolves a write by its first segment.
+    //
+    // The second of them is the add-worktree modal's error line. `crate::ui::worktree_form` is its
+    // ONLY render site — `tests/open_project_git_gate.rs` exists because an assertion on it passed
+    // green for as long as a refusal wrote here with the modal shut, invisible to users — so
+    // despite the name it is the form's field, not the worktree feature's, and T067a-4 moved it
+    // (see specs/021-mvu-slice-architecture/cross-feature-writes.md, group G).
     ("worktree_form", "worktree_form"),
-    // The add-worktree modal's error line. `crate::ui::worktree_form` is its ONLY render site —
-    // `tests/open_project_git_gate.rs` exists because an assertion on it passed green for as long
-    // as a refusal wrote here with the modal shut, invisible to users — so despite the name it is
-    // the form's field, not the worktree feature's, and T067a-4 moved it (see
-    // specs/021-mvu-slice-architecture/cross-feature-writes.md, group G).
-    ("worktree_error", "worktree_form"),
     // --- sidebar ------------------------------------------------------------------------------
     ("expanded", "sidebar"),
     ("default_expanded", "sidebar"),

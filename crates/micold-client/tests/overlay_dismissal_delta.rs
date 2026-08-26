@@ -47,7 +47,6 @@ fn with_about() -> State {
             about_open: true,
             ..Default::default()
         },
-
         ..State::default()
     }
 }
@@ -128,7 +127,6 @@ fn every_non_modal_surface_closes_on_a_scroll_beneath() {
             help_menu_open: true,
             ..Default::default()
         },
-
         project_switcher_open: true,
         sidebar_filter_open: true,
         ..State::default()
@@ -188,7 +186,7 @@ fn escape_still_reaches_exactly_what_it_used_to() {
         ),
         (
             "add_worktree",
-            |s| s.worktree_form = Some(Default::default()),
+            |s| s.worktree_form.form = Some(Default::default()),
             Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
         ),
         (

@@ -136,7 +136,7 @@ fn form_open() -> State {
 fn an_idle_form_asks_for_no_frames() {
     let state = form_open();
     assert_eq!(
-        state.worktree_form.as_ref().map(|f| f.status),
+        state.worktree_form.form.as_ref().map(|f| f.status),
         Some(WorktreeFormStatus::Editing),
         "the fixture is meant to be an open form with nothing in flight"
     );
@@ -166,7 +166,7 @@ fn a_running_create_animates_its_indicator() {
         micold_client::features::worktree_form::Msg::CreateStarted(Default::default()),
     ));
     assert_eq!(
-        state.worktree_form.as_ref().map(|f| f.status),
+        state.worktree_form.form.as_ref().map(|f| f.status),
         Some(WorktreeFormStatus::Creating),
         "the create did not start, so this test would prove nothing"
     );

@@ -124,7 +124,7 @@ pub(crate) fn on_folder_chosen(app: &mut App, path: PathBuf) -> Task<Message> {
     micold_client::app::drain(outcomes, |o| {
         micold_client::app::interpret(&mut app.core, o)
     });
-    app.core.worktree_error = None;
+    app.core.worktree_form.worktree_error = None;
     crate::log_foreground_choice(app, &path);
     // The daemon is the single writer: tell it to learn this project (persist + discover),
     // and switch this client's attachment to it. No local `persist()`, no local

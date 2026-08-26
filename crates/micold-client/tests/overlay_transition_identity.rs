@@ -62,7 +62,7 @@ const DIALOGS: &[(&str, fn(&mut State))] = &[
         })
     }),
     ("add_worktree", |state| {
-        state.worktree_form = Some(Default::default())
+        state.worktree_form.form = Some(Default::default())
     }),
     ("settings", |state| {
         state.settings_draft = Some(Default::default())

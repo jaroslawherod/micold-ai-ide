@@ -39,6 +39,7 @@
 mod inventory;
 
 use micold_client::features::help;
+use micold_client::features::worktree_form;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -330,12 +331,15 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
     // own state and several would otherwise be shadowed by nothing — they are independent, so a
     // single maximal state answers every probe.
     let all = State {
+        worktree_form: worktree_form::State {
+            form: Some(Default::default()),
+            ..Default::default()
+        },
         help: help::State {
             about_open: true,
             help_menu_open: true,
             ..Default::default()
         },
-
         project_switcher_open: true,
         sidebar_filter_open: true,
         project_menu_open: Some(ProjectMenu {
@@ -357,7 +361,6 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
             text: String::new(),
             error: None,
         }),
-        worktree_form: Some(Default::default()),
         settings_draft: Some(Default::default()),
         worktree_delete_target: Some("wt".to_string()),
         worktree_rename_draft: Some(WorktreeRenameDraft {

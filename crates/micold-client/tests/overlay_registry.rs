@@ -91,7 +91,7 @@ fn dialogs() -> Vec<Dialog> {
         Dialog {
             id: "add_worktree",
             cancel: Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
-            open: |state| state.worktree_form = Some(Default::default()),
+            open: |state| state.worktree_form.form = Some(Default::default()),
         },
         Dialog {
             id: "settings",

@@ -21,7 +21,7 @@ fn non_git_directory_fails_the_gate() {
 
 /// The refusal goes to the global notification surface, which renders unconditionally.
 ///
-/// This assertion previously read `state.worktree_error == Some(..)` and passed green for the
+/// This assertion previously read `state.worktree_form.worktree_error == Some(..)` and passed green for the
 /// entire time the refusal was invisible to users: `worktree_error`'s only render site is
 /// inside the Add Worktree modal, which is never open when a folder is refused.
 #[test]
@@ -40,7 +40,7 @@ fn refusal_message_is_surfaced_to_the_user() {
     assert_eq!(visible.message, "Only git repositories can be opened");
     assert_eq!(state.notifications.queue.pending(), 0);
     // Not stashed in the modal-owned field that made it unreachable.
-    assert!(state.worktree_error.is_none());
+    assert!(state.worktree_form.worktree_error.is_none());
 }
 
 /// A refusal stays until the user dismisses it — it is not cleared by unrelated activity such

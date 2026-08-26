@@ -371,6 +371,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                     let form_open = app
                         .core
                         .worktree_form
+                        .form
                         .as_ref()
                         .is_some_and(|f| f.status == WorktreeFormStatus::Editing);
                     if let Some(project) = app
@@ -509,11 +510,12 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 // surface the modal's scrim covers — invisible — and for the listing the
                 // empty picker would then wrongly claim the repository has no branches.
                 Some(PendingOp::BranchPreflight { .. }) => {
-                    app.core.worktree_error =
+                    app.core.worktree_form.worktree_error =
                         Some(format!("Could not check the branch: {message}"));
                 }
                 Some(PendingOp::BranchList { .. }) => {
-                    app.core.worktree_error = Some(format!("Could not list branches: {message}"));
+                    app.core.worktree_form.worktree_error =
+                        Some(format!("Could not list branches: {message}"));
                 }
                 Some(op) => app
                     .core
@@ -773,7 +775,7 @@ pub fn on_worktree_rename_confirmed(app: &mut App) -> Task<Message> {
 /// rather than the dead-end "a branch with that name already exists" error.
 pub fn on_add_worktree_submitted(app: &mut App) -> Task<Message> {
     app.core.update(Message::WorktreeForm(FormMsg::Submitted));
-    let Some(form) = app.core.worktree_form.clone() else {
+    let Some(form) = app.core.worktree_form.form.clone() else {
         return Task::none();
     };
     if form.status != WorktreeFormStatus::Editing || form.resolution.is_prompting() {
@@ -834,7 +836,7 @@ pub fn on_add_worktree_submitted(app: &mut App) -> Task<Message> {
 /// create the reducer just declined to acknowledge — an `Overwrite` that never passed the
 /// destructive confirmation, in the worst case.
 pub fn on_add_worktree_resolution_chosen(app: &mut App, mode: CreateMode) -> Task<Message> {
-    let answering = app.core.worktree_form.as_ref().is_some_and(|f| {
+    let answering = app.core.worktree_form.form.as_ref().is_some_and(|f| {
         matches!(f.resolution, ResolutionState::Choosing { .. })
             && !matches!(mode, CreateMode::Overwrite)
     });
@@ -852,6 +854,7 @@ pub fn on_add_worktree_overwrite_confirmed(app: &mut App) -> Task<Message> {
     let confirmed = app
         .core
         .worktree_form
+        .form
         .as_ref()
         .is_some_and(|f| matches!(f.resolution, ResolutionState::ConfirmingOverwrite { .. }));
     app.core
@@ -1342,7 +1345,7 @@ pub fn attach_current_process(app: &mut App, id: SessionId) {
 /// anything (FR-009), so a branch that changed while the prompt was open fails cleanly rather than
 /// acting on a stale answer.
 pub fn start_resolved_create(app: &mut App, mode: CreateMode) -> Task<Message> {
-    let Some(form) = app.core.worktree_form.clone() else {
+    let Some(form) = app.core.worktree_form.form.clone() else {
         return Task::none();
     };
     // Same double-submit guard `AddWorktreeSubmitted` applies: the answer buttons stop being

@@ -61,7 +61,7 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
     ),
     (
         "add_worktree",
-        |s| s.worktree_form = Some(Default::default()),
+        |s| s.worktree_form.form = Some(Default::default()),
         Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
     ),
     (
@@ -189,7 +189,6 @@ fn every_dismissible_popover_open() -> State {
             help_menu_open: true,
             ..Default::default()
         },
-
         project_switcher_open: true,
         sidebar_filter_open: true,
         project_menu_open: Some(micold_client::features::project::ProjectMenu {
