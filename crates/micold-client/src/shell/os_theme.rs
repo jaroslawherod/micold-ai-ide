@@ -20,6 +20,7 @@
 //! (FR-016). The split is three ways on purpose.
 
 use micold_client::app::Message;
+use micold_client::features::settings::Msg as SettingsMsg;
 use micold_core::os_theme::OsThemeProbe;
 use micold_core::theme::SystemScheme;
 
@@ -47,7 +48,7 @@ pub(crate) fn map_system_scheme(mode: dark_light::Mode) -> SystemScheme {
 /// `os_theme_poll`'s `Subscription::map` closure had to *capture* `last_known` to call it — and
 /// iced panics on boot if a subscription's mapping closure captures anything, since a capturing
 /// closure can't have the stable identity iced needs to avoid restarting the underlying timer
-/// every frame. The fallback now happens in the reducer (`Message::SystemThemeChanged`,
+/// every frame. The fallback now happens in the reducer (`Message::Settings(SettingsMsg::SystemThemeChanged)`,
 /// `src/app.rs`), which already has the previous scheme in `self.system_scheme`.
 ///
 /// `pub(crate)`, not `pub`, and the difference is a lint rather than a design: in a binary the two
@@ -71,7 +72,9 @@ pub(crate) fn detect_system_scheme() -> Result<SystemScheme, ()> {
 pub(crate) fn redetect_on_focus(app: &mut App, focused: bool) {
     if focused {
         app.core
-            .update(Message::SystemThemeChanged(detect_system_scheme()));
+            .update(Message::Settings(SettingsMsg::SystemThemeChanged(
+                detect_system_scheme(),
+            )));
     }
 }
 

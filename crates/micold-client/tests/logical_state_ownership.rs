@@ -17,6 +17,7 @@
 
 use micold_client::app::{Message, State, SIDEBAR_MIN_WIDTH};
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::TagFilter;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
@@ -125,7 +126,7 @@ fn tag_filters_are_application_owned() {
 fn theme_preference_is_application_owned() {
     let mut state = State::default();
     let before = state.theme_pref;
-    state.update(Message::ThemeModeCycled);
+    state.update(Message::Settings(SettingsMsg::ThemeModeCycled));
     assert_ne!(state.theme_pref, before);
     assert!(matches!(
         state.theme_pref,

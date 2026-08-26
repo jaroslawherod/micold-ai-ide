@@ -71,7 +71,7 @@ pub(crate) fn default_resolution_cwd(core: &State) -> PathBuf {
 /// `env_include_last_outcome` to this attempt's outcome (feature 011 FR-007, BUG-002). Called on
 /// `TerminalRestartRequested` for the restarted session's own directory (leaving every other
 /// cached directory untouched, since only this one needs a fresh attempt), and from
-/// `Message::SettingsSaved`'s handler after it clears the whole cache (every cached directory is
+/// `settings::Msg::Saved`'s handler after it clears the whole cache (every cached directory is
 /// stale once the enabled/path/timeout settings themselves changed) — the two refresh triggers
 /// the spec's Clarifications name.
 pub(crate) fn refresh_env_include(app: &mut App, cwd: &Path) {

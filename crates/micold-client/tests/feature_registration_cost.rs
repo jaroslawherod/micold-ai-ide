@@ -168,6 +168,16 @@ fn every_feature_module_is_registered_exactly_once() {
     );
 
     // ...and nowhere else declares one, which is what makes it *the* registration point.
+    //
+    // **`shell/mod.rs` declaring the same *name* is not a second registration** (feature 028,
+    // FR-020). A feature that must return an `iced::Task` puts that half in `src/shell/<n>.rs`
+    // and the pure half in `src/features/<n>.rs` — two different modules, in two different trees,
+    // that happen to share a name because they are two halves of one feature. `settings` is the
+    // first; `connection` is the second. The check below is textual, so without this it reads
+    // `pub mod settings;` in `shell/mod.rs` as a duplicate of `features/mod.rs`'s, which it is
+    // not. The exception is deliberately narrow: only `shell/mod.rs`, and only when the file it
+    // is declaring is really there, so a stray declaration naming no module still fails.
+    let shell_half = |m: &str| src_dir().join("shell").join(format!("{m}.rs")).is_file();
     let elsewhere: Vec<String> = sources()
         .iter()
         .filter(|(path, _)| *path != "features/mod.rs")
@@ -175,6 +185,7 @@ fn every_feature_module_is_registered_exactly_once() {
             modules
                 .iter()
                 .filter(move |m| code.contains(&format!("pub mod {m};")))
+                .filter(move |m| !(path == "shell/mod.rs" && shell_half(m)))
                 .map(move |m| format!("  {path} declares `{m}`"))
         })
         .collect();
@@ -183,6 +194,48 @@ fn every_feature_module_is_registered_exactly_once() {
         "a feature module is declared outside the registration point:\n{}",
         elsewhere.join("\n")
     );
+}
+
+/// The `shell/mod.rs` exception above, pinned so it cannot widen into "any file may declare a
+/// feature module" (feature 028, FR-020).
+///
+/// Two claims: the exception applies only where the shell half really exists, and every shell
+/// module that borrows a feature's name is a shell *half* of that feature rather than an
+/// unrelated module that happens to collide. The second is what would go wrong first — a
+/// `shell/session.rs` full of something other than `session`'s effects would pass the guard above
+/// and mean nothing by the name.
+#[test]
+fn the_shell_half_exception_covers_only_real_shell_halves() {
+    let modules = feature_modules();
+    let declared: BTreeSet<String> =
+        code_only(&fs::read_to_string(src_dir().join("shell/mod.rs")).expect("read shell/mod.rs"))
+            .lines()
+            .filter_map(|line| {
+                line.trim()
+                    .strip_prefix("pub mod ")?
+                    .strip_suffix(';')
+                    .map(str::to_string)
+            })
+            .collect();
+
+    for name in declared.intersection(&modules) {
+        let path = src_dir().join("shell").join(format!("{name}.rs"));
+        assert!(
+            path.is_file(),
+            "`shell/mod.rs` declares `{name}`, which is a feature module name, but \
+             `src/shell/{name}.rs` does not exist — the exception in \
+             `every_feature_module_is_registered_exactly_once` would be excusing a declaration \
+             that is not a shell half at all"
+        );
+        let code = code_only(&fs::read_to_string(&path).expect("read shell half"));
+        assert!(
+            code.contains(&format!("features::{name}::Msg")),
+            "`src/shell/{name}.rs` borrows the `{name}` feature's name without naming \
+             `features::{name}::Msg`. A shell half routes that feature's vocabulary; a module \
+             that does not is a name collision, and the registration guard should be failing on \
+             it rather than excusing it"
+        );
+    }
 }
 
 #[test]

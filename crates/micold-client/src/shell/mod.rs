@@ -23,6 +23,7 @@ pub mod env_include;
 pub mod os_theme;
 pub mod persist;
 pub mod service_control;
+pub mod settings;
 pub mod startup;
 pub mod subscriptions;
 pub mod workspace;

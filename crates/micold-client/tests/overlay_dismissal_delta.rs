@@ -21,6 +21,7 @@
 //! assertion-freeze check flags the file with this paragraph as its explanation.
 
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::settings::Msg as SettingsMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{Message, State};
@@ -181,7 +182,7 @@ fn escape_still_reaches_exactly_what_it_used_to() {
         (
             "settings",
             |s| s.settings_draft = Some(Default::default()),
-            Message::SettingsCancelled,
+            Message::Settings(SettingsMsg::Cancelled),
         ),
         (
             "confirm_worktree_delete",

@@ -33,6 +33,7 @@
 //! It is also what made the two tests below possible without reinstating the `Capabilities`
 //! constructor T049 deleted for want of a caller.
 
+use micold_client::features::settings::Msg as SettingsMsg;
 use std::path::Path;
 
 use iced::Task;
@@ -121,7 +122,7 @@ pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core:
 /// Open Settings: let the reducer show the overlay, then seed the draft with the current
 /// scrollback value (FR-019/FR-020).
 pub fn on_settings_opened(app: &mut App) -> Task<Message> {
-    app.core.update(Message::SettingsOpened);
+    app.core.update(Message::Settings(SettingsMsg::Opened));
     if let Some(draft) = app.core.settings_draft.as_mut() {
         draft.scrollback_lines = app.scrollback_lines.to_string();
         draft.env_include_enabled = app.env_include_enabled;
@@ -221,7 +222,7 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
     app.env_include_cache.clear();
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);
-    app.core.update(Message::SettingsSaved); // closes the overlay
+    app.core.update(Message::Settings(SettingsMsg::Saved)); // closes the overlay
     Task::none()
 }
 

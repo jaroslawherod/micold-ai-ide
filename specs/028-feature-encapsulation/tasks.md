@@ -103,8 +103,8 @@ reaches the 37-variant feature.
 ### Implementation for User Story 1
 
 - [X] T006 [US1] Nest `help` — 3 variants → `help::Msg` in `crates/micold-client/src/features/help.rs`, one root arm in `crates/micold-client/src/app.rs`
-- [ ] T007 [US1] Nest `window` — 2 variants → `window::Msg` in `crates/micold-client/src/features/window.rs`
-- [ ] T008 [US1] Nest `notifications` — 2 variants → `notifications::Msg` in `crates/micold-client/src/features/notifications.rs`
+- [X] T007 [US1] Nest `window` — 2 variants → `window::Msg` in `crates/micold-client/src/features/window.rs`
+- [X] T008 [US1] Nest `notifications` — 2 variants → `notifications::Msg` in `crates/micold-client/src/features/notifications.rs`
 - [ ] T009 [US1] Nest `settings` — 10 variants → `settings::Msg` in `crates/micold-client/src/features/settings.rs`, with the effectful arms in `crates/micold-client/src/shell/settings.rs`
 - [ ] T010 [US1] Nest `sidebar` — 10 variants → `sidebar::Msg` in `crates/micold-client/src/features/sidebar.rs`
 - [ ] T011 [US1] Nest `connection` — 12 variants → `connection::Msg` in `crates/micold-client/src/features/connection.rs` with the entry point in `crates/micold-client/src/shell/connection.rs` (shape B only); this is the task that exercises the two-shape rule on a 12-variant feature rather than discovering it on the 37-variant one

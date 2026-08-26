@@ -31,6 +31,7 @@
 //! function to confirm it still emits only that one.
 
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::settings::Msg as SettingsMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{on_escape, Message, State};
@@ -89,7 +90,7 @@ fn dialogs() -> Vec<Dialog> {
         },
         Dialog {
             id: "settings",
-            cancel: Message::SettingsCancelled,
+            cancel: Message::Settings(SettingsMsg::Cancelled),
             open: |state| state.settings_draft = Some(Default::default()),
         },
         Dialog {
@@ -281,7 +282,7 @@ fn the_reducer_opens_a_dialog_through_that_mechanism() {
             "add_worktree",
             Message::WorktreeForm(micold_client::features::worktree_form::Msg::Opened),
         ),
-        ("settings", Message::SettingsOpened),
+        ("settings", Message::Settings(SettingsMsg::Opened)),
     ];
 
     for (name, opening) in openers {
@@ -613,7 +614,9 @@ fn a_dialog_draws_from_its_own_state() {
                 micold_client::features::worktree_form::Msg::Opened,
             ))
         }),
-        ("settings", |s| s.update(Message::SettingsOpened)),
+        ("settings", |s| {
+            s.update(Message::Settings(SettingsMsg::Opened))
+        }),
         ("confirm_worktree_delete", |s| {
             s.update(Message::WorktreeDeleteRequested("feat-x".to_string()))
         }),

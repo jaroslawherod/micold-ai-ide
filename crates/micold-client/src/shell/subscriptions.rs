@@ -31,6 +31,7 @@
 //! along FR-019a's line — the runtime schedules, the probe asks the operating system — so
 //! [`os_theme_poll`] imports the one function it calls and owns none of it.
 
+use micold_client::features::settings::Msg as SettingsMsg;
 use std::time::Duration;
 
 use iced::time::every;
@@ -152,7 +153,8 @@ fn window_focus_message(
 }
 
 fn os_theme_poll(interval: Duration) -> Subscription<Message> {
-    every(interval).map(|_instant| Message::SystemThemeChanged(detect_system_scheme()))
+    every(interval)
+        .map(|_instant| Message::Settings(SettingsMsg::SystemThemeChanged(detect_system_scheme())))
 }
 
 #[cfg(test)]

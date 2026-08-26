@@ -15,6 +15,7 @@
 
 use micold_client::app::{route_key, KeyRouting, State};
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::window::Msg as WindowMsg;
 use micold_client::keymap::KeyOutput;
 use micold_core::session::SessionLocation;
@@ -85,7 +86,10 @@ fn escape_closes_the_settings_overlay() {
         settings_draft: Some(Default::default()),
         ..State::default()
     };
-    assert_eq!(on_escape(&s), Some(Message::SettingsCancelled));
+    assert_eq!(
+        on_escape(&s),
+        Some(Message::Settings(SettingsMsg::Cancelled))
+    );
 }
 
 #[test]

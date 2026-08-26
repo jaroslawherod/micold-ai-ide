@@ -2,6 +2,7 @@
 //! 006, FR-019/FR-020). Currently exposes the embedded-terminal scrollback limit.
 
 use crate::app::{Message, State};
+use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::SettingsDraft;
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
@@ -41,25 +42,25 @@ pub fn modal<'a>(
         .label("Scrollback lines")
         .supporting("Lines kept per terminal")
         .track_focus(FieldId::SettingsScrollback, focused)
-        .on_input(Message::SettingsScrollbackChanged)
-        .on_submit(Message::SettingsSaved);
+        .on_input(|text| Message::Settings(SettingsMsg::ScrollbackChanged(text)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
 
     // Environment-include: enabled flag, script path, timeout — grouped as one visually
     // distinct set, separate from the scrollback field above (FR-015).
     let env_include_enabled_checkbox = Checkbox::new("Enabled", draft.env_include_enabled, r)
         .track_focus(FieldId::SettingsEnvIncludeEnabled, focused)
-        .on_toggle(Message::SettingsEnvIncludeEnabledToggled);
+        .on_toggle(|on| Message::Settings(SettingsMsg::EnvIncludeEnabledToggled(on)));
     let env_include_path_input = TextField::new("", &draft.env_include_script_path, r)
         .label("Script path")
         .track_focus(FieldId::SettingsEnvIncludePath, focused)
-        .on_input(Message::SettingsEnvIncludePathChanged)
-        .on_submit(Message::SettingsSaved);
+        .on_input(|text| Message::Settings(SettingsMsg::EnvIncludePathChanged(text)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
     let env_include_timeout_input = TextField::new("", &draft.env_include_timeout, r)
         .label("Timeout")
         .supporting("Seconds")
         .track_focus(FieldId::SettingsEnvIncludeTimeout, focused)
-        .on_input(Message::SettingsEnvIncludeTimeoutChanged)
-        .on_submit(Message::SettingsSaved);
+        .on_input(|text| Message::Settings(SettingsMsg::EnvIncludeTimeoutChanged(text)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
 
     let mut fields = material::dialog::fields(column![
         Text::new("Settings", TypeRole::Headline, r),
@@ -87,8 +88,8 @@ pub fn modal<'a>(
     }
 
     let actions = material::dialog::actions(row![
-        Button::filled("Save", r).on_press(Message::SettingsSaved),
-        Button::outlined("Cancel", r).on_press(Message::SettingsCancelled),
+        Button::filled("Save", r).on_press(Message::Settings(SettingsMsg::Saved)),
+        Button::outlined("Cancel", r).on_press(Message::Settings(SettingsMsg::Cancelled)),
     ]);
 
     let dialog = material::Surface::new(

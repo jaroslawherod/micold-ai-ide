@@ -96,22 +96,9 @@ pub enum Message {
     ProjectMenuToggled(PathBuf, (u16, u16)),
     /// Dismiss the project context menu (outside click, or after an action is chosen).
     ProjectMenuDismissed,
-    /// The user selected a theme preference (Follow system / Light / Dark) (FR-007, FR-008).
-    /// The binary persists the updated preference afterward.
-    ThemePreferenceChanged(ThemePreference),
-    /// Cycle the theme mode to the next one (Auto → Light → Dark → Auto) from the toolbar
-    /// menu's mode toggle. The binary persists the updated preference; the menu stays open.
-    ThemeModeCycled,
-    /// The OS light/dark preference poll observed a (changed) scheme (FR-006). Transient;
-    /// never persisted. Carries the raw detection outcome — `Err(())` for a transient failure
-    /// (e.g. `dark_light::detect()` timing out under CPU load) — rather than an
-    /// already-resolved `SystemScheme`, specifically so the periodic poll's `Subscription::map`
-    /// closure (`os_theme_poll`, `src/main.rs`) does not need to capture the previous scheme:
-    /// iced panics if a subscription's mapping closure captures state, since that breaks the
-    /// stable identity it relies on to avoid restarting the underlying timer every frame. The
-    /// reducer below applies the same last-known fallback (`theme::observe_system_scheme`)
-    /// that used to be baked in at the call site instead.
-    SystemThemeChanged(Result<SystemScheme, ()>),
+    /// Everything the user can do to their settings (feature 028, FR-001). Ten variants moved
+    /// behind this one; see [`crate::features::settings::Msg`].
+    Settings(crate::features::settings::Msg),
 
     // ---- Feature 005: worktrees, sessions, embedded terminal ----
     /// Opening a directory as a project was refused because it is not a git repo (FR-001a).
@@ -400,21 +387,6 @@ pub enum Message {
     TerminalContextMenuOpened { x: u16, y: u16 },
     /// Dismiss the terminal context menu (an outside click, or after an item is chosen) (FR-013).
     TerminalContextMenuClosed,
-    /// Open the Settings form (from the toolbar menu) (FR-019). The binary seeds the draft with
-    /// the current scrollback value.
-    SettingsOpened,
-    /// The Settings scrollback field changed.
-    SettingsScrollbackChanged(String),
-    /// The Settings environment-include enabled checkbox was toggled (feature 011, FR-001).
-    SettingsEnvIncludeEnabledToggled(bool),
-    /// The Settings environment-include script path field changed (FR-002).
-    SettingsEnvIncludePathChanged(String),
-    /// The Settings environment-include timeout field changed (FR-003).
-    SettingsEnvIncludeTimeoutChanged(String),
-    /// Save the Settings form (validated + persisted by the binary) (FR-020, FR-021).
-    SettingsSaved,
-    /// Dismiss the Settings form without saving (Cancel or Esc).
-    SettingsCancelled,
 
     // ---- Feature 008: background project switching ----
     /// Toggle the top-bar project switcher panel (feature 008, FR-004). Mutually exclusive
@@ -908,12 +880,9 @@ impl State {
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ProjectForgetCancelled => crate::features::project::forget_cancelled(self),
-            Message::ThemeModeCycled => crate::features::settings::theme_mode_cycled(self),
-            Message::ThemePreferenceChanged(pref) => {
-                crate::features::settings::theme_preference_changed(self, pref)
-            }
-            Message::SystemThemeChanged(detected) => {
-                crate::features::settings::system_theme_changed(self, detected)
+            Message::Settings(msg) => {
+                let outcomes = crate::features::settings::update(self, msg);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ProjectOpenRefused(message) => {
                 let outcomes = crate::features::project::open_refused(self, message);
@@ -1098,21 +1067,6 @@ impl State {
             Message::ShellInstanceMenuClosed => {
                 crate::features::session::shell_instance_menu_closed(self)
             }
-            Message::SettingsOpened => crate::features::settings::opened(self),
-            Message::SettingsScrollbackChanged(text) => {
-                crate::features::settings::scrollback_changed(self, text)
-            }
-            Message::SettingsEnvIncludeEnabledToggled(enabled) => {
-                crate::features::settings::env_include_enabled_toggled(self, enabled)
-            }
-            Message::SettingsEnvIncludePathChanged(text) => {
-                crate::features::settings::env_include_path_changed(self, text)
-            }
-            Message::SettingsEnvIncludeTimeoutChanged(text) => {
-                crate::features::settings::env_include_timeout_changed(self, text)
-            }
-            Message::SettingsSaved => crate::features::settings::saved(self),
-            Message::SettingsCancelled => crate::features::settings::cancelled(self),
             Message::Notifications(msg) => {
                 let outcomes = crate::features::notifications::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));

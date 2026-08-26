@@ -316,7 +316,7 @@ fn the_root_reducer_decides_no_more_than_it_did() {
 /// The `!routing.is_empty()` half was the load-bearing one while 93 of 110 arms decided. Now that
 /// none do, the exact count above can no longer catch a classifier that calls *everything* routing
 /// — 0 is the answer such a classifier and a correct one both give. That is what the arm total
-/// below is for: a scan that has stopped parsing reports 0 arms, not 89, and fails there.
+/// below is for: a scan that has stopped parsing reports 0 arms, and fails there.
 #[test]
 fn the_arm_scan_finds_the_reducer_it_is_meant_to_read() {
     let (routing, deciding) = classified();
@@ -325,11 +325,30 @@ fn the_arm_scan_finds_the_reducer_it_is_meant_to_read() {
     // `Message::WorktreeForm`. 110 - 22 + 1 = 89 exactly, which is the arithmetic that says the
     // collapse lost nothing — a scan that had merely stopped seeing some arms would not land on
     // the number the change predicts.
+    //
+    // The floor was 85 until feature 028 (FR-020). T064 was one feature folding its vocabulary;
+    // 028 is all ten doing it, and the root ends at 15 arms — 10 wrapper variants and 5
+    // cross-cutting ones — so a floor derived from the pre-028 count would fail every conversion
+    // on its way down, and would have to be re-derived nine times to say nothing new. It is 12
+    // now, comfortably under the 15 this feature arrives at and still far above the 0 a scan that
+    // has stopped parsing reports.
+    //
+    // Lowering a floor weakens it, so the named check below is what takes over the work. It does
+    // not decay: `ScrolledBeneathOverlay` and `EscapePressed` are cross-cutting, which is exactly
+    // why 028 leaves them at the root, and a scan that has gone quiet cannot produce either name.
     assert!(
-        total >= 85,
-        "the scan found only {total} arms in the root reducer — it found 89 after T064, and a \
-         scan that has gone quiet reports the root as routing only"
+        total >= 12,
+        "the scan found only {total} arms in the root reducer — the root ends feature 028 with \
+         15, and a scan that has gone quiet reports the root as routing only"
     );
+    for expected in ["ScrolledBeneathOverlay", "EscapePressed"] {
+        assert!(
+            routing.iter().chain(&deciding).any(|arm| arm == expected),
+            "the scan did not find the root's `{expected}` arm, so it is not reading the reducer \
+             it thinks it is. That arm is cross-cutting — it belongs to no feature and no \
+             conversion moves it — so its absence means the parse broke, not that the root shrank"
+        );
+    }
     assert!(
         !routing.is_empty(),
         "no arm classified as routing, so the burn-down target is unreachable by construction"

@@ -6,6 +6,7 @@
 use crate::app::{Message, State};
 use crate::features::help::help_actions;
 use crate::features::help::Msg as HelpMsg;
+use crate::features::settings::Msg as SettingsMsg;
 use crate::icons::Icon;
 use crate::ui::material::{Button, MenuItem, MenuTrigger, Toolbar};
 use iced::Element;
@@ -30,9 +31,13 @@ pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
         MenuItem::new(
             mode_icon(state.theme_pref),
             state.theme_pref.label(),
-            Message::ThemeModeCycled,
+            Message::Settings(SettingsMsg::ThemeModeCycled),
         ),
-        MenuItem::new(Icon::Settings, "Settings", Message::SettingsOpened),
+        MenuItem::new(
+            Icon::Settings,
+            "Settings",
+            Message::Settings(SettingsMsg::Opened),
+        ),
         MenuItem::new(
             Icon::Help,
             "Session service diagnostics",

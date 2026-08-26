@@ -1,6 +1,7 @@
 //! T011 — extended app base state: defaults + new message wiring (feature 005).
 
 use micold_client::app::{on_escape, Message, State};
+use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::window::FieldId;
 use micold_client::features::window::Msg as WindowMsg;
 use micold_client::ui::terminal::StripTab;
@@ -969,8 +970,10 @@ fn the_tab_menu_closes_when_a_dialog_opens() {
 #[test]
 fn settings_env_include_enabled_toggled_updates_only_that_field() {
     let mut state = State::default();
-    state.update(Message::SettingsOpened);
-    state.update(Message::SettingsEnvIncludeEnabledToggled(false));
+    state.update(Message::Settings(SettingsMsg::Opened));
+    state.update(Message::Settings(SettingsMsg::EnvIncludeEnabledToggled(
+        false,
+    )));
 
     let draft = state.settings_draft.as_ref().unwrap();
     assert!(!draft.env_include_enabled);
@@ -979,10 +982,10 @@ fn settings_env_include_enabled_toggled_updates_only_that_field() {
 #[test]
 fn settings_env_include_path_changed_updates_only_that_field() {
     let mut state = State::default();
-    state.update(Message::SettingsOpened);
-    state.update(Message::SettingsEnvIncludePathChanged(
+    state.update(Message::Settings(SettingsMsg::Opened));
+    state.update(Message::Settings(SettingsMsg::EnvIncludePathChanged(
         "/custom/script.sh".to_string(),
-    ));
+    )));
 
     let draft = state.settings_draft.as_ref().unwrap();
     assert_eq!(draft.env_include_script_path, "/custom/script.sh");
@@ -991,8 +994,10 @@ fn settings_env_include_path_changed_updates_only_that_field() {
 #[test]
 fn settings_env_include_timeout_changed_updates_only_that_field() {
     let mut state = State::default();
-    state.update(Message::SettingsOpened);
-    state.update(Message::SettingsEnvIncludeTimeoutChanged("30".to_string()));
+    state.update(Message::Settings(SettingsMsg::Opened));
+    state.update(Message::Settings(SettingsMsg::EnvIncludeTimeoutChanged(
+        "30".to_string(),
+    )));
 
     let draft = state.settings_draft.as_ref().unwrap();
     assert_eq!(draft.env_include_timeout, "30");
@@ -1001,13 +1006,19 @@ fn settings_env_include_timeout_changed_updates_only_that_field() {
 #[test]
 fn env_include_field_changes_leave_other_draft_fields_untouched() {
     let mut state = State::default();
-    state.update(Message::SettingsOpened);
-    state.update(Message::SettingsScrollbackChanged("25000".to_string()));
-    state.update(Message::SettingsEnvIncludeEnabledToggled(false));
-    state.update(Message::SettingsEnvIncludePathChanged(
+    state.update(Message::Settings(SettingsMsg::Opened));
+    state.update(Message::Settings(SettingsMsg::ScrollbackChanged(
+        "25000".to_string(),
+    )));
+    state.update(Message::Settings(SettingsMsg::EnvIncludeEnabledToggled(
+        false,
+    )));
+    state.update(Message::Settings(SettingsMsg::EnvIncludePathChanged(
         "/custom/script.sh".to_string(),
-    ));
-    state.update(Message::SettingsEnvIncludeTimeoutChanged("30".to_string()));
+    )));
+    state.update(Message::Settings(SettingsMsg::EnvIncludeTimeoutChanged(
+        "30".to_string(),
+    )));
 
     let draft = state.settings_draft.as_ref().unwrap();
     assert_eq!(draft.scrollback_lines, "25000");
@@ -1812,7 +1823,7 @@ fn opening_a_dialog_forgets_the_field_that_had_focus() {
     // The fields that reported focus belong to a widget tree being torn down, and will never report
     // losing it. A remembered focus would outlive them and draw the next dialog's field focused
     // over an input nobody has clicked.
-    state.update(Message::SettingsOpened);
+    state.update(Message::Settings(SettingsMsg::Opened));
 
     assert_eq!(state.focused_field, None);
 }

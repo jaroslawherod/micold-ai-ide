@@ -576,9 +576,6 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::RenameConfirmed => shell::daemon_sync::on_rename_confirmed(app),
         Message::ProjectForgetConfirmed => shell::daemon_sync::on_project_forget_confirmed(app),
         Message::WorktreeRenameConfirmed => shell::daemon_sync::on_worktree_rename_confirmed(app),
-        Message::ThemePreferenceChanged(_) | Message::ThemeModeCycled => {
-            shell::persist::on_theme_changed(app, message)
-        }
         Message::WorktreeForm(FormMsg::Submitted) => {
             shell::daemon_sync::on_add_worktree_submitted(app)
         }
@@ -670,8 +667,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::TerminalCopyRequested => shell::clipboard::on_copy_requested(app),
         Message::TerminalPasteRequested => shell::clipboard::on_paste_requested(app),
         Message::TextCopyRequested(text) => shell::clipboard::on_text_copy_requested(app, text),
-        Message::SettingsOpened => shell::persist::on_settings_opened(app),
-        Message::SettingsSaved => shell::persist::on_settings_saved(app),
+        Message::Settings(msg) => shell::settings::update(app, msg),
         Message::TerminalTick => {
             // Obsolete under the daemon: output arrives as streamed grid frames, titles arrive via
             // the daemon (Event::Title), and the daemon supervises/restarts processes. The emitting
@@ -941,6 +937,7 @@ pub(crate) mod tests {
     // mostly what they were for; the stamper-seeding tests below still build a snapshot, so they
     // import them back rather than keep a second copy.
     use crate::shell::daemon_sync::tests::{snapshot_with, summary, summary_at};
+    use micold_client::features::settings::Msg as SettingsMsg;
     use micold_client::features::settings::SettingsDraft;
     // These tests drive whole messages through `update_inner`, which is this file's dispatcher, so
     // they stay here even though what they assert about is the daemon's: they are tests of the
@@ -1622,7 +1619,7 @@ pub(crate) mod tests {
             error: None,
         });
 
-        let _ = update_inner(&mut app, Message::SettingsSaved);
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
 
         match rx.try_recv() {
             Ok(ClientMsg::SettingsSet {
@@ -1647,7 +1644,8 @@ pub(crate) mod tests {
     }
 
     /// The disconnected case is not an error: settings-saving already has a fully working local-only
-    /// path (the direct `settings.json` write above the daemon-send in `Message::SettingsSaved`), so
+    /// path (the direct `settings.json` write above the daemon-send in
+    /// `Message::Settings(SettingsMsg::Saved)`), so
     /// there is nothing to notify the user about — unlike every other `send_op`-routed mutation, which
     /// has no such standalone path.
     #[test]
@@ -1662,7 +1660,7 @@ pub(crate) mod tests {
             error: None,
         });
 
-        let _ = update_inner(&mut app, Message::SettingsSaved);
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
 
         assert_eq!(
             app.scrollback_lines, 20_000,

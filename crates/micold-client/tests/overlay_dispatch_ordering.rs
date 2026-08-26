@@ -17,6 +17,7 @@
 //! code got right.
 
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::settings::Msg as SettingsMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{on_escape, Message, State};
@@ -61,7 +62,7 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
     (
         "settings",
         |s| s.settings_draft = Some(Default::default()),
-        Message::SettingsCancelled,
+        Message::Settings(SettingsMsg::Cancelled),
     ),
     (
         "confirm_worktree_delete",
