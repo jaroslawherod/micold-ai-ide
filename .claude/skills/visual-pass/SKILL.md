@@ -54,11 +54,20 @@ branch under test had deleted, while the source contained no reference to it and
 
 ```bash
 scripts/build-lock.sh bash -c \
-  'cargo build -p micold-client --bin micold-ai-ide -p micold-daemon &&
+  'cargo build -p micold-client --bin micold-ai-ide &&
+   cargo build -p micold-daemon &&
    cp "$CARGO_TARGET_DIR/debug/micold-ai-ide" "$CARGO_TARGET_DIR/debug/micold-daemon" ~/vp/bin/'
 ```
 
-One invocation, both binaries, copy inside the lock — then run the copies. Three details:
+One lock, both binaries, copy inside it — then run the copies. Four details:
+
+- **Two `cargo build`s, not one.** `--bin` filters targets across the *whole* invocation, so
+  `cargo build -p micold-client --bin micold-ai-ide -p micold-daemon` never builds the daemon: it is
+  skipped in silence and the `cp` picks up whatever branch last wrote
+  `target-shared/debug/micold-daemon`. That cost a whole pass on 2026-08-26 — a 0.8.0 client against
+  a 0.10.0 daemon from another worktree, surfacing as "The session service is a different version".
+  Deleting the output first does not rescue it; cargo still calls the package fresh and does not
+  re-link.
 
 - **The client and the daemon must come from the same build.** The client refuses a daemon whose
   protocol *schema hash* differs (`handshake::evaluate`), and the daemon logs that as `refusing
