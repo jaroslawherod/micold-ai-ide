@@ -47,6 +47,14 @@ const SURVIVAL_CONTAINER: &str = "micold-survival-probe";
 const SURVIVAL_NETWORK: &str = "micold-survival-probe-net";
 const SURVIVAL_PORT: u16 = 17736;
 
+const REBOOT_CONTAINER: &str = "micold-reboot-probe";
+const REBOOT_NETWORK: &str = "micold-reboot-probe-net";
+const REBOOT_PORT: u16 = 17738;
+
+const NO_REBOOT_CONTAINER: &str = "micold-no-reboot-probe";
+const NO_REBOOT_NETWORK: &str = "micold-no-reboot-probe-net";
+const NO_REBOOT_PORT: u16 = 17739;
+
 /// A file only the *new* project holds, so "the sandbox cannot see it" is a statement about that
 /// project and not about a path that happens not to exist.
 const LATE_MARKER: &str = "micold-late-project-marker-2c71";
@@ -83,6 +91,7 @@ async fn sandbox_real_a_project_registered_after_boot_is_outside_the_running_con
         project: &project,
         token_path: &token_path,
         home: &home,
+        survive_logout: false,
         extra: &[],
     });
 
@@ -196,6 +205,7 @@ async fn sandbox_real_sessions_survive_a_client_restart() {
         project: &project,
         token_path: &token_path,
         home: &home,
+        survive_logout: false,
         extra: &[],
     });
 
@@ -252,5 +262,230 @@ async fn sandbox_real_sessions_survive_a_client_restart() {
     assert!(
         survived.contains("yes"),
         "state set in the shell before the client went away must still be there; got:\n{survived}"
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// §B.5, box 5 — the sandbox comes back on its own (FR-014a/b/c, R6)
+// ---------------------------------------------------------------------------------------------
+
+/// `{{.State.Running}}` and the start time, as one string, so a restart is visible as a *change*
+/// and not merely as "running", which it also was before.
+fn state_of(container: &str) -> String {
+    cli_out(&[
+        "inspect",
+        "-f",
+        "{{.State.Running}} {{.State.StartedAt}}",
+        container,
+    ])
+    .trim()
+    .to_string()
+}
+
+/// Kill the container the way a machine does, not the way an operator does.
+///
+/// `docker kill` is the obvious spelling and it is the wrong one: an API-issued kill is recorded as
+/// a *manual* stop, and declining to restart after a manual stop is the entire difference between
+/// `unless-stopped` and `always`. So the runtime honouring the policy looks exactly like the
+/// runtime ignoring it — the container stays down either way, and the test passes or fails for a
+/// reason unrelated to what it asks. (Measured: with `--restart unless-stopped`, a `kill` through
+/// the CLI leaves the container dead indefinitely.)
+///
+/// Signalling the container's main process on the host is the death the policy is *for*: nothing
+/// asked for it, so the runtime restarts. It needs no privilege — the sandbox runs as the host user
+/// (`--user uid:gid` on Docker, `--userns=keep-id` on podman), so its PID 1 is ours to signal.
+fn kill_the_container_process(container: &str) {
+    let pid = cli_out(&["inspect", "-f", "{{.State.Pid}}", container])
+        .trim()
+        .to_string();
+    assert_ne!(
+        pid, "0",
+        "{container} has no running process to kill; it is already down"
+    );
+    let status = std::process::Command::new("kill")
+        .args(["-9", &pid])
+        .status()
+        .unwrap_or_else(|e| panic!("kill -9 {pid}: {e}"));
+    assert!(status.success(), "kill -9 {pid} failed: {status}");
+}
+
+/// What this can and cannot say about a reboot.
+///
+/// FR-014a is a claim about the *host* restarting: with the survival opt-in on, the sandbox comes
+/// back without the application, and its sessions are live before the application opens. Rebooting
+/// is not something a test suite may do to the machine it runs on, so this takes the claim apart
+/// and measures the part that is the mechanism.
+///
+/// The opt-in selects a restart policy (`argv::restart_policy`, unit-asserted for both runtimes).
+/// A policy is only a promise until the runtime acts on it, and the runtime acts on it in exactly
+/// two situations: the container dies, and the runtime itself starts. This kills the container —
+/// the abrupt end a reboot is, from inside — and requires that the runtime bring it back on its
+/// own, that the daemon inside come up and accept a client with no help from the host, and that
+/// the catalogue still hold the session. What is left unmeasured is the second situation: that the
+/// runtime restores this container when it starts at boot. That is the runtime's own documented
+/// behaviour for this policy, it is why the policy is `unless-stopped` rather than `always`, and
+/// nothing in this repository can influence it.
+///
+/// `evidence/quickstart-b-closeout.md` says the same thing where a reader looking for the pass will
+/// find it.
+#[tokio::test]
+async fn sandbox_real_the_survival_opt_in_brings_the_sandbox_back_without_the_application() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().join("data");
+    let project = dir.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    let session = seed(&data, &project, "reboot");
+
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    let token = Token::generate();
+    let token_path = data.join("micold-ai-ide").join("sandbox.token");
+    token.write_to(&token_path).unwrap();
+    let daemon_log = data.join("micold-ai-ide").join("micold-daemon.log");
+
+    let _sandbox = start_sandbox(&SandboxSpec {
+        container: REBOOT_CONTAINER,
+        network: REBOOT_NETWORK,
+        port: REBOOT_PORT,
+        data_home: &data,
+        project: &project,
+        token_path: &token_path,
+        home: &home,
+        survive_logout: true,
+        extra: &[],
+    });
+
+    // The opt-in reached the runtime, not just the argv.
+    let policy = cli_out(&[
+        "inspect",
+        "-f",
+        "{{.HostConfig.RestartPolicy.Name}}",
+        REBOOT_CONTAINER,
+    ]);
+    assert_eq!(
+        policy.trim(),
+        "unless-stopped",
+        "the survival opt-in must reach the runtime as a restart policy; a container created \
+         without one is stopped by a reboot and stays stopped"
+    );
+
+    let before = state_of(REBOOT_CONTAINER);
+    {
+        let (mut conn, catalog) = wait_for_accept(REBOOT_PORT, &credentials(&token)).await;
+        let serial = input_serial(&catalog, session);
+        let screen = open_session(&mut conn, &project, session, &daemon_log).await;
+        let mut term = Terminal::new(
+            &mut conn,
+            session,
+            screen,
+            REBOOT_CONTAINER,
+            &daemon_log,
+            serial,
+        );
+        assert!(
+            term.run("echo before-the-restart")
+                .await
+                .contains("before-the-restart"),
+            "the session must be working before the container is killed, or the check after it \
+             proves nothing"
+        );
+    }
+
+    // The abrupt end. Neither `stop` nor `kill` through the runtime: both are the *explicit* stop
+    // that `unless-stopped` exists to respect (see `kill_the_container_process`).
+    kill_the_container_process(REBOOT_CONTAINER);
+
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let now = state_of(REBOOT_CONTAINER);
+        if now.starts_with("true") && now != before {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the runtime never restarted the sandbox within 60s; it is still `{now}` \
+             (it was `{before}`)"
+        );
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+
+    // Nothing on the host was asked to do this: no client connected, no `start` was issued, and
+    // the application is not running at all.
+    let (mut conn, catalog) = wait_for_accept(REBOOT_PORT, &credentials(&token)).await;
+    assert!(
+        catalog
+            .projects
+            .iter()
+            .flat_map(|p| &p.sessions)
+            .any(|s| s.id == session),
+        "the restarted daemon must still hold the session in its catalogue — a sandbox that comes \
+         back empty has survived in name only"
+    );
+
+    let serial = input_serial(&catalog, session);
+    let screen = open_session(&mut conn, &project, session, &daemon_log).await;
+    let mut term = Terminal::new(
+        &mut conn,
+        session,
+        screen,
+        REBOOT_CONTAINER,
+        &daemon_log,
+        serial,
+    );
+    let after = term.run("echo after-the-restart").await;
+    assert!(
+        after.contains("after-the-restart"),
+        "the session must be usable again after the sandbox came back; got:\n{after}"
+    );
+}
+
+/// FR-014c, and the reason the box above is not simply "a container restarts".
+#[tokio::test]
+async fn sandbox_real_without_the_opt_in_nothing_brings_the_sandbox_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().join("data");
+    let project = dir.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    seed(&data, &project, "no-reboot");
+
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    let token = Token::generate();
+    let token_path = data.join("micold-ai-ide").join("sandbox.token");
+    token.write_to(&token_path).unwrap();
+
+    let _sandbox = start_sandbox(&SandboxSpec {
+        container: NO_REBOOT_CONTAINER,
+        network: NO_REBOOT_NETWORK,
+        port: NO_REBOOT_PORT,
+        data_home: &data,
+        project: &project,
+        token_path: &token_path,
+        home: &home,
+        survive_logout: false,
+        extra: &[],
+    });
+
+    let policy = cli_out(&[
+        "inspect",
+        "-f",
+        "{{.HostConfig.RestartPolicy.Name}}",
+        NO_REBOOT_CONTAINER,
+    ]);
+    assert_eq!(
+        policy.trim(),
+        "no",
+        "with the opt-in off the sandbox must carry no restart policy at all — leaving one behind \
+         is how a setting turned off keeps acting (FR-014c)"
+    );
+
+    // The same death as the test above, so the two differ in the opt-in and in nothing else.
+    kill_the_container_process(NO_REBOOT_CONTAINER);
+
+    // Long enough for the restart the other test waits for: the runtime's first retry is well
+    // inside a second, so five is a decision rather than a race.
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    let state = state_of(NO_REBOOT_CONTAINER);
+    assert!(
+        state.starts_with("false"),
+        "with the opt-in off the sandbox must stay down once it dies; it is `{state}`"
     );
 }

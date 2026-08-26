@@ -164,6 +164,7 @@ async fn sandbox_real_parity_a_sandboxed_terminal_answers_exactly_as_an_unsandbo
         project: &box_project,
         token_path: &token_path,
         home: &home,
+        survive_logout: false,
         extra: &[],
     });
     let (mut box_conn, catalog) = wait_for_accept(PORT, &credentials(&token)).await;

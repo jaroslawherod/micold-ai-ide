@@ -288,6 +288,10 @@ pub struct SandboxSpec<'a> {
     /// The daemon's `HOME`, and so the session's. Passing the **host** home is what `argv::create`
     /// does, and it is what makes "`ls ~` shows nothing" worth asserting at all.
     pub home: &'a str,
+    /// The session-survival opt-in, which selects the container's restart policy — the whole of
+    /// the mechanism behind FR-014a. Off in every probe but the one that is about it: a container
+    /// that Docker would restart on its own outlives a failing test.
+    pub survive_logout: bool,
     /// Extra `create` arguments — the limit flags, a different network posture.
     pub extra: &'a [String],
 }
@@ -370,7 +374,7 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
         "--name",
         spec.container,
         "--restart",
-        "no",
+        micold_core::sandbox::argv::restart_policy(spec.survive_logout),
         "--network",
         spec.network,
         "-p",

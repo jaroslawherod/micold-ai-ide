@@ -57,6 +57,7 @@ async fn sandbox_real_a_freshly_built_image_passes_the_strict_fingerprint_check(
         project: &project,
         token_path: &token_path,
         home: &home,
+        survive_logout: false,
         extra: &[],
     });
 

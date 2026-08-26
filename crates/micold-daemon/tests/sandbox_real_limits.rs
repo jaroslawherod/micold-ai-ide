@@ -80,6 +80,7 @@ async fn sandbox_real_limits_stop_the_session_not_the_daemon() {
         project: &project,
         token_path: &token_path,
         home: &home,
+        survive_logout: false,
         extra: &memory_flags(),
     });
 
@@ -176,6 +177,7 @@ async fn sandbox_real_limits_change_only_by_recreating_the_container() {
         project: &project,
         token_path: &token_path,
         home: &home,
+        survive_logout: false,
         extra: &first,
     });
     assert_eq!(
@@ -193,6 +195,7 @@ async fn sandbox_real_limits_change_only_by_recreating_the_container() {
         project: &project,
         token_path: &token_path,
         home: &home,
+        survive_logout: false,
         extra: &second,
     });
     assert_eq!(
