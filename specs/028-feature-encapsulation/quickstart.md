@@ -45,6 +45,11 @@ Baseline **44 flat fields**. Target **9 feature structs + `workspace`**, the one
 member (`connection` owns no state, so it gets no struct — T037). The
 criterion is guard **G2**.
 
+Observed at T048: **10** — nine of which are `crate::features::<n>::State` (count them with
+`grep -cE '^    pub [a-z_]+: crate::features::'` over the same range), and `workspace`, which
+`SHARED` declares. SC-007 reproduces beside it: each of the nine modules declares its own
+`pub struct State`, and `features/connection.rs` says in its header why it declares none.
+
 ### A.3 Reproducing the attribution table
 
 The per-variant owner table in [data-model.md](./data-model.md) §2 is derived, not transcribed. To
