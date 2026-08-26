@@ -25,6 +25,7 @@
 //! passed all of them.
 
 use micold_client::app::{Message, State};
+use micold_client::features::help::Msg as HelpMsg;
 use micold_client::ui::terminal::StripTab;
 use micold_core::session::{SessionId, ShellInstanceId};
 use std::path::PathBuf;
@@ -70,7 +71,7 @@ const DISPLACES: &[(&str, &[&str])] = &[
 /// The message that opens each popover, by the id it registers under.
 fn opener(id: &str) -> Message {
     match id {
-        "help_menu" => Message::HelpMenuToggled,
+        "help_menu" => Message::Help(HelpMsg::MenuToggled),
         "project_switcher" => Message::ProjectSwitcherToggled,
         "sidebar_filter" => Message::SidebarFilterMenuToggled,
         "project_menu" => Message::ProjectMenuToggled(PathBuf::from("/a"), (10, 10)),
@@ -165,8 +166,8 @@ fn toggling_a_popover_shut_displaces_nothing() {
     // either mechanism being removed on its own — see
     // `a_toggle_that_shut_its_surface_reports_nothing` for the half no state can observe.
     let mut st = State::default();
-    st.update(Message::HelpMenuToggled);
-    st.update(Message::HelpMenuToggled);
+    st.update(Message::Help(HelpMsg::MenuToggled));
+    st.update(Message::Help(HelpMsg::MenuToggled));
     assert_eq!(open_popovers(&st), Vec::<&str>::new());
 
     st.update(Message::SessionMenuToggled(SessionId::new(), (30, 30)));

@@ -30,6 +30,7 @@
 //! the message the subscription emits, and `the_keyboard_subscription_names_no_surface` reads the
 //! function to confirm it still emits only that one.
 
+use micold_client::features::help::Msg as HelpMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{on_escape, Message, State};
@@ -62,7 +63,7 @@ fn dialogs() -> Vec<Dialog> {
     vec![
         Dialog {
             id: "about",
-            cancel: Message::AboutClosed,
+            cancel: Message::Help(HelpMsg::AboutClosed),
             open: |state| state.about_open = true,
         },
         Dialog {
@@ -275,7 +276,7 @@ fn the_reducer_opens_a_dialog_through_that_mechanism() {
     // actually call it. Driven with real messages rather than by setting fields, so an arm that
     // forgets the call fails here — which is the failure the enum could not have.
     let openers: &[(&str, Message)] = &[
-        ("about", Message::AboutOpened),
+        ("about", Message::Help(HelpMsg::AboutOpened)),
         (
             "add_worktree",
             Message::WorktreeForm(micold_client::features::worktree_form::Msg::Opened),
@@ -311,7 +312,10 @@ fn a_modal_keeps_escape_whatever_floats_above_it() {
 
     let top = registry::topmost(&both).expect("a modal and a popover are open");
     assert_eq!(top.layer(), Layer::Dialog);
-    assert_eq!(registry::escape(&both), Some(Message::AboutClosed));
+    assert_eq!(
+        registry::escape(&both),
+        Some(Message::Help(HelpMsg::AboutClosed))
+    );
 
     let popover_alone = state(None, true);
     assert_eq!(
@@ -392,7 +396,7 @@ fn escape_now_reaches_every_popover() {
     };
     assert_eq!(
         registry::escape(&state),
-        Some(Message::HelpMenuToggled),
+        Some(Message::Help(HelpMsg::MenuToggled)),
         "Escape closes the overflow menu, which before T031 it left open"
     );
 
@@ -400,7 +404,7 @@ fn escape_now_reaches_every_popover() {
     state.about_open = true;
     assert_eq!(
         registry::escape(&state),
-        Some(Message::AboutClosed),
+        Some(Message::Help(HelpMsg::AboutClosed)),
         "a dialog outranks a menu, whichever was opened first (contract D1)"
     );
 }
@@ -600,7 +604,7 @@ fn a_dialog_draws_from_its_own_state() {
 
     #[allow(clippy::type_complexity)]
     let openers: &[(&str, fn(&mut State))] = &[
-        ("about", |s| s.update(Message::AboutOpened)),
+        ("about", |s| s.update(Message::Help(HelpMsg::AboutOpened))),
         ("rename_project", |s| {
             s.update(Message::RenameStarted(std::path::PathBuf::from("/p")))
         }),

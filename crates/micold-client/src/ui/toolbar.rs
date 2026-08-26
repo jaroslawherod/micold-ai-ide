@@ -5,6 +5,7 @@
 
 use crate::app::{Message, State};
 use crate::features::help::help_actions;
+use crate::features::help::Msg as HelpMsg;
 use crate::icons::Icon;
 use crate::ui::material::{Button, MenuItem, MenuTrigger, Toolbar};
 use iced::Element;
@@ -49,7 +50,7 @@ pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
     items.push(MenuItem::new(
         Icon::About,
         help_actions()[0],
-        Message::AboutOpened,
+        Message::Help(HelpMsg::AboutOpened),
     ));
     items
 }
@@ -75,7 +76,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let switcher = Button::text(switcher_label, r)
         .leading(Icon::OpenProject)
         .on_press(Message::ProjectSwitcherToggled);
-    let menu = MenuTrigger::new(Icon::Menu, Message::HelpMenuToggled, r);
+    let menu = MenuTrigger::new(Icon::Menu, Message::Help(HelpMsg::MenuToggled), r);
     Toolbar::new(meta.name, r)
         // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from
         // the sidebar's offset rather than stored, so nothing else can set it.

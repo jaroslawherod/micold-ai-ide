@@ -16,6 +16,7 @@
 //! Read a failure here as: the generic dispatch does not preserve an ordering rule the special-case
 //! code got right.
 
+use micold_client::features::help::Msg as HelpMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{on_escape, Message, State};
@@ -31,7 +32,11 @@ use micold_core::session::SessionId;
 /// opened it; the enum is gone, so opening one means building the state it draws from.
 #[allow(clippy::type_complexity)]
 const MODALS: &[(&str, fn(&mut State), Message)] = &[
-    ("about", |s| s.about_open = true, Message::AboutClosed),
+    (
+        "about",
+        |s| s.about_open = true,
+        Message::Help(HelpMsg::AboutClosed),
+    ),
     (
         "project_selector",
         |s| s.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),

@@ -35,6 +35,7 @@ mod inventory;
 
 use inventory::{code_only, declarations_in, sources_in, src_dir};
 use micold_client::app::Message;
+use micold_client::features::help::Msg as HelpMsg;
 use micold_client::overlay::registry::Open;
 use micold_client::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::overlay::{Layer, Surface, Trigger};
@@ -99,7 +100,8 @@ fn a_surface_description_terminates_in_a_conversion() {
             Layer::Dialog
         }
         fn dismissal(&self) -> DismissalRules {
-            DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::AboutClosed)
+            DismissalRules::for_layer(Layer::Dialog)
+                .cancelled_by(Message::Help(HelpMsg::AboutClosed))
         }
     }
 
@@ -107,7 +109,10 @@ fn a_surface_description_terminates_in_a_conversion() {
 
     assert_eq!(open.id(), SurfaceId::new("probe"));
     assert_eq!(open.layer(), Layer::Dialog);
-    assert_eq!(open.on(Trigger::Escape), Some(&Message::AboutClosed));
+    assert_eq!(
+        open.on(Trigger::Escape),
+        Some(&Message::Help(HelpMsg::AboutClosed))
+    );
 }
 
 #[test]

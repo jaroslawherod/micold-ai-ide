@@ -1,6 +1,7 @@
 //! The About dialog, rendered as a Material modal overlay within the main window (FR-013).
 
 use crate::app::{Message, State};
+use crate::features::help::Msg as HelpMsg;
 use crate::ui::material::{Button, SurfaceKind, Text, TypeRole};
 use iced::widget::column;
 use iced::Element;
@@ -30,7 +31,7 @@ pub fn modal<'a>(scheme: ColorScheme) -> Element<'a, Message> {
                 Text::new(format!("License: {}", meta.license), TypeRole::Caption, r).muted(),
                 Text::new(meta.description, TypeRole::Body, r),
             ]),
-            Button::filled("Close", r).on_press(Message::AboutClosed),
+            Button::filled("Close", r).on_press(Message::Help(HelpMsg::AboutClosed)),
         ),
         SurfaceKind::Dialog,
         r,

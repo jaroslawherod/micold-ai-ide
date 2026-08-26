@@ -16,6 +16,7 @@
 //! widget deciding whether a destructive action is available.
 
 use micold_client::app::{Message, State, SIDEBAR_MIN_WIDTH};
+use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::sidebar::TagFilter;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
@@ -69,7 +70,7 @@ fn open_overlay_identity_is_application_owned() {
     // through the registry — the same answer to the same question, asked of what now holds it.
     let mut state = State::default();
     assert!(micold_client::overlay::registry::open_dialog(&state).is_none());
-    state.update(Message::AboutOpened);
+    state.update(Message::Help(HelpMsg::AboutOpened));
     assert_eq!(
         micold_client::overlay::registry::open_dialog(&state).map(|open| open.id()),
         Some(micold_client::overlay::SurfaceId::new("about"))

@@ -40,12 +40,9 @@ pub const SIDEBAR_DEFAULT_WIDTH: u16 = 300;
 /// No longer `Copy`: some variants carry owned data (`PathBuf`, listing results).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Message {
-    /// The "Help" toolbar entry was selected (reveals/collapses its "About" action).
-    HelpMenuToggled,
-    /// The "About" action was activated.
-    AboutOpened,
-    /// The About dialog was dismissed (Close button or Esc).
-    AboutClosed,
+    /// The Help menu and the About dialog it opens (feature 028, FR-001). Three variants moved
+    /// behind this one; see [`crate::features::help::Msg`].
+    Help(crate::features::help::Msg),
     /// Open the project selector (folder browser). The binary computes the starting
     /// directory and launches the first directory scan (FR-001).
     ProjectSelectorOpened,
@@ -881,16 +878,14 @@ impl State {
             | Message::DiagnosticsRequested
             | Message::LogoutSurvivalRequested
             | Message::LogoutSurvivalOutcome(_) => {}
-            Message::HelpMenuToggled => {
-                let outcomes = crate::features::help::menu_toggled(self);
+            Message::Help(msg) => {
+                let outcomes = crate::features::help::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ProjectSwitcherToggled => {
                 let outcomes = crate::features::project::switcher_toggled(self);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::AboutOpened => crate::features::help::about_opened(self),
-            Message::AboutClosed => crate::features::help::about_closed(self),
             Message::SelectorNavigatedInto(path) => {
                 crate::features::project::selector_navigated_into(self, path)
             }

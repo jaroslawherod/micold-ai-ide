@@ -69,3 +69,40 @@ line above naming 028 as the scope. That is fixed, and the suite now has a case 
 the report is how every adjudication below gets written, and a report that sends the reader to the
 wrong requirement corrupts the input to that judgment. The probe was reverted; nothing in the suite
 carries the altered text.
+
+## T006 — `help`'s three variants moved behind `Message::Help`
+
+Six assertions, one shape. Each asks what the Escape path answers when a help surface is open, and
+each compares it against the message that closes it. That message is now spelled
+`Message::Help(HelpMsg::AboutClosed)` rather than `Message::AboutClosed` — the same message, reached
+through the wrapper the conversion introduced, with the variant keeping its name and losing only the
+feature-name prefix it never needed (contract M1).
+
+Nothing here says less than it did. The call under test is unchanged, the expected value is the same
+value, and the equality is still an equality: `Some(x)` where `x` closes the About dialog. What
+changed is the path by which the vocabulary names it, which is the whole content of this task.
+
+The check reports five of the six at 89–97% against their own successors, and the sixth
+(`escape(&both)`) at 89% for the same reason — a longer spelling of the same constructor. Read
+individually rather than pattern-matched, as Q3 requires: each survivor was compared against the
+assertion it replaced, and in every case the predicate, the subject and the expected value are
+identical modulo the wrapper.
+
+```
+was: assert_eq!(escape(&both),Some(MAboutClosed))
+```
+```
+was: assert_eq!(escape(&state),Some(MAboutClosed),"adialogoutranksamenu,whicheverwasopenedfirst(contractD1)")
+```
+```
+was: assert_eq!(escape(&state),Some(MHelpMenuToggled),"Escapeclosestheoverflowmenu,whichbeforeT031itleftopen")
+```
+```
+was: assert_eq!(on_escape(&state),Some(MAboutClosed))
+```
+```
+was: assert_eq!(on_escape(&state),Some(MAboutClosed),"thescrimemitswhateverEscapewould,sothetwopathscannotdisagree")
+```
+```
+was: assert_eq!(open.on(TEscape),Some(&MAboutClosed))
+```

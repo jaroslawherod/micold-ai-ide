@@ -5,6 +5,7 @@
 mod support;
 
 use micold_client::app::{Message, State};
+use micold_client::features::help::Msg as HelpMsg;
 use micold_core::project::Availability;
 use std::path::{Path, PathBuf};
 use support::{idle_session, running_session, workspace_with};
@@ -24,7 +25,7 @@ fn toggling_switcher_opens_and_closes_it() {
 #[test]
 fn opening_switcher_closes_the_overflow_menu() {
     let mut st = State::default();
-    st.update(Message::HelpMenuToggled); // menu open
+    st.update(Message::Help(HelpMsg::MenuToggled)); // menu open
     assert!(st.help_menu_open);
 
     st.update(Message::ProjectSwitcherToggled);
@@ -41,7 +42,7 @@ fn opening_the_overflow_menu_closes_the_switcher() {
     st.update(Message::ProjectSwitcherToggled); // switcher open
     assert!(st.project_switcher_open);
 
-    st.update(Message::HelpMenuToggled);
+    st.update(Message::Help(HelpMsg::MenuToggled));
     assert!(st.help_menu_open);
     assert!(
         !st.project_switcher_open,

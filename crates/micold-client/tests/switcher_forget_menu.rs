@@ -8,6 +8,7 @@
 //! and validated by quickstart.md.
 
 use micold_client::app::{Message, State};
+use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::clamp_menu_anchor;
 use std::path::PathBuf;
 
@@ -63,7 +64,7 @@ fn toggling_the_same_project_closes_the_menu_and_a_different_one_replaces_it() {
 #[test]
 fn opening_any_other_popover_closes_the_project_menu() {
     for opener in [
-        Message::HelpMenuToggled,
+        Message::Help(HelpMsg::MenuToggled),
         Message::ProjectSwitcherToggled,
         Message::SidebarFilterMenuToggled,
         Message::WorktreeMenuToggled("w1".into(), (100, 100)),

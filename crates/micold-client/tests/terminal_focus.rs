@@ -14,6 +14,7 @@
 //! `should_write_to` left to test here.
 
 use micold_client::app::{route_key, KeyRouting, State};
+use micold_client::features::help::Msg as HelpMsg;
 use micold_client::keymap::KeyOutput;
 use micold_core::session::SessionLocation;
 
@@ -575,11 +576,15 @@ fn a_restored_session_holds_the_keyboard_at_launch() {
 /// Each surface that must take the keyboard while it is open, as (name, open, close).
 fn keyboard_taking_surfaces() -> Vec<(&'static str, Message, Message)> {
     vec![
-        ("about dialog", Message::AboutOpened, Message::AboutClosed),
+        (
+            "about dialog",
+            Message::Help(HelpMsg::AboutOpened),
+            Message::Help(HelpMsg::AboutClosed),
+        ),
         (
             "help menu",
-            Message::HelpMenuToggled,
-            Message::HelpMenuToggled,
+            Message::Help(HelpMsg::MenuToggled),
+            Message::Help(HelpMsg::MenuToggled),
         ),
         (
             "project switcher",

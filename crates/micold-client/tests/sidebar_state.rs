@@ -3,6 +3,7 @@
 use micold_client::app::{
     on_escape, Message, State, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
 };
+use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
@@ -252,7 +253,7 @@ fn opening_help_menu_or_project_switcher_closes_the_filter_panel() {
     state.update(Message::SidebarFilterMenuToggled);
     assert!(state.sidebar_filter_open);
 
-    state.update(Message::HelpMenuToggled);
+    state.update(Message::Help(HelpMsg::MenuToggled));
     assert!(!state.sidebar_filter_open);
 
     state.update(Message::SidebarFilterMenuToggled);

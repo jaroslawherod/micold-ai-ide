@@ -20,6 +20,7 @@
 //! one. Nine rows replace nine variants. No property changed, nothing was weakened, and the
 //! assertion-freeze check flags the file with this paragraph as its explanation.
 
+use micold_client::features::help::Msg as HelpMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{Message, State};
@@ -45,7 +46,7 @@ fn with_about() -> State {
 /// A state with the overflow menu open.
 fn with_help_menu() -> State {
     let mut state = State::default();
-    state.update(Message::HelpMenuToggled);
+    state.update(Message::Help(HelpMsg::MenuToggled));
     assert!(state.help_menu_open, "precondition: the menu is open");
     state
 }
@@ -70,7 +71,7 @@ fn a_dialog_now_dismisses_on_a_scrim_click() {
     let state = with_about();
     assert_eq!(
         micold_client::app::on_escape(&state),
-        Some(Message::AboutClosed),
+        Some(Message::Help(HelpMsg::AboutClosed)),
         "the scrim emits whatever Escape would, so the two paths cannot disagree"
     );
 }
@@ -141,7 +142,7 @@ fn outside_click_dismissal_of_a_menu_is_unchanged() {
     assert!(dismisses(Surface::NonModal, Trigger::OutsideClick));
 
     let mut state = with_help_menu();
-    state.update(Message::HelpMenuToggled);
+    state.update(Message::Help(HelpMsg::MenuToggled));
     assert!(!state.help_menu_open);
 }
 
@@ -151,7 +152,11 @@ fn outside_click_dismissal_of_a_menu_is_unchanged() {
 fn escape_still_reaches_exactly_what_it_used_to() {
     #[allow(clippy::type_complexity)]
     let dialogs: &[(&str, fn(&mut State), Message)] = &[
-        ("about", |s| s.about_open = true, Message::AboutClosed),
+        (
+            "about",
+            |s| s.about_open = true,
+            Message::Help(HelpMsg::AboutClosed),
+        ),
         (
             "project_selector",
             |s| s.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),

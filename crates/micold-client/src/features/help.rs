@@ -44,7 +44,7 @@ impl FloatingSurface for HelpMenu {
     }
 
     fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Popover).cancelled_by(Message::HelpMenuToggled)
+        DismissalRules::for_layer(Layer::Popover).cancelled_by(Message::Help(Msg::MenuToggled))
     }
 }
 
@@ -71,7 +71,7 @@ impl FloatingSurface for AboutDialog {
     }
 
     fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::AboutClosed)
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::Help(Msg::AboutClosed))
     }
 }
 
@@ -79,6 +79,36 @@ impl Registered for AboutDialog {
     fn open_in(state: &State) -> Option<Self> {
         state.about_open.then_some(AboutDialog)
     }
+}
+
+/// What can happen to the Help menu and the dialog it opens (feature 028, FR-001).
+///
+/// # The variants kept their meaning and lost their prefix
+///
+/// `Message::Help(HelpMsg::MenuToggled)` is `Msg::MenuToggled` here — the type says which menu, so the variant
+/// does not have to (contract M1). `AboutOpened` and `AboutClosed` keep their names: "About" is the
+/// single action this menu offers, not a restatement of the feature's own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Msg {
+    /// The "Help" toolbar entry was selected (reveals/collapses its "About" action).
+    MenuToggled,
+    /// The "About" action was activated.
+    AboutOpened,
+    /// The About dialog was dismissed (Close button or Esc).
+    AboutClosed,
+}
+
+/// This feature's whole reducer surface: one entry point, shape A (contract M2).
+///
+/// Pure — nothing here reaches the filesystem or the daemon — so the root's arm is a `drain` over
+/// what comes back and nothing else.
+pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+    match msg {
+        Msg::MenuToggled => return menu_toggled(state),
+        Msg::AboutOpened => about_opened(state),
+        Msg::AboutClosed => about_closed(state),
+    }
+    Vec::new()
 }
 
 /// The overflow menu was toggled (feature 021, T062 — FR-004a).

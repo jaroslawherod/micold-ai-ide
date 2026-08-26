@@ -8,11 +8,12 @@
 //! surface that closes when its neighbour does not.
 
 use micold_client::app::Message;
+use micold_client::features::help::Msg as HelpMsg;
 use micold_client::overlay::{DismissalRules, SurfaceId};
 use micold_core::overlay::{dismisses, Layer, Surface, Trigger};
 
 fn cancellable(layer: Layer) -> DismissalRules {
-    DismissalRules::for_layer(layer).cancelled_by(Message::AboutClosed)
+    DismissalRules::for_layer(layer).cancelled_by(Message::Help(HelpMsg::AboutClosed))
 }
 
 #[test]

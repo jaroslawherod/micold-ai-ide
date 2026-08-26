@@ -13,6 +13,7 @@ mod shell;
 use crate::shell::capabilities::Capabilities;
 use crate::shell::daemon_sync::PendingOp;
 use micold_client::app::{Message, State};
+use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::session::SelectKind;
 use micold_client::features::worktree_form::Msg as FormMsg;
 use micold_client::grid::GridCache;
@@ -266,7 +267,7 @@ fn compose_scene(app: &mut App) -> Task<Message> {
         }
     }
     if !facts.dialog_open {
-        steps.push(Task::done(Message::AboutOpened));
+        steps.push(Task::done(Message::Help(HelpMsg::AboutOpened)));
     }
     if !facts.context_menu_open {
         let (x, y) = SCENE_MENU_AT;

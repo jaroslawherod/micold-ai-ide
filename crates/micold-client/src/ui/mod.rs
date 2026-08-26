@@ -39,6 +39,7 @@ pub(crate) mod worktree_form;
 pub(crate) mod worktree_rename;
 
 use crate::app::{Message, State};
+use crate::features::help::Msg as HelpMsg;
 use crate::icons::{icon_role, Icon, IconSurface};
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length, Subscription};
@@ -219,7 +220,7 @@ pub fn view<'a>(
     // would be nothing left on screen to fade out. Closed, it is inert and blocks nothing.
     let overflow_menu: cdk::overlay::Surface<'a, Message> = material::MenuOverlay::new(
         toolbar::overflow_items(state),
-        Message::HelpMenuToggled,
+        Message::Help(HelpMsg::MenuToggled),
         roles,
     )
     .open(state.help_menu_open)
