@@ -146,3 +146,29 @@ before the names are even looked at.
 ```
 was: assert!(total>=85,"thescanfoundonly{total}armsintherootreducer—itfound89afterT064,anda\scanthathasgonequietreportstherootasroutingonly")
 ```
+
+## T010 — `sidebar`'s ten variants moved behind `Message::Sidebar`
+
+All five are one constructor renamed: `Message::SidebarFilterMenuToggled` became
+`Message::Sidebar(sidebar::Msg::FilterMenuToggled)`, and the filter panel's dismissal rule is
+asserted in five places. Read individually as Q3 requires — the subject (`escape`, `on_escape`,
+`open.on`, `scroll_beneath`), the predicate and the expected value are unchanged in every one, and
+each still says the same thing about the same surface: Escape closes the open filter panel, and a
+scroll behind a modal invalidates the menu anchored beneath it. The message they name is the same
+message, spelled through the wrapper that now owns it.
+
+```
+was: assert_eq!(escape(&popover_alone),Some(MSidebarFilterMenuToggled),"withnomodalthepopoveristhetopmostsurface,andEscapeisitsown")
+```
+```
+was: assert_eq!(on_escape(&state),Some(MSidebarFilterMenuToggled),"Escapemustdismissthefilterpanelwhileit'sopen")
+```
+```
+was: assert_eq!(on_escape(&state),Some(MSidebarFilterMenuToggled),"theeverydaycase:onelightweightsurfaceopen,andEscapeclosesit")
+```
+```
+was: assert_eq!(open.on(TEscape),Some(&MSidebarFilterMenuToggled))
+```
+```
+was: assert_eq!(scroll_beneath(&state(Some(&dialogs()[0]),true)),vec![MSidebarFilterMenuToggled],"ascrollbehindanopenmodalstillinvalidatesthemenuanchoredbeneathit,anddoes\nottouchthemodal")
+```
