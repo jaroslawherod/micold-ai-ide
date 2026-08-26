@@ -351,7 +351,11 @@ does a session start unsandboxed without an explicit choice.
       repository. Where the client has no local git that stream is not a faster copy of something
       it could compute; it is the only list it will ever have.
 - [ ] T115 [P] Verify the full quickstart.md §A suite is green on Linux, macOS and Windows with **no** runtime installed, from the CI matrix in `.github/workflows/` (Principle VI, the fake runtime's whole purpose)
-- [ ] T116 [P] Measure SC-003 — sandboxed session start no more than 2s slower than unsandboxed — recording the numbers in `specs/027-sandboxed-daemon-runtime/evidence/performance.md`
+- [x] T116 [P] Measure SC-003 — sandboxed session start no more than 2s slower than unsandboxed — recording the numbers in `specs/027-sandboxed-daemon-runtime/evidence/performance.md`
+      — **0ms** against a 2000ms budget: both placements 2ms median over 7 timed rounds, both showing a real `$` prompt.
+      Three earlier revisions of the measurement passed while measuring nothing (an unmounted catalogue, a snapshot
+      mistaken for a prompt, and two different shells); each is written up in the evidence, because a green comparative
+      benchmark is exactly the kind that hides its own vacuity.
 - [ ] T117 [P] Measure SC-004 — first-time enable under 5 minutes with continuous progress, from a cold image state — into `specs/027-sandboxed-daemon-runtime/evidence/performance.md`
 - [x] T118 Audit that no code path logs, prints, or includes the authentication token in argv or an error message (P-3), adding the grep-the-argv-and-log test to `crates/micold-core/tests/protocol_auth.rs`
       — the audit found a live vector, not a clean bill. `auth::Token` redacts its own `Debug`, but
