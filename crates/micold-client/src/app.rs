@@ -12,7 +12,7 @@
 
 use crate::features::notifications::NoticeLevel;
 use crate::features::project::{ProjectMenu, RenameDraft, SwitcherEntry};
-use crate::features::session::{SelectKind, SessionMenu};
+use crate::features::session::SessionMenu;
 use crate::features::settings::SettingsDraft;
 use crate::features::sidebar::TagFilter;
 use crate::features::window::FieldId;
@@ -21,7 +21,7 @@ use crate::features::worktree_form::WorktreeForm;
 use micold_core::notify;
 use micold_core::project::Availability;
 use micold_core::selector::Selector;
-use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
+use micold_core::session::SessionId;
 use micold_core::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
 use micold_core::worktree::Worktree;
 use std::collections::BTreeSet;
@@ -63,9 +63,6 @@ pub enum Message {
     /// behind this one; see [`crate::features::sidebar::Msg`].
     Sidebar(crate::features::sidebar::Msg),
 
-    // ---- Feature 008: worktree sidebar refinement ----
-
-    // ---- 016 BUG-002: showing a worktree the app does not manage ----
     /// Content scrolled underneath an open floating surface (feature 017, FR-009). The third of
     /// the three dismissal triggers, and the one no widget used to report — see
     /// [`micold_core::overlay::Trigger::ScrollBeneath`]. Emitted unconditionally by the scrollable
@@ -82,28 +79,10 @@ pub enum Message {
     /// made against the state Escape actually lands in rather than the state that was last
     /// rendered.
     EscapePressed,
-    /// The terminal tab strip scrolled; carries the offset, the viewport's width and its content's,
-    /// all in whole pixels (feature 026 FR-002e).
-    ///
-    /// Two numbers in one message because they answer one question — "does anything lie beyond this
-    /// edge" — and the rendering stack delivers them together. Split across messages there would be
-    /// frames where one is stale, and a fade computed from a stale pair points at nothing or fails
-    /// to point at something.
-    ///
-    /// It was three until feature 027. The content width came with them and is no longer carried:
-    /// the strip's content is now a function of its viewport (the trailing alignment's slack is
-    /// laid out inside it), so a *measured* content width paired with the current viewport is
-    /// exactly the stale pair this doc warns about — and it went stale for real, because this
-    /// message is the only thing that ever wrote it and it fires only when something scrolls. The
-    /// fade derives the width from the tab count instead (`ui::terminal::strip_overflow`).
-    TabStripScrolled { offset: u32, width: u32 },
-    /// The tab strip's viewport was laid out, or resized (feature 026 FR-002e).
-    ///
-    /// Separate from [`Self::TabStripScrolled`] because the two answer different questions and fire
-    /// at different times — the same split the sidebar's pair makes. This one is what covers the
-    /// **first** frame, where nothing has scrolled yet and a strip that already overflows still has
-    /// to fade its edge.
-    TabStripViewportResized { width: u32 },
+    /// Everything a session, its terminal panes and its tab strip say about themselves (feature
+    /// 028, FR-001). Thirty-seven variants — the largest feature in the application — moved behind
+    /// this one; see [`crate::features::session::Msg`].
+    Session(crate::features::session::Msg),
     /// A dialog has finished animating out (feature 017, FR-011). Emitted by the `Modal` component
     /// itself, which owns the transition, so the binary can release the snapshot it was rendering
     /// from ([`crate::overlay::registry::Closing`]). The binary used to watch a central progress
@@ -117,156 +96,10 @@ pub enum Message {
     /// or dismissed as a unit, and no other feature reads its intermediate state. Twenty-two
     /// variants — 17% of this enum — collapse to this one.
     WorktreeForm(crate::features::worktree_form::Msg),
-    /// Start a new session at the given location — a worktree or, as of feature 010, the
-    /// project root ("Default", FR-001) — (FR-010). The binary spawns `claude`.
-    SessionStartRequested { location: SessionLocation },
-    /// A session was started/added for the active project (FR-011).
-    SessionStarted(Session),
-    /// Select a session to display its terminal (FR-015); other sessions keep running.
-    SessionSelected(SessionId),
-    /// Close/stop a session (FR-015a, bugfix BUG-003). The binary kills the process and records
-    /// the durable suppression marker; this archives (not deletes) the record.
-    SessionCloseRequested(SessionId),
-    /// The session's `claude` process reported it is running (FR-010).
-    ///
-    /// **Emitted nowhere in production** — the daemon owns this transition and publishes it in the
-    /// catalog snapshot (FR-006d, `010` BUG-011), which `reconcile_catalog` adopts unconditionally.
-    /// Kept as the reducer's own `→ Running` edge, which the state tests drive directly; deleting it
-    /// is a separate change from the one that made the daemon report the transition at all.
-    SessionRunning(SessionId),
-    /// The session's `claude` title became available/changed (FR-011a).
-    SessionTitleUpdated { id: SessionId, title: String },
-
-    // ---- Bugfix BUG-003: session Remove (distinct from Close/archive) ----
-    /// Open (or close, if already open) a session's right-click context menu, anchored at the
-    /// press point in window pixels (018 FR-029d).
-    SessionMenuToggled(SessionId, (u16, u16)),
-    /// Dismiss the session context menu (outside click, or after an action is chosen).
-    SessionMenuDismissed,
-    /// Request permanent removal of a session; opens the confirm dialog (FR-015c).
-    SessionRemoveRequested(SessionId),
-    /// Confirm removal. The binary kills the process (if running) and records the durable
-    /// suppression marker, then persists; the reducer drops the record outright.
-    SessionRemoveConfirmed,
-    /// Dismiss the remove confirmation without removing anything.
-    SessionRemoveCancelled,
-
-    // ---- Feature 010: switchable regular terminal mode ----
-    // The mode toggle's `TerminalModeToggled` lived here until feature 027 deleted the control.
-    // The tab strip is the only route between a session's panes now, so a message meaning "switch
-    // to whichever pane is not showing" has no sender and, more to the point, no meaning: a strip
-    // names its destination. `TerminalAiCliSelected` and `ShellInstanceSelected` are what remain,
-    // and both **set** rather than flip — see FR-007 below for why that distinction is load-bearing.
-    /// The manual restart affordance was pressed for the active session's currently-attached,
-    /// not-running process — for the AI CLI branch, and for whichever Regular Terminal instance
-    /// is currently active (FR-013; contracts/terminal-mode-lifecycle.md).
-    TerminalRestartRequested,
-
-    // ---- Feature 011: multiple Regular Terminal instances per session ----
-    /// Open an additional Regular Terminal instance for the active session (the "+" control or
-    /// the `Ctrl+Shift+T`/`Cmd+Shift+T` shortcut, FR-001, FR-019) — a no-op outside Regular mode.
-    /// No pure reducer body: mirrors `TerminalRestartRequested`/`SessionStartRequested`, which
-    /// only trigger binary-side spawn logic.
-    ShellInstanceOpenRequested,
-    /// Switch the visible pane to a different open Regular Terminal instance of `SessionId`
-    /// (FR-004; the instance-switching control in `pane()`). Carries the owning session
-    /// explicitly, not just the instance id, because `ShellInstanceId` is only unique within its
-    /// own session — resolving against whatever `active_session` happens to be when this message
-    /// is processed (rather than the session it was actually raised for) could otherwise apply it
-    /// to a same-numbered instance of a different session if the active session changes first.
-    ShellInstanceSelected(SessionId, ShellInstanceId),
-    /// Close an individual Regular Terminal instance of `SessionId` (FR-011–FR-013) — may flip
-    /// that session's `mode` back to `AiCli` if this was the last remaining instance. Carries the
-    /// owning session explicitly for the same reason as `ShellInstanceSelected`.
-    ShellInstanceCloseRequested(SessionId, ShellInstanceId),
-    /// Manually restart a specific Regular Terminal instance of `SessionId` after it exited —
-    /// independent of whether that instance is the one currently attached to the pane (FR-010; a
-    /// background instance can be restarted without first switching to it). No pure reducer
-    /// body: mirrors `TerminalRestartRequested`, which only triggers binary-side spawn logic.
-    /// Carries the owning session explicitly for the same reason as `ShellInstanceSelected`.
-    ShellInstanceRestartRequested(SessionId, ShellInstanceId),
-    /// Open the context menu for one strip tab, at a window-pixel point (feature 012 BUG-005
-    /// FR-010b, widened by feature 026 FR-006a). Dispatched by a secondary (right) press.
-    ///
-    /// Carries a `StripTab` rather than a `ShellInstanceId` since feature 026, because the AI tab
-    /// has a menu too and it is **the same menu** with Close filtered out (FR-004, FR-006a). One
-    /// message, one surface, one registration: two would be the shape that lets the two menus drift
-    /// into offering different actions for the same reason, which is the thing FR-006a is worded to
-    /// prevent.
-    StripTabMenuRequested(crate::ui::terminal::StripTab, u16, u16),
-    /// Dismiss the terminal-tab context menu.
-    ShellInstanceMenuClosed,
-    /// Show the session's AI CLI process in the pane (feature 026 FR-006, FR-007).
-    ///
-    /// **Sets** the mode rather than toggling it, which is FR-007: pressing the AI tab while the AI
-    /// CLI is already displayed must be a no-op with no visible change, and a flipping message
-    /// would switch away. Carries the session explicitly, for the same reason
-    /// `ShellInstanceSelected` does.
-    TerminalAiCliSelected(SessionId),
-    /// A Regular Terminal instance reported it is running (feature 011; replaces feature 010's
-    /// `ShellSessionRunning(SessionId)`, now id-addressed since a session may have more than one
-    /// instance).
-    ///
-    /// **Emitted nowhere in production**, like [`Self::SessionRunning`]. The daemon owns this
-    /// transition and publishes it as `SessionSummary::live_shells`, which `reconcile_catalog`
-    /// adopts (`012` FR-008, BUG-003). Kept as the reducer's own `→ Running` edge, which feature
-    /// 023's FR-019 rule (a session reaching `Running` must not move the keyboard) is asserted
-    /// through.
-    ///
-    /// The older reason for keeping it — that it was the *only* lever `tests/` had, because
-    /// `reconcile_catalog` sat in the binary crate — no longer holds: the fold now lives in
-    /// [`crate::catalog_sync`] and `crates/micold-daemon/tests/catalog_join.rs` drives the real
-    /// daemon → wire → client path. That is the coverage this variant was standing in for, and
-    /// standing in badly: it let `012` BUG-003 ship an incomplete fix.
-    ShellInstanceRunning(SessionId, ShellInstanceId),
-    /// A Regular Terminal instance's shell process exited (intentional or crash) — never
-    /// auto-restarted (FR-008; replaces feature 010's `ShellSessionExited(SessionId)`).
-    ///
-    /// Emitted nowhere in production, for the same reason and with the same caveat as
-    /// [`Self::ShellInstanceRunning`] above.
-    ShellInstanceExited(SessionId, ShellInstanceId),
-
-    /// Periodic redraw tick while a terminal is live (drives streamed-output repaint).
-    TerminalTick,
     /// The OS window gained (`true`) or lost (`false`) input focus. Handled by the binary,
     /// which gates the terminal/OS-theme poll subscriptions on it so a backgrounded window
     /// doesn't keep burning CPU on ticks nothing is looking at (idle-CPU fix).
     WindowFocusChanged(bool),
-
-    // ---- Feature 006: real terminal behavior ----
-    /// The terminal pane gained input focus (explicit click/action) (FR-010).
-    TerminalFocused,
-    /// Focus was released back to the app (reserved chord / click-outside / affordance) (FR-011).
-    TerminalFocusReleased,
-    /// Bytes to write to the focused session's PTY (from `keymap::encode` / paste). The binary
-    /// writes them only when the session is Running (FR-008, FR-012a).
-    TerminalBytes(Vec<u8>),
-    /// Begin a text selection at a viewport grid cell (feature 006 mouse, FR-013/FR-013b).
-    TerminalSelectStart {
-        col: u16,
-        line: u16,
-        kind: SelectKind,
-    },
-    /// Extend the in-progress text selection to a viewport grid cell (FR-013).
-    TerminalSelectUpdate { col: u16, line: u16 },
-    /// Clear the current text selection.
-    TerminalSelectCleared,
-    /// Scroll the displayed terminal by N lines (+ up into scrollback) (FR-016).
-    TerminalScrolled(i32),
-    /// Scroll the displayed terminal to an absolute scrollback offset (0 = live bottom) (FR-016).
-    /// Used by the scrollbar drag: the delta is resolved against the live offset at apply time, so
-    /// batched drag events set the target instead of accumulating relative deltas (drag flicker).
-    TerminalScrolledTo(usize),
-    /// The terminal pane's visible size changed; resize the PTY + grid (FR-014, FR-015).
-    TerminalResized { cols: u16, rows: u16 },
-    /// Copy the current terminal selection to the clipboard (binary handles clipboard) (FR-013).
-    TerminalCopyRequested,
-    /// Paste clipboard text into the focused session's PTY (binary handles clipboard) (FR-013).
-    TerminalPasteRequested,
-    /// Open the terminal right-click context menu at a pane-local pixel point (FR-013).
-    TerminalContextMenuOpened { x: u16, y: u16 },
-    /// Dismiss the terminal context menu (an outside click, or after an item is chosen) (FR-013).
-    TerminalContextMenuClosed,
 
     // ---- Global notification surface ----
     /// What happens to the notification on screen (feature 028, FR-001). Two variants moved behind
@@ -685,11 +518,9 @@ impl State {
                 let outcomes = crate::features::sidebar::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::TabStripScrolled { offset, width } => {
-                crate::features::session::tab_strip_scrolled(self, offset, width)
-            }
-            Message::TabStripViewportResized { width } => {
-                crate::features::session::tab_strip_viewport_resized(self, width)
+            Message::Session(msg) => {
+                let outcomes = crate::features::session::update(self, msg);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ScrolledBeneathOverlay => self.dismiss_on_scroll_beneath(),
             Message::EscapePressed => self.dismiss_topmost(),
@@ -697,125 +528,14 @@ impl State {
                 let outcomes = crate::features::worktree_form::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::SessionStarted(session) => {
-                let outcomes = crate::features::session::started(self, session);
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::SessionSelected(id) => {
-                let outcomes = crate::features::session::selected(self, id);
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::SessionRunning(id) => crate::features::session::running(self, id),
-            Message::SessionTitleUpdated { id, title } => {
-                crate::features::session::title_updated(self, id, title)
-            }
-            Message::TerminalAiCliSelected(id) => {
-                let outcomes = crate::features::session::ai_cli_selected(self, id);
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::TerminalRestartRequested => {
-                // No pure state to update here — the binary decides which process to spawn based on
-                // the current mode. For an AI-CLI session the daemon owns the lifecycle and
-                // announces `Running` in the catalog snapshot once the process exists (FR-006d,
-                // `010` BUG-011); `reconcile_catalog` adopts it. This comment used to claim a
-                // follow-up `SessionRunning` message, which is emitted nowhere — believing it cost
-                // BUG-011 a round of investigation, because it made a state bug look like a
-                // transport one.
-            }
-            Message::ShellInstanceOpenRequested => {
-                // No session state to update here — the binary decides whether the active session
-                // is in Regular mode, opens the instance (`Session::open_shell_instance`), and
-                // spawns its process. The daemon then reports it in `SessionSummary::live_shells`
-                // and `reconcile_catalog` marks it running (`012` FR-008, BUG-003); this used to
-                // claim a follow-up `ShellInstanceRunning` message, which is emitted nowhere and
-                // is why every instance sat at `NotStarted` for its whole life.
-                // The new instance is what the user will be looking at, so it holds the keyboard
-                // (FR-011) and is scrolled into view (026 FR-002d) — see
-                // `session::shell_instance_open_requested` for why the second half was missing
-                // until feature 027 put the "+" beside the strip it fills.
-                let outcomes = crate::features::session::shell_instance_open_requested(self);
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::ShellInstanceSelected(id, shell_id) => {
-                let outcomes = crate::features::session::shell_instance_selected(self, id, shell_id);
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::ShellInstanceCloseRequested(id, shell_id) => {
-                let outcomes =
-                    crate::features::session::shell_instance_close_requested(self, id, shell_id);
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::ShellInstanceRestartRequested(..) => {
-                // No pure state to update here — the binary spawns the process, and the daemon's
-                // next snapshot reports the instance live (`012` FR-008, BUG-003). Mirrors
-                // `TerminalRestartRequested`, including that neither emits a follow-up message.
-            }
-            Message::ShellInstanceRunning(session_id, shell_id) => {
-                crate::features::session::shell_instance_running(self, session_id, shell_id)
-            }
-            Message::ShellInstanceExited(session_id, shell_id) => {
-                crate::features::session::shell_instance_exited(self, session_id, shell_id)
-            }
-            Message::SessionCloseRequested(id) => {
-                let outcomes = crate::features::session::close_requested(self, id);
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::SessionMenuToggled(id, anchor) => {
-                crate::features::session::menu_toggled(self, id, anchor)
-            }
-            Message::SessionMenuDismissed => crate::features::session::menu_dismissed(self),
-            Message::SessionRemoveRequested(id) => crate::features::session::remove_requested(self, id),
-            Message::SessionRemoveConfirmed => {
-                let outcomes = crate::features::session::remove_confirmed(self);
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::SessionRemoveCancelled => crate::features::session::remove_cancelled(self),
-            Message::TerminalTick => {}
-            // The handle only speaks while it is being dragged, so there is no flag to consult:
-            // an arriving width *is* the drag. Clamped here — how wide the sidebar may be is the
-            // application's decision, not the edge's.
-
-            // ---- Feature 006 ----
-            Message::TerminalFocused => {
-                let outcomes = self.focus_terminal();
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::TerminalFocusReleased => {
-                self.release_terminal();
-            }
-            Message::TerminalContextMenuOpened { x, y } => {
-                crate::features::session::context_menu_opened(self, x, y)
-            }
-            Message::TerminalContextMenuClosed => crate::features::session::context_menu_closed(self),
-            Message::StripTabMenuRequested(tab, x, y) => {
-                crate::features::session::strip_tab_menu_requested(self, tab, x, y)
-            }
-            Message::ShellInstanceMenuClosed => {
-                crate::features::session::shell_instance_menu_closed(self)
-            }
             Message::Notifications(msg) => {
                 let outcomes = crate::features::notifications::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
 
-            // Performed by the binary at the I/O boundary (needs the home directory + a
-            // scan task, a FolderScanner, git, persistence, or PTY spawning); no pure
-            // reducer effect.
-            Message::SessionStartRequested { .. }
-            // Feature 006: applied to the live terminal by the binary (PTY write/scroll/resize,
-            // clipboard); no pure reducer effect.
-            | Message::TerminalBytes(_)
-            | Message::TerminalSelectStart { .. }
-            | Message::TerminalSelectUpdate { .. }
-            | Message::TerminalSelectCleared
-            | Message::TerminalScrolled(_)
-            | Message::TerminalScrolledTo(_)
-            | Message::TerminalResized { .. }
-            | Message::TerminalCopyRequested
-            | Message::TerminalPasteRequested
             // The closing dialog's snapshot is a binary-owned render detail (`App::dismissing`),
             // so releasing it is the binary's business; the pure core never knew about it.
-            | Message::OverlayTransitionFinished
+            Message::OverlayTransitionFinished
             // Focus state is tracked by the binary (gui runtime), not the pure core.
             | Message::WindowFocusChanged(_) => {}
         }

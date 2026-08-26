@@ -2,10 +2,11 @@
 //! provider's session name (FR-011a, SC-009).
 //!
 //! Exercises the real read path (`ClaudeProvider::read_title` over a temp transcript file)
-//! wired to the pure reducer (`Message::SessionTitleUpdated` → `set_title`), headlessly — no
+//! wired to the pure reducer (`Message::Session(SessionMsg::TitleUpdated)` → `set_title`), headlessly — no
 //! `claude`, no GUI. This is the behaviour the main-loop terminal poll drives at runtime.
 
 use micold_client::app::{Message, State};
+use micold_client::features::session::Msg as SessionMsg;
 use micold_core::project::{Availability, Project};
 use micold_core::provider::{AiCliProvider, ClaudeProvider};
 use micold_core::session::{Session, SessionLocation};
@@ -28,7 +29,7 @@ fn sync_once(state: &mut State, config_dir: &Path, project: &Path) {
         }
     }
     for (id, title) in updates {
-        state.update(Message::SessionTitleUpdated { id, title });
+        state.update(Message::Session(SessionMsg::TitleUpdated { id, title }));
     }
 }
 
@@ -42,7 +43,7 @@ fn state_with_active_session(project: &Path, worktree_dir: &str) -> (State, Sess
     });
     state.workspace.active = Some(project.to_path_buf());
     let session = Session::start_new(SessionLocation::Worktree(worktree_dir.to_string()));
-    state.update(Message::SessionStarted(session.clone()));
+    state.update(Message::Session(SessionMsg::Started(session.clone())));
     (state, session)
 }
 

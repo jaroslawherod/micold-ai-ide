@@ -27,6 +27,7 @@
 use micold_client::app::{Message, State};
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::ui::terminal::StripTab;
@@ -79,11 +80,15 @@ fn opener(id: &str) -> Message {
         "sidebar_filter" => Message::Sidebar(SidebarMsg::FilterMenuToggled),
         "project_menu" => Message::Project(ProjectMsg::MenuToggled(PathBuf::from("/a"), (10, 10))),
         "worktree_menu" => Message::Worktree(WorktreeMsg::MenuToggled("w1".into(), (20, 20))),
-        "session_menu" => Message::SessionMenuToggled(SessionId::new(), (30, 30)),
-        "terminal_context_menu" => Message::TerminalContextMenuOpened { x: 10, y: 20 },
-        "shell_instance_menu" => {
-            Message::StripTabMenuRequested(StripTab::Instance(ShellInstanceId(1)), 30, 40)
+        "session_menu" => Message::Session(SessionMsg::MenuToggled(SessionId::new(), (30, 30))),
+        "terminal_context_menu" => {
+            Message::Session(SessionMsg::TerminalContextMenuOpened { x: 10, y: 20 })
         }
+        "shell_instance_menu" => Message::Session(SessionMsg::StripTabMenuRequested(
+            StripTab::Instance(ShellInstanceId(1)),
+            30,
+            40,
+        )),
         other => panic!("no opener for `{other}`"),
     }
 }
@@ -173,7 +178,10 @@ fn toggling_a_popover_shut_displaces_nothing() {
     st.update(Message::Help(HelpMsg::MenuToggled));
     assert_eq!(open_popovers(&st), Vec::<&str>::new());
 
-    st.update(Message::SessionMenuToggled(SessionId::new(), (30, 30)));
+    st.update(Message::Session(SessionMsg::MenuToggled(
+        SessionId::new(),
+        (30, 30),
+    )));
     st.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "w1".into(),
         (20, 20),

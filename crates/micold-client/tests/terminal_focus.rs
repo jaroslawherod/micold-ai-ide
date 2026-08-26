@@ -16,6 +16,7 @@
 use micold_client::app::{route_key, KeyRouting, State};
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::window::Msg as WindowMsg;
@@ -101,12 +102,12 @@ fn focus_toggles_via_messages() {
     // A session has to be displayed first: since feature 023 the predicate names `active_session`,
     // so "focused with nothing on screen" is not a state that can be reached (FR-020).
     let mut s = State::default();
-    s.update(Message::SessionStarted(Session::start_new(
+    s.update(Message::Session(SessionMsg::Started(Session::start_new(
         SessionLocation::Worktree("feat-x".to_string()),
-    )));
-    s.update(Message::TerminalFocused);
+    ))));
+    s.update(Message::Session(SessionMsg::TerminalFocused));
     assert!(s.terminal_focused());
-    s.update(Message::TerminalFocusReleased);
+    s.update(Message::Session(SessionMsg::TerminalFocusReleased));
     assert!(!s.terminal_focused());
 }
 
@@ -118,13 +119,16 @@ fn context_menu_opens_at_a_point_and_dismisses() {
         s.terminal_context_menu, None,
         "the terminal context menu starts closed (FR-013)"
     );
-    s.update(Message::TerminalContextMenuOpened { x: 48, y: 16 });
+    s.update(Message::Session(SessionMsg::TerminalContextMenuOpened {
+        x: 48,
+        y: 16,
+    }));
     assert_eq!(
         s.terminal_context_menu,
         Some((48, 16)),
         "right-click opens the context menu anchored at the clicked point"
     );
-    s.update(Message::TerminalContextMenuClosed);
+    s.update(Message::Session(SessionMsg::TerminalContextMenuClosed));
     assert_eq!(
         s.terminal_context_menu, None,
         "an outside click or a chosen item closes the context menu"
@@ -140,7 +144,7 @@ fn selecting_a_session_focuses_its_terminal() {
     let mut s = State::default();
     assert!(!s.terminal_focused(), "precondition: starts unfocused");
     let id = Session::start_new(SessionLocation::Worktree("feat-x".to_string())).id;
-    s.update(Message::SessionSelected(id));
+    s.update(Message::Session(SessionMsg::Selected(id)));
     assert!(
         s.terminal_focused(),
         "selecting a session must auto-focus its terminal (BUG-001, FR-010/FR-010a)"
@@ -153,9 +157,9 @@ fn starting_a_session_focuses_its_terminal() {
     use micold_client::app::Message;
     use micold_core::session::Session;
     let mut s = State::default();
-    s.update(Message::SessionStarted(Session::start_new(
+    s.update(Message::Session(SessionMsg::Started(Session::start_new(
         SessionLocation::Worktree("feat-x".to_string()),
-    )));
+    ))));
     assert!(
         s.terminal_focused(),
         "starting a session must auto-focus its terminal (BUG-001, FR-010/FR-010a)"
@@ -167,11 +171,11 @@ fn releasing_focus_after_auto_focus_still_works() {
     use micold_client::app::Message;
     use micold_core::session::Session;
     let mut s = State::default();
-    s.update(Message::SessionSelected(
+    s.update(Message::Session(SessionMsg::Selected(
         Session::start_new(SessionLocation::Worktree("feat-x".to_string())).id,
-    ));
+    )));
     assert!(s.terminal_focused());
-    s.update(Message::TerminalFocusReleased);
+    s.update(Message::Session(SessionMsg::TerminalFocusReleased));
     assert!(
         !s.terminal_focused(),
         "release must still return focus to the app after auto-focus (FR-011)"
@@ -185,9 +189,9 @@ fn closing_the_displayed_session_clears_focus() {
     let mut s = State::default();
     let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
     let id = session.id;
-    s.update(Message::SessionStarted(session));
+    s.update(Message::Session(SessionMsg::Started(session)));
     assert!(s.terminal_focused());
-    s.update(Message::SessionCloseRequested(id));
+    s.update(Message::Session(SessionMsg::CloseRequested(id)));
     assert!(
         !s.terminal_focused(),
         "closing the displayed session leaves no terminal to focus (focus-model.md BUG-001)"
@@ -239,9 +243,9 @@ fn the_current_session_is_marked_whether_or_not_its_terminal_has_focus() {
     // driving the messages rather than by assigning a field.
     for focused in [true, false] {
         state.update(if focused {
-            Message::TerminalFocused
+            Message::Session(SessionMsg::TerminalFocused)
         } else {
-            Message::TerminalFocusReleased
+            Message::Session(SessionMsg::TerminalFocusReleased)
         });
         assert_eq!(
             state.terminal_focused(),
@@ -313,9 +317,9 @@ use micold_core::session::Session;
 /// A state showing one session's terminal, with nothing else claiming the keyboard.
 fn showing_a_terminal() -> State {
     let mut s = State::default();
-    s.update(Message::SessionStarted(Session::start_new(
+    s.update(Message::Session(SessionMsg::Started(Session::start_new(
         SessionLocation::Worktree("feat-x".to_string()),
-    )));
+    ))));
     s
 }
 
@@ -340,7 +344,7 @@ fn no_displayed_session_means_no_terminal_holds_the_keyboard() {
 #[test]
 fn an_explicit_release_outranks_the_default() {
     let mut s = showing_a_terminal();
-    s.update(Message::TerminalFocusReleased);
+    s.update(Message::Session(SessionMsg::TerminalFocusReleased));
     assert!(
         !s.terminal_focused(),
         "an explicit release holds until given back or navigated away from (FR-021)"
@@ -375,8 +379,8 @@ fn only_the_displayed_sessions_terminal_is_eligible() {
     let mut s = State::default();
     let first = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
     let second = Session::start_new(SessionLocation::Worktree("feat-y".to_string()));
-    s.update(Message::SessionStarted(first));
-    s.update(Message::SessionStarted(second));
+    s.update(Message::Session(SessionMsg::Started(first)));
+    s.update(Message::Session(SessionMsg::Started(second)));
     assert!(
         s.terminal_focused(),
         "precondition: the second one is displayed"
@@ -401,7 +405,7 @@ fn pressing_the_pane_wins_over_a_field_that_held_the_keyboard() {
     )));
     assert!(!s.terminal_focused(), "precondition: the field has it");
 
-    s.update(Message::TerminalFocused);
+    s.update(Message::Session(SessionMsg::TerminalFocused));
     assert!(
         s.terminal_focused(),
         "a press on the pane takes the keyboard from a field on that press (FR-008b)"
@@ -421,7 +425,7 @@ fn a_late_blur_after_a_pane_press_is_a_no_op() {
         FieldId::RenameProjectName,
         true,
     )));
-    s.update(Message::TerminalFocused);
+    s.update(Message::Session(SessionMsg::TerminalFocused));
     s.update(Message::Window(WindowMsg::FieldFocusChanged(
         FieldId::RenameProjectName,
         false,
@@ -443,7 +447,7 @@ fn window_focus_changes_no_focus_term() {
     for released in [false, true] {
         let mut s = showing_a_terminal();
         if released {
-            s.update(Message::TerminalFocusReleased);
+            s.update(Message::Session(SessionMsg::TerminalFocusReleased));
         }
         let before = (
             s.terminal_focused(),
@@ -474,7 +478,7 @@ fn a_release_survives_leaving_the_window() {
     // The half that a "restore the terminal on return" rule would get wrong: the user handed the
     // keyboard back on purpose, and coming back is not a request to undo that (FR-015, FR-021).
     let mut s = showing_a_terminal();
-    s.update(Message::TerminalFocusReleased);
+    s.update(Message::Session(SessionMsg::TerminalFocusReleased));
     s.update(Message::WindowFocusChanged(false));
     s.update(Message::WindowFocusChanged(true));
     assert!(
@@ -516,42 +520,52 @@ fn every_navigation_to_a_terminal_clears_a_release() {
         (
             "SessionStarted",
             Box::new(|_: &State| {
-                Message::SessionStarted(Session::start_new(SessionLocation::Worktree(
-                    "feat-y".to_string(),
+                Message::Session(SessionMsg::Started(Session::start_new(
+                    SessionLocation::Worktree("feat-y".to_string()),
                 )))
             }),
         ),
         (
             "SessionSelected",
-            Box::new(|s: &State| Message::SessionSelected(s.active_session.expect("displayed"))),
+            Box::new(|s: &State| {
+                Message::Session(SessionMsg::Selected(s.active_session.expect("displayed")))
+            }),
         ),
         (
             "TerminalAiCliSelected",
             Box::new(|s: &State| {
-                Message::TerminalAiCliSelected(s.active_session.expect("displayed"))
+                Message::Session(SessionMsg::TerminalAiCliSelected(
+                    s.active_session.expect("displayed"),
+                ))
             }),
         ),
         (
             "ShellInstanceOpenRequested",
-            Box::new(|_: &State| Message::ShellInstanceOpenRequested),
+            Box::new(|_: &State| Message::Session(SessionMsg::ShellInstanceOpenRequested)),
         ),
         (
             "ShellInstanceSelected",
             Box::new(move |s: &State| {
-                Message::ShellInstanceSelected(s.active_session.expect("displayed"), shell)
+                Message::Session(SessionMsg::ShellInstanceSelected(
+                    s.active_session.expect("displayed"),
+                    shell,
+                ))
             }),
         ),
         (
             "ShellInstanceCloseRequested",
             Box::new(move |s: &State| {
-                Message::ShellInstanceCloseRequested(s.active_session.expect("displayed"), shell)
+                Message::Session(SessionMsg::ShellInstanceCloseRequested(
+                    s.active_session.expect("displayed"),
+                    shell,
+                ))
             }),
         ),
     ];
 
     for (name, build) in navigations {
         let mut s = showing_a_terminal();
-        s.update(Message::TerminalFocusReleased);
+        s.update(Message::Session(SessionMsg::TerminalFocusReleased));
         assert!(!s.terminal_focused(), "{name}: precondition — released");
 
         let message = build(&s);
@@ -650,7 +664,7 @@ fn a_release_outranks_a_closing_surface() {
     // quietly undo that (FR-010's exception, FR-021).
     for (name, open, close) in keyboard_taking_surfaces() {
         let mut s = showing_a_terminal();
-        s.update(Message::TerminalFocusReleased);
+        s.update(Message::Session(SessionMsg::TerminalFocusReleased));
         s.update(open);
         s.update(close);
         assert!(
@@ -667,12 +681,15 @@ fn the_terminals_own_context_menu_is_furniture() {
     // would mean a right-click stops the user typing. Deliberately *not* a term of the predicate
     // (research R4) — and the one exclusion, which is why it is asserted rather than assumed.
     let mut s = showing_a_terminal();
-    s.update(Message::TerminalContextMenuOpened { x: 10, y: 4 });
+    s.update(Message::Session(SessionMsg::TerminalContextMenuOpened {
+        x: 10,
+        y: 4,
+    }));
     assert!(
         s.terminal_focused(),
         "the terminal keeps the keyboard while its own context menu is open (FR-007)"
     );
-    s.update(Message::TerminalContextMenuClosed);
+    s.update(Message::Session(SessionMsg::TerminalContextMenuClosed));
     assert!(s.terminal_focused());
 }
 
@@ -689,13 +706,13 @@ fn output_and_lifecycle_never_change_the_holder() {
 
     let other = Session::start_new(SessionLocation::Worktree("noisy".to_string()));
     let other_id = other.id;
-    s.update(Message::SessionStarted(other));
+    s.update(Message::Session(SessionMsg::Started(other)));
     s.update(Message::Window(WindowMsg::FieldFocusChanged(
         FieldId::AddWorktreeName,
         true,
     )));
-    s.update(Message::SessionRunning(other_id));
-    s.update(Message::TerminalTick);
+    s.update(Message::Session(SessionMsg::Running(other_id)));
+    s.update(Message::Session(SessionMsg::TerminalTick));
 
     assert_eq!(
         s.terminal_focused(),

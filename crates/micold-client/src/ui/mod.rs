@@ -43,6 +43,7 @@ use crate::features::connection::Msg as ConnectionMsg;
 use crate::features::help::Msg as HelpMsg;
 use crate::features::notifications::Msg as NotificationsMsg;
 use crate::features::project::Msg as ProjectMsg;
+use crate::features::session::Msg as SessionMsg;
 use crate::features::sidebar::Msg as SidebarMsg;
 use crate::features::worktree::Msg as WorktreeMsg;
 use crate::icons::{icon_role, Icon, IconSurface};
@@ -346,7 +347,7 @@ pub fn view<'a>(
                 material::menu_panel_size(items.len()),
                 state.window_size,
             );
-            material::MenuOverlay::new(items, Message::SessionMenuDismissed, roles)
+            material::MenuOverlay::new(items, Message::Session(SessionMsg::MenuDismissed), roles)
                 .anchor(iced::Point::new(x as f32, y as f32))
                 .into()
         });
@@ -375,16 +376,21 @@ pub fn view<'a>(
                 return None;
             }
             Some(
-                material::ContextMenu::new(items, (x, y), Message::ShellInstanceMenuClosed, roles)
-                    // Upward, from the bar's top edge rather than down from the press point: the tab
-                    // strip lives in the terminal's bottom bar, so a panel hung below the cursor has
-                    // the bar's remaining height to open into and is cut off by the window. The
-                    // press y is still what the primitive reports and still says which control was
-                    // pressed; it is the x that places the panel here. `app_bar::HEIGHT` is that bar's
-                    // height — §7.1's figure, read rather than restated (BUG-003's lesson, one bar
-                    // over).
-                    .rising_above(anatomy::app_bar::HEIGHT)
-                    .into(),
+                material::ContextMenu::new(
+                    items,
+                    (x, y),
+                    Message::Session(SessionMsg::ShellInstanceMenuClosed),
+                    roles,
+                )
+                // Upward, from the bar's top edge rather than down from the press point: the tab
+                // strip lives in the terminal's bottom bar, so a panel hung below the cursor has
+                // the bar's remaining height to open into and is cut off by the window. The
+                // press y is still what the primitive reports and still says which control was
+                // pressed; it is the x that places the panel here. `app_bar::HEIGHT` is that bar's
+                // height — §7.1's figure, read rather than restated (BUG-003's lesson, one bar
+                // over).
+                .rising_above(anatomy::app_bar::HEIGHT)
+                .into(),
             )
         });
 
@@ -547,16 +553,16 @@ fn strip_tab_menu_items(
             "Restart",
             match tab {
                 terminal::StripTab::Instance(instance) => {
-                    Message::ShellInstanceRestartRequested(session, instance)
+                    Message::Session(SessionMsg::ShellInstanceRestartRequested(session, instance))
                 }
-                terminal::StripTab::Ai => Message::TerminalRestartRequested,
+                terminal::StripTab::Ai => Message::Session(SessionMsg::TerminalRestartRequested),
             },
         ));
     }
     if let terminal::StripTab::Instance(instance) = tab {
         items.push(material::MenuItem::labeled(
             "Close",
-            Message::ShellInstanceCloseRequested(session, instance),
+            Message::Session(SessionMsg::ShellInstanceCloseRequested(session, instance)),
         ));
     }
     items
@@ -588,11 +594,15 @@ pub(crate) fn strip_tab_menu_labels(
 /// behind a confirm dialog (FR-015c).
 fn session_menu_items(id: SessionId) -> Vec<material::MenuItem<Message>> {
     vec![
-        material::MenuItem::new(Icon::Close, "Close", Message::SessionCloseRequested(id)),
+        material::MenuItem::new(
+            Icon::Close,
+            "Close",
+            Message::Session(SessionMsg::CloseRequested(id)),
+        ),
         material::MenuItem::new(
             Icon::Unavailable,
             "Remove",
-            Message::SessionRemoveRequested(id),
+            Message::Session(SessionMsg::RemoveRequested(id)),
         ),
     ]
 }

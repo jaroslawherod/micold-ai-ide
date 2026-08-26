@@ -14,7 +14,7 @@
 //!
 //! # The one exemption
 //!
-//! `Message::SessionSelected` writes the field directly. The user clicked a row they could already
+//! `Message::Session(SessionMsg::Selected)` writes the field directly. The user clicked a row they could already
 //! see, so revealing it would open nothing they had not opened and scroll a list they were reading
 //! (FR-006). It is named here rather than inferred, so adding a second exemption is a deliberate
 //! edit to this file.

@@ -23,6 +23,7 @@
 use iced::Task;
 
 use micold_client::app::Message;
+use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::Outcome;
 use micold_client::selection;
@@ -66,15 +67,21 @@ pub fn selection_copy_request(app: &App) -> Option<Outcome> {
 
 /// Copy the current selection to the system clipboard (FR-013). Also closes the menu.
 pub fn on_copy_requested(app: &mut App) -> Task<Message> {
-    app.core.update(Message::TerminalContextMenuClosed);
+    app.core
+        .update(Message::Session(SessionMsg::TerminalContextMenuClosed));
     selection_copy_request(app).map_or_else(Task::none, interpret)
 }
 
 /// Paste the system clipboard into the displayed session's PTY (FR-013). The read is async;
 /// its result flows back through `TerminalBytes`, which honours the Running write-gate.
 pub fn on_paste_requested(app: &mut App) -> Task<Message> {
-    app.core.update(Message::TerminalContextMenuClosed);
-    iced::clipboard::read().map(|c| Message::TerminalBytes(c.unwrap_or_default().into_bytes()))
+    app.core
+        .update(Message::Session(SessionMsg::TerminalContextMenuClosed));
+    iced::clipboard::read().map(|c| {
+        Message::Session(SessionMsg::TerminalBytes(
+            c.unwrap_or_default().into_bytes(),
+        ))
+    })
 }
 
 /// Copy arbitrary displayed text (e.g. a worktree name) to the system clipboard, so

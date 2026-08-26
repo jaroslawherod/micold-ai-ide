@@ -19,6 +19,7 @@
 //! the kind of thing a refactor breaks quietly.
 
 use micold_client::app::State;
+use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::session::{ForegroundChoice, SelectKind};
 use micold_core::project::{Availability, Project};
 use micold_core::session::{Session, SessionId, SessionLocation};
@@ -122,7 +123,9 @@ fn a_switch_lands_on_a_terminal_ready_to_type() {
     // is a restored session's terminal. An explicit release made before the switch goes with it
     // (FR-021a): it was about the moment, not about the session.
     let (mut st, _, _) = two_projects(1, 1);
-    st.update(micold_client::app::Message::TerminalFocusReleased);
+    st.update(micold_client::app::Message::Session(
+        SessionMsg::TerminalFocusReleased,
+    ));
 
     assert!(st.switch_active(Path::new("/b")).is_some());
 

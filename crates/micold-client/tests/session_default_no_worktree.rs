@@ -1,9 +1,9 @@
 //! T010 (010-root-dir-session, FR-002) — starting a `SessionLocation::Default` session never
 //! creates, modifies, or removes a git worktree.
 //!
-//! `Message::SessionStartRequested` has no pure-reducer effect (`src/app.rs`) — it is an I/O
+//! `Message::Session(SessionMsg::StartRequested)` has no pure-reducer effect (`src/app.rs`) — it is an I/O
 //! trigger the binary (`src/main.rs`) consumes to spawn a PTY, then dispatches
-//! `Message::SessionStarted(session)` once it has succeeded. That handler is where a session
+//! `Message::Session(SessionMsg::Started(session))` once it has succeeded. That handler is where a session
 //! actually enters `State`, so it is the right boundary to assert against: dispatching it for a
 //! `Default` session must leave `state.worktrees` (the in-memory worktree list, sourced only
 //! from git discovery / `|a0| Message::WorktreeForm(Msg::Created(a0))`) byte-for-byte unchanged. A `FakeGit` with a
@@ -13,6 +13,7 @@
 //! is structurally incapable of calling `worktree_add_new_branch`/`worktree_remove`.
 
 use micold_client::app::{Message, State};
+use micold_client::features::session::Msg as SessionMsg;
 use micold_core::git::FakeGit;
 use micold_core::project::{Availability, Project};
 use micold_core::session::{Session, SessionLocation};
@@ -33,7 +34,7 @@ fn starting_a_default_session_leaves_worktrees_untouched() {
 
     let before = state.worktrees.clone();
     let session = Session::start_new(SessionLocation::Default);
-    state.update(Message::SessionStarted(session));
+    state.update(Message::Session(SessionMsg::Started(session)));
 
     assert_eq!(
         state.worktrees, before,

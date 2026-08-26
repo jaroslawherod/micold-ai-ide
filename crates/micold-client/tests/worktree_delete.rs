@@ -6,6 +6,7 @@
 //! process or repository (Constitution Principle I).
 
 use micold_client::app::{Message, State};
+use micold_client::features::session::Msg as SessionMsg;
 use micold_core::git::{FakeGit, Git, GitCli};
 use micold_core::project::{Availability, Project};
 use micold_core::provider::{AiCliProvider, ClaudeProvider};
@@ -53,8 +54,8 @@ fn confirm_removes_worktree_branch_and_kills_only_matching_sessions() {
         Session::start_new(SessionLocation::Worktree("feat-abc-123-x".to_string()));
     let other_session = Session::start_new(SessionLocation::Worktree("other".to_string()));
     let (target_id, other_id) = (target_session.id, other_session.id);
-    state.update(Message::SessionStarted(target_session));
-    state.update(Message::SessionStarted(other_session));
+    state.update(Message::Session(SessionMsg::Started(target_session)));
+    state.update(Message::Session(SessionMsg::Started(other_session)));
 
     // Stand in for the binary's live PTY handles.
     let mut handles: HashMap<_, FakeHandle> = HashMap::new();
@@ -117,8 +118,8 @@ fn confirmed_delete_marks_the_worktrees_sessions_archived_but_not_others() {
         Session::start_new(SessionLocation::Worktree("feat-abc-123-x".to_string()));
     let other_session = Session::start_new(SessionLocation::Worktree("other".to_string()));
     let (target_id, other_id) = (target_session.id, other_session.id);
-    state.update(Message::SessionStarted(target_session));
-    state.update(Message::SessionStarted(other_session));
+    state.update(Message::Session(SessionMsg::Started(target_session)));
+    state.update(Message::Session(SessionMsg::Started(other_session)));
 
     let mut handles: HashMap<_, FakeHandle> = HashMap::new();
     handles.insert(target_id, FakeHandle::default());
@@ -219,7 +220,7 @@ fn fr_023_failed_delete_leaves_its_sessions_running_and_unarchived() {
     state.worktrees = vec![wt("feat-locked", &repo)];
     let session = Session::start_new(SessionLocation::Worktree("feat-locked".to_string()));
     let session_id = session.id;
-    state.update(Message::SessionStarted(session));
+    state.update(Message::Session(SessionMsg::Started(session)));
 
     let mut handles: HashMap<_, FakeHandle> = HashMap::new();
     handles.insert(session_id, FakeHandle::default());

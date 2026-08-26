@@ -24,6 +24,7 @@ use iced::{Element, Rectangle, Size};
 
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
+use micold_client::features::session::Msg as SessionMsg;
 use micold_core::env_include::EnvIncludeOutcome;
 
 use support::layout::{self as lay, WINDOW};
@@ -74,7 +75,7 @@ fn first_frame_messages(state: &State) -> Vec<Message> {
 /// The reported grid, if the frame reported one.
 fn reported_grid(messages: &[Message]) -> Option<(u16, u16)> {
     messages.iter().find_map(|m| match m {
-        Message::TerminalResized { cols, rows } => Some((*cols, *rows)),
+        Message::Session(SessionMsg::TerminalResized { cols, rows }) => Some((*cols, *rows)),
         _ => None,
     })
 }

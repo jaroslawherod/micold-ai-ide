@@ -22,6 +22,7 @@
 
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::PathBuf;
@@ -205,7 +206,7 @@ fn escape_still_reaches_exactly_what_it_used_to() {
         (
             "confirm_session_remove",
             |s| s.session_remove_target = Some(SessionId::new()),
-            Message::SessionRemoveCancelled,
+            Message::Session(SessionMsg::RemoveCancelled),
         ),
         (
             "confirm_forget_project",

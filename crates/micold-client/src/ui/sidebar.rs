@@ -2,6 +2,7 @@
 //! shared [`tree_view`] primitive (FR-002, FR-003, Constitution Principle VIII).
 
 use crate::app::{Message, State};
+use crate::features::session::Msg as SessionMsg;
 use crate::features::sidebar::Msg as SidebarMsg;
 use crate::features::sidebar::TagFilter;
 use crate::features::worktree::Msg as WorktreeMsg;
@@ -383,9 +384,9 @@ fn row_actions_cluster(
         cluster = cluster.push(action_icon(
             Icon::AddSession,
             r.primary,
-            Message::SessionStartRequested {
+            Message::Session(SessionMsg::StartRequested {
                 location: SessionLocation::Worktree(dir.to_string()),
-            },
+            }),
             "Start a new session in this worktree",
             active,
             r,
@@ -520,15 +521,15 @@ fn session_tree_item(
         // the same width either way, so names stay aligned as signals change (FR-016f).
         .badge(ActivityBadge::<Message>::new(session.activity.clone(), r))
         .selected(selected)
-        .on_press(Message::SessionSelected(session.id))
+        .on_press(Message::Session(SessionMsg::Selected(session.id)))
         .on_right_press({
             // The id, copied out of the borrow: the closure outlives this `&Session`.
             let id = session.id;
-            move |point| Message::SessionMenuToggled(id, point)
+            move |point| Message::Session(SessionMsg::MenuToggled(id, point))
         })
         .trailing(
             Icon::Close,
-            Message::SessionCloseRequested(session.id),
+            Message::Session(SessionMsg::CloseRequested(session.id)),
             "Close this session",
         )
 }
@@ -553,9 +554,9 @@ fn build_default_item(
     let start_session = action_icon(
         Icon::AddSession,
         r.primary,
-        Message::SessionStartRequested {
+        Message::Session(SessionMsg::StartRequested {
             location: SessionLocation::Default,
-        },
+        }),
         "Start a new session in the project root",
         true,
         r,

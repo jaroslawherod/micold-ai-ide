@@ -1,6 +1,7 @@
 //! T011 — extended app base state: defaults + new message wiring (feature 005).
 
 use micold_client::app::{on_escape, Message, State};
+use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::window::FieldId;
@@ -349,7 +350,7 @@ fn session_started_selected_and_closed() {
 
     let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
     let id = session.id;
-    state.update(Message::SessionStarted(session));
+    state.update(Message::Session(SessionMsg::Started(session)));
     assert_eq!(state.active_session, Some(id));
     assert_eq!(state.active_sessions().len(), 1);
     assert!(state.expanded.contains("feat-x"));
@@ -357,16 +358,16 @@ fn session_started_selected_and_closed() {
     // derived from which session is current, and the line above is the user's own set.
     assert!(state.location_open(&SessionLocation::Worktree("feat-x".to_string())));
 
-    state.update(Message::SessionRunning(id));
+    state.update(Message::Session(SessionMsg::Running(id)));
     assert!(state.active_sessions()[0].is_active());
 
-    state.update(Message::SessionTitleUpdated {
+    state.update(Message::Session(SessionMsg::TitleUpdated {
         id,
         title: "Titled".to_string(),
-    });
+    }));
     assert_eq!(state.active_sessions()[0].label.display(), "Titled");
 
-    state.update(Message::SessionCloseRequested(id));
+    state.update(Message::Session(SessionMsg::CloseRequested(id)));
     assert!(state.active_session.is_none());
     // Bugfix BUG-003 (FR-015a): close archives the record (kept, not deleted) so a still-existing
     // `claude` transcript isn't reconstructed by reconciliation later — it just stops appearing
@@ -381,7 +382,7 @@ fn session_started_selected_and_closed() {
 }
 
 // T015 (010-root-dir-session): a Default-located session enters `Workspace.sessions` exactly
-// like a worktree session. Note: `Message::SessionStartRequested` itself has no pure-reducer
+// like a worktree session. Note: `Message::Session(SessionMsg::StartRequested)` itself has no pure-reducer
 // effect for ANY location (it's an I/O trigger the binary consumes to spawn a PTY before
 // dispatching `SessionStarted` — see `src/app.rs`'s `on_escape`-adjacent no-op arm list); the
 // pure-core assertion point is `SessionStarted`, exercised identically to the existing
@@ -400,7 +401,7 @@ fn default_session_started_enters_workspace_sessions() {
 
     let session = Session::start_new(SessionLocation::Default);
     let id = session.id;
-    state.update(Message::SessionStarted(session));
+    state.update(Message::Session(SessionMsg::Started(session)));
 
     assert_eq!(state.active_session, Some(id));
     assert_eq!(state.active_sessions().len(), 1);
@@ -435,7 +436,7 @@ fn state_with_worktree_and_session(dir: &str) -> State {
         included: false,
     });
     let session = Session::start_new(SessionLocation::Worktree(dir.to_string()));
-    state.update(Message::SessionStarted(session));
+    state.update(Message::Session(SessionMsg::Started(session)));
     state
 }
 
@@ -768,10 +769,12 @@ fn selecting_a_terminal_tab_shows_that_terminal() {
         .1
         .open_shell_instance();
     // The precondition that makes this a test rather than a tautology: the AI pane is showing.
-    state.update(Message::TerminalAiCliSelected(id));
+    state.update(Message::Session(SessionMsg::TerminalAiCliSelected(id)));
     assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
 
-    state.update(Message::ShellInstanceSelected(id, shell));
+    state.update(Message::Session(SessionMsg::ShellInstanceSelected(
+        id, shell,
+    )));
 
     assert_eq!(
         state.active_sessions()[0].mode,
@@ -797,10 +800,12 @@ fn the_two_kinds_of_tab_move_the_session_between_its_panes() {
         .open_shell_instance();
     assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
 
-    state.update(Message::ShellInstanceSelected(id, shell));
+    state.update(Message::Session(SessionMsg::ShellInstanceSelected(
+        id, shell,
+    )));
     assert_eq!(state.active_sessions()[0].mode, TerminalMode::Regular);
 
-    state.update(Message::TerminalAiCliSelected(id));
+    state.update(Message::Session(SessionMsg::TerminalAiCliSelected(id)));
     assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
 }
 
@@ -817,13 +822,17 @@ fn shell_instance_running_and_exited_update_that_instances_lifecycle() {
         .1
         .open_shell_instance();
 
-    state.update(Message::ShellInstanceRunning(id, shell_id));
+    state.update(Message::Session(SessionMsg::ShellInstanceRunning(
+        id, shell_id,
+    )));
     assert_eq!(
         state.active_sessions()[0].active_shell_lifecycle(),
         Some(ShellLifecycle::Running)
     );
 
-    state.update(Message::ShellInstanceExited(id, shell_id));
+    state.update(Message::Session(SessionMsg::ShellInstanceExited(
+        id, shell_id,
+    )));
     assert_eq!(
         state.active_sessions()[0].active_shell_lifecycle(),
         Some(ShellLifecycle::Exited)
@@ -850,11 +859,11 @@ fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
     // which is the case under test.
     assert_eq!(state.active_sessions()[0].active_shell, Some(active));
 
-    state.update(Message::StripTabMenuRequested(
+    state.update(Message::Session(SessionMsg::StripTabMenuRequested(
         StripTab::Instance(background),
         742,
         761,
-    ));
+    )));
     assert_eq!(
         state.shell_instance_menu,
         Some((StripTab::Instance(background), 742, 761)),
@@ -863,17 +872,17 @@ fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
 
     // Opening another tab's menu moves the one menu rather than stacking a second: two open menus
     // would each claim the next click, and only one of them would be the one the user is looking at.
-    state.update(Message::StripTabMenuRequested(
+    state.update(Message::Session(SessionMsg::StripTabMenuRequested(
         StripTab::Instance(active),
         880,
         761,
-    ));
+    )));
     assert_eq!(
         state.shell_instance_menu,
         Some((StripTab::Instance(active), 880, 761))
     );
 
-    state.update(Message::ShellInstanceMenuClosed);
+    state.update(Message::Session(SessionMsg::ShellInstanceMenuClosed));
     assert_eq!(state.shell_instance_menu, None);
 }
 
@@ -897,7 +906,7 @@ fn pressing_the_ai_tab_shows_the_ai_cli_and_disturbs_nothing() {
     let before = state.active_sessions()[0].clone();
     assert_eq!(before.mode, TerminalMode::Regular);
 
-    state.update(Message::TerminalAiCliSelected(id));
+    state.update(Message::Session(SessionMsg::TerminalAiCliSelected(id)));
     let after = &state.active_sessions()[0];
     assert_eq!(
         after.mode,
@@ -926,7 +935,7 @@ fn pressing_the_ai_tab_shows_the_ai_cli_and_disturbs_nothing() {
 
     // FR-007: pressing it again, while it is already what the pane shows, changes nothing at all.
     let displayed = state.active_sessions()[0].clone();
-    state.update(Message::TerminalAiCliSelected(id));
+    state.update(Message::Session(SessionMsg::TerminalAiCliSelected(id)));
     let again = &state.active_sessions()[0];
     assert_eq!(again.mode, displayed.mode);
     assert_eq!(again.lifecycle, displayed.lifecycle);
@@ -950,11 +959,11 @@ fn the_tab_menu_records_which_tab_including_the_ai_one() {
         .1
         .open_shell_instance();
 
-    state.update(Message::StripTabMenuRequested(
+    state.update(Message::Session(SessionMsg::StripTabMenuRequested(
         StripTab::Instance(shell),
         742,
         761,
-    ));
+    )));
     assert_eq!(
         state.shell_instance_menu,
         Some((StripTab::Instance(shell), 742, 761))
@@ -962,14 +971,18 @@ fn the_tab_menu_records_which_tab_including_the_ai_one() {
 
     // Opening the AI tab's menu **replaces** the instance's rather than stacking a second: two open
     // menus would each claim the next click, and only one is the one the user is looking at.
-    state.update(Message::StripTabMenuRequested(StripTab::Ai, 880, 761));
+    state.update(Message::Session(SessionMsg::StripTabMenuRequested(
+        StripTab::Ai,
+        880,
+        761,
+    )));
     assert_eq!(
         state.shell_instance_menu,
         Some((StripTab::Ai, 880, 761)),
         "the AI tab's menu is the same surface, moved — not a second one beside it"
     );
 
-    state.update(Message::ShellInstanceMenuClosed);
+    state.update(Message::Session(SessionMsg::ShellInstanceMenuClosed));
     assert_eq!(state.shell_instance_menu, None);
 }
 
@@ -989,11 +1002,11 @@ fn the_tab_menu_closes_when_a_dialog_opens() {
         .1
         .open_shell_instance();
 
-    state.update(Message::StripTabMenuRequested(
+    state.update(Message::Session(SessionMsg::StripTabMenuRequested(
         StripTab::Instance(shell),
         742,
         761,
-    ));
+    )));
     assert!(state.shell_instance_menu.is_some());
 
     state.clear_for_dialog();
@@ -2198,7 +2211,7 @@ fn starting_a_session_reveals_it() {
 
     let started = Session::start_new(SessionLocation::Worktree("feat-b".to_string()));
     let id = started.id;
-    state.update(Message::SessionStarted(started));
+    state.update(Message::Session(SessionMsg::Started(started)));
 
     assert_eq!(state.active_session, Some(id));
     assert!(
@@ -2223,7 +2236,7 @@ fn clicking_a_session_marks_it_and_moves_nothing() {
     state.workspace.sessions.get_mut(&path).unwrap().push(other);
     state.pending_reveal_scroll = false;
 
-    state.update(Message::SessionSelected(other_id));
+    state.update(Message::Session(SessionMsg::Selected(other_id)));
 
     assert_eq!(state.active_session, Some(other_id), "it is now current");
     assert!(
@@ -2246,7 +2259,7 @@ fn closing_the_current_session_promotes_nothing_in_its_place() {
         .push(sibling);
     let closing = state.active_session.unwrap();
 
-    state.update(Message::SessionCloseRequested(closing));
+    state.update(Message::Session(SessionMsg::CloseRequested(closing)));
 
     assert!(
         state.active_session.is_none(),
@@ -2267,9 +2280,9 @@ fn closing_the_current_session_promotes_nothing_in_its_place() {
 fn removing_the_current_session_behaves_the_same_way() {
     let mut state = state_with_current_session_in("feat-a");
     let removing = state.active_session.unwrap();
-    state.update(Message::SessionRemoveRequested(removing));
+    state.update(Message::Session(SessionMsg::RemoveRequested(removing)));
 
-    state.update(Message::SessionRemoveConfirmed);
+    state.update(Message::Session(SessionMsg::RemoveConfirmed));
 
     assert!(state.active_session.is_none());
     assert!(

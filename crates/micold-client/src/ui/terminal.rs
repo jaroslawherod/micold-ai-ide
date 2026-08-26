@@ -8,6 +8,7 @@
 //! `alacritty_terminal` only for those VT-mode/flag/colour *types* (feature 006 rendering).
 
 use crate::app::{Message, State};
+use crate::features::session::Msg as SessionMsg;
 use crate::grid::GridCache;
 use crate::icons::Icon;
 use crate::ui::material::{
@@ -376,11 +377,17 @@ pub fn pane<'a>(
             .push(
                 ContextMenu::new(
                     vec![
-                        MenuItem::labeled("Copy", Message::TerminalCopyRequested),
-                        MenuItem::labeled("Paste", Message::TerminalPasteRequested),
+                        MenuItem::labeled(
+                            "Copy",
+                            Message::Session(SessionMsg::TerminalCopyRequested),
+                        ),
+                        MenuItem::labeled(
+                            "Paste",
+                            Message::Session(SessionMsg::TerminalPasteRequested),
+                        ),
                     ],
                     (x, y),
-                    Message::TerminalContextMenuClosed,
+                    Message::Session(SessionMsg::TerminalContextMenuClosed),
                     r,
                 )
                 .into(),
@@ -524,15 +531,16 @@ pub fn pane<'a>(
                 // measured against a stale viewport width is a fade that points at nothing. The
                 // third number it reports — the content width — is deliberately dropped; see
                 // `strip_overflow` for why a measured one cannot be paired with a live viewport.
-                .on_scroll_metrics(|offset, width, _content| Message::TabStripScrolled {
-                    offset,
-                    width,
+                .on_scroll_metrics(|offset, width, _content| {
+                    Message::Session(SessionMsg::TabStripScrolled { offset, width })
                 })
                 // `on_scroll` fires only when something scrolls, and the frame that matters most is
                 // the **first** one, where nothing has: a strip that already overflows on its first
                 // layout must fade its edge before the user touches it.
-                .on_viewport_resize(|size| Message::TabStripViewportResized {
-                    width: crate::app::scroll_offset_px(size.width),
+                .on_viewport_resize(|size| {
+                    Message::Session(SessionMsg::TabStripViewportResized {
+                        width: crate::app::scroll_offset_px(size.width),
+                    })
                 }),
             r,
         )
@@ -558,7 +566,7 @@ pub fn pane<'a>(
         Tooltip::new(
             IconButton::new(Icon::AddTerminalInstance, r)
                 .padding(spacing::SM)
-                .on_press(Message::ShellInstanceOpenRequested),
+                .on_press(Message::Session(SessionMsg::ShellInstanceOpenRequested)),
             "Open a new terminal instance (Ctrl+Shift+T)",
             r,
         )
@@ -668,8 +676,8 @@ fn restart_message(state: &State, id: SessionId) -> Message {
         .filter(|s| s.mode == TerminalMode::Regular)
         .and_then(|s| s.active_shell);
     match instance {
-        Some(instance) => Message::ShellInstanceRestartRequested(id, instance),
-        None => Message::TerminalRestartRequested,
+        Some(instance) => Message::Session(SessionMsg::ShellInstanceRestartRequested(id, instance)),
+        None => Message::Session(SessionMsg::TerminalRestartRequested),
     }
 }
 
@@ -1035,7 +1043,10 @@ fn tab_strip_row<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Eleme
                 .padding(spacing::XS)
                 .circular()
                 .tint(tint)
-                .on_press(Message::ShellInstanceCloseRequested(id, instance.id)),
+                .on_press(Message::Session(SessionMsg::ShellInstanceCloseRequested(
+                    id,
+                    instance.id,
+                ))),
             "Close this terminal instance",
             r,
         )
@@ -1057,11 +1068,18 @@ fn tab_strip_row<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Eleme
                 r,
             ))
             .trailing(close)
-            .on_press(Message::ShellInstanceSelected(id, instance.id))
+            .on_press(Message::Session(SessionMsg::ShellInstanceSelected(
+                id,
+                instance.id,
+            )))
             // A secondary press opens this tab's menu; a primary press still selects the instance,
             // because the wrapper lets the child answer first and intercepts only the right button.
             .on_secondary_press(move |(x, y)| {
-                Message::StripTabMenuRequested(StripTab::Instance(instance.id), x, y)
+                Message::Session(SessionMsg::StripTabMenuRequested(
+                    StripTab::Instance(instance.id),
+                    x,
+                    y,
+                ))
             }),
         );
     }
@@ -1126,13 +1144,15 @@ fn pinned_ai_tab<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Eleme
         // FR-006: a primary press shows the AI CLI and does nothing else. It **sets** the mode
         // rather than toggling it, which is FR-007 — pressing this tab while the AI CLI is already
         // displayed is a no-op with no visible change.
-        .on_press(Message::TerminalAiCliSelected(id))
+        .on_press(Message::Session(SessionMsg::TerminalAiCliSelected(id)))
         // FR-006a: the same menu a terminal tab offers, minus Close. The wrapper lets the child
         // answer first and intercepts only the right button, so the primary press above keeps
         // working through it — the property feature 012 established and this reuses rather than
         // re-establishes. FR-006b is what makes the press silent while the process is running: the
         // menu would be empty, so none opens.
-        .on_secondary_press(move |(x, y)| Message::StripTabMenuRequested(StripTab::Ai, x, y))],
+        .on_secondary_press(move |(x, y)| {
+            Message::Session(SessionMsg::StripTabMenuRequested(StripTab::Ai, x, y))
+        })],
         r,
     )
     .into()
@@ -1716,7 +1736,7 @@ mod tests {
         let (state, id) = state_showing(SessionLifecycle::Idle);
         assert_eq!(
             restart_message(&state, id),
-            Message::TerminalRestartRequested
+            Message::Session(SessionMsg::TerminalRestartRequested)
         );
 
         // Regular mode with an instance: that instance is what the bar reports on, and what
@@ -1729,7 +1749,7 @@ mod tests {
         };
         assert_eq!(
             restart_message(&state, id),
-            Message::ShellInstanceRestartRequested(id, instance),
+            Message::Session(SessionMsg::ShellInstanceRestartRequested(id, instance)),
             "in Regular mode the bar describes the attached shell instance, so its restart must \
              name that instance — restarting the session leaves the dead shell dead"
         );
@@ -1743,13 +1763,13 @@ mod tests {
         }
         assert_eq!(
             restart_message(&state, id),
-            Message::TerminalRestartRequested
+            Message::Session(SessionMsg::TerminalRestartRequested)
         );
 
         // An unknown session must not panic the render path.
         assert_eq!(
             restart_message(&state, SessionId::new()),
-            Message::TerminalRestartRequested
+            Message::Session(SessionMsg::TerminalRestartRequested)
         );
     }
 

@@ -15,6 +15,7 @@ use crate::shell::daemon_sync::PendingOp;
 use micold_client::app::{Message, State};
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::session::SelectKind;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::worktree_form::Msg as FormMsg;
@@ -68,7 +69,7 @@ struct App {
     /// terminal/OS-theme poll subscriptions: `true` until the first `Unfocused` event,
     /// which matches iced's behavior of not emitting an initial `Focused` on launch.
     window_focused: bool,
-    /// The terminal pane's last-known `(cols, rows)`, reported by `Message::TerminalResized`.
+    /// The terminal pane's last-known `(cols, rows)`, reported by `Message::Session(SessionMsg::TerminalResized)`.
     /// Seeds newly-spawned sessions so they fill the pane immediately instead of starting at the
     /// hardcoded default and waiting for the next window resize to reconcile (bugfix: new
     /// terminal not starting fullscreen).
@@ -263,9 +264,9 @@ fn compose_scene(app: &mut App) -> Task<Message> {
         // Guarded, unlike the other two: a session create is not idempotent, and an unguarded one
         // here would start a fresh session on every frame.
         if !creating && app.daemon.is_some() {
-            steps.push(Task::done(Message::SessionStartRequested {
+            steps.push(Task::done(Message::Session(SessionMsg::StartRequested {
                 location: SessionLocation::Default,
-            }));
+            })));
         }
     }
     if !facts.dialog_open {
@@ -273,7 +274,9 @@ fn compose_scene(app: &mut App) -> Task<Message> {
     }
     if !facts.context_menu_open {
         let (x, y) = SCENE_MENU_AT;
-        steps.push(Task::done(Message::TerminalContextMenuOpened { x, y }));
+        steps.push(Task::done(Message::Session(
+            SessionMsg::TerminalContextMenuOpened { x, y },
+        )));
     }
 
     Task::batch(steps)
@@ -565,34 +568,42 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::WorktreeForm(FormMsg::SourceChanged(source)) => {
             shell::daemon_sync::on_add_worktree_source_changed(app, source)
         }
-        Message::SessionStartRequested { location } => {
+        Message::Session(SessionMsg::StartRequested { location }) => {
             shell::daemon_sync::on_session_start_requested(app, location)
         }
-        Message::SessionSelected(id) => shell::daemon_sync::on_session_selected(app, id),
-        Message::SessionCloseRequested(id) => {
+        Message::Session(SessionMsg::Selected(id)) => {
+            shell::daemon_sync::on_session_selected(app, id)
+        }
+        Message::Session(SessionMsg::CloseRequested(id)) => {
             shell::daemon_sync::on_session_close_requested(app, id)
         }
-        Message::SessionRemoveConfirmed => shell::daemon_sync::on_session_remove_confirmed(app),
-        Message::TerminalAiCliSelected(id) => {
+        Message::Session(SessionMsg::RemoveConfirmed) => {
+            shell::daemon_sync::on_session_remove_confirmed(app)
+        }
+        Message::Session(SessionMsg::TerminalAiCliSelected(id)) => {
             shell::daemon_sync::on_terminal_ai_cli_selected(app, id)
         }
-        Message::TerminalRestartRequested => shell::daemon_sync::on_terminal_restart_requested(app),
-        Message::ShellInstanceRestartRequested(id, shell_id) => {
+        Message::Session(SessionMsg::TerminalRestartRequested) => {
+            shell::daemon_sync::on_terminal_restart_requested(app)
+        }
+        Message::Session(SessionMsg::ShellInstanceRestartRequested(id, shell_id)) => {
             shell::daemon_sync::on_shell_instance_restart_requested(app, id, shell_id)
         }
-        Message::ShellInstanceOpenRequested => {
+        Message::Session(SessionMsg::ShellInstanceOpenRequested) => {
             shell::daemon_sync::on_shell_instance_open_requested(app)
         }
-        Message::ShellInstanceCloseRequested(id, shell_id) => {
+        Message::Session(SessionMsg::ShellInstanceCloseRequested(id, shell_id)) => {
             shell::daemon_sync::on_shell_instance_close_requested(app, id, shell_id)
         }
-        Message::ShellInstanceSelected(id, shell_id) => {
+        Message::Session(SessionMsg::ShellInstanceSelected(id, shell_id)) => {
             shell::daemon_sync::on_shell_instance_selected(app, id, shell_id)
         }
-        Message::TerminalBytes(bytes) => shell::daemon_sync::on_terminal_bytes(app, bytes),
+        Message::Session(SessionMsg::TerminalBytes(bytes)) => {
+            shell::daemon_sync::on_terminal_bytes(app, bytes)
+        }
         // Mouse text selection on the displayed session's grid, anchored to absolute `LineId`s so
         // new output can't corrupt it (FR-013/FR-018).
-        Message::TerminalSelectStart { col, line, kind } => {
+        Message::Session(SessionMsg::TerminalSelectStart { col, line, kind }) => {
             if let Some(id) = app.core.active_session {
                 if let Some(grid) = app.grids.get(&id) {
                     let anchor = Anchor::new(row_line_id(grid, app.display_offset, line), col);
@@ -608,7 +619,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::TerminalSelectUpdate { col, line } => {
+        Message::Session(SessionMsg::TerminalSelectUpdate { col, line }) => {
             if let Some(id) = app.core.active_session {
                 if let (Some(grid), Some(sel)) = (app.grids.get(&id), app.selection.as_mut()) {
                     let anchor = Anchor::new(row_line_id(grid, app.display_offset, line), col);
@@ -617,16 +628,16 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::TerminalSelectCleared => {
+        Message::Session(SessionMsg::TerminalSelectCleared) => {
             app.selection = None;
             Task::none()
         }
-        Message::TerminalResized { cols, rows } => {
+        Message::Session(SessionMsg::TerminalResized { cols, rows }) => {
             shell::daemon_sync::on_terminal_resized(app, cols, rows)
         }
         // Scroll the displayed session's scrollback view (FR-016). Offset is clamped to the cached
         // history; deeper history is fetched from the daemon on demand (see `request_scrollback`).
-        Message::TerminalScrolled(delta) => {
+        Message::Session(SessionMsg::TerminalScrolled(delta)) => {
             scroll_view(app, |off, history| {
                 (off as i32 + delta).clamp(0, history as i32) as usize
             });
@@ -634,20 +645,24 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         // Scroll to an absolute offset (scrollbar drag). Resolve against the LIVE offset at apply
         // time so a burst of batched drag messages converges (drag flicker fix, FR-016).
-        Message::TerminalScrolledTo(target) => {
+        Message::Session(SessionMsg::TerminalScrolledTo(target)) => {
             scroll_view(app, |off, history| {
                 let delta = micold_client::ui::target_offset_delta(off, target);
                 (off as i32 + delta).clamp(0, history as i32) as usize
             });
             Task::none()
         }
-        Message::TerminalCopyRequested => shell::clipboard::on_copy_requested(app),
-        Message::TerminalPasteRequested => shell::clipboard::on_paste_requested(app),
+        Message::Session(SessionMsg::TerminalCopyRequested) => {
+            shell::clipboard::on_copy_requested(app)
+        }
+        Message::Session(SessionMsg::TerminalPasteRequested) => {
+            shell::clipboard::on_paste_requested(app)
+        }
         Message::Worktree(WorktreeMsg::TextCopyRequested(text)) => {
             shell::clipboard::on_text_copy_requested(app, text)
         }
         Message::Settings(msg) => shell::settings::update(app, msg),
-        Message::TerminalTick => {
+        Message::Session(SessionMsg::TerminalTick) => {
             // Obsolete under the daemon: output arrives as streamed grid frames, titles arrive via
             // the daemon (Event::Title), and the daemon supervises/restarts processes. The emitting
             // poll subscription is gone; this no-op keeps `Message` exhaustive. TODO: drop the variant.
@@ -1071,19 +1086,19 @@ pub(crate) mod tests {
 
         let _ = update_inner(
             &mut app,
-            Message::TerminalResized {
+            Message::Session(SessionMsg::TerminalResized {
                 cols: 220,
                 rows: 60,
-            },
+            }),
         );
         assert_eq!(app.last_grid, Some((220, 60)));
 
         let _ = update_inner(
             &mut app,
-            Message::TerminalResized {
+            Message::Session(SessionMsg::TerminalResized {
                 cols: 180,
                 rows: 45,
-            },
+            }),
         );
         assert_eq!(app.last_grid, Some((180, 45)));
     }
@@ -1106,7 +1121,7 @@ pub(crate) mod tests {
         let id = SessionId::new();
         app.last_grid = Some((220, 60));
 
-        let _ = update_inner(&mut app, Message::SessionSelected(id));
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::Selected(id)));
 
         match rx.try_recv() {
             Ok(ClientMsg::SessionResize {
@@ -1139,7 +1154,7 @@ pub(crate) mod tests {
         let id = SessionId::new();
         assert_eq!(app.last_grid, None);
 
-        let _ = update_inner(&mut app, Message::SessionSelected(id));
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::Selected(id)));
 
         assert!(
             matches!(

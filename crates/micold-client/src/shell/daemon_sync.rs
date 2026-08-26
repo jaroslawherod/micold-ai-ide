@@ -41,6 +41,7 @@
 //! not with who happens to call it.
 
 use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::{Path, PathBuf};
 
@@ -322,7 +323,8 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         DaemonMsg::OperationOk { req, result } => match app.pending_ops.remove(&req) {
             Some(PendingOp::CreateSession) => {
                 if let OperationResult::SessionCreated { session } = result {
-                    app.core.update(Message::SessionSelected(session));
+                    app.core
+                        .update(Message::Session(SessionMsg::Selected(session)));
                     view_and_start(app, session);
                     // No follow-up focus message: `SessionSelected` focuses the terminal in
                     // the reducer and nothing releases it on the same click any more
@@ -908,7 +910,7 @@ pub fn on_session_start_requested(app: &mut App, location: SessionLocation) -> T
 /// (FR-005, FR-011) — an Idle AI CLI session resumes via `claude --resume` (FR-023a); a
 /// session last left in Regular mode gets a fresh shell instead.
 pub fn on_session_selected(app: &mut App, id: SessionId) -> Task<Message> {
-    app.core.update(Message::SessionSelected(id));
+    app.core.update(Message::Session(SessionMsg::Selected(id)));
     // View the selected session (the daemon streams its grid), resuming it if idle — the
     // same sequence `view_and_start` performs for every other path that displays a session,
     // called rather than repeated so the pane size that now precedes the start (BUG-003,
@@ -937,7 +939,8 @@ pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message>
     send_op(app, PendingOp::DeleteSession, move |req| {
         ClientMsg::SessionDelete { req, session: id }
     });
-    app.core.update(Message::SessionCloseRequested(id));
+    app.core
+        .update(Message::Session(SessionMsg::CloseRequested(id)));
     Task::none()
 }
 
@@ -952,7 +955,8 @@ pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
             ClientMsg::SessionDelete { req, session: id }
         });
     }
-    app.core.update(Message::SessionRemoveConfirmed);
+    app.core
+        .update(Message::Session(SessionMsg::RemoveConfirmed));
     Task::none()
 }
 
@@ -961,7 +965,7 @@ pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
 ///
 /// # Why this arm has to exist
 ///
-/// It is the deleted mode toggle's other half. `Message::TerminalAiCliSelected`'s reducer sets the
+/// It is the deleted mode toggle's other half. `Message::Session(SessionMsg::TerminalAiCliSelected)`'s reducer sets the
 /// mode and nothing more (feature 026 FR-006), and until feature 027 the message had **no arm in
 /// `main.rs` at all** — it fell through to the catch-all, which runs the reducer and stops. So the
 /// AI tab moved the mark while the daemon went on streaming and driving whichever shell instance
@@ -974,7 +978,8 @@ pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
 /// CLI process and it is not created here. Neither process is killed as a side effect (010 FR-006)
 /// — the previously-attached one stops being displayed and keeps running (research R6).
 pub fn on_terminal_ai_cli_selected(app: &mut App, id: SessionId) -> Task<Message> {
-    app.core.update(Message::TerminalAiCliSelected(id));
+    app.core
+        .update(Message::Session(SessionMsg::TerminalAiCliSelected(id)));
     attach_current_process(app, id);
     Task::none()
 }
@@ -987,7 +992,7 @@ pub fn on_terminal_ai_cli_selected(app: &mut App, id: SessionId) -> Task<Message
 /// the Settings-save refresh trigger. Unlike the passive reattach callers below, this is
 /// also a direct user restart request, so it must cover a Regular Terminal instance that
 /// has already `Exited` — `explicit_restart = true` lets `ensure_attached_process`'s
-/// `Regular` branch spawn it, the same case `Message::ShellInstanceRestartRequested`
+/// `Regular` branch spawn it, the same case `Message::Session(SessionMsg::ShellInstanceRestartRequested)`
 /// handles for a background instance.
 pub fn on_terminal_restart_requested(app: &mut App) -> Task<Message> {
     if let Some(id) = app.core.active_session {
@@ -1020,7 +1025,9 @@ pub fn on_shell_instance_restart_requested(
         });
     }
     app.core
-        .update(Message::ShellInstanceRestartRequested(id, shell_id));
+        .update(Message::Session(SessionMsg::ShellInstanceRestartRequested(
+            id, shell_id,
+        )));
     Task::none()
 }
 
@@ -1057,7 +1064,8 @@ pub fn on_shell_instance_open_requested(app: &mut App) -> Task<Message> {
         // from here: `update_inner` routes the message to this handler *instead of* the core, so
         // nothing ran it. Harmless while the "+" could not change which pane was displayed; not
         // harmless now that it can.
-        app.core.update(Message::ShellInstanceOpenRequested);
+        app.core
+            .update(Message::Session(SessionMsg::ShellInstanceOpenRequested));
     }
     Task::none()
 }
@@ -1068,7 +1076,7 @@ pub fn on_shell_instance_open_requested(app: &mut App) -> Task<Message> {
 /// last instance, the pure reducer flips `mode` back to `AiCli` (FR-013); reattach the AI
 /// CLI process via the same shared path the primary toggle already uses (a no-op if it's
 /// already attached). Addressed by the originating `SessionId` (not
-/// `app.core.active_session`) — see `Message::ShellInstanceSelected`'s doc comment.
+/// `app.core.active_session`) — see `Message::Session(SessionMsg::ShellInstanceSelected)`'s doc comment.
 pub fn on_shell_instance_close_requested(
     app: &mut App,
     id: SessionId,
@@ -1082,7 +1090,9 @@ pub fn on_shell_instance_close_requested(
     }
     // Core close reassigns active_shell / reverts mode to AiCli when the last one closes.
     app.core
-        .update(Message::ShellInstanceCloseRequested(id, shell_id));
+        .update(Message::Session(SessionMsg::ShellInstanceCloseRequested(
+            id, shell_id,
+        )));
     // Re-attach whatever process the session now shows (a sibling instance, or the primary).
     attach_current_process(app, id);
     Task::none()
@@ -1096,7 +1106,9 @@ pub fn on_shell_instance_selected(
     shell_id: ShellInstanceId,
 ) -> Task<Message> {
     app.core
-        .update(Message::ShellInstanceSelected(id, shell_id));
+        .update(Message::Session(SessionMsg::ShellInstanceSelected(
+            id, shell_id,
+        )));
     attach_current_process(app, id);
     Task::none()
 }
@@ -1246,7 +1258,7 @@ pub fn view_and_start(app: &mut App, id: SessionId) {
 
 /// Tell the daemon what size to start `id` at, **before** its `SessionStart` (BUG-003, FR-014a).
 ///
-/// The pane widget only publishes `Message::TerminalResized` when its own size *changes*, so a
+/// The pane widget only publishes `Message::Session(SessionMsg::TerminalResized)` when its own size *changes*, so a
 /// session started into a window the user is not resizing is never told anything — it used to come
 /// up at the daemon's 100×30 spawn seed and stay there until the next window resize. `App::last_grid`
 /// is the last size the pane published; stating it here is what makes it a size the *next* session
@@ -1742,7 +1754,7 @@ pub(crate) mod tests {
     }
 
     /// `012` BUG-003 / FR-008. Before this, `mark_shell_running` and `mark_shell_exited` were
-    /// reachable only from `Message::ShellInstanceRunning`/`ShellInstanceExited`, which nothing in
+    /// reachable only from `Message::Session(SessionMsg::ShellInstanceRunning)`/`ShellInstanceExited`, which nothing in
     /// the client emits, so every instance sat at `Starting` for its whole life and the bar read
     /// `starting…` beside a shell the user was typing into.
     ///
@@ -2006,7 +2018,7 @@ pub(crate) mod tests {
     ///
     /// # The defect this exists for, which is live on `main`
     ///
-    /// `Message::TerminalAiCliSelected` had **no arm in `main.rs`** — it fell through to the
+    /// `Message::Session(SessionMsg::TerminalAiCliSelected)` had **no arm in `main.rs`** — it fell through to the
     /// catch-all, which runs the pure reducer and nothing else. So the AI tab moved the mark and
     /// the mode while the daemon went on streaming and driving whichever shell instance was
     /// attached: the user pressed the AI tab, the strip said AI, and the keys went to bash.
