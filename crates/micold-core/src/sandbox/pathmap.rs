@@ -56,12 +56,19 @@ pub fn map_for(host: &Path, windows_host: bool) -> PathBuf {
         _ => ("share".to_string(), raw.as_str()),
     };
     let rest = rest.trim_start_matches('/');
-    let mut out = PathBuf::from(WINDOWS_MOUNT_ROOT);
-    out.push(drive);
+    // Joined as a *string*, not with `PathBuf::push`. `PathBuf` is native to whichever platform
+    // compiled it, so on a Windows host `push` writes `\` separators and the container path comes
+    // out as `/mnt/host\c\Users/u/p` -- half Linux, half not, and rejected by the runtime. Two
+    // `PathBuf`s spelled either way still compare *equal* on Windows, which is why this survived
+    // until the argv gate, whose assertions are on rendered strings, first ran there (T115).
+    let mut out = String::from(WINDOWS_MOUNT_ROOT);
+    out.push('/');
+    out.push_str(&drive);
     if !rest.is_empty() {
-        out.push(rest);
+        out.push('/');
+        out.push_str(rest);
     }
-    out
+    PathBuf::from(out)
 }
 
 /// The path a host directory is mounted at inside the container, on *this* platform.
@@ -121,6 +128,18 @@ mod tests {
         let unc = map_for(Path::new(r"\\server\share\p"), true);
         assert!(unc.starts_with("/mnt/host/share"), "got {unc:?}");
         assert_ne!(unc, map_for(Path::new(r"S:\share\p"), true));
+    }
+
+    #[test]
+    fn a_windows_container_path_is_spelled_the_linux_way() {
+        // Deliberately on the rendered string rather than on the `PathBuf`. Comparing `PathBuf`s
+        // is what let a `\`-separated container path pass here for the whole of feature 027:
+        // Windows treats `/` and `\` as the same separator, so the assertion above holds on both
+        // platforms even when the *text* handed to `docker -v` is only correct on one of them.
+        let mapped = map_for(Path::new(r"C:\Users\u\p"), true);
+        let rendered = mapped.to_string_lossy();
+        assert_eq!(rendered, "/mnt/host/c/Users/u/p");
+        assert!(!rendered.contains('\\'), "got {rendered:?}");
     }
 
     #[test]
