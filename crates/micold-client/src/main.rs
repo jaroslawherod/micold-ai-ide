@@ -96,11 +96,16 @@ struct App {
     /// The last catalog snapshot the daemon sent (welcome or `CatalogChanged`). Not yet rendered —
     /// the sidebar/session-list retarget onto it lands with the render switch (T042).
     daemon_catalog: Option<micold_core::protocol::messages::CatalogSnapshot>,
-    /// Projects this window has been displaced from by another window's takeover (US5, FR-024),
-    /// keyed by project path → the taking-over window's identity. A displaced project is read-only
-    /// here (input suppressed, a banner shown) until the user takes it back or reconnects. Cleared
-    /// on a fresh connect. Empty in the common single-window case.
-    displaced: HashMap<PathBuf, String>,
+    /// Projects this window may not write to because another window holds them, keyed by project
+    /// path → who holds it and which of the two events said so (US5, FR-023/FR-024): a takeover
+    /// this window lost, or an attach it was refused. Read-only here (input suppressed, a banner
+    /// shown) until the user takes it back or reconnects. Cleared on a fresh connect. Empty in the
+    /// common single-window case.
+    ///
+    /// The cause is stored rather than derived because it is not recoverable afterwards — the
+    /// banner would otherwise have to describe one event in the words of the other, which is what
+    /// it did (`010` BUG-023).
+    displaced: HashMap<PathBuf, micold_client::features::connection::Hold>,
     /// Whether the daemon connection is currently down (between a `DaemonDisconnected` and the next
     /// `DaemonConnected`). Drives the stale-content banner (FR-027). `daemon.is_none()` also implies
     /// this, but the flag is explicit for clarity at the render site.
@@ -904,18 +909,17 @@ fn active_project_displaced(app: &App) -> bool {
 /// The precedence lives in `features::connection` so it is testable without a window; what is left
 /// here is the one thing that needs the shell: turning the active project into a displacement.
 fn connection_status(app: &App) -> micold_client::features::connection::ConnectionStatus {
-    let displaced_by = app
+    let hold = app
         .core
         .workspace
         .active
         .as_ref()
-        .and_then(|project| app.displaced.get(project))
-        .map(String::as_str);
+        .and_then(|project| app.displaced.get(project));
 
     micold_client::features::connection::connection_status(
         app.version_mismatch.as_ref(),
         app.build_mismatch.as_ref(),
-        displaced_by,
+        hold,
         app.disconnected,
     )
 }
@@ -1766,6 +1770,62 @@ pub(crate) mod tests {
         );
     }
 
+    /// `010` BUG-023: the refusal and the takeover are one state and must not be one sentence.
+    ///
+    /// Both leave the window read-only with the same take-over button, which is why the refusal was
+    /// folded onto `displaced` in the first place. What the fold also did was tell a window that had
+    /// merely been turned away that another window "took over this project" — the opposite event,
+    /// described in the past tense, about something that never happened to it. The distinction has
+    /// to survive as far as the banner, so the banner is chosen from the status and the status is
+    /// what this pins.
+    #[test]
+    fn a_refused_attach_reaches_the_banner_as_a_refusal_not_a_takeover() {
+        use micold_client::features::connection::ConnectionStatus;
+
+        let project = PathBuf::from("/repo/demo");
+
+        let mut refused = app_on_project(&project);
+        feed(
+            &mut refused,
+            DaemonMsg::Refused {
+                reason: micold_core::protocol::messages::RefusalReason::ProjectBusy {
+                    project: project.clone(),
+                    holder: "other-window".into(),
+                    since_secs: 12,
+                },
+            },
+        );
+
+        let mut taken = app_on_project(&project);
+        feed(
+            &mut taken,
+            DaemonMsg::Displaced {
+                project: project.clone(),
+                by: "other-window".into(),
+            },
+        );
+
+        assert_eq!(
+            connection_status(&refused),
+            ConnectionStatus::ProjectBusy {
+                holder: "other-window".into()
+            },
+            "nobody took anything from this window — it asked and was told no"
+        );
+        assert_eq!(
+            connection_status(&taken),
+            ConnectionStatus::Displaced {
+                by: "other-window".into()
+            },
+            "and the window that really did lose the project keeps the sentence that fits it"
+        );
+        assert!(
+            active_project_displaced(&refused) && active_project_displaced(&taken),
+            "the difference is in what the user is told, not in what they may do: both are \
+             read-only and both are resolved by the same take-over"
+        );
+    }
+
     #[test]
     fn an_accepted_attach_ends_the_read_only_state_a_takeover_started() {
         // The same fix from the other direction: this window *was* displaced by a real takeover
@@ -2049,7 +2109,10 @@ pub(crate) mod tests {
 
         let project = PathBuf::from("/repo/demo");
         app.core.workspace.active = Some(project.clone());
-        app.displaced.insert(project.clone(), "other-window".into());
+        app.displaced.insert(
+            project.clone(),
+            micold_client::features::connection::Hold::taken_over("other-window"),
+        );
         assert_eq!(
             connection_status(&app),
             ConnectionStatus::Displaced {

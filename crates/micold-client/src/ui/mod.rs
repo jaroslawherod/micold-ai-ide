@@ -104,9 +104,27 @@ fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a,
             "The displayed content may be stale. Reconnecting…",
             roles,
         ),
+        // Past tense for the same reason the refusal's is (`010` BUG-023): this label is recorded
+        // when the takeover arrives and never re-derived, so "is now attached" went on asserting
+        // that a window killed minutes ago held the project. What happened is the part that stays
+        // true.
         ConnectionStatus::Displaced { by } => material::ConnectionBanner::new(
             "Another window took over this project",
-            format!("{by} is now attached — this window is read-only until you take it back."),
+            format!("{by} took it — this window is read-only until you take it back."),
+            roles,
+        )
+        .action("Take over", Message::ConnectionTakeoverRequested),
+        // The same read-only state and the same button, and deliberately not the same sentence
+        // (`010` BUG-023): this window never held the project, so nothing was taken from it and
+        // there is no "back" to take it. Said in the past tense because it is a report of the
+        // answer this window got, not a live claim about who is attached now — the label is never
+        // re-derived, and the holder may since have exited.
+        ConnectionStatus::ProjectBusy { holder } => material::ConnectionBanner::new(
+            "This project is already open in another window",
+            format!(
+                "{holder} was holding it when this window asked, so this one is read-only. Take \
+                 it over to work here."
+            ),
             roles,
         )
         .action("Take over", Message::ConnectionTakeoverRequested),
