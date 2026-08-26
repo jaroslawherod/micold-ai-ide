@@ -162,8 +162,10 @@ never changes how a session's exit is handled.
 - **A crash *loop* gives up, loudly.** If a session keeps crashing, the daemon retries a bounded
   number of times (three consecutive restarts) and then settles it in a **Failed** state instead of
   restarting forever. Failed carries a sentence saying how many attempts were spent and what the
-  last exit was — `Gave up after 3 restart attempts — last exit: exit status 1.` — and a window that
-  attaches afterwards is shown it, so a loop that ran while nobody was watching is not reduced to
+  last exit was — `Gave up after 3 restart attempts — last exit: exit status 1.` The terminal pane
+  shows that sentence in place of the output it has none of, beside the `restart` control that
+  resolves it, and the status bar under it reads `failed after 3 attempts`. A window that attaches
+  after the loop ended is shown both, so a loop that ran while nobody was watching is not reduced to
   the word `failed`. It survives until the daemon itself stops (the state is held in memory, not
   written to disk), and you can restart the session manually once you've addressed the cause. This
   is the same limit whether or not a window was open while it was crashing.
