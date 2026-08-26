@@ -206,7 +206,7 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
     // Feature 024: through `set_current_session`, like every other app-initiated clear, so the row
     // the vanished session was in is committed open rather than snapping shut under the user
     // (FR-001c). Nothing is armed: there is no session to scroll to.
-    if let Some(id) = core.active_session {
+    if let Some(id) = core.session.active {
         if core.workspace.find_session(id).is_none() {
             // T067a-6: committing the outgoing row is an outcome now, so it has to be applied —
             // a dropped `Vec<Outcome>` here is the row snapping shut, which is the thing FR-001c

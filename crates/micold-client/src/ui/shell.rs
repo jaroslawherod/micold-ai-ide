@@ -70,7 +70,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
 
     // The background-restart return notice (feature 008, FR-011 / SC-007) used to be drawn
     // here. It never appeared: this function is the *else* branch of
-    // `if state.active_session.is_some()`, and returning to a project restores its foreground
+    // `if state.session.active.is_some()`, and returning to a project restores its foreground
     // session, so the branch was not taken in the one case the banner existed for. It is now
     // an ordinary entry on the global notification surface in `ui::view`.
     body = body.push(header);

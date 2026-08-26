@@ -225,7 +225,7 @@ fn scene_facts(app: &App) -> SceneFacts {
         worktrees: app.core.worktree.worktrees.len(),
         running_sessions,
         dialog_open: micold_client::overlay::registry::open_dialog(&app.core).is_some(),
-        context_menu_open: app.core.terminal_context_menu.is_some(),
+        context_menu_open: app.core.session.terminal_context_menu.is_some(),
         ripple_animating: app.ripples_animating.load(Ordering::Relaxed) > 0,
     }
 }
@@ -327,7 +327,7 @@ impl Drop for App {
 impl App {
     /// The displayed session's grid cache, if any (routes through `active_session`).
     fn attached_grid(&self) -> Option<&GridCache> {
-        self.grids.get(&self.core.active_session?)
+        self.grids.get(&self.core.session.active?)
     }
 }
 
@@ -507,15 +507,15 @@ fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
 /// every selection would yank them back each time, including on selections made with the mode
 /// toggle rather than with the strip.
 fn tab_reveal_scroll(app: &mut App) -> Option<Task<Message>> {
-    if !app.core.pending_tab_reveal || app.core.tab_strip_viewport_width == 0 {
+    if !app.core.session.pending_tab_reveal || app.core.session.tab_strip_viewport_width == 0 {
         return None;
     }
-    app.core.pending_tab_reveal = false;
+    app.core.session.pending_tab_reveal = false;
     let index = micold_client::ui::terminal::marked_tab_index(&app.core)?;
     let offset = micold_client::ui::terminal::scroll_into_view(
         index,
-        app.core.tab_strip_scroll_offset as f32,
-        app.core.tab_strip_viewport_width as f32,
+        app.core.session.tab_strip_scroll_offset as f32,
+        app.core.session.tab_strip_viewport_width as f32,
     )?;
     Some(iced::widget::operation::scroll_to(
         micold_client::ui::terminal::TAB_STRIP_SCROLL_ID.clone(),
@@ -604,7 +604,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // Mouse text selection on the displayed session's grid, anchored to absolute `LineId`s so
         // new output can't corrupt it (FR-013/FR-018).
         Message::Session(SessionMsg::TerminalSelectStart { col, line, kind }) => {
-            if let Some(id) = app.core.active_session {
+            if let Some(id) = app.core.session.active {
                 if let Some(grid) = app.grids.get(&id) {
                     let anchor = Anchor::new(row_line_id(grid, app.display_offset, line), col);
                     let gran = match kind {
@@ -620,7 +620,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::Session(SessionMsg::TerminalSelectUpdate { col, line }) => {
-            if let Some(id) = app.core.active_session {
+            if let Some(id) = app.core.session.active {
                 if let (Some(grid), Some(sel)) = (app.grids.get(&id), app.selection.as_mut()) {
                     let anchor = Anchor::new(row_line_id(grid, app.display_offset, line), col);
                     sel.update(anchor, |id| grid.line(id).map(|l| l.text.clone()));
@@ -811,7 +811,7 @@ fn row_line_id(grid: &GridCache, offset: usize, row: u16) -> LineId {
 /// daemon's full retained depth (`viewport_top - oldest_available`), so the view can scroll into
 /// history; un-fetched lines render blank until the `ScrollbackResponse` fills them (FR-016/017).
 fn scroll_view(app: &mut App, f: impl FnOnce(usize, usize) -> usize) {
-    let Some(id) = app.core.active_session else {
+    let Some(id) = app.core.session.active else {
         return;
     };
     let (vt, new_off, need_from) = {
@@ -885,7 +885,7 @@ fn log_line(message: &str) {
 /// logged alongside for exactly that case: if the sidebar lists sessions the resolve cannot find,
 /// the two keys are printed side by side and the mismatch is the answer.
 fn log_foreground_choice(app: &App, path: &Path) {
-    let choice = &app.core.last_foreground_choice;
+    let choice = &app.core.session.last_foreground_choice;
     let keys: Vec<String> = app
         .core
         .workspace
@@ -896,7 +896,7 @@ fn log_foreground_choice(app: &App, path: &Path) {
     log_line(&format!(
         "switch: entered {} -> active_session={:?} choice={:?} resolve_key={} session_keys={:?}",
         path.display(),
-        app.core.active_session,
+        app.core.session.active,
         choice,
         micold_core::project::canonicalize_best_effort(path).display(),
         keys,
@@ -1222,7 +1222,7 @@ pub(crate) mod tests {
         app.core.workspace.active = Some(project.clone());
         // What `boot()`'s `restore_after_activation` leaves behind: the session is already current
         // when the connection arrives, chosen from the memory loaded off disk.
-        app.core.active_session = Some(id);
+        app.core.session.active = Some(id);
 
         let sent = connect(
             &mut app,
@@ -1274,7 +1274,7 @@ pub(crate) mod tests {
         let elsewhere = SessionId::new();
         let mut app = base_app();
         app.core.workspace.active = Some(project.clone());
-        app.core.active_session = Some(restored);
+        app.core.session.active = Some(restored);
 
         let mut catalog = snapshot_with(
             "/repo/demo",
@@ -1321,7 +1321,7 @@ pub(crate) mod tests {
         let mut app = base_app();
         app.core.workspace.active = Some(project.clone());
         assert_eq!(
-            app.core.active_session, None,
+            app.core.session.active, None,
             "the memory resolved to nothing"
         );
 
@@ -1386,7 +1386,7 @@ pub(crate) mod tests {
         let session = Session::start_new(SessionLocation::Worktree("only".to_string()));
         let id = session.id;
         app.core.workspace.sessions.insert(path, vec![session]);
-        app.core.active_session = Some(id);
+        app.core.session.active = Some(id);
         // Everything here fits: one location in a tall panel. This is the project that scrolls
         // without reporting.
         app.core.sidebar.viewport_height = 400;

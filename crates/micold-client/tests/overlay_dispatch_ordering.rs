@@ -89,7 +89,7 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
     ),
     (
         "confirm_session_remove",
-        |s| s.session_remove_target = Some(SessionId::new()),
+        |s| s.session.remove_target = Some(SessionId::new()),
         Message::Session(SessionMsg::RemoveCancelled),
     ),
     (

@@ -409,7 +409,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 state.workspace = workspace;
                 state.sidebar.expanded.insert("feat-short".to_string());
                 state.window.window_size = (1280, 800);
-                state.session_menu_open = Some(SessionMenu {
+                state.session.menu_open = Some(SessionMenu {
                     id,
                     anchor: (120, 760),
                 });
@@ -637,7 +637,7 @@ pub fn covered_states() -> &'static [CoveredState] {
 
                 let mut state = with_project();
                 state.workspace = workspace;
-                state.active_session = Some(active);
+                state.session.active = Some(active);
                 StateUnderTest::new(state)
             },
             anchors: &[
@@ -738,7 +738,7 @@ pub fn covered_states() -> &'static [CoveredState] {
 
                 let mut state = with_project();
                 state.workspace = workspace;
-                state.active_session = Some(active);
+                state.session.active = Some(active);
                 // The width the bar actually gives the scrolling region, which the running
                 // application learns from `Scrollable::on_viewport_resize` and a hand-built state
                 // does not. Feature 027 FR-003 spends whatever of it the tabs do not need as
@@ -749,7 +749,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // Not a magic number: that gate compares the strip's leading gap against the
                 // recorded viewport, so a figure that has drifted from what the bar hands out fails
                 // there with the current one in the message.
-                state.tab_strip_viewport_width = TAB_STRIP_VIEWPORT;
+                state.session.tab_strip_viewport_width = TAB_STRIP_VIEWPORT;
                 StateUnderTest::new(state)
             },
             anchors: &[
@@ -841,7 +841,7 @@ pub fn covered_states() -> &'static [CoveredState] {
 
                 let mut state = with_project();
                 state.workspace = workspace;
-                state.active_session = Some(active);
+                state.session.active = Some(active);
                 // The width the bar actually gives the scrolling region, which the running
                 // application learns from `Scrollable::on_viewport_resize` and a hand-built state
                 // does not. Feature 027 FR-003 spends whatever of it the tabs do not need as
@@ -852,7 +852,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // Not a magic number: that gate compares the strip's leading gap against the
                 // recorded viewport, so a figure that has drifted from what the bar hands out fails
                 // there with the current one in the message.
-                state.tab_strip_viewport_width = TAB_STRIP_VIEWPORT;
+                state.session.tab_strip_viewport_width = TAB_STRIP_VIEWPORT;
                 StateUnderTest::new(state)
             },
             anchors: &[

@@ -78,21 +78,23 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
             anchor: (120, 300),
         })
     }),
-    ("session_menu_open", "session_menu", |s| {
-        s.session_menu_open = Some(micold_client::features::session::SessionMenu {
+    ("session.menu_open", "session_menu", |s| {
+        s.session.menu_open = Some(micold_client::features::session::SessionMenu {
             id: SessionId::new(),
             anchor: (120, 340),
         })
     }),
-    ("terminal_context_menu", "terminal_context_menu", |s| {
-        s.terminal_context_menu = Some((4, 2))
-    }),
+    (
+        "session.terminal_context_menu",
+        "terminal_context_menu",
+        |s| s.session.terminal_context_menu = Some((4, 2)),
+    ),
     // The terminal *tab's* menu, not the terminal's own (feature 012, BUG-005). Two context menus
     // on the same screen, on different things: this one acts on an instance, that one on the
     // content. It carries the instance because the menu belongs to the tab it was opened on rather
     // than to the active one — FR-010a is about restarting an instance you have not selected.
-    ("shell_instance_menu", "shell_instance_menu", |s| {
-        s.shell_instance_menu = Some((
+    ("session.shell_instance_menu", "shell_instance_menu", |s| {
+        s.session.shell_instance_menu = Some((
             micold_client::ui::terminal::StripTab::Instance(ShellInstanceId(1)),
             4,
             2,

@@ -34,6 +34,7 @@ use micold_client::features::help;
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::session;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar;
@@ -119,7 +120,7 @@ fn dialogs() -> Vec<Dialog> {
         Dialog {
             id: "confirm_session_remove",
             cancel: Message::Session(SessionMsg::RemoveCancelled),
-            open: |state| state.session_remove_target = Some(SessionId::new()),
+            open: |state| state.session.remove_target = Some(SessionId::new()),
         },
         Dialog {
             id: "confirm_forget_project",
@@ -563,6 +564,11 @@ fn a_popover_is_not_drawn_from_the_registry() {
     let mut drawn = Vec::new();
     for probe in registry::probes() {
         let state = State {
+            session: session::State {
+                terminal_context_menu: Some((4, 2)),
+                ..Default::default()
+            },
+
             sidebar: sidebar::State {
                 filter_open: true,
                 ..Default::default()
@@ -577,7 +583,6 @@ fn a_popover_is_not_drawn_from_the_registry() {
                 help_menu_open: true,
                 ..Default::default()
             },
-            terminal_context_menu: Some((4, 2)),
             ..Default::default()
         };
         if let Some(open) = probe(&state) {

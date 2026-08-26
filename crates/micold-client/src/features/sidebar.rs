@@ -389,7 +389,7 @@ impl crate::app::State {
     /// missing while the project was inactive (FR-013). The third is why this resolves against
     /// `self.worktree.worktrees` rather than trusting the session's own `location`.
     pub fn current_session_location(&self) -> Option<SessionLocation> {
-        let id = self.active_session?;
+        let id = self.session.active?;
         let location = self
             .active_sessions()
             .iter()
@@ -413,7 +413,7 @@ impl crate::app::State {
     /// The `is_some` guard is not redundant: without it, "no session is current and nothing is
     /// suppressed" would compare `None == None` and report a suppression.
     pub fn reveal_suppressed(&self) -> bool {
-        self.active_session.is_some() && self.reveal_suppressed_for == self.active_session
+        self.session.active.is_some() && self.session.reveal_suppressed_for == self.session.active
     }
 
     /// Fold a location into the user's own open set (T067a-6).
@@ -465,7 +465,7 @@ impl crate::app::State {
     /// scrolling to a stale offset (invariant I4).
     pub fn reveal_scroll_offset(&self) -> Option<u32> {
         let entries = self.sidebar_entries();
-        let index = current_session_row(&entries, self.active_session)?;
+        let index = current_session_row(&entries, self.session.active)?;
         let heights = row_heights(&entries);
         if crate::reveal_trace::enabled() {
             let top: f32 = heights[..index].iter().sum::<f32>() + ROW_GAP * index as f32;
@@ -494,7 +494,7 @@ impl crate::app::State {
     /// The condition for draining an armed reveal: until it is true there is nothing to scroll to,
     /// and the arm stays set.
     pub fn current_session_is_listed(&self) -> bool {
-        current_session_row(&self.sidebar_entries(), self.active_session).is_some()
+        current_session_row(&self.sidebar_entries(), self.session.active).is_some()
     }
 
     /// Open or close a location's row, from the user's own twisty (feature 024, contract §2.1).

@@ -120,7 +120,7 @@ fn context_menu_opens_at_a_point_and_dismisses() {
     use micold_client::app::Message;
     let mut s = State::default();
     assert_eq!(
-        s.terminal_context_menu, None,
+        s.session.terminal_context_menu, None,
         "the terminal context menu starts closed (FR-013)"
     );
     s.update(Message::Session(SessionMsg::TerminalContextMenuOpened {
@@ -128,13 +128,13 @@ fn context_menu_opens_at_a_point_and_dismisses() {
         y: 16,
     }));
     assert_eq!(
-        s.terminal_context_menu,
+        s.session.terminal_context_menu,
         Some((48, 16)),
         "right-click opens the context menu anchored at the clicked point"
     );
     s.update(Message::Session(SessionMsg::TerminalContextMenuClosed));
     assert_eq!(
-        s.terminal_context_menu, None,
+        s.session.terminal_context_menu, None,
         "an outside click or a chosen item closes the context menu"
     );
 }
@@ -153,7 +153,7 @@ fn selecting_a_session_focuses_its_terminal() {
         s.terminal_focused(),
         "selecting a session must auto-focus its terminal (BUG-001, FR-010/FR-010a)"
     );
-    assert_eq!(s.active_session, Some(id));
+    assert_eq!(s.session.active, Some(id));
 }
 
 #[test]
@@ -200,7 +200,7 @@ fn closing_the_displayed_session_clears_focus() {
         !s.terminal_focused(),
         "closing the displayed session leaves no terminal to focus (focus-model.md BUG-001)"
     );
-    assert!(s.active_session.is_none());
+    assert!(s.session.active.is_none());
 }
 
 // --- Feature 024: the current-session mark is not a focus indicator ---------------------------
@@ -234,14 +234,14 @@ fn state_with_current_session() -> State {
     let session = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
     state
 }
 
 #[test]
 fn the_current_session_is_marked_whether_or_not_its_terminal_has_focus() {
     let mut state = state_with_current_session();
-    let marked = state.active_session;
+    let marked = state.session.active;
 
     // Feature 023 made `terminal_focused` a derived question, so the two states are reached by
     // driving the messages rather than by assigning a field.
@@ -257,7 +257,7 @@ fn the_current_session_is_marked_whether_or_not_its_terminal_has_focus() {
             "precondition: the keyboard is where this iteration says it is"
         );
         assert_eq!(
-            state.active_session, marked,
+            state.session.active, marked,
             "the mark says which session the main area is showing, not where the keyboard is \
              going. The two are independent facts: a released terminal is still the session you \
              are looking at, and tying them together would leave the panel unmarked in exactly \
@@ -276,7 +276,7 @@ fn a_stopped_or_failed_session_that_is_current_is_still_marked() {
 
     for drive in [0usize, 1, 8] {
         let mut state = state_with_current_session();
-        let id = state.active_session.unwrap();
+        let id = state.session.active.unwrap();
         {
             let session = state
                 .workspace
@@ -294,7 +294,7 @@ fn a_stopped_or_failed_session_that_is_current_is_still_marked() {
         }
 
         assert_eq!(
-            state.active_session,
+            state.session.active,
             Some(id),
             "run state and being current are independent: a session you are looking at is the one \
              you are looking at, whether it is running, stopped, interrupted or failed (FR-015)"
@@ -338,7 +338,7 @@ fn a_displayed_terminal_holds_the_keyboard_by_default() {
 #[test]
 fn no_displayed_session_means_no_terminal_holds_the_keyboard() {
     let s = State::default();
-    assert!(s.active_session.is_none(), "precondition");
+    assert!(s.session.active.is_none(), "precondition");
     assert!(
         !s.terminal_focused(),
         "with nothing displayed there is no terminal to hold the keyboard (FR-012, FR-016)"
@@ -390,7 +390,7 @@ fn only_the_displayed_sessions_terminal_is_eligible() {
         "precondition: the second one is displayed"
     );
 
-    s.active_session = None;
+    s.session.active = None;
     assert!(
         !s.terminal_focused(),
         "background sessions are never eligible to hold the keyboard (FR-020)"
@@ -455,9 +455,9 @@ fn window_focus_changes_no_focus_term() {
         }
         let before = (
             s.terminal_focused(),
-            s.terminal_released,
+            s.session.terminal_released,
             s.window.focused_field,
-            s.active_session,
+            s.session.active,
         );
 
         s.update(Message::WindowFocusChanged(false));
@@ -466,9 +466,9 @@ fn window_focus_changes_no_focus_term() {
         assert_eq!(
             (
                 s.terminal_focused(),
-                s.terminal_released,
+                s.session.terminal_released,
                 s.window.focused_field,
-                s.active_session
+                s.session.active
             ),
             before,
             "a window focus round trip must leave the keyboard exactly where it was \
@@ -532,14 +532,14 @@ fn every_navigation_to_a_terminal_clears_a_release() {
         (
             "SessionSelected",
             Box::new(|s: &State| {
-                Message::Session(SessionMsg::Selected(s.active_session.expect("displayed")))
+                Message::Session(SessionMsg::Selected(s.session.active.expect("displayed")))
             }),
         ),
         (
             "TerminalAiCliSelected",
             Box::new(|s: &State| {
                 Message::Session(SessionMsg::TerminalAiCliSelected(
-                    s.active_session.expect("displayed"),
+                    s.session.active.expect("displayed"),
                 ))
             }),
         ),
@@ -551,7 +551,7 @@ fn every_navigation_to_a_terminal_clears_a_release() {
             "ShellInstanceSelected",
             Box::new(move |s: &State| {
                 Message::Session(SessionMsg::ShellInstanceSelected(
-                    s.active_session.expect("displayed"),
+                    s.session.active.expect("displayed"),
                     shell,
                 ))
             }),
@@ -560,7 +560,7 @@ fn every_navigation_to_a_terminal_clears_a_release() {
             "ShellInstanceCloseRequested",
             Box::new(move |s: &State| {
                 Message::Session(SessionMsg::ShellInstanceCloseRequested(
-                    s.active_session.expect("displayed"),
+                    s.session.active.expect("displayed"),
                     shell,
                 ))
             }),
@@ -576,7 +576,7 @@ fn every_navigation_to_a_terminal_clears_a_release() {
         s.update(message);
 
         assert!(
-            !s.terminal_released,
+            !s.session.terminal_released,
             "{name} puts a terminal in front of the user, so it must clear the release (FR-011, \
              FR-021a)"
         );
@@ -593,7 +593,7 @@ fn a_restored_session_holds_the_keyboard_at_launch() {
     // to whatever is displayed (FR-012a). `Default` is `terminal_released: false`, so this is a
     // property of the default rather than a step somebody has to remember on the startup path.
     assert!(
-        !State::default().terminal_released,
+        !State::default().session.terminal_released,
         "the application starts with the terminal not released, so a restored session is focused"
     );
     let mut s = State::default();
@@ -604,7 +604,7 @@ fn a_restored_session_holds_the_keyboard_at_launch() {
         .entry(std::path::PathBuf::from("/p"))
         .or_default()
         .push(session);
-    s.active_session = Some(id);
+    s.session.active = Some(id);
     assert!(
         s.terminal_focused(),
         "a restored, displayed session's terminal holds the keyboard at launch (FR-012a)"
@@ -746,13 +746,13 @@ fn restoring_a_session_leaves_its_terminal_ready_to_type() {
     let path = state.workspace.active.clone().unwrap();
     state.record_foreground();
     // The shape after a restart: the memory survived, the pointer did not.
-    state.active_session = None;
+    state.session.active = None;
 
     let outcomes = state.restore_after_activation(&path);
     micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut state, o));
 
     assert!(
-        state.active_session.is_some(),
+        state.session.active.is_some(),
         "precondition: the memory was honoured"
     );
     assert!(
@@ -778,12 +778,12 @@ fn a_launch_that_restores_nothing_focuses_nothing() {
             session.archive();
         }
     }
-    state.active_session = None;
+    state.session.active = None;
 
     let outcomes = state.restore_after_activation(&path);
     micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut state, o));
 
-    assert!(state.active_session.is_none());
+    assert!(state.session.active.is_none());
     assert!(
         !state.terminal_focused(),
         "focus follows a displayed session, so with none displayed there is nothing to focus — no \

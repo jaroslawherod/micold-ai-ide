@@ -430,7 +430,7 @@ fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
     let session = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
     let location = SessionLocation::Worktree("feat-a".to_string());
     assert!(
         state.location_open(&location),
@@ -465,7 +465,7 @@ fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
          (SC-008, FR-001b)"
     );
     assert!(
-        state.reveal_suppressed_for.is_none(),
+        state.session.reveal_suppressed_for.is_none(),
         "and nothing about the user's own choices is reset by a background discovery either"
     );
 }

@@ -331,7 +331,7 @@ pub fn pane<'a>(
     // *started* at, and the empty state occupies exactly the rectangle the first session will be
     // displayed in — so measuring it here is what lets that session be spawned at the right size
     // instead of corrected a frame after its first output.
-    let Some(active) = state.active_session else {
+    let Some(active) = state.session.active else {
         return GridSizeReporter::new(
             container(
                 Text::new(
@@ -372,7 +372,7 @@ pub fn pane<'a>(
     // Hosted on the terminal body rather than on the window's overlay, because `(x, y)` is
     // pane-local: the pane's origin is not known at render time, so there is nothing to translate
     // the point by. Same primitive, mounted one level down.
-    let body: Element<'a, Message> = match state.terminal_context_menu {
+    let body: Element<'a, Message> = match state.session.terminal_context_menu {
         Some((x, y)) => crate::ui::cdk::overlay::Overlay::new(body)
             .push(
                 ContextMenu::new(
@@ -502,8 +502,8 @@ pub fn pane<'a>(
     // same latent defect until feature 027 — it was pushed only in `TerminalMode::Regular`, so the
     // AI pane renumbered the bar's tail — and it is unconditional now for the same reason.
     let beyond = strip_overflow(
-        state.tab_strip_scroll_offset as f32,
-        state.tab_strip_viewport_width as f32,
+        state.session.tab_strip_scroll_offset as f32,
+        state.session.tab_strip_viewport_width as f32,
         strip_tab_count(state, active),
     );
     // FR-002e: the edge fade takes the **indicator's own accent** when the tab beyond it is the
@@ -515,10 +515,10 @@ pub fn pane<'a>(
     let marked_beyond = match marked_tab_index(state) {
         Some(index) => scroll_into_view(
             index,
-            state.tab_strip_scroll_offset as f32,
-            state.tab_strip_viewport_width as f32,
+            state.session.tab_strip_scroll_offset as f32,
+            state.session.tab_strip_viewport_width as f32,
         )
-        .map(|target| target < state.tab_strip_scroll_offset as f32),
+        .map(|target| target < state.session.tab_strip_scroll_offset as f32),
         None => None,
     };
     bar = bar.push(
@@ -900,7 +900,7 @@ pub(crate) fn stopped_mark(
 /// the AI tab, which sits outside the viewport and therefore cannot be scrolled into it. There is
 /// nothing to do, which is exactly the right answer.
 pub fn marked_tab_index(state: &State) -> Option<usize> {
-    let id = state.active_session?;
+    let id = state.session.active?;
     let StripTab::Instance(instance) = marked_tab(state, id) else {
         return None;
     };
@@ -1013,7 +1013,7 @@ fn right_aligned_tabs<'a>(
     r: tokens::Roles,
 ) -> Element<'a, Message> {
     let slack = leading_slack(
-        state.tab_strip_viewport_width as f32,
+        state.session.tab_strip_viewport_width as f32,
         strip_tab_count(state, id),
     );
     container(tab_strip_row(state, id, r))
@@ -1183,7 +1183,7 @@ mod tests {
         session.lifecycle = lifecycle;
         let id = session.id;
         state.workspace.sessions.insert(path, vec![session]);
-        state.active_session = Some(id);
+        state.session.active = Some(id);
         (state, id)
     }
 
@@ -1222,7 +1222,7 @@ mod tests {
         session.active_shell = active.map(|i| opened[i]);
         let id = session.id;
         state.workspace.sessions.insert(path, vec![session]);
-        state.active_session = Some(id);
+        state.session.active = Some(id);
         (state, id)
     }
 

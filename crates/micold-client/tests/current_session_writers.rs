@@ -70,13 +70,13 @@ fn production_only(text: &str) -> String {
     }
 }
 
-/// A line assigning to `active_session` — `self.active_session = …` or `core.active_session = …`.
+/// A line assigning to `active_session` — `self.session.active = …` or `core.session.active = …`.
 ///
 /// Comparisons (`==`, `!=`) and reads are not writes, so the check is for a single `=` that is not
 /// part of one. Deliberately textual: the alternative is a full parse, and a writer this check
 /// cannot see is a writer a reviewer would not see either.
 fn is_a_write(line: &str) -> bool {
-    let Some(rest) = line.split_once(".active_session") else {
+    let Some(rest) = line.split_once(".session.active") else {
         return false;
     };
     let after = rest.1.trim_start();

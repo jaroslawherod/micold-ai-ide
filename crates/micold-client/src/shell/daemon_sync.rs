@@ -172,7 +172,7 @@ pub fn switch_daemon_attachment(app: &mut App, old: Option<PathBuf>, new: &Path)
     //
     // `&mut App` for `crate::view_and_start`, which resets the selection and scroll offset. A switch
     // wants both reset anyway — they belong to the session being left, not the one being shown.
-    match app.core.active_session {
+    match app.core.session.active {
         Some(session) => view_and_start(app, session),
         None => daemon.send(ClientMsg::SetViewedSession {
             project: new.to_path_buf(),
@@ -205,7 +205,7 @@ pub fn on_grid_frame(
     // `line_at_row = viewport_top - display_offset + row` would slide the shown lines toward
     // the live bottom on every output tick (FR-016). Only the displayed session, only while
     // scrolled up; clamp to the retained history.
-    if app.core.active_session == Some(session) && app.display_offset > 0 && new_top > old_top {
+    if app.core.session.active == Some(session) && app.display_offset > 0 && new_top > old_top {
         let advanced = (new_top - old_top) as usize;
         let history = (new_top - oldest).max(0) as usize;
         app.display_offset = (app.display_offset + advanced).min(history);
@@ -255,7 +255,7 @@ pub fn on_takeover_requested(app: &mut App) -> Task<Message> {
         });
         d.send(ClientMsg::SetViewedSession {
             project,
-            session: app.core.active_session,
+            session: app.core.session.active,
         });
     }
     Task::none()
@@ -648,7 +648,7 @@ pub fn on_connected(
             project: project.clone(),
             force: false,
         });
-        match app.core.active_session {
+        match app.core.session.active {
             // Feature 025 restored a session at boot. Displaying it means *starting* it,
             // exactly as selecting it by hand does (FR-004a, contract §3.3a) — BUG-002.
             //
@@ -953,7 +953,7 @@ pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message>
 /// the daemon has no hard-delete, so a remove is an archive with a durable tombstone, which
 /// also suppresses any future reconciliation (FR-020c). The pure core drops the record.
 pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
-    if let Some(id) = app.core.session_remove_target {
+    if let Some(id) = app.core.session.remove_target {
         app.grids.remove(&id);
         app.stamper.forget(id); // T114, as in the close path above.
         send_op(app, PendingOp::DeleteSession, move |req| {
@@ -1000,7 +1000,7 @@ pub fn on_terminal_ai_cli_selected(app: &mut App, id: SessionId) -> Task<Message
 /// `Regular` branch spawn it, the same case `Message::Session(SessionMsg::ShellInstanceRestartRequested)`
 /// handles for a background instance.
 pub fn on_terminal_restart_requested(app: &mut App) -> Task<Message> {
-    if let Some(id) = app.core.active_session {
+    if let Some(id) = app.core.session.active {
         // Re-source fresh for this session's own directory only (BUG-002) — other
         // cached directories are untouched, since only this one needs a new attempt.
         if let Some((cwd, _, _)) = session_cwd_mode_and_active_shell(&app.core, id) {
@@ -1015,7 +1015,7 @@ pub fn on_terminal_restart_requested(app: &mut App) -> Task<Message> {
 /// independent of `active_shell`, so a background instance can be restarted without first
 /// switching to it. A no-op if that instance's process is already running (idempotent,
 /// mirrors `ensure_attached_process`'s reattach-for-free check). Addressed by the
-/// originating `SessionId` (not `app.core.active_session`) so this can't misapply to a
+/// originating `SessionId` (not `app.core.session.active`) so this can't misapply to a
 /// same-numbered instance of a different session if the active session changed in the
 /// same message batch.
 pub fn on_shell_instance_restart_requested(
@@ -1043,7 +1043,7 @@ pub fn on_shell_instance_restart_requested(
 /// `ensure_attached_process` (spawn-if-absent/reattach), this always opens a brand-new
 /// instance, even if one is already running.
 pub fn on_shell_instance_open_requested(app: &mut App) -> Task<Message> {
-    if let Some(id) = app.core.active_session {
+    if let Some(id) = app.core.session.active {
         let shell_id = {
             let Some((_, session)) = app.core.workspace.find_session_mut(id) else {
                 return Task::none();
@@ -1081,7 +1081,7 @@ pub fn on_shell_instance_open_requested(app: &mut App) -> Task<Message> {
 /// last instance, the pure reducer flips `mode` back to `AiCli` (FR-013); reattach the AI
 /// CLI process via the same shared path the primary toggle already uses (a no-op if it's
 /// already attached). Addressed by the originating `SessionId` (not
-/// `app.core.active_session`) — see `Message::Session(SessionMsg::ShellInstanceSelected)`'s doc comment.
+/// `app.core.session.active`) — see `Message::Session(SessionMsg::ShellInstanceSelected)`'s doc comment.
 pub fn on_shell_instance_close_requested(
     app: &mut App,
     id: SessionId,
@@ -1129,7 +1129,7 @@ pub fn on_terminal_bytes(app: &mut App, bytes: Vec<u8>) -> Task<Message> {
     if active_project_displaced(app) {
         return Task::none();
     }
-    if let Some(id) = app.core.active_session {
+    if let Some(id) = app.core.session.active {
         // The daemon owns process liveness: it routes input to the session's attached
         // process and drops it harmlessly if that process isn't running. Gating on a
         // client-side lifecycle field is wrong now (the client no longer tracks process
@@ -1149,7 +1149,7 @@ pub fn on_terminal_bytes(app: &mut App, bytes: Vec<u8>) -> Task<Message> {
 pub fn on_terminal_resized(app: &mut App, cols: u16, rows: u16) -> Task<Message> {
     // Remember the pane's live size so the next started session starts at it too.
     app.last_grid = Some((cols, rows));
-    if let (Some(id), Some(d)) = (app.core.active_session, &app.daemon) {
+    if let (Some(id), Some(d)) = (app.core.session.active, &app.daemon) {
         d.send(ClientMsg::SessionResize {
             session: id,
             cols,
@@ -1517,7 +1517,7 @@ pub(crate) mod tests {
         // `restore_after_activation` has already run: the target is active and its remembered
         // session is current.
         app.core.workspace.active = Some(new.clone());
-        app.core.active_session = Some(id);
+        app.core.session.active = Some(id);
 
         switch_daemon_attachment(&mut app, Some(old.clone()), &new);
 
@@ -1549,7 +1549,7 @@ pub(crate) mod tests {
         let new = PathBuf::from("/repo/new");
         let (mut app, mut rx) = connected_app();
         app.core.workspace.active = Some(new.clone());
-        assert_eq!(app.core.active_session, None);
+        assert_eq!(app.core.session.active, None);
 
         switch_daemon_attachment(&mut app, None, &new);
 
@@ -1659,7 +1659,7 @@ pub(crate) mod tests {
     fn switching_projects_releases_the_old_attachment_before_taking_the_new() {
         let (mut app, mut rx) = connected_app();
         let viewed = SessionId::new();
-        app.core.active_session = Some(viewed);
+        app.core.session.active = Some(viewed);
         // The production precondition, now load-bearing (BUG-002): both callers activate the target
         // before calling this, and the start goes through `view_and_start`, which reads the project
         // from `workspace.active` rather than from `new`. Without it the switch would send nothing
@@ -1914,7 +1914,7 @@ pub(crate) mod tests {
 
         // Third snapshot: only B remains (A archived/removed on the daemon) — A is dropped, and a
         // dangling active pointer to A is cleared.
-        core.active_session = Some(a);
+        core.session.active = Some(a);
         reconcile_catalog(
             &mut core,
             &snapshot_with(path, vec![summary(b, "B", WireLifecycle::Running)]),
@@ -1923,7 +1923,7 @@ pub(crate) mod tests {
         let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].id, b);
-        assert_eq!(core.active_session, None, "dangling active pointer cleared");
+        assert_eq!(core.session.active, None, "dangling active pointer cleared");
     }
 
     // Convergence fix (retrofit session, 2026-07-27): a session transitioning to `Restarting` in
@@ -1943,7 +1943,7 @@ pub(crate) mod tests {
             &snapshot_with("/a", vec![summary(a, "A", WireLifecycle::Running)]),
             false,
         );
-        assert!(core.restarted_while_inactive.is_empty());
+        assert!(core.session.restarted_while_inactive.is_empty());
 
         // /a's session crashes and the daemon starts restarting it, while /a is still inactive.
         reconcile_catalog(
@@ -1955,7 +1955,7 @@ pub(crate) mod tests {
             false,
         );
         assert!(
-            core.restarted_while_inactive.contains(&a),
+            core.session.restarted_while_inactive.contains(&a),
             "a background session's transition into Restarting must be detected and marked"
         );
 
@@ -1968,7 +1968,7 @@ pub(crate) mod tests {
             ),
             false,
         );
-        assert_eq!(core.restarted_while_inactive.len(), 1);
+        assert_eq!(core.session.restarted_while_inactive.len(), 1);
 
         // Returning to /a fires the return notice (mirrors `background_restart.rs`).
         core.record_foreground();
@@ -2009,7 +2009,7 @@ pub(crate) mod tests {
             .sessions
             .insert(project.clone(), vec![session]);
         app.core.workspace.active = Some(project);
-        app.core.active_session = Some(id);
+        app.core.session.active = Some(id);
         (app, rx, id)
     }
 
@@ -2078,7 +2078,7 @@ pub(crate) mod tests {
             .sessions
             .insert(project.clone(), vec![session]);
         app.core.workspace.active = Some(project);
-        app.core.active_session = Some(id);
+        app.core.session.active = Some(id);
         let _ = wire(&mut rx);
 
         let _ = on_shell_instance_open_requested(&mut app);

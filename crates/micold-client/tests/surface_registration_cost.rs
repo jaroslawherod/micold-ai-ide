@@ -40,6 +40,7 @@ mod inventory;
 
 use micold_client::features::help;
 use micold_client::features::project;
+use micold_client::features::session;
 use micold_client::features::settings;
 use micold_client::features::sidebar;
 use micold_client::features::worktree;
@@ -335,6 +336,16 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
     // own state and several would otherwise be shadowed by nothing — they are independent, so a
     // single maximal state answers every probe.
     let all = State {
+        session: session::State {
+            terminal_context_menu: Some((4, 2)),
+            remove_target: Some(SessionId::new()),
+            menu_open: Some(micold_client::features::session::SessionMenu {
+                id: SessionId::new(),
+                anchor: (120, 340),
+            }),
+            ..Default::default()
+        },
+
         sidebar: sidebar::State {
             filter_open: true,
             ..Default::default()
@@ -384,12 +395,6 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
             help_menu_open: true,
             ..Default::default()
         },
-        session_menu_open: Some(micold_client::features::session::SessionMenu {
-            id: SessionId::new(),
-            anchor: (120, 340),
-        }),
-        terminal_context_menu: Some((4, 2)),
-        session_remove_target: Some(SessionId::new()),
         ..State::default()
     };
     vec![all]

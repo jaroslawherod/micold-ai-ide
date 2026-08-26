@@ -690,7 +690,7 @@ fn filter_recomputes_after_rename(/* FR-028 / C1 */) {
 /// The state above, with its one session made current.
 fn state_with_current_session() -> State {
     let mut state = state_with_active_project();
-    state.active_session = Some(state.active_sessions()[0].id);
+    state.session.active = Some(state.active_sessions()[0].id);
     state
 }
 
@@ -783,7 +783,7 @@ fn a_current_session_in_the_project_root_opens_the_default_row() {
         .get_mut(&path)
         .unwrap()
         .push(default_session);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
 
     let default_open = state
         .sidebar_entries()
@@ -838,7 +838,7 @@ fn state_with_filterable_worktrees(dir: &str) -> State {
     let session = Session::start_new(SessionLocation::Worktree(dir.to_string()));
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
     state
 }
 
@@ -1017,7 +1017,7 @@ fn exactly_one_session_row_carries_the_mark_when_a_location_holds_several() {
         .unwrap()
         .push(sibling);
     let current = state.active_sessions()[0].id;
-    state.active_session = Some(current);
+    state.session.active = Some(current);
 
     let node = state
         .worktree_tree()
@@ -1029,7 +1029,7 @@ fn exactly_one_session_row_carries_the_mark_when_a_location_holds_several() {
     let marked: Vec<_> = node
         .sessions
         .iter()
-        .filter(|s| state.active_session == Some(s.id))
+        .filter(|s| state.session.active == Some(s.id))
         .map(|s| s.id)
         .collect();
     assert_eq!(
@@ -1054,7 +1054,7 @@ fn nothing_is_marked_when_no_session_is_current() {
     assert!(
         node.sessions
             .iter()
-            .all(|s| state.active_session != Some(s.id)),
+            .all(|s| state.session.active != Some(s.id)),
         "and none carries it when there is no current session — the panel must not claim \
          otherwise (FR-002, FR-013)"
     );

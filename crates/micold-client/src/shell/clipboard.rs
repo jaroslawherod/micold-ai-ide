@@ -59,7 +59,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
 /// and a whitespace-only one both come back as `None` from `selection::copy_request` rather than
 /// being filtered here.
 pub fn selection_copy_request(app: &App) -> Option<Outcome> {
-    let grid = app.core.active_session.and_then(|id| app.grids.get(&id))?;
+    let grid = app.core.session.active.and_then(|id| app.grids.get(&id))?;
     selection::copy_request(app.selection.as_ref(), |id| {
         grid.line(id).map(|l| l.text.clone())
     })

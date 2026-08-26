@@ -149,7 +149,7 @@ fn every_non_modal_surface_closes_on_a_scroll_beneath() {
     assert!(!state.sidebar.filter_open, "sidebar filter panel");
     assert!(state.project.menu_open.is_none(), "project context menu");
     assert!(state.worktree.menu_open.is_none(), "worktree context menu");
-    assert!(state.session_menu_open.is_none(), "session context menu");
+    assert!(state.session.menu_open.is_none(), "session context menu");
 }
 
 // ---------------------------------------------------------------------------
@@ -222,7 +222,7 @@ fn escape_still_reaches_exactly_what_it_used_to() {
         ),
         (
             "confirm_session_remove",
-            |s| s.session_remove_target = Some(SessionId::new()),
+            |s| s.session.remove_target = Some(SessionId::new()),
             Message::Session(SessionMsg::RemoveCancelled),
         ),
         (

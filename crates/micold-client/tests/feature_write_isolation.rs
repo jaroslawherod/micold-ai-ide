@@ -90,27 +90,16 @@ const OWNERS: &[(&str, &str)] = &[
     // --- session ------------------------------------------------------------------------------
     ("workspace.sessions", "session"),
     ("workspace.foreground_by_project", "session"),
-    ("active_session", "session"),
-    ("reveal_suppressed_for", "session"),
-    ("last_foreground_choice", "session"),
-    ("restarted_while_inactive", "session"),
-    ("session_menu_open", "session"),
-    ("session_remove_target", "session"),
+    ("session", "session"),
     // The terminal is the session's pane: both fields are written only by `focus_terminal` /
     // `release_terminal`, and `tests/terminal_bar_stability.rs` already holds that line.
-    ("terminal_released", "session"),
     // The tab strip draws a *session's* tabs, so which one is marked and whether it is in view are
     // the session's business (feature 026, arriving on `main` mid-feature). `arm_tab_reveal` came
     // over as an `impl State` helper in `app.rs` and moved here for the reason T067a-7 gave for
     // `focus_terminal`: root code the guard cannot attribute is reported against every caller.
-    ("pending_tab_reveal", "session"),
-    ("tab_strip_scroll_offset", "session"),
-    ("tab_strip_viewport_width", "session"),
-    ("terminal_context_menu", "session"),
     // The terminal *tab* menu (feature 012, BUG-005), which landed on `main` while this feature was
     // in flight. Same owner as the pane's own menu, and for the same reason: it acts on a shell
     // instance, and a shell instance belongs to a session.
-    ("shell_instance_menu", "session"),
     // --- worktree -----------------------------------------------------------------------------
     ("workspace.worktree_names", "worktree"),
     ("workspace.included_worktrees", "worktree"),

@@ -114,7 +114,7 @@ fn forget_confirmed_on_active_project_clears_active_and_active_session() {
         .workspace
         .sessions
         .insert(PathBuf::from("/b"), vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
 
     state.update(Message::Project(ProjectMsg::ForgetRequested(
         PathBuf::from("/b"),
@@ -130,7 +130,7 @@ fn forget_confirmed_on_active_project_clears_active_and_active_session() {
         state.workspace.active, None,
         "active working space cleared (FR-008)"
     );
-    assert!(state.active_session.is_none(), "active session cleared");
+    assert!(state.session.active.is_none(), "active session cleared");
 }
 
 #[test]
@@ -157,7 +157,7 @@ fn forgetting_a_background_project_leaves_active_untouched() {
         .workspace
         .sessions
         .insert(PathBuf::from("/fg"), vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
 
     state.update(Message::Project(ProjectMsg::ForgetRequested(
         PathBuf::from("/bg"),
@@ -166,7 +166,7 @@ fn forgetting_a_background_project_leaves_active_untouched() {
 
     assert_eq!(state.workspace.active, Some(PathBuf::from("/fg")));
     assert_eq!(
-        state.active_session,
+        state.session.active,
         Some(id),
         "foreground session untouched"
     );
@@ -212,7 +212,7 @@ fn forgetting_the_active_project_clears_the_current_session_through_the_one_path
         .workspace
         .sessions
         .insert(PathBuf::from("/b"), vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
     state.sidebar.pending_reveal_scroll = false;
 
     state.update(Message::Project(ProjectMsg::ForgetRequested(
@@ -221,7 +221,7 @@ fn forgetting_the_active_project_clears_the_current_session_through_the_one_path
     state.update(Message::Project(ProjectMsg::ForgetConfirmed));
 
     assert!(
-        state.active_session.is_none(),
+        state.session.active.is_none(),
         "the project holding it is gone, so no session is current"
     );
     assert!(

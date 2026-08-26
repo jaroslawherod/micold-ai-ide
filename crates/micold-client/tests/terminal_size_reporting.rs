@@ -21,6 +21,7 @@ mod support;
 use iced::advanced::widget::Tree;
 use iced::advanced::{clipboard, layout, mouse, Shell};
 use iced::{Element, Rectangle, Size};
+use micold_client::features::session;
 use micold_client::features::sidebar;
 
 use micold_client::app::{Message, State};
@@ -91,17 +92,21 @@ fn session_displayed_before_its_first_frame() -> State {
     let mut workspace = support::workspace_with(vec![("/tmp/project", vec![session])]);
     workspace.active = workspace.projects.first().map(|p| p.path.clone());
     let state = State {
+        session: session::State {
+            active: Some(id),
+            ..Default::default()
+        },
+
         sidebar: sidebar::State {
             width: 260,
             ..Default::default()
         },
 
         workspace,
-        active_session: Some(id),
         ..State::default()
     };
     assert_eq!(
-        state.active_session,
+        state.session.active,
         Some(id),
         "the premise is that this session is displayed"
     );

@@ -51,7 +51,7 @@ fn every_strip_control_that_moves_the_mark_arms_the_reveal() {
             "ShellInstanceSelected",
             Box::new(move |s: &State| {
                 Message::Session(SessionMsg::ShellInstanceSelected(
-                    s.active_session.expect("displayed"),
+                    s.session.active.expect("displayed"),
                     shell,
                 ))
             }),
@@ -60,7 +60,7 @@ fn every_strip_control_that_moves_the_mark_arms_the_reveal() {
             "ShellInstanceCloseRequested",
             Box::new(move |s: &State| {
                 Message::Session(SessionMsg::ShellInstanceCloseRequested(
-                    s.active_session.expect("displayed"),
+                    s.session.active.expect("displayed"),
                     shell,
                 ))
             }),
@@ -69,7 +69,7 @@ fn every_strip_control_that_moves_the_mark_arms_the_reveal() {
             "TerminalAiCliSelected",
             Box::new(|s: &State| {
                 Message::Session(SessionMsg::TerminalAiCliSelected(
-                    s.active_session.expect("displayed"),
+                    s.session.active.expect("displayed"),
                 ))
             }),
         ),
@@ -78,7 +78,7 @@ fn every_strip_control_that_moves_the_mark_arms_the_reveal() {
     for (name, build) in presses {
         let mut s = showing_a_terminal();
         assert!(
-            !s.pending_tab_reveal,
+            !s.session.pending_tab_reveal,
             "{name}: precondition — nothing armed yet"
         );
 
@@ -86,7 +86,7 @@ fn every_strip_control_that_moves_the_mark_arms_the_reveal() {
         s.update(message);
 
         assert!(
-            s.pending_tab_reveal,
+            s.session.pending_tab_reveal,
             "{name} changes which tab is marked, so it must ask for that tab to be scrolled into \
              view (feature 026 FR-002d).\n\n\
              Unarmed, the mark can land outside the strip's viewport and stay there: the tab is \

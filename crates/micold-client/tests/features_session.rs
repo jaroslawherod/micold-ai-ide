@@ -63,7 +63,7 @@ fn two_projects(a: usize, b: usize) -> (State, Vec<SessionId>, Vec<SessionId>) {
 #[test]
 fn switching_to_an_unknown_project_changes_nothing_and_says_so() {
     let (mut st, a, _) = two_projects(1, 1);
-    st.active_session = Some(a[0]);
+    st.session.active = Some(a[0]);
 
     let switched = st.switch_active(Path::new("/nowhere")).is_some();
 
@@ -78,7 +78,7 @@ fn switching_to_an_unknown_project_changes_nothing_and_says_so() {
          not switching"
     );
     assert_eq!(
-        st.active_session,
+        st.session.active,
         Some(a[0]),
         "and it must leave the foreground alone too"
     );
@@ -87,13 +87,13 @@ fn switching_to_an_unknown_project_changes_nothing_and_says_so() {
 #[test]
 fn switching_away_and_back_returns_to_the_session_that_was_in_front() {
     let (mut st, a, _) = two_projects(2, 1);
-    st.active_session = Some(a[1]);
+    st.session.active = Some(a[1]);
 
     assert!(st.switch_active(Path::new("/b")).is_some());
     assert!(st.switch_active(Path::new("/a")).is_some());
 
     assert_eq!(
-        st.active_session,
+        st.session.active,
         Some(a[1]),
         "the outgoing foreground is recorded BEFORE activation (data-model.md I1); record it \
          after and you store the incoming project's session under the outgoing project's key, \
@@ -108,7 +108,7 @@ fn entering_a_project_with_no_recorded_foreground_falls_back_to_a_running_sessio
     assert!(st.switch_active(Path::new("/b")).is_some());
 
     assert_eq!(
-        st.active_session,
+        st.session.active,
         Some(b[0]),
         "a first visit has nothing stored, so the project shows its first running session \
          rather than an empty shell"
@@ -143,7 +143,7 @@ fn a_restart_in_the_active_project_raises_no_return_notice() {
     st.note_background_restart(a[0]);
 
     assert!(
-        !st.restarted_while_inactive.contains(&a[0]),
+        !st.session.restarted_while_inactive.contains(&a[0]),
         "the user watched it happen — telling them about it on return would be noise"
     );
 }
@@ -154,14 +154,14 @@ fn a_restart_in_an_inactive_project_is_remembered_until_the_user_returns() {
 
     st.note_background_restart(b[0]);
     assert!(
-        st.restarted_while_inactive.contains(&b[0]),
+        st.session.restarted_while_inactive.contains(&b[0]),
         "it happened out of sight, so it is owed a notice"
     );
 
     assert!(st.switch_active(Path::new("/b")).is_some());
 
     assert!(
-        !st.restarted_while_inactive.contains(&b[0]),
+        !st.session.restarted_while_inactive.contains(&b[0]),
         "the marker is consumed on arrival, or the same notice reappears on every later visit"
     );
 }
@@ -204,7 +204,7 @@ fn the_three_selection_kinds_stay_distinct() {
 #[test]
 fn the_remembered_session_is_chosen_when_it_is_still_running() {
     let (mut st, a, _) = two_projects(2, 1);
-    st.active_session = Some(a[1]);
+    st.session.active = Some(a[1]);
     st.record_foreground();
 
     assert_eq!(
@@ -225,7 +225,7 @@ fn the_remembered_session_is_chosen_when_it_is_still_running() {
 #[test]
 fn a_remembered_session_is_restored_even_after_it_has_stopped() {
     let (mut st, a, _) = two_projects(2, 1);
-    st.active_session = Some(a[1]);
+    st.session.active = Some(a[1]);
     st.record_foreground();
     let stopped = a[1];
     if let Some((_, session)) = st.workspace.find_session_mut(stopped) {
@@ -244,7 +244,7 @@ fn a_remembered_session_is_restored_even_after_it_has_stopped() {
 #[test]
 fn a_remembered_session_that_was_closed_is_not_restored() {
     let (mut st, a, _) = two_projects(2, 1);
-    st.active_session = Some(a[1]);
+    st.session.active = Some(a[1]);
     st.record_foreground();
     let closed = a[1];
     if let Some((_, session)) = st.workspace.find_session_mut(closed) {
@@ -265,7 +265,7 @@ fn a_remembered_session_that_was_closed_is_not_restored() {
 #[test]
 fn restoring_a_stopped_session_does_not_start_it() {
     let (mut st, a, _) = two_projects(1, 1);
-    st.active_session = Some(a[0]);
+    st.session.active = Some(a[0]);
     st.record_foreground();
     if let Some((_, session)) = st.workspace.find_session_mut(a[0]) {
         session.record_clean_exit();
@@ -274,7 +274,7 @@ fn restoring_a_stopped_session_does_not_start_it() {
     assert!(st.switch_active(Path::new("/b")).is_some());
     assert!(st.switch_active(Path::new("/a")).is_some());
 
-    assert_eq!(st.active_session, Some(a[0]), "restored");
+    assert_eq!(st.session.active, Some(a[0]), "restored");
     assert!(
         !st.workspace.find_session(a[0]).unwrap().1.is_active(),
         "restoring is a display decision; starting a process is not. FR-001/FR-002 keep a switch \
@@ -315,14 +315,14 @@ fn a_key_nothing_was_filed_under_is_its_own_answer() {
 #[test]
 fn the_choice_is_recorded_where_the_binary_can_log_it() {
     let (mut st, a, _) = two_projects(1, 1);
-    st.active_session = Some(a[0]);
+    st.session.active = Some(a[0]);
     st.record_foreground();
 
     assert!(st.switch_active(Path::new("/b")).is_some());
     assert!(st.switch_active(Path::new("/a")).is_some());
 
     assert_eq!(
-        st.last_foreground_choice,
+        st.session.last_foreground_choice,
         Some(ForegroundChoice::Remembered(a[0])),
         "the reducer decides; the binary logs. Keeping the reason on the state is what lets the \
          log line say why without the decision leaking into the I/O boundary"
@@ -353,11 +353,11 @@ fn a_foreground_resolved_before_the_catalog_arrived_is_resolved_again_when_it_do
         .expect("sessions");
     let _ = st.restore_after_activation(Path::new("/a"));
     assert_eq!(
-        st.last_foreground_choice,
+        st.session.last_foreground_choice,
         Some(ForegroundChoice::NoSessionsForKey),
         "with no sessions filed under the key, this is the honest answer — the bug is that it is final"
     );
-    assert_eq!(st.active_session, None);
+    assert_eq!(st.session.active, None);
 
     // The catalog arrives; `reconcile_catalog` files the sessions under the project.
     st.workspace.sessions.insert(PathBuf::from("/a"), staged);
@@ -367,7 +367,7 @@ fn a_foreground_resolved_before_the_catalog_arrived_is_resolved_again_when_it_do
         "the resolve must be re-run now that the data it needed exists"
     );
     assert_eq!(
-        st.active_session,
+        st.session.active,
         Some(ids_a[0]),
         "the session the daemon was hosting all along is now the current one, which is also what \
          opens its row in the sidebar"
@@ -389,11 +389,11 @@ fn a_deliberate_landing_on_the_project_overview_is_left_alone() {
     let _ = st.restore_after_activation(Path::new("/a"));
     assert!(
         matches!(
-            st.last_foreground_choice,
+            st.session.last_foreground_choice,
             Some(ForegroundChoice::NoneActive { .. })
         ),
         "got {:?}",
-        st.last_foreground_choice
+        st.session.last_foreground_choice
     );
 
     assert!(
@@ -401,7 +401,7 @@ fn a_deliberate_landing_on_the_project_overview_is_left_alone() {
         "nothing was missing, so nothing is re-resolved — the user is on the overview because that \
          is where the rule put them (FR-007)"
     );
-    assert_eq!(st.active_session, None);
+    assert_eq!(st.session.active, None);
 }
 
 /// A session already chosen must never be replaced by a later catalog: a reconnect mid-session
@@ -414,7 +414,7 @@ fn a_catalog_arriving_mid_session_does_not_move_the_user() {
 
     assert!(st.resolve_foreground_after_catalog().is_none());
     assert_eq!(
-        st.active_session,
+        st.session.active,
         Some(ids_a[1]),
         "a reconnect must not relocate the user to a different session"
     );
@@ -453,7 +453,7 @@ fn the_connect_path_re_resolves_the_foreground_after_folding_the_catalog() {
              catalog existed and answered `NoSessionsForKey` against sessions still on the wire",
     );
     let reads_active = connected
-        .find("app.core.active_session")
+        .find("app.core.session.active")
         .expect("on_connected decides what to view from active_session");
 
     assert!(

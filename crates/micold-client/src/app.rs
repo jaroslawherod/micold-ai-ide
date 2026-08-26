@@ -12,10 +12,8 @@
 
 use crate::features::notifications::NoticeLevel;
 use crate::features::project::SwitcherEntry;
-use crate::features::session::SessionMenu;
 use micold_core::notify;
 use micold_core::project::Availability;
-use micold_core::session::SessionId;
 use micold_core::theme::{resolve, ColorScheme};
 use micold_core::worktree::Worktree;
 use std::collections::BTreeSet;
@@ -129,91 +127,16 @@ pub struct State {
     pub worktree: crate::features::worktree::State,
     /// What the sidebar feature remembers -- see [`crate::features::sidebar::State`].
     pub sidebar: crate::features::sidebar::State,
-    /// The currently displayed session, if any (FR-012, FR-015).
-    ///
-    /// Feature 024: written through [`Self::set_current_session`] by everything except
-    /// `SessionSelected`, because the panel's reveal is a consequence of this field changing
-    /// rather than of any particular message being handled (contract §3.0).
-    pub active_session: Option<SessionId>,
-    /// The session whose revealed row the user closed (feature 024, FR-005).
-    ///
-    /// Scoped to a session rather than to a location, so an old collapse cannot swallow the next
-    /// reveal: it is compared against `active_session` and cleared whenever that changes
-    /// (invariant I2). `None` means nothing is suppressed.
-    ///
-    /// This is the *whole* of the reveal's stored state. Which row is open is otherwise derived
-    /// from `active_session` on every view ([`Self::location_open`]), which is what makes a
-    /// wholesale replacement of the worktree list unable to lose it (FR-001b).
-    pub reveal_suppressed_for: Option<SessionId>,
-    /// The tab strip's scroll offset, in whole pixels from its leading edge (feature 026 FR-002e).
-    ///
-    /// Presentation, not state to persist: FR-002d scrolls the marked tab into view on selection,
-    /// and where the user has scrolled to is not remembered across sessions or restarts (spec
-    /// Assumptions). It lives here only because the edge fade and the reveal both have to read it,
-    /// and only the reducer sees both.
-    pub tab_strip_scroll_offset: u32,
-    /// The tab strip viewport's laid-out width, in whole pixels. `0` until the first layout, which
-    /// reads as "cannot decide yet" and never as "nothing fits" — the same rule
-    /// [`Self::viewport_height`] follows, and for the same reason.
-    pub tab_strip_viewport_width: u32,
-    /// Whether the marked tab is waiting to be scrolled into view (feature 026 FR-002d).
-    ///
-    /// A flag, not a target, for the reason [`Self::pending_reveal_scroll`] is one: the offset
-    /// cannot be computed when the selection changes, because the viewport's width is not known
-    /// until layout. The reducer arms it; the binary computes and applies the scroll on the first
-    /// frame where the viewport has a width.
-    pub pending_tab_reveal: bool,
+    /// What the session feature remembers -- see [`crate::features::session::State`].
+    pub session: crate::features::session::State,
     /// What the worktree_form feature remembers -- see [`crate::features::worktree_form::State`].
     pub worktree_form: crate::features::worktree_form::State,
-    /// Whether the user has explicitly handed the keyboard from the terminal back to the
-    /// application (feature 023, FR-021). Default `false`.
-    ///
-    /// **This is not "the terminal is unfocused"** — that question is [`State::terminal_focused`],
-    /// which is derived. This is the one thing about focus the user decides: the reserved chord or
-    /// the release affordance sets it, and any navigation that displays a terminal clears it
-    /// (FR-021a). It replaced a stored `terminal_focused: bool` that seven scattered assignments
-    /// had to keep correct between them, which is how project switch, mode toggle and instance
-    /// switch each ended up missing a case. Written only by [`State::focus_terminal`] and
-    /// [`State::release_terminal`]; `tests/terminal_bar_stability.rs` fails if that stops being
-    /// true.
-    pub terminal_released: bool,
-    /// The open terminal right-click context menu's anchor in pane-local pixels, or `None` when
-    /// no menu is showing (feature 006, FR-013).
-    pub terminal_context_menu: Option<(u16, u16)>,
-    /// The open terminal-tab context menu — which instance it belongs to, and where it was opened
-    /// in window pixels — or `None` when no menu is showing (feature 012, BUG-005, FR-010b).
-    ///
-    /// Carries the instance because the menu acts on the tab it was opened on, **not** on the
-    /// active one: restarting a background instance without selecting it first is the whole of
-    /// FR-010a, and it is what addressing the restart message by instance id was built for.
-    /// Window pixels rather than the pane-local point [`State::terminal_context_menu`] holds — that
-    /// one is drawn on the pane's own overlay because a pane's origin is not known at render time,
-    /// and this one is drawn on the window's, where the anchor is already in the right space.
-    pub shell_instance_menu: Option<(crate::ui::terminal::StripTab, u16, u16)>,
-    /// Why entering a project landed on the session it did, from the most recent switch.
-    ///
-    /// Diagnostic only — nothing renders from it and nothing branches on it. It exists because
-    /// "the app forgot which session I was on" is a report with four possible causes, and the one
-    /// that matters most (a resolve looking under a key nothing is filed under) is invisible from
-    /// the outside. The binary writes it to the client log at the I/O boundary.
-    pub last_foreground_choice: Option<crate::features::session::ForegroundChoice>,
-    /// Sessions that were auto-restarted while their project was inactive, pending a return
-    /// notification. Cleared when the user returns to the owner.
-    pub restarted_while_inactive: BTreeSet<SessionId>,
     /// What the notifications feature remembers — see
     /// [`crate::features::notifications::State`].
     ///
     /// Rendered unconditionally so no failure can be swallowed by an unreachable render path (see
     /// [`notify::Notification`]).
     pub notifications: crate::features::notifications::State,
-    /// The session whose right-click context menu is open, and where it was opened from (bugfix
-    /// BUG-003). At most one is open at a time; `None` means no menu is showing. Mirrors
-    /// `worktree.menu_open`.
-    pub session_menu_open: Option<SessionMenu>,
-    /// The session pending permanent removal, shown in the confirm dialog (bugfix BUG-003,
-    /// FR-015c). Its presence *is* the confirm dialog being shown (T037). Mirrors
-    /// `worktree.delete_target`.
-    pub session_remove_target: Option<SessionId>,
 }
 
 /// The sidebar's reported offset as the app bar reads it: whole pixels, never above the top.
@@ -337,8 +260,8 @@ impl State {
     ///
     /// See `specs/023-terminal-focus-flow/contracts/focus-model.md` (v2).
     pub fn terminal_focused(&self) -> bool {
-        self.active_session.is_some()
-            && !self.terminal_released
+        self.session.active.is_some()
+            && !self.session.terminal_released
             && self.window.focused_field.is_none()
             && !self.any_surface_takes_keyboard()
     }

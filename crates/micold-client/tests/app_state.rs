@@ -50,7 +50,7 @@ fn defaults_are_empty() {
     let state = State::default();
     assert!(state.worktree.worktrees.is_empty());
     assert!(state.sidebar.expanded.is_empty());
-    assert!(state.active_session.is_none());
+    assert!(state.session.active.is_none());
     assert!(state.worktree_form.form.is_none());
     assert!(state.worktree_form.worktree_error.is_none());
     assert_eq!(open_dialog(&state), None);
@@ -355,7 +355,7 @@ fn session_started_selected_and_closed() {
     let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
     let id = session.id;
     state.update(Message::Session(SessionMsg::Started(session)));
-    assert_eq!(state.active_session, Some(id));
+    assert_eq!(state.session.active, Some(id));
     assert_eq!(state.active_sessions().len(), 1);
     assert!(state.sidebar.expanded.contains("feat-x"));
     // Feature 024: and the row reads as open, which is now a second question — open-ness is
@@ -372,7 +372,7 @@ fn session_started_selected_and_closed() {
     assert_eq!(state.active_sessions()[0].label.display(), "Titled");
 
     state.update(Message::Session(SessionMsg::CloseRequested(id)));
-    assert!(state.active_session.is_none());
+    assert!(state.session.active.is_none());
     // Bugfix BUG-003 (FR-015a): close archives the record (kept, not deleted) so a still-existing
     // `claude` transcript isn't reconstructed by reconciliation later — it just stops appearing
     // in the sidebar (`sidebar_entries`/`worktree_tree`, not `active_sessions()` itself).
@@ -407,7 +407,7 @@ fn default_session_started_enters_workspace_sessions() {
     let id = session.id;
     state.update(Message::Session(SessionMsg::Started(session)));
 
-    assert_eq!(state.active_session, Some(id));
+    assert_eq!(state.session.active, Some(id));
     assert_eq!(state.active_sessions().len(), 1);
     assert_eq!(
         state.active_sessions()[0].location,
@@ -785,7 +785,7 @@ fn selecting_a_terminal_tab_shows_that_terminal() {
     use micold_core::session::TerminalMode;
 
     let mut state = state_with_worktree_and_session("feat-x");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     let shell = state
         .workspace
         .find_session_mut(id)
@@ -815,7 +815,7 @@ fn the_two_kinds_of_tab_move_the_session_between_its_panes() {
     use micold_core::session::TerminalMode;
 
     let mut state = state_with_worktree_and_session("feat-x");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     let shell = state
         .workspace
         .find_session_mut(id)
@@ -838,7 +838,7 @@ fn shell_instance_running_and_exited_update_that_instances_lifecycle() {
     use micold_core::session::ShellLifecycle;
 
     let mut state = state_with_worktree_and_session("feat-x");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     let shell_id = state
         .workspace
         .find_session_mut(id)
@@ -872,7 +872,7 @@ fn shell_instance_running_and_exited_update_that_instances_lifecycle() {
 #[test]
 fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
     let mut state = state_with_worktree_and_session("feat-x");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     let (background, active) = {
         let session = state.workspace.find_session_mut(id).unwrap().1;
         let first = session.open_shell_instance();
@@ -889,7 +889,7 @@ fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
         761,
     )));
     assert_eq!(
-        state.shell_instance_menu,
+        state.session.shell_instance_menu,
         Some((StripTab::Instance(background), 742, 761)),
         "the menu must record the instance whose tab was clicked, not the active one"
     );
@@ -902,12 +902,12 @@ fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
         761,
     )));
     assert_eq!(
-        state.shell_instance_menu,
+        state.session.shell_instance_menu,
         Some((StripTab::Instance(active), 880, 761))
     );
 
     state.update(Message::Session(SessionMsg::ShellInstanceMenuClosed));
-    assert_eq!(state.shell_instance_menu, None);
+    assert_eq!(state.session.shell_instance_menu, None);
 }
 
 /// Feature 026 FR-006/FR-007/FR-011: a primary press on the AI tab shows the AI CLI and does
@@ -920,7 +920,7 @@ fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
 #[test]
 fn pressing_the_ai_tab_shows_the_ai_cli_and_disturbs_nothing() {
     let mut state = state_with_worktree_and_session("feat-x");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     let shell = {
         let session = state.workspace.find_session_mut(id).unwrap().1;
         let opened = session.open_shell_instance();
@@ -975,7 +975,7 @@ fn pressing_the_ai_tab_shows_the_ai_cli_and_disturbs_nothing() {
 #[test]
 fn the_tab_menu_records_which_tab_including_the_ai_one() {
     let mut state = state_with_worktree_and_session("feat-x");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     let shell = state
         .workspace
         .find_session_mut(id)
@@ -989,7 +989,7 @@ fn the_tab_menu_records_which_tab_including_the_ai_one() {
         761,
     )));
     assert_eq!(
-        state.shell_instance_menu,
+        state.session.shell_instance_menu,
         Some((StripTab::Instance(shell), 742, 761))
     );
 
@@ -1001,13 +1001,13 @@ fn the_tab_menu_records_which_tab_including_the_ai_one() {
         761,
     )));
     assert_eq!(
-        state.shell_instance_menu,
+        state.session.shell_instance_menu,
         Some((StripTab::Ai, 880, 761)),
         "the AI tab's menu is the same surface, moved — not a second one beside it"
     );
 
     state.update(Message::Session(SessionMsg::ShellInstanceMenuClosed));
-    assert_eq!(state.shell_instance_menu, None);
+    assert_eq!(state.session.shell_instance_menu, None);
 }
 
 /// Opening a dialog closes the tab menu with every other popover (feature 021, T031).
@@ -1018,7 +1018,7 @@ fn the_tab_menu_records_which_tab_including_the_ai_one() {
 #[test]
 fn the_tab_menu_closes_when_a_dialog_opens() {
     let mut state = state_with_worktree_and_session("feat-x");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     let shell = state
         .workspace
         .find_session_mut(id)
@@ -1031,11 +1031,11 @@ fn the_tab_menu_closes_when_a_dialog_opens() {
         742,
         761,
     )));
-    assert!(state.shell_instance_menu.is_some());
+    assert!(state.session.shell_instance_menu.is_some());
 
     state.clear_for_dialog();
     assert_eq!(
-        state.shell_instance_menu, None,
+        state.session.shell_instance_menu, None,
         "a menu that outlives the dialog opening over it claims the next click"
     );
 }
@@ -1929,7 +1929,7 @@ fn state_with_current_session_in(dir: &str) -> State {
     let session = Session::start_new(SessionLocation::Worktree(dir.to_string()));
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
     state
 }
 
@@ -1952,7 +1952,7 @@ fn collapsing_the_revealed_row_closes_it_and_it_stays_closed() {
          otherwise the control does nothing on the one row the feature added (FR-005)"
     );
     assert_eq!(
-        state.reveal_suppressed_for, state.active_session,
+        state.session.reveal_suppressed_for, state.session.active,
         "and the close is remembered against the session it was made for, so a later reveal for \
          a different session is not swallowed by it (invariant I2)"
     );
@@ -1991,7 +1991,7 @@ fn re_expanding_a_suppressed_row_lifts_the_suppression() {
         "the twisty is a toggle in both directions, on the revealed row as much as any other"
     );
     assert!(
-        state.reveal_suppressed_for.is_none(),
+        state.session.reveal_suppressed_for.is_none(),
         "re-opening it by hand withdraws the close, rather than leaving a suppression that only \
          a change of session can clear"
     );
@@ -2011,7 +2011,7 @@ fn the_default_rows_twisty_suppresses_the_same_way() {
     let session = Session::start_new(SessionLocation::Default);
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
     assert!(state.location_open(&SessionLocation::Default));
 
     state.update(Message::Sidebar(SidebarMsg::DefaultExpansionToggled));
@@ -2020,7 +2020,7 @@ fn the_default_rows_twisty_suppresses_the_same_way() {
         !state.location_open(&SessionLocation::Default),
         "the project-root row is a location like any other — FR-005 is not worktree-only"
     );
-    assert_eq!(state.reveal_suppressed_for, state.active_session);
+    assert_eq!(state.session.reveal_suppressed_for, state.session.active);
 }
 
 // --- Feature 024: what a change of current session does to the rows ---------------------------
@@ -2086,7 +2086,7 @@ fn a_change_of_current_session_lifts_a_suppression_made_against_the_old_one() {
     state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
         "feat-a".to_string(),
     )));
-    assert_eq!(state.reveal_suppressed_for, state.active_session);
+    assert_eq!(state.session.reveal_suppressed_for, state.session.active);
 
     let next = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
     let next_id = next.id;
@@ -2095,7 +2095,7 @@ fn a_change_of_current_session_lifts_a_suppression_made_against_the_old_one() {
     set_current(&mut state, Some(next_id));
 
     assert!(
-        state.reveal_suppressed_for.is_none(),
+        state.session.reveal_suppressed_for.is_none(),
         "the close was made against a session that is no longer current; keeping it would swallow \
          the next reveal for a reason the user could not see (invariant I2)"
     );
@@ -2134,7 +2134,7 @@ fn state_with_many_worktrees(count: usize) -> State {
     let session = Session::start_new(SessionLocation::Worktree(format!("feat-{:02}", count - 1)));
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
     state
 }
 
@@ -2237,7 +2237,7 @@ fn starting_a_session_reveals_it() {
     let id = started.id;
     state.update(Message::Session(SessionMsg::Started(started)));
 
-    assert_eq!(state.active_session, Some(id));
+    assert_eq!(state.session.active, Some(id));
     assert!(
         state.location_open(&SessionLocation::Worktree("feat-b".to_string())),
         "a session you just started is one the app put in front of you, so it is revealed like any \
@@ -2262,7 +2262,7 @@ fn clicking_a_session_marks_it_and_moves_nothing() {
 
     state.update(Message::Session(SessionMsg::Selected(other_id)));
 
-    assert_eq!(state.active_session, Some(other_id), "it is now current");
+    assert_eq!(state.session.active, Some(other_id), "it is now current");
     assert!(
         !state.sidebar.pending_reveal_scroll,
         "but nothing is opened or scrolled on the user's behalf: they clicked a row they could \
@@ -2281,12 +2281,12 @@ fn closing_the_current_session_promotes_nothing_in_its_place() {
         .get_mut(&path)
         .unwrap()
         .push(sibling);
-    let closing = state.active_session.unwrap();
+    let closing = state.session.active.unwrap();
 
     state.update(Message::Session(SessionMsg::CloseRequested(closing)));
 
     assert!(
-        state.active_session.is_none(),
+        state.session.active.is_none(),
         "this feature reveals where you are; it does not decide where you go next. A sibling \
          session in the same location is not promoted (FR-001a)"
     );
@@ -2303,12 +2303,12 @@ fn closing_the_current_session_promotes_nothing_in_its_place() {
 #[test]
 fn removing_the_current_session_behaves_the_same_way() {
     let mut state = state_with_current_session_in("feat-a");
-    let removing = state.active_session.unwrap();
+    let removing = state.session.active.unwrap();
     state.update(Message::Session(SessionMsg::RemoveRequested(removing)));
 
     state.update(Message::Session(SessionMsg::RemoveConfirmed));
 
-    assert!(state.active_session.is_none());
+    assert!(state.session.active.is_none());
     assert!(
         state.location_open(&SessionLocation::Worktree("feat-a".to_string())),
         "remove drops the record where close archives it, but neither is the app moving you to a \
@@ -2325,10 +2325,10 @@ fn removing_the_current_session_behaves_the_same_way() {
 
 fn state_with_remembered_session() -> (State, SessionId) {
     let mut state = state_with_current_session_in("feat-a");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     state.record_foreground();
     // The shape after a restart: the memory survived, the pointer did not.
-    state.active_session = None;
+    state.session.active = None;
     state.sidebar.pending_reveal_scroll = false;
     (state, id)
 }
@@ -2342,7 +2342,7 @@ fn applying_the_memory_makes_that_session_current_and_reveals_it() {
     set_current(&mut state, choice.session());
 
     assert_eq!(
-        state.active_session,
+        state.session.active,
         Some(id),
         "reopening lands on the session you were last using, which is the whole feature"
     );
@@ -2379,7 +2379,7 @@ fn applying_the_memory_starts_only_the_session_it_displays() {
          lie BUG-001 fixed, arrived at from the other direction"
     );
     assert_eq!(
-        state.active_session,
+        state.session.active,
         Some(id),
         "and exactly one session is made current — the one the start will name"
     );
@@ -2435,7 +2435,7 @@ fn a_memory_whose_worktree_is_gone_is_still_restored() {
     set_current(&mut state, choice);
 
     assert_eq!(
-        state.active_session,
+        state.session.active,
         Some(id),
         "the application already lists a session whose worktree is missing and lets you select it,          so refusing to *return* you to it would be the same inconsistency BUG-001 was about.          Declining would also need the worktree list at resolve time, which a project switch does          not have yet — one rule that breaks switching to handle a case the user can see"
     );
@@ -2460,7 +2460,7 @@ fn a_memory_naming_a_closed_session_restores_nothing_and_disturbs_nothing() {
     set_current(&mut state, choice);
 
     assert!(
-        state.active_session.is_none(),
+        state.session.active.is_none(),
         "a closed session is not listed at all, so restoring one would display something the panel \
          cannot show (FR-005). Nothing is chosen in its place either (FR-007)"
     );

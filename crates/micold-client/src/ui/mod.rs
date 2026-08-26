@@ -173,7 +173,7 @@ pub fn view<'a>(
     // the embedded terminal when a session is active (FR-012), else the project surface. The
     // sidebar slides in/out and is resizable; the main content fades when it changes.
     let body: Element<'a, Message> = if state.workspace.active_project().is_some() {
-        let main_inner: Element<'a, Message> = if state.active_session.is_some() {
+        let main_inner: Element<'a, Message> = if state.session.active.is_some() {
             terminal::pane(state, grid, selection, display_offset, scheme)
         } else {
             shell::view(state, scheme)
@@ -341,7 +341,7 @@ pub fn view<'a>(
     // The session right-click context menu (feature 010's BUG-003). Only present while a session's
     // menu is open. Same anchor rule and the same clamping as the worktree menu above.
     let session_menu: Option<cdk::overlay::Surface<'a, Message>> =
-        state.session_menu_open.map(|menu| {
+        state.session.menu_open.map(|menu| {
             let items = session_menu_items(menu.id);
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
@@ -365,8 +365,8 @@ pub fn view<'a>(
     // that one is anchored pane-local because a pane's origin is not known at render time, and this
     // point is already in window space, which is what this overlay takes.
     let shell_instance_menu: Option<cdk::overlay::Surface<'a, Message>> =
-        state.shell_instance_menu.and_then(|(tab, x, y)| {
-            let session = state.active_session?;
+        state.session.shell_instance_menu.and_then(|(tab, x, y)| {
+            let session = state.session.active?;
             let items = strip_tab_menu_items(state, session, tab);
             // FR-006b: a menu with no items does not open, and the secondary press does nothing.
             // With restart the only item and Close excluded (FR-004), this is the AI tab's state
@@ -612,7 +612,7 @@ fn session_menu_items(id: SessionId) -> Vec<material::MenuItem<Message>> {
 /// on every re-render — the same question the old `MotionKey::Main` reset answered, now asked of
 /// the component that owns the track.
 fn main_content_key(state: &State) -> u64 {
-    match (state.workspace.active_project(), state.active_session) {
+    match (state.workspace.active_project(), state.session.active) {
         (None, _) => 0,
         (Some(_), None) => 1,
         // Offset past the two fixed states; the id itself distinguishes one session from another.

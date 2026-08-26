@@ -1,7 +1,7 @@
 //! Sessions: which one is in the foreground, and what survives a project switch
 //! (feature 021, T021).
 //!
-//! The switch sequence in [`State::switch_active`] is the delicate part of this feature and the
+//! The switch sequence in [`crate::app::State::switch_active`] is the delicate part of this feature and the
 //! reason its helpers belong together: the order of record-then-activate-then-restore is
 //! load-bearing (data-model.md I1), and the private steps it calls are meaningless apart from it.
 //!
@@ -30,13 +30,108 @@
 //! scrolls or resizes it, or reaches the clipboard.
 
 use crate::app::Message;
-use crate::app::State;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::overlay::Layer;
 use micold_core::project::canonicalize_best_effort;
 use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
+use std::collections::BTreeSet;
 use std::path::Path;
+
+/// What this feature remembers (feature 028, contract S1).
+///
+/// Nine of the twelve keep the names they had as flat members of `app::State`. Three do not: the
+/// qualifier already says `session`, so `session.active_session`, `session.session_menu_open` and
+/// `session.session_remove_target` would say it twice, and they are `active`, `menu_open` and
+/// `remove_target` here. That is the same trim `worktree.menu_open` and `worktree.delete_target`
+/// took, and the two menus they name are still the mirror of each other they were.
+///
+/// The other nine name a sub-surface inside a session rather than the feature — `terminal_`,
+/// `shell_instance_`, `tab_strip_` — or name no feature at all, so there is nothing for the
+/// qualifier to absorb and they are unchanged.
+///
+/// The reducers below spell the root's type `crate::app::State` now that `State` here means this
+/// struct.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct State {
+    /// The currently displayed session, if any (FR-012, FR-015).
+    ///
+    /// Feature 024: written through [`crate::app::State::set_current_session`] by everything except
+    /// `SessionSelected`, because the panel's reveal is a consequence of this field changing
+    /// rather than of any particular message being handled (contract §3.0).
+    pub active: Option<SessionId>,
+    /// Why entering a project landed on the session it did, from the most recent switch.
+    ///
+    /// Diagnostic only — nothing renders from it and nothing branches on it. It exists because
+    /// "the app forgot which session I was on" is a report with four possible causes, and the one
+    /// that matters most (a resolve looking under a key nothing is filed under) is invisible from
+    /// the outside. The binary writes it to the client log at the I/O boundary.
+    pub last_foreground_choice: Option<crate::features::session::ForegroundChoice>,
+    /// Whether the marked tab is waiting to be scrolled into view (feature 026 FR-002d).
+    ///
+    /// A flag, not a target, for the reason [`crate::features::sidebar::State::pending_reveal_scroll`] is one: the offset
+    /// cannot be computed when the selection changes, because the viewport's width is not known
+    /// until layout. The reducer arms it; the binary computes and applies the scroll on the first
+    /// frame where the viewport has a width.
+    pub pending_tab_reveal: bool,
+    /// Sessions that were auto-restarted while their project was inactive, pending a return
+    /// notification. Cleared when the user returns to the owner.
+    pub restarted_while_inactive: BTreeSet<SessionId>,
+    /// The session whose revealed row the user closed (feature 024, FR-005).
+    ///
+    /// Scoped to a session rather than to a location, so an old collapse cannot swallow the next
+    /// reveal: it is compared against `active` and cleared whenever that changes
+    /// (invariant I2). `None` means nothing is suppressed.
+    ///
+    /// This is the *whole* of the reveal's stored state. Which row is open is otherwise derived
+    /// from `active` on every view ([`crate::app::State::location_open`]), which is what makes a
+    /// wholesale replacement of the worktree list unable to lose it (FR-001b).
+    pub reveal_suppressed_for: Option<SessionId>,
+    /// The session whose right-click context menu is open, and where it was opened from (bugfix
+    /// BUG-003). At most one is open at a time; `None` means no menu is showing. Mirrors
+    /// `worktree.menu_open`.
+    pub menu_open: Option<SessionMenu>,
+    /// The session pending permanent removal, shown in the confirm dialog (bugfix BUG-003,
+    /// FR-015c). Its presence *is* the confirm dialog being shown (T037). Mirrors
+    /// `worktree.delete_target`.
+    pub remove_target: Option<SessionId>,
+    /// The open terminal-tab context menu — which instance it belongs to, and where it was opened
+    /// in window pixels — or `None` when no menu is showing (feature 012, BUG-005, FR-010b).
+    ///
+    /// Carries the instance because the menu acts on the tab it was opened on, **not** on the
+    /// active one: restarting a background instance without selecting it first is the whole of
+    /// FR-010a, and it is what addressing the restart message by instance id was built for.
+    /// Window pixels rather than the pane-local point [`Self::terminal_context_menu`] holds — that
+    /// one is drawn on the pane's own overlay because a pane's origin is not known at render time,
+    /// and this one is drawn on the window's, where the anchor is already in the right space.
+    pub shell_instance_menu: Option<(crate::ui::terminal::StripTab, u16, u16)>,
+    /// The tab strip's scroll offset, in whole pixels from its leading edge (feature 026 FR-002e).
+    ///
+    /// Presentation, not state to persist: FR-002d scrolls the marked tab into view on selection,
+    /// and where the user has scrolled to is not remembered across sessions or restarts (spec
+    /// Assumptions). It lives here only because the edge fade and the reveal both have to read it,
+    /// and only the reducer sees both.
+    pub tab_strip_scroll_offset: u32,
+    /// The tab strip viewport's laid-out width, in whole pixels. `0` until the first layout, which
+    /// reads as "cannot decide yet" and never as "nothing fits" — the same rule
+    /// [`crate::features::sidebar::State::viewport_height`] follows, and for the same reason.
+    pub tab_strip_viewport_width: u32,
+    /// The open terminal right-click context menu's anchor in pane-local pixels, or `None` when
+    /// no menu is showing (feature 006, FR-013).
+    pub terminal_context_menu: Option<(u16, u16)>,
+    /// Whether the user has explicitly handed the keyboard from the terminal back to the
+    /// application (feature 023, FR-021). Default `false`.
+    ///
+    /// **This is not "the terminal is unfocused"** — that question is [`crate::app::State::terminal_focused`],
+    /// which is derived. This is the one thing about focus the user decides: the reserved chord or
+    /// the release affordance sets it, and any navigation that displays a terminal clears it
+    /// (FR-021a). It replaced a stored `terminal_focused: bool` that seven scattered assignments
+    /// had to keep correct between them, which is how project switch, mode toggle and instance
+    /// switch each ended up missing a case. Written only by [`crate::app::State::focus_terminal`] and
+    /// [`crate::app::State::release_terminal`]; `tests/terminal_bar_stability.rs` fails if that stops being
+    /// true.
+    pub terminal_released: bool,
+}
 
 /// Why entering a project landed on the session it did — or on none (feature 008 FR-003).
 ///
@@ -100,7 +195,7 @@ pub enum SelectKind {
     Lines,
 }
 
-impl State {
+impl crate::app::State {
     /// delete): the sessions the binary must terminate before removing the worktree (FR-020).
     pub fn sessions_in_worktree(&self, dir_name: &str) -> Vec<SessionId> {
         self.active_sessions()
@@ -160,16 +255,16 @@ impl State {
         &mut self,
         next: Option<SessionId>,
     ) -> Vec<crate::features::Outcome> {
-        if self.active_session == next {
+        if self.session.active == next {
             crate::reveal_trace::line(format_args!(
                 "current session unchanged at {:?}: neither expanded nor armed",
-                self.active_session
+                self.session.active
             ));
             return Vec::new();
         }
         crate::reveal_trace::line(format_args!(
             "current session {:?} -> {next:?}, arming={}",
-            self.active_session,
+            self.session.active,
             next.is_some()
         ));
         let mut outcomes = Vec::new();
@@ -180,8 +275,8 @@ impl State {
                 outcomes.push(crate::features::Outcome::LocationOpened(location));
             }
         }
-        self.reveal_suppressed_for = None;
-        self.active_session = next;
+        self.session.reveal_suppressed_for = None;
+        self.session.active = next;
         if next.is_some() {
             outcomes.push(crate::features::Outcome::RevealScrollArmed);
         }
@@ -193,8 +288,8 @@ impl State {
     /// Reached from `Outcome::RevealSuppressed`; the sidebar owns the row, this feature owns what
     /// closing it means.
     pub fn reveal_suppression_set(&mut self, suppressed: bool) {
-        self.reveal_suppressed_for = if suppressed {
-            self.active_session
+        self.session.reveal_suppressed_for = if suppressed {
+            self.session.active
         } else {
             None
         };
@@ -226,7 +321,7 @@ impl State {
     /// `Workspace::open_or_activate`) can capture the outgoing foreground BEFORE activation
     /// and then call [`restore_after_activation`](Self::restore_after_activation) (I1).
     pub fn record_foreground(&mut self) {
-        if let (Some(active), Some(id)) = (self.workspace.active.clone(), self.active_session) {
+        if let (Some(active), Some(id)) = (self.workspace.active.clone(), self.session.active) {
             // Feature 025: on the workspace, so it is persisted with the sessions it refers to.
             // The client keeps it current in memory; the daemon is what writes it to disk.
             self.workspace.foreground_by_project.insert(active, id);
@@ -243,7 +338,7 @@ impl State {
         // — including when it landed nowhere, which is the case a user reports as "it forgot my
         // session" and which `Option::None` alone cannot explain.
         let choice = self.explain_foreground(&key);
-        self.last_foreground_choice = Some(choice.clone());
+        self.session.last_foreground_choice = Some(choice.clone());
         // Feature 024: through `set_current_session`, so arriving in a project reveals the session
         // it drops you into (FR-001) — the reported bug was that the panel showed every row
         // collapsed while the main area showed a session.
@@ -306,11 +401,11 @@ impl State {
     /// BUG-013 was filed for. Mirrors `switch_active`, whose `None` is likewise the refusal.
     #[must_use = "the reveal of the session this resolved is applied by draining this (010 BUG-013)"]
     pub fn resolve_foreground_after_catalog(&mut self) -> Option<Vec<crate::features::Outcome>> {
-        if self.active_session.is_some() {
+        if self.session.active.is_some() {
             return None;
         }
         if !matches!(
-            self.last_foreground_choice,
+            self.session.last_foreground_choice,
             Some(ForegroundChoice::NoSessionsForKey)
         ) {
             return None;
@@ -324,7 +419,7 @@ impl State {
             return None;
         }
         let session = choice.session();
-        self.last_foreground_choice = Some(choice);
+        self.session.last_foreground_choice = Some(choice);
         // Through `set_current_session` like every other app-initiated move, so the row the
         // session is in is revealed rather than left shut (feature 024, FR-001) — which is the
         // half of this bug the user actually saw.
@@ -380,17 +475,17 @@ impl State {
             .map(|list| {
                 list.iter()
                     .map(|s| s.id)
-                    .filter(|id| self.restarted_while_inactive.contains(id))
+                    .filter(|id| self.session.restarted_while_inactive.contains(id))
                     .collect()
             })
             .unwrap_or_default();
         if !restarted.is_empty() {
             for id in &restarted {
-                self.restarted_while_inactive.remove(id);
+                self.session.restarted_while_inactive.remove(id);
             }
             // Reported through the global surface. The previous dedicated `notice` field was
             // drawn only by `shell::view`, which is the *else* branch of
-            // `if state.active_session.is_some()` — and returning to a project restores its
+            // `if state.session.active.is_some()` — and returning to a project restores its
             // foreground session, so the banner was unreachable in exactly the case it exists
             // for (FR-011 / SC-007).
             return vec![crate::features::notifications::info(
@@ -410,7 +505,7 @@ impl State {
             .map(|(path, _)| path.to_path_buf());
         if let Some(owner) = owner {
             if self.workspace.active.as_deref() != Some(owner.as_path()) {
-                self.restarted_while_inactive.insert(id);
+                self.session.restarted_while_inactive.insert(id);
             }
         }
     }
@@ -461,8 +556,8 @@ impl FloatingSurface for SessionContextMenu {
 }
 
 impl Registered for SessionContextMenu {
-    fn open_in(state: &State) -> Option<Self> {
-        state.session_menu_open.map(|_| SessionContextMenu)
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state.session.menu_open.map(|_| SessionContextMenu)
     }
 }
 
@@ -491,8 +586,11 @@ impl FloatingSurface for TerminalContextMenu {
 }
 
 impl Registered for TerminalContextMenu {
-    fn open_in(state: &State) -> Option<Self> {
-        state.terminal_context_menu.map(|_| TerminalContextMenu)
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .session
+            .terminal_context_menu
+            .map(|_| TerminalContextMenu)
     }
 }
 
@@ -523,8 +621,8 @@ impl FloatingSurface for ShellInstanceMenu {
 }
 
 impl Registered for ShellInstanceMenu {
-    fn open_in(state: &State) -> Option<Self> {
-        state.shell_instance_menu.map(|_| ShellInstanceMenu)
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state.session.shell_instance_menu.map(|_| ShellInstanceMenu)
     }
 }
 
@@ -548,9 +646,10 @@ impl FloatingSurface for ConfirmSessionRemoveDialog {
 }
 
 impl Registered for ConfirmSessionRemoveDialog {
-    fn open_in(state: &State) -> Option<Self> {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
         state
-            .session_remove_target
+            .session
+            .remove_target
             .map(|_| ConfirmSessionRemoveDialog)
     }
 }
@@ -566,7 +665,7 @@ impl Registered for ConfirmSessionRemoveDialog {
 ///
 /// Making a session the displayed session puts the user in front of a terminal, so it holds the
 /// keyboard (FR-011).
-pub fn started(state: &mut State, session: Session) -> Vec<crate::features::Outcome> {
+pub fn started(state: &mut crate::app::State, session: Session) -> Vec<crate::features::Outcome> {
     let id = session.id;
     let location = session.location.clone();
     if let Some(path) = state.workspace.active.clone() {
@@ -589,22 +688,22 @@ pub fn started(state: &mut State, session: Session) -> Vec<crate::features::Outc
 /// could already see, so revealing it would open nothing they had not opened and would scroll a
 /// list they were reading (FR-006). `tests/current_session_writers.rs` knows this exemption by
 /// name; any other direct write to `active_session` fails that gate.
-pub fn selected(state: &mut State, id: SessionId) -> Vec<crate::features::Outcome> {
-    state.active_session = Some(id);
+pub fn selected(state: &mut crate::app::State, id: SessionId) -> Vec<crate::features::Outcome> {
+    state.session.active = Some(id);
     // Selecting a session displays its terminal, so it holds the keyboard, clearing any earlier
     // release (FR-011, FR-021a).
     state.focus_terminal()
 }
 
 /// The daemon reported a session's process running.
-pub fn running(state: &mut State, id: SessionId) {
+pub fn running(state: &mut crate::app::State, id: SessionId) {
     if let Some(session) = state.session_mut(id) {
         session.mark_running();
     }
 }
 
 /// A session's title changed.
-pub fn title_updated(state: &mut State, id: SessionId, title: String) {
+pub fn title_updated(state: &mut crate::app::State, id: SessionId, title: String) {
     if let Some(session) = state.session_mut(id) {
         session.set_title(title);
     }
@@ -612,7 +711,7 @@ pub fn title_updated(state: &mut State, id: SessionId, title: String) {
 
 /// A shell instance was selected (feature 012).
 pub fn shell_instance_selected(
-    state: &mut State,
+    state: &mut crate::app::State,
     id: SessionId,
     shell_id: ShellInstanceId,
 ) -> Vec<crate::features::Outcome> {
@@ -640,7 +739,9 @@ pub fn shell_instance_selected(
 /// while the "+" opened instances into a strip with room for them; feature 027 put the "+" beside a
 /// right-aligned strip, and the sixth press then created a tab, marked it, and left it behind the
 /// trailing edge fade — the user's own new terminal, and the one thing the bar would not show.
-pub fn shell_instance_open_requested(state: &mut State) -> Vec<crate::features::Outcome> {
+pub fn shell_instance_open_requested(
+    state: &mut crate::app::State,
+) -> Vec<crate::features::Outcome> {
     arm_tab_reveal(state);
     state.focus_terminal()
 }
@@ -652,7 +753,7 @@ pub fn shell_instance_open_requested(state: &mut State) -> Vec<crate::features::
 /// moves every tab after the closed one; the mark can land outside the viewport without anything
 /// having scrolled.
 pub fn shell_instance_close_requested(
-    state: &mut State,
+    state: &mut crate::app::State,
     id: SessionId,
     shell_id: ShellInstanceId,
 ) -> Vec<crate::features::Outcome> {
@@ -664,14 +765,22 @@ pub fn shell_instance_close_requested(
 }
 
 /// The daemon reported a shell instance live (feature 012, FR-008).
-pub fn shell_instance_running(state: &mut State, session_id: SessionId, shell_id: ShellInstanceId) {
+pub fn shell_instance_running(
+    state: &mut crate::app::State,
+    session_id: SessionId,
+    shell_id: ShellInstanceId,
+) {
     if let Some(session) = state.session_mut(session_id) {
         session.mark_shell_running(shell_id);
     }
 }
 
 /// A shell instance's process ended (feature 012).
-pub fn shell_instance_exited(state: &mut State, session_id: SessionId, shell_id: ShellInstanceId) {
+pub fn shell_instance_exited(
+    state: &mut crate::app::State,
+    session_id: SessionId,
+    shell_id: ShellInstanceId,
+) {
     if let Some(session) = state.session_mut(session_id) {
         session.mark_shell_exited(shell_id);
     }
@@ -689,7 +798,10 @@ pub fn shell_instance_exited(state: &mut State, session_id: SessionId, shell_id:
 /// (FR-001c). Nothing is armed — no session is current to scroll to, and FR-001a forbids moving
 /// the panel when the user closes the session they were on. Nothing needs clearing alongside it:
 /// with no displayed session `terminal_focused()` is already false (FR-012/FR-016).
-pub fn close_requested(state: &mut State, id: SessionId) -> Vec<crate::features::Outcome> {
+pub fn close_requested(
+    state: &mut crate::app::State,
+    id: SessionId,
+) -> Vec<crate::features::Outcome> {
     if let Some(path) = state.workspace.active.clone() {
         if let Some(list) = state.workspace.sessions.get_mut(&path) {
             if let Some(session) = list.iter_mut().find(|s| s.id == id) {
@@ -697,7 +809,7 @@ pub fn close_requested(state: &mut State, id: SessionId) -> Vec<crate::features:
             }
         }
     }
-    if state.active_session == Some(id) {
+    if state.session.active == Some(id) {
         return state.set_current_session(None);
     }
     Vec::new()
@@ -707,22 +819,22 @@ pub fn close_requested(state: &mut State, id: SessionId) -> Vec<crate::features:
 ///
 /// Same session closes; a different one replaces it (only ever one open) — mirrors
 /// `worktree::menu_toggled` — and re-anchors at its own press point (018 BUG-008).
-pub fn menu_toggled(state: &mut State, id: SessionId, anchor: (u16, u16)) {
-    state.session_menu_open = match &state.session_menu_open {
+pub fn menu_toggled(state: &mut crate::app::State, id: SessionId, anchor: (u16, u16)) {
+    state.session.menu_open = match &state.session.menu_open {
         Some(open) if open.id == id => None,
         _ => Some(SessionMenu { id, anchor }),
     };
 }
 
 /// The session context menu was dismissed.
-pub fn menu_dismissed(state: &mut State) {
-    state.session_menu_open = None;
+pub fn menu_dismissed(state: &mut crate::app::State) {
+    state.session.menu_open = None;
 }
 
 /// Permanent removal was requested; the confirmation opens (bugfix BUG-003, FR-015c).
-pub fn remove_requested(state: &mut State, id: SessionId) {
+pub fn remove_requested(state: &mut crate::app::State, id: SessionId) {
     state.clear_for_dialog();
-    state.session_remove_target = Some(id);
+    state.session.remove_target = Some(id);
 }
 
 /// Permanent removal was confirmed (FR-015c, FR-020c).
@@ -735,11 +847,11 @@ pub fn remove_requested(state: &mut State, id: SessionId) {
 /// location to find — so clearing the pointer *after* dropping the record collapses the row and
 /// takes its siblings out of view. The close path is not exposed to this, archiving leaving the
 /// record in place.
-pub fn remove_confirmed(state: &mut State) -> Vec<crate::features::Outcome> {
-    let Some(id) = state.session_remove_target.take() else {
+pub fn remove_confirmed(state: &mut crate::app::State) -> Vec<crate::features::Outcome> {
+    let Some(id) = state.session.remove_target.take() else {
         return Vec::new();
     };
-    let outcomes = if state.active_session == Some(id) {
+    let outcomes = if state.session.active == Some(id) {
         state.set_current_session(None)
     } else {
         Vec::new()
@@ -753,18 +865,18 @@ pub fn remove_confirmed(state: &mut State) -> Vec<crate::features::Outcome> {
 }
 
 /// The removal confirmation was dismissed.
-pub fn remove_cancelled(state: &mut State) {
-    state.session_remove_target = None;
+pub fn remove_cancelled(state: &mut crate::app::State) {
+    state.session.remove_target = None;
 }
 
 /// The terminal's right-click menu opened at a pane-local anchor (feature 006, FR-013).
-pub fn context_menu_opened(state: &mut State, x: u16, y: u16) {
-    state.terminal_context_menu = Some((x, y));
+pub fn context_menu_opened(state: &mut crate::app::State, x: u16, y: u16) {
+    state.session.terminal_context_menu = Some((x, y));
 }
 
 /// The terminal's right-click menu was dismissed.
-pub fn context_menu_closed(state: &mut State) {
-    state.terminal_context_menu = None;
+pub fn context_menu_closed(state: &mut crate::app::State) {
+    state.session.terminal_context_menu = None;
 }
 
 /// A terminal *tab* was right-clicked (feature 012, BUG-005, FR-010b).
@@ -779,17 +891,17 @@ pub fn context_menu_closed(state: &mut State) {
 /// It arrived on `main` as an arm of `State::update` while this feature was in flight; it is a
 /// routing call here for the same reason every other arm is (FR-002).
 pub fn strip_tab_menu_requested(
-    state: &mut State,
+    state: &mut crate::app::State,
     tab: crate::ui::terminal::StripTab,
     x: u16,
     y: u16,
 ) {
-    state.shell_instance_menu = Some((tab, x, y));
+    state.session.shell_instance_menu = Some((tab, x, y));
 }
 
 /// The terminal-tab context menu was dismissed.
-pub fn shell_instance_menu_closed(state: &mut State) {
-    state.shell_instance_menu = None;
+pub fn shell_instance_menu_closed(state: &mut crate::app::State) {
+    state.session.shell_instance_menu = None;
 }
 
 /// Ask for the marked tab to be scrolled into view on the next laid-out frame (feature 026,
@@ -804,8 +916,8 @@ pub fn shell_instance_menu_closed(state: &mut State) {
 /// T067a-7 gave for `focus_terminal`: the strip draws a *session's* tabs, so which one is marked
 /// and whether it is in view are the session's business, and a helper in the root is a helper the
 /// write-isolation guard reports against every caller instead of the one function that writes it.
-pub(crate) fn arm_tab_reveal(state: &mut State) {
-    state.pending_tab_reveal = true;
+pub(crate) fn arm_tab_reveal(state: &mut crate::app::State) {
+    state.session.pending_tab_reveal = true;
 }
 
 /// The AI tab was pressed (feature 026, FR-006/FR-007).
@@ -822,7 +934,10 @@ pub(crate) fn arm_tab_reveal(state: &mut State) {
 /// the keyboard hand-off it performs is an outcome rather than a reach into `focused_field`
 /// (T067a-9).
 #[must_use = "the field that holds the keyboard gives it up by draining this (T067a-9)"]
-pub fn ai_cli_selected(state: &mut State, id: SessionId) -> Vec<crate::features::Outcome> {
+pub fn ai_cli_selected(
+    state: &mut crate::app::State,
+    id: SessionId,
+) -> Vec<crate::features::Outcome> {
     if let Some(session) = state.session_mut(id) {
         session.set_mode(micold_core::session::TerminalMode::AiCli);
     }
@@ -836,9 +951,9 @@ pub fn ai_cli_selected(state: &mut State, id: SessionId) -> Vec<crate::features:
 /// A scrollable is a place the ground can move, so this dismisses whatever floats above it — the
 /// same rule `sidebar::scrolled` applies, from the second scroll region this application has.
 /// Without it the tab menu would hang over a tab that had scrolled out from under it.
-pub fn tab_strip_scrolled(state: &mut State, offset: u32, width: u32) {
-    state.tab_strip_scroll_offset = offset;
-    state.tab_strip_viewport_width = width;
+pub fn tab_strip_scrolled(state: &mut crate::app::State, offset: u32, width: u32) {
+    state.session.tab_strip_scroll_offset = offset;
+    state.session.tab_strip_viewport_width = width;
     state.dismiss_on_scroll_beneath();
 }
 
@@ -846,8 +961,8 @@ pub fn tab_strip_scrolled(state: &mut State, offset: u32, width: u32) {
 ///
 /// Separate from [`tab_strip_scrolled`] because the two answer different questions and fire at
 /// different times; a resize moves nothing under an open menu, so it dismisses nothing.
-pub fn tab_strip_viewport_resized(state: &mut State, width: u32) {
-    state.tab_strip_viewport_width = width;
+pub fn tab_strip_viewport_resized(state: &mut crate::app::State, width: u32) {
+    state.session.tab_strip_viewport_width = width;
 }
 
 /// Sessions that no longer exist were dropped (feature 021, T065 — `Outcome::SessionsClosed`).
@@ -859,8 +974,8 @@ pub fn tab_strip_viewport_resized(state: &mut State, width: u32) {
 /// The pointer is cleared before the records are dropped, for the reason `remove_confirmed`
 /// records at length: feature 024 resolves the outgoing session's location by looking it up, and a
 /// record already removed has no location to find.
-pub fn closed(state: &mut State, ids: &[SessionId]) -> Vec<crate::features::Outcome> {
-    let outcomes = if state.active_session.is_some_and(|id| ids.contains(&id)) {
+pub fn closed(state: &mut crate::app::State, ids: &[SessionId]) -> Vec<crate::features::Outcome> {
+    let outcomes = if state.session.active.is_some_and(|id| ids.contains(&id)) {
         state.set_current_session(None)
     } else {
         Vec::new()
@@ -871,7 +986,7 @@ pub fn closed(state: &mut State, ids: &[SessionId]) -> Vec<crate::features::Outc
     outcomes
 }
 
-impl State {
+impl crate::app::State {
     /// The user is being put in front of a terminal (FR-011, FR-021a, FR-008b).
     ///
     /// Clears the explicit release *and* any text-field focus. The second one matters: a press on
@@ -888,14 +1003,14 @@ impl State {
     /// wrote window state, when one function does.
     #[must_use = "the field that holds the keyboard gives it up by draining this (T067a-9)"]
     pub(crate) fn focus_terminal(&mut self) -> Vec<crate::features::Outcome> {
-        self.terminal_released = false;
+        self.session.terminal_released = false;
         vec![crate::features::Outcome::FieldFocusCleared]
     }
 
     /// The user handed the keyboard back to the application (FR-021) — the reserved chord or the
     /// release affordance. It holds until they give it back or navigate to a terminal.
     pub(crate) fn release_terminal(&mut self) {
-        self.terminal_released = true;
+        self.session.terminal_released = true;
     }
 }
 
@@ -1087,7 +1202,7 @@ pub enum Msg {
 /// matched a second time in `main.rs`, which runs the effect and lets the message reach here.
 /// The split is by *effect*, not by variant, as `worktree_form` established and M2 names as the
 /// reference.
-pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::Started(session) => return started(state, session),
         Msg::Selected(id) => return selected(state, id),

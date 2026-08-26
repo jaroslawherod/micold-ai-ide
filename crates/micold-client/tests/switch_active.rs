@@ -21,7 +21,7 @@ fn two_projects_active_a() -> State {
     };
     st.workspace.active = Some(PathBuf::from("/a"));
     // Foreground on /a = the SECOND session, to prove exact restore.
-    st.active_session = Some(st.workspace.sessions[Path::new("/a")][1].id);
+    st.session.active = Some(st.workspace.sessions[Path::new("/a")][1].id);
     st
 }
 
@@ -57,7 +57,7 @@ fn switch_keeps_outgoing_sessions_running() {
 #[test]
 fn records_outgoing_foreground_before_activating() {
     let mut st = two_projects_active_a();
-    let fg_a = st.active_session.unwrap();
+    let fg_a = st.session.active.unwrap();
 
     assert!(switch(&mut st, "/b"));
 
@@ -72,24 +72,24 @@ fn records_outgoing_foreground_before_activating() {
 #[test]
 fn foreground_restored_on_return() {
     let mut st = two_projects_active_a();
-    let fg_a = st.active_session.unwrap();
+    let fg_a = st.session.active.unwrap();
 
     assert!(switch(&mut st, "/b"));
     // On /b, foreground falls to its first running session.
     assert_eq!(
-        st.active_session,
+        st.session.active,
         Some(st.workspace.sessions[Path::new("/b")][0].id)
     );
 
     assert!(switch(&mut st, "/a"));
     // BS-3: the exact prior foreground of /a is restored.
-    assert_eq!(st.active_session, Some(fg_a));
+    assert_eq!(st.session.active, Some(fg_a));
 }
 
 #[test]
 fn switch_to_unavailable_is_rejected_and_leaves_state_unchanged() {
     let mut st = two_projects_active_a();
-    let fg_a = st.active_session.unwrap();
+    let fg_a = st.session.active.unwrap();
     for p in &mut st.workspace.projects {
         if p.path.as_path() == Path::new("/b") {
             p.availability = Availability::Unavailable;
@@ -100,7 +100,7 @@ fn switch_to_unavailable_is_rejected_and_leaves_state_unchanged() {
 
     // BS-10: nothing changed.
     assert_eq!(st.workspace.active, Some(PathBuf::from("/a")));
-    assert_eq!(st.active_session, Some(fg_a));
+    assert_eq!(st.session.active, Some(fg_a));
     assert!(st.workspace.sessions[Path::new("/b")]
         .iter()
         .all(|s| s.lifecycle == SessionLifecycle::Running));
@@ -200,7 +200,7 @@ fn view_state_does_not_carry_from_the_project_you_left() {
 #[test]
 fn switching_arms_a_scroll_and_clears_a_stale_suppression() {
     let mut st = two_projects_with_worktrees();
-    st.reveal_suppressed_for = st.active_session;
+    st.session.reveal_suppressed_for = st.session.active;
     st.sidebar.pending_reveal_scroll = false;
 
     assert!(switch(&mut st, "/b"));
@@ -211,7 +211,7 @@ fn switching_arms_a_scroll_and_clears_a_stale_suppression() {
          into view (FR-008)"
     );
     assert!(
-        st.reveal_suppressed_for.is_none(),
+        st.session.reveal_suppressed_for.is_none(),
         "and a row closed against the session you were on does not keep the next project's \
          reveal closed (invariant I2)"
     );
@@ -224,14 +224,14 @@ fn switching_to_a_project_with_no_session_reveals_nothing() {
         ..Default::default()
     };
     st.workspace.active = Some(PathBuf::from("/a"));
-    st.active_session = Some(st.workspace.sessions[Path::new("/a")][0].id);
+    st.session.active = Some(st.workspace.sessions[Path::new("/a")][0].id);
 
     assert!(switch(&mut st, "/b"));
     micold_client::app::drain(st.set_worktrees(b_worktrees()), |o| {
         micold_client::app::interpret(&mut st, o)
     });
 
-    assert!(st.active_session.is_none());
+    assert!(st.session.active.is_none());
     assert!(
         !st.location_open(&SessionLocation::Worktree("wb".to_string())),
         "no session is current, so no row is opened and the panel does not claim otherwise \
@@ -262,7 +262,7 @@ fn switching_to_a_project_not_yet_visited_uses_its_stored_memory() {
     assert!(switch(&mut st, "/b"));
 
     assert_eq!(
-        st.active_session,
+        st.session.active,
         Some(b_second),
         "the memory loaded from disk is the same map `record_foreground` writes, so a project you \
          have not visited this run behaves exactly like one you have. Falling back to the first \
@@ -273,10 +273,10 @@ fn switching_to_a_project_not_yet_visited_uses_its_stored_memory() {
 #[test]
 fn each_project_keeps_the_session_it_was_last_on_not_the_last_one_overall() {
     let mut st = two_projects_active_a();
-    let fg_a = st.active_session.unwrap();
+    let fg_a = st.session.active.unwrap();
 
     assert!(switch(&mut st, "/b"));
-    let fg_b = st.active_session.unwrap();
+    let fg_b = st.session.active.unwrap();
     assert!(switch(&mut st, "/a"));
 
     assert_eq!(

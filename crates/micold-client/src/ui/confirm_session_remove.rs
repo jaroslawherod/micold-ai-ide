@@ -54,7 +54,8 @@ pub fn dialog<'a>(
     _env_include_outcome: &'a EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
     state
-        .session_remove_target
+        .session
+        .remove_target
         .and_then(|id| state.workspace.find_session(id))
         .map(|(_, session)| modal(session.label.display(), scheme))
 }

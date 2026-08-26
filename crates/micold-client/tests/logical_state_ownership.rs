@@ -170,7 +170,7 @@ fn drafts_are_application_owned() {
 #[test]
 fn active_session_is_application_owned() {
     let state = with_project();
-    assert!(state.active_session.is_none());
+    assert!(state.session.active.is_none());
     // The field exists and is readable without a renderer, which is the property under test:
     // nothing about it requires a widget tree to interpret.
 }

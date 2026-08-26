@@ -485,7 +485,7 @@ fn build_items(
 
         if node.expanded {
             for session in &node.sessions {
-                items.push(session_tree_item(session, state.active_session, r));
+                items.push(session_tree_item(session, state.session.active, r));
             }
         }
     }
@@ -576,7 +576,7 @@ fn build_default_item(
 
     if node.expanded {
         for session in &node.sessions {
-            items.push(session_tree_item(session, state.active_session, r));
+            items.push(session_tree_item(session, state.session.active, r));
         }
     }
 

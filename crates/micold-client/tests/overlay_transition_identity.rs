@@ -78,7 +78,7 @@ const DIALOGS: &[(&str, fn(&mut State))] = &[
         })
     }),
     ("confirm_session_remove", |state| {
-        state.session_remove_target = Some(SessionId::new())
+        state.session.remove_target = Some(SessionId::new())
     }),
     ("confirm_forget_project", |state| {
         state.project.forget_target = Some(PathBuf::from("/p"))
