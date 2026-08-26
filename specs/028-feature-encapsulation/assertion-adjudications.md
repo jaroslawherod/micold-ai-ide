@@ -510,5 +510,50 @@ was: assert_eq!(st.project_menu_open.as_ref().unwrap().anchor,(100,100))
 was: assert_eq!(state.forget_target.as_deref(),Some(Pnew("/a")))
 ```
 
+## T034 — the worktree list, its menu and its dialogs moved behind `state.worktree`
+
+Six fields became members of `features::worktree::State`, and five shed the `worktree` the
+qualifier now carries: `hovered_worktree` is `worktree.hovered`, and
+`worktree_delete_keep_branch`, `worktree_delete_target`, `worktree_menu_open` and
+`worktree_rename_draft` are `worktree.delete_keep_branch`, `worktree.delete_target`,
+`worktree.menu_open` and `worktree.rename_draft`. `worktrees` keeps its name, because trimming it
+leaves nothing: it is the collection the feature is about, not a fact about one worktree, and
+`worktree.worktrees` is a plural inside a singular rather than a word said twice.
+
+Thirty assertions changed spelling across `tests/app_state.rs`, `tests/features_worktree.rs`,
+`tests/logical_state_ownership.rs`, `tests/overlay_dismissal_delta.rs`,
+`tests/session_default_no_worktree.rs`, `tests/sidebar_state.rs` and `tests/sidebar_tree.rs`. None
+changed meaning: each still reads the same field of the same state and expects the same value. One
+of them —
+`assert!(state.worktree_rename_draft.as_ref().unwrap().error.is_some())` — asks about
+`WorktreeRenameDraft`'s own `error`, a field that did not move; only the segment in front of it
+did, exactly as T031's two `worktree_form.as_ref().unwrap().error` assertions.
+
+```
+was: assert!(!state.worktree_delete_keep_branch)
+was: assert!(!state.worktree_delete_keep_branch,"defaultstodelete")
+was: assert!(state.hovered_worktree.is_none())
+was: assert!(state.worktree_delete_keep_branch)
+was: assert!(state.worktree_delete_target.is_none())
+was: assert!(state.worktree_menu_open.is_none())
+was: assert!(state.worktree_menu_open.is_none(),"worktreecontextmenu")
+was: assert!(state.worktree_rename_draft.as_ref().unwrap().error.is_some())
+was: assert!(state.worktree_rename_draft.is_none())
+was: assert!(state.worktrees.is_empty())
+was: assert!(state.worktrees.iter().any(|w|w.dir_name=="feat-x"))
+was: assert!(state.worktrees.iter().any(|w|w.dir_name=="feat-x"),"therowstandsuntilthedaemonconfirmstheremoval")
+was: assert_eq!(st.worktrees.len(),1,"visibilityisaviewconcern—pruning,renamingandsessionlookupallreasonabout\existence,andahiddenworktreestillexists")
+was: assert_eq!(state.hovered_worktree.as_deref(),Some("feat-a"))
+was: assert_eq!(state.worktree_delete_target.as_deref(),Some("feat-x"))
+was: assert_eq!(state.worktree_menu_open,None)
+was: assert_eq!(state.worktree_menu_open.as_ref().unwrap().anchor,(120,300))
+was: assert_eq!(state.worktree_menu_open.as_ref().unwrap().anchor,(140,610))
+was: assert_eq!(state.worktree_rename_draft.as_ref().unwrap().text,"MyLogin")
+was: assert_eq!(state.worktrees,before,"startingaDefaultsessionmustnotcreateaworktreeentry")
+was: assert_eq!(state.worktrees.len(),1)
+was: assert_eq!(state.worktrees.len(),1,"theincludestilllands")
+was: assert_eq!(state.worktrees.len(),6)
+```
+
 T040 rolls these up for the phase; each move is adjudicated as it lands, so the freeze is green at
 every commit rather than only at the end (contract C.1).
