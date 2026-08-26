@@ -92,3 +92,11 @@ the reason — the mechanism 021 built and this feature brings into scope
 Where a behaviour turns out to be undefined today and the move forces a choice, the choice is
 written down with its reasoning and a test is added for it. `ScrolledBeneathOverlay` — a root
 variant with no producer — is the first known instance.
+
+Decided at T025: **kept, not deleted.** The reasoning is recorded as G1's `NO_OWNER` entry in
+`crates/micold-client/tests/root_vocabulary_is_cross_cutting.rs`, next to the rule it is an
+exception to, and pinned there by an assertion that the reported no-owner set is exactly that
+variant. Its behaviour is specified by four assertions in `tests/overlay_dismissal_delta.rs` but
+unreachable in the running application: the rule it routes to, `close_on_scroll_beneath`, is the
+shared one `EscapePressed` also uses, so the missing half is the emitter, not the decision. If
+something starts emitting it, the entry becomes false and G1 says so.

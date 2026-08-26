@@ -144,9 +144,9 @@ describe, deliberately.
 
 ### Implementation for User Story 3, part 1
 
-- [ ] T025 [US3] Decide and pin `Message::ScrolledBeneathOverlay` (FR-020, contract B2) — it is declared in `crates/micold-client/src/app.rs:186`, matched at `:1007`, exercised by four assertions in `crates/micold-client/tests/overlay_dismissal_delta.rs`, and emitted by nothing; record it as G1's `NO_OWNER` entry with the written reason that its behaviour is specified by tests but unreachable in the running application, and assert in G1 that the reported no-owner set is exactly that variant
-- [ ] T026 [US3] Verify SC-002 and SC-004 — the root vocabulary holds no variant produced and consumed by exactly one feature, and 10 of 10 features have a vocabulary and an entry point, up from 1 of 10 ([quickstart.md](./quickstart.md) §A.4)
-- [ ] T027 [US3] Document each guard in its own file header — `crates/micold-client/tests/root_vocabulary_is_cross_cutting.rs` and `crates/micold-client/tests/feature_registration_cost.rs` — stating the rule it enforces, how an exception is granted, and the probe that showed it non-vacuous (Principle VII)
+- [X] T025 [US3] Decide and pin `Message::ScrolledBeneathOverlay` (FR-020, contract B2) — it is declared in `crates/micold-client/src/app.rs:186`, matched at `:1007`, exercised by four assertions in `crates/micold-client/tests/overlay_dismissal_delta.rs`, and emitted by nothing; record it as G1's `NO_OWNER` entry with the written reason that its behaviour is specified by tests but unreachable in the running application, and assert in G1 that the reported no-owner set is exactly that variant
+- [X] T026 [US3] Verify SC-002 and SC-004 — the root vocabulary holds no variant produced and consumed by exactly one feature, and 10 of 10 features have a vocabulary and an entry point, up from 1 of 10 ([quickstart.md](./quickstart.md) §A.4)
+- [X] T027 [US3] Document each guard in its own file header — `crates/micold-client/tests/root_vocabulary_is_cross_cutting.rs` and `crates/micold-client/tests/feature_registration_cost.rs` — stating the rule it enforces, how an exception is granted, and the probe that showed it non-vacuous (Principle VII)
 
 **Checkpoint**: Stories 1 and 3's vocabulary half are complete and independently valuable. SC-002,
 SC-004 and two of SC-005's three probes are satisfied.

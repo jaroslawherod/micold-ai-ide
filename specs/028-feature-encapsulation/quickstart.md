@@ -67,6 +67,14 @@ grep -l 'pub enum Msg' crates/micold-client/src/features/*.rs | wc -l
 
 Baseline **1 of 10**. Target **10 of 10**. Held by guard **G3**.
 
+Observed at T026: **10 modules, 10 with a vocabulary**, and each has an entry point — nine are
+shape A (`pub fn update(state: &mut State, …)` in the module), `connection` is shape B only
+(`src/shell/connection.rs`), and `settings` has both. G3 reads the same two shapes, so the count
+above is evidence and the guard is the criterion.
+
+SC-002 reproduces alongside it: §A.1 reports **15**, and every one of the ten wrappers resolves to
+its own feature under G1, so no root variant is produced and consumed by exactly one feature.
+
 ---
 
 ## B. Guards observed failing (SC-005, FR-017)
