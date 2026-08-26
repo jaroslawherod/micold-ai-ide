@@ -1491,13 +1491,63 @@ a path only a second press exercises, or a pixel position.
   gets somewhere readable. Restart on a missing CLI moves the bar to `failed` after this; it does
   not yet say why.
 
-- [ ] T088 Surface the reason a start failed, somewhere a user can read it (FR-010). The daemon
+- [X] T088 Surface the reason a start failed, somewhere a user can read it (FR-010). The daemon
   already computes the sentence — "GitHub Copilot isn't installed. Install it, or start this session
   on another AI CLI." — and it reaches `WireLifecycle::Failed { reason, attempts: 0 }`. §B found it
   displayed nowhere: the bar reads "failed", and the reason is not in the row, not in the terminal,
   not on hover. FR-010 asks for the CLI to be *named*, which "failed" does not do. Decide one
   surface and gate it there; a tooltip is enough if that is what the sidebar can carry, but the
   choice belongs in the task rather than in whatever is convenient at the call site.
+
+  **Done 2026-08-26.** The surface is the notification queue (`micold-core/src/notify.rs`), drawn as
+  a `material::Snackbar` on `Layer::Snackbar` from the root view (`ui/mod.rs:453`). It was chosen
+  because it is the only surface that is both *unconditional* and able to carry a sentence, and the
+  two nearer-looking candidates fail on one of those. The session pane's empty-state text renders
+  only when `grid` is `None`, and a restart that fails leaves the previous grid in place — so the
+  text would never draw in exactly the case it is for. The bar has a width budget and already says
+  `failed`; the reason is a full sentence naming a CLI and an action, and it does not fit. A tooltip
+  was the task's own suggested fallback and is rejected deliberately: a user who pressed restart and
+  saw nothing happen has no reason to go hunting for a hover target.
+
+  The announcement is **level-triggered**, against a new `State::announced_start_failures`
+  (`BTreeMap<SessionId, String>`, owner `session` in `feature_write_isolation`'s `OWNERS`). It holds
+  the sentence *already said*, not a copy of the failure — the lifecycle itself stays the daemon's,
+  and arrives in the catalog. Edge-free pushing is not an option here because of T086: a badge
+  moving now publishes the catalog, so an unguarded push would banner every few seconds for as long
+  as the session stayed failed. The entry is dropped as soon as the daemon reports the session as
+  anything but failed, so a genuine *second* failure is news again rather than being swallowed by
+  the record of the first. An empty `reason` says nothing at all: the crash-loop give-up reaches
+  `Failed` too and carries no text, and a banner with nothing in it is worse than the bar's `failed`.
+
+  Gated in two places, because the claim spans two crates. `micold-daemon/tests/catalog_join.rs`
+  holds the whole path — a real `start_session(id, Resume)` against a `PATH` with no Copilot on it,
+  through `overlay_live_summaries` and the wire, into `reconcile_catalog` — and asserts the visible
+  notification is an `Error` naming `display_name()` and *not* `command()`, which is FR-010's actual
+  ask (name the CLI, in the words a user would recognise). `micold-client/tests/start_failure_notice.rs`
+  holds the four behaviours against `reconcile_catalog` directly, on hand-built snapshots: said once
+  however many snapshots repeat it, said again after the session has been something else, a
+  different reason for the same session is news, and nothing to say says nothing.
+
+  Four probes on `62e5981`, each scoped to the binary that should notice and each failing **alone**
+  within it: removing the call site fails the daemon join gate and three of the four client gates
+  (the fourth asserts absence, and correctly still passes); pushing unconditionally fails
+  `an_unchanged_failure_is_said_once…` only; dropping the forget-on-recovery fails
+  `a_failure_after_the_session_has_been_something_else_is_said_again` only; dropping the
+  `!reason.trim().is_empty()` filter fails `a_failure_with_nothing_to_say_says_nothing` only.
+
+  The first probe also failed `every_state_field_has_an_owner`, which is **not** a probe effect and
+  is worth recording as the run's second finding: the new `State` field had no `OWNERS` entry, so
+  that pre-existing guard had been red from the moment the field was added, and a workspace run made
+  for a different purpose is simply where it was noticed. Fixed in the same commit. The lesson is
+  the one `--no-fail-fast` keeps paying for — a fail-fast run would have stopped at the first
+  failing binary and reported the probe as clean.
+
+  Two limits, recorded rather than glossed. A repeat press against an unchanged world produces a
+  byte-identical snapshot — `attempts` stays `0` by contract for a start that never launched — so
+  once the ten-second banner has expired, a second press is silent. Closing that needs the daemon to
+  publish the attempt, which is a wire change and a task of its own. Clearing the record on the
+  press instead was considered and rejected: the press path (`view_and_start`) lives in `shell/`,
+  which is binary-only and unreachable from `tests/`, so the fix would have shipped ungated.
 
 - [ ] T089 Anchor the session-start list to the press that opened it. Both halves of `SplitAction`
   open the CLI list at the window origin, over the sidebar header, whatever row was pressed —
