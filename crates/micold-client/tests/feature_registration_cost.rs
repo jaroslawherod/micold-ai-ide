@@ -25,6 +25,41 @@
 //! `features/help.rs` and `features/window.rs`, both created *after* the criterion's "eight feature
 //! modules" was written. A number in a spec is satisfied by the day it was taken. That is the same
 //! argument SC-002a makes about SC-001 and SC-002, so the same answer applies.
+//!
+//! # G3: every feature module has a reducer entry point (feature 028, T023–T024 — FR-015, SC-004)
+//!
+//! ## The rule
+//!
+//! For each module under `src/features/` other than `mod.rs`: if it declares `pub enum Msg`, it
+//! must expose **shape A** — `pub fn update(&mut State, Msg) -> Vec<Outcome>` in the same module —
+//! or **shape B** — `pub fn update(&mut App, Msg) -> Task<Message>` in `src/shell/<n>.rs`. A module
+//! declaring no `Msg` passes and needs no allowlist entry; that is FR-005's no-ceremony case, and
+//! `features/mod.rs`'s own vocabulary types are why it exists.
+//!
+//! A vocabulary with nowhere to be handled is the shape feature 021 left behind nine times: the
+//! variants sat in `app::Message` and the arms sat in the root, which is exactly the coupling
+//! FR-001 is about. Declaring `Msg` is the claim that a feature owns its transitions; `update` is
+//! where it answers them.
+//!
+//! ## Why here rather than a new file
+//!
+//! This file already enumerates feature modules from the filesystem rather than from a list — its
+//! own header records that a hardcoded count went stale the day two modules were added — and
+//! already parses signatures taking the state mutably, in both the `&mut self` and `&mut State`
+//! spellings. Re-deriving either in a new file would be a second answer to the same question.
+//!
+//! ## How an exception is granted
+//!
+//! There is none, and none is planned. The two shapes already cover a feature that is entirely
+//! effects (`connection`, shape B with no pure `update` at all) and a feature that is entirely
+//! pure. If a third shape is ever needed it takes the same `(&str, &str)` allowlist form the other
+//! guards use, with a written reason.
+//!
+//! ## The probe that showed this non-vacuous (FR-017, T024)
+//!
+//! `src/features/probe.rs` was added declaring `pub enum Msg { Tick }` and no `update`. The guard
+//! failed, naming `probe`. The message is recorded in
+//! `specs/028-feature-encapsulation/assertion-adjudications.md`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -361,5 +396,119 @@ fn every_feature_module_has_an_isolation_test() {
          One file per feature, constructing only that feature's types. See tests/features_help.rs \
          for the smallest example.",
         missing.join("\n")
+    );
+}
+
+// ---- G3: every feature module has a reducer entry point (FR-015) --------------------------------
+
+/// Whether `code` declares a `pub fn update` whose parameters and return type match.
+fn declares_update(code: &str, takes: &str, returns: &str) -> bool {
+    let mut rest = code;
+    while let Some(at) = rest.find("pub fn update") {
+        let after = &rest[at + "pub fn update".len()..];
+        rest = after;
+        let Some(open) = after.find('(') else {
+            continue;
+        };
+        let Some(close) = after[open..].find(')') else {
+            continue;
+        };
+        let params = &after[open..open + close];
+        let signature_end = after[open + close..]
+            .find('{')
+            .map(|i| open + close + i)
+            .unwrap_or(after.len());
+        let ret = &after[open + close..signature_end];
+        if params.contains(takes) && params.contains("Msg") && ret.contains(returns) {
+            return true;
+        }
+    }
+    false
+}
+
+/// The entry shape a feature module exposes, if any (data-model.md §1.1).
+fn entry_shape(module: &str, sources: &BTreeMap<String, String>) -> Option<&'static str> {
+    let pure = sources
+        .get(&format!("features/{module}.rs"))
+        .is_some_and(|code| declares_update(code, "&mut State", "Outcome"));
+    if pure {
+        return Some("A");
+    }
+    let effectful = sources
+        .get(&format!("shell/{module}.rs"))
+        .is_some_and(|code| declares_update(code, "&mut App", "Task<Message>"));
+    effectful.then_some("B")
+}
+
+#[test]
+fn every_feature_with_a_vocabulary_has_a_reducer_entry_point() {
+    let sources = sources();
+    let modules = feature_modules();
+
+    let with_vocabulary: Vec<&String> = modules
+        .iter()
+        .filter(|m| {
+            sources
+                .get(&format!("features/{m}.rs"))
+                .is_some_and(|code| code.contains("pub enum Msg"))
+        })
+        .collect();
+
+    // The floor. Feature 028 converted ten; a scan that has stopped finding `pub enum Msg` would
+    // report every module compliant by finding nothing to check.
+    assert!(
+        with_vocabulary.len() >= 10,
+        "found only {} feature modules declaring `pub enum Msg` — there are at least 10 \
+         (feature 028, T016), so this scan is no longer reading what it thinks it is",
+        with_vocabulary.len()
+    );
+
+    let stranded: Vec<String> = with_vocabulary
+        .iter()
+        .filter(|m| entry_shape(m, &sources).is_none())
+        .map(|m| format!("  `{m}` declares `pub enum Msg` and no `update`"))
+        .collect();
+    assert!(
+        stranded.is_empty(),
+        "a feature declares a vocabulary with nowhere to handle it (FR-015):\n{}\n\n\
+         Add `pub fn update(&mut State, Msg) -> Vec<Outcome>` to the feature module (shape A), or \
+         `pub fn update(&mut App, Msg) -> Task<Message>` to `src/shell/<feature>.rs` when the \
+         transitions must return an `iced::Task` (shape B). A vocabulary answered by the root \
+         instead is the coupling FR-001 exists to remove.",
+        stranded.join("\n")
+    );
+}
+
+/// Both shapes are in use, and a module with no `Msg` is not quietly failing.
+///
+/// The rule above passes if every module happens to be shape A. That would still be true if the
+/// shape-B detector had rotted, and `connection` — the one feature that is entirely effects — is
+/// the module that would go unnoticed.
+#[test]
+fn both_entry_shapes_are_live_and_a_feature_may_have_neither() {
+    let sources = sources();
+    let modules = feature_modules();
+    let shapes: Vec<(&String, Option<&str>)> = modules
+        .iter()
+        .map(|m| (m, entry_shape(m, &sources)))
+        .collect();
+
+    for shape in ["A", "B"] {
+        assert!(
+            shapes.iter().any(|(_, s)| *s == Some(shape)),
+            "no feature module exposes shape {shape}, so half of the rule above is unreachable by \
+             construction. `connection` is shape B and every other converted feature is shape A; \
+             if that has genuinely changed, this check needs rewriting rather than relaxing"
+        );
+    }
+
+    // FR-005's no-ceremony case, stated as a fact rather than as an absence: `connection` declares
+    // a vocabulary and no pure `update`, and it is compliant. If someone "fixes" that by adding an
+    // empty shape-A reducer, the rule above would still pass and this would catch the drift.
+    assert_eq!(
+        entry_shape("connection", &sources),
+        Some("B"),
+        "`connection` is the feature that is entirely effects — shape B, with no pure `update` in \
+         `features/connection.rs` (feature 028, T016). A feature is not required to have both."
     );
 }
