@@ -1514,6 +1514,10 @@ fn rename_error_message(err: micold_core::project::RenameError) -> &'static str 
 ///   (protocol.md §7).
 /// - **Reply ordering**: `reply` (Some for `SessionCreate`, None for `SessionStart`) is sent after
 ///   the start concludes, exactly where it was sent before.
+///
+/// A *failure*, by contrast, is announced regardless of `reply` (T087). The absent reply is
+/// deliberate for the success case — a resume has no `SessionCreated` to send — but the reason a
+/// start failed belongs to every client whatever asked for it, and the catalog is where it lives.
 fn spawn_session_start(
     state: &Arc<DaemonState>,
     session: micold_core::session::SessionId,
@@ -1537,11 +1541,22 @@ fn spawn_session_start(
         .await;
         match outcome {
             Ok(Ok(())) => {}
+            // A failed start moves the catalog and, unlike a successful one, nothing else says so
+            // (feature 026, T087, FR-010). `start_session` records the reason — it is what fills
+            // the wire's `Failed { reason, attempts: 0 }` — and broadcasts only *after* it has
+            // marked the session running, which it returned before doing. Announced here rather
+            // than beside the reply below, because a resume has no reply to carry it:
+            // `ClientMsg::SessionStart` carries no `req`, so there is no `OperationError` to
+            // address to it, and pressing restart on a session whose CLI is gone did nothing
+            // visible at all. The catalog is the surface both launch modes share, and the one the
+            // `SessionCreate` path already relies on for exactly this.
             Ok(Err(err)) => {
                 tracing::warn!(session = %session.0, %err, "session start failed");
+                task_state.broadcast_catalog();
             }
             Err(join) => {
                 tracing::warn!(session = %session.0, error = %join, "session start task failed");
+                task_state.broadcast_catalog();
             }
         }
         // Before the reply, so a client that acts on `SessionCreated` immediately finds the session
