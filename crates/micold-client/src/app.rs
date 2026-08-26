@@ -11,18 +11,16 @@
 //! no-ops handled entirely in `src/main.rs`.
 
 use crate::features::notifications::NoticeLevel;
-use crate::features::project::{ProjectMenu, RenameDraft, SwitcherEntry};
+use crate::features::project::SwitcherEntry;
 use crate::features::session::SessionMenu;
 use crate::features::sidebar::TagFilter;
 use crate::features::worktree::{WorktreeMenu, WorktreeRenameDraft};
 use micold_core::notify;
 use micold_core::project::Availability;
-use micold_core::selector::Selector;
 use micold_core::session::SessionId;
 use micold_core::theme::{resolve, ColorScheme};
 use micold_core::worktree::Worktree;
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 
 /// Minimum sidebar width in pixels (resize lower bound).
 pub const SIDEBAR_MIN_WIDTH: u16 = 180;
@@ -123,10 +121,8 @@ pub struct State {
     /// The known-projects catalog and the active working space (persisted). Per-story
     /// selector/rename working state is added alongside those stories.
     pub workspace: micold_core::workspace::Workspace,
-    /// The folder-browser state; its presence *is* the project-selector dialog being shown (T037).
-    pub selector: Option<Selector>,
-    /// The in-progress rename; its presence *is* the rename dialog being shown (T037).
-    pub rename_draft: Option<RenameDraft>,
+    /// What the project feature remembers -- see [`crate::features::project::State`].
+    pub project: crate::features::project::State,
     /// What the window feature remembers -- see [`crate::features::window::State`].
     pub window: crate::features::window::State,
     /// What the settings feature remembers -- see [`crate::features::settings::State`].
@@ -245,13 +241,6 @@ pub struct State {
     /// The app bar's elevation derives from this and nothing else (FR-025a) — see
     /// [`Self::app_bar_elevated`] for why a second source would be a defect rather than a feature.
     pub sidebar_scroll_offset: u32,
-    /// Whether the top-bar project switcher panel is open. Mutually exclusive with
-    /// `help_menu_open`.
-    pub project_switcher_open: bool,
-    /// The open project right-click context menu (feature 015), with the project it acts on and
-    /// the press point to draw it at. At most one is open. Mutually exclusive with the other
-    /// popovers, but the switcher panel itself stays open behind it. Transient — not persisted.
-    pub project_menu_open: Option<ProjectMenu>,
     /// The worktree whose right-click context menu is open, and where it was opened from
     /// (feature 008). At most one is open at a time; `None` means no menu is showing.
     pub worktree_menu_open: Option<WorktreeMenu>,
@@ -269,7 +258,7 @@ pub struct State {
     /// filters combine with OR (FR-025). Transient — not persisted.
     pub sidebar_filters: BTreeSet<TagFilter>,
     /// Whether the sidebar's tag-filter panel is shown (feature 009, FR-002/FR-003). Mutually
-    /// exclusive with `help_menu_open`/`project_switcher_open`. Transient — not persisted;
+    /// exclusive with `help.help_menu_open`/`project.switcher_open`. Transient — not persisted;
     /// closing it never alters `sidebar_filters` (FR-007/FR-008).
     pub sidebar_filter_open: bool,
     /// Whether agent-owned worktrees are included in the sidebar list (feature 014, FR-010).
@@ -291,10 +280,6 @@ pub struct State {
     /// FR-015c). Its presence *is* the confirm dialog being shown (T037). Mirrors
     /// `worktree_delete_target`.
     pub session_remove_target: Option<SessionId>,
-    /// The project pending a forget confirmation, by path (feature 014). Its presence *is* the
-    /// confirm dialog being shown (T037). Transient — never persisted. Mirrors
-    /// `worktree_delete_target`.
-    pub forget_target: Option<PathBuf>,
 }
 
 /// The sidebar's reported offset as the app bar reads it: whole pixels, never above the top.

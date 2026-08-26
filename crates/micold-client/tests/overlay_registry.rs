@@ -32,6 +32,7 @@
 
 use micold_client::features::help;
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
@@ -75,13 +76,13 @@ fn dialogs() -> Vec<Dialog> {
         Dialog {
             id: "project_selector",
             cancel: Message::Project(ProjectMsg::SelectorClosed),
-            open: |state| state.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
+            open: |state| state.project.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
         },
         Dialog {
             id: "rename_project",
             cancel: Message::Project(ProjectMsg::RenameCancelled),
             open: |state| {
-                state.rename_draft = Some(RenameDraft {
+                state.project.rename_draft = Some(RenameDraft {
                     path: PathBuf::from("/tmp"),
                     text: String::new(),
                     error: None,
@@ -122,7 +123,7 @@ fn dialogs() -> Vec<Dialog> {
         Dialog {
             id: "confirm_forget_project",
             cancel: Message::Project(ProjectMsg::ForgetCancelled),
-            open: |state| state.forget_target = Some(PathBuf::from("/p")),
+            open: |state| state.project.forget_target = Some(PathBuf::from("/p")),
         },
     ]
 }
@@ -557,11 +558,15 @@ fn a_popover_is_not_drawn_from_the_registry() {
     let mut drawn = Vec::new();
     for probe in registry::probes() {
         let state = State {
+            project: project::State {
+                switcher_open: true,
+                ..Default::default()
+            },
+
             help: help::State {
                 help_menu_open: true,
                 ..Default::default()
             },
-            project_switcher_open: true,
             sidebar_filter_open: true,
             terminal_context_menu: Some((4, 2)),
             ..Default::default()

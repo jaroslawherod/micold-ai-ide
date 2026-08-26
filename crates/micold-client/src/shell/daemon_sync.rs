@@ -681,13 +681,14 @@ pub fn on_connected(
 pub fn on_rename_confirmed(app: &mut App) -> Task<Message> {
     let draft = app
         .core
+        .project
         .rename_draft
         .as_ref()
         .map(|d| (d.path.clone(), d.text.trim().to_string()));
     app.core
         .update(Message::Project(ProjectMsg::RenameConfirmed));
     // Only send if the pure update accepted it (a rejected name leaves the draft in place).
-    if app.core.rename_draft.is_none() {
+    if app.core.project.rename_draft.is_none() {
         if let Some((path, display_name)) = draft {
             if !display_name.is_empty() {
                 send_op(app, PendingOp::ProjectRename, move |req| {
@@ -708,7 +709,7 @@ pub fn on_rename_confirmed(app: &mut App) -> Task<Message> {
 /// then broadcasts the pruned catalog (T055). The pure reducer drops the record + clears the
 /// active pointer in memory for instant feedback; nothing inside the project folder is touched.
 pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
-    if let Some(path) = app.core.forget_target.clone() {
+    if let Some(path) = app.core.project.forget_target.clone() {
         app.grids.retain(|id, _| {
             !app.core
                 .workspace

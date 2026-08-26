@@ -83,7 +83,7 @@ pub fn dialog<'a>(
     scheme: ColorScheme,
     _env_include_outcome: &'a EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
-    state.forget_target.as_ref().map(|path| {
+    state.project.forget_target.as_ref().map(|path| {
         // The display name and running-session count are read from the catalog/sessions at
         // render time; the count (FR-002a) is exactly the set the binary will stop.
         let display_name = state

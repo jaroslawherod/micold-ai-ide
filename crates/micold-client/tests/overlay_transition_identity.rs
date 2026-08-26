@@ -52,10 +52,10 @@ use micold_core::session::SessionId;
 const DIALOGS: &[(&str, fn(&mut State))] = &[
     ("about", |state| state.help.about_open = true),
     ("project_selector", |state| {
-        state.selector = Some(Selector::open_at(PathBuf::from("/tmp")))
+        state.project.selector = Some(Selector::open_at(PathBuf::from("/tmp")))
     }),
     ("rename_project", |state| {
-        state.rename_draft = Some(RenameDraft {
+        state.project.rename_draft = Some(RenameDraft {
             path: PathBuf::from("/tmp"),
             text: String::new(),
             error: None,
@@ -81,7 +81,7 @@ const DIALOGS: &[(&str, fn(&mut State))] = &[
         state.session_remove_target = Some(SessionId::new())
     }),
     ("confirm_forget_project", |state| {
-        state.forget_target = Some(PathBuf::from("/p"))
+        state.project.forget_target = Some(PathBuf::from("/p"))
     }),
 ];
 

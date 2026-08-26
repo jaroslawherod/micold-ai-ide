@@ -964,7 +964,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 let mut workspace = super::workspace_with(vec![(PROJECT, vec![]), (OTHER, vec![])]);
                 workspace.active = workspace.projects.first().map(|p| p.path.clone());
                 state.workspace = workspace;
-                state.project_switcher_open = true;
+                state.project.switcher_open = true;
                 StateUnderTest::new(state)
             },
             anchors: &[

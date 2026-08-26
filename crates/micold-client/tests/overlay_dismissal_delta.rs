@@ -22,6 +22,7 @@
 
 use micold_client::features::help;
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
@@ -123,11 +124,15 @@ fn a_menu_now_closes_when_the_list_beneath_it_scrolls() {
 #[test]
 fn every_non_modal_surface_closes_on_a_scroll_beneath() {
     let mut state = State {
+        project: project::State {
+            switcher_open: true,
+            ..Default::default()
+        },
+
         help: help::State {
             help_menu_open: true,
             ..Default::default()
         },
-        project_switcher_open: true,
         sidebar_filter_open: true,
         ..State::default()
     };
@@ -135,9 +140,9 @@ fn every_non_modal_surface_closes_on_a_scroll_beneath() {
     state.update(Message::ScrolledBeneathOverlay);
 
     assert!(!state.help.help_menu_open, "overflow menu");
-    assert!(!state.project_switcher_open, "project switcher");
+    assert!(!state.project.switcher_open, "project switcher");
     assert!(!state.sidebar_filter_open, "sidebar filter panel");
-    assert!(state.project_menu_open.is_none(), "project context menu");
+    assert!(state.project.menu_open.is_none(), "project context menu");
     assert!(state.worktree_menu_open.is_none(), "worktree context menu");
     assert!(state.session_menu_open.is_none(), "session context menu");
 }
@@ -170,13 +175,13 @@ fn escape_still_reaches_exactly_what_it_used_to() {
         ),
         (
             "project_selector",
-            |s| s.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
+            |s| s.project.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
             Message::Project(ProjectMsg::SelectorClosed),
         ),
         (
             "rename_project",
             |s| {
-                s.rename_draft = Some(RenameDraft {
+                s.project.rename_draft = Some(RenameDraft {
                     path: PathBuf::from("/tmp"),
                     text: String::new(),
                     error: None,
@@ -217,7 +222,7 @@ fn escape_still_reaches_exactly_what_it_used_to() {
         ),
         (
             "confirm_forget_project",
-            |s| s.forget_target = Some(PathBuf::from("/p")),
+            |s| s.project.forget_target = Some(PathBuf::from("/p")),
             Message::Project(ProjectMsg::ForgetCancelled),
         ),
     ];
@@ -246,5 +251,5 @@ fn scrolling_with_nothing_open_changes_nothing() {
         "an idle scroll must not touch the overlay"
     );
     assert!(!state.help.help_menu_open);
-    assert!(!state.project_switcher_open);
+    assert!(!state.project.switcher_open);
 }

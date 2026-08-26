@@ -18,6 +18,7 @@
 
 use micold_client::features::help;
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
@@ -45,13 +46,13 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
     ),
     (
         "project_selector",
-        |s| s.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
+        |s| s.project.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
         Message::Project(ProjectMsg::SelectorClosed),
     ),
     (
         "rename_project",
         |s| {
-            s.rename_draft = Some(RenameDraft {
+            s.project.rename_draft = Some(RenameDraft {
                 path: PathBuf::from("/tmp"),
                 text: String::new(),
                 error: None,
@@ -92,7 +93,7 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
     ),
     (
         "confirm_forget_project",
-        |s| s.forget_target = Some(PathBuf::from("/p")),
+        |s| s.project.forget_target = Some(PathBuf::from("/p")),
         Message::Project(ProjectMsg::ForgetCancelled),
     ),
 ];
@@ -185,16 +186,20 @@ fn a_popover_alone_and_a_popover_over_a_modal_are_not_the_same_case() {
 /// A state with all four popovers that `open_overlay` is responsible for clearing.
 fn every_dismissible_popover_open() -> State {
     State {
+        project: project::State {
+            switcher_open: true,
+            menu_open: Some(micold_client::features::project::ProjectMenu {
+                path: std::path::PathBuf::from("/p"),
+                anchor: (10, 10),
+            }),
+            ..Default::default()
+        },
+
         help: help::State {
             help_menu_open: true,
             ..Default::default()
         },
-        project_switcher_open: true,
         sidebar_filter_open: true,
-        project_menu_open: Some(micold_client::features::project::ProjectMenu {
-            path: std::path::PathBuf::from("/p"),
-            anchor: (10, 10),
-        }),
         ..Default::default()
     }
 }
@@ -217,7 +222,7 @@ fn opening_a_modal_closes_the_popovers_floating_above_it() {
             "the overflow menu survived {name} opening"
         );
         assert!(
-            !state.project_switcher_open,
+            !state.project.switcher_open,
             "the project switcher survived {name} opening"
         );
         assert!(
@@ -225,7 +230,7 @@ fn opening_a_modal_closes_the_popovers_floating_above_it() {
             "the filter panel survived {name} opening"
         );
         assert!(
-            state.project_menu_open.is_none(),
+            state.project.menu_open.is_none(),
             "the project context menu survived {name} opening"
         );
     }

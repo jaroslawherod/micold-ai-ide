@@ -146,7 +146,7 @@ fn theme_preference_is_application_owned() {
 #[test]
 fn drafts_are_application_owned() {
     let mut state = with_project();
-    assert!(state.rename_draft.is_none());
+    assert!(state.project.rename_draft.is_none());
 
     state.update(Message::Project(ProjectMsg::RenameStarted(PathBuf::from(
         "/repo",
@@ -156,6 +156,7 @@ fn drafts_are_application_owned() {
     )));
 
     let draft = state
+        .project
         .rename_draft
         .as_ref()
         .expect("an in-progress rename must survive on State, not in a rebuilt widget");

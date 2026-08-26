@@ -73,6 +73,7 @@ pub fn dialog<'a>(
     _env_include_outcome: &'a EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
     state
+        .project
         .rename_draft
         .as_ref()
         .map(|draft| modal(draft, scheme, state.window.focused_field))

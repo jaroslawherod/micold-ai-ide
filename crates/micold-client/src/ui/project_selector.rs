@@ -117,6 +117,7 @@ pub fn dialog<'a>(
     _env_include_outcome: &'a EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
     state
+        .project
         .selector
         .as_ref()
         .map(|selector| modal(selector, scheme))

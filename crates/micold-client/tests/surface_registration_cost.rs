@@ -39,6 +39,7 @@
 mod inventory;
 
 use micold_client::features::help;
+use micold_client::features::project;
 use micold_client::features::settings;
 use micold_client::features::worktree_form;
 use std::collections::{BTreeMap, BTreeSet};
@@ -332,6 +333,22 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
     // own state and several would otherwise be shadowed by nothing — they are independent, so a
     // single maximal state answers every probe.
     let all = State {
+        project: project::State {
+            switcher_open: true,
+            menu_open: Some(ProjectMenu {
+                path: PathBuf::from("/tmp/p"),
+                anchor: (10, 10),
+            }),
+            rename_draft: Some(RenameDraft {
+                path: PathBuf::from("/tmp"),
+                text: String::new(),
+                error: None,
+            }),
+            selector: Some(Selector::open_at(PathBuf::from("/tmp"))),
+            forget_target: Some(PathBuf::from("/p")),
+            ..Default::default()
+        },
+
         settings: settings::State {
             settings_draft: Some(Default::default()),
             ..Default::default()
@@ -346,12 +363,7 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
             help_menu_open: true,
             ..Default::default()
         },
-        project_switcher_open: true,
         sidebar_filter_open: true,
-        project_menu_open: Some(ProjectMenu {
-            path: PathBuf::from("/tmp/p"),
-            anchor: (10, 10),
-        }),
         worktree_menu_open: Some(micold_client::features::worktree::WorktreeMenu {
             dir_name: "wt".to_string(),
             anchor: (120, 300),
@@ -361,12 +373,6 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
             anchor: (120, 340),
         }),
         terminal_context_menu: Some((4, 2)),
-        selector: Some(Selector::open_at(PathBuf::from("/tmp"))),
-        rename_draft: Some(RenameDraft {
-            path: PathBuf::from("/tmp"),
-            text: String::new(),
-            error: None,
-        }),
         worktree_delete_target: Some("wt".to_string()),
         worktree_rename_draft: Some(WorktreeRenameDraft {
             dir_name: "wt".to_string(),
@@ -374,7 +380,6 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
             error: None,
         }),
         session_remove_target: Some(SessionId::new()),
-        forget_target: Some(PathBuf::from("/p")),
         ..State::default()
     };
     vec![all]

@@ -29,13 +29,39 @@
 //! `ForgetConfirmed` (M2).
 
 use crate::app::Message;
-use crate::app::State;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::overlay::Layer;
 use micold_core::project::{canonicalize_best_effort, FolderEntry, RenameError};
 use micold_core::selector::Selector;
 use std::path::PathBuf;
+
+/// What this feature remembers (feature 028, contract S1).
+///
+/// Three fields keep the names they had as flat members of `app::State`. Two do not: the
+/// qualifier already says `project`, so `project.project_menu_open` and
+/// `project.project_switcher_open` would say it twice, and they are `menu_open` and
+/// `switcher_open` here (the same trim `notifications.queue` and `worktree_form.form` took). The
+/// reducers below spell the root's type `crate::app::State` now that `State` here means this
+/// struct.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct State {
+    /// The project pending a forget confirmation, by path (feature 014). Its presence *is* the
+    /// confirm dialog being shown (T037). Transient — never persisted. Mirrors
+    /// `worktree_delete_target`.
+    pub forget_target: Option<PathBuf>,
+    /// The open project right-click context menu (feature 015), with the project it acts on and
+    /// the press point to draw it at. At most one is open. Mutually exclusive with the other
+    /// popovers, but the switcher panel itself stays open behind it. Transient — not persisted.
+    pub menu_open: Option<ProjectMenu>,
+    /// Whether the top-bar project switcher panel is open. Mutually exclusive with
+    /// `help.help_menu_open`.
+    pub switcher_open: bool,
+    /// The in-progress rename; its presence *is* the rename dialog being shown (T037).
+    pub rename_draft: Option<RenameDraft>,
+    /// The folder-browser state; its presence *is* the project-selector dialog being shown (T037).
+    pub selector: Option<Selector>,
+}
 
 /// An open project right-click context menu (feature 015): which project it acts on, and where
 /// to draw it. The anchor is the pointer position at the moment of the right-click, in window
@@ -123,8 +149,8 @@ impl FloatingSurface for ProjectSwitcher {
 }
 
 impl Registered for ProjectSwitcher {
-    fn open_in(state: &State) -> Option<Self> {
-        state.project_switcher_open.then_some(ProjectSwitcher)
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state.project.switcher_open.then_some(ProjectSwitcher)
     }
 }
 
@@ -160,8 +186,8 @@ impl FloatingSurface for ProjectContextMenu {
 }
 
 impl Registered for ProjectContextMenu {
-    fn open_in(state: &State) -> Option<Self> {
-        state.project_menu_open.as_ref().map(|_| ProjectContextMenu)
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state.project.menu_open.as_ref().map(|_| ProjectContextMenu)
     }
 }
 
@@ -185,8 +211,12 @@ impl FloatingSurface for ProjectSelectorDialog {
 }
 
 impl Registered for ProjectSelectorDialog {
-    fn open_in(state: &State) -> Option<Self> {
-        state.selector.as_ref().map(|_| ProjectSelectorDialog)
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .project
+            .selector
+            .as_ref()
+            .map(|_| ProjectSelectorDialog)
     }
 }
 
@@ -210,8 +240,12 @@ impl FloatingSurface for RenameProjectDialog {
 }
 
 impl Registered for RenameProjectDialog {
-    fn open_in(state: &State) -> Option<Self> {
-        state.rename_draft.as_ref().map(|_| RenameProjectDialog)
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .project
+            .rename_draft
+            .as_ref()
+            .map(|_| RenameProjectDialog)
     }
 }
 
@@ -235,8 +269,9 @@ impl FloatingSurface for ConfirmForgetProjectDialog {
 }
 
 impl Registered for ConfirmForgetProjectDialog {
-    fn open_in(state: &State) -> Option<Self> {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
         state
+            .project
             .forget_target
             .as_ref()
             .map(|_| ConfirmForgetProjectDialog)
@@ -249,28 +284,28 @@ impl Registered for ConfirmForgetProjectDialog {
 /// declared on its registration line rather than assigned here (T067a-2). Note the asymmetry: the
 /// row menu does *not* close the switcher, because it is opened by right-clicking a row inside it.
 #[must_use = "what an opening popover displaces is the registry's business, not the caller's"]
-pub fn switcher_toggled(state: &mut State) -> Vec<crate::features::Outcome> {
-    state.project_switcher_open = !state.project_switcher_open;
-    crate::features::surface_opened(state.project_switcher_open, ProjectSwitcher::ID)
+pub fn switcher_toggled(state: &mut crate::app::State) -> Vec<crate::features::Outcome> {
+    state.project.switcher_open = !state.project.switcher_open;
+    crate::features::surface_opened(state.project.switcher_open, ProjectSwitcher::ID)
 }
 
 /// The folder browser descended into `path`.
-pub fn selector_navigated_into(state: &mut State, path: PathBuf) {
+pub fn selector_navigated_into(state: &mut crate::app::State, path: PathBuf) {
     with_selector(state, |selector| selector.enter(path));
 }
 
 /// The folder browser went up one level.
-pub fn selector_navigated_up(state: &mut State) {
+pub fn selector_navigated_up(state: &mut crate::app::State) {
     with_selector(state, Selector::up);
 }
 
 /// A folder listing arrived.
-pub fn selector_listing_ready(state: &mut State, entries: Vec<FolderEntry>) {
+pub fn selector_listing_ready(state: &mut crate::app::State, entries: Vec<FolderEntry>) {
     with_selector(state, |selector| selector.listing_ready(entries));
 }
 
 /// A folder listing failed.
-pub fn selector_listing_failed(state: &mut State, message: String) {
+pub fn selector_listing_failed(state: &mut crate::app::State, message: String) {
     with_selector(state, |selector| selector.listing_failed(message));
 }
 
@@ -278,22 +313,22 @@ pub fn selector_listing_failed(state: &mut State, message: String) {
 ///
 /// Its presence *is* the dialog being shown (T037), so every one of these arms is a no-op with the
 /// dialog closed — stated once rather than four times.
-fn with_selector<T>(state: &mut State, change: impl FnOnce(&mut Selector) -> T) {
-    if let Some(selector) = &mut state.selector {
+fn with_selector<T>(state: &mut crate::app::State, change: impl FnOnce(&mut Selector) -> T) {
+    if let Some(selector) = &mut state.project.selector {
         let _ = change(selector);
     }
 }
 
 /// The project selector was dismissed.
-pub fn selector_closed(state: &mut State) {
-    state.selector = None;
+pub fn selector_closed(state: &mut crate::app::State) {
+    state.project.selector = None;
 }
 
 /// A rename was started for `path` (feature 015, FR-018).
 ///
 /// Seeded with the project's current display name. A path with no project is a no-op: nothing is
 /// opened, so an empty dialog cannot appear over a project that is gone.
-pub fn rename_started(state: &mut State, path: PathBuf) {
+pub fn rename_started(state: &mut crate::app::State, path: PathBuf) {
     let current = state
         .workspace
         .projects
@@ -302,7 +337,7 @@ pub fn rename_started(state: &mut State, path: PathBuf) {
         .map(|p| p.display_name.clone());
     if let Some(name) = current {
         state.clear_for_dialog();
-        state.rename_draft = Some(RenameDraft {
+        state.project.rename_draft = Some(RenameDraft {
             path,
             text: name,
             error: None,
@@ -314,8 +349,8 @@ pub fn rename_started(state: &mut State, path: PathBuf) {
 ///
 /// Clearing the error matters: a stale message beside a name the user has since corrected is the
 /// dialog arguing with them after they fixed it.
-pub fn rename_text_changed(state: &mut State, text: String) {
-    if let Some(draft) = &mut state.rename_draft {
+pub fn rename_text_changed(state: &mut crate::app::State, text: String) {
+    if let Some(draft) = &mut state.project.rename_draft {
         draft.text = text;
         draft.error = None;
     }
@@ -325,8 +360,9 @@ pub fn rename_text_changed(state: &mut State, text: String) {
 ///
 /// Renaming never touches disk — only the stored name. A rejected name leaves the dialog open
 /// carrying its reason, rather than discarding what was typed.
-pub fn rename_confirmed(state: &mut State) {
+pub fn rename_confirmed(state: &mut crate::app::State) {
     let Some((path, text)) = state
+        .project
         .rename_draft
         .as_ref()
         .map(|draft| (draft.path.clone(), draft.text.clone()))
@@ -334,9 +370,9 @@ pub fn rename_confirmed(state: &mut State) {
         return;
     };
     match state.workspace.rename(&path, &text) {
-        Ok(()) => state.rename_draft = None,
+        Ok(()) => state.project.rename_draft = None,
         Err(error) => {
-            if let Some(draft) = &mut state.rename_draft {
+            if let Some(draft) = &mut state.project.rename_draft {
                 draft.error = Some(error);
             }
         }
@@ -344,8 +380,8 @@ pub fn rename_confirmed(state: &mut State) {
 }
 
 /// The rename was dismissed without saving.
-pub fn rename_cancelled(state: &mut State) {
-    state.rename_draft = None;
+pub fn rename_cancelled(state: &mut crate::app::State) {
+    state.project.rename_draft = None;
 }
 
 /// A project's right-click menu was toggled (feature 015).
@@ -356,28 +392,28 @@ pub fn rename_cancelled(state: &mut State) {
 /// the right-clicked row remains visible; the other popovers do not.
 #[must_use = "what an opening menu displaces is the registry's business, not the caller's"]
 pub fn menu_toggled(
-    state: &mut State,
+    state: &mut crate::app::State,
     path: PathBuf,
     anchor: (u16, u16),
 ) -> Vec<crate::features::Outcome> {
-    state.project_menu_open = match &state.project_menu_open {
+    state.project.menu_open = match &state.project.menu_open {
         Some(open) if open.path == path => None,
         _ => Some(ProjectMenu { path, anchor }),
     };
-    crate::features::surface_opened(state.project_menu_open.is_some(), ProjectContextMenu::ID)
+    crate::features::surface_opened(state.project.menu_open.is_some(), ProjectContextMenu::ID)
 }
 
 /// The project context menu was dismissed.
-pub fn menu_dismissed(state: &mut State) {
-    state.project_menu_open = None;
+pub fn menu_dismissed(state: &mut crate::app::State) {
+    state.project.menu_open = None;
 }
 
 /// A forget was requested (feature 014, FR-002).
 ///
 /// Opens the confirmation; nothing is removed until confirmed.
-pub fn forget_requested(state: &mut State, path: PathBuf) {
+pub fn forget_requested(state: &mut crate::app::State, path: PathBuf) {
     state.clear_for_dialog();
-    state.forget_target = Some(path);
+    state.project.forget_target = Some(path);
 }
 
 /// A forget was confirmed (feature 014, FR-003/FR-005).
@@ -388,9 +424,9 @@ pub fn forget_requested(state: &mut State, path: PathBuf) {
 /// **Clearing the session pointer is the subtle half.** `Workspace::forget` clears
 /// `workspace.active`, and `active_session` only ever referenced the active project — so without
 /// this it would point into a project that no longer exists (FR-008).
-pub fn forget_confirmed(state: &mut State) -> Vec<crate::features::Outcome> {
+pub fn forget_confirmed(state: &mut crate::app::State) -> Vec<crate::features::Outcome> {
     let mut outcomes = Vec::new();
-    if let Some(path) = state.forget_target.clone() {
+    if let Some(path) = state.project.forget_target.clone() {
         let was_active =
             state.workspace.active.as_deref() == Some(canonicalize_best_effort(&path).as_path());
         state.workspace.forget(&path);
@@ -401,13 +437,13 @@ pub fn forget_confirmed(state: &mut State) -> Vec<crate::features::Outcome> {
             outcomes = state.set_current_session(None);
         }
     }
-    state.forget_target = None;
+    state.project.forget_target = None;
     outcomes
 }
 
 /// A forget was dismissed.
-pub fn forget_cancelled(state: &mut State) {
-    state.forget_target = None;
+pub fn forget_cancelled(state: &mut crate::app::State) {
+    state.project.forget_target = None;
 }
 
 /// Opening a folder was refused because it is not a git repository (FR-001a).
@@ -415,7 +451,10 @@ pub fn forget_cancelled(state: &mut State) {
 /// The active project is unchanged. Reported through the global surface rather than
 /// `worktree_error`: the refusal arrives with the selector already closed, so the Add Worktree
 /// modal that owns `worktree_error` is not open and the message would never be drawn.
-pub fn open_refused(_state: &mut State, message: String) -> Vec<crate::features::Outcome> {
+pub fn open_refused(
+    _state: &mut crate::app::State,
+    message: String,
+) -> Vec<crate::features::Outcome> {
     vec![crate::features::notifications::error(message)]
 }
 
@@ -492,7 +531,7 @@ pub enum Msg {
 /// matched a second time in `main.rs`, which runs the effect and lets the message reach here.
 /// The split is by *effect*, not by variant, as `worktree_form` established and M2 names as the
 /// reference.
-pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::SwitcherToggled => return switcher_toggled(state),
         Msg::MenuToggled(path, anchor) => return menu_toggled(state, path, anchor),

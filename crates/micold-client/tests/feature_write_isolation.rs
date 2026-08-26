@@ -86,11 +86,7 @@ const OWNERS: &[(&str, &str)] = &[
     // --- project ------------------------------------------------------------------------------
     ("workspace.projects", "project"),
     ("workspace.active", "project"),
-    ("selector", "project"),
-    ("rename_draft", "project"),
-    ("project_switcher_open", "project"),
-    ("project_menu_open", "project"),
-    ("forget_target", "project"),
+    ("project", "project"),
     // --- session ------------------------------------------------------------------------------
     ("workspace.sessions", "session"),
     ("workspace.foreground_by_project", "session"),

@@ -77,7 +77,7 @@ pub(crate) fn discover_worktrees(git: &dyn Git, repo: &Path) -> Vec<Worktree> {
 pub(crate) fn on_project_selector_opened(app: &mut App) -> Task<Message> {
     let dir = start_dir();
     app.core.clear_for_dialog();
-    app.core.selector = Some(Selector::open_at(dir.clone()));
+    app.core.project.selector = Some(Selector::open_at(dir.clone()));
     scan_task(app.caps.browser(), dir)
 }
 
@@ -86,7 +86,7 @@ pub(crate) fn on_project_selector_opened(app: &mut App) -> Task<Message> {
 /// its answer and must not spawn a second scan.
 pub(crate) fn on_selector_navigated(app: &mut App, msg: project::Msg) -> Task<Message> {
     app.core.update(Message::Project(msg));
-    match &app.core.selector {
+    match &app.core.project.selector {
         Some(selector) if selector.status == SelectorStatus::Loading => {
             scan_task(app.caps.browser(), selector.current_dir.clone())
         }
@@ -99,7 +99,7 @@ pub(crate) fn on_folder_chosen(app: &mut App, path: PathBuf) -> Task<Message> {
     // Close the picker BEFORE the git gate. Notifications render inside `base`, which
     // every modal wraps behind its scrim, so a refusal reported while the selector was
     // still open would be dimmed out of view.
-    app.core.selector = None;
+    app.core.project.selector = None;
     if !app.caps.git().is_repo_root(&path) {
         app.core.update(Message::Project(ProjectMsg::OpenRefused(
             "Only git repositories can be opened as projects.".to_string(),
@@ -171,7 +171,7 @@ mod tests {
     /// `base_app` carries the real git capability, and a temp dir is reliably not a repo root.
     fn choose_a_non_repository() -> App {
         let mut app = base_app();
-        app.core.selector = Some(Selector::open_at(PathBuf::from("/tmp")));
+        app.core.project.selector = Some(Selector::open_at(PathBuf::from("/tmp")));
         let dir = std::env::temp_dir().join("micold-t055-not-a-repo");
         let _ = std::fs::create_dir_all(&dir);
         let _ = on_folder_chosen(&mut app, dir);
@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn the_picker_closes_before_the_refusal_is_reported() {
         assert!(
-            choose_a_non_repository().core.selector.is_none(),
+            choose_a_non_repository().core.project.selector.is_none(),
             "the picker must close before the refusal is reported, or the notification renders \
              behind the modal's scrim and the user sees nothing happen"
         );

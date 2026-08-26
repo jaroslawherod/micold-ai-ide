@@ -44,7 +44,7 @@ fn forget_requested_opens_confirmation_and_sets_target() {
 
     assert_eq!(open_dialog(&state), Some("confirm_forget_project"));
     assert_eq!(
-        state.forget_target.as_deref(),
+        state.project.forget_target.as_deref(),
         Some(std::path::Path::new("/a"))
     );
     // Requesting does not yet remove anything.
@@ -61,7 +61,7 @@ fn forget_cancelled_closes_and_changes_nothing() {
     state.update(Message::Project(ProjectMsg::ForgetCancelled));
 
     assert_eq!(open_dialog(&state), None);
-    assert!(state.forget_target.is_none());
+    assert!(state.project.forget_target.is_none());
     assert_eq!(
         state.workspace.projects.len(),
         2,
@@ -80,7 +80,7 @@ fn forget_confirmed_removes_the_nonactive_target_others_remain() {
     state.update(Message::Project(ProjectMsg::ForgetConfirmed));
 
     assert_eq!(open_dialog(&state), None);
-    assert!(state.forget_target.is_none());
+    assert!(state.project.forget_target.is_none());
     assert_eq!(state.workspace.projects.len(), 1);
     assert_eq!(state.workspace.projects[0].path, PathBuf::from("/b"));
     assert_eq!(

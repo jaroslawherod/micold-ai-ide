@@ -284,7 +284,7 @@ pub fn view<'a>(
         Message::Project(ProjectMsg::SwitcherToggled),
         roles,
     )
-    .open(state.project_switcher_open)
+    .open(state.project.switcher_open)
     .into();
 
     // The right-clicked project's context menu, at the cursor (feature 015), like a normal desktop
@@ -293,7 +293,7 @@ pub fn view<'a>(
     // the panel hanging off the edge. The switcher stays open behind it — which is now a property
     // of the context-menu layer rather than of the order these are built in.
     let project_menu: Option<cdk::overlay::Surface<'a, Message>> =
-        state.project_menu_open.as_ref().map(|menu| {
+        state.project.menu_open.as_ref().map(|menu| {
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(1),

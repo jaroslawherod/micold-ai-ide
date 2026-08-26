@@ -60,14 +60,14 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
     ("help.help_menu_open", "help_menu", |s| {
         s.help.help_menu_open = true
     }),
-    ("project_switcher_open", "project_switcher", |s| {
-        s.project_switcher_open = true
+    ("project.switcher_open", "project_switcher", |s| {
+        s.project.switcher_open = true
     }),
     ("sidebar_filter_open", "sidebar_filter", |s| {
         s.sidebar_filter_open = true
     }),
-    ("project_menu_open", "project_menu", |s| {
-        s.project_menu_open = Some(ProjectMenu {
+    ("project.menu_open", "project_menu", |s| {
+        s.project.menu_open = Some(ProjectMenu {
             path: PathBuf::from("/tmp/p"),
             anchor: (10, 10),
         })

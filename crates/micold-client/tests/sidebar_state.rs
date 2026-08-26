@@ -269,7 +269,7 @@ fn sidebar_filter_menu_toggle_opens_and_closes_and_excludes_siblings() {
     // Opening the filter panel closes the sibling popovers (mutual exclusion, symmetric with
     // the existing help::Msg::MenuToggled/project::Msg::SwitcherToggled pair).
     assert!(!state.help.help_menu_open);
-    assert!(!state.project_switcher_open);
+    assert!(!state.project.switcher_open);
 
     state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
     assert!(!state.sidebar_filter_open);

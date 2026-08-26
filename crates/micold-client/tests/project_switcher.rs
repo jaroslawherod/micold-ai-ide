@@ -16,11 +16,11 @@ use support::{idle_session, running_session, workspace_with};
 #[test]
 fn toggling_switcher_opens_and_closes_it() {
     let mut st = State::default();
-    assert!(!st.project_switcher_open);
+    assert!(!st.project.switcher_open);
     st.update(Message::Project(ProjectMsg::SwitcherToggled));
-    assert!(st.project_switcher_open);
+    assert!(st.project.switcher_open);
     st.update(Message::Project(ProjectMsg::SwitcherToggled));
-    assert!(!st.project_switcher_open);
+    assert!(!st.project.switcher_open);
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn opening_switcher_closes_the_overflow_menu() {
     assert!(st.help.help_menu_open);
 
     st.update(Message::Project(ProjectMsg::SwitcherToggled));
-    assert!(st.project_switcher_open);
+    assert!(st.project.switcher_open);
     assert!(
         !st.help.help_menu_open,
         "opening the switcher closes the overflow menu"
@@ -41,12 +41,12 @@ fn opening_switcher_closes_the_overflow_menu() {
 fn opening_the_overflow_menu_closes_the_switcher() {
     let mut st = State::default();
     st.update(Message::Project(ProjectMsg::SwitcherToggled)); // switcher open
-    assert!(st.project_switcher_open);
+    assert!(st.project.switcher_open);
 
     st.update(Message::Help(HelpMsg::MenuToggled));
     assert!(st.help.help_menu_open);
     assert!(
-        !st.project_switcher_open,
+        !st.project.switcher_open,
         "opening the overflow menu closes the switcher"
     );
 }

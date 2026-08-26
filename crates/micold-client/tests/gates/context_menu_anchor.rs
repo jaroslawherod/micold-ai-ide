@@ -474,7 +474,7 @@ fn the_project_menu_opens_at_the_row_it_was_opened_from() {
         "Nothing changed, so the switcher's panel is not sized by what it lists and this gate can \
          no longer find it.",
     );
-    two.project_switcher_open = true;
+    two.project.switcher_open = true;
 
     // Inside the panel's first row: across the panel it was just measured at, and down past §7.5's
     // vertical padding into the middle of the item. The figures are the measured panel's own and
