@@ -75,8 +75,12 @@ fn canned_failures_reach_the_caller_as_distinct_variants() {
         (
             "err_port_unavailable.txt",
             "podman_err_port_unavailable.txt",
-            &|e| matches!(e, RuntimeError::PortUnavailable { .. }),
-            "PortUnavailable",
+            // The port, not just the variant: both fixtures are a conflict on 7727, and a
+            // classifier that reads the variant off one runtime's wording while losing the number
+            // off the other's still passes every `{ .. }` check — then tells the user "Port 0 is
+            // already in use" and sends them looking for a port nothing is listening on.
+            &|e| matches!(e, RuntimeError::PortUnavailable { port: 7727 }),
+            "PortUnavailable on 7727",
         ),
         (
             "err_mount_rejected.txt",

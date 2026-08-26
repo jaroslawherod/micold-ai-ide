@@ -1,1 +1,1 @@
-Error: mkdir /mnt/netshare: read-only file system
+Error: statfs /no/such/host/path: no such file or directory

@@ -16,14 +16,30 @@ than one shared file per failure precisely because the wording is the input — 
 only recognises `Cannot connect to the Docker daemon` reports podman's daemon being down as
 `Unknown`, which is exactly the anonymous failure FR-034 exists to prevent.
 
-**Provenance differs between the two halves, and the difference is worth stating.** The Docker
-fixtures were captured on the machine described above. Podman is not installed there, so the
-podman fixtures were transcribed from podman's own message strings rather than captured from a
-run: they are what podman prints, to the best of what its sources and documentation say, and they
-have not been confirmed against a live podman. T098 — the quickstart pass against a real podman on
-Linux — is where that confirmation happens, and it is the task that may correct these files.
+**Both halves are captured now.** The Docker fixtures come from the machine described above. The
+podman fixtures were transcribed from podman's own message strings
+until T098, and are now captured from podman 5.8.4 (Fedora build, rootless, `crun`) running one
+level in on that same machine — see `specs/027-sandboxed-daemon-runtime/evidence/us5-podman.md`
+for the rig and for what its nesting does and does not establish.
 
-Treating a transcribed fixture as if it were captured is the failure mode to avoid here: it would
-let the classifier pass a suite built from our own assumptions. The transcription is a starting
-point that keeps the *shape* of the suite honest across both runtimes until a real podman is
-available.
+The transcription was wrong in ways worth recording, because they are the ways a transcribed
+fixture is always wrong:
+
+- `podman_err_port_unavailable.txt` was written with `rootlessport` and Docker's `host:port`
+  separator. Podman 5.8.4 rootless publishes through **pasta**, and writes `127.0.0.1/7727`. The
+  classifier read the variant off it correctly and the port as `0`.
+- `podman_err_mount_rejected.txt` carried Docker's `mkdir ...: read-only file system` wording.
+  Podman reports the syscall it tried: `statfs <path>: no such file or directory`.
+- `podman_err_no_subuid.txt` had the right sentence and the wrong status. Podman 5.8.4 emits it as
+  a `level=error` log line and then **continues** with single mapping; the fatal failure arrives
+  later, in the words now in `podman_err_subuid_range_too_small.txt`, which share nothing with it.
+  That second file is the one the classifier could not read at all.
+- `podman_err_service_down.txt` and `podman_err_permission_denied.txt` were close but incomplete:
+  both real messages open with a client info block and the `Cannot connect to Podman` paragraph,
+  and both end by repeating the socket URL. The permission one contains the not-running wording
+  *as well as* `permission denied`, which is why `classify` tests the permission phrases first —
+  with the transcribed fixtures that ordering was a precaution, and with these it is load-bearing.
+
+Treating a transcribed fixture as if it were captured is the failure mode this section exists to
+prevent: it lets the classifier pass a suite built from our own assumptions. Anything added here
+for a runtime nobody has run should say so in this file until someone runs it.

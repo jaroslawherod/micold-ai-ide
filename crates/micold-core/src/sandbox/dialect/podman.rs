@@ -36,6 +36,12 @@ pub fn dialect() -> Dialect {
             "no subuid ranges found",
             "no subgid ranges found",
             "check rootless mode",
+            // Podman 5.8.4 no longer refuses when the range is merely *too small*: it maps what it
+            // can and fails later, deep inside an unpack, in words that share nothing with the
+            // sentence above — no "subuid", no "rootless". Captured under T098 from a user given a
+            // ten-id range, where it was landing in `Unknown` while the fix stayed one `usermod`
+            // away.
+            "insufficient uids or gids",
         ],
         // Podman does not talk about mount configuration at all: it reports the syscall it tried.
         // `statfs <path>: no such file or directory` is what a bind onto a path podman cannot reach
