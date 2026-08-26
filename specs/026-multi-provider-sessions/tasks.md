@@ -1403,7 +1403,7 @@ Four, opened as tasks rather than written up as notes, because each is a behavio
 claims and does not have. None is reachable from §A: every one of them is either a timing property,
 a path only a second press exercises, or a pixel position.
 
-- [ ] T086 Broadcast after `note_activity`, so the badge moves when the event lands (SC-005, FR-018).
+- [X] T086 Broadcast after `note_activity`, so the badge moves when the event lands (SC-005, FR-018).
   `state.rs`'s `open_event_log_tail` callback calls `state.note_activity(id, event)` and **discards
   its return value** — the `bool` that says the projected signal changed. `drain_signals`, the other
   producer of the same kind of change, returns the same `bool` to the supervisor tick, which pushes
@@ -1415,6 +1415,32 @@ a path only a second press exercises, or a pixel position.
   `note_activity` changed the signal passes today. Assert a subscriber receives a catalog after a
   synthesised event-log append, and probe it by deleting the new broadcast — nothing else in the
   suite should fail, which is the measure of how alone that assertion is.
+
+  **Done.** `open_event_log_tail`'s callback now reads the `bool` and calls `broadcast_catalog()`
+  when it is `true`, which is what the hook receiver two files over has always done with the same
+  value. The guard is not decoration: `events.jsonl` is mostly lines the machine deliberately
+  ignores, and an unconditional push would send a full catalog snapshot per line for a badge that
+  never moves.
+
+  The gate is `activity_pipeline.rs::an_event_log_append_pushes_the_new_badge_to_connected_clients`,
+  and it is written against the trap the task named — it registers a client and reads *what that
+  client was sent*, never `catalog_snapshot()`, because a snapshot assertion passes against the
+  defect. Nothing else in the test can broadcast: no `drain_signals`, no supervisor tick, no start,
+  so the tail is the only thing that can speak. Its second half proves the `if` rather than the
+  call, and does it without a sleep: a no-op line is appended *between* two real ones, so when the
+  second push arrives the first has certainly been delivered too, and the assertion is that exactly
+  two arrived.
+
+  Probed on `11bd5b2` by restoring the discard and running `cargo test --workspace --no-fail-fast`
+  — the flag matters, because a fail-fast run stops at the first failing binary and 42 of the 220
+  never execute, which cannot distinguish "alone" from "first". 219 binaries pass, 1 fails, and the
+  only failing assertion is this one. The whole suite is otherwise blind to whether the daemon ever
+  tells anybody the badge moved.
+
+  Timing is deliberately not asserted. SC-005's budget is one second and the run takes 0.24 s, but
+  a deadline tight enough to *be* the measurement would fail on a loaded runner for a reason that is
+  not the defect; what is under test is that a push happens at all. §B's frames remain the timing
+  evidence.
 
 - [ ] T087 Report a failed **resume** to the client (FR-010). `ClientMsg::SessionStart` — the restart
   a user presses on an existing session — calls `spawn_session_start(…, LaunchMode::Resume, None, …)`
