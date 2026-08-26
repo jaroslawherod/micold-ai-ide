@@ -19,12 +19,12 @@ rather than the behavior of the product.
 ### The finding this feature exists to act on
 
 Feature 021 set out to turn a monolithic MVU core into a "distributed, component-based MVU". It
-delivered a great deal — eleven feature modules, an overlay registry, a shell split, and a set of
+delivered a great deal — ten feature modules, an overlay registry, a shell split, and a set of
 guard tests this feature will extend rather than replace. But on the two axes a maintainer actually
 feels, it stopped short, and **it stopped short by design rather than by accident**:
 
 - **FR-004b explicitly permitted a feature to conclude that a reducer module suffices** — that
-  nesting a message vocabulary was optional. Ten of eleven features concluded exactly that.
+  nesting a message vocabulary was optional. Nine of ten features concluded exactly that.
 - **Local state was never in scope at all.** Not attempted, not deferred, not measured.
 
 The result is that nesting happened **once**. `features/worktree_form.rs` has a `Msg` enum
@@ -67,7 +67,7 @@ enough for its share to be noise, and one feature is already down to a single va
 This feature inherits far more machinery than it builds:
 
 - **The `Outcome` vocabulary and its draining interpreter** (`features/mod.rs`, `app::drain`,
-  `app::interpret`) already exist, with seven variants and real emitters. A feature reducer that
+  `app::interpret`) already exist, with twelve variants and real emitters. A feature reducer that
   must not write another feature's data already has the sanctioned way to say so. This feature
   extends that vocabulary; it does not invent it.
 - **The overlay registry** (feature 017 + 021) already owns surface registration, dismissal and
@@ -94,6 +94,20 @@ evidence, not on the principle alone: the pains are nesting and ownership proble
 the current framework's primitives already solve — as the 18 existing stateful widgets and the one
 nested feature demonstrate — while a framework change would discard roughly 45,000 lines of
 rendering code and about half the test suite to fix them.
+
+## Clarifications
+
+### Session 2026-08-26
+
+- Q: The spec's baseline figures were inherited from feature 021 and three of them are wrong against the code as it stands, which makes SC-004's target of "eleven of eleven" unsatisfiable — should they be corrected? → A: Yes, all three, to their measured values: ten feature modules (not eleven), twelve outcome variants (not seven), and thirteen uses of component-owned state (not eighteen). SC-004 now reads ten of ten, up from one of ten. The bullets recorded in the 2026-08-25 session are left as written; they are a log of what was answered, not a statement of current fact.
+
+### Session 2026-08-25
+
+- Q: Story 2 asks that single-owner state move into the widget that renders it, but all five fields that qualify are pinned to the application by an existing feature-017 test that FR-021 forbids relaxing — should Story 2 instead give each feature its own state struct on the application, and keep the widget rule only as a guard for future fields? → A: Yes — two tracks. Feature-owned state structs deliver Story 2's outcome; FR-007's widget rule ships as a guard that moves nothing today and catches the first field that genuinely qualifies.
+- Q: The root has a message that four tests exercise but that no running code ever sends — leave it in place with its dead status recorded, wire it up, or delete it? → A: Leave it and record it. The guard gains a third verdict — *no owner* — which it reports rather than fails; wiring it would change behavior FR-019 freezes, deleting it would remove assertions FR-021 protects.
+- Q: Should SC-001 stay a one-time measurement, or become a fourth guard that fails the build when it stops being true? → A: Measured once, with the three guards recorded as its standing enforcement — a change that touched a second file would have had to add a root variant or a root state path, and one of the three catches that.
+- Q: Should the platform-independent test list gain only this feature's three new guards, or the four existing architecture guards alongside them? → A: All seven. The four feature-021 guards join this feature's three, closing an omission 021's own notes recorded twice and left open.
+- Q: Regrouping the state renames the paths that ~100 test files read, so nearly every assertion's text changes — should the assertion-freeze check be switched on for this feature? → A: Yes, enforcing, with an adjudications file recording each renamed assertion and the path rename that caused it. A report nobody must act on is the same failure mode as the optional guidance that left feature 021 at one feature in eleven.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -135,8 +149,12 @@ feature's state is scattered across a shared 44-field struct, and telling which 
 requires consulting a separate ownership map in a test file. Anything a view needs is threaded down
 from the root; anything it changes is threaded back up.
 
-Afterwards, state that has exactly one writer and no reader outside its own feature lives inside
-the component that owns it, and does not appear in the root struct at all.
+Afterwards, everything a feature remembers is declared in that feature's own module as a single
+named grouping, which the application holds in one place. State the application genuinely shares
+stays shared, and says so. Where a path additionally has no reader outside the feature's view, it
+belongs inside the component that renders it — but only where no existing assertion pins it to the
+application, because those assertions are the behavior specification this feature is forbidden to
+relax.
 
 **Why this priority**: It is the deeper of the two pains and the one never attempted, but it
 depends on Story 1 — a feature cannot own its state until it owns the messages that write it. It
@@ -150,9 +168,9 @@ revertible.
 
 **Acceptance Scenarios**:
 
-1. **Given** a state path with exactly one writing feature and no reader outside that feature's own
-   module and view, **When** the migration is complete, **Then** that path does not appear in the
-   root application state.
+1. **Given** a state path with exactly one writing feature, **When** the migration is complete,
+   **Then** that path is declared in that feature's own module and does not appear as a loose field
+   of the root application state.
 2. **Given** a state path that more than one feature reads, **When** the migration is complete,
    **Then** it remains in the root state, and the reason is recorded where a maintainer will find
    it rather than inferred.
@@ -171,7 +189,7 @@ lets them declare it "small enough" to skip the pattern and put its variants in 
 
 **Why this priority**: This is the story that makes the other two durable, and it is P1 despite
 being listed third because *without it this feature is feature 021 again*. 021's optional guidance
-reached one feature in eleven; every guard it made mandatory still holds today, without exception.
+reached one feature in ten; every guard it made mandatory still holds today, without exception.
 The evidence for this story is already in the repository.
 
 **Independent Test**: Attempt each violation against the guards and confirm each is reported: a new
@@ -212,6 +230,11 @@ with no reducer entry point, and a feature reducer reaching for another feature'
 - **Two features that must act on one interaction.** Escape, a scroll beneath an open surface, and
   a window resize are observed by several features at once. These are cross-cutting by nature and
   belong in the root vocabulary; the guards must not push them into an arbitrary feature.
+- **A root message with no producer at all.** A variant can be declared, matched and exercised by
+  tests while nothing in the running application sends it. It has no owning feature to be pushed
+  into, and both obvious fixes are forbidden here: wiring it up changes behavior, deleting it
+  removes assertions. The guard must be able to say *no owner* as a distinct, reported verdict.
+
 - **An exemption granted and then forgotten.** An allowlist entry that outlives its reason is the
   same failure as no guard at all, only quieter.
 
@@ -240,8 +263,14 @@ with no reducer entry point, and a feature reducer reaching for another feature'
 
 **State ownership (Story 2)**
 
-- **FR-007**: A state path MUST be moved into the component that owns it when it has exactly one
-  writing feature and no reader outside that feature's own module and its view.
+- **FR-007**: Every feature's state MUST be declared in that feature's own module as a single named
+  grouping, which the root application state holds in one place, rather than as loose paths spread
+  across the root.
+- **FR-007a**: A state path with exactly one writing feature and no reader outside that feature's
+  own module and its view MUST additionally move into the component that renders it — unless an
+  existing assertion pins it to the application, in which case the path stays and the guard's
+  allowlist MUST record that assertion as the reason. FR-021 makes this exception mandatory rather
+  than discretionary: no existing assertion may be relaxed to let a path move.
 - **FR-008**: A state path read by more than one feature MUST remain in the root application state,
   and the reason MUST be recorded in the codebase rather than left to be inferred.
 - **FR-009**: Moving a state path MUST NOT change when that state is created, retained or
@@ -258,7 +287,9 @@ with no reducer entry point, and a feature reducer reaching for another feature'
 **Enforcement (Story 3)**
 
 - **FR-013**: A guard MUST fail when a message variant in the root vocabulary is produced and
-  consumed by exactly one feature, and MUST name that feature.
+  consumed by exactly one feature, and MUST name that feature. A variant with **no** producer MUST
+  be reported rather than failed, and MUST carry a written reason recording that its behavior is
+  specified by tests but unreachable in the running application.
 - **FR-014**: A guard MUST fail when a root state path has exactly one writing feature and no
   reader outside it, and MUST name that feature.
 - **FR-015**: A guard MUST fail when a feature module has no reducer entry point.
@@ -267,7 +298,9 @@ with no reducer entry point, and a feature reducer reaching for another feature'
 - **FR-017**: Each guard MUST be demonstrated non-vacuous: for each rule, the violation it forbids
   MUST be shown to fail the suite before the guard is relied upon.
 - **FR-018**: The guards MUST run in the environment that runs without a window, so they hold on
-  every supported platform rather than only where the full suite runs.
+  every supported platform rather than only where the full suite runs. This covers the three guards
+  this feature adds **and** the four architecture guards feature 021 left running on one platform
+  only; all seven read source text and start no window.
 
 **Behavior preservation (all stories)**
 
@@ -277,24 +310,27 @@ with no reducer entry point, and a feature reducer reaching for another feature'
   forces a decision, the decision MUST be recorded with its reasoning and pinned by a test, rather
   than being made silently.
 - **FR-021**: The existing test suite MUST continue to pass throughout, and no existing assertion
-  may be removed to accommodate the restructuring.
+  may be removed to accommodate the restructuring. This MUST be enforced by the repository's
+  assertion-freeze check rather than asserted: the check MUST fail this feature's branch, and every
+  assertion whose text changes because a state path was renamed MUST be recorded as a reviewed
+  rename with the rename that caused it.
 
 ### Key Entities
 
 - **Feature module**: One module holding a feature's types together with the operations over them.
-  Eleven exist. Render-free, and required to stay so.
+  Ten exist. Render-free, and required to stay so.
 - **Feature message vocabulary**: The set of interactions one feature produces and consumes,
   declared by that feature. One exists today.
 - **Feature reducer**: The single entry point that applies a feature's own vocabulary to state and
   reports consequences. One exists today.
 - **Outcome vocabulary**: The shared set of consequences a feature reports for the root to route.
-  Seven variants exist today.
+  Twelve variants exist today.
 - **Root message vocabulary**: What remains after FR-003 — cross-cutting interactions and
   environmental events.
-- **Root application state**: What remains after FR-007 and FR-008 — state with more than one
-  reader.
+- **Root application state**: What remains after FR-007 and FR-008 — one grouping per feature, plus
+  the paths more than one feature reads, each carrying its recorded reason.
 - **Component-owned state**: State held inside the component that renders it, created and destroyed
-  with it. The mechanism exists and is used 18 times.
+  with it. The mechanism exists and is used 13 times.
 - **Ownership map**: The per-path table of which feature writes which state, already built and
   already tested.
 
@@ -303,14 +339,18 @@ with no reducer entry point, and a feature reducer reaching for another feature'
 ### Measurable Outcomes
 
 - **SC-001**: Adding an interaction that no other feature observes changes **one feature module and
-  its view, and no other file** — measured by making such a change and counting, not asserted.
+  its view, and no other file** — measured by making such a change and counting, not asserted. No
+  fourth guard is added for it: the three guards are its standing enforcement, because a change that
+  reached a second file would have had to add a root message variant or a root state path, and
+  SC-002 and SC-003 forbid both.
 - **SC-002**: The root message vocabulary contains **no variant produced and consumed by exactly
   one feature**, with every exception listed and justified in one place. The rule is the criterion;
   a variant count is reported alongside it as evidence, not as the target.
-- **SC-003**: The root application state contains **no path with exactly one writing feature and no
-  reader outside it**, with every exception listed and justified in one place.
+- **SC-003**: The root application state contains **no loose path with exactly one writing
+  feature** — every such path is declared inside its feature's own state grouping — with every
+  exception listed and justified in one place.
 - **SC-004**: **Every** feature module has its own message vocabulary and reducer entry point —
-  eleven of eleven, up from one of eleven, with FR-005's no-interaction case counted as satisfying
+  ten of ten, up from one of ten, with FR-005's no-interaction case counted as satisfying
   rather than exempt.
 - **SC-005**: Each of the three guards is demonstrated non-vacuous by observing its forbidden
   violation fail the suite.
@@ -328,16 +368,18 @@ Recorded because the description did not settle them and a reasonable default ex
 decision this spec is making, not a question it is deferring.
 
 - **The qualifying rule for moving state is mechanical, not editorial.** "Nobody else's business"
-  is defined as FR-007 states it — one writer, no outside reader — and is computed from the
+  is defined as FR-007a states it — one writer, no outside reader — and is computed from the
   ownership data the write-isolation guard already builds. 021's pattern spread to one feature in
-  eleven because the decision was left to per-feature judgment; this spec removes the judgment.
+  ten because the decision was left to per-feature judgment; this spec removes the judgment.
+  FR-007 itself needs no judgment at all: every feature gets its grouping.
 - **A feature's view counts as part of the feature** for the purposes of FR-007. Views live beside
   features rather than inside them by existing convention, and treating that convention as
   disqualifying would move nothing.
-- **The session and terminal cluster is in scope for Story 1 and evaluated case-by-case for Story
-  2.** It is the largest share of the root vocabulary, so exempting it would forfeit most of the
-  benefit; but its grid has multiple readers, so FR-008 is expected to keep parts of it in the root
-  state, and that is a correct outcome rather than a partial one.
+- **The session and terminal cluster is in scope for Story 1, and for FR-007 like every other
+  feature.** It is the largest share of the root vocabulary, so exempting it would forfeit most of
+  the benefit. Its grid has multiple readers, so FR-008 is expected to keep parts of it declared as
+  shared rather than folded into the session grouping, and that is a correct outcome rather than a
+  partial one. Only FR-007a's further move into a component is evaluated case by case.
 - **`src/showcase/` is out of scope.** It is a development-only second binary that already has the
   target shape, and 021 reached the same conclusion for the same reason.
 - **The daemon, the core crate and the wire protocol are untouched.** This feature lives entirely
@@ -354,7 +396,7 @@ decision this spec is making, not a question it is deferring.
 ## Dependencies
 
 - Feature 017 (Material component architecture) — the shared surface and layer vocabulary.
-- Feature 021 (Feature-module MVU architecture) — the eleven feature modules, the outcome
+- Feature 021 (Feature-module MVU architecture) — the ten feature modules, the outcome
   vocabulary and interpreter, the overlay registry, the shell split, and the two guard tests this
   feature extends. **This feature completes 021's Tier 3 rather than revisiting Tiers 1 and 2.**
 - Constitution Principles I (test-first), V (Rust + iced), VII (documentation) and VIII (reusable
