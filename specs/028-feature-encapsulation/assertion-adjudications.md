@@ -341,5 +341,36 @@ was: assert_eq!(state.notify.pending(),0,"onemessageshouldnotqueuebehinditself")
 was: assert!(guard.contains("notify.is_active()"),"thesnackbarclockisinside`{guard}`,whichdoesnottestwhetheranotificationis\showing.Subscribedatrestitwakestheprocessfourtimesasecondforthelifeofthe\application,andnobehaviouraltestinthisworkspacecanseeit(FR-032a,SC-017).")
 ```
 
+## T029 — About and the Help menu moved behind `state.help`
+
+Two renames, applied everywhere: `state.about_open` is `state.help.about_open` and
+`state.help_menu_open` is `state.help.help_menu_open`, because both fields are now members of
+`features::help::State` rather than flat fields of `app::State`. Twenty-two assertions changed
+spelling and none changed meaning — each still asks the same flag the same question, reached one
+segment further in. Every one is a plain field-path rename, across `tests/about_open.rs`,
+`tests/features_help.rs`, `tests/overlay_dismissal_delta.rs`, `tests/overlay_dispatch_ordering.rs`,
+`tests/overlay_transition_identity.rs` and `tests/project_switcher.rs`.
+
+Nothing here is a source-text assertion of the T028 `idle_subscriptions.rs` kind: no test in this
+set greps for the old spelling, so no expected string had to be re-pinned.
+
+```
+was: assert!(!menu.help_menu_open,"Escapenowreachestheoverflowmenu,whichthesubscription'smatchnevernamed")
+was: assert!(!st.about_open)
+was: assert!(!st.help_menu_open)
+was: assert!(!st.help_menu_open,"openingtheswitcherclosestheoverflowmenu")
+was: assert!(!st.help_menu_open,"themenutheactionwaschosenfromdoesnotstayopenbehindthedialogitopened")
+was: assert!(!state.help_menu_open)
+was: assert!(!state.help_menu_open,"overflowmenu")
+was: assert!(!state.help_menu_open,"theoverflowmenumustclosewhencontentscrollsbeneathit")
+was: assert!(!state.help_menu_open,"theoverflowmenusurvived{name}opening")
+was: assert!(closing.state().about_open,"thesnapshotmustkeepthestateasitwas,nottracktheliveone")
+was: assert!(st.about_open)
+was: assert!(st.about_open,"stillexactlyone,notasecondinstance")
+was: assert!(st.help_menu_open)
+was: assert!(state.help_menu_open)
+was: assert!(state.help_menu_open,"precondition:themenuisopen")
+```
+
 T040 rolls these up for the phase; each move is adjudicated as it lands, so the freeze is green at
 every commit rather than only at the end (contract C.1).
