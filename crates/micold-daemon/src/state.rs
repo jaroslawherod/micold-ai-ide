@@ -1478,10 +1478,18 @@ impl DaemonState {
         changed
     }
 
-    /// Respawn a session's primary process after a crash and swap it into the live registry, marking
-    /// the session `Running` (resets the crash-loop counter). On a spawn *failure* (rare — the binary
-    /// is gone), count it as another crash so the retry budget still advances toward `Failed` instead
-    /// of leaving a dead entry that looks alive.
+    /// Respawn a session's primary process after a crash and swap it into the live registry. The
+    /// session stays `Restarting { attempts }` — the policy set that, and only an explicit healthy
+    /// signal clears it — so a process that dies again right away keeps advancing toward `Failed`.
+    ///
+    /// On a spawn *failure* (the binary is gone, or the working directory is — `010` BUG-012), the
+    /// dead entry is left exactly where it is. That is not an oversight: `supervise_exited_sessions`
+    /// classifies by `pty.is_alive()` over the live registry, so a dead primary left in place is
+    /// re-observed by the very next tick and counted like any other crash, once per tick, until the
+    /// budget runs out and the give-up path drops it *and* announces the change. Counting the
+    /// failure here instead and dropping the entry — which this did until `010` BUG-024 — took the
+    /// session out of the only collection anything walks, stranding it at `Restarting` with no
+    /// process behind it for the life of the daemon.
     fn respawn_primary(
         &self,
         id: SessionId,
@@ -1518,13 +1526,10 @@ impl DaemonState {
                 let _old = self.swap_primary(id, session);
             }
             Err(_) => {
-                // Couldn't even respawn — count it as a further crash so the budget still advances,
-                // and drop the dead entry so it does not masquerade as alive.
-                let _ = self
-                    .lock()
-                    .catalog
-                    .supervise_session_exit(id, ExitOutcome::Crashed);
-                self.remove_session(id);
+                // Couldn't even respawn. Leave the dead primary in the registry: the next tick sees
+                // a session whose process is not alive, which is precisely the case supervision is
+                // written for, and counts one crash for it like any other. Removing it here would
+                // be the last anything ever heard of this session (BUG-024).
             }
         }
     }
