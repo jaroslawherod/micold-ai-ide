@@ -821,3 +821,30 @@ non-vacuity probe records rather than adjudications and carry no keys.
 
 T040 rolls these up for the phase; each move is adjudicated as it lands, so the freeze is green at
 every commit rather than only at the end (contract C.1).
+
+## T043 — G2's non-vacuity probe (FR-017)
+
+Not an adjudication; a record, and the third of the three SC-005 asks for. `pub scratch_pad: String`
+was added to `app::State` and written from one place — `features/help.rs::about_opened` — then
+reverted. `cargo test -p micold-client --test root_state_is_shared` failed, naming the feature:
+
+```
+thread 'every_root_field_is_a_feature_struct_or_a_declared_shared_member' panicked at
+crates/micold-client/tests/root_state_is_shared.rs:292:5:
+1 loose field(s) in `app::State`. Every public field must be a feature's own `State` or a declared
+shared member in SHARED (feature 028, FR-014, contract S2):
+  `state.scratch_pad: String` — written only by `help` — move it into `features/help.rs`'s `State`
+```
+
+Three of the guard's four tests passed, so the run was a real run — an injection that fails to
+compile demonstrates nothing, which is the trap 021's record fell into twice. That the other three
+passed is itself informative: the component rule did not fire, because a field with one writer and
+no reader at all is not component-local, and neither allowlist went stale.
+
+`feature_write_isolation.rs` failed alongside it, and that is the older guard working rather than
+noise: `every_state_field_has_an_owner` reported `["scratch_pad"]`, and the six tests that resolve a
+write to an owner each hit `` `scratch_pad` has no owner — add it to OWNERS ``. Since T047 that
+message is the *last* resort — nine root fields answer by their type — so a field reaching it is a
+field whose type names no feature, which is precisely what G2 exists to say more clearly.
+
+Reverted with `git checkout -- crates/micold-client`; both files' tests pass again.
