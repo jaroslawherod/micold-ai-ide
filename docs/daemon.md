@@ -190,7 +190,8 @@ all fully live and never interfering with one another.
 - **A second window on the same project is refused — with an offer, not a wall.** If you open a
   window on a project another window already holds, attachment is refused with a message naming the
   current holder and how long it has held it, and offering to **take over**. Nothing happens to the
-  other window until you confirm.
+  other window until you confirm. The refused window says the project is already open elsewhere —
+  not that anything was taken from it, which is the other case below and a different sentence.
 
 - **Takeover is deliberate and non-destructive.** When you confirm, the new window becomes the holder
   and the previous one is **displaced**: it shows a banner saying another window took over, stops

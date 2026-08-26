@@ -604,17 +604,25 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // Another window took over a project we held (US5, FR-024). Mark it read-only here —
         // input is suppressed and a "take over" banner is shown — but never terminate.
         DaemonMsg::Displaced { project, by } => {
-            app.displaced.insert(project, by);
+            app.displaced.insert(
+                project,
+                micold_client::features::connection::Hold::taken_over(by),
+            );
         }
-        // A (re)attach was refused. `ProjectBusy` means another window holds it: surface the
-        // same take-over banner as a live displacement, naming the current holder.
+        // A (re)attach was refused. `ProjectBusy` means another window holds it: the same
+        // read-only state and the same take-over offer as a live displacement, recorded as the
+        // refusal it is so the banner can say so rather than announce a takeover that never
+        // happened (`010` BUG-023).
         DaemonMsg::Refused {
             reason:
                 micold_core::protocol::messages::RefusalReason::ProjectBusy {
                     project, holder, ..
                 },
         } => {
-            app.displaced.insert(project, holder);
+            app.displaced.insert(
+                project,
+                micold_client::features::connection::Hold::already_open(holder),
+            );
         }
         // An attach this window asked for was accepted (FR-024a). This is the fact that
         // falsifies a recorded displacement: the daemon decides who holds a project, and it
