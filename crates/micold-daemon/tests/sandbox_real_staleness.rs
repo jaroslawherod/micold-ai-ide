@@ -35,7 +35,7 @@ use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 
 use sandbox_real_support::{
-    credentials, docker_out, input_serial, open_session, seed, start_sandbox, wait_for_accept,
+    cli_out, credentials, input_serial, open_session, seed, start_sandbox, wait_for_accept,
     SandboxSpec, Terminal,
 };
 
@@ -86,7 +86,7 @@ async fn sandbox_real_a_project_registered_after_boot_is_outside_the_running_con
         extra: &[],
     });
 
-    let started_at = docker_out(&["inspect", "-f", "{{.State.StartedAt}}", CONTAINER]);
+    let started_at = cli_out(&["inspect", "-f", "{{.State.StartedAt}}", CONTAINER]);
     let (mut conn, catalog) = wait_for_accept(PORT, &credentials(&token)).await;
     let serial = input_serial(&catalog, session);
     let screen = open_session(&mut conn, &project, session, &daemon_log).await;
@@ -145,18 +145,18 @@ async fn sandbox_real_a_project_registered_after_boot_is_outside_the_running_con
     // The second: nothing restarted on its own. Asserted on the runtime's own record rather than on
     // our state machine, which is the half that could be lying.
     assert_eq!(
-        docker_out(&["inspect", "-f", "{{.State.StartedAt}}", CONTAINER]),
+        cli_out(&["inspect", "-f", "{{.State.StartedAt}}", CONTAINER]),
         started_at,
         "registering a project must not restart the container — a restart ends every session in it, \
          which is not a price to pay for a side effect of registering a project (R9)"
     );
     assert_eq!(
-        docker_out(&["inspect", "-f", "{{.RestartCount}}", CONTAINER]),
+        cli_out(&["inspect", "-f", "{{.RestartCount}}", CONTAINER]),
         "0",
         "the container must not have been restarted by anything"
     );
     assert_eq!(
-        docker_out(&["inspect", "-f", "{{.State.Running}}", CONTAINER]),
+        cli_out(&["inspect", "-f", "{{.State.Running}}", CONTAINER]),
         "true",
         "and it must still be running"
     );

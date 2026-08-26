@@ -25,7 +25,7 @@ use std::time::Duration;
 use micold_core::protocol::auth::Token;
 
 use sandbox_real_support::{
-    credentials, docker_out, input_serial, open_session, seed, start_sandbox, wait_for_accept,
+    cli_out, credentials, input_serial, open_session, seed, start_sandbox, wait_for_accept,
     SandboxSpec, Terminal,
 };
 
@@ -84,7 +84,7 @@ async fn sandbox_real_limits_stop_the_session_not_the_daemon() {
     });
 
     // The limit reached the container, not just the argv (FR-015) -------------------------------
-    let enforced = docker_out(&["inspect", "-f", "{{.HostConfig.Memory}}", CONTAINER]);
+    let enforced = cli_out(&["inspect", "-f", "{{.HostConfig.Memory}}", CONTAINER]);
     assert_eq!(
         enforced,
         (MEMORY_MIB * 1024 * 1024).to_string(),
@@ -132,7 +132,7 @@ async fn sandbox_real_limits_stop_the_session_not_the_daemon() {
 
     // …and so does the daemon, on its own connection (FR-035's premise) -------------------------
     assert_eq!(
-        docker_out(&["inspect", "-f", "{{.State.Running}}", CONTAINER]),
+        cli_out(&["inspect", "-f", "{{.State.Running}}", CONTAINER]),
         "true",
         "the container must still be running after the limit was reached"
     );
@@ -172,7 +172,7 @@ async fn sandbox_real_limits_change_only_by_recreating_the_container() {
         extra: &first,
     });
     assert_eq!(
-        docker_out(&["inspect", "-f", "{{.HostConfig.Memory}}", container]),
+        cli_out(&["inspect", "-f", "{{.HostConfig.Memory}}", container]),
         (256u64 * 1024 * 1024).to_string()
     );
     drop(sandbox);
@@ -189,7 +189,7 @@ async fn sandbox_real_limits_change_only_by_recreating_the_container() {
         extra: &second,
     });
     assert_eq!(
-        docker_out(&["inspect", "-f", "{{.HostConfig.Memory}}", container]),
+        cli_out(&["inspect", "-f", "{{.HostConfig.Memory}}", container]),
         (512u64 * 1024 * 1024).to_string(),
         "a changed limit must be in force after the sandbox is restarted"
     );

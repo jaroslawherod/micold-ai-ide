@@ -23,9 +23,10 @@ mod sandbox_real_support;
 
 use micold_core::protocol::auth::Token;
 
+use micold_core::sandbox::runtime::RuntimeKind;
 use sandbox_real_support::{
-    credentials, input_serial, open_session, seed, start_sandbox, wait_for_accept, SandboxSpec,
-    Terminal,
+    credentials, input_serial, open_session, runtime_kind, seed, start_sandbox, wait_for_accept,
+    SandboxSpec, Terminal,
 };
 
 const CONTAINER: &str = "micold-boundary-probe";
@@ -35,6 +36,24 @@ const PORT: u16 = 17731;
 /// Written into the project on the host, read back from inside. Distinctive enough that finding it
 /// anywhere else would be a finding of its own.
 const MARKER: &str = "micold-boundary-marker-8f3a";
+
+/// Where the selected runtime keeps the socket that drives it.
+///
+/// C-3 is "the sandbox cannot drive its own runtime", and the two runtimes keep that socket in
+/// different places. Probing Docker's path under podman would pass the box by asking about a file
+/// podman never created — the shape of a green check that checks nothing.
+fn control_socket() -> String {
+    match runtime_kind() {
+        RuntimeKind::Docker => "/var/run/docker.sock".to_string(),
+        // Rootless podman's socket lives under the invoking user's runtime directory; the rootful
+        // one is at `/run/podman/podman.sock`. Whichever this host runs, the sandbox must not see
+        // it, so the probe asks about the one the *harness* is driving.
+        RuntimeKind::Podman => {
+            let (uid, _) = micold_core::sandbox::host_identity();
+            format!("/run/user/{uid}/podman/podman.sock")
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------------------------
 // §B.2
@@ -125,7 +144,7 @@ async fn sandbox_real_boundary_holds_from_inside_a_session() {
         ),
         (
             "the runtime's own control socket (C-3)",
-            "ls -l /var/run/docker.sock".to_string(),
+            format!("ls -l {}", control_socket()),
         ),
         (
             "a git identity, with no credential opt-in (FR-004a)",
