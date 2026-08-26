@@ -32,6 +32,7 @@ use iced::advanced::{mouse, Shell, Widget};
 use iced::widget::{container, text};
 use iced::{keyboard, window, Element, Event, Length, Point, Rectangle, Size, Vector};
 
+use micold_client::ui::cdk::motion::FRAME;
 use micold_client::ui::cdk::picker::Picker;
 
 use support::layout::renderer;
@@ -67,6 +68,14 @@ struct Harness<'a> {
     picker: Picker<'a, Msg>,
     tree: Tree,
     renderer: iced::Renderer,
+    /// A monotonic frame clock, one nominal [`FRAME`] apart.
+    ///
+    /// A track advances by the wall-clock time between the frame it is handed and the one before it
+    /// (007 BUG-001), so the redraws a test hands over have to be spaced the way a display spaces
+    /// them. Two `Instant::now()`s taken inside a loop are microseconds apart, and six hundred of
+    /// them would not add up to one frame of a 100 ms exit.
+    origin: Instant,
+    clock: u32,
 }
 
 impl<'a> Harness<'a> {
@@ -81,6 +90,8 @@ impl<'a> Harness<'a> {
             picker,
             tree,
             renderer: renderer(),
+            origin: Instant::now(),
+            clock: 0,
         }
     }
 
@@ -115,6 +126,7 @@ impl<'a> Harness<'a> {
 
     /// Advance one frame, returning whether a redraw was requested.
     fn frame(&mut self) -> bool {
+        self.clock += 1;
         let mut messages = Vec::new();
         let mut shell = Shell::new(&mut messages);
         let limits = iced::advanced::layout::Limits::new(Size::ZERO, Size::new(400.0, 400.0));
@@ -123,7 +135,9 @@ impl<'a> Harness<'a> {
         let viewport = Rectangle::with_size(Size::new(400.0, 400.0));
         self.picker.update(
             &mut self.tree,
-            &Event::Window(window::Event::RedrawRequested(Instant::now())),
+            &Event::Window(window::Event::RedrawRequested(
+                self.origin + FRAME * self.clock,
+            )),
             layout,
             mouse::Cursor::Unavailable,
             &self.renderer,

@@ -8,6 +8,14 @@ display. `micold-showcase` from `~/vp83/bin`, built 2026-08-20.
 **Result**: the **grow-in** clause passes for both pickers; the **fade-out** clause fails for both,
 and it is the same defect 007 found — [007 BUG-001](../../007-motion-overlay-fade/bugs/BUG-001.md)
 
+**Superseded reading (2026-08-26)**: the lists were not cut. Both faded the whole way out and
+reached their targets — in about a third of the stated duration, so at 60 fps only two or three
+frames of each exit were captured, and on the back-loaded `accelerate` curve those frames are its
+flat head. That is the "~1%" and "~7%" below. See
+[BUG-001's root cause](../../007-motion-overlay-fade/bugs/BUG-001.md#root-cause); the clock is now
+elapsed-time, so §B2's "in noticeably less time than it took to arrive" now holds by the durations
+the components state (`SHORT_4` out against `MEDIUM_2` in).
+
 ## The instrument that made this answerable
 
 [B-gallery-pass.md](./B-gallery-pass.md) left §B2 **PARTIAL** with a specific reason: *"A screenshot

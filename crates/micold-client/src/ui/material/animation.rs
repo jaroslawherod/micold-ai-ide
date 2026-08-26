@@ -1149,3 +1149,200 @@ where
         Element::new(scale)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{tags, Track};
+    use crate::ui::cdk::motion::FRAME;
+    use crate::ui::material::Modal;
+    use iced::advanced::widget::{tree, Tree};
+    use iced::advanced::{clipboard, layout, mouse, Layout, Shell};
+    use iced::{window, Element, Event, Length, Rectangle, Size};
+    use micold_core::tokens;
+    use micold_core::tokens::motion::duration;
+    use std::time::{Duration, Instant};
+
+    const WINDOW: Size = Size::new(800.0, 600.0);
+
+    /// The dialog exit's stated duration — the same token `modal.rs` builds it from.
+    const EXIT: Duration = Duration::from_millis(duration::SHORT_4);
+
+    /// Frames four times as often as the nominal 60fps, which is about the rate this application
+    /// really renders at: measured on it, an uncapped window delivered a frame every ~5 ms.
+    ///
+    /// A fraction of [`FRAME`] rather than a duration of its own, because that is what it is —
+    /// "four times as fast as a display", not a timing anyone specified.
+    fn interval() -> Duration {
+        FRAME / 4
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    enum Msg {
+        Dismiss,
+        Hidden,
+    }
+
+    fn body<'a>() -> Element<'a, Msg> {
+        iced::widget::container(iced::widget::text("dialog"))
+            .width(Length::Fixed(240.0))
+            .height(Length::Fixed(120.0))
+            .into()
+    }
+
+    /// The composition `ui::view` builds for a dialog: an overlay host, one modal surface, and a
+    /// dismisser that exists only while the dialog is open — a closing dialog is a snapshot being
+    /// animated out and has nothing left to cancel.
+    fn view(shown: bool) -> Element<'static, Msg> {
+        let roles = tokens::roles(micold_core::theme::ColorScheme::Light);
+        let mut modal = Modal::new(body(), roles)
+            .shown(shown)
+            .restart_on(7)
+            .on_hidden(Msg::Hidden);
+        if shown {
+            modal = modal.on_dismiss(Msg::Dismiss);
+        }
+        let base: Element<'static, Msg> = iced::widget::Space::new()
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into();
+        crate::ui::cdk::overlay::Overlay::new(base)
+            .push(modal.into())
+            .into()
+    }
+
+    /// The scrim's track value — the one that clocks the whole surface and publishes `on_hidden`.
+    ///
+    /// Found by tag rather than by path, so the shape of the composition above this is free to
+    /// change without silently measuring a different widget.
+    fn scrim_value(tree: &Tree) -> Option<f32> {
+        if tree.tag == tree::Tag::of::<tags::Scrim>() {
+            return Some(tree.state.downcast_ref::<Track>().progress.value());
+        }
+        tree.children.iter().find_map(scrim_value)
+    }
+
+    /// What one frame of a real application does: rebuild the view, diff it in, lay it out, and
+    /// deliver the redraw. Returns the scrim's value after it, the messages it published, and
+    /// whether it asked for another frame.
+    struct Run {
+        renderer: iced::Renderer,
+        element: Element<'static, Msg>,
+        tree: Tree,
+        start: Instant,
+        clock: u32,
+    }
+
+    impl Run {
+        fn new() -> Self {
+            let element = view(true);
+            let tree = Tree::new(element.as_widget());
+            Self {
+                renderer: crate::ui::material::test_support::renderer(),
+                element,
+                tree,
+                start: Instant::now(),
+                clock: 0,
+            }
+        }
+
+        fn frame(&mut self, shown: bool) -> (f32, Vec<Msg>, bool) {
+            self.element = view(shown);
+            self.element.as_widget().diff(&mut self.tree);
+
+            let limits = layout::Limits::new(Size::ZERO, WINDOW);
+            let node = self
+                .element
+                .as_widget_mut()
+                .layout(&mut self.tree, &self.renderer, &limits);
+
+            self.clock += 1;
+            let mut messages: Vec<Msg> = Vec::new();
+            let mut shell = Shell::new(&mut messages);
+            self.element.as_widget_mut().update(
+                &mut self.tree,
+                &Event::Window(window::Event::RedrawRequested(
+                    self.start + interval() * self.clock,
+                )),
+                Layout::new(&node),
+                mouse::Cursor::Unavailable,
+                &self.renderer,
+                &mut clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(WINDOW),
+            );
+
+            let asked = shell.redraw_request() != window::RedrawRequest::Wait;
+            let value = scrim_value(&self.tree).expect("the modal's scrim is in the tree");
+            (value, messages, asked)
+        }
+    }
+
+    /// A dialog's exit animates the whole way out, at the rate the window really renders (BUG-001).
+    ///
+    /// The report that opened this asked for frame count rather than identity: *"an exit driven to
+    /// completion must render more than one intermediate value and must reach its target before the
+    /// element is dropped"*. Both are asserted here, on the real `Modal` → `cdk::overlay`
+    /// composition rather than on the primitive, and at four frames per nominal one — because the
+    /// defect was never in this composition. The tracks always ran the whole way; they ran it in a
+    /// fixed number of frames, so an uncapped window finished a 200ms exit in 60ms and a 60fps
+    /// capture caught three frames of it. On the back-loaded `accelerate` curve §6.3 gives an exit,
+    /// three frames is its flat head — which is why the dialog read as vanishing rather than
+    /// leaving, and why the wall-clock assertion below is the one that would have caught it.
+    #[test]
+    fn a_dialogs_exit_animates_the_whole_way_out() {
+        let mut run = Run::new();
+
+        // Let the entrance finish, so the exit starts from a settled, fully shown dialog.
+        for _ in 0..500 {
+            if !run.frame(true).2 {
+                break;
+            }
+        }
+        let shown = scrim_value(&run.tree).expect("the modal's scrim is in the tree");
+        assert_eq!(shown, 1.0, "the entrance never arrived; measuring nothing");
+
+        // Now close it, and record every frame of the way out.
+        let began = run.clock;
+        let mut values = Vec::new();
+        let mut hidden = 0;
+        for _ in 0..500 {
+            let (value, messages, asked) = run.frame(false);
+            values.push(value);
+            hidden += messages.iter().filter(|m| **m == Msg::Hidden).count();
+            if !asked {
+                break;
+            }
+        }
+        let took = interval() * (run.clock - began);
+
+        let intermediate = values.iter().filter(|v| **v > 0.0 && **v < 1.0).count();
+        assert!(
+            intermediate > 1,
+            "the exit drew {intermediate} intermediate values before reaching {:?} — the whole \
+             sequence was {values:?}",
+            values.last(),
+        );
+        assert_eq!(
+            values.last(),
+            Some(&0.0),
+            "the exit stopped at {:?} instead of reaching its target",
+            values.last(),
+        );
+        assert!(
+            values.windows(2).all(|w| w[1] <= w[0]),
+            "the exit went backwards on the way out: {values:?}",
+        );
+        assert_eq!(
+            hidden, 1,
+            "`on_hidden` was published {hidden} times; it announces the end of the exit, once",
+        );
+
+        // The half a frame count cannot express: an exit takes the time it states, whatever rate
+        // the window renders at. At a fixed step per frame this took a quarter of it.
+        assert!(
+            took.abs_diff(EXIT) <= interval() * 4,
+            "a {EXIT:?} exit took {took:?} at one frame per {:?}",
+            interval(),
+        );
+    }
+}

@@ -21,13 +21,22 @@ use iced::window;
 use iced::Event;
 use std::time::{Duration, Instant};
 
-/// The frame interval a per-frame step is derived against (~60fps).
+/// One nominal frame at ~60fps.
 ///
-/// A track advances by a fixed amount per redraw rather than by elapsed wall-clock time, so a
-/// transition's real duration is only nominal: on a slower display it takes proportionally longer.
-/// That is exactly what the central animator did — it stepped a fixed amount per 16ms clock tick —
-/// so keeping the arithmetic identical is what makes this feature's transitions look unchanged.
-/// Moving to elapsed-time interpolation is a visual change, and therefore feature 018's to make.
+/// A track steps by the wall-clock time elapsed since its own previous frame, so a transition takes
+/// the duration it states whatever rate the window happens to render at. This is the estimate for
+/// the *first* frame of a transition, which has no previous frame to measure against: its clock
+/// started on the between-frames event that set the destination, and the last redraw this widget
+/// saw may have been minutes ago in a quiescent window.
+///
+/// It used to be the step itself. A track advanced a fixed `FRAME / duration` per redraw — what the
+/// central animator this feature replaced did, one step per 16ms clock tick — which made a
+/// transition's real duration a frame count rather than a time. Nothing caps this application's
+/// frame rate, so measured on it frames arrived every ~5ms and every transition ran roughly three
+/// times too fast: a 300ms dialog entrance in 96ms, a 150ms menu exit in 45ms. Nothing was
+/// truncated, but 45ms is two or three frames of a 60fps capture, and on the back-loaded
+/// `accelerate` curve §6.3 gives an exit those are its flat head — so exits read as elements that
+/// vanished rather than left (007 BUG-001).
 ///
 /// Public since feature 022, for the in-crate component tests that have to *hand over* the frames
 /// the runtime would deliver — a picker's list only appears once its visibility track has been
@@ -36,12 +45,33 @@ use std::time::{Duration, Instant};
 /// stated rather than named (`motion_tokens.rs`) as well as a number free to drift from this one.
 pub const FRAME: Duration = Duration::from_millis(16);
 
-/// The per-frame step that carries a track across its full `0.0..=1.0` range in `duration`.
+/// The step that carries a track across its full `0.0..=1.0` range in `duration`, per *nominal*
+/// frame.
 ///
 /// Timings are stated as durations at the call site because that is what a motion spec is written
 /// in; a bare step like `0.14` says nothing about how long anything takes.
+///
+/// For callers that advance a track a frame at a time on purpose rather than from a redraw event —
+/// [`Ripple::advance`](crate::ui::cdk::ripple::Ripple::advance), and the touch test that drives a
+/// track by hand. Everything driven by the runtime goes through [`Progress::on_frame`], which
+/// measures the frame it was actually given instead of assuming this one.
 pub fn step_for(duration: Duration) -> f32 {
-    (FRAME.as_secs_f32() / duration.as_secs_f32()).clamp(f32::EPSILON, 1.0)
+    step_across(FRAME, duration)
+}
+
+/// The largest gap between two frames a single step will honour: four frames at [`FRAME`].
+///
+/// A window that stalls — a slow layout pass, the compositor holding a frame back — hands the next
+/// redraw an elapsed time covering the whole stall. Honouring it would make a transition jump the
+/// distance it "should" have travelled while nothing was on screen to travel it, which is the
+/// snap this module exists to avoid. Past this bound a stalled transition runs long instead, which
+/// is the recoverable failure.
+const MAX_STEP: Duration = Duration::from_millis(64);
+
+/// The step that carries a track across its full range in `over`, given `elapsed` since its last
+/// frame.
+fn step_across(elapsed: Duration, over: Duration) -> f32 {
+    (elapsed.min(MAX_STEP).as_secs_f32() / over.as_secs_f32()).clamp(f32::EPSILON, 1.0)
 }
 /// A straight line: what every track did before easing existed, and the default.
 const LINEAR: (f32, f32, f32, f32) = (0.0, 0.0, 1.0, 1.0);
@@ -256,7 +286,7 @@ impl Progress {
         over: Duration,
         shell: &mut Shell<'_, M>,
     ) -> f32 {
-        self.on_event(event, target, step_for(over), shell)
+        self.on_event(event, target, over, shell)
     }
 
     /// [`Self::on_frame`] for a track whose value feeds `Widget::layout`, not only `draw`.
@@ -293,12 +323,15 @@ impl Progress {
     /// where it wants to be, and gets back what to draw. Only a redraw tick advances the track, so
     /// a burst of mouse-move events cannot fast-forward a transition.
     ///
+    /// How far each tick advances comes from the time between it and the previous one, bounded by
+    /// [`MAX_STEP`] — see [`FRAME`] for why it is measured rather than assumed.
+    ///
     /// Returns the value to draw with.
     pub fn on_event<M>(
         &mut self,
         event: &Event,
         target: f32,
-        speed: f32,
+        over: Duration,
         shell: &mut Shell<'_, M>,
     ) -> f32 {
         if let Event::Window(window::Event::RedrawRequested(now)) = event {
@@ -306,8 +339,20 @@ impl Progress {
             // same event handed to it again in the same frame, and stepping again would make the
             // transition run at a multiple of its stated duration.
             if self.last_frame != Some(*now) {
+                let step = match self.last_frame {
+                    // Mid-transition: step by the time that actually passed, so the transition
+                    // takes `over` and not a frame count (007 BUG-001).
+                    Some(previous) if self.t > 0.0 => {
+                        step_across(now.saturating_duration_since(previous), over)
+                    }
+                    // The first frame of a transition has no previous frame of its own. `t == 0.0`
+                    // means the clock was rewound by `retarget` on some between-frames event, and
+                    // `last_frame` is whatever redraw this widget last saw — in a window that has
+                    // been quiescent, minutes ago. One nominal frame is the honest estimate.
+                    _ => step_for(over),
+                };
                 self.last_frame = Some(*now);
-                self.advance_to(target, speed);
+                self.advance_to(target, step);
             }
         } else {
             // The destination may have changed between frames — a press, a hover, an overlay
@@ -324,6 +369,13 @@ impl Progress {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A traversal that takes ten nominal frames, so one frame is a tenth of the way.
+    ///
+    /// These tests predate durations reaching this far in — they were written against a bare step
+    /// of `0.1`, and they assert on tenths throughout. Naming the duration that *is* that step at
+    /// [`FRAME`] keeps every one of their assertions arithmetically unchanged.
+    const TENTH: Duration = Duration::from_millis(160);
 
     /// The one property the whole arrangement rests on: it stops. Everything else is a detail.
     #[test]
@@ -365,7 +417,7 @@ mod tests {
         p.on_event(
             &Event::Mouse(iced::mouse::Event::CursorEntered),
             1.0,
-            0.1,
+            TENTH,
             &mut Shell::new(&mut messages),
         );
         assert_eq!(
@@ -380,7 +432,7 @@ mod tests {
                 start + Duration::from_millis(16),
             )),
             1.0,
-            0.1,
+            TENTH,
             &mut Shell::new(&mut messages),
         );
         assert!(
@@ -390,14 +442,14 @@ mod tests {
         );
     }
 
-    /// Drive `p` for `frames` redraw ticks toward `target` at `speed`, starting the frame clock at
+    /// Drive `p` for `frames` redraw ticks toward `target` over `over`, starting the frame clock at
     /// `from`. Returns the frame count consumed, so a caller can keep the clock monotonic across
     /// several legs — `on_event` ignores a repeated timestamp, so two legs sharing one would lose a
     /// frame silently.
     fn tick<M>(
         p: &mut Progress,
         target: f32,
-        speed: f32,
+        over: Duration,
         frames: usize,
         from: usize,
         messages: &mut Vec<M>,
@@ -409,7 +461,7 @@ mod tests {
                     Instant::now() + Duration::from_millis(16 * (from + i + 1) as u64),
                 )),
                 target,
-                speed,
+                over,
                 &mut Shell::new(messages),
             );
         }
@@ -436,10 +488,10 @@ mod tests {
         p.on_event(
             &Event::Mouse(iced::mouse::Event::CursorEntered),
             1.0,
-            0.1,
+            TENTH,
             &mut Shell::new(&mut messages),
         );
-        tick(&mut p, 1.0, 0.1, 4, 0, &mut messages);
+        tick(&mut p, 1.0, TENTH, 4, 0, &mut messages);
         let caught = p.value();
         assert!(
             caught > 0.0 && caught < 1.0,
@@ -450,7 +502,7 @@ mod tests {
         p.on_event(
             &Event::Mouse(iced::mouse::Event::CursorLeft),
             0.0,
-            0.1,
+            TENTH,
             &mut Shell::new(&mut messages),
         );
         assert_eq!(
@@ -461,7 +513,7 @@ mod tests {
 
         // The first frame of the reversal steps back from `caught`, and only by a step: not to 0,
         // and not to 1 either (the `min(1 + speed, 1)` arrival this module's other test describes).
-        tick(&mut p, 0.0, 0.1, 1, 5, &mut messages);
+        tick(&mut p, 0.0, TENTH, 1, 5, &mut messages);
         assert!(
             p.value() < caught && p.value() > 0.0,
             "one frame of the reversal put the track at {} (from {caught}) — it snapped",
@@ -471,13 +523,79 @@ mod tests {
 
         // And it takes the reversal's own full duration from there rather than a residue of the
         // entrance: ten frames at a tenth per frame is exactly one traversal.
-        tick(&mut p, 0.0, 0.1, 9, 6, &mut messages);
+        tick(&mut p, 0.0, TENTH, 9, 6, &mut messages);
         assert_eq!(
             p.value(),
             0.0,
             "the reversal did not complete in its own time"
         );
         assert!(!p.animating(), "and it comes to rest");
+    }
+
+    /// A transition takes the time it states, whatever rate the window renders at (007 BUG-001).
+    ///
+    /// A track used to advance a fixed `FRAME / over` per redraw, which made its duration a frame
+    /// count rather than a time. This application renders uncapped: measured on it, frames arrived
+    /// every ~5 ms and a 150 ms menu exit finished in 45 ms. Nothing was truncated — every
+    /// intermediate value was drawn and every track reached its target — but a 60 fps capture sees
+    /// two or three frames of a 45 ms transition, and on the back-loaded `accelerate` curve §6.3
+    /// gives an exit those first frames are its flat head. So an exit read as an element that
+    /// vanished rather than one that left, and BUG-001 reported it as truncation.
+    ///
+    /// Both halves are asserted, because a fix that only shortened the fast run would satisfy
+    /// neither: the fast run must take the *same wall clock* as the slow one, and must get there by
+    /// drawing proportionally *more* intermediate values rather than by arriving early.
+    #[test]
+    fn a_transition_takes_its_stated_time_however_fast_frames_arrive() {
+        const OVER: Duration = Duration::from_millis(200);
+
+        /// One full exit driven at `interval` per frame: how long it took, and how many
+        /// intermediate values it drew on the way.
+        fn exit(interval: Duration) -> (Duration, usize) {
+            let mut p = Progress::new(1.0);
+            let mut messages: Vec<()> = Vec::new();
+            let start = Instant::now();
+
+            // The destination arrives between frames, as every real transition's does.
+            p.on_event(
+                &Event::Mouse(iced::mouse::Event::CursorLeft),
+                0.0,
+                OVER,
+                &mut Shell::new(&mut messages),
+            );
+
+            for i in 1..10_000u32 {
+                p.on_event(
+                    &Event::Window(iced::window::Event::RedrawRequested(start + interval * i)),
+                    0.0,
+                    OVER,
+                    &mut Shell::new(&mut messages),
+                );
+                if !p.animating() {
+                    // The frame it arrived on is not an intermediate value; it is the target.
+                    return (interval * i, i as usize - 1);
+                }
+            }
+            panic!("the exit never arrived");
+        }
+
+        let (slow, slow_frames) = exit(FRAME);
+        let (fast, fast_frames) = exit(FRAME / 4);
+
+        assert!(
+            fast.abs_diff(slow) <= FRAME,
+            "the same {OVER:?} exit took {slow:?} at one frame per {FRAME:?} and {fast:?} at four \
+             times that rate — its duration is a frame count, not a time"
+        );
+        assert!(
+            fast_frames > slow_frames * 2,
+            "the fast run drew {fast_frames} intermediate values against the slow run's \
+             {slow_frames} — it reached the end early rather than drawing more of the way"
+        );
+        assert!(
+            slow_frames > 1,
+            "even at {FRAME:?} a frame the exit drew only {slow_frames} intermediate values"
+        );
     }
 
     /// Rapid toggling leaves nothing stuck part-way (007 §5).
@@ -496,10 +614,10 @@ mod tests {
             p.on_event(
                 &Event::Mouse(iced::mouse::Event::CursorEntered),
                 target,
-                0.1,
+                TENTH,
                 &mut Shell::new(&mut messages),
             );
-            tick(&mut p, target, 0.1, 2, frame, &mut messages);
+            tick(&mut p, target, TENTH, 2, frame, &mut messages);
             frame += 2;
             assert!(
                 (0.0..=1.0).contains(&p.value()),
@@ -509,7 +627,7 @@ mod tests {
         }
 
         // Stop toggling: it must land, and land closed (the last target above is 0.0, at i == 11).
-        tick(&mut p, 0.0, 0.1, 20, frame, &mut messages);
+        tick(&mut p, 0.0, TENTH, 20, frame, &mut messages);
         assert_eq!(p.value(), 0.0, "a rapidly toggled track stuck part-way");
         assert!(!p.animating());
     }
