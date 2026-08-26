@@ -617,24 +617,38 @@ fn session_title(state: &State, id: SessionId) -> String {
 /// `SessionLifecycle` in `AiCli` mode, the shell's `ShellLifecycle` in `Regular` mode
 /// (contracts/terminal-mode-lifecycle.md: `TerminalMode` never determines *running*, only
 /// *displayed* — so the status shown must follow the same split).
-fn session_status(state: &State, id: SessionId) -> &'static str {
+///
+/// Owned rather than `&'static str` because one state is no longer a word: a give-up names the
+/// number of attempts it spent (`010` BUG-017, FR-005/SC-012). Every other arm is still a literal
+/// and allocates a small one per render, which is what [`session_title`] beside it already does.
+fn session_status(state: &State, id: SessionId) -> String {
     let Some(session) = state.active_sessions().iter().find(|s| s.id == id) else {
-        return "";
+        return String::new();
     };
     match session.mode {
-        TerminalMode::AiCli => match session.lifecycle {
-            SessionLifecycle::Running => "running",
-            SessionLifecycle::Starting => "starting…",
-            SessionLifecycle::Restarting { .. } => "restarting…",
-            SessionLifecycle::Failed { .. } => "failed",
-            SessionLifecycle::Idle => "idle",
-            SessionLifecycle::InterruptedResumable => "interrupted",
+        TerminalMode::AiCli => match &session.lifecycle {
+            SessionLifecycle::Running => "running".to_string(),
+            SessionLifecycle::Starting => "starting…".to_string(),
+            SessionLifecycle::Restarting { .. } => "restarting…".to_string(),
+            // The count, not the sentence (`010` BUG-017 step 3). The sentence goes to the pane,
+            // which has room for it; this row is content-sized labels sharing its width with the
+            // tab strip, and the strip is what gives that width up (FR-002c).
+            //
+            // `0` names no count because there is none to name: the wire's `Failed` also covers a
+            // spawn that never reached a first process, which spends no budget at all.
+            SessionLifecycle::Failed { attempts, .. } => match attempts {
+                0 => "failed".to_string(),
+                1 => "failed after 1 attempt".to_string(),
+                n => format!("failed after {n} attempts"),
+            },
+            SessionLifecycle::Idle => "idle".to_string(),
+            SessionLifecycle::InterruptedResumable => "interrupted".to_string(),
         },
         TerminalMode::Regular => match session.active_shell_lifecycle() {
-            Some(ShellLifecycle::Running) => "running",
-            Some(ShellLifecycle::Starting) => "starting…",
-            Some(ShellLifecycle::Exited) => "exited",
-            Some(ShellLifecycle::NotStarted) | None => "idle",
+            Some(ShellLifecycle::Running) => "running".to_string(),
+            Some(ShellLifecycle::Starting) => "starting…".to_string(),
+            Some(ShellLifecycle::Exited) => "exited".to_string(),
+            Some(ShellLifecycle::NotStarted) | None => "idle".to_string(),
         },
     }
 }
@@ -650,16 +664,42 @@ fn session_status(state: &State, id: SessionId) -> &'static str {
 /// user to wait for something that would never happen, while the bar one row below said
 /// `interrupted` and offered `restart`.
 ///
+/// A give-up says more (`010` BUG-017 step 3). The daemon records *why* it stopped trying and how
+/// many attempts that cost, and until this the client had both and showed neither: the bar said the
+/// bare word `failed` and the pane said the same generic sentence a merely-idle session gets. This
+/// is also the surface that **lasts** — the notification the reason raises is announced once, and a
+/// window that attaches after the give-up, which is the unattended case the whole state exists for,
+/// never saw it.
+///
 /// Answered from [`attached_process_restartable`] rather than from a second match on
 /// `SessionLifecycle`. That predicate already means "the attached process is not running", already
 /// handles the `TerminalMode` split, and is already what decides whether the `restart` control is
 /// there to be pointed at. Deriving both from it is what makes the two *unable* to disagree —
 /// which they did, for exactly as long as they were two readings of one fact.
-fn empty_terminal_message(state: &State, id: SessionId) -> &'static str {
-    if attached_process_restartable(state, id) {
-        "This session is not running. Choose restart below to resume it."
-    } else {
-        "Starting…"
+fn empty_terminal_message(state: &State, id: SessionId) -> String {
+    if !attached_process_restartable(state, id) {
+        return "Starting…".to_string();
+    }
+    match give_up_reason(state, id) {
+        // The recorded sentence already ends in a full stop (`on_unexpected_exit` assembles it), so
+        // the pointer at the control follows it as a second sentence.
+        Some(reason) => format!("{reason} Choose restart below to resume it."),
+        None => "This session is not running. Choose restart below to resume it.".to_string(),
+    }
+}
+
+/// The sentence a give-up recorded, when there is one (`010` BUG-017).
+///
+/// `None` means both *"this session did not give up"* and *"it gave up and the reason is empty"*.
+/// The wire type permits an empty reason — `catalog_sync::announce_start_failures` is built on
+/// exactly that, and a client attached to a daemon from before BUG-017 receives one — so the two
+/// have to collapse somewhere. Collapsing them here gives the pane one fallback instead of a blank
+/// interpolated into the middle of a sentence.
+fn give_up_reason(state: &State, id: SessionId) -> Option<&str> {
+    let session = state.active_sessions().iter().find(|s| s.id == id)?;
+    match &session.lifecycle {
+        SessionLifecycle::Failed { reason, .. } => Some(reason.trim()).filter(|r| !r.is_empty()),
+        _ => None,
     }
 }
 
@@ -1902,6 +1942,84 @@ mod tests {
                  for the first frame"
             );
         }
+    }
+
+    /// `010` BUG-017 step 3, the display. FR-005 / SC-012, quickstart S4: *"on the next attach it
+    /// shows the failed state with the reason **and attempt count**"*.
+    ///
+    /// Steps 1 and 2 carried both fields the whole way from the FSM to the client's `State`, and
+    /// then nothing read them — the bar said the bare word `failed` for every give-up, whatever it
+    /// had cost and whatever had killed it.
+    ///
+    /// Driven at three different counts because `attempts` was a **constant** for the whole of this
+    /// bug's life, and a constant that happened to be right for the crash loop. One value cannot
+    /// tell a measurement from `MAX_RESTART_ATTEMPTS` spelled out; three can.
+    #[test]
+    fn the_bar_names_the_attempts_a_give_up_actually_spent() {
+        for attempts in [1u8, 2, 3] {
+            let (state, id) = state_showing(SessionLifecycle::Failed {
+                reason: "Gave up after 1 restart attempt — last exit: exit status 1.".into(),
+                attempts,
+            });
+            let status = session_status(&state, id);
+            assert!(
+                status.contains("failed"),
+                "a give-up is still a failure and the bar still says so; got {status:?}"
+            );
+            assert!(
+                status.contains(&attempts.to_string()),
+                "the bar must name the budget this give-up actually spent — a spawn that failed                  once reads as three attempts the moment this is a constant ({attempts} spent,                  got {status:?})"
+            );
+        }
+    }
+
+    /// The other half of step 3: the pane says *why*, at length, beside the `restart` control that
+    /// resolves it.
+    ///
+    /// The sentence cannot go in the bar. That row is content-sized labels sharing its width with
+    /// the tab strip, which is its one flexible member (FR-002c) — so every character of status is
+    /// taken from the strip, and the strip is the only route back to the assistant. The pane is
+    /// where there is room.
+    ///
+    /// It is also the surface that *lasts*. The notification the daemon's reason now raises
+    /// (`announce_start_failures`) is transient and is announced once; a window that attaches after
+    /// the give-up — the unattended case this whole state exists for — never saw it.
+    #[test]
+    fn the_empty_pane_says_why_a_session_gave_up() {
+        let (state, id) = state_showing(SessionLifecycle::Failed {
+            reason: "Gave up after 3 restart attempts — last exit: killed by Terminated.".into(),
+            attempts: 3,
+        });
+        let message = empty_terminal_message(&state, id);
+        assert!(
+            message.contains("killed by Terminated"),
+            "the pane must carry the reason the daemon recorded, not a generic sentence about not              running — the diagnosis is the whole point of the give-up state; got {message:?}"
+        );
+        assert!(
+            message.contains("restart"),
+            "and must still point at the control that resolves it (025 FR-014); got {message:?}"
+        );
+    }
+
+    /// A give-up whose reason is empty must still read as a sentence.
+    ///
+    /// The wire type permits one — `catalog_sync`'s announcement guard is built on exactly that —
+    /// so a client talking to a daemon from before BUG-017 gets one. Asserted as *the same thing
+    /// any not-running session says* rather than against a literal, because the claim is structural
+    /// (fall back, do not interpolate a blank) and pinning the prose in a second place is what
+    /// makes prose unchangeable rather than correct.
+    #[test]
+    fn a_give_up_with_no_reason_still_reads_as_a_sentence() {
+        let (state, id) = state_showing(SessionLifecycle::Failed {
+            reason: String::new(),
+            attempts: 3,
+        });
+        let (idle, idle_id) = state_showing(SessionLifecycle::Idle);
+        assert_eq!(
+            empty_terminal_message(&state, id),
+            empty_terminal_message(&idle, idle_id),
+            "an empty reason must leave the sentence a not-running session already had, not a              fragment with the reason's place left blank"
+        );
     }
 
     /// The guarantee the fix is built on, and the reason this is one predicate rather than two
