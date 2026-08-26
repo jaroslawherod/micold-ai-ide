@@ -1256,7 +1256,18 @@ impl DaemonState {
             // A direct push, not a queued one: the badge moves as the line lands, and SC-005's
             // one-second budget is spent on the platform's notification latency rather than on a
             // cadence of ours.
-            state.note_activity(id, event);
+            //
+            // Announcing it is part of that, and the part this originally left out (T086): moving
+            // the signal only changes what a *snapshot* would say, and no client takes one on its
+            // own. Every other producer of this change pushes — the hook receiver on the same
+            // `bool` (`hooks.rs`), `drain_signals` by returning it to the supervisor tick — and
+            // there is no tick behind a watch, so without this the badge waited for an unrelated
+            // broadcast. Guarded on the `bool` for the same reason they are: the event vocabulary
+            // is full of lines that are deliberately no-ops, and a snapshot per line of
+            // `events.jsonl` would be a broadcast storm for a badge that never moves.
+            if state.note_activity(id, event) {
+                state.broadcast_catalog();
+            }
         }) {
             Ok(tail) => {
                 if let Some(live) = self.lock().sessions.get_mut(&id) {
