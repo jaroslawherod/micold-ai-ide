@@ -67,10 +67,19 @@ than by hand.
 
 Start from no image present (`docker rmi` the tag first). Settings → Session service → enable the sandbox.
 
-- [ ] Progress moves continuously through image acquisition; no silent stretch longer than a few
-      seconds (SC-004, C-8)
-- [ ] Whole thing completes in under five minutes on a normal connection (SC-004)
-- [ ] A session starts, and its terminal behaves exactly as an unsandboxed one (SC-001, FR-025)
+Driven by the application's own enable sequence rather than by hand, so the evidence and the code
+cannot drift apart. The GUI half — that this is reachable from Settings → Session service — is
+covered by §B.6; what is measured here is what happens after the switch is thrown.
+
+- [x] Progress moves continuously through image acquisition; no silent stretch longer than a few
+      seconds (SC-004, C-8) — `sandbox_real_enable.rs`, `evidence/performance.md`
+- [x] Whole thing completes in under five minutes on a normal connection (SC-004) — same test.
+      Its cold state is honestly a cold *reference* and not a cold machine (the layers stay in the
+      local store), and the registry route cannot be measured at all until an image is published;
+      both caveats are stated in the test and the evidence rather than hidden in the total
+- [x] A session starts, and its terminal behaves exactly as an unsandboxed one (SC-001, FR-025) —
+      twelve commands run in both placements, identical answers (`sandbox_real_parity.rs`,
+      `evidence/us2-parity.md`)
 
 ### B.2 — The boundary, tested adversarially
 
