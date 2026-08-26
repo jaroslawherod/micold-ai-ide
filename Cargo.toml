@@ -79,3 +79,19 @@ micold-core = { path = "crates/micold-core" }
 
 [workspace.lints.clippy]
 all = "warn"
+
+# Debug builds default to `debug = 2` (full DWARF), which is the bulk of the bytes
+# cargo writes: a `cargo test --workspace` link phase measured 260 MB/s sustained --
+# enough to fill the kernel's dirty page pool and stall every other process on the
+# machine, and enough to grow target-shared/debug to 84 GB. "line-tables-only" keeps
+# backtraces with function names and line numbers -- what a panic or a failing test
+# actually needs -- and drops the variable and type DWARF that only a debugger reads.
+# Recover it ad hoc with `CARGO_PROFILE_DEV_DEBUG=2`.
+[profile.dev]
+debug = "line-tables-only"
+
+# `cargo test` compiles test targets under [profile.test]; their dependencies build
+# under [profile.dev] above. Both need the setting for the reduction to apply to a
+# whole `cargo test --workspace` run.
+[profile.test]
+debug = "line-tables-only"
