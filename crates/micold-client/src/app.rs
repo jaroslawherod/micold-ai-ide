@@ -24,7 +24,7 @@ use micold_core::selector::Selector;
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation, ShellInstanceId};
 use micold_core::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
 use micold_core::worktree::Worktree;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -757,6 +757,25 @@ pub struct State {
     /// confirm dialog being shown (T037). Transient — never persisted. Mirrors
     /// `worktree_delete_target`.
     pub forget_target: Option<PathBuf>,
+    /// The start failure already reported to the user for each session, by the sentence reported
+    /// (feature 026, FR-010, T088).
+    ///
+    /// This is a *said-it* record, not a copy of the failure — the failure itself lives in the
+    /// daemon's snapshot, where `WireLifecycle::Failed { reason, .. }` carries it, and the sidebar
+    /// tint and bar text are already derived from that. What the client lacks without this is any
+    /// memory of having spoken, and the notification is a one-shot: `reconcile_catalog` runs on
+    /// every `CatalogChanged`, an activity badge moving is one of those (T086), and a failure
+    /// re-announced on each of them would be a banner every few seconds for as long as the session
+    /// stays failed.
+    ///
+    /// Keyed by session and holding the sentence, so a *different* reason for the same session —
+    /// a missing CLI after a conversation that had gone missing, say — is news and is said. The
+    /// entry is dropped as soon as the daemon reports that session as anything but failed, which
+    /// is what makes the next failure speak again.
+    ///
+    /// Transient, and deliberately not persisted: it records what this window has said, and a
+    /// window that has said nothing yet should say it.
+    pub announced_start_failures: BTreeMap<SessionId, String>,
 }
 
 /// The sidebar's reported offset as the app bar reads it: whole pixels, never above the top.

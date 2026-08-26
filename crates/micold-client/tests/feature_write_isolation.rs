@@ -99,6 +99,10 @@ const OWNERS: &[(&str, &str)] = &[
     ("reveal_suppressed_for", "session"),
     ("last_foreground_choice", "session"),
     ("restarted_while_inactive", "session"),
+    // What the user has already been told about a session that would not start (feature 026,
+    // T088). A record of what was *said*, not of what the session is — the lifecycle itself
+    // belongs to the daemon and arrives in the catalog — but what it is said about is a session.
+    ("announced_start_failures", "session"),
     ("session_menu_open", "session"),
     // The "start a session on…" list is opened from a sidebar row and starts a session; what it
     // holds is a session's location (feature 026, FR-004).
