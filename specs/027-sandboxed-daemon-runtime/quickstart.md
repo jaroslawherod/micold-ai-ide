@@ -64,6 +64,10 @@ above asserts on strings.
 Needs Docker installed. The view work in §B.6 is runnable with the repo's `visual-pass` skill rather
 than by hand.
 
+Run end to end on 2026-08-26 against Docker 29.5.1, in release, on one freshly built image;
+transcript and the two commands in `evidence/quickstart-b-closeout.md`. Every box below is ticked
+except the idle-repaint one in §B.6, which a software rasteriser cannot settle.
+
 ### B.1 — First enable, cold
 
 Start from no image present (`docker rmi` the tag first). Settings → Session service → enable the sandbox.
@@ -134,7 +138,12 @@ found a real defect: `overlayfs` was classified as enforcing a storage limit it 
       recorded and nothing re-dialled. `evidence/us6-failures.md` §B.5 box 3
 - [x] Sessions survive a client restart while sandboxed (FR-014) — same shell process, same shell
       state, over a new connection (`sandbox_real_staleness.rs`)
-- [ ] With survive-logout enabled, the sandbox comes back after a reboot (FR-014a/b, R6)
+- [x] With survive-logout enabled, the sandbox comes back after a reboot (FR-014a/b, R6) —
+      `sandbox_real_staleness.rs`, with a `--restart no` control beside it. **No reboot was
+      performed**: the probe kills the container's own process on the host, so the runtime restarts
+      it unasked, the daemon comes back up, and the session is still in the catalogue and still
+      answers. What is left to the runtime is restoring the container at boot.
+      `evidence/quickstart-b-closeout.md`
 - [x] Daemon state survives container recreation: stop, remove, restart — projects are still there
       (FR-011, M-3)
 

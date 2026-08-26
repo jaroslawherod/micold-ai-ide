@@ -422,7 +422,25 @@ does a session start unsandboxed without an explicit choice.
       the `mise` tasks CLAUDE.md declares canonical. The same stale wording survives in several early
       features' spec artifacts; the constitution's 1.4.1 report explicitly leaves those to their own
       passes, so they were not touched here.
-- [ ] T120 Run the complete quickstart.md §B pass end to end and record the evidence in `specs/027-sandboxed-daemon-runtime/evidence/`
+- [x] T120 Run the complete quickstart.md §B pass end to end and record the evidence in `specs/027-sandboxed-daemon-runtime/evidence/`
+      Run 2026-08-26 against Docker 29.5.1 (cgroup v2, `systemd` driver, `overlayfs`) on a freshly
+      built `micold-daemon:dev`, in release, in one sitting: 22 real-runtime tests across
+      `micold-core` and `micold-daemon`, all green. `evidence/quickstart-b-closeout.md`.
+      Two things the pass produced rather than confirmed. **The survival box could be closed after
+      all** (§B.5, FR-014a/b/c): the opt-in's restart policy now has one home,
+      `argv::restart_policy`, called by both `argv::create` and the harness — which had hardcoded
+      `"no"` and so could never have caught it going wrong — and `sandbox_real_staleness.rs` gained
+      a probe that kills the container's own process on the host, watches the runtime bring it back
+      unasked, and finds the session still in the catalogue and still answering, plus a `--restart
+      no` control that stays exited. No reboot was performed; the evidence says so where the tick
+      is. The first spelling of that probe used `docker kill` and *always* failed: an API-issued
+      kill is recorded as a manual stop, which `unless-stopped` is defined to respect, so the
+      runtime obeying the policy and ignoring it look identical.
+      **`--no-fail-fast` matters here.** Outside release, `sandbox_real_session_start` refuses to
+      measure — correctly — and cargo then stops at that target, silently skipping every test
+      after it, including the whole of `sandbox_real_staleness`.
+      The idle-repaint box in §B.6 stays open: lavapipe cannot settle it, and this pass did not
+      change that.
 
 ---
 
