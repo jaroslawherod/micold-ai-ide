@@ -172,3 +172,23 @@ was: assert_eq!(open.on(TEscape),Some(&MSidebarFilterMenuToggled))
 ```
 was: assert_eq!(scroll_beneath(&state(Some(&dialogs()[0]),true)),vec![MSidebarFilterMenuToggled],"ascrollbehindanopenmodalstillinvalidatesthemenuanchoredbeneathit,anddoes\nottouchthemodal")
 ```
+
+## T012 — `worktree`'s eighteen variants moved behind `Message::Worktree`
+
+Both are one constructor renamed. `Message::WorktreeDeleteCancelled` became
+`Message::Worktree(worktree::Msg::DeleteCancelled)`, and `Message::WorktreeRenameCancelled`
+became `Message::Worktree(worktree::Msg::RenameCancelled)`. Read individually as Q3 requires:
+the subject is `on_escape(&state)` in both, the predicate is `assert_eq!` in both, and the state
+each is handed — a delete confirmation opened by `DeleteRequested`, a rename opened by
+`RenameStarted` — is unchanged. Each still says exactly what it said: Escape cancels the
+worktree operation that is currently asking, and cancels *that* one rather than some other
+dismissable surface, which is what makes the named message worth asserting instead of a bare
+`is_some()`. The message they name is the same message, spelled through the wrapper that now
+owns it.
+
+```
+was: assert_eq!(on_escape(&state),Some(MWorktreeDeleteCancelled))
+```
+```
+was: assert_eq!(on_escape(&state),Some(MWorktreeRenameCancelled))
+```
