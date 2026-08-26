@@ -356,7 +356,11 @@ does a session start unsandboxed without an explicit choice.
       Three earlier revisions of the measurement passed while measuring nothing (an unmounted catalogue, a snapshot
       mistaken for a prompt, and two different shells); each is written up in the evidence, because a green comparative
       benchmark is exactly the kind that hides its own vacuity.
-- [ ] T117 [P] Measure SC-004 — first-time enable under 5 minutes with continuous progress, from a cold image state — into `specs/027-sandboxed-daemon-runtime/evidence/performance.md`
+- [x] T117 [P] Measure SC-004 — first-time enable under 5 minutes with continuous progress, from a cold image state — into `specs/027-sandboxed-daemon-runtime/evidence/performance.md`
+      — **851ms** against a 300,000ms budget (acquire 419ms, create 258ms, start 123ms, daemon answering 50ms), plus
+      **9s** for SC-004b's source-change loop. The *duration* half is measured; the **continuity** half is not, and the
+      evidence says so: the only acquisition route runnable here is the file import, which finished too fast to have
+      any silence in it, and the route that would (a registry pull) has nothing published to pull.
 - [x] T118 Audit that no code path logs, prints, or includes the authentication token in argv or an error message (P-3), adding the grep-the-argv-and-log test to `crates/micold-core/tests/protocol_auth.rs`
       — the audit found a live vector, not a clean bill. `auth::Token` redacts its own `Debug`, but
       the token stops being a `Token` the moment it goes on the wire: `ClientMsg::Hello`,

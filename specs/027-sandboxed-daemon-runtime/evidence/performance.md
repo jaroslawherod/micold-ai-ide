@@ -88,4 +88,91 @@ an untimed warm-up session before the clock is started.
 
 ## SC-004 — first enable under five minutes, with continuous progress
 
-Not yet measured. See T117.
+> *"First-time enablement, including preparing the sandbox on a working network connection,
+> completes within 5 minutes and shows continuous progress throughout, so the user never has to
+> guess whether the application has stopped responding."*
+
+### The run
+
+```
+$ cargo test -p micold-core --features sandbox-real-runtime \
+      sandbox_real_first_enable -- --nocapture --test-threads=1
+```
+
+```
+test sandbox_real_first_enable_is_under_five_minutes_and_never_goes_quiet ...
+SC-004 enable: total 851ms — acquire 419ms, create 258ms, start 123ms, answer 50ms (archive 67.7 MiB)
+SC-004 progress: 1 reports during acquisition, stages ["Importing"]
+SC-004 longest silence during acquisition: 396ms
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.86s
+```
+
+**Result: 851ms.** The budget is 300,000ms.
+
+### What is measured
+
+`crates/micold-core/tests/sandbox_real_enable.rs`, behind `sandbox-real-runtime`. The clock covers
+the application's whole enable sequence — `acquire_image`, `create`, `start`, and then waiting until
+the daemon *inside* the container writes `listening (sandboxed)` into the state directory the host
+shares with it. "Enabled" is the daemon answering, not the container existing.
+
+The cold state is built by tagging the image under a throwaway reference, `docker save`-ing it, and
+deleting the tag — so a developer's own `micold-daemon:dev` is never disturbed.
+
+### Which acquisition route this is, and why the other two are not measurable here
+
+`ImageSourceKind` has three arms, and only one of them can be driven from this repository today:
+
+| Route | Measured? | Why |
+|---|---|---|
+| `Registry` | **No** | Nothing is published, so there is no reference to pull. This gap is why SC-004a exists. |
+| `LocalBuild` | Not through the app | `acquire_image` deliberately refuses it — staging a cross-compiled Linux binary beside a Containerfile is a build-system job. Timed separately below. |
+| `ImportedFile` | **Yes** | SC-004a's documented no-network procedure, and the one streaming acquisition runnable here. |
+
+### Where this evidence is weaker than the number suggests
+
+Say this plainly, because 851ms against a five-minute budget invites the wrong conclusion:
+
+- **The total is real; the continuity is barely exercised.** Acquisition emitted **one** progress
+  report over 419ms. That is `docker load` being nearly instant because every layer is already in
+  the local store — the honest reading is not "progress is continuous" but "there was nothing long
+  enough to report on". A cold *machine*, or a registry pull over a real network, moves data this
+  run did not.
+- **The claim's own long case is the unmeasurable one.** The per-line reporting that would carry a
+  four-minute pull is `run_streaming` feeding `pull_progress`, and it is covered against a fake
+  runtime in `crates/micold-core/tests/sandbox_runtime.rs`
+  (`assert!(reports.len() >= 2, "SC-004 gives this five minutes; silence for that long reads as a
+  hang")`). Mechanism tested, duration not.
+- **67.7 MiB is the transfer size.** Stated so the total can be scaled by a reader on a slower link
+  rather than taken as machine-independent.
+
+The `MAX_SILENCE` bound the test asserts (10s between reports) therefore passes on a route that
+could not plausibly have violated it. It is a regression guard, not proof of the claim.
+
+---
+
+## SC-004b — source change to running sandboxed, without a registry
+
+> *"…without publishing an image and without any registry interaction, and the loop is no more
+> onerous than the existing build-and-run loop plus a single image build."*
+
+Measured directly, since it is a developer loop rather than an application path:
+
+```
+$ cargo clean -p micold-daemon --release --target x86_64-unknown-linux-gnu
+Removed 194 files, 37.5MiB total
+$ time mise run image
+   Compiling micold-daemon v0.8.0
+    Finished `release` profile [optimized] target(s) in 9.09s
+Built micold-daemon:dev -- select it in Settings > Daemon > Image.
+SECONDS_TOTAL=9
+```
+
+**9 seconds** from a cleaned daemon crate to a rebuilt image; **10 seconds** when nothing has
+changed at all. That is one release compile of one crate plus a layer-cached `docker build` — the
+"plus a single image build" the criterion allows, and no registry is involved at any point.
+
+Not measured: a genuinely cold machine, where the dependency graph compiles from scratch. That cost
+belongs to the existing build-and-run loop, not to sandboxing, but it is the one case where a first
+enable on this repository could exceed five minutes, and it should be measured before the criterion
+is called closed for a new contributor's machine.
