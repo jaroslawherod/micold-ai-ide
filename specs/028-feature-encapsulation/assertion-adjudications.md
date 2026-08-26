@@ -295,3 +295,51 @@ G3 is the one that names the missing reducer, and it is the only one of the thre
 have fired had the probe been fully registered.
 
 No assertion text changed; the working tree was restored with `rm`.
+
+## T028 — the notification queue moved behind `state.notifications`
+
+One rename, applied everywhere: `state.notify` is `state.notifications.queue`, because the queue is
+now a member of `features::notifications::State` rather than a flat field of `app::State`. Thirty-one
+assertions changed spelling and none changed meaning — every one still asks the queue the same
+question about the same queue, reached one segment further in.
+
+Twenty-three of them are plain field-path renames across `tests/notifications.rs`,
+`tests/worktree_delete.rs`, `tests/open_project_git_gate.rs`, `tests/background_restart.rs`,
+`tests/banner_is_not_a_snackbar.rs`, `src/shell/service_control.rs`, `src/shell/daemon_sync.rs` and
+`src/shell/persist.rs`.
+
+The twenty-fourth is different and worth naming: `tests/idle_subscriptions.rs` greps the
+subscription guard as **source text**, so the spelling *is* the assertion — the same shape as T014's
+restart-control case. Its non-vacuity is unchanged: the surrounding test still fails if the guard
+stops naming the queue at all, and the new expected text is the text the source now has.
+
+```
+was: assert!(!st.notify.is_active())
+was: assert!(app.core.notify.is_active())
+was: assert!(app.core.notify.is_active(),"restartingtheservicemusttelltheuserwhatitcosts")
+was: assert!(app.core.notify.visible().is_none(),"anordinaryprojectswitchmustnotreporttheconnection")
+was: assert!(app.core.notify.visible().is_some(),"adroppedopisstillreported")
+was: assert!(core.notify.visible().is_none())
+was: assert!(guard.contains("notify.is_active()"),...)
+was: assert!(st.notify.is_active())
+was: assert!(st.notify.visible().is_none())
+was: assert!(st.notify.visible().is_none(),"aninfonoticeoutliveditsownduration")
+was: assert!(st.notify.visible().is_some(),"theerrorwasclearedaftertheinfoduration—itisbeingtimedbythewrongseverity")
+was: assert!(state.notify.visible().is_none())
+was: assert!(state.notify.visible().is_none(),"afullysuccessfuldeletemustreportnothing,got:{:?}",state.notify.visible())
+was: assert!(state.notify.visible().is_some())
+was: assert!(state.notify.visible().is_some(),"nonotificationreachedthequeueatall,soeveryassertionaboveisvacuous")
+was: assert_eq!(error.notify.visible().map(|n|n.level),Some(LError))
+was: assert_eq!(info.notify.visible().map(|n|n.level),Some(LInfo))
+was: assert_eq!(st.notify.pending(),0)
+was: assert_eq!(st.notify.pending(),2)
+was: assert_eq!(st.notify.visible().map(|n|n.message.as_str()),Some("first"))
+was: assert_eq!(st.notify.visible().map(|n|n.message.as_str()),Some("second"),"dismissingleftagapinsteadofpromotingwhatwaswaiting")
+was: assert_eq!(state.notify.pending()+from(state.notify.visible().is_some()),1,"agenuineleftovermuststillreachtheuser")
+was: assert_eq!(state.notify.pending(),0)
+was: assert_eq!(state.notify.pending(),0,"onemessageshouldnotqueuebehinditself")
+was: assert!(guard.contains("notify.is_active()"),"thesnackbarclockisinside`{guard}`,whichdoesnottestwhetheranotificationis\showing.Subscribedatrestitwakestheprocessfourtimesasecondforthelifeofthe\application,andnobehaviouraltestinthisworkspacecanseeit(FR-032a,SC-017).")
+```
+
+T040 rolls these up for the phase; each move is adjudicated as it lands, so the freeze is green at
+every commit rather than only at the end (contract C.1).
