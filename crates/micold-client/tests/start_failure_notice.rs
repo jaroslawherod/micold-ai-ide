@@ -137,9 +137,9 @@ fn a_different_reason_for_the_same_session_is_news() {
     );
 }
 
-/// The give-up variant reaches `Failed` too, and carries no sentence (the domain's `Failed` is a
-/// unit variant — there is nowhere to put one). An empty banner says less than the bar's `failed`
-/// already does.
+/// A `Failed` with an empty reason. Since `010` BUG-017 the domain variant carries a sentence and
+/// the crash-loop give-up fills it, so nothing in the daemon produces this today — but the wire
+/// type permits it, and an empty banner says less than the bar's `failed` already does.
 #[test]
 fn a_failure_with_nothing_to_say_says_nothing() {
     let mut core = State::default();

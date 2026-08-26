@@ -51,7 +51,10 @@ pub fn wire_to_lifecycle(w: &WireLifecycle) -> SessionLifecycle {
         WireLifecycle::Restarting { attempts } => SessionLifecycle::Restarting {
             attempts: *attempts,
         },
-        WireLifecycle::Failed { .. } => SessionLifecycle::Failed,
+        WireLifecycle::Failed { reason, attempts } => SessionLifecycle::Failed {
+            reason: reason.clone(),
+            attempts: *attempts,
+        },
     }
 }
 
@@ -269,7 +272,9 @@ fn announce_start_failures(core: &mut State, snapshot: &CatalogSnapshot) {
     for summary in snapshot.projects.iter().flat_map(|p| &p.sessions) {
         let reason = match &summary.lifecycle {
             // An empty reason is not a sentence, and a banner with nothing in it is worse than the
-            // bar's `failed` — the crash-loop give-up reaches this variant too, and it has no text.
+            // bar's `failed`. Since `010` BUG-017 the crash-loop give-up words its own, so this
+            // guard is for a wire message that permits an empty reason, not for a case the daemon
+            // still produces.
             WireLifecycle::Failed { reason, .. } if !reason.trim().is_empty() => reason,
             _ => {
                 core.announced_start_failures.remove(&summary.id);

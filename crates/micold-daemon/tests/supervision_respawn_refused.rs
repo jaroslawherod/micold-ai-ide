@@ -120,18 +120,22 @@ fn a_respawn_that_cannot_spawn_still_reaches_failed_and_says_so() {
     };
 
     // One attempt per tick, counted where every other exit is counted. A failed respawn that also
-    // counted itself would advance the budget twice per tick and skip a rung of this walk — and the
-    // wire `Failed` cannot show that, since it reports `attempts` as the constant `MAX_RESTART_
-    // ATTEMPTS` regardless of what was actually spent (`catalog.rs`, `wire_lifecycle`). The rungs
-    // are where the count is observable, so this asserts the whole walk rather than the terminus.
+    // counted itself would advance the budget twice per tick and skip a rung of this walk. The
+    // rungs are asserted whole rather than just the terminus: when this gate was written the wire
+    // `Failed` reported `attempts` as a constant, so a double count was invisible there — `010`
+    // BUG-017 has since made it a measurement, and the terminus below now checks it too.
+    let (rungs, terminus) = walk.split_at(walk.len() - 1);
     let expected: Vec<WireLifecycle> = (1..MAX_RESTART_ATTEMPTS)
         .map(|attempts| WireLifecycle::Restarting { attempts })
-        .chain([WireLifecycle::Failed {
-            reason: String::new(),
-            attempts: MAX_RESTART_ATTEMPTS,
-        }])
         .collect();
-    assert_eq!(walk, expected, "budget spent one attempt at a time");
+    assert_eq!(rungs, expected, "budget spent one attempt at a time");
+    let [WireLifecycle::Failed { attempts, .. }] = terminus else {
+        panic!("the walk ends at the give-up; got {terminus:?}");
+    };
+    assert_eq!(
+        *attempts, MAX_RESTART_ATTEMPTS,
+        "and the give-up records the budget it spent, not a constant"
+    );
     assert!(
         changed.contains(&project),
         "and the give-up is announced: `Failed` is the state that tells the user to look at this, \

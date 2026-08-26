@@ -69,6 +69,7 @@ fn lifecycle_of(catalog: &Catalog, id: SessionId) -> SessionLifecycle {
         .find(|s| s.id == id)
         .expect("session present")
         .lifecycle
+        .clone()
 }
 
 #[test]
@@ -138,15 +139,21 @@ fn present_interrupted_resumable_never_overrides_a_running_or_failed_session() {
     let mut sessions = vec![restored(failed, TerminalMode::AiCli)];
     // Force it Failed via the crash path (three unexpected exits).
     for _ in 0..3 {
-        sessions[0].on_unexpected_exit();
+        sessions[0].on_unexpected_exit("exit status 1");
     }
-    assert_eq!(sessions[0].lifecycle, SessionLifecycle::Failed);
+    assert!(matches!(
+        sessions[0].lifecycle,
+        SessionLifecycle::Failed { .. }
+    ));
 
     let mut catalog = loaded_catalog(project.path(), sessions);
     let marked = catalog.present_interrupted_resumable(|_id, _cwd, _mode, _provider| true);
 
     assert_eq!(marked, 0);
-    assert_eq!(lifecycle_of(&catalog, failed), SessionLifecycle::Failed);
+    assert!(matches!(
+        lifecycle_of(&catalog, failed),
+        SessionLifecycle::Failed { .. }
+    ));
 }
 
 #[test]

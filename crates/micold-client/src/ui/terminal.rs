@@ -626,7 +626,7 @@ fn session_status(state: &State, id: SessionId) -> &'static str {
             SessionLifecycle::Running => "running",
             SessionLifecycle::Starting => "starting…",
             SessionLifecycle::Restarting { .. } => "restarting…",
-            SessionLifecycle::Failed => "failed",
+            SessionLifecycle::Failed { .. } => "failed",
             SessionLifecycle::Idle => "idle",
             SessionLifecycle::InterruptedResumable => "interrupted",
         },
@@ -755,7 +755,7 @@ pub fn process_stopped(state: &State, id: SessionId, tab: StripTab) -> bool {
         StripTab::Ai => matches!(
             session.lifecycle,
             SessionLifecycle::Idle
-                | SessionLifecycle::Failed
+                | SessionLifecycle::Failed { .. }
                 | SessionLifecycle::InterruptedResumable
         ),
         StripTab::Instance(instance) => matches!(
@@ -1199,6 +1199,16 @@ mod tests {
     use micold_core::project::{Availability, Project};
     use micold_core::session::{Session, SessionLifecycle, SessionLocation};
 
+    /// A `Failed` in the shape supervision produces one. These cases are about the *variant* — the
+    /// tint, the status word, whether restart is offered — not about the sentence, but the variant
+    /// has carried one since `010` BUG-017 and something has to fill it.
+    fn failed() -> SessionLifecycle {
+        SessionLifecycle::Failed {
+            reason: "Gave up after 3 restart attempts — last exit: exit status 1.".into(),
+            attempts: 3,
+        }
+    }
+
     /// A state with one project and one session at `lifecycle`, made current.
     fn state_showing(lifecycle: SessionLifecycle) -> (State, SessionId) {
         let mut state = State::default();
@@ -1314,11 +1324,7 @@ mod tests {
                 SessionLifecycle::Idle,
                 ShellLifecycle::Running,
             ),
-            (
-                TerminalMode::AiCli,
-                SessionLifecycle::Failed,
-                ShellLifecycle::Exited,
-            ),
+            (TerminalMode::AiCli, failed(), ShellLifecycle::Exited),
             (
                 TerminalMode::AiCli,
                 SessionLifecycle::InterruptedResumable,
@@ -1340,7 +1346,7 @@ mod tests {
                 ShellLifecycle::Exited,
             ),
         ] {
-            let (state, id) = state_with_instances(mode, lifecycle, &[shell], Some(0));
+            let (state, id) = state_with_instances(mode, lifecycle.clone(), &[shell], Some(0));
             let instance = state.active_sessions()[0].shells[0].id;
             for tab in [StripTab::Ai, StripTab::Instance(instance)] {
                 assert_eq!(
@@ -1393,7 +1399,7 @@ mod tests {
     fn the_ai_tabs_menu_is_a_terminal_tabs_minus_close() {
         for (lifecycle, shell) in [
             (SessionLifecycle::Idle, ShellLifecycle::Exited),
-            (SessionLifecycle::Failed, ShellLifecycle::NotStarted),
+            (failed(), ShellLifecycle::NotStarted),
             (
                 SessionLifecycle::InterruptedResumable,
                 ShellLifecycle::Exited,
@@ -1406,7 +1412,7 @@ mod tests {
             ),
         ] {
             let (state, id) =
-                state_with_instances(TerminalMode::Regular, lifecycle, &[shell], Some(0));
+                state_with_instances(TerminalMode::Regular, lifecycle.clone(), &[shell], Some(0));
             let instance = state.active_sessions()[0].shells[0].id;
 
             let for_instance =
@@ -1441,7 +1447,8 @@ mod tests {
             SessionLifecycle::Starting,
             SessionLifecycle::Restarting { attempts: 1 },
         ] {
-            let (state, id) = state_with_instances(TerminalMode::AiCli, lifecycle, &[], None);
+            let (state, id) =
+                state_with_instances(TerminalMode::AiCli, lifecycle.clone(), &[], None);
             assert!(
                 crate::ui::strip_tab_menu_labels(&state, id, StripTab::Ai).is_empty(),
                 "{lifecycle:?}: a secondary press on a running AI tab must do nothing — an empty \
@@ -1450,10 +1457,11 @@ mod tests {
         }
         for lifecycle in [
             SessionLifecycle::Idle,
-            SessionLifecycle::Failed,
+            failed(),
             SessionLifecycle::InterruptedResumable,
         ] {
-            let (state, id) = state_with_instances(TerminalMode::AiCli, lifecycle, &[], None);
+            let (state, id) =
+                state_with_instances(TerminalMode::AiCli, lifecycle.clone(), &[], None);
             assert_eq!(
                 crate::ui::strip_tab_menu_labels(&state, id, StripTab::Ai),
                 vec!["Restart"],
@@ -1730,7 +1738,7 @@ mod tests {
                 false,
                 "an auto-restart is already under way; a mark here would point at an action                  nobody needs to take",
             ),
-            (SessionLifecycle::Failed, true, "auto-restart gave up; a manual one is the offer"),
+            (failed(), true, "auto-restart gave up; a manual one is the offer"),
             (
                 SessionLifecycle::InterruptedResumable,
                 true,
@@ -1738,7 +1746,7 @@ mod tests {
             ),
         ] {
             let (state, id) =
-                state_with_instances(TerminalMode::AiCli, lifecycle, &[], None);
+                state_with_instances(TerminalMode::AiCli, lifecycle.clone(), &[], None);
             assert_eq!(
                 process_stopped(&state, id, StripTab::Ai),
                 want,
@@ -1770,12 +1778,8 @@ mod tests {
             ),
             (TerminalMode::Regular, &[][..], None),
         ] {
-            for lifecycle in [
-                SessionLifecycle::Idle,
-                SessionLifecycle::Running,
-                SessionLifecycle::Failed,
-            ] {
-                let (state, id) = state_with_instances(mode, lifecycle, shells, active);
+            for lifecycle in [SessionLifecycle::Idle, SessionLifecycle::Running, failed()] {
+                let (state, id) = state_with_instances(mode, lifecycle.clone(), shells, active);
                 let attached = match mode {
                     TerminalMode::AiCli => StripTab::Ai,
                     TerminalMode::Regular => state.active_sessions()[0]
@@ -1863,9 +1867,9 @@ mod tests {
         for lifecycle in [
             SessionLifecycle::InterruptedResumable,
             SessionLifecycle::Idle,
-            SessionLifecycle::Failed,
+            failed(),
         ] {
-            let (state, id) = state_showing(lifecycle);
+            let (state, id) = state_showing(lifecycle.clone());
             let message = empty_terminal_message(&state, id);
             assert!(
                 !message.contains("Starting"),
@@ -1890,7 +1894,7 @@ mod tests {
             SessionLifecycle::Restarting { attempts: 1 },
             SessionLifecycle::Running,
         ] {
-            let (state, id) = state_showing(lifecycle);
+            let (state, id) = state_showing(lifecycle.clone());
             assert_eq!(
                 empty_terminal_message(&state, id),
                 "Starting…",
@@ -1910,10 +1914,10 @@ mod tests {
             SessionLifecycle::Starting,
             SessionLifecycle::Running,
             SessionLifecycle::Restarting { attempts: 1 },
-            SessionLifecycle::Failed,
+            failed(),
             SessionLifecycle::InterruptedResumable,
         ] {
-            let (state, id) = state_showing(lifecycle);
+            let (state, id) = state_showing(lifecycle.clone());
             let restartable = attached_process_restartable(&state, id);
             let says_starting = empty_terminal_message(&state, id).contains("Starting");
             assert_ne!(

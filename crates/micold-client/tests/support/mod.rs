@@ -65,7 +65,7 @@ pub fn failed_session(worktree_dir: &str) -> Session {
     );
     s.mark_running();
     loop {
-        if s.on_unexpected_exit() == RestartDecision::GiveUp {
+        if s.on_unexpected_exit("exit status 1") == RestartDecision::GiveUp {
             break;
         }
     }

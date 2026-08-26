@@ -216,7 +216,7 @@ fn shell_instance_mutators_never_touch_ai_cli_lifecycle() {
 
     let mut s = Session::start_new(worktree("feature-x"), AiCli::ClaudeCode);
     s.mark_running();
-    let ai_cli_before = s.lifecycle;
+    let ai_cli_before = s.lifecycle.clone();
     assert_eq!(ai_cli_before, SessionLifecycle::Running);
 
     let id = s.open_shell_instance();

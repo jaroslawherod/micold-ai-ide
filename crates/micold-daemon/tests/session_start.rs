@@ -499,6 +499,7 @@ fn a_resumed_session_leaves_the_interrupted_resumable_state() {
             .find(|s| s.id == id)
             .expect("session")
             .lifecycle
+            .clone()
     };
     assert_eq!(
         lifecycle_of(&catalog),
@@ -1174,10 +1175,11 @@ fn catalog_with_ai_cli_session(
 /// against one of them would pass this test on the other by accident.
 ///
 /// Two things this holds apart, which are easy to conflate because they end up in the same variant.
-/// The **reason** has a home only on the wire: `session::SessionLifecycle::Failed` is a unit variant
-/// with nothing to carry a sentence in, so it is `WireLifecycle::Failed { reason, attempts }` — the
-/// form a client receives — that this reads, and the domain record is not where to look for the
-/// text. And the **attempts** are zero: a binary that is not on `PATH` is not a crash loop, and
+/// The **reason** for *this* failure lives in the daemon's `start_failures` overlay rather than in
+/// the session record — a start that never reached a first process is not the crash-loop give-up
+/// `SessionLifecycle::Failed` means, even though both arrive as `WireLifecycle::Failed { reason,
+/// attempts }`. So it is the wire form — what a client receives — that this reads. And the
+/// **attempts** are zero: a binary that is not on `PATH` is not a crash loop, and
 /// letting it climb toward `MAX_RESTART_ATTEMPTS` would spend three spawns on a problem no retry
 /// can change, with the one sentence that would explain it arriving last instead of first.
 #[test]
