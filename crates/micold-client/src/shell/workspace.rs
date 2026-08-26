@@ -24,12 +24,14 @@
 //! discovery here only seeds the worktree list so the UI is populated before the daemon's
 //! post-attach refresh reconciles it.
 
+use micold_client::features::project::Msg as ProjectMsg;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iced::Task;
 
 use micold_client::app::Message;
+use micold_client::features::project;
 use micold_core::fs_scan::FolderBrowser;
 use micold_core::git::Git;
 use micold_core::protocol::messages::ClientMsg;
@@ -58,8 +60,8 @@ pub(crate) fn scan_task(
 
 fn scan(browser: &dyn FolderBrowser, dir: PathBuf) -> Message {
     match browser.list_subdirs(&dir) {
-        Ok(entries) => Message::SelectorListingReady(entries),
-        Err(error) => Message::SelectorListingFailed(error.to_string()),
+        Ok(entries) => Message::Project(ProjectMsg::SelectorListingReady(entries)),
+        Err(error) => Message::Project(ProjectMsg::SelectorListingFailed(error.to_string())),
     }
 }
 
@@ -82,8 +84,8 @@ pub(crate) fn on_project_selector_opened(app: &mut App) -> Task<Message> {
 /// Navigating the picker lists the directory the reducer moved to — but only when the reducer
 /// says it is waiting for one. Anything else (a cached listing, a refused navigation) already has
 /// its answer and must not spawn a second scan.
-pub(crate) fn on_selector_navigated(app: &mut App, message: Message) -> Task<Message> {
-    app.core.update(message);
+pub(crate) fn on_selector_navigated(app: &mut App, msg: project::Msg) -> Task<Message> {
+    app.core.update(Message::Project(msg));
     match &app.core.selector {
         Some(selector) if selector.status == SelectorStatus::Loading => {
             scan_task(app.caps.browser(), selector.current_dir.clone())
@@ -99,9 +101,9 @@ pub(crate) fn on_folder_chosen(app: &mut App, path: PathBuf) -> Task<Message> {
     // still open would be dimmed out of view.
     app.core.selector = None;
     if !app.caps.git().is_repo_root(&path) {
-        app.core.update(Message::ProjectOpenRefused(
+        app.core.update(Message::Project(ProjectMsg::OpenRefused(
             "Only git repositories can be opened as projects.".to_string(),
-        ));
+        )));
         return Task::none();
     }
     // Switch without tearing down the outgoing project's sessions (feature 008, BS-1).
@@ -226,13 +228,17 @@ mod tests {
         );
 
         match scan(&browser, PathBuf::from("/work")) {
-            Message::SelectorListingReady(entries) => assert_eq!(entries.len(), 2),
+            Message::Project(ProjectMsg::SelectorListingReady(entries)) => {
+                assert_eq!(entries.len(), 2)
+            }
             other => panic!("expected a listing, got {other:?}"),
         }
         // A different directory is a different answer — an implementation that ignored `dir` and
         // returned one cached listing would pass the assertion above on its own.
         match scan(&browser, PathBuf::from("/elsewhere")) {
-            Message::SelectorListingReady(entries) => assert!(entries.is_empty()),
+            Message::Project(ProjectMsg::SelectorListingReady(entries)) => {
+                assert!(entries.is_empty())
+            }
             other => panic!("expected an empty listing, got {other:?}"),
         }
     }
@@ -245,7 +251,7 @@ mod tests {
         let browser = FakeFolderScanner::new().with_unreadable("/nope");
 
         match scan(&browser, PathBuf::from("/nope")) {
-            Message::SelectorListingFailed(_) => {}
+            Message::Project(ProjectMsg::SelectorListingFailed(_)) => {}
             other => panic!("expected a reported failure, got {other:?}"),
         }
     }

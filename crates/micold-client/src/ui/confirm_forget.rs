@@ -4,6 +4,7 @@
 //! Nothing on disk (the folder, its files, or any git worktrees) is deleted; the dialog says so.
 
 use crate::app::{Message, State};
+use crate::features::project::Msg as ProjectMsg;
 use crate::ui::material::{self, Button, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, row};
 use iced::Element;
@@ -56,8 +57,8 @@ pub fn modal<'a>(
     }
 
     let actions = material::dialog::actions(row![
-        Button::filled("Forget", r).on_press(Message::ProjectForgetConfirmed),
-        Button::outlined("Cancel", r).on_press(Message::ProjectForgetCancelled),
+        Button::filled("Forget", r).on_press(Message::Project(ProjectMsg::ForgetConfirmed)),
+        Button::outlined("Cancel", r).on_press(Message::Project(ProjectMsg::ForgetCancelled)),
     ]);
 
     let dialog = material::Surface::new(

@@ -17,6 +17,7 @@
 //! code got right.
 
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
@@ -43,7 +44,7 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
     (
         "project_selector",
         |s| s.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
-        Message::ProjectSelectorClosed,
+        Message::Project(ProjectMsg::SelectorClosed),
     ),
     (
         "rename_project",
@@ -54,7 +55,7 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
                 error: None,
             })
         },
-        Message::RenameCancelled,
+        Message::Project(ProjectMsg::RenameCancelled),
     ),
     (
         "add_worktree",
@@ -90,7 +91,7 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
     (
         "confirm_forget_project",
         |s| s.forget_target = Some(PathBuf::from("/p")),
-        Message::ProjectForgetCancelled,
+        Message::Project(ProjectMsg::ForgetCancelled),
     ),
 ];
 

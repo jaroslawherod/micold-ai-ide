@@ -31,6 +31,7 @@
 //! function to confirm it still emits only that one.
 
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
@@ -71,12 +72,12 @@ fn dialogs() -> Vec<Dialog> {
         },
         Dialog {
             id: "project_selector",
-            cancel: Message::ProjectSelectorClosed,
+            cancel: Message::Project(ProjectMsg::SelectorClosed),
             open: |state| state.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
         },
         Dialog {
             id: "rename_project",
-            cancel: Message::RenameCancelled,
+            cancel: Message::Project(ProjectMsg::RenameCancelled),
             open: |state| {
                 state.rename_draft = Some(RenameDraft {
                     path: PathBuf::from("/tmp"),
@@ -118,7 +119,7 @@ fn dialogs() -> Vec<Dialog> {
         },
         Dialog {
             id: "confirm_forget_project",
-            cancel: Message::ProjectForgetCancelled,
+            cancel: Message::Project(ProjectMsg::ForgetCancelled),
             open: |state| state.forget_target = Some(PathBuf::from("/p")),
         },
     ]
@@ -609,7 +610,9 @@ fn a_dialog_draws_from_its_own_state() {
     let openers: &[(&str, fn(&mut State))] = &[
         ("about", |s| s.update(Message::Help(HelpMsg::AboutOpened))),
         ("rename_project", |s| {
-            s.update(Message::RenameStarted(std::path::PathBuf::from("/p")))
+            s.update(Message::Project(ProjectMsg::RenameStarted(
+                std::path::PathBuf::from("/p"),
+            )))
         }),
         ("add_worktree", |s| {
             s.update(Message::WorktreeForm(
@@ -630,8 +633,8 @@ fn a_dialog_draws_from_its_own_state() {
             )))
         }),
         ("confirm_forget_project", |s| {
-            s.update(Message::ProjectForgetRequested(std::path::PathBuf::from(
-                "/p",
+            s.update(Message::Project(ProjectMsg::ForgetRequested(
+                std::path::PathBuf::from("/p"),
             )))
         }),
     ];

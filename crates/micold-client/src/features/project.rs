@@ -99,7 +99,8 @@ impl FloatingSurface for ProjectSwitcher {
     }
 
     fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Popover).cancelled_by(Message::ProjectSwitcherToggled)
+        DismissalRules::for_layer(Layer::Popover)
+            .cancelled_by(Message::Project(Msg::SwitcherToggled))
     }
 }
 
@@ -135,7 +136,8 @@ impl FloatingSurface for ProjectContextMenu {
     }
 
     fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::ContextMenu).cancelled_by(Message::ProjectMenuDismissed)
+        DismissalRules::for_layer(Layer::ContextMenu)
+            .cancelled_by(Message::Project(Msg::MenuDismissed))
     }
 }
 
@@ -160,7 +162,7 @@ impl FloatingSurface for ProjectSelectorDialog {
     }
 
     fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::ProjectSelectorClosed)
+        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::Project(Msg::SelectorClosed))
     }
 }
 
@@ -184,7 +186,8 @@ impl FloatingSurface for RenameProjectDialog {
     }
 
     fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::RenameCancelled)
+        DismissalRules::for_layer(Layer::Dialog)
+            .cancelled_by(Message::Project(Msg::RenameCancelled))
     }
 }
 
@@ -208,7 +211,8 @@ impl FloatingSurface for ConfirmForgetProjectDialog {
     }
 
     fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::ProjectForgetCancelled)
+        DismissalRules::for_layer(Layer::Dialog)
+            .cancelled_by(Message::Project(Msg::ForgetCancelled))
     }
 }
 
@@ -395,4 +399,103 @@ pub fn forget_cancelled(state: &mut State) {
 /// modal that owns `worktree_error` is not open and the message would never be drawn.
 pub fn open_refused(_state: &mut State, message: String) -> Vec<crate::features::Outcome> {
     vec![crate::features::notifications::error(message)]
+}
+
+/// Everything the user or the folder browser can say about a project (feature 028, FR-001).
+///
+/// The `Project` prefix is gone from every variant that carried it (contract M1) — the wrapper
+/// says it once. `Selector` stays where it appeared, because it names a sub-surface of this
+/// feature and not the feature: `Msg::SelectorOpened` and `Msg::SelectorNavigatedUp` are the
+/// folder browser, `Msg::MenuToggled` is the switcher's right-click menu, and the two would read
+/// as the same thing without it.
+///
+/// `KnownProjectReopened` became [`Msg::Reopened`]. "Known" was distinguishing it from browsing to
+/// a folder, and [`Msg::FolderChosen`] is still sitting next to it saying so.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Msg {
+    /// Open the project selector (folder browser). The binary computes the starting
+    /// directory and launches the first directory scan (FR-001).
+    SelectorOpened,
+    /// Navigate the selector into a subfolder (FR-002).
+    SelectorNavigatedInto(PathBuf),
+    /// Navigate the selector to the parent directory (FR-002).
+    SelectorNavigatedUp,
+    /// A directory scan completed; populate the current listing (FR-006).
+    SelectorListingReady(Vec<FolderEntry>),
+    /// A directory scan failed (e.g. permission denied); show an error, do not crash.
+    SelectorListingFailed(String),
+    /// Open the currently-browsed folder as a project (FR-003, FR-005). The binary
+    /// records git status/availability and persists the catalog.
+    FolderChosen(PathBuf),
+    /// Dismiss the project selector without choosing (Cancel button or Esc).
+    SelectorClosed,
+    /// Reopen an already-known project from the list without browsing (FR-011). The binary
+    /// refreshes its availability, activates it if available (FR-023), and persists.
+    Reopened(PathBuf),
+    /// Begin renaming the given project; opens the rename dialog (FR-017).
+    RenameStarted(PathBuf),
+    /// The rename dialog's text changed.
+    RenameTextChanged(String),
+    /// Confirm the rename. Applies it if valid (FR-020); the binary then persists.
+    RenameConfirmed,
+    /// Dismiss the rename dialog without applying (Cancel or Esc).
+    RenameCancelled,
+    /// Request to forget the project at this path; opens the confirm dialog (feature 014, FR-002).
+    ForgetRequested(PathBuf),
+    /// Confirm forgetting. The binary stops the project's live session processes, the reducer
+    /// drops the record + metadata and clears the active working space if it was active, then the
+    /// binary persists and deletes the project's per-project state file (FR-003/005/007/008/010).
+    ForgetConfirmed,
+    /// Dismiss the forget confirmation without removing anything (feature 014, FR-004).
+    ForgetCancelled,
+    /// Open (or close, if already open) a project's switcher right-click context menu, by path,
+    /// anchored at the press point in window pixels. The switcher panel stays open behind it; the
+    /// other popovers are mutually exclusive.
+    ///
+    /// The point rides on the message since BUG-008. It used to be read from a `State::cursor` fed
+    /// by a pointer subscription that ran only while the switcher was open — a side channel that
+    /// existed because the row handed over a bare message, and that answered `(0, 0)` to anyone
+    /// who was not the running binary.
+    MenuToggled(PathBuf, (u16, u16)),
+    /// Dismiss the project context menu (outside click, or after an action is chosen).
+    MenuDismissed,
+    /// Opening a directory as a project was refused because it is not a git repo (FR-001a).
+    /// The binary performs the `Git::is_repo_root` check and dispatches this on refusal.
+    OpenRefused(String),
+    /// Toggle the top-bar project switcher panel (feature 008, FR-004). Mutually exclusive
+    /// with the overflow menu.
+    SwitcherToggled,
+}
+
+/// The pure half of this feature's reducer surface: shape A (contract M2).
+///
+/// All nineteen arms are here. Six of them additionally need an effect — the folder browser
+/// opened and walked, a project opened, reopened, renamed or forgotten — and those six are
+/// matched a second time in `main.rs`, which runs the effect and lets the message reach here.
+/// The split is by *effect*, not by variant, as `worktree_form` established and M2 names as the
+/// reference.
+pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+    match msg {
+        Msg::SwitcherToggled => return switcher_toggled(state),
+        Msg::MenuToggled(path, anchor) => return menu_toggled(state, path, anchor),
+        Msg::ForgetConfirmed => return forget_confirmed(state),
+        Msg::OpenRefused(message) => return open_refused(state, message),
+        Msg::SelectorNavigatedInto(path) => selector_navigated_into(state, path),
+        Msg::SelectorNavigatedUp => selector_navigated_up(state),
+        Msg::SelectorListingReady(entries) => selector_listing_ready(state, entries),
+        Msg::SelectorListingFailed(message) => selector_listing_failed(state, message),
+        Msg::SelectorClosed => selector_closed(state),
+        Msg::RenameStarted(path) => rename_started(state, path),
+        Msg::RenameTextChanged(text) => rename_text_changed(state, text),
+        Msg::RenameConfirmed => rename_confirmed(state),
+        Msg::RenameCancelled => rename_cancelled(state),
+        Msg::MenuDismissed => menu_dismissed(state),
+        Msg::ForgetRequested(path) => forget_requested(state, path),
+        Msg::ForgetCancelled => forget_cancelled(state),
+        // Performed by the binary at the I/O boundary: the home directory and a folder scan, a
+        // `Git::is_repo_root` check, or the catalog's availability refresh and persistence. The
+        // reducer holds no state that any of the three changes on its own.
+        Msg::SelectorOpened | Msg::FolderChosen(_) | Msg::Reopened(_) => {}
+    }
+    Vec::new()
 }

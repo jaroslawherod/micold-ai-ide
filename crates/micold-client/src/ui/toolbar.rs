@@ -7,6 +7,7 @@ use crate::app::{Message, State};
 use crate::features::connection::Msg as ConnectionMsg;
 use crate::features::help::help_actions;
 use crate::features::help::Msg as HelpMsg;
+use crate::features::project::Msg as ProjectMsg;
 use crate::features::settings::Msg as SettingsMsg;
 use crate::icons::Icon;
 use crate::ui::material::{Button, MenuItem, MenuTrigger, Toolbar};
@@ -81,7 +82,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .unwrap_or_else(|| "Select project".to_string());
     let switcher = Button::text(switcher_label, r)
         .leading(Icon::OpenProject)
-        .on_press(Message::ProjectSwitcherToggled);
+        .on_press(Message::Project(ProjectMsg::SwitcherToggled));
     let menu = MenuTrigger::new(Icon::Menu, Message::Help(HelpMsg::MenuToggled), r);
     Toolbar::new(meta.name, r)
         // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from

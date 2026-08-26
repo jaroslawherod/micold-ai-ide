@@ -2,6 +2,7 @@
 
 use micold_client::app::{Message, State};
 use micold_client::features::notifications::Msg as NotificationsMsg;
+use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_core::git::{FakeGit, Git};
 use std::path::Path;
@@ -27,9 +28,9 @@ fn non_git_directory_fails_the_gate() {
 fn refusal_message_is_surfaced_to_the_user() {
     let mut state = State::default();
     assert!(state.notify.visible().is_none());
-    state.update(Message::ProjectOpenRefused(
+    state.update(Message::Project(ProjectMsg::OpenRefused(
         "Only git repositories can be opened".to_string(),
-    ));
+    )));
     let visible = state
         .notify
         .visible()
@@ -46,7 +47,9 @@ fn refusal_message_is_surfaced_to_the_user() {
 #[test]
 fn refusal_persists_until_dismissed() {
     let mut state = State::default();
-    state.update(Message::ProjectOpenRefused("nope".to_string()));
+    state.update(Message::Project(ProjectMsg::OpenRefused(
+        "nope".to_string(),
+    )));
     state.update(Message::Worktree(WorktreeMsg::Loaded(vec![])));
     assert!(state.notify.visible().is_some());
 

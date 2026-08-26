@@ -4,6 +4,7 @@ use micold_client::app::{
     on_escape, Message, State, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
 };
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_client::features::worktree::Msg as WorktreeMsg;
@@ -261,7 +262,7 @@ fn sidebar_filter_menu_toggle_opens_and_closes_and_excludes_siblings() {
     state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
     assert!(state.sidebar_filter_open);
     // Opening the filter panel closes the sibling popovers (mutual exclusion, symmetric with
-    // the existing HelpMenuToggled/ProjectSwitcherToggled pair).
+    // the existing help::Msg::MenuToggled/project::Msg::SwitcherToggled pair).
     assert!(!state.help_menu_open);
     assert!(!state.project_switcher_open);
 
@@ -281,7 +282,7 @@ fn opening_help_menu_or_project_switcher_closes_the_filter_panel() {
     state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
     assert!(state.sidebar_filter_open);
 
-    state.update(Message::ProjectSwitcherToggled);
+    state.update(Message::Project(ProjectMsg::SwitcherToggled));
     assert!(!state.sidebar_filter_open);
 }
 

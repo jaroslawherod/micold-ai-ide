@@ -40,6 +40,7 @@
 //! way for the same reason — `App` is the binary's type. Each fixture sits with what it is *of*,
 //! not with who happens to call it.
 
+use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::{Path, PathBuf};
 
@@ -679,7 +680,8 @@ pub fn on_rename_confirmed(app: &mut App) -> Task<Message> {
         .rename_draft
         .as_ref()
         .map(|d| (d.path.clone(), d.text.trim().to_string()));
-    app.core.update(Message::RenameConfirmed);
+    app.core
+        .update(Message::Project(ProjectMsg::RenameConfirmed));
     // Only send if the pure update accepted it (a rejected name leaves the draft in place).
     if app.core.rename_draft.is_none() {
         if let Some((path, display_name)) = draft {
@@ -721,7 +723,8 @@ pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
             d.send(ClientMsg::Detach { project: path });
         }
     }
-    app.core.update(Message::ProjectForgetConfirmed);
+    app.core
+        .update(Message::Project(ProjectMsg::ForgetConfirmed));
     Task::none()
 }
 

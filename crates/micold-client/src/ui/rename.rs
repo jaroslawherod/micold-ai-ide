@@ -3,6 +3,7 @@
 //! disk (FR-018).
 
 use crate::app::{Message, State};
+use crate::features::project::Msg as ProjectMsg;
 use crate::features::project::RenameDraft;
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
@@ -26,8 +27,8 @@ pub fn modal<'a>(
     let input = TextField::new("", &draft.text, r)
         .label("Project name")
         .track_focus(FieldId::RenameProjectName, focused)
-        .on_input(Message::RenameTextChanged)
-        .on_submit(Message::RenameConfirmed);
+        .on_input(|text| Message::Project(ProjectMsg::RenameTextChanged(text)))
+        .on_submit(Message::Project(ProjectMsg::RenameConfirmed));
 
     let mut fields = material::dialog::fields(column![
         Text::new("Rename project", TypeRole::Headline, r),
@@ -45,8 +46,8 @@ pub fn modal<'a>(
     }
 
     let actions = material::dialog::actions(row![
-        Button::filled("Rename", r).on_press(Message::RenameConfirmed),
-        Button::outlined("Cancel", r).on_press(Message::RenameCancelled),
+        Button::filled("Rename", r).on_press(Message::Project(ProjectMsg::RenameConfirmed)),
+        Button::outlined("Cancel", r).on_press(Message::Project(ProjectMsg::RenameCancelled)),
     ]);
 
     let dialog = material::Surface::new(

@@ -6,9 +6,9 @@
 //!
 //! Side-effectful concerns (reading the filesystem for a directory listing, detecting a
 //! folder's git status, and persisting the catalog) are performed by the binary at the
-//! I/O boundary; the reducer stays pure. A few messages (`ProjectSelectorOpened`,
-//! `FolderChosen`) therefore carry no reducer effect here — they are documented no-ops
-//! handled entirely in `src/main.rs`.
+//! I/O boundary; the reducer stays pure. A few messages (`project::Msg::SelectorOpened`,
+//! `project::Msg::FolderChosen`) therefore carry no reducer effect here — they are documented
+//! no-ops handled entirely in `src/main.rs`.
 
 use crate::features::notifications::NoticeLevel;
 use crate::features::project::{ProjectMenu, RenameDraft, SwitcherEntry};
@@ -19,7 +19,7 @@ use crate::features::window::FieldId;
 use crate::features::worktree::{WorktreeMenu, WorktreeRenameDraft};
 use crate::features::worktree_form::WorktreeForm;
 use micold_core::notify;
-use micold_core::project::{Availability, FolderEntry};
+use micold_core::project::Availability;
 use micold_core::selector::Selector;
 use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
 use micold_core::theme::{resolve, ColorScheme, SystemScheme, ThemePreference};
@@ -42,68 +42,20 @@ pub enum Message {
     /// The Help menu and the About dialog it opens (feature 028, FR-001). Three variants moved
     /// behind this one; see [`crate::features::help::Msg`].
     Help(crate::features::help::Msg),
-    /// Open the project selector (folder browser). The binary computes the starting
-    /// directory and launches the first directory scan (FR-001).
-    ProjectSelectorOpened,
-    /// Navigate the selector into a subfolder (FR-002).
-    SelectorNavigatedInto(PathBuf),
-    /// Navigate the selector to the parent directory (FR-002).
-    SelectorNavigatedUp,
-    /// A directory scan completed; populate the current listing (FR-006).
-    SelectorListingReady(Vec<FolderEntry>),
-    /// A directory scan failed (e.g. permission denied); show an error, do not crash.
-    SelectorListingFailed(String),
-    /// Open the currently-browsed folder as a project (FR-003, FR-005). The binary
-    /// records git status/availability and persists the catalog.
-    FolderChosen(PathBuf),
-    /// Dismiss the project selector without choosing (Cancel button or Esc).
-    ProjectSelectorClosed,
-    /// Reopen a known project from the list without browsing (FR-011). The binary
-    /// refreshes its availability, activates it if available (FR-023), and persists.
-    KnownProjectReopened(PathBuf),
-    /// Begin renaming the given project; opens the rename dialog (FR-017).
-    RenameStarted(PathBuf),
-    /// The rename dialog's text changed.
-    RenameTextChanged(String),
-    /// Confirm the rename. Applies it if valid (FR-020); the binary then persists.
-    RenameConfirmed,
-    /// Dismiss the rename dialog without applying (Cancel or Esc).
-    RenameCancelled,
-
-    // ---- Feature 014: forget a project ----
-    /// Request to forget the project at this path; opens the confirm dialog (FR-002).
-    ProjectForgetRequested(PathBuf),
-    /// Confirm forgetting. The binary stops the project's live session processes, the reducer
-    /// drops the record + metadata and clears the active working space if it was active, then the
-    /// binary persists and deletes the project's per-project state file (FR-003/005/007/008/010).
-    ProjectForgetConfirmed,
-    /// Dismiss the forget confirmation without removing anything (FR-004).
-    ProjectForgetCancelled,
+    /// Everything the user or the folder browser can say about a project (feature 028,
+    /// FR-001). Nineteen variants moved behind this one; see
+    /// [`crate::features::project::Msg`].
+    Project(crate::features::project::Msg),
 
     /// What the window reports about itself (feature 028, FR-001). Two variants moved behind this
     /// one; see [`crate::features::window::Msg`].
     Window(crate::features::window::Msg),
 
-    // ---- Feature 015: forget from the switcher's right-click menu ----
-    /// Open (or close, if already open) a project's switcher right-click context menu, by path,
-    /// anchored at the press point in window pixels. The switcher panel stays open behind it; the
-    /// other popovers are mutually exclusive.
-    ///
-    /// The point rides on the message since BUG-008. It used to be read from a `State::cursor` fed
-    /// by a pointer subscription that ran only while the switcher was open — a side channel that
-    /// existed because the row handed over a bare message, and that answered `(0, 0)` to anyone
-    /// who was not the running binary.
-    ProjectMenuToggled(PathBuf, (u16, u16)),
-    /// Dismiss the project context menu (outside click, or after an action is chosen).
-    ProjectMenuDismissed,
     /// Everything the user can do to their settings (feature 028, FR-001). Ten variants moved
     /// behind this one; see [`crate::features::settings::Msg`].
     Settings(crate::features::settings::Msg),
 
     // ---- Feature 005: worktrees, sessions, embedded terminal ----
-    /// Opening a directory as a project was refused because it is not a git repo (FR-001a).
-    /// The binary performs the `Git::is_repo_root` check and dispatches this on refusal.
-    ProjectOpenRefused(String),
     /// Everything the user or the daemon can say about a worktree (feature 028, FR-001).
     /// Eighteen variants moved behind this one; see [`crate::features::worktree::Msg`].
     Worktree(crate::features::worktree::Msg),
@@ -315,11 +267,6 @@ pub enum Message {
     TerminalContextMenuOpened { x: u16, y: u16 },
     /// Dismiss the terminal context menu (an outside click, or after an item is chosen) (FR-013).
     TerminalContextMenuClosed,
-
-    // ---- Feature 008: background project switching ----
-    /// Toggle the top-bar project switcher panel (feature 008, FR-004). Mutually exclusive
-    /// with the overflow menu.
-    ProjectSwitcherToggled,
 
     // ---- Global notification surface ----
     /// What happens to the notification on screen (feature 028, FR-001). Two variants moved behind
@@ -716,50 +663,16 @@ impl State {
                 let outcomes = crate::features::help::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::ProjectSwitcherToggled => {
-                let outcomes = crate::features::project::switcher_toggled(self);
+            Message::Project(msg) => {
+                let outcomes = crate::features::project::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::SelectorNavigatedInto(path) => {
-                crate::features::project::selector_navigated_into(self, path)
-            }
-            Message::SelectorNavigatedUp => crate::features::project::selector_navigated_up(self),
-            Message::SelectorListingReady(entries) => {
-                crate::features::project::selector_listing_ready(self, entries)
-            }
-            Message::SelectorListingFailed(message) => {
-                crate::features::project::selector_listing_failed(self, message)
-            }
-            Message::ProjectSelectorClosed => crate::features::project::selector_closed(self),
-            Message::RenameStarted(path) => crate::features::project::rename_started(self, path),
-            Message::RenameTextChanged(text) => {
-                crate::features::project::rename_text_changed(self, text)
-            }
-            Message::RenameConfirmed => crate::features::project::rename_confirmed(self),
-            Message::RenameCancelled => crate::features::project::rename_cancelled(self),
             Message::Window(msg) => {
                 let outcomes = crate::features::window::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::ProjectMenuToggled(path, anchor) => {
-                let outcomes = crate::features::project::menu_toggled(self, path, anchor);
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::ProjectMenuDismissed => crate::features::project::menu_dismissed(self),
-            Message::ProjectForgetRequested(path) => {
-                crate::features::project::forget_requested(self, path)
-            }
-            Message::ProjectForgetConfirmed => {
-                let outcomes = crate::features::project::forget_confirmed(self);
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::ProjectForgetCancelled => crate::features::project::forget_cancelled(self),
             Message::Settings(msg) => {
                 let outcomes = crate::features::settings::update(self, msg);
-                drain(outcomes, |outcome| interpret(self, outcome));
-            }
-            Message::ProjectOpenRefused(message) => {
-                let outcomes = crate::features::project::open_refused(self, message);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::Worktree(msg) => {
@@ -888,10 +801,7 @@ impl State {
             // Performed by the binary at the I/O boundary (needs the home directory + a
             // scan task, a FolderScanner, git, persistence, or PTY spawning); no pure
             // reducer effect.
-            Message::ProjectSelectorOpened
-            | Message::FolderChosen(_)
-            | Message::KnownProjectReopened(_)
-            | Message::SessionStartRequested { .. }
+            Message::SessionStartRequested { .. }
             // Feature 006: applied to the live terminal by the binary (PTY write/scroll/resize,
             // clipboard); no pure reducer effect.
             | Message::TerminalBytes(_)

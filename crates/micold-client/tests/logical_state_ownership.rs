@@ -17,6 +17,7 @@
 
 use micold_client::app::{Message, State, SIDEBAR_MIN_WIDTH};
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::TagFilter;
@@ -147,8 +148,12 @@ fn drafts_are_application_owned() {
     let mut state = with_project();
     assert!(state.rename_draft.is_none());
 
-    state.update(Message::RenameStarted(PathBuf::from("/repo")));
-    state.update(Message::RenameTextChanged("renamed".to_string()));
+    state.update(Message::Project(ProjectMsg::RenameStarted(PathBuf::from(
+        "/repo",
+    ))));
+    state.update(Message::Project(ProjectMsg::RenameTextChanged(
+        "renamed".to_string(),
+    )));
 
     let draft = state
         .rename_draft

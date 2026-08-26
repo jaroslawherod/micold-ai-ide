@@ -4,12 +4,13 @@
 //! the Forget control in the known-projects list); this feature only adds the switcher entry
 //! point. These tests therefore cover the new pure surface: the context menu's open/close/replace
 //! behavior, its press-point anchoring, on-screen clamping, mutual exclusion with the other popovers,
-//! and the hand-off into the existing `ProjectForgetRequested` flow. Rendering is build-verified
+//! and the hand-off into the existing `project::Msg::ForgetRequested` flow. Rendering is build-verified
 //! and validated by quickstart.md.
 
 use micold_client::app::{Message, State};
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::clamp_menu_anchor;
+use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::window::Msg as WindowMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
@@ -32,7 +33,10 @@ fn right_click_opens_the_menu_and_the_switcher_stays_open_behind_it() {
         ..Default::default()
     };
 
-    st.update(Message::ProjectMenuToggled(PathBuf::from("/a"), (100, 100)));
+    st.update(Message::Project(ProjectMsg::MenuToggled(
+        PathBuf::from("/a"),
+        (100, 100),
+    )));
 
     assert_eq!(
         st.project_menu_open.as_ref().map(|m| m.path.clone()),
@@ -48,19 +52,31 @@ fn right_click_opens_the_menu_and_the_switcher_stays_open_behind_it() {
 fn toggling_the_same_project_closes_the_menu_and_a_different_one_replaces_it() {
     let mut st = State::default();
 
-    st.update(Message::ProjectMenuToggled(PathBuf::from("/a"), (100, 100)));
-    st.update(Message::ProjectMenuToggled(PathBuf::from("/a"), (100, 100)));
+    st.update(Message::Project(ProjectMsg::MenuToggled(
+        PathBuf::from("/a"),
+        (100, 100),
+    )));
+    st.update(Message::Project(ProjectMsg::MenuToggled(
+        PathBuf::from("/a"),
+        (100, 100),
+    )));
     assert_eq!(st.project_menu_open, None, "same project toggles off");
 
-    st.update(Message::ProjectMenuToggled(PathBuf::from("/a"), (100, 100)));
-    st.update(Message::ProjectMenuToggled(PathBuf::from("/b"), (100, 100)));
+    st.update(Message::Project(ProjectMsg::MenuToggled(
+        PathBuf::from("/a"),
+        (100, 100),
+    )));
+    st.update(Message::Project(ProjectMsg::MenuToggled(
+        PathBuf::from("/b"),
+        (100, 100),
+    )));
     assert_eq!(
         st.project_menu_open.as_ref().map(|m| m.path.clone()),
         Some(PathBuf::from("/b")),
         "a different project replaces it — only one menu is ever open"
     );
 
-    st.update(Message::ProjectMenuDismissed);
+    st.update(Message::Project(ProjectMsg::MenuDismissed));
     assert_eq!(st.project_menu_open, None);
 }
 
@@ -68,12 +84,15 @@ fn toggling_the_same_project_closes_the_menu_and_a_different_one_replaces_it() {
 fn opening_any_other_popover_closes_the_project_menu() {
     for opener in [
         Message::Help(HelpMsg::MenuToggled),
-        Message::ProjectSwitcherToggled,
+        Message::Project(ProjectMsg::SwitcherToggled),
         Message::Sidebar(SidebarMsg::FilterMenuToggled),
         Message::Worktree(WorktreeMsg::MenuToggled("w1".into(), (100, 100))),
     ] {
         let mut st = State::default();
-        st.update(Message::ProjectMenuToggled(PathBuf::from("/a"), (100, 100)));
+        st.update(Message::Project(ProjectMsg::MenuToggled(
+            PathBuf::from("/a"),
+            (100, 100),
+        )));
         assert!(st.project_menu_open.is_some());
 
         st.update(opener);
@@ -93,7 +112,10 @@ fn the_menu_anchors_at_the_press_point() {
         ..Default::default()
     };
 
-    st.update(Message::ProjectMenuToggled(PathBuf::from("/a"), (412, 233)));
+    st.update(Message::Project(ProjectMsg::MenuToggled(
+        PathBuf::from("/a"),
+        (412, 233),
+    )));
 
     assert_eq!(
         st.project_menu_open.as_ref().expect("menu open").anchor,
@@ -108,10 +130,16 @@ fn reopening_on_another_row_re_anchors_at_the_new_press_point() {
         project_switcher_open: true,
         ..Default::default()
     };
-    st.update(Message::ProjectMenuToggled(PathBuf::from("/a"), (100, 100)));
+    st.update(Message::Project(ProjectMsg::MenuToggled(
+        PathBuf::from("/a"),
+        (100, 100),
+    )));
     assert_eq!(st.project_menu_open.as_ref().unwrap().anchor, (100, 100));
 
-    st.update(Message::ProjectMenuToggled(PathBuf::from("/b"), (640, 480)));
+    st.update(Message::Project(ProjectMsg::MenuToggled(
+        PathBuf::from("/b"),
+        (640, 480),
+    )));
 
     let menu = st.project_menu_open.as_ref().expect("menu open");
     assert_eq!(menu.path, PathBuf::from("/b"));
@@ -173,10 +201,15 @@ fn choosing_forget_closes_the_menu_and_opens_the_existing_confirm_dialog() {
         project_switcher_open: true,
         ..Default::default()
     };
-    st.update(Message::ProjectMenuToggled(PathBuf::from("/a"), (100, 100)));
+    st.update(Message::Project(ProjectMsg::MenuToggled(
+        PathBuf::from("/a"),
+        (100, 100),
+    )));
 
     // The menu item emits feature 014's message — this feature adds no second forget path.
-    st.update(Message::ProjectForgetRequested(PathBuf::from("/a")));
+    st.update(Message::Project(ProjectMsg::ForgetRequested(
+        PathBuf::from("/a"),
+    )));
 
     assert_eq!(st.project_menu_open, None, "the context menu closes");
     assert_eq!(st.forget_target, Some(PathBuf::from("/a")));
@@ -193,9 +226,12 @@ fn dismissing_the_menu_forgets_nothing() {
         project_switcher_open: true,
         ..Default::default()
     };
-    st.update(Message::ProjectMenuToggled(PathBuf::from("/a"), (100, 100)));
+    st.update(Message::Project(ProjectMsg::MenuToggled(
+        PathBuf::from("/a"),
+        (100, 100),
+    )));
 
-    st.update(Message::ProjectMenuDismissed);
+    st.update(Message::Project(ProjectMsg::MenuDismissed));
 
     assert_eq!(st.project_menu_open, None);
     assert_eq!(st.forget_target, None, "nothing was staged for removal");

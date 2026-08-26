@@ -42,6 +42,7 @@ use crate::app::{Message, State};
 use crate::features::connection::Msg as ConnectionMsg;
 use crate::features::help::Msg as HelpMsg;
 use crate::features::notifications::Msg as NotificationsMsg;
+use crate::features::project::Msg as ProjectMsg;
 use crate::features::sidebar::Msg as SidebarMsg;
 use crate::features::worktree::Msg as WorktreeMsg;
 use crate::icons::{icon_role, Icon, IconSurface};
@@ -254,7 +255,7 @@ pub fn view<'a>(
             // Unavailable projects are shown but cannot be activated (008 FR-008).
             message: e
                 .available
-                .then(|| Message::KnownProjectReopened(e.path.clone())),
+                .then(|| Message::Project(ProjectMsg::Reopened(e.path.clone()))),
             trailing_text: (e.running_count > 0).then(|| format!("{} running", e.running_count)),
             trailing_icon: (!e.available).then_some((
                 Icon::Unavailable,
@@ -263,7 +264,7 @@ pub fn view<'a>(
             // Right-click a project row to reach its "Forget project" menu (feature 015). Offered
             // even for unavailable projects — those are precisely the ones a user wants to forget.
             on_context: Some(Box::new(move |point| {
-                Message::ProjectMenuToggled(e.path.clone(), point)
+                Message::Project(ProjectMsg::MenuToggled(e.path.clone(), point))
             })),
         })
         .collect();
@@ -274,13 +275,16 @@ pub fn view<'a>(
         ..material::MenuItem::new(
             Icon::OpenProject,
             "Add project…",
-            Message::ProjectSelectorOpened,
+            Message::Project(ProjectMsg::SelectorOpened),
         )
     });
-    let switcher: cdk::overlay::Surface<'a, Message> =
-        material::MenuOverlay::new(switcher_items, Message::ProjectSwitcherToggled, roles)
-            .open(state.project_switcher_open)
-            .into();
+    let switcher: cdk::overlay::Surface<'a, Message> = material::MenuOverlay::new(
+        switcher_items,
+        Message::Project(ProjectMsg::SwitcherToggled),
+        roles,
+    )
+    .open(state.project_switcher_open)
+    .into();
 
     // The right-clicked project's context menu, at the cursor (feature 015), like a normal desktop
     // context menu: the panel's top-left corner sits at the click point. The anchor is clamped at
@@ -298,9 +302,9 @@ pub fn view<'a>(
                 vec![material::MenuItem::new(
                     Icon::Delete,
                     "Forget project",
-                    Message::ProjectForgetRequested(menu.path.clone()),
+                    Message::Project(ProjectMsg::ForgetRequested(menu.path.clone())),
                 )],
-                Message::ProjectMenuDismissed,
+                Message::Project(ProjectMsg::MenuDismissed),
                 roles,
             )
             .anchor(iced::Point::new(x as f32, y as f32))

@@ -15,6 +15,7 @@
 
 use micold_client::app::{route_key, KeyRouting, State};
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::window::Msg as WindowMsg;
@@ -609,8 +610,8 @@ fn keyboard_taking_surfaces() -> Vec<(&'static str, Message, Message)> {
         ),
         (
             "project switcher",
-            Message::ProjectSwitcherToggled,
-            Message::ProjectSwitcherToggled,
+            Message::Project(ProjectMsg::SwitcherToggled),
+            Message::Project(ProjectMsg::SwitcherToggled),
         ),
         (
             "sidebar filter panel",

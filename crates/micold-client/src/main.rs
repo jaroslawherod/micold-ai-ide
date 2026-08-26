@@ -14,6 +14,7 @@ use crate::shell::capabilities::Capabilities;
 use crate::shell::daemon_sync::PendingOp;
 use micold_client::app::{Message, State};
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::SelectKind;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::worktree_form::Msg as FormMsg;
@@ -531,16 +532,24 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.dismissing = None;
             Task::none()
         }
-        Message::ProjectSelectorOpened => shell::workspace::on_project_selector_opened(app),
-        Message::SelectorNavigatedInto(_) | Message::SelectorNavigatedUp => {
-            shell::workspace::on_selector_navigated(app, message)
+        Message::Project(ProjectMsg::SelectorOpened) => {
+            shell::workspace::on_project_selector_opened(app)
         }
-        Message::FolderChosen(path) => shell::workspace::on_folder_chosen(app, path),
-        Message::KnownProjectReopened(path) => {
+        Message::Project(
+            msg @ (ProjectMsg::SelectorNavigatedInto(_) | ProjectMsg::SelectorNavigatedUp),
+        ) => shell::workspace::on_selector_navigated(app, msg),
+        Message::Project(ProjectMsg::FolderChosen(path)) => {
+            shell::workspace::on_folder_chosen(app, path)
+        }
+        Message::Project(ProjectMsg::Reopened(path)) => {
             shell::workspace::on_known_project_reopened(app, path)
         }
-        Message::RenameConfirmed => shell::daemon_sync::on_rename_confirmed(app),
-        Message::ProjectForgetConfirmed => shell::daemon_sync::on_project_forget_confirmed(app),
+        Message::Project(ProjectMsg::RenameConfirmed) => {
+            shell::daemon_sync::on_rename_confirmed(app)
+        }
+        Message::Project(ProjectMsg::ForgetConfirmed) => {
+            shell::daemon_sync::on_project_forget_confirmed(app)
+        }
         Message::Worktree(WorktreeMsg::RenameConfirmed) => {
             shell::daemon_sync::on_worktree_rename_confirmed(app)
         }

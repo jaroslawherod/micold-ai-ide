@@ -21,6 +21,7 @@
 //! assertion-freeze check flags the file with this paragraph as its explanation.
 
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::PathBuf;
@@ -162,7 +163,7 @@ fn escape_still_reaches_exactly_what_it_used_to() {
         (
             "project_selector",
             |s| s.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
-            Message::ProjectSelectorClosed,
+            Message::Project(ProjectMsg::SelectorClosed),
         ),
         (
             "rename_project",
@@ -173,7 +174,7 @@ fn escape_still_reaches_exactly_what_it_used_to() {
                     error: None,
                 })
             },
-            Message::RenameCancelled,
+            Message::Project(ProjectMsg::RenameCancelled),
         ),
         (
             "add_worktree",
@@ -209,7 +210,7 @@ fn escape_still_reaches_exactly_what_it_used_to() {
         (
             "confirm_forget_project",
             |s| s.forget_target = Some(PathBuf::from("/p")),
-            Message::ProjectForgetCancelled,
+            Message::Project(ProjectMsg::ForgetCancelled),
         ),
     ];
 
