@@ -367,6 +367,18 @@ a session survived; confirm it does not survive without the setting.
 - **FR-010**: The client MUST own and persist only per-window presentation state: theme, window
   geometry, viewport position, and text selection. The scrollback limit is NOT client-owned (see
   FR-012a).
+- **FR-010a** *(added — BUG-014)*: Where the client and the service both persist into one file —
+  `settings.json`, whose fields FR-010, FR-012a and FR-012b divide between them — each writer MUST
+  write only the fields it owns, over a read of the file taken at save time. Neither may persist a
+  value for a field the other owns, and neither may write from a copy older than the save it is
+  performing.
+
+  **Bugfix**: 2026-08-26 — BUG-014 added this requirement; the service held the whole `Settings`
+  struct from its own boot and wrote it back on every service-owned change, so a theme the user had
+  chosen since was reverted by an unrelated Settings save — invisibly, until the next launch. The
+  client already read-modify-wrote and its comment shows the author reasoned the rule out; nothing
+  in the artifacts obliged the service to, and the ownership split was stated per field while the
+  file was written whole. See `bugs/BUG-014.md`.
 - **FR-011**: All project, worktree, and version-control mutations MUST be requested from the service,
   and all connected clients affected by a mutation MUST receive the updated state without the user
   taking further action.
