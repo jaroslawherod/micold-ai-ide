@@ -262,6 +262,22 @@ async fn connect_and_pump(
                 PumpEnd::AppGone
             };
         }
+        // The one refusal that exists purely for the development loop (FR-024d, R8). It reached the
+        // user as `StaleDevImage { client_fingerprint: "…", … }` through the catch-all below, which
+        // names the tag only as debug noise and the remedy not at all — and the person seeing it is
+        // by definition mid-rebuild, with a daemon that will now misbehave in ways that look like
+        // bugs in the code they just wrote. Reason *and* remedy, in the words the fix is spelled in.
+        Connected::Refused(micold_core::protocol::messages::RefusalReason::StaleDevImage {
+            client_fingerprint,
+            daemon_fingerprint,
+            image,
+        }) => {
+            return report_connect_failure(
+                output,
+                stale_dev_image_advice(&image, &daemon_fingerprint, &client_fingerprint),
+            )
+            .await;
+        }
         Connected::Refused(reason) => {
             return report_connect_failure(
                 output,
@@ -337,6 +353,22 @@ async fn connect_and_pump(
     PumpEnd::Disconnected
 }
 
+/// What to tell someone whose `:dev` image is behind their working tree (FR-024d, research R8).
+///
+/// Separated from the pump so the thing FR-024d actually requires — that the tag and the rebuild
+/// command both appear — is checkable without a live connection.
+fn stale_dev_image_advice(
+    image: &str,
+    daemon_fingerprint: &str,
+    client_fingerprint: &str,
+) -> String {
+    format!(
+        "the sandbox is running `{image}`, built from a different working tree than this client \
+         (image {daemon_fingerprint}, client {client_fingerprint}). Rebuild it with \
+         `mise run image`, then restart the sandbox."
+    )
+}
+
 /// Report a connect failure to the app and map it to a disconnect (so the outer loop retries). If the
 /// app is gone, that surfaces as `AppGone` instead.
 async fn report_connect_failure(output: &mut mpsc::Sender<Message>, reason: String) -> PumpEnd {
@@ -348,5 +380,23 @@ async fn report_connect_failure(output: &mut mpsc::Sender<Message>, reason: Stri
         PumpEnd::AppGone
     } else {
         PumpEnd::Disconnected
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::stale_dev_image_advice;
+
+    /// FR-024d asks for the tag **and** the rebuild command. Before this, the refusal reached the
+    /// user as a `{:?}` dump of `StaleDevImage`, which carried the tag as debug noise and no remedy
+    /// at all — and its whole audience is someone mid-rebuild, about to read a stale daemon's
+    /// behaviour as a bug in the code they just wrote.
+    #[test]
+    fn the_stale_image_advice_names_the_tag_and_the_rebuild_command() {
+        let advice = stale_dev_image_advice("micold-daemon:dev", "aaaa1111", "bbbb2222");
+        assert!(advice.contains("micold-daemon:dev"), "{advice}");
+        assert!(advice.contains("mise run image"), "{advice}");
+        // Both fingerprints, so "which side is stale" is answerable from the message alone.
+        assert!(advice.contains("aaaa1111") && advice.contains("bbbb2222"), "{advice}");
     }
 }
