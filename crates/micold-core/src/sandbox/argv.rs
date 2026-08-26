@@ -98,6 +98,13 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     args.push("-e".into());
     args.push(format!("HOME={}", spec.home.display()).into());
 
+    // The image the daemon is running from, so a `StaleDevImage` refusal can name it (FR-024d,
+    // research R8). The daemon reads it (`state.rs`) and has no other way to learn it — a container
+    // cannot see the reference it was created from. Without this the refusal carries `image: ""`
+    // and the remedy is missing exactly the word the developer needs to act on it.
+    args.push("-e".into());
+    args.push(format!("MICOLD_IMAGE_REFERENCE={}", spec.profile.image.reference).into());
+
     args.extend(budget_args(spec, caps));
     args.extend(mount_args(&spec.mounts));
 
@@ -385,6 +392,24 @@ mod tests {
                 "{kind}: {args:?}"
             );
             assert!(!args.iter().any(|a| a == "7727:7727"), "{kind}");
+        }
+    }
+
+    #[test]
+    fn the_image_reference_is_passed_in_so_a_stale_image_can_name_itself() {
+        // FR-024d, research R8. The daemon reads `MICOLD_IMAGE_REFERENCE` when it builds a
+        // `StaleDevImage` refusal and has no other way to learn it — a container cannot see the
+        // reference it was created from. Nothing set it, so the refusal that exists to tell a
+        // developer *which image to rebuild* named no image at all: `image: ""`, measured against a
+        // real container in `evidence/us7-dev-loop.md`.
+        for kind in RuntimeKind::ALL {
+            let s = spec();
+            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            let expected = format!("MICOLD_IMAGE_REFERENCE={}", s.profile.image.reference);
+            assert!(
+                args.contains(&expected),
+                "{kind}: expected {expected:?} in {args:?}"
+            );
         }
     }
 

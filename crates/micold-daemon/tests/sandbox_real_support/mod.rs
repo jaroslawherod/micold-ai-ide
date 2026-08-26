@@ -284,6 +284,7 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
     let user = format!("{uid}:{gid}");
     let publish = format!("127.0.0.1:{}:7727", spec.port);
     let home_env = format!("HOME={}", spec.home);
+    let image_env = format!("MICOLD_IMAGE_REFERENCE={IMAGE}");
     let project_mount = format!("{0}:{0}:rw", spec.project.display());
     let state_mount = format!(
         "{}:/var/lib/micold-ai-ide:rw",
@@ -305,6 +306,11 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
         &publish,
         "-e",
         &home_env,
+        // What `argv::create` passes so a `StaleDevImage` refusal can name the image to rebuild
+        // (FR-024d). Mirrored here because a harness that omits it would have hidden the defect
+        // that it was never passed at all.
+        "-e",
+        &image_env,
         // Pinned rather than inherited: an unsandboxed comparison must run the same shell, and a
         // probe's output must not depend on whose login files the host happens to have.
         "-e",
