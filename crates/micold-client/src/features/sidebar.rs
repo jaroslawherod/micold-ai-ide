@@ -23,7 +23,6 @@
 //! A) — every one of them is a question about what the sidebar shows, answerable without leaving the
 //! process, so the binary matches none of them again.
 
-use crate::app::State;
 use crate::features::worktree::worktree_tags;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
@@ -34,6 +33,70 @@ use micold_core::tokens::{density, spacing};
 use micold_core::worktree::Worktree;
 use std::collections::BTreeSet;
 use std::path::Path;
+
+/// What this feature remembers (feature 028, contract S1).
+///
+/// Six of the ten shed the `sidebar` the qualifier now carries: `sidebar_filter_open`,
+/// `sidebar_filters`, `sidebar_hidden`, `sidebar_scroll_offset`, `sidebar_viewport_height` and
+/// `sidebar_width` are `filter_open`, `filters`, `hidden`, `scroll_offset`, `viewport_height` and
+/// `width`. The other four never carried it — `default_expanded`, `expanded`,
+/// `pending_reveal_scroll`, `show_agent_worktrees` — and keep their names. The reducers below
+/// spell the root's type `crate::app::State` now that `State` here means this struct.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct State {
+    /// Whether the "Default" (project-root) sidebar row is expanded to reveal its sessions
+    /// (feature 010, mirrors `expanded` for worktree rows — a dedicated field rather than a
+    /// sentinel key in `expanded`, since there is always exactly one Default row).
+    pub default_expanded: bool,
+    /// Which worktree rows are expanded to reveal their sessions (FR-003). By `dir_name`.
+    pub expanded: BTreeSet<String>,
+    /// Whether a reveal is waiting to scroll its row into view (feature 024, FR-008).
+    ///
+    /// A flag, not a target. The offset cannot be computed when the reveal is armed: the incoming
+    /// project's worktree list may not have arrived yet, and the viewport height is not known
+    /// until layout. So the reducer arms this, and the binary computes and applies the scroll on
+    /// the first frame where a row for the current session actually exists (research R7,
+    /// invariant I4).
+    pub pending_reveal_scroll: bool,
+    /// Whether agent-owned worktrees are included in the sidebar list (feature 014, FR-010).
+    /// `false` = hidden, the safe default.
+    ///
+    /// Transient AND project-scoped: never persisted, so every app start begins hidden (FR-010a),
+    /// and reset in [`crate::app::State::restore_after_activation`] so a project switch begins
+    /// hidden too
+    /// (FR-010e). Deliberately unlike `filters`, which survives a switch — view state
+    /// switched on for one project must not silently render in another.
+    pub show_agent_worktrees: bool,
+    /// Whether the sidebar's tag-filter panel is shown (feature 009, FR-002/FR-003). Mutually
+    /// exclusive with `help.help_menu_open`/`project.switcher_open`. Transient — not persisted;
+    /// closing it never alters `filters` (FR-007/FR-008).
+    pub filter_open: bool,
+    /// Active sidebar tag filters (feature 008, FR-024). Empty ⇒ all worktrees shown. Multiple
+    /// filters combine with OR (FR-025). Transient — not persisted.
+    pub filters: BTreeSet<TagFilter>,
+    /// Whether the sidebar is collapsed/hidden. Default (`false`) is visible.
+    pub hidden: bool,
+    /// How far the worktree sidebar is scrolled, in logical pixels.
+    ///
+    /// The app bar's elevation derives from this and nothing else (FR-025a) — see
+    /// [`crate::app::State::app_bar_elevated`] for why a second source would be a defect rather
+    /// than a feature.
+    pub scroll_offset: u32,
+    /// The sidebar scroll viewport's laid-out height in whole logical pixels (feature 024).
+    ///
+    /// Reported by the `Scrollable`'s viewport sensor. `0` until the first layout, which reads as
+    /// "cannot decide visibility yet" and never as "zero tall" — nothing is scrolled on a guess
+    /// (contract §6.3).
+    ///
+    /// `u32` rather than `f32` for two reasons that happen to agree: `State` derives `Eq`, and the
+    /// offset this is compared against ([`Self::scroll_offset`]) is already whole pixels.
+    /// Keeping both in the same unit is what stops the scroll arithmetic from having a rounding
+    /// seam in the middle of it.
+    pub viewport_height: u32,
+    /// The sidebar width in pixels. `0` means "use the default width" (see
+    /// [`crate::app::State::sidebar_width_px`]).
+    pub width: u16,
+}
 
 /// One row in the sidebar's location list (feature 010): either a worktree or the single
 /// "Default" project-root entry. A closed enum (Principle V) so a row can never be ambiguously
@@ -317,7 +380,7 @@ pub fn worktree_location_label(project_root: &Path, worktree: &Worktree) -> Stri
         .unwrap_or_else(|_| worktree.path.display().to_string())
 }
 
-impl State {
+impl crate::app::State {
     /// Where the current session lives, if the panel can point at it (feature 024, contract §1.2).
     ///
     /// `None` in three cases, all of which reduce [`Self::location_open`] to the user's own
@@ -359,21 +422,21 @@ impl State {
     pub fn location_opened(&mut self, location: &SessionLocation) {
         match location {
             SessionLocation::Worktree(dir) => {
-                self.expanded.insert(dir.clone());
+                self.sidebar.expanded.insert(dir.clone());
             }
-            SessionLocation::Default => self.default_expanded = true,
+            SessionLocation::Default => self.sidebar.default_expanded = true,
         }
     }
 
     /// Arm the scroll that reaches the current session's row on the first frame one exists.
     pub fn reveal_scroll_armed(&mut self) {
-        self.pending_reveal_scroll = true;
+        self.sidebar.pending_reveal_scroll = true;
     }
 
     /// Drop view state that must not follow the user into a different project (T067a-6).
     pub fn project_entered(&mut self) {
-        self.default_expanded = false;
-        self.show_agent_worktrees = false;
+        self.sidebar.default_expanded = false;
+        self.sidebar.show_agent_worktrees = false;
     }
 
     /// Whether a location's row is shown open (feature 024, contract §1.1).
@@ -383,8 +446,8 @@ impl State {
     /// *user's* open set, and this is the union of that with the app's one revealed row.
     pub fn location_open(&self, location: &SessionLocation) -> bool {
         let user_open = match location {
-            SessionLocation::Worktree(dir) => self.expanded.contains(dir),
-            SessionLocation::Default => self.default_expanded,
+            SessionLocation::Worktree(dir) => self.sidebar.expanded.contains(dir),
+            SessionLocation::Default => self.sidebar.default_expanded,
         };
         effective_open(
             user_open,
@@ -413,15 +476,15 @@ impl State {
                  offset {}",
                 heights.len(),
                 top + heights[index],
-                self.sidebar_viewport_height,
-                self.sidebar_scroll_offset,
+                self.sidebar.viewport_height,
+                self.sidebar.scroll_offset,
             ));
         }
         scroll_target(
             &heights,
             index,
-            self.sidebar_viewport_height as f32,
-            self.sidebar_scroll_offset as f32,
+            self.sidebar.viewport_height as f32,
+            self.sidebar.scroll_offset as f32,
         )
         .map(|offset| offset.round().max(0.0) as u32)
     }
@@ -449,12 +512,12 @@ impl State {
         match &location {
             SessionLocation::Worktree(dir) => {
                 if open {
-                    self.expanded.remove(dir);
+                    self.sidebar.expanded.remove(dir);
                 } else {
-                    self.expanded.insert(dir.clone());
+                    self.sidebar.expanded.insert(dir.clone());
                 }
             }
-            SessionLocation::Default => self.default_expanded = !open,
+            SessionLocation::Default => self.sidebar.default_expanded = !open,
         }
         if holds_current {
             // Whether the reveal is suppressed is a fact about the session, not the row (T067a-6).
@@ -466,7 +529,7 @@ impl State {
 
     /// Build the sidebar tree: worktrees (top level) each joined with their sessions and
     /// expansion state (FR-002, FR-003). Sessions are matched to worktrees by `dir_name`.
-    /// Sourced from [`State::visible_worktrees`], so agent-owned worktrees produce no row while
+    /// Sourced from [`crate::app::State::visible_worktrees`], so agent-owned worktrees produce no row while
     /// hidden (feature 014, FR-002).
     pub fn worktree_tree(&self) -> Vec<WorktreeNode> {
         let sessions = self.active_sessions();
@@ -487,14 +550,14 @@ impl State {
     }
 
     /// The worktree tree narrowed to the active tag filters (feature 008, FR-025). With no
-    /// filter active this equals [`State::worktree_tree`]. Used by the sidebar to render only
+    /// filter active this equals [`crate::app::State::worktree_tree`]. Used by the sidebar to render only
     /// matching worktrees; a subsequent add/rename/delete re-runs this so the list stays
     /// consistent (FR-028).
     /// (Feature 024) The location holding the current session survives the filters, and says so.
     ///
     /// Two mechanisms hide a row and the exemption has to reach past both: the tag filters here,
     /// and the hidden-agent-worktree setting, which excludes rows *earlier* — in
-    /// [`State::visible_worktrees`], before [`State::worktree_tree`] ever sees them. So the
+    /// [`crate::app::State::visible_worktrees`], before [`crate::app::State::worktree_tree`] ever sees them. So the
     /// re-admitted row is built from `self.worktree.worktrees` rather than from the tree above.
     ///
     /// Exactly one row can be re-admitted, because there is one current session. That is what keeps
@@ -505,7 +568,7 @@ impl State {
         let mut tree: Vec<WorktreeNode> = self
             .worktree_tree()
             .into_iter()
-            .filter(|node| matches_filters(&node.tags, &self.sidebar_filters))
+            .filter(|node| matches_filters(&node.tags, &self.sidebar.filters))
             .collect();
 
         let Some(SessionLocation::Worktree(dir)) = self.current_session_location() else {
@@ -550,7 +613,7 @@ impl State {
     /// project is open (contracts/sidebar-default-entry.md invariant 1) — mirrors how
     /// `worktree_tree` is empty with no active project. The Default entry is exempt from tag
     /// filtering (FR-011, research.md R4): it is included unconditionally whenever a project is
-    /// open, regardless of `sidebar_filters`.
+    /// open, regardless of `filters`.
     pub fn sidebar_entries(&self) -> Vec<SidebarEntry> {
         if self.workspace.active.is_none() {
             return Vec::new();
@@ -578,7 +641,7 @@ impl State {
     /// `Type` per conventional type present, `HasIssue` if any worktree embeds an issue key,
     /// and `Untyped` if any worktree lacks a type. Order: types first, then HasIssue, Untyped.
     ///
-    /// Sourced from [`State::visible_worktrees`] (feature 014, FR-003): a hidden agent worktree
+    /// Sourced from [`crate::app::State::visible_worktrees`] (feature 014, FR-003): a hidden agent worktree
     /// must not conjure a chip — its machine name has no conventional type, so it would otherwise
     /// offer an `Untyped` filter matching nothing the user can see (research R7).
     pub fn available_tag_filters(&self) -> Vec<TagFilter> {
@@ -621,7 +684,7 @@ impl State {
 /// The sidebar's tag-filter panel, as a floating surface (feature 021, T029).
 ///
 /// The panel is a popover with no state of its own beyond "is it showing": the filters it edits
-/// live in `State::sidebar_filters` and outlive it, which is contract D3 — closing the panel is
+/// live in `State::filters` and outlive it, which is contract D3 — closing the panel is
 /// not a decision about the filters. So the surface is a marker, and everything dispatch needs is
 /// the three answers below.
 ///
@@ -653,28 +716,28 @@ impl FloatingSurface for SidebarFilterPanel {
 }
 
 impl Registered for SidebarFilterPanel {
-    fn open_in(state: &State) -> Option<Self> {
-        state.sidebar_filter_open.then_some(SidebarFilterPanel)
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state.sidebar.filter_open.then_some(SidebarFilterPanel)
     }
 }
 
 /// A tag filter was toggled on or off (feature 008, FR-024).
 ///
 /// Filters combine with OR (FR-025); an empty set shows everything.
-pub fn filter_toggled(state: &mut State, filter: TagFilter) {
-    if !state.sidebar_filters.remove(&filter) {
-        state.sidebar_filters.insert(filter);
+pub fn filter_toggled(state: &mut crate::app::State, filter: TagFilter) {
+    if !state.sidebar.filters.remove(&filter) {
+        state.sidebar.filters.insert(filter);
     }
 }
 
 /// Every tag filter was cleared (feature 008, FR-024).
-pub fn filters_cleared(state: &mut State) {
-    state.sidebar_filters.clear();
+pub fn filters_cleared(state: &mut crate::app::State) {
+    state.sidebar.filters.clear();
 }
 
 /// The scroll viewport reported its laid-out height (feature 024).
-pub fn viewport_resized(state: &mut State, height: u32) {
-    state.sidebar_viewport_height = height;
+pub fn viewport_resized(state: &mut crate::app::State, height: u32) {
+    state.sidebar.viewport_height = height;
 }
 
 /// The sidebar was scrolled (feature 024, FR-025a).
@@ -682,9 +745,9 @@ pub fn viewport_resized(state: &mut State, height: u32) {
 /// The scroll is *also* the dismissal trigger, and the rendering stack gives a scrollable one
 /// message per event — so this does both rather than the view emitting two. Same rule, one call,
 /// no second copy of it.
-pub fn scrolled(state: &mut State, offset: u32) {
+pub fn scrolled(state: &mut crate::app::State, offset: u32) {
     crate::reveal_trace::line(format_args!("the scrollable reports offset {offset}"));
-    state.sidebar_scroll_offset = offset;
+    state.sidebar.scroll_offset = offset;
     state.dismiss_on_scroll_beneath();
 }
 
@@ -694,9 +757,9 @@ pub fn scrolled(state: &mut State, offset: u32) {
 /// It used to assign those three fields; since T067a-2 it reports that the panel opened and the
 /// registry closes what this surface declares it displaces.
 #[must_use = "what an opening popover displaces is the registry's business, not the caller's"]
-pub fn filter_menu_toggled(state: &mut State) -> Vec<crate::features::Outcome> {
-    state.sidebar_filter_open = !state.sidebar_filter_open;
-    crate::features::surface_opened(state.sidebar_filter_open, SidebarFilterPanel::ID)
+pub fn filter_menu_toggled(state: &mut crate::app::State) -> Vec<crate::features::Outcome> {
+    state.sidebar.filter_open = !state.sidebar.filter_open;
+    crate::features::surface_opened(state.sidebar.filter_open, SidebarFilterPanel::ID)
 }
 
 /// Agent-owned worktrees were shown or hidden (feature 014, FR-010).
@@ -704,18 +767,18 @@ pub fn filter_menu_toggled(state: &mut State) -> Vec<crate::features::Outcome> {
 /// Sole mutation (FR-010d): tag filters, expansion state and overlays are left exactly as they
 /// were, and nothing is re-discovered — this is a pure view recomputation, so no git call and no
 /// `Task` (FR-008).
-pub fn show_agent_worktrees_toggled(state: &mut State) {
-    state.show_agent_worktrees = !state.show_agent_worktrees;
+pub fn show_agent_worktrees_toggled(state: &mut crate::app::State) {
+    state.sidebar.show_agent_worktrees = !state.sidebar.show_agent_worktrees;
 }
 
 /// The sidebar was collapsed or revealed.
-pub fn toggled(state: &mut State) {
-    state.sidebar_hidden = !state.sidebar_hidden;
+pub fn toggled(state: &mut crate::app::State) {
+    state.sidebar.hidden = !state.sidebar.hidden;
 }
 
 /// The sidebar's drag handle moved (feature 007).
-pub fn drag_moved(state: &mut State, x: u16) {
-    state.sidebar_width = x.clamp(crate::app::SIDEBAR_MIN_WIDTH, crate::app::SIDEBAR_MAX_WIDTH);
+pub fn drag_moved(state: &mut crate::app::State, x: u16) {
+    state.sidebar.width = x.clamp(crate::app::SIDEBAR_MIN_WIDTH, crate::app::SIDEBAR_MAX_WIDTH);
 }
 
 /// The worktree list was replaced; drop expansion for rows that no longer exist (T066).
@@ -723,8 +786,11 @@ pub fn drag_moved(state: &mut State, x: u16) {
 /// The sidebar's answer to `Outcome::WorktreesReplaced`. Pruning this used to happen inside
 /// `State::set_worktrees`, which is how the worktree feature came to write sidebar data — the
 /// first entry converted out of `tests/feature_write_isolation.rs`'s allowlist.
-pub fn worktrees_replaced(state: &mut State, names: &std::collections::BTreeSet<String>) {
-    state.expanded.retain(|dir| names.contains(dir));
+pub fn worktrees_replaced(
+    state: &mut crate::app::State,
+    names: &std::collections::BTreeSet<String>,
+) {
+    state.sidebar.expanded.retain(|dir| names.contains(dir));
 }
 
 /// Everything the user can do to the sidebar (feature 028, FR-001).
@@ -755,7 +821,7 @@ pub enum Msg {
 /// Two of the ten report something back — expanding a row can reveal the current session, and
 /// opening the filter panel displaces the other popovers — so this returns outcomes rather than
 /// swallowing them. The other eight write fields this module owns and have nothing to say.
-pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::WorktreeExpansionToggled(dir) => {
             return state.toggle_location(SessionLocation::Worktree(dir));

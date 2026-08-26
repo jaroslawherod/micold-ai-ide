@@ -48,9 +48,9 @@ fn with_project() -> State {
 #[test]
 fn sidebar_visibility_is_application_owned() {
     let mut state = State::default();
-    assert!(!state.sidebar_hidden);
+    assert!(!state.sidebar.hidden);
     state.update(Message::Sidebar(SidebarMsg::Toggled));
-    assert!(state.sidebar_hidden, "the flag must live on State");
+    assert!(state.sidebar.hidden, "the flag must live on State");
 }
 
 /// Likewise the width. The handle reports where the pointer is; the application decides what width
@@ -108,11 +108,11 @@ fn expanded_nodes_are_application_owned() {
     state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
         "feat-a".to_string(),
     )));
-    assert!(state.expanded.contains("feat-a"));
+    assert!(state.sidebar.expanded.contains("feat-a"));
     state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
         "feat-a".to_string(),
     )));
-    assert!(!state.expanded.contains("feat-a"));
+    assert!(!state.sidebar.expanded.contains("feat-a"));
 }
 
 /// A filter changes which rows exist. A component that owned it would be a component deciding what
@@ -122,9 +122,9 @@ fn tag_filters_are_application_owned() {
     let mut state = State::default();
     let feature = TagFilter::Type(ConventionalType::Feat);
     state.update(Message::Sidebar(SidebarMsg::FilterToggled(feature)));
-    assert!(state.sidebar_filters.contains(&feature));
+    assert!(state.sidebar.filters.contains(&feature));
     state.update(Message::Sidebar(SidebarMsg::FilterToggled(feature)));
-    assert!(!state.sidebar_filters.contains(&feature));
+    assert!(!state.sidebar.filters.contains(&feature));
 }
 
 /// The theme preference is written to disk and restored, so it could not live in a widget tree

@@ -6,6 +6,7 @@ use micold_client::app::{
 use micold_client::features::help;
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::sidebar;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_client::features::worktree::Msg as WorktreeMsg;
@@ -39,7 +40,7 @@ fn state_with_active() -> State {
 #[test]
 fn defaults_visible_with_default_width() {
     let state = State::default();
-    assert!(!state.sidebar_hidden);
+    assert!(!state.sidebar.hidden);
     assert_eq!(state.sidebar_width_px(), SIDEBAR_DEFAULT_WIDTH);
 }
 
@@ -47,9 +48,9 @@ fn defaults_visible_with_default_width() {
 fn toggling_hides_and_shows() {
     let mut state = State::default();
     state.update(Message::Sidebar(SidebarMsg::Toggled));
-    assert!(state.sidebar_hidden);
+    assert!(state.sidebar.hidden);
     state.update(Message::Sidebar(SidebarMsg::Toggled));
-    assert!(!state.sidebar_hidden);
+    assert!(!state.sidebar.hidden);
 }
 
 /// The drag protocol changed with feature 017 (T041): the resize handle owns the drag itself, so
@@ -233,18 +234,18 @@ fn sidebar_filter_toggles_and_clears() {
     let mut state = State::default();
     let feat = TagFilter::Type(ConventionalType::Feat);
     state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
-    assert!(state.sidebar_filters.contains(&feat));
+    assert!(state.sidebar.filters.contains(&feat));
     // Toggling again removes it.
     state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
-    assert!(!state.sidebar_filters.contains(&feat));
+    assert!(!state.sidebar.filters.contains(&feat));
     // Multiple filters accumulate; clear empties them all.
     state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
     state.update(Message::Sidebar(SidebarMsg::FilterToggled(
         TagFilter::HasIssue,
     )));
-    assert_eq!(state.sidebar_filters.len(), 2);
+    assert_eq!(state.sidebar.filters.len(), 2);
     state.update(Message::Sidebar(SidebarMsg::FiltersCleared));
-    assert!(state.sidebar_filters.is_empty());
+    assert!(state.sidebar.filters.is_empty());
 }
 
 // --- Feature 009: sidebar filter panel toggle ---
@@ -252,7 +253,7 @@ fn sidebar_filter_toggles_and_clears() {
 #[test]
 fn sidebar_filter_panel_starts_closed() {
     let state = State::default();
-    assert!(!state.sidebar_filter_open);
+    assert!(!state.sidebar.filter_open);
 }
 
 #[test]
@@ -266,30 +267,30 @@ fn sidebar_filter_menu_toggle_opens_and_closes_and_excludes_siblings() {
     };
 
     state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
-    assert!(state.sidebar_filter_open);
+    assert!(state.sidebar.filter_open);
     // Opening the filter panel closes the sibling popovers (mutual exclusion, symmetric with
     // the existing help::Msg::MenuToggled/project::Msg::SwitcherToggled pair).
     assert!(!state.help.help_menu_open);
     assert!(!state.project.switcher_open);
 
     state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
-    assert!(!state.sidebar_filter_open);
+    assert!(!state.sidebar.filter_open);
 }
 
 #[test]
 fn opening_help_menu_or_project_switcher_closes_the_filter_panel() {
     let mut state = State::default();
     state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
-    assert!(state.sidebar_filter_open);
+    assert!(state.sidebar.filter_open);
 
     state.update(Message::Help(HelpMsg::MenuToggled));
-    assert!(!state.sidebar_filter_open);
+    assert!(!state.sidebar.filter_open);
 
     state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
-    assert!(state.sidebar_filter_open);
+    assert!(state.sidebar.filter_open);
 
     state.update(Message::Project(ProjectMsg::SwitcherToggled));
-    assert!(!state.sidebar_filter_open);
+    assert!(!state.sidebar.filter_open);
 }
 
 #[test]
@@ -297,13 +298,13 @@ fn closing_the_filter_panel_never_changes_active_filters() {
     let mut state = State::default();
     let feat = TagFilter::Type(ConventionalType::Feat);
     state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
-    assert!(state.sidebar_filters.contains(&feat));
+    assert!(state.sidebar.filters.contains(&feat));
 
     state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled)); // open
-    assert!(state.sidebar_filters.contains(&feat));
+    assert!(state.sidebar.filters.contains(&feat));
     state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled)); // close
     assert!(
-        state.sidebar_filters.contains(&feat),
+        state.sidebar.filters.contains(&feat),
         "toggling panel visibility must not alter the active filter set (FR-007/FR-008)"
     );
 }
@@ -313,7 +314,7 @@ fn escape_dismisses_the_open_filter_panel_when_no_overlay_is_open() {
     let mut state = State::default();
     assert_eq!(on_escape(&state), None);
 
-    state.sidebar_filter_open = true;
+    state.sidebar.filter_open = true;
     assert_eq!(
         on_escape(&state),
         Some(Message::Sidebar(SidebarMsg::FilterMenuToggled)),
@@ -329,11 +330,15 @@ fn escape_prefers_an_open_overlay_over_the_filter_panel() {
     // keeps this combination from ever occurring (see the next test), but `on_escape` must not
     // silently disagree with the live subscription if that invariant is ever violated.
     let state = State {
+        sidebar: sidebar::State {
+            filter_open: true,
+            ..Default::default()
+        },
+
         worktree_form: worktree_form::State {
             form: Some(Default::default()),
             ..Default::default()
         },
-        sidebar_filter_open: true,
         ..Default::default()
     };
     assert_eq!(
@@ -347,18 +352,18 @@ fn escape_prefers_an_open_overlay_over_the_filter_panel() {
 #[test]
 fn opening_an_overlay_closes_the_filter_panel() {
     // Regression test: previously, opening a modal overlay (e.g. the Add Worktree form) while
-    // the filter accordion was open left `sidebar_filter_open` untouched, so `on_escape` and
+    // the filter accordion was open left `filter_open` untouched, so `on_escape` and
     // the live keyboard subscription disagreed about what Escape should dismiss. Every
     // overlay-open now routes through `State::open_overlay`, which resets it unconditionally.
     let mut state = State::default();
     state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
-    assert!(state.sidebar_filter_open);
+    assert!(state.sidebar.filter_open);
 
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::Opened,
     ));
     assert!(
-        !state.sidebar_filter_open,
+        !state.sidebar.filter_open,
         "opening an overlay must close the filter panel"
     );
     assert_eq!(open_dialog(&state), Some("add_worktree"));

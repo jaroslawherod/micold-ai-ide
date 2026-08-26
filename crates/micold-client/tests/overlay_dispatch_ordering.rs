@@ -22,6 +22,7 @@ use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
+use micold_client::features::sidebar;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::PathBuf;
@@ -111,7 +112,7 @@ fn open_dialog(state: &State) -> Option<&'static str> {
 // preserve what the code does, so these tests assert the code and the contract has been corrected
 // to match. Written out because the difference is easy to read past:
 //
-//     if state.overlay == Overlay::None && state.sidebar_filter_open { ...popover... }
+//     if state.overlay == Overlay::None && state.sidebar.filter_open { ...popover... }
 //     match state.overlay { ...modal... }
 //
 // The popover branch comes first *textually*, which is what makes it look like popover-priority.
@@ -127,7 +128,11 @@ fn open_dialog(state: &State) -> Option<&'static str> {
 /// A modal open *and* a popover open at the same time.
 fn modal_and_popover(open: fn(&mut State)) -> State {
     let mut state = State {
-        sidebar_filter_open: true,
+        sidebar: sidebar::State {
+            filter_open: true,
+            ..Default::default()
+        },
+
         ..Default::default()
     };
     open(&mut state);
@@ -138,7 +143,7 @@ fn modal_and_popover(open: fn(&mut State)) -> State {
 fn escape_belongs_to_the_popover_when_nothing_modal_is_open() {
     let mut state = State::default();
     state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
-    assert!(state.sidebar_filter_open, "precondition: the panel is open");
+    assert!(state.sidebar.filter_open, "precondition: the panel is open");
 
     assert_eq!(
         on_escape(&state),
@@ -186,6 +191,11 @@ fn a_popover_alone_and_a_popover_over_a_modal_are_not_the_same_case() {
 /// A state with all four popovers that `open_overlay` is responsible for clearing.
 fn every_dismissible_popover_open() -> State {
     State {
+        sidebar: sidebar::State {
+            filter_open: true,
+            ..Default::default()
+        },
+
         project: project::State {
             switcher_open: true,
             menu_open: Some(micold_client::features::project::ProjectMenu {
@@ -199,7 +209,6 @@ fn every_dismissible_popover_open() -> State {
             help_menu_open: true,
             ..Default::default()
         },
-        sidebar_filter_open: true,
         ..Default::default()
     }
 }
@@ -226,7 +235,7 @@ fn opening_a_modal_closes_the_popovers_floating_above_it() {
             "the project switcher survived {name} opening"
         );
         assert!(
-            !state.sidebar_filter_open,
+            !state.sidebar.filter_open,
             "the filter panel survived {name} opening"
         );
         assert!(
@@ -267,14 +276,14 @@ fn closing_the_filter_panel_leaves_the_active_filters_alone() {
     state.update(Message::Sidebar(SidebarMsg::FilterToggled(
         TagFilter::HasIssue,
     )));
-    let chosen = state.sidebar_filters.clone();
+    let chosen = state.sidebar.filters.clone();
     assert_eq!(chosen.len(), 2, "precondition: two filters are active");
 
     state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
 
-    assert!(!state.sidebar_filter_open, "precondition: the panel closed");
+    assert!(!state.sidebar.filter_open, "precondition: the panel closed");
     assert_eq!(
-        state.sidebar_filters, chosen,
+        state.sidebar.filters, chosen,
         "closing the panel is putting the chooser away, not clearing the choice — a sidebar that \
          silently unfiltered itself every time the panel collapsed would be unusable"
     );
@@ -289,14 +298,14 @@ fn dismissing_a_modal_leaves_the_filters_it_never_owned_alone() {
         state.update(Message::Sidebar(SidebarMsg::FilterToggled(
             TagFilter::Untyped,
         )));
-        let chosen = state.sidebar_filters.clone();
+        let chosen = state.sidebar.filters.clone();
 
         state.clear_for_dialog();
         open(&mut state);
         state.update(cancel.clone());
 
         assert_eq!(
-            state.sidebar_filters, chosen,
+            state.sidebar.filters, chosen,
             "cancelling {name} reached into the sidebar's filters, which it does not own"
         );
     }

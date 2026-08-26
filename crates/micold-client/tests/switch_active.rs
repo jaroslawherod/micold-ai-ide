@@ -179,7 +179,7 @@ fn the_reveal_survives_a_worktree_list_that_arrives_after_the_switch() {
 fn view_state_does_not_carry_from_the_project_you_left() {
     let mut st = two_projects_with_worktrees();
     // Open a row by hand in /a, on top of the one its current session reveals.
-    st.expanded.insert("wa1".to_string());
+    st.sidebar.expanded.insert("wa1".to_string());
 
     assert!(switch(&mut st, "/b"));
     micold_client::app::drain(st.set_worktrees(b_worktrees()), |o| {
@@ -187,12 +187,12 @@ fn view_state_does_not_carry_from_the_project_you_left() {
     });
 
     assert!(
-        !st.expanded.contains("wa1"),
+        !st.sidebar.expanded.contains("wa1"),
         "/a's expansion is pruned by /b's worktree names, so a row opened in one project cannot \
          render in another (FR-007)"
     );
     assert!(
-        !st.default_expanded,
+        !st.sidebar.default_expanded,
         "and the Default row, which has no name to prune by, is reset outright"
     );
 }
@@ -201,12 +201,12 @@ fn view_state_does_not_carry_from_the_project_you_left() {
 fn switching_arms_a_scroll_and_clears_a_stale_suppression() {
     let mut st = two_projects_with_worktrees();
     st.reveal_suppressed_for = st.active_session;
-    st.pending_reveal_scroll = false;
+    st.sidebar.pending_reveal_scroll = false;
 
     assert!(switch(&mut st, "/b"));
 
     assert!(
-        st.pending_reveal_scroll,
+        st.sidebar.pending_reveal_scroll,
         "the revealed row is no use below the fold, so a switch arms the scroll that brings it \
          into view (FR-008)"
     );
@@ -238,7 +238,7 @@ fn switching_to_a_project_with_no_session_reveals_nothing() {
          (US1 scenario 4, FR-013)"
     );
     assert!(
-        !st.pending_reveal_scroll,
+        !st.sidebar.pending_reveal_scroll,
         "and nothing is armed to scroll to, which is what stops a scroll firing later against \
          an unrelated row (invariant I5)"
     );

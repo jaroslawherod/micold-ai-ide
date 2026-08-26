@@ -12,6 +12,7 @@
 //! worktrees, configuration or session store — a fixture that recorded the author's own workspace
 //! would be unreproducible anywhere else, including on the same machine tomorrow.
 
+use micold_client::features::sidebar;
 use micold_client::features::worktree;
 use std::path::PathBuf;
 
@@ -174,6 +175,11 @@ fn with_project() -> State {
     workspace.active = workspace.projects.first().map(|p| p.path.clone());
 
     let state = State {
+        sidebar: sidebar::State {
+            width: 260,
+            ..Default::default()
+        },
+
         workspace,
         worktree: worktree::State {
             worktrees: vec![
@@ -183,7 +189,6 @@ fn with_project() -> State {
             ],
             ..Default::default()
         },
-        sidebar_width: 260,
         ..State::default()
     };
     assert!(
@@ -244,7 +249,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "main-shell-sidebar-collapsed",
             build: || {
                 let mut state = with_project();
-                state.sidebar_hidden = true;
+                state.sidebar.hidden = true;
                 StateUnderTest::new(state)
             },
             anchors: &[
@@ -402,7 +407,7 @@ pub fn covered_states() -> &'static [CoveredState] {
 
                 let mut state = with_project();
                 state.workspace = workspace;
-                state.expanded.insert("feat-short".to_string());
+                state.sidebar.expanded.insert("feat-short".to_string());
                 state.window.window_size = (1280, 800);
                 state.session_menu_open = Some(SessionMenu {
                     id,
@@ -902,7 +907,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 state.workspace = workspace;
                 // The one line this state is about. Without it the session exists in the workspace
                 // and the sidebar still draws a flat list of depth-0 rows.
-                state.expanded.insert("feat-short".to_string());
+                state.sidebar.expanded.insert("feat-short".to_string());
                 StateUnderTest::new(state)
             },
             anchors: &[
@@ -1009,7 +1014,7 @@ pub fn revealing_states() -> &'static [RevealingState] {
         RevealingState {
             name: "sidebar-filter-panel-mid-reveal",
             build: || StateUnderTest::new(with_project()),
-            toward: |state| state.sidebar_filter_open = true,
+            toward: |state| state.sidebar.filter_open = true,
             frames: 2,
             node: "0/0/0/1/0/0/0/1",
             // Widened when the reveal took §6.2's easing (T064). A *decelerating* curve covers

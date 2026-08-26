@@ -113,7 +113,7 @@ fn reloading_worktrees_drops_stale_expansion_state() {
         "feat-b",
         WorktreeStatus::Valid,
     )])));
-    assert!(!state.expanded.contains("feat-a"));
+    assert!(!state.sidebar.expanded.contains("feat-a"));
 }
 
 // --- Feature 008 US1: display name + tags per worktree ---
@@ -709,7 +709,7 @@ fn the_current_sessions_location_is_open_though_nobody_expanded_it() {
          was not (FR-001)"
     );
     assert!(
-        state.expanded.is_empty(),
+        state.sidebar.expanded.is_empty(),
         "and it is open without anything being written to the user's own expansion set: \
          open-ness is derived, so a worktree-list replacement has nothing to lose (FR-001b)"
     );
@@ -854,7 +854,8 @@ fn listed(state: &State) -> Vec<String> {
 fn a_filter_that_would_hide_the_current_session_does_not_hide_it() {
     let mut state = state_with_filterable_worktrees("fix-b");
     state
-        .sidebar_filters
+        .sidebar
+        .filters
         .insert(TagFilter::Type(ConventionalType::Feat));
 
     assert_eq!(
@@ -870,7 +871,8 @@ fn a_filter_that_would_hide_the_current_session_does_not_hide_it() {
 fn the_exempt_row_sits_where_it_would_sit_unfiltered() {
     let mut state = state_with_filterable_worktrees("feat-a");
     state
-        .sidebar_filters
+        .sidebar
+        .filters
         .insert(TagFilter::Type(ConventionalType::Fix));
 
     assert_eq!(
@@ -884,9 +886,10 @@ fn the_exempt_row_sits_where_it_would_sit_unfiltered() {
 #[test]
 fn only_the_current_sessions_location_escapes_the_filter() {
     let mut state = state_with_filterable_worktrees("fix-b");
-    state.show_agent_worktrees = true;
+    state.sidebar.show_agent_worktrees = true;
     state
-        .sidebar_filters
+        .sidebar
+        .filters
         .insert(TagFilter::Type(ConventionalType::Feat));
 
     let listed = listed(&state);
@@ -917,7 +920,8 @@ fn a_hidden_agent_worktree_holding_the_current_session_is_shown() {
 fn the_exempt_row_says_why_it_is_there_and_others_do_not() {
     let mut state = state_with_filterable_worktrees("fix-b");
     state
-        .sidebar_filters
+        .sidebar
+        .filters
         .insert(TagFilter::Type(ConventionalType::Feat));
 
     let tree = state.filtered_worktree_tree();
@@ -945,7 +949,8 @@ fn the_exempt_row_says_why_it_is_there_and_others_do_not() {
 fn a_row_the_filters_allow_is_not_marked_as_exempt_merely_for_being_current() {
     let mut state = state_with_filterable_worktrees("feat-a");
     state
-        .sidebar_filters
+        .sidebar
+        .filters
         .insert(TagFilter::Type(ConventionalType::Feat));
 
     let tree = state.filtered_worktree_tree();
@@ -965,7 +970,8 @@ fn a_row_the_filters_allow_is_not_marked_as_exempt_merely_for_being_current() {
 fn the_exemption_ends_when_the_location_stops_holding_the_current_session() {
     let mut state = state_with_filterable_worktrees("fix-b");
     state
-        .sidebar_filters
+        .sidebar
+        .filters
         .insert(TagFilter::Type(ConventionalType::Feat));
     assert!(listed(&state).contains(&"fix-b".to_string()));
 
@@ -981,7 +987,7 @@ fn the_exemption_ends_when_the_location_stops_holding_the_current_session() {
          was exempt has gone (FR-012, US4 scenario 4)"
     );
     assert!(
-        state.expanded.contains("fix-b"),
+        state.sidebar.expanded.contains("fix-b"),
         "its *open* state survives the commit, though — only its presence goes (contract §5.3)"
     );
 }

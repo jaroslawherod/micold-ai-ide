@@ -444,38 +444,38 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
 /// Once it does drain, the offset may still be `None`: the row was already fully visible, and
 /// FR-009 says a reveal that did not need to move the list must not move it.
 fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
-    if !app.core.pending_reveal_scroll
-        || app.core.sidebar_viewport_height == 0
+    if !app.core.sidebar.pending_reveal_scroll
+        || app.core.sidebar.viewport_height == 0
         || !app.core.current_session_is_listed()
     {
-        if app.core.pending_reveal_scroll && micold_client::reveal_trace::enabled() {
+        if app.core.sidebar.pending_reveal_scroll && micold_client::reveal_trace::enabled() {
             micold_client::reveal_trace::line(format_args!(
                 "armed, waiting: viewport_h={} listed={}",
-                app.core.sidebar_viewport_height,
+                app.core.sidebar.viewport_height,
                 app.core.current_session_is_listed()
             ));
         }
         return None;
     }
-    app.core.pending_reveal_scroll = false;
+    app.core.sidebar.pending_reveal_scroll = false;
     let offset = app.core.reveal_scroll_offset();
     if micold_client::reveal_trace::enabled() {
         match offset {
             Some(y) => micold_client::reveal_trace::line(format_args!(
                 "drained: viewport_h={} scroll_offset={} -> scrolling to {y}",
-                app.core.sidebar_viewport_height, app.core.sidebar_scroll_offset,
+                app.core.sidebar.viewport_height, app.core.sidebar.scroll_offset,
             )),
             None => micold_client::reveal_trace::line(format_args!(
                 "drained: viewport_h={} scroll_offset={} -> no scroll, the row is already visible \
                  (FR-009)",
-                app.core.sidebar_viewport_height, app.core.sidebar_scroll_offset,
+                app.core.sidebar.viewport_height, app.core.sidebar.scroll_offset,
             )),
         }
     }
     let offset = offset?;
     // Record where the list was sent, rather than waiting to be told (BUG-002).
     //
-    // `sidebar_scroll_offset` is a mirror of the scrollable's position whose only writer is
+    // `scroll_offset` is a mirror of the scrollable's position whose only writer is
     // `Message::Sidebar(SidebarMsg::Scrolled)` — and the rendering stack publishes that from `notify_viewport`,
     // which returns *without publishing* whenever the content fits the viewport
     // (`iced_widget/src/scrollable.rs`). A reveal in a project whose sidebar fits therefore moves
@@ -487,7 +487,7 @@ fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
     // The application does not need to be told what it just did. `offset` is already clamped into
     // this list's own scrollable range by `scroll_target`, so it is the position the panel will
     // hold whether or not a notification follows.
-    app.core.sidebar_scroll_offset = offset;
+    app.core.sidebar.scroll_offset = offset;
     Some(iced::widget::operation::scroll_to(
         micold_client::ui::SIDEBAR_SCROLL_ID.clone(),
         iced::widget::scrollable::AbsoluteOffset {
@@ -1349,7 +1349,7 @@ pub(crate) mod tests {
     /// BUG-002 (024): a drained reveal must record where it sent the list, because the list will
     /// not always tell us.
     ///
-    /// `sidebar_scroll_offset` is a mirror of the scrollable's position, and its only writer is
+    /// `scroll_offset` is a mirror of the scrollable's position, and its only writer is
     /// `Message::Sidebar(SidebarMsg::Scrolled)` — which iced publishes from `notify_viewport`, and
     /// `notify_viewport` returns without publishing when the content fits the viewport
     /// (`iced_widget/src/scrollable.rs`). So a reveal that runs in a project whose sidebar fits —
@@ -1389,10 +1389,10 @@ pub(crate) mod tests {
         app.core.active_session = Some(id);
         // Everything here fits: one location in a tall panel. This is the project that scrolls
         // without reporting.
-        app.core.sidebar_viewport_height = 400;
+        app.core.sidebar.viewport_height = 400;
         // Left behind by the project we just came from, whose list was long enough to scroll.
-        app.core.sidebar_scroll_offset = 734;
-        app.core.pending_reveal_scroll = true;
+        app.core.sidebar.scroll_offset = 734;
+        app.core.sidebar.pending_reveal_scroll = true;
 
         assert!(
             reveal_scroll(&mut app).is_some(),
@@ -1401,7 +1401,7 @@ pub(crate) mod tests {
         );
 
         assert_eq!(
-            app.core.sidebar_scroll_offset, 0,
+            app.core.sidebar.scroll_offset, 0,
             "the reveal knows where it sent the list, so it must not wait to be told: leaving 734 \
              here is BUG-002, and the next arrival measures its row against a position the panel \
              left long ago"

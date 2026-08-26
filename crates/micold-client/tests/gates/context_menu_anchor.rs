@@ -44,6 +44,7 @@ use crate::panel_placement::anchored_panels;
 use crate::support::layout::{self as lay, LayoutRecord};
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
+use micold_client::features::sidebar;
 use micold_client::features::window;
 use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
 use micold_core::theme::{ColorScheme, ThemePreference};
@@ -101,6 +102,11 @@ fn with_project(sessions: Vec<Session>) -> State {
     workspace.active = workspace.projects.first().map(|p| p.path.clone());
 
     let mut state = State {
+        sidebar: sidebar::State {
+            width: 260,
+            ..Default::default()
+        },
+
         window: window::State {
             window_size: (lay::WINDOW.width as u16, lay::WINDOW.height as u16),
             ..Default::default()
@@ -112,7 +118,6 @@ fn with_project(sessions: Vec<Session>) -> State {
                 .collect(),
             ..Default::default()
         },
-        sidebar_width: 260,
         // Clamping is only meaningful against a window whose size the application knows.
         ..State::default()
     };
@@ -455,7 +460,7 @@ fn the_session_menu_opens_at_the_row_it_was_opened_from() {
         TerminalMode::AiCli,
     );
     let mut state = with_project(vec![session]);
-    state.expanded.insert("feat-00".to_string());
+    state.sidebar.expanded.insert("feat-00".to_string());
 
     // Default row, then `feat-00`, then its session.
     assert_menu_opens_at_the_press(state, &sidebar_row(2), "a session row's context menu");

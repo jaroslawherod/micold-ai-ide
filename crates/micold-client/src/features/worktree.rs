@@ -4,7 +4,7 @@
 //! Three of the helpers T019 names are **not** here — `worktree_tree`, `filtered_worktree_tree`
 //! and `available_tag_filters` went to `features/sidebar.rs` instead. They are named for worktrees
 //! but typed for the sidebar: they return `WorktreeNode` and `TagFilter`, consume
-//! `sidebar_filters`, and `worktree_tree`'s own doc comment opens "Build the sidebar tree". Filing
+//! `filters`, and `worktree_tree`'s own doc comment opens "Build the sidebar tree". Filing
 //! them here would group by name where FR-001 asks to group by feature, and SC-010 — "answer
 //! 'where does this feature live?' by naming a single module" — is decided by where the sidebar's
 //! projections sit, not by what they are called.
@@ -123,7 +123,7 @@ impl crate::app::State {
     /// reason about *existence*, not visibility. A hidden worktree still exists, and its rename
     /// override must survive.
     pub fn visible_worktrees(&self) -> impl Iterator<Item = &Worktree> {
-        let show_all = self.show_agent_worktrees;
+        let show_all = self.sidebar.show_agent_worktrees;
         self.worktree
             .worktrees
             .iter()

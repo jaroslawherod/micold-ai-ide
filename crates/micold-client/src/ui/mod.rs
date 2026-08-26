@@ -186,7 +186,7 @@ pub fn view<'a>(
             sidebar::view(state, scheme),
             sidebar::collapsed_strip(scheme),
         )
-        .open(!state.sidebar_hidden)
+        .open(!state.sidebar.hidden)
         .handle(
             material::ResizeHandle::new(roles)
                 .on_resize(|x| Message::Sidebar(SidebarMsg::DragMoved(x.max(0.0) as u16))),

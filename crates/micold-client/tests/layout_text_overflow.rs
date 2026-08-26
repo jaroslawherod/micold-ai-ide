@@ -210,7 +210,7 @@ fn a_collapsed_panel_overlapping_the_sidebar_is_not_reported_as_an_overflow() {
 
     let mut overflows = |filter_open: bool| -> Vec<lay::Overflow> {
         let mut state = (covered_states()[0].build)().state;
-        state.sidebar_filter_open = filter_open;
+        state.sidebar.filter_open = filter_open;
         let element = micold_client::ui::view(
             &state,
             None,

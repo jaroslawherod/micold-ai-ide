@@ -36,6 +36,7 @@ use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
+use micold_client::features::sidebar;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::PathBuf;
@@ -131,7 +132,11 @@ fn dialogs() -> Vec<Dialog> {
 /// A state with `dialog` open (or nothing open, for `None`) and the filter panel as asked.
 fn state(dialog: Option<&Dialog>, filter_open: bool) -> State {
     let mut state = State {
-        sidebar_filter_open: filter_open,
+        sidebar: sidebar::State {
+            filter_open: filter_open,
+            ..Default::default()
+        },
+
         ..Default::default()
     };
     if let Some(dialog) = dialog {
@@ -462,7 +467,7 @@ fn pressing_escape_closes_the_topmost_surface() {
         "the dialog took the Escape"
     );
     assert!(
-        both.sidebar_filter_open,
+        both.sidebar.filter_open,
         "and the popover beneath it is untouched — one Escape closes one surface"
     );
 
@@ -558,6 +563,11 @@ fn a_popover_is_not_drawn_from_the_registry() {
     let mut drawn = Vec::new();
     for probe in registry::probes() {
         let state = State {
+            sidebar: sidebar::State {
+                filter_open: true,
+                ..Default::default()
+            },
+
             project: project::State {
                 switcher_open: true,
                 ..Default::default()
@@ -567,7 +577,6 @@ fn a_popover_is_not_drawn_from_the_registry() {
                 help_menu_open: true,
                 ..Default::default()
             },
-            sidebar_filter_open: true,
             terminal_context_menu: Some((4, 2)),
             ..Default::default()
         };

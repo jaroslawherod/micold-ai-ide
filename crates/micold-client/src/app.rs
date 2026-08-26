@@ -13,7 +13,6 @@
 use crate::features::notifications::NoticeLevel;
 use crate::features::project::SwitcherEntry;
 use crate::features::session::SessionMenu;
-use crate::features::sidebar::TagFilter;
 use micold_core::notify;
 use micold_core::project::Availability;
 use micold_core::session::SessionId;
@@ -128,12 +127,8 @@ pub struct State {
     pub settings: crate::features::settings::State,
     /// What the worktree feature remembers -- see [`crate::features::worktree::State`].
     pub worktree: crate::features::worktree::State,
-    /// Which worktree rows are expanded to reveal their sessions (FR-003). By `dir_name`.
-    pub expanded: BTreeSet<String>,
-    /// Whether the "Default" (project-root) sidebar row is expanded to reveal its sessions
-    /// (feature 010, mirrors `expanded` for worktree rows — a dedicated field rather than a
-    /// sentinel key in `expanded`, since there is always exactly one Default row).
-    pub default_expanded: bool,
+    /// What the sidebar feature remembers -- see [`crate::features::sidebar::State`].
+    pub sidebar: crate::features::sidebar::State,
     /// The currently displayed session, if any (FR-012, FR-015).
     ///
     /// Feature 024: written through [`Self::set_current_session`] by everything except
@@ -150,25 +145,6 @@ pub struct State {
     /// from `active_session` on every view ([`Self::location_open`]), which is what makes a
     /// wholesale replacement of the worktree list unable to lose it (FR-001b).
     pub reveal_suppressed_for: Option<SessionId>,
-    /// The sidebar scroll viewport's laid-out height in whole logical pixels (feature 024).
-    ///
-    /// Reported by the `Scrollable`'s viewport sensor. `0` until the first layout, which reads as
-    /// "cannot decide visibility yet" and never as "zero tall" — nothing is scrolled on a guess
-    /// (contract §6.3).
-    ///
-    /// `u32` rather than `f32` for two reasons that happen to agree: `State` derives `Eq`, and the
-    /// offset this is compared against ([`Self::sidebar_scroll_offset`]) is already whole pixels.
-    /// Keeping both in the same unit is what stops the scroll arithmetic from having a rounding
-    /// seam in the middle of it.
-    pub sidebar_viewport_height: u32,
-    /// Whether a reveal is waiting to scroll its row into view (feature 024, FR-008).
-    ///
-    /// A flag, not a target. The offset cannot be computed when the reveal is armed: the incoming
-    /// project's worktree list may not have arrived yet, and the viewport height is not known
-    /// until layout. So the reducer arms this, and the binary computes and applies the scroll on
-    /// the first frame where a row for the current session actually exists (research R7,
-    /// invariant I4).
-    pub pending_reveal_scroll: bool,
     /// The tab strip's scroll offset, in whole pixels from its leading edge (feature 026 FR-002e).
     ///
     /// Presentation, not state to persist: FR-002d scrolls the marked tab into view on selection,
@@ -178,7 +154,7 @@ pub struct State {
     pub tab_strip_scroll_offset: u32,
     /// The tab strip viewport's laid-out width, in whole pixels. `0` until the first layout, which
     /// reads as "cannot decide yet" and never as "nothing fits" — the same rule
-    /// [`Self::sidebar_viewport_height`] follows, and for the same reason.
+    /// [`Self::viewport_height`] follows, and for the same reason.
     pub tab_strip_viewport_width: u32,
     /// Whether the marked tab is waiting to be scrolled into view (feature 026 FR-002d).
     ///
@@ -189,10 +165,6 @@ pub struct State {
     pub pending_tab_reveal: bool,
     /// What the worktree_form feature remembers -- see [`crate::features::worktree_form::State`].
     pub worktree_form: crate::features::worktree_form::State,
-    /// Whether the sidebar is collapsed/hidden. Default (`false`) is visible.
-    pub sidebar_hidden: bool,
-    /// The sidebar width in pixels. `0` means "use the default width" (see [`State::sidebar_width_px`]).
-    pub sidebar_width: u16,
     /// Whether the user has explicitly handed the keyboard from the terminal back to the
     /// application (feature 023, FR-021). Default `false`.
     ///
@@ -234,26 +206,6 @@ pub struct State {
     /// Rendered unconditionally so no failure can be swallowed by an unreachable render path (see
     /// [`notify::Notification`]).
     pub notifications: crate::features::notifications::State,
-    /// How far the worktree sidebar is scrolled, in logical pixels.
-    ///
-    /// The app bar's elevation derives from this and nothing else (FR-025a) — see
-    /// [`Self::app_bar_elevated`] for why a second source would be a defect rather than a feature.
-    pub sidebar_scroll_offset: u32,
-    /// Active sidebar tag filters (feature 008, FR-024). Empty ⇒ all worktrees shown. Multiple
-    /// filters combine with OR (FR-025). Transient — not persisted.
-    pub sidebar_filters: BTreeSet<TagFilter>,
-    /// Whether the sidebar's tag-filter panel is shown (feature 009, FR-002/FR-003). Mutually
-    /// exclusive with `help.help_menu_open`/`project.switcher_open`. Transient — not persisted;
-    /// closing it never alters `sidebar_filters` (FR-007/FR-008).
-    pub sidebar_filter_open: bool,
-    /// Whether agent-owned worktrees are included in the sidebar list (feature 014, FR-010).
-    /// `false` = hidden, the safe default.
-    ///
-    /// Transient AND project-scoped: never persisted, so every app start begins hidden (FR-010a),
-    /// and reset in [`Self::restore_after_activation`] so a project switch begins hidden too
-    /// (FR-010e). Deliberately unlike `sidebar_filters`, which survives a switch — view state
-    /// switched on for one project must not silently render in another.
-    pub show_agent_worktrees: bool,
     /// The session whose right-click context menu is open, and where it was opened from (bugfix
     /// BUG-003). At most one is open at a time; `None` means no menu is showing. Mirrors
     /// `worktree.menu_open`.
@@ -297,7 +249,7 @@ impl State {
     /// whole answer. A bar that also raised itself for the terminal's scrollback would flicker
     /// between states that have nothing to do with what is under it.
     pub fn app_bar_elevated(&self) -> bool {
-        self.sidebar_scroll_offset > 0
+        self.sidebar.scroll_offset > 0
     }
 
     /// Close the transient popovers when the ground moves under them (FR-009, FR-017).
@@ -350,7 +302,7 @@ impl State {
     /// Popovers and modals are meant to be mutually exclusive (`on_escape` and the keyboard
     /// subscription both assume it — feature 009 code review), but before this helper existed each
     /// overlay-opening arm had to reset the popovers by hand, and none of them reset
-    /// `sidebar_filter_open`, so it was possible to open e.g. the Add Worktree form while the
+    /// `filter_open`, so it was possible to open e.g. the Add Worktree form while the
     /// filter panel was still (invisibly) open, leaving Escape's two implementations disagreeing
     /// about what to dismiss. Routing every dialog-open through here makes that reset
     /// unconditional. Since T031 the popovers are closed by asking the registry which are open
@@ -475,10 +427,11 @@ impl State {
     /// The effective sidebar width in pixels: the user's chosen width (clamped), or the
     /// default until they resize it.
     pub fn sidebar_width_px(&self) -> u16 {
-        if self.sidebar_width == 0 {
+        if self.sidebar.width == 0 {
             SIDEBAR_DEFAULT_WIDTH
         } else {
-            self.sidebar_width
+            self.sidebar
+                .width
                 .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
         }
     }

@@ -11,6 +11,7 @@
 //! and that is the diff to watch for.
 
 use micold_client::app::State;
+use micold_client::features::sidebar;
 use micold_client::features::worktree;
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
@@ -35,11 +36,15 @@ fn agent_worktree() -> Worktree {
 
 fn with_worktrees(worktrees: Vec<Worktree>, reveal: bool) -> State {
     State {
+        sidebar: sidebar::State {
+            show_agent_worktrees: reveal,
+            ..Default::default()
+        },
+
         worktree: worktree::State {
             worktrees,
             ..Default::default()
         },
-        show_agent_worktrees: reveal,
         ..Default::default()
     }
 }

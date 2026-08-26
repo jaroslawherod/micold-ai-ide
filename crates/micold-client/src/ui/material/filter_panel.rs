@@ -33,7 +33,7 @@ impl<M> FilterTrigger<M> {
 
     /// Whether any tag filter is currently active — tints the icon with the `primary` role
     /// instead of the default muted `on_surface_variant` tint (research R4). Carries no visual
-    /// state of its own; callers pass `!state.sidebar_filters.is_empty()`.
+    /// state of its own; callers pass `!state.sidebar.filters.is_empty()`.
     pub fn active(mut self, active: bool) -> Self {
         self.active = active;
         self

@@ -41,7 +41,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // currently active even while the accordion is collapsed (FR-005, US2).
     let filter_toggle: Element<'_, Message> =
         FilterTrigger::new(Message::Sidebar(SidebarMsg::FilterMenuToggled), r)
-            .active(!state.sidebar_filters.is_empty())
+            .active(!state.sidebar.filters.is_empty())
             .into();
     let add_worktree = Tooltip::new(
         IconButton::new(Icon::AddWorktree, r)
@@ -86,7 +86,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         column![reveal_chip(state, r), filter_bar(state, r)].spacing(spacing::XS),
         r,
     )
-    .open(state.sidebar_filter_open)
+    .open(state.sidebar.filter_open)
     .into();
 
     // The "Default" entry (feature 010) is always present once a project is open — see
@@ -279,7 +279,7 @@ fn reveal_chip(state: &State, r: Roles) -> Element<'static, Message> {
         Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled),
         r,
     )
-    .active(state.show_agent_worktrees)
+    .active(state.sidebar.show_agent_worktrees)
     .into()
 }
 
@@ -301,13 +301,13 @@ fn filter_bar(state: &State, r: Roles) -> Element<'static, Message> {
         for &filter in chunk {
             rw = rw.push(filter_chip(
                 filter,
-                state.sidebar_filters.contains(&filter),
+                state.sidebar.filters.contains(&filter),
                 r,
             ));
         }
         col = col.push(rw);
     }
-    if !state.sidebar_filters.is_empty() {
+    if !state.sidebar.filters.is_empty() {
         col = col.push(
             Button::with_content(
                 Text::new("Clear filters", TypeRole::SidebarTag, r),

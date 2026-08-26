@@ -63,8 +63,8 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
     ("project.switcher_open", "project_switcher", |s| {
         s.project.switcher_open = true
     }),
-    ("sidebar_filter_open", "sidebar_filter", |s| {
-        s.sidebar_filter_open = true
+    ("sidebar.filter_open", "sidebar_filter", |s| {
+        s.sidebar.filter_open = true
     }),
     ("project.menu_open", "project_menu", |s| {
         s.project.menu_open = Some(ProjectMenu {

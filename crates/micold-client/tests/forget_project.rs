@@ -213,7 +213,7 @@ fn forgetting_the_active_project_clears_the_current_session_through_the_one_path
         .sessions
         .insert(PathBuf::from("/b"), vec![session]);
     state.active_session = Some(id);
-    state.pending_reveal_scroll = false;
+    state.sidebar.pending_reveal_scroll = false;
 
     state.update(Message::Project(ProjectMsg::ForgetRequested(
         PathBuf::from("/b"),
@@ -225,7 +225,7 @@ fn forgetting_the_active_project_clears_the_current_session_through_the_one_path
         "the project holding it is gone, so no session is current"
     );
     assert!(
-        !state.pending_reveal_scroll,
+        !state.sidebar.pending_reveal_scroll,
         "and nothing is armed to scroll to. This is an app-initiated clear like the close and \
          remove arms, and it goes through the same function for the same reason — a scroll armed \
          with no target stays armed, then fires against whatever row appears next (invariant I5)"

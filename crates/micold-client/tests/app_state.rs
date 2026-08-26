@@ -49,7 +49,7 @@ use std::path::PathBuf;
 fn defaults_are_empty() {
     let state = State::default();
     assert!(state.worktree.worktrees.is_empty());
-    assert!(state.expanded.is_empty());
+    assert!(state.sidebar.expanded.is_empty());
     assert!(state.active_session.is_none());
     assert!(state.worktree_form.form.is_none());
     assert!(state.worktree_form.worktree_error.is_none());
@@ -357,7 +357,7 @@ fn session_started_selected_and_closed() {
     state.update(Message::Session(SessionMsg::Started(session)));
     assert_eq!(state.active_session, Some(id));
     assert_eq!(state.active_sessions().len(), 1);
-    assert!(state.expanded.contains("feat-x"));
+    assert!(state.sidebar.expanded.contains("feat-x"));
     // Feature 024: and the row reads as open, which is now a second question — open-ness is
     // derived from which session is current, and the line above is the user's own set.
     assert!(state.location_open(&SessionLocation::Worktree("feat-x".to_string())));
@@ -414,8 +414,8 @@ fn default_session_started_enters_workspace_sessions() {
         SessionLocation::Default
     );
     // The Default row's own expansion flag opens, not the worktree `expanded` set.
-    assert!(state.default_expanded);
-    assert!(state.expanded.is_empty());
+    assert!(state.sidebar.default_expanded);
+    assert!(state.sidebar.expanded.is_empty());
     // Feature 024: and the row reads as open, by derivation as well as by the flag.
     assert!(state.location_open(&SessionLocation::Default));
 }
@@ -684,7 +684,7 @@ fn rename_override_for_a_hidden_worktree_survives_reload() {
 #[test]
 fn reveal_control_is_off_by_default() {
     // FR-010a: the safe default, with no persisted field to migrate.
-    assert!(!State::default().show_agent_worktrees);
+    assert!(!State::default().sidebar.show_agent_worktrees);
 }
 
 #[test]
@@ -698,15 +698,15 @@ fn toggling_reveal_changes_only_that_field() {
     state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
         "feat-x".to_string(),
     )));
-    let filters_before = state.sidebar_filters.clone();
-    let expanded_before = state.expanded.clone();
+    let filters_before = state.sidebar.filters.clone();
+    let expanded_before = state.sidebar.expanded.clone();
     let dialog_before = open_dialog(&state);
 
     state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
 
-    assert!(state.show_agent_worktrees);
-    assert_eq!(state.sidebar_filters, filters_before);
-    assert_eq!(state.expanded, expanded_before);
+    assert!(state.sidebar.show_agent_worktrees);
+    assert_eq!(state.sidebar.filters, filters_before);
+    assert_eq!(state.sidebar.expanded, expanded_before);
     assert_eq!(open_dialog(&state), dialog_before);
 }
 
@@ -750,18 +750,18 @@ fn switching_projects_resets_the_reveal_control() {
     });
 
     state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
-    assert!(state.show_agent_worktrees);
+    assert!(state.sidebar.show_agent_worktrees);
 
     assert!(switch(&mut state, &other));
     assert!(
-        !state.show_agent_worktrees,
+        !state.sidebar.show_agent_worktrees,
         "the incoming project must be entered with agent worktrees hidden"
     );
 
     // Switching back does not restore it either — nothing is remembered per project.
     let first = PathBuf::from("/repo");
     assert!(switch(&mut state, &first));
-    assert!(!state.show_agent_worktrees);
+    assert!(!state.sidebar.show_agent_worktrees);
 }
 
 // --- Feature 027: the tab strip is the only route between a session's panes ---
@@ -2042,7 +2042,7 @@ fn a_location_that_stops_holding_the_current_session_stays_open() {
          with it (FR-001c)"
     );
     assert!(
-        state.expanded.contains("feat-a"),
+        state.sidebar.expanded.contains("feat-a"),
         "and it stays open by becoming ordinary user-open state, which is the honest description \
          of what the user was looking at (invariant I3)"
     );
@@ -2068,12 +2068,12 @@ fn a_row_the_user_closed_is_not_re_opened_by_the_commit() {
 #[test]
 fn clearing_the_current_session_arms_no_scroll() {
     let mut state = state_with_current_session_in("feat-a");
-    state.pending_reveal_scroll = false;
+    state.sidebar.pending_reveal_scroll = false;
 
     set_current(&mut state, None);
 
     assert!(
-        !state.pending_reveal_scroll,
+        !state.sidebar.pending_reveal_scroll,
         "there is no row to scroll to. An armed scroll with no target stays armed — nothing drains \
          it — and then fires against whatever row appears next; FR-001a forbids scrolling at all \
          when the user closes the session they were on (invariant I5)"
@@ -2100,7 +2100,7 @@ fn a_change_of_current_session_lifts_a_suppression_made_against_the_old_one() {
          the next reveal for a reason the user could not see (invariant I2)"
     );
     assert!(
-        state.pending_reveal_scroll,
+        state.sidebar.pending_reveal_scroll,
         "and the new current session arms its own scroll"
     );
 }
@@ -2141,7 +2141,7 @@ fn state_with_many_worktrees(count: usize) -> State {
 #[test]
 fn a_row_near_the_bottom_of_a_long_list_is_scrolled_to() {
     let mut state = state_with_many_worktrees(30);
-    state.sidebar_viewport_height = 400;
+    state.sidebar.viewport_height = 400;
 
     assert!(
         state.current_session_is_listed(),
@@ -2160,7 +2160,7 @@ fn a_row_near_the_bottom_of_a_long_list_is_scrolled_to() {
 #[test]
 fn a_row_already_on_screen_is_not_scrolled_to() {
     let mut state = state_with_many_worktrees(3);
-    state.sidebar_viewport_height = 400;
+    state.sidebar.viewport_height = 400;
 
     assert_eq!(
         state.reveal_scroll_offset(),
@@ -2175,7 +2175,7 @@ fn nothing_is_scrolled_to_before_the_viewport_has_been_laid_out() {
     let state = state_with_many_worktrees(30);
 
     assert_eq!(
-        state.sidebar_viewport_height, 0,
+        state.sidebar.viewport_height, 0,
         "precondition: no layout has happened yet"
     );
     assert_eq!(
@@ -2189,7 +2189,7 @@ fn nothing_is_scrolled_to_before_the_viewport_has_been_laid_out() {
 #[test]
 fn a_reveal_waits_for_the_worktree_list_rather_than_scrolling_to_a_stale_row() {
     let mut state = state_with_many_worktrees(30);
-    state.sidebar_viewport_height = 400;
+    state.sidebar.viewport_height = 400;
     // The switch has happened but discovery has not reported yet: the panel knows of no locations.
     micold_client::app::drain(state.set_worktrees(Vec::new()), |o| {
         micold_client::app::interpret(&mut state, o)
@@ -2231,7 +2231,7 @@ fn starting_a_session_reveals_it() {
         ]),
         |o| micold_client::app::interpret(&mut state, o),
     );
-    state.pending_reveal_scroll = false;
+    state.sidebar.pending_reveal_scroll = false;
 
     let started = Session::start_new(SessionLocation::Worktree("feat-b".to_string()));
     let id = started.id;
@@ -2243,7 +2243,7 @@ fn starting_a_session_reveals_it() {
         "a session you just started is one the app put in front of you, so it is revealed like any \
          other (US3 scenario 2)"
     );
-    assert!(state.pending_reveal_scroll, "and brought into view");
+    assert!(state.sidebar.pending_reveal_scroll, "and brought into view");
     assert!(
         state.location_open(&SessionLocation::Worktree("feat-a".to_string())),
         "while the row that held the outgoing current session stays open — ceasing to be current \
@@ -2258,13 +2258,13 @@ fn clicking_a_session_marks_it_and_moves_nothing() {
     let other_id = other.id;
     let path = state.workspace.active.clone().unwrap();
     state.workspace.sessions.get_mut(&path).unwrap().push(other);
-    state.pending_reveal_scroll = false;
+    state.sidebar.pending_reveal_scroll = false;
 
     state.update(Message::Session(SessionMsg::Selected(other_id)));
 
     assert_eq!(state.active_session, Some(other_id), "it is now current");
     assert!(
-        !state.pending_reveal_scroll,
+        !state.sidebar.pending_reveal_scroll,
         "but nothing is opened or scrolled on the user's behalf: they clicked a row they could \
          already see, and scrolling it would move the list they were reading (FR-006)"
     );
@@ -2295,7 +2295,7 @@ fn closing_the_current_session_promotes_nothing_in_its_place() {
         "and the row stays open, so the sibling you might want next is still on screen (FR-001c)"
     );
     assert!(
-        !state.pending_reveal_scroll,
+        !state.sidebar.pending_reveal_scroll,
         "with nothing armed to scroll to"
     );
 }
@@ -2314,7 +2314,7 @@ fn removing_the_current_session_behaves_the_same_way() {
         "remove drops the record where close archives it, but neither is the app moving you to a \
          session — so neither opens, closes or scrolls anything (FR-001a)"
     );
-    assert!(!state.pending_reveal_scroll);
+    assert!(!state.sidebar.pending_reveal_scroll);
 }
 
 // --- Feature 025: applying a project's remembered session at launch ---------------------------
@@ -2329,7 +2329,7 @@ fn state_with_remembered_session() -> (State, SessionId) {
     state.record_foreground();
     // The shape after a restart: the memory survived, the pointer did not.
     state.active_session = None;
-    state.pending_reveal_scroll = false;
+    state.sidebar.pending_reveal_scroll = false;
     (state, id)
 }
 
@@ -2429,7 +2429,7 @@ fn a_memory_whose_worktree_is_gone_is_still_restored() {
     micold_client::app::drain(state.set_worktrees(Vec::new()), |o| {
         micold_client::app::interpret(&mut state, o)
     });
-    state.expanded.insert("kept-open".to_string());
+    state.sidebar.expanded.insert("kept-open".to_string());
 
     let choice = state.explain_foreground(&path).session();
     set_current(&mut state, choice);
@@ -2440,7 +2440,7 @@ fn a_memory_whose_worktree_is_gone_is_still_restored() {
         "the application already lists a session whose worktree is missing and lets you select it,          so refusing to *return* you to it would be the same inconsistency BUG-001 was about.          Declining would also need the worktree list at resolve time, which a project switch does          not have yet — one rule that breaks switching to handle a case the user can see"
     );
     assert!(
-        state.expanded.contains("kept-open"),
+        state.sidebar.expanded.contains("kept-open"),
         "and the rest of the project is untouched — a memory that cannot be honoured must not cost \
          the user anything else (FR-006)"
     );
@@ -2454,7 +2454,7 @@ fn a_memory_naming_a_closed_session_restores_nothing_and_disturbs_nothing() {
     if let Some((_, session)) = state.workspace.find_session_mut(id) {
         session.archive();
     }
-    state.expanded.insert("kept-open".to_string());
+    state.sidebar.expanded.insert("kept-open".to_string());
 
     let choice = state.explain_foreground(&path).session();
     set_current(&mut state, choice);
@@ -2465,7 +2465,7 @@ fn a_memory_naming_a_closed_session_restores_nothing_and_disturbs_nothing() {
          cannot show (FR-005). Nothing is chosen in its place either (FR-007)"
     );
     assert!(
-        state.expanded.contains("kept-open"),
+        state.sidebar.expanded.contains("kept-open"),
         "and the rest of the project is exactly as it was (FR-006)"
     );
 }

@@ -26,6 +26,7 @@ use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
+use micold_client::features::sidebar;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::PathBuf;
 
@@ -124,6 +125,11 @@ fn a_menu_now_closes_when_the_list_beneath_it_scrolls() {
 #[test]
 fn every_non_modal_surface_closes_on_a_scroll_beneath() {
     let mut state = State {
+        sidebar: sidebar::State {
+            filter_open: true,
+            ..Default::default()
+        },
+
         project: project::State {
             switcher_open: true,
             ..Default::default()
@@ -133,7 +139,6 @@ fn every_non_modal_surface_closes_on_a_scroll_beneath() {
             help_menu_open: true,
             ..Default::default()
         },
-        sidebar_filter_open: true,
         ..State::default()
     };
 
@@ -141,7 +146,7 @@ fn every_non_modal_surface_closes_on_a_scroll_beneath() {
 
     assert!(!state.help.help_menu_open, "overflow menu");
     assert!(!state.project.switcher_open, "project switcher");
-    assert!(!state.sidebar_filter_open, "sidebar filter panel");
+    assert!(!state.sidebar.filter_open, "sidebar filter panel");
     assert!(state.project.menu_open.is_none(), "project context menu");
     assert!(state.worktree.menu_open.is_none(), "worktree context menu");
     assert!(state.session_menu_open.is_none(), "session context menu");

@@ -130,18 +130,9 @@ const OWNERS: &[(&str, &str)] = &[
     // (see specs/021-mvu-slice-architecture/cross-feature-writes.md, group G).
     ("worktree_form", "worktree_form"),
     // --- sidebar ------------------------------------------------------------------------------
-    ("expanded", "sidebar"),
-    ("default_expanded", "sidebar"),
-    ("sidebar_viewport_height", "sidebar"),
-    ("pending_reveal_scroll", "sidebar"),
-    ("sidebar_hidden", "sidebar"),
-    ("sidebar_width", "sidebar"),
-    ("sidebar_scroll_offset", "sidebar"),
-    ("sidebar_filters", "sidebar"),
-    ("sidebar_filter_open", "sidebar"),
+    ("sidebar", "sidebar"),
     // Which worktrees the sidebar lists, not a fact about any worktree — its own doc calls it view
-    // state and contrasts it with `sidebar_filters` beside it.
-    ("show_agent_worktrees", "sidebar"),
+    // state and contrasts it with `filters` beside it.
     // --- settings -----------------------------------------------------------------------------
     ("settings", "settings"),
     // --- notifications ------------------------------------------------------------------------
@@ -1046,7 +1037,7 @@ fn scan() -> Scan {
     );
 
     // Report each write once, at the innermost feature operation that reaches it. Without this a
-    // single `self.expanded.insert(..)` is reported three times over — at the write, and again at
+    // single `self.sidebar.expanded.insert(..)` is reported three times over — at the write, and again at
     // each feature-module caller that inherits it — and the allowlist would then name callers that
     // converting the write would silently fix, which is the opposite of what T067a needs.
     // Every key an operation of that bare name resolves to, and whether any of them is a feature

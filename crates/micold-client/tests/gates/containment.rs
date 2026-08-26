@@ -394,7 +394,10 @@ fn the_recorded_scroll_overflow_is_the_sidebar_list() {
                     .collect(),
                 ..Default::default()
             },
-            sidebar_width: 260,
+            sidebar: micold_client::features::sidebar::State {
+                width: 260,
+                ..Default::default()
+            },
             ..micold_client::app::State::default()
         };
 
@@ -643,8 +646,11 @@ fn the_recorded_escapes_are_the_accordion_reveal() {
         workspace.active = workspace.projects.first().map(|p| p.path.clone());
         let state = micold_client::app::State {
             workspace,
-            sidebar_width: 260,
-            sidebar_filter_open: filter_open,
+            sidebar: micold_client::features::sidebar::State {
+                width: 260,
+                filter_open,
+                ..Default::default()
+            },
             ..micold_client::app::State::default()
         };
 
