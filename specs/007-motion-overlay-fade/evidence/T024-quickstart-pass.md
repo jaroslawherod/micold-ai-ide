@@ -3,6 +3,11 @@
 **Date**: 2026-08-25
 **Covers**: T024 (§3, §5), T028 (§4), T030 (§3 perceptibility), T032 (end-to-end)
 **Result**: entrances pass; **every exit fails** — filed as [BUG-001](../bugs/BUG-001.md)
+**Superseded reading (2026-08-26)**: the exits were never truncated. Every one of them rendered
+every intermediate value and reached its target — in about a third of its stated duration, because
+`Progress` stepped by frame count against an assumed 16 ms frame while this window renders uncapped
+at ~200 fps. The frame counts below stand as measurements; what they mean is in
+[BUG-001's root cause](../bugs/BUG-001.md#root-cause), and the clock is now elapsed-time.
 **Ran on**: Xvfb `:83` at 1600×1400, Mesa lavapipe software Vulkan, no window manager —
 not a real display. See "What this does and does not transfer" at the end.
 
