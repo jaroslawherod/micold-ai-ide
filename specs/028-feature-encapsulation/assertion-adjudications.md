@@ -555,5 +555,77 @@ was: assert_eq!(state.worktrees.len(),1,"theincludestilllands")
 was: assert_eq!(state.worktrees.len(),6)
 ```
 
+## T035 — the sidebar's ten fields moved behind `state.sidebar`
+
+Ten fields became members of `features::sidebar::State`. Six shed the `sidebar` the qualifier now
+carries: `sidebar_filter_open`, `sidebar_filters`, `sidebar_hidden`, `sidebar_scroll_offset`,
+`sidebar_viewport_height` and `sidebar_width` are `sidebar.filter_open`, `sidebar.filters`,
+`sidebar.hidden`, `sidebar.scroll_offset`, `sidebar.viewport_height` and `sidebar.width`. The
+other four never carried it — `default_expanded`, `expanded`, `pending_reveal_scroll`,
+`show_agent_worktrees` — and keep their names.
+
+Sixty-two assertions changed spelling across `tests/app_state.rs`, `tests/forget_project.rs`,
+`tests/logical_state_ownership.rs`, `tests/overlay_dismissal_delta.rs`,
+`tests/overlay_dispatch_ordering.rs`, `tests/overlay_registry.rs`, `tests/sidebar_state.rs`,
+`tests/sidebar_tree.rs`, `tests/switch_active.rs` and `src/main.rs`. None changed meaning.
+
+One name needs care, because `expanded` is not unique in this codebase: a `SidebarEntry`'s node
+has an `expanded` of its own, and sixteen assertions read *that* one. Those are untouched — they
+still say `node.expanded`, `feat_a.expanded` and so on, because the node's flag is not the
+feature's set and did not move. Only the reads of the root's `expanded` — the `BTreeSet<String>` of
+which worktree rows are open — became `state.sidebar.expanded`.
+
+```
+was: assert!(!Sdefault().show_agent_worktrees)
+was: assert!(!st.default_expanded,"andtheDefaultrow,whichhasnonametopruneby,isresetoutright")
+was: assert!(!st.expanded.contains("wa1"),"/a'sexpansionisprunedby/b'sworktreenames,soarowopenedinoneprojectcannot\renderinanother(FR-007)")
+was: assert!(!st.pending_reveal_scroll,"andnothingisarmedtoscrollto,whichiswhatstopsascrollfiringlateragainst\anunrelatedrow(invariantI5)")
+was: assert!(!state.expanded.contains("feat-a"))
+was: assert!(!state.pending_reveal_scroll)
+was: assert!(!state.pending_reveal_scroll,"andnothingisarmedtoscrollto.Thisisanapp-initiatedclearlikethecloseand\removearms,anditgoesthroughthesamefunctionforthesamereason—ascrollarmed\withnotargetstaysarmed,thenfiresagainstwhateverrowappearsnext(invariantI5)")
+was: assert!(!state.pending_reveal_scroll,"butnothingisopenedorscrolledontheuser'sbehalf:theyclickedarowtheycould\alreadysee,andscrollingitwouldmovethelisttheywerereading(FR-006)")
+was: assert!(!state.pending_reveal_scroll,"thereisnorowtoscrollto.Anarmedscrollwithnotargetstaysarmed—nothingdrains\it—andthenfiresagainstwhateverrowappearsnext;FR-001aforbidsscrollingatall\whentheuserclosesthesessiontheywereon(invariantI5)")
+was: assert!(!state.pending_reveal_scroll,"withnothingarmedtoscrollto")
+was: assert!(!state.show_agent_worktrees)
+was: assert!(!state.show_agent_worktrees,"theincomingprojectmustbeenteredwithagentworktreeshidden")
+was: assert!(!state.sidebar_filter_open)
+was: assert!(!state.sidebar_filter_open,"openinganoverlaymustclosethefilterpanel")
+was: assert!(!state.sidebar_filter_open,"precondition:thepanelclosed")
+was: assert!(!state.sidebar_filter_open,"sidebarfilterpanel")
+was: assert!(!state.sidebar_filter_open,"thefilterpanelsurvived{name}opening")
+was: assert!(!state.sidebar_filters.contains(&feat))
+was: assert!(!state.sidebar_filters.contains(&feature))
+was: assert!(!state.sidebar_hidden)
+was: assert!(both.sidebar_filter_open,"andthepopoverbeneathitisuntouched—oneEscapeclosesonesurface")
+was: assert!(st.pending_reveal_scroll,"therevealedrowisnousebelowthefold,soaswitcharmsthescrollthatbringsit\intoview(FR-008)")
+was: assert!(state.default_expanded)
+was: assert!(state.expanded.contains("feat-a"))
+was: assert!(state.expanded.contains("feat-a"),"anditstaysopenbybecomingordinaryuser-openstate,whichisthehonestdescription\ofwhattheuserwaslookingat(invariantI3)")
+was: assert!(state.expanded.contains("feat-x"))
+was: assert!(state.expanded.contains("fix-b"),"its*open*statesurvivesthecommit,though—onlyitspresencegoes(contract§5.3)")
+was: assert!(state.expanded.contains("kept-open"),"andtherestoftheprojectisexactlyasitwas(FR-006)")
+was: assert!(state.expanded.contains("kept-open"),"andtherestoftheprojectisuntouched—amemorythatcannotbehonouredmustnotcost\theuseranythingelse(FR-006)")
+was: assert!(state.expanded.is_empty())
+was: assert!(state.expanded.is_empty(),"anditisopenwithoutanythingbeingwrittentotheuser'sownexpansionset:\open-nessisderived,soaworktree-listreplacementhasnothingtolose(FR-001b)")
+was: assert!(state.pending_reveal_scroll,"andbroughtintoview")
+was: assert!(state.pending_reveal_scroll,"andthenewcurrentsessionarmsitsownscroll")
+was: assert!(state.show_agent_worktrees)
+was: assert!(state.sidebar_filter_open)
+was: assert!(state.sidebar_filter_open,"precondition:thepanelisopen")
+was: assert!(state.sidebar_filters.contains(&feat))
+was: assert!(state.sidebar_filters.contains(&feat),"togglingpanelvisibilitymustnotaltertheactivefilterset(FR-007/FR-008)")
+was: assert!(state.sidebar_filters.contains(&feature))
+was: assert!(state.sidebar_filters.is_empty())
+was: assert!(state.sidebar_hidden)
+was: assert!(state.sidebar_hidden,"theflagmustliveonState")
+was: assert_eq!(app.core.sidebar_scroll_offset,0,"therevealknowswhereitsentthelist,soitmustnotwaittobetold:leaving734\hereisBUG-002,andthenextarrivalmeasuresitsrowagainstapositionthepanel\leftlongago")
+was: assert_eq!(state.expanded,expanded_before)
+was: assert_eq!(state.sidebar_filters,chosen,"cancelling{name}reachedintothesidebar'sfilters,whichitdoesnotown")
+was: assert_eq!(state.sidebar_filters,chosen,"closingthepanelisputtingthechooseraway,notclearingthechoice—asidebarthat\silentlyunfiltereditselfeverytimethepanelcollapsedwouldbeunusable")
+was: assert_eq!(state.sidebar_filters,filters_before)
+was: assert_eq!(state.sidebar_filters.len(),2)
+was: assert_eq!(state.sidebar_viewport_height,0,"precondition:nolayouthashappenedyet")
+```
+
 T040 rolls these up for the phase; each move is adjudicated as it lands, so the freeze is green at
 every commit rather than only at the end (contract C.1).
