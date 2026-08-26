@@ -137,20 +137,38 @@ unsupported limit as unavailable **with the reason** rather than accepting a num
 FR-015 is thereby honoured as "enforced where the selected runtime can, visibly unavailable where it
 cannot" (recorded in plan.md's Complexity Tracking as a softening of the requirement).
 
-**Measured.** On this machine, `--storage-opt size=` **is** accepted:
+**Measured — and the first measurement was of the wrong thing.** Originally recorded here:
 
 ```
 $ docker run --rm --storage-opt size=1G alpine:latest true ; echo $?
 0                                     # Docker 29.5.1, storage driver: overlayfs
 ```
 
-**Rationale.** That exit code is exactly why the capability must be probed rather than assumed in
-either direction. The same flag is rejected outright on the older `overlay2` driver unless it is
-backed by xfs with `pquota`, and podman's behaviour differs again. Hard-coding "supported" would
-break users on common configurations; hard-coding "unsupported" would deny the limit to users like
-this one, whose runtime enforces it fine. The probe runs once per runtime, its result is cached with
-the runtime's version, and it is the same mechanism R10 uses for every other limit — so storage is
-not a special case in the code, only the most likely to come back false.
+and read as "this driver enforces it". It does not. That exit code says the flag was **accepted**;
+accepted and enforced are different claims, and only one of them is a limit. Measured again, on the
+same runtime, asking whether the cap actually holds (2026-08-26):
+
+```
+$ docker run --rm --storage-opt size=512m … sh -c 'dd if=/dev/zero of=/big bs=1M count=700'
+734003200 bytes (734 MB, 700 MiB) copied, 0.302584 s, 2.4 GB/s
+$ docker run --rm --storage-opt size=2g   … sh -c 'df -h /'
+overlay         481G  361G   96G  80% /
+```
+
+700 MiB into a 512 MiB cap, and a root filesystem still reporting the host's whole disk. Both
+overlay drivers enforce a size limit only over a filesystem with project quotas (xfs `pquota`, ext4
+`prjquota`), which `docker info` does not expose, so both are now classified unsupported **with the
+reason**. `crates/micold-core/tests/sandbox_real_storage.rs` keeps the classification tied to the
+behaviour: it probes the runtime, then writes past the cap, and fails if the two disagree in either
+direction.
+
+**Rationale.** That correction is exactly why the capability must be probed rather than assumed —
+and why the probe's *claim* must itself be checked against the runtime, because a probe reading a
+driver name is only as good as what the driver name is taken to mean. Hard-coding "supported" would
+promise users a bound that does not exist; hard-coding "unsupported" would deny the limit to anyone
+on btrfs or zfs, where it works. The probe runs once per runtime, its result is cached with the
+runtime's version, and it is the same mechanism R10 uses for every other limit — so storage is not a
+special case in the code, only the most likely to come back false.
 
 Silently accepting a limit the runtime drops is the "silent drift" the codebase's endpoint module
 already refuses to tolerate; reproducing it in a security feature would be worse, because the user

@@ -102,11 +102,14 @@ every `sandbox-runtime` CI run.
 
 ### B.4 — Limits
 
-- [ ] Set a memory limit, then allocate past it in a session: the process is killed, the session
+`evidence/us4-limits.md`, as `sandbox_real_limits.rs` and `sandbox_real_storage.rs`. The third box
+found a real defect: `overlayfs` was classified as enforcing a storage limit it silently ignores.
+
+- [x] Set a memory limit, then allocate past it in a session: the process is killed, the session
       reports it, and the daemon survives (FR-012, FR-016)
-- [ ] On a runtime that cannot enforce storage: the field is shown **disabled with the reason**, not
+- [x] On a runtime that cannot enforce storage: the field is shown **disabled with the reason**, not
       hidden and not silently accepted (FR-015, SC-009, C-2)
-- [ ] Change a limit, restart the sandbox, confirm it took effect
+- [x] Change a limit, restart the sandbox, confirm it took effect
 
 ### B.5 — Lifecycle and failure
 

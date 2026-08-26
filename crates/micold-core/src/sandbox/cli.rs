@@ -93,16 +93,32 @@ impl<R: CommandRunner> CliRuntime<R> {
 /// which is what R10 asked for. Actually attempting the limit would be a truer probe still, but it
 /// costs a container start on every capability refresh, and the driver determines the answer.
 ///
-/// Measured: Docker 29.5.1 on `overlayfs` accepts it (`docker run --storage-opt size=1G alpine
-/// true` → exit 0). `overlay2` accepts it only over xfs with `pquota`, which cannot be read from
-/// `info`, so it is reported unsupported with the reason rather than guessed at — a limit the user
-/// believes is enforced and is not would be worse than one they were told they cannot have.
+/// # `overlayfs` is unsupported, and the exit code that said otherwise was the wrong measurement
+///
+/// This originally classified Docker 29's `overlayfs` as supported, on the strength of
+/// `docker run --storage-opt size=1G alpine true` → exit 0 (research R5). That measured whether the
+/// flag is **accepted**. It is; it is also **ignored**. Measured again, on the same runtime:
+///
+/// ```text
+/// $ docker run --rm --storage-opt size=512m … sh -c 'dd if=/dev/zero of=/big bs=1M count=700'
+/// 734003200 bytes (734 MB, 700 MiB) copied, 0.302584 s, 2.4 GB/s
+/// ```
+///
+/// 700 MiB written into a 512 MiB cap, no error anywhere. Both overlay drivers enforce a size limit
+/// only over a filesystem with project quotas — xfs with `pquota`, or ext4 with `prjquota` — which
+/// cannot be read from `info`, so both are reported unsupported **with the reason** rather than
+/// guessed at. That is the whole point of C-2: a limit the user believes is enforced and is not is
+/// worse than one they were told they cannot have, and an exit code of 0 is not enforcement.
+///
+/// `crates/micold-core/tests/sandbox_real_storage.rs` is what now holds this honest — it writes past
+/// the cap against the real runtime and requires the classification to match what happened.
 fn storage_support(driver: &str) -> LimitSupport {
     match driver {
-        "overlayfs" | "btrfs" | "zfs" => LimitSupport::Supported,
-        "overlay2" => LimitSupport::unsupported(
-            "the overlay2 storage driver enforces a size limit only over xfs with the `pquota` \
-             mount option, which cannot be detected here",
+        "btrfs" | "zfs" => LimitSupport::Supported,
+        "overlayfs" | "overlay2" => LimitSupport::unsupported(
+            "the overlay storage drivers enforce a size limit only over a filesystem with project \
+             quotas (xfs with `pquota`, ext4 with `prjquota`), which cannot be detected here — \
+             without one the runtime accepts the limit and does not apply it",
         ),
         "" => LimitSupport::unsupported("the runtime did not report a storage driver"),
         other => LimitSupport::unsupported(format!(

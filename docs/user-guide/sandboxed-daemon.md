@@ -131,11 +131,13 @@ things, and 64 processes is about what a shell running a build already has open.
 smaller and the field itself refuses it, naming the minimum — the settings are not saved with a
 number that would produce a sandbox that cannot start.
 
-**Not every limit works with every setup, and the writable-storage one often does not.** Whether it
-can be enforced depends on how your container runtime stores images — Docker's `overlayfs` driver
-accepts a size cap, the older `overlay2` driver rejects it unless it sits on xfs with project quotas
-enabled, and podman differs again. The application asks your runtime once, when the sandbox starts,
-and remembers the answer against that runtime's version.
+**Not every limit works with every setup, and the writable-storage one usually does not.** Whether
+it can be enforced depends on how your container runtime stores images. Docker's overlay drivers —
+both `overlayfs` and the older `overlay2` — enforce a size cap only when they sit on a filesystem
+with project quotas turned on (xfs with `pquota`, ext4 with `prjquota`); without one they *accept*
+the setting and quietly ignore it, so the application treats them as unable to enforce it. btrfs and
+zfs do enforce it. podman differs again. The application asks your runtime once, when the sandbox
+starts, and remembers the answer against that runtime's version.
 
 Where a limit cannot be enforced, its field is shown **disabled with the runtime's own reason**
 underneath it. It is not hidden — a value you set earlier stays visible — and it is never quietly

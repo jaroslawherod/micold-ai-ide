@@ -137,31 +137,37 @@ fn truncated_output_is_classified_not_panicked() {
 /// false negative denies a working limit, a false positive promises one that is not enforced.
 #[test]
 fn the_storage_capability_follows_the_reported_driver() {
+    // A driver that enforces it for real. Not the recorded `docker_info.json` fixture: that one is
+    // this machine's, and this machine's driver is `overlayfs`, which does not.
     let supported = primed(
         RuntimeKind::Docker,
         vec![
             CommandOutput::ok(fixture("docker_version.json")),
-            CommandOutput::ok(fixture("docker_info.json")),
+            CommandOutput::ok(r#"{"Driver":"btrfs"}"#.to_string()),
         ],
     );
-    // Measured on Docker 29.5.1 / overlayfs: `--storage-opt size=1G` is accepted.
     assert!(supported.probe().unwrap().storage.is_supported());
 
-    let unsupported = primed(
-        RuntimeKind::Docker,
-        vec![
-            CommandOutput::ok(fixture("docker_version.json")),
-            CommandOutput::ok(r#"{"Driver":"overlay2"}"#),
-        ],
-    );
-    let caps = unsupported.probe().unwrap();
-    assert!(!caps.storage.is_supported());
-    match caps.storage {
-        micold_core::sandbox::runtime::LimitSupport::Unsupported { reason } => {
-            // SC-009 needs the reason, because the view renders it beside the disabled field.
-            assert!(reason.contains("pquota"), "reason was {reason:?}");
+    // Both overlay drivers do not — including `overlayfs`, which this once classified as supported
+    // because `docker run --storage-opt size=1G … true` exits 0. It does; it also ignores the cap.
+    // See `storage_support`'s note and `tests/sandbox_real_storage.rs`.
+    for driver in ["overlay2", "overlayfs"] {
+        let unsupported = primed(
+            RuntimeKind::Docker,
+            vec![
+                CommandOutput::ok(fixture("docker_version.json")),
+                CommandOutput::ok(format!(r#"{{"Driver":"{driver}"}}"#)),
+            ],
+        );
+        let caps = unsupported.probe().unwrap();
+        assert!(!caps.storage.is_supported(), "{driver}");
+        match caps.storage {
+            micold_core::sandbox::runtime::LimitSupport::Unsupported { reason } => {
+                // SC-009 needs the reason, because the view renders it beside the disabled field.
+                assert!(reason.contains("quota"), "{driver}: reason was {reason:?}");
+            }
+            other => panic!("{driver}: expected Unsupported, got {other:?}"),
         }
-        other => panic!("expected Unsupported, got {other:?}"),
     }
 }
 
