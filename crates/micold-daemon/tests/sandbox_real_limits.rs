@@ -99,12 +99,19 @@ async fn sandbox_real_limits_stop_the_session_not_the_daemon() {
     // A session cannot exceed the memory it was given (FR-016) ----------------------------------
     //
     // Perl rather than a shell loop: one allocation of a known size, refused or killed at once,
-    // instead of a growth curve whose timing depends on the machine. `\\$x` — the daemon writes the
-    // typed bytes to a PTY, so the shell is the one expanding, and `$x` unescaped would expand to
-    // nothing before perl ever saw it.
+    // instead of a growth curve whose timing depends on the machine.
+    //
+    // `$x`, not `\$x`. The daemon writes the typed bytes to a PTY and the shell is the one
+    // expanding, but the program is inside single quotes, where `sh` expands nothing — so the
+    // escape did not protect `$x`, it handed perl a literal backslash, and `\$x = ...` is a fatal
+    // compile error. This passed for the whole of feature 027 because perl *constant-folds*
+    // `"A" x 536870912` while compiling: the 512 MiB allocation happens before the error can be
+    // reported, so under a working limit the process is killed and the screen shows exactly what
+    // the test asks for. It surfaced the moment the limit was not enforced (T098), which is the
+    // one run where this probe had to be trustworthy.
     let out = term
         .run_within(
-            &format!("perl -e '\\$x = \"A\" x ({ASK_MIB} * 1024 * 1024); print \"ALLOCATED\\n\"'"),
+            &format!("perl -e '$x = \"A\" x ({ASK_MIB} * 1024 * 1024); print \"ALLOCATED\\n\"'"),
             Duration::from_secs(60),
         )
         .await;

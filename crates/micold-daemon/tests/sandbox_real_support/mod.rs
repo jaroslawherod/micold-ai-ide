@@ -310,6 +310,40 @@ pub fn purge(container: &str, network: &str) {
     let _ = Command::new(program)
         .args(["network", "rm", network])
         .output();
+    // Removal is not finished when `rm` returns — on podman.
+    //
+    // `docker rm -f` releases the name before it exits, so a test that deletes a container and
+    // recreates it under the same name works. Podman's returns while c/storage still holds the
+    // name, and the recreate fails with `creating container storage: the container name
+    // "..." is already in use`, which reads like a leaked container from an earlier run rather
+    // than the race it is. Waiting here rather than at the call sites keeps that asymmetry in one
+    // place; on Docker the first poll already finds nothing.
+    wait_until_absent(program, &["ps", "-a", "--filter"], "name", container);
+    wait_until_absent(program, &["network", "ls", "--filter"], "name", network);
+}
+
+/// Poll `<program> <list> <key>=^<name>$` until it comes back empty.
+fn wait_until_absent(program: &str, list: &[&str], key: &str, name: &str) {
+    let filter = format!("{key}=^{name}$");
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let out = Command::new(program)
+            .args(list)
+            .arg(&filter)
+            .args(["--format", "{{.Name}}{{.Names}}"])
+            .output();
+        let text = out
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+            .unwrap_or_default();
+        if !text.contains(name) {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{program} still lists `{name}` 20s after it was removed"
+        );
+        std::thread::sleep(Duration::from_millis(200));
+    }
 }
 
 /// Mounts the *state* directory, one level below the data home — the image sets
