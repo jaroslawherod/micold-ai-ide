@@ -139,10 +139,21 @@ found a real defect: `overlayfs` was classified as enforcing a storage limit it 
 
 ### B.7 — The development loop (FR-024c)
 
-- [ ] `mise run image` builds a `:dev` image from the working tree
-- [ ] Running against it works
-- [ ] Rebuild the client only, leave the `:dev` image stale, reconnect: refused as `StaleDevImage`,
+Run 2026-08-26 against Docker 29.5.1 on Linux; transcripts in `evidence/us7-dev-loop.md`. This is
+the part of the pass everyone assumes works because everyone builds a `:dev` image — and it did not:
+the `StaleDevImage` refusal reached the developer as a `{:?}` dump with no rebuild command, and the
+tag inside it was empty, because nothing ever set `MICOLD_IMAGE_REFERENCE`. Both fixed here.
+
+Box 4 is ticked for the round-trip only. "With the network off entirely" could not be checked on
+this machine and is recorded as unverified; what was measured is that no registry can serve the tag
+and that create succeeds under `--pull never`.
+
+- [x] `mise run image` builds a `:dev` image from the working tree
+- [x] Running against it works — with the staleness check *armed*, which is the claim a lenient
+      handshake does not make (`sandbox_real_fingerprint.rs`)
+- [x] Rebuild the client only, leave the `:dev` image stale, reconnect: refused as `StaleDevImage`,
       naming the tag and the rebuild command (FR-024d, R8, P-4)
-- [ ] `docker save` / `docker load` round-trips the image, and enabling the sandbox works with the
-      network off entirely (FR-024a — Principle IV's offline claim, which is nominal until this is
-      checked once)
+- [x] `docker save` / `docker load` round-trips the image (`sandbox_real_enable.rs`, SC-004a), and
+      enabling the sandbox consults no registry (FR-024a). Principle IV's offline claim holds as
+      "no registry is contacted"; "works with the machine offline" remains unverified — see the
+      evidence for why the usual substitutes test the wrong thing
