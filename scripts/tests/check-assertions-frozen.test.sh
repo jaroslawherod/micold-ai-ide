@@ -205,6 +205,15 @@ commit_in "$d" reverse
 run "in scope by a branch naming 028" 1 "names feature 028" "$d" HEAD~1 FREEZE_BRANCH=feat/028-encapsulation
 rm -rf "$d"
 
+# The report has to cite the rule the *matched* feature carries. 028 has no FR-027 -- its FR-021
+# restates the freeze -- and a first run of this check blocked correctly while telling the reader to
+# go read the wrong requirement in the wrong document.
+d="$(new_repo)"
+sed -i 's/!state.enabled,/state.enabled,/' "$d/crates/thing/tests/a.rs"
+claim_028 "$d"; commit_in "$d" reverse
+run "the report cites the matched feature's rule" 1 "feature 028's FR-021" "$d" HEAD~1
+rm -rf "$d"
+
 # --- adjudications: the third option, and the rule that keeps it honest (T074) -------------------
 
 # An adjudication file lives in the feature directory. Written here rather than by the fixture's

@@ -36,4 +36,36 @@ freeze is the safety argument for the whole restructuring: a check that reports 
 would let every subsequent phase pass by default, and that is precisely the failure this file's
 scope extension was written to close.
 
-(Observed output recorded by T005 below.)
+The probe: `crates/micold-client/tests/feature_write_isolation.rs` carries a two-line `assert!` whose
+message was rewritten in place — `"OWNERS names paths that are not \`State\` fields any more"` became
+`"OWNERS is stale"` — with the predicate and the `assert!(` opener untouched. That is deliberately
+the hardest case for this check and the one issue #146 was filed about: a line-based diff sees the
+opener as context and the changed line as carrying no `assert` token, so the rewrite would enter
+neither the removed set nor the added one and pass as "no assertion removed". The whole-file
+multiset comparison catches it.
+
+Observed, at exit 1:
+
+```
+assertion freeze: FAILED — 1 assertion(s) removed and not reinstated
+
+  - assert!(stale.is_empty(),"OWNERSnamespathsthatarenot`State`fieldsanymore:{stale:?}")
+      was in: crates/micold-client/tests/feature_write_isolation.rs
+      no near match survives — this looks like an outright deletion
+
+feature 028's FR-021 freezes the existing suite for that feature's duration.
+This change is in scope: it touches specs/028-feature-encapsulation/.
+Tests may be ADDED or RELOCATED; expectations may not be relaxed, rewritten or deleted.
+```
+
+Three things this pins, beyond the non-zero exit. The check names the assertion and the file it left.
+It resolves scope through the **directory** signal, not the branch name — this branch is
+`feat/feature-encapsulation`, which contains no "028", so had T004 extended only the branch case the
+freeze would still have been reporting. And it points the reader at
+`specs/028-feature-encapsulation/assertion-adjudications.md`, this file, rather than 021's.
+
+The first run of the probe blocked correctly and then cited feature 021's FR-027 as the rule, one
+line above naming 028 as the scope. That is fixed, and the suite now has a case holding it: reading
+the report is how every adjudication below gets written, and a report that sends the reader to the
+wrong requirement corrupts the input to that judgment. The probe was reverted; nothing in the suite
+carries the altered text.

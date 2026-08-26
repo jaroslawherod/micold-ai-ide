@@ -68,7 +68,7 @@ still work left to fail.
 **⚠️ CRITICAL**: No conversion work begins until this phase is complete.
 
 - [X] T004 Extend `scope_reason()` in `scripts/check-assertions-frozen.sh` to recognise feature 028 the same way it recognises 021 — both the `specs/028-feature-encapsulation/` path test and the `*028*` branch-name case — per [research.md](./research.md) §R7
-- [ ] T005 Verify the freeze now blocks rather than reports: change one assertion's text in any file under `crates/micold-client/tests/`, run `scripts/check-assertions-frozen.sh`, confirm a non-zero exit naming that assertion, revert the change, and record the observed message in `specs/028-feature-encapsulation/assertion-adjudications.md`
+- [X] T005 Verify the freeze now blocks rather than reports: change one assertion's text in any file under `crates/micold-client/tests/`, run `scripts/check-assertions-frozen.sh`, confirm a non-zero exit naming that assertion, revert the change, and record the observed message in `specs/028-feature-encapsulation/assertion-adjudications.md`
 
 **Checkpoint**: The freeze is live. Every conversion below must leave `mise run test` green and
 either change no assertion text or adjudicate what it changed.
