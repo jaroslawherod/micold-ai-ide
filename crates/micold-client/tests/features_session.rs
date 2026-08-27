@@ -19,7 +19,9 @@
 //! the kind of thing a refactor breaks quietly.
 
 use micold_client::app::State;
-use micold_client::features::session::{ForegroundChoice, SelectKind};
+use micold_client::features::session::{
+    AvailabilitySource, CliAvailability, ForegroundChoice, SelectKind,
+};
 use micold_core::project::{Availability, Project};
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
 use std::path::{Path, PathBuf};
@@ -476,7 +478,10 @@ use micold_client::features::session::{PressTarget, StartIntent};
 fn state_with(default_ai_cli: AiCli, available: &[AiCli]) -> State {
     State {
         default_ai_cli,
-        available_providers: available.to_vec(),
+        available_providers: Some(CliAvailability {
+            available: available.to_vec(),
+            source: AvailabilitySource::ThisComputer,
+        }),
         ..State::default()
     }
 }

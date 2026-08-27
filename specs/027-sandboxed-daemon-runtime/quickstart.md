@@ -171,6 +171,11 @@ found a real defect: `overlayfs` was classified as enforcing a storage limit it 
       alone (FR-026d)
 - [x] The overflow menu offers no control a section owns — no theme, no session survival — and
       session survival still works from its section under both placements (FR-026e, FR-014d)
+- [ ] A CLI the image does not provide is named where a CLI is chosen and where the image is
+      chosen, reads as a statement about the image rather than as the application failing, and does
+      not sit in the caution register (FR-023b). The wording is gated by
+      `missing_cli_is_reported_where_it_is_chosen.rs`; what only eyes settle is whether it is
+      legible in place, under the control it is about, in both schemes
 
 ### B.7 — The development loop (FR-024c)
 

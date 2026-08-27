@@ -20,6 +20,7 @@
 //! the crate.
 
 use crate::app::Message;
+use crate::features::session::CliAvailability;
 use crate::features::settings::{SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::material::{self, Button, Scrollable, Section, SectionList, SurfaceKind};
@@ -27,7 +28,6 @@ use crate::ui::settings::{appearance, daemon, environment, terminal};
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
-use micold_core::session::AiCli;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
 
@@ -41,7 +41,7 @@ const SHARING: &str = "Sharing";
 pub fn view<'a>(
     draft: &'a SettingsDraft,
     env_include_outcome: &'a EnvIncludeOutcome,
-    available_providers: &'a [AiCli],
+    availability: Option<&'a CliAvailability>,
     focused: Option<FieldId>,
     rail_collapsed: bool,
     scheme: ColorScheme,
@@ -84,9 +84,9 @@ pub fn view<'a>(
         SettingsSection::Appearance => appearance::view(draft, r),
         SettingsSection::Terminal => terminal::view(draft, focused, r),
         SettingsSection::Environment => {
-            environment::view(draft, env_include_outcome, available_providers, focused, r)
+            environment::view(draft, env_include_outcome, availability, focused, r)
         }
-        SettingsSection::Daemon => daemon::view(draft, focused, r),
+        SettingsSection::Daemon => daemon::view(draft, availability, focused, r),
     };
 
     // Scrolled, and only the page is: the rail and the actions stay where the user left them while

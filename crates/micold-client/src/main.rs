@@ -721,7 +721,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             location,
             unavailable_default,
         } => {
-            app.core.available_providers = app.caps.available_providers();
+            shell::daemon_sync::ask_cli_availability(app);
             app.core.update(Message::SessionStartMenuOpened {
                 location,
                 unavailable_default,

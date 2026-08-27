@@ -22,6 +22,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use crate::app::State;
+use crate::features::session::{AvailabilitySource, CliAvailability};
 use crate::features::window::FieldId;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::RuntimeCapabilities;
@@ -744,4 +745,56 @@ pub fn saved(state: &mut State) {
 /// The form was dismissed without saving.
 pub fn cancelled(state: &mut State) {
     state.settings_draft = None;
+}
+
+// --- Where a CLI is missing, and what to say about it (feature 027, FR-023b) ---
+
+/// The sentence shown where an image is chosen and where a CLI is chosen, when the place sessions
+/// run is missing one (FR-023b). `None` when there is nothing to say.
+///
+/// Two of the three `None` cases are the interesting ones:
+///
+/// - **the service has not answered yet.** Not "nothing is available" — the app has not asked, or
+///   the reply is in flight. Saying anything here would be a guess, and a guess that names a
+///   *specific* CLI as missing is worse than silence.
+/// - **everything is present.** The absence of a notice is the whole of "this is fine"; a green
+///   "all CLIs present" line is a second thing to read on every visit to a form that is not about
+///   AI CLIs.
+///
+/// The sentence never presents this as the application failing. It is a fact about the machine
+/// sessions run on, phrased as what that machine would have to provide, because that is where the
+/// user can act. FR-023b is explicit that it belongs *here*, at the two points of choice, and not
+/// at session start — by then the user has committed to something the app already knew would not
+/// work.
+pub fn missing_cli_notice(availability: Option<&CliAvailability>) -> Option<String> {
+    let availability = availability?;
+    let missing = availability.missing();
+    let names = name_list(&missing)?;
+    let verb = if missing.len() == 1 {
+        "isn't"
+    } else {
+        "aren't"
+    };
+    Some(match &availability.source {
+        AvailabilitySource::Image(reference) => format!(
+            "{names} {verb} in {reference}. Sessions run in that image, so it has to provide any \
+             AI CLI you want to use."
+        ),
+        AvailabilitySource::ThisComputer => {
+            format!("{names} {verb} installed on this computer, which is where sessions run.")
+        }
+    })
+}
+
+/// "Claude Code", "Claude Code and GitHub Copilot", "a, b and c" — `None` for an empty list.
+///
+/// Written out rather than `join(", ")` because this goes in a sentence, and a comma-separated
+/// list reads as a field value rather than as prose.
+fn name_list(clis: &[AiCli]) -> Option<String> {
+    let (last, rest) = clis.split_last()?;
+    if rest.is_empty() {
+        return Some(last.to_string());
+    }
+    let leading: Vec<String> = rest.iter().map(ToString::to_string).collect();
+    Some(format!("{} and {last}", leading.join(", ")))
 }
