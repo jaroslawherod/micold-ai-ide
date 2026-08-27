@@ -274,6 +274,52 @@ cp -R "$work/good" "$work/bad-search"
 HTML
 } > "$work/bad-search/index.html"
 
+# --- clips, and what a page may not do with one (feature 028, T066) --------------------------------
+#
+# A clip on this site is a poster with a play control: it holds still until the reader presses it
+# (FR-015a) and fetches no video bytes before that (FR-028). Both are one attribute away from being
+# wrong, and neither shows up in a link check, a budget check or a contrast check -- the page is
+# perfectly valid, it just starts moving at a reader who did not ask.
+#
+# So there are three fixtures: the figure written correctly, the same figure with `autoplay`, and the
+# same figure with a preload that fetches. The correct one is the control, because a check that
+# refused every video would pass this test and take the clips off the site.
+
+clip_figure() {
+  # $1 = the attributes under test, $2 = the path back to the site root
+  local attrs="$1" up="${2:-}"
+  cat <<HTML
+<figure class="media"><video controls loop muted playsinline ${attrs}
+  poster="${up}media/open-project.png" aria-label="A project opening in the main area" width="320" height="200">
+  <source src="${up}media/open-project.webm" type="video/webm">
+  <source src="${up}media/open-project.mp4" type="video/mp4">
+</video><figcaption>Opening a project.</figcaption></figure>
+HTML
+}
+
+clip_site() {
+  # $1 = the fixture directory, $2 = the attributes on the <video>
+  cp -R "$work/good" "$1"
+  mkdir -p "$1/media"
+  # Real files, so that a fetch the page should not make is a fetch that succeeds. A 404 would fail
+  # the page for a reason that is not the one under test.
+  cp "$work/good/shot.png" "$1/media/open-project.png"
+  printf 'x' > "$1/media/open-project.webm"
+  printf 'x' > "$1/media/open-project.mp4"
+  {
+    page_head
+    page_nav "../"
+    page_search "../"
+    printf '<h1>User guide</h1><p>Opening a project shows its worktrees.</p>\n'
+    clip_figure "$2" "../"
+    printf '</body></html>\n'
+  } > "$1/user-guide/index.html"
+}
+
+clip_site "$work/clip-good" 'preload="none"'
+clip_site "$work/clip-autoplay" 'autoplay preload="none"'
+clip_site "$work/clip-preload" 'preload="auto"'
+
 run() {
   local dir="$1"
   shift
@@ -314,6 +360,11 @@ expect_fail "a page three steps down the navigation fails" "$work/deep-nav" "gam
 
 printf '== search (FR-026, SC-006) ==\n'
 expect_fail "a search that answers with the wrong page first fails" "$work/bad-search" "user guide"
+
+printf '== clips hold still until the reader asks (FR-015a, FR-028, SC-011) ==\n'
+expect_pass "a clip with a play control and preload=\"none\" passes" "$work/clip-good"
+expect_fail "a clip that plays on its own fails" "$work/clip-autoplay" "autoplay"
+expect_fail "a clip that fetches its video before the reader asks fails" "$work/clip-preload" "preload"
 
 printf '\n'
 if [ "$failures" -eq 0 ]; then

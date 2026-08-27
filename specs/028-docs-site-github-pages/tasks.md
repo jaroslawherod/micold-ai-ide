@@ -209,8 +209,8 @@ and no video bytes were requested until a play control was pressed.
 
 ### Tests for User Story 3 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T065 [P] [US3] Write the failing `scripts/tests/clip-encode.test.sh`: over a fixture frame sequence, `site/capture/encode.sh` produces an `.mp4`, a `.webm` and a poster from the first frame, carries no audio track, runs under 15 seconds, and encodes bit-identically on two runs (FR-015, FR-011d)
-- [ ] T066 [P] [US3] Extend `scripts/tests/page-checks.test.sh` with a fixture page carrying an `autoplay` video and one with `preload="auto"`, and confirm the no-autoplay assertion fails both (FR-015a, FR-028, SC-011)
+- [X] T065 [P] [US3] Write the failing `scripts/tests/clip-encode.test.sh`: over a fixture frame sequence, `site/capture/encode.sh` produces an `.mp4`, a `.webm` and a poster from the first frame, carries no audio track, runs under 15 seconds, and encodes bit-identically on two runs (FR-015, FR-011d)
+- [X] T066 [P] [US3] Extend `scripts/tests/page-checks.test.sh` with a fixture page carrying an `autoplay` video and one with `preload="auto"`, and confirm the no-autoplay assertion fails both (FR-015a, FR-028, SC-011)
 
 ### Implementation for User Story 3
 
