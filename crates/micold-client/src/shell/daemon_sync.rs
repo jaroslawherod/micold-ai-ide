@@ -52,7 +52,7 @@ use micold_client::features::worktree_form::{
     BranchSource, Msg as FormMsg, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
 use micold_core::protocol::messages::{
-    CatalogSnapshot, ClientMsg, DaemonMsg, OperationResult, SessionProcess,
+    CatalogSnapshot, ClientInstance, ClientMsg, DaemonMsg, OperationResult, SessionProcess,
 };
 use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId, TerminalMode};
 use micold_core::worktree::{BranchOrigin, CreateMode};
@@ -604,9 +604,24 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // Another window took over a project we held (US5, FR-024). Mark it read-only here —
         // input is suppressed and a "take over" banner is shown — but never terminate.
         DaemonMsg::Displaced { project, by } => {
+            // ...unless the window it names is *this* one (`010` BUG-022). A reconnect attaches
+            // before the daemon has noticed the old connection is dead, so the old connection is
+            // displaced — by us — and its `Displaced` arrives on the new one, after the `Attached`
+            // that cleared the flag. Order decided, and the stale frame won: one window, no second
+            // window anywhere, read-only until the user clicked "Take over".
+            //
+            // The identity is what settles it, not an ordering rule. A generation counter would
+            // drop this frame as stale, but the same self-collision also arrives as a *timely*
+            // `Refused { ProjectBusy }` on the current connection (below), which no ordering rule
+            // can recognise. Comparing the build string cannot do it either: two genuinely
+            // different windows of one binary carry the same one, and they must still displace
+            // each other — which is why they carry an instance now.
+            if by.is(&ClientInstance::current()) {
+                return follow_up;
+            }
             app.displaced.insert(
                 project,
-                micold_client::features::connection::Hold::taken_over(by),
+                micold_client::features::connection::Hold::taken_over(by.to_string()),
             );
         }
         // A (re)attach was refused. `ProjectBusy` means another window holds it: the same
@@ -619,9 +634,24 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                     project, holder, ..
                 },
         } => {
+            // Unless the holder is this window's own superseded connection (`010` BUG-022). The
+            // daemon releases an attachment when the connection dies, but it learns that from the
+            // transport, which can lag a reconnect that the keepalive triggered — so the window
+            // that has just reconnected is refused its own project by its own corpse. Nothing is
+            // taken over by forcing here: the only holder is a connection this process has already
+            // replaced, and the user was never asked because there is nobody to ask about.
+            if holder.is(&ClientInstance::current()) {
+                if let Some(d) = &app.daemon {
+                    d.send(ClientMsg::Attach {
+                        project,
+                        force: true,
+                    });
+                }
+                return follow_up;
+            }
             app.displaced.insert(
                 project,
-                micold_client::features::connection::Hold::already_open(holder),
+                micold_client::features::connection::Hold::already_open(holder.to_string()),
             );
         }
         // An attach this window asked for was accepted (FR-024a). This is the fact that

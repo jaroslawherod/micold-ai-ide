@@ -1715,6 +1715,27 @@ pub(crate) mod tests {
     // --- T117 / FR-024a / SC-021: the read-only state must end when the daemon says we hold the
     // project (BUG-007) -----------------------------------------------------------------------
 
+    /// A *different* window: same build as this one, its own instance. Every gate below that
+    /// speaks of "another window" means this — a second process, which is what the daemon reports
+    /// when the takeover is real. `010` BUG-022 is the case where it is not.
+    fn other_window() -> micold_core::protocol::messages::ClientIdentity {
+        micold_core::protocol::messages::ClientIdentity::new(
+            "other-window",
+            micold_core::protocol::messages::ClientInstance {
+                pid: 4242,
+                nonce: "a-second-process".into(),
+            },
+        )
+    }
+
+    /// This window, as the daemon would name it back to us.
+    fn this_window() -> micold_core::protocol::messages::ClientIdentity {
+        micold_core::protocol::messages::ClientIdentity::new(
+            "micold-ai-ide/test",
+            micold_core::protocol::messages::ClientInstance::current(),
+        )
+    }
+
     /// An `App` holding `project` as its active project, with nothing else varied.
     fn app_on_project(project: &Path) -> App {
         let mut app = base_app();
@@ -1741,7 +1762,7 @@ pub(crate) mod tests {
             DaemonMsg::Refused {
                 reason: micold_core::protocol::messages::RefusalReason::ProjectBusy {
                     project: project.clone(),
-                    holder: "other-window".into(),
+                    holder: other_window(),
                     since_secs: 12,
                 },
             },
@@ -1790,7 +1811,7 @@ pub(crate) mod tests {
             DaemonMsg::Refused {
                 reason: micold_core::protocol::messages::RefusalReason::ProjectBusy {
                     project: project.clone(),
-                    holder: "other-window".into(),
+                    holder: other_window(),
                     since_secs: 12,
                 },
             },
@@ -1801,21 +1822,21 @@ pub(crate) mod tests {
             &mut taken,
             DaemonMsg::Displaced {
                 project: project.clone(),
-                by: "other-window".into(),
+                by: other_window(),
             },
         );
 
         assert_eq!(
             connection_status(&refused),
             ConnectionStatus::ProjectBusy {
-                holder: "other-window".into()
+                holder: other_window().to_string()
             },
             "nobody took anything from this window — it asked and was told no"
         );
         assert_eq!(
             connection_status(&taken),
             ConnectionStatus::Displaced {
-                by: "other-window".into()
+                by: other_window().to_string()
             },
             "and the window that really did lose the project keeps the sentence that fits it"
         );
@@ -1823,6 +1844,146 @@ pub(crate) mod tests {
             active_project_displaced(&refused) && active_project_displaced(&taken),
             "the difference is in what the user is told, not in what they may do: both are \
              read-only and both are resolved by the same take-over"
+        );
+    }
+
+    // --- `010` BUG-022: a window must not displace itself ---------------------------------------
+
+    /// The reported defect, end to end: one window, one project, no second window anywhere, and
+    /// the window goes read-only above a banner naming its own build.
+    ///
+    /// The sequence is a reconnect. The keepalive declares the link dead, the outer loop dials
+    /// again, the new connection attaches — and the daemon, which has not yet noticed the old
+    /// socket is gone, does exactly what FR-024 says: it displaces the holder and tells it so.
+    /// Both connections feed one `App`, so that `Displaced` lands after the new connection's
+    /// `Attached`, which is the frame that clears the flag. The stale frame wins, and re-latches
+    /// read-only on a window that just successfully attached.
+    ///
+    /// The pair is the point. A window that really did lose the project must still be told; what
+    /// must not happen is a window being told it lost the project to itself.
+    #[test]
+    fn a_window_is_not_displaced_by_its_own_reconnect_but_is_by_another_window() {
+        use micold_client::features::connection::ConnectionStatus;
+
+        let project = PathBuf::from("/repo/demo");
+
+        let mut myself = app_on_project(&project);
+        feed(
+            &mut myself,
+            DaemonMsg::Displaced {
+                project: project.clone(),
+                by: this_window(),
+            },
+        );
+
+        let mut other = app_on_project(&project);
+        feed(
+            &mut other,
+            DaemonMsg::Displaced {
+                project: project.clone(),
+                by: other_window(),
+            },
+        );
+
+        assert_eq!(
+            connection_status(&myself),
+            ConnectionStatus::Connected,
+            "the only window the user has must keep its project when its own reconnect \
+             supersedes its own dead connection (BUG-022)"
+        );
+        assert!(
+            !active_project_displaced(&myself),
+            "and it must keep typing into it — input suppression is the harm, the banner is only \
+             how the user finds out about it"
+        );
+        assert_eq!(
+            connection_status(&other),
+            ConnectionStatus::Displaced {
+                by: other_window().to_string()
+            },
+            "two genuinely different windows of one build must still displace each other, which \
+             is why the identity is compared and not the build string"
+        );
+    }
+
+    /// The same collision arriving as a refusal rather than a displacement — and the reason the
+    /// fix is an identity and not a connection generation.
+    ///
+    /// When the reconnect wins the race the other way round, the daemon still has the old
+    /// attachment and refuses the new connection's attach as `ProjectBusy`, naming the holder.
+    /// That frame is *timely*: it arrives on the current connection, in answer to a request this
+    /// window just made, so no staleness rule can discard it. Only the holder's identity says what
+    /// it is — this window's own corpse — and the window can then reclaim the project instead of
+    /// asking the user to take it over from themselves.
+    #[test]
+    fn a_refusal_by_this_windows_own_dead_connection_is_reclaimed_not_offered() {
+        use micold_client::features::connection::ConnectionStatus;
+
+        let project = PathBuf::from("/repo/demo");
+        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = app_on_project(&project);
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+
+        feed(
+            &mut app,
+            DaemonMsg::Refused {
+                reason: micold_core::protocol::messages::RefusalReason::ProjectBusy {
+                    project: project.clone(),
+                    holder: this_window(),
+                    since_secs: 3,
+                },
+            },
+        );
+
+        match rx.try_recv() {
+            Ok(ClientMsg::Attach { project: p, force }) => {
+                assert_eq!(p, project);
+                assert!(
+                    force,
+                    "a non-forced retry would be refused by the same dead connection forever"
+                );
+            }
+            other => panic!("expected a forced re-attach, got {other:?}"),
+        }
+        assert_eq!(
+            connection_status(&app),
+            ConnectionStatus::Connected,
+            "and the user is never shown a take-over offer against themselves"
+        );
+    }
+
+    /// The other half of that pair: a refusal naming a *different* window is still the user's
+    /// decision, and forcing it silently would be a takeover nobody confirmed (FR-023).
+    #[test]
+    fn a_refusal_by_another_window_is_still_offered_never_forced() {
+        use micold_client::features::connection::ConnectionStatus;
+
+        let project = PathBuf::from("/repo/demo");
+        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = app_on_project(&project);
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+
+        feed(
+            &mut app,
+            DaemonMsg::Refused {
+                reason: micold_core::protocol::messages::RefusalReason::ProjectBusy {
+                    project: project.clone(),
+                    holder: other_window(),
+                    since_secs: 3,
+                },
+            },
+        );
+
+        assert!(
+            rx.try_recv().is_err(),
+            "nothing may be sent: taking a project from another window is a confirmed action"
+        );
+        assert_eq!(
+            connection_status(&app),
+            ConnectionStatus::ProjectBusy {
+                holder: other_window().to_string()
+            },
+            "the window is told, and offered the take-over it must ask for"
         );
     }
 
@@ -1839,7 +2000,7 @@ pub(crate) mod tests {
             &mut app,
             DaemonMsg::Displaced {
                 project: project.clone(),
-                by: "other-window".into(),
+                by: other_window(),
             },
         );
         assert!(
@@ -1870,7 +2031,7 @@ pub(crate) mod tests {
                 &mut app,
                 DaemonMsg::Displaced {
                     project: p.clone(),
-                    by: "other-window".into(),
+                    by: other_window(),
                 },
             );
         }
@@ -1914,7 +2075,7 @@ pub(crate) mod tests {
             &mut app,
             DaemonMsg::Displaced {
                 project: project.clone(),
-                by: "other-window".into(),
+                by: other_window(),
             },
         );
         assert!(
@@ -2111,12 +2272,12 @@ pub(crate) mod tests {
         app.core.workspace.active = Some(project.clone());
         app.displaced.insert(
             project.clone(),
-            micold_client::features::connection::Hold::taken_over("other-window"),
+            micold_client::features::connection::Hold::taken_over(other_window().to_string()),
         );
         assert_eq!(
             connection_status(&app),
             ConnectionStatus::Displaced {
-                by: "other-window".into()
+                by: other_window().to_string()
             },
             "a takeover must win over a plain disconnect"
         );

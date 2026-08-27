@@ -21,6 +21,17 @@ use tokio_util::codec::Framed;
 
 type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
 
+/// The instance a simulated window presents. Derived from its build name so that each window in a
+/// test is a *distinct* process, which is what these tests are simulating — `ClientInstance::current()`
+/// would make every window here the same one, and `010` BUG-022 is precisely about what changes
+/// when two connections do share an instance.
+fn instance_of(build: &str) -> micold_core::protocol::messages::ClientInstance {
+    micold_core::protocol::messages::ClientInstance {
+        pid: 0,
+        nonce: build.into(),
+    }
+}
+
 /// Handshake a fresh client against `state`, consuming its `Welcome`. Returns the framed stream; the
 /// server task is detached but kept alive as long as the returned stream (its socket) is held.
 async fn connect(state: &Arc<DaemonState>, build: &str) -> Client {
@@ -35,6 +46,7 @@ async fn connect(state: &Arc<DaemonState>, build: &str) -> Client {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: build.into(),
+            client_instance: instance_of(build),
             client_package_version: PACKAGE_VERSION.into(),
             // Feature 027: the host-process placement presents no token, and a fingerprint
             // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
@@ -102,7 +114,7 @@ async fn a_second_attach_is_refused_then_force_displaces_the_holder() {
             },
         } => {
             assert_eq!(project, std::path::Path::new("/proj"));
-            assert_eq!(holder, "window-A"); // the refusal names the current holder
+            assert_eq!(holder.build, "window-A"); // the refusal names the current holder
         }
         other => panic!("B expected ProjectBusy, got {other:?}"),
     }
@@ -115,8 +127,49 @@ async fn a_second_attach_is_refused_then_force_displaces_the_holder() {
     match next_control(&mut a).await {
         DaemonMsg::Displaced { project, by } => {
             assert_eq!(project, std::path::Path::new("/proj"));
-            assert_eq!(by, "window-B");
+            assert_eq!(by.build, "window-B");
         }
+        other => panic!("A expected Displaced, got {other:?}"),
+    }
+}
+
+/// `010` BUG-022: the two frames that say who holds a project must name the *window*, not only the
+/// build — because the window that reads them has to be able to tell whether it is itself.
+///
+/// The daemon's own behaviour is unchanged and deliberately so: exclusivity is per connection, and
+/// two connections presenting the same instance are still two attachments, one of which displaces
+/// the other. That is what the daemon cannot fix and what it must not try to — it cannot know that
+/// a window has replaced its own connection rather than a second window having opened. What it can
+/// do is report enough for the client to know, which is the whole of this fix on this side.
+#[tokio::test]
+async fn the_holder_is_named_by_window_not_only_by_build() {
+    let state = state();
+    let mut a = connect(&state, "same-build").await;
+    let mut b = connect(&state, "same-build").await;
+
+    attach(&mut a, "/proj", false).await;
+
+    let holder = match attach(&mut b, "/proj", false).await {
+        DaemonMsg::Refused {
+            reason: RefusalReason::ProjectBusy { holder, .. },
+        } => holder,
+        other => panic!("B expected ProjectBusy, got {other:?}"),
+    };
+    assert_eq!(
+        holder.instance,
+        instance_of("same-build"),
+        "the refusal must carry the holder's instance, which is the only thing that distinguishes \
+         two windows of one build"
+    );
+
+    attach(&mut b, "/proj", true).await;
+    match next_control(&mut a).await {
+        DaemonMsg::Displaced { by, .. } => assert_eq!(
+            by.instance,
+            instance_of("same-build"),
+            "and so must the displacement — a build string alone told the displaced window \
+             nothing it did not already know about itself"
+        ),
         other => panic!("A expected Displaced, got {other:?}"),
     }
 }

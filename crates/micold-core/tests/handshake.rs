@@ -133,3 +133,61 @@ fn matching_package_version_is_accepted_even_with_differing_build_strings() {
     )
     .is_ok());
 }
+
+/// `010` BUG-022: an instance identifies the *process*, so it must not change between the
+/// connections that process makes.
+///
+/// This is the property the whole fix rests on. A window that reconnects presents the same
+/// instance it presented before; that is how the daemon's answer about who holds a project can be
+/// recognised by the window that holds it. An instance minted per connection would be a fresh
+/// stranger every time, and the self-collision would look exactly like a second window again.
+#[test]
+fn a_client_instance_is_stable_for_the_life_of_the_process() {
+    use micold_core::protocol::messages::ClientInstance;
+
+    assert_eq!(
+        ClientInstance::current(),
+        ClientInstance::current(),
+        "every connection this process opens must present the same window"
+    );
+    assert_eq!(
+        ClientInstance::current().pid,
+        std::process::id(),
+        "and it must name this process, so a banner can point at something a user can also see"
+    );
+}
+
+/// The half a build string cannot do, and the half an instance cannot do — stated together,
+/// because the fix keeps both and either alone would be wrong.
+#[test]
+fn two_windows_of_one_build_share_a_build_string_and_differ_by_instance() {
+    use micold_core::protocol::messages::{ClientIdentity, ClientInstance};
+
+    let one = ClientIdentity::new(
+        "micold-ai-ide/0.10.0",
+        ClientInstance {
+            pid: 11,
+            nonce: "one".into(),
+        },
+    );
+    let two = ClientIdentity::new(
+        "micold-ai-ide/0.10.0",
+        ClientInstance {
+            pid: 12,
+            nonce: "two".into(),
+        },
+    );
+
+    assert_eq!(
+        one.build, two.build,
+        "the build is what the two windows have in common — comparing it could never tell them \
+         apart, which is how a window came to displace itself"
+    );
+    assert_ne!(one, two, "the instance is what tells them apart");
+    assert!(one.is(&one.instance) && !one.is(&two.instance));
+    assert_eq!(
+        one.to_string(),
+        "micold-ai-ide/0.10.0 (window 11)",
+        "and the banner names the window, not only the build a reader shares with it (BUG-023)"
+    );
+}

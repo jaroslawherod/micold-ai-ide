@@ -77,6 +77,7 @@ async fn a_viewing_client_receives_frames_and_can_drive_the_session() {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
+            client_instance: micold_core::protocol::messages::ClientInstance::current(),
             client_package_version: PACKAGE_VERSION.into(),
             // Feature 027: the host-process placement presents no token, and a fingerprint
             // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
@@ -156,6 +157,7 @@ async fn session_resize_reframes_at_the_new_size() {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
+            client_instance: micold_core::protocol::messages::ClientInstance::current(),
             client_package_version: PACKAGE_VERSION.into(),
             // Feature 027: the host-process placement presents no token, and a fingerprint
             // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
@@ -248,6 +250,7 @@ async fn a_client_can_fetch_scrollback_history_over_the_wire() {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
+            client_instance: micold_core::protocol::messages::ClientInstance::current(),
             client_package_version: PACKAGE_VERSION.into(),
             // Feature 027: the host-process placement presents no token, and a fingerprint
             // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
@@ -407,6 +410,7 @@ async fn a_client_can_start_view_and_drive_a_session_from_cold_over_the_wire() {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
+            client_instance: micold_core::protocol::messages::ClientInstance::current(),
             client_package_version: PACKAGE_VERSION.into(),
             // Feature 027: the host-process placement presents no token, and a fingerprint
             // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
