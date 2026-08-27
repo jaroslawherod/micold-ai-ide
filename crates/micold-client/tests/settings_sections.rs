@@ -295,10 +295,11 @@ fn every_declared_setting_has_a_control_in_its_module() {
     for (module, src) in section_sources() {
         let body = body_of(&src);
         for (setting, message) in declared_by(&src) {
-            if !body.contains(&message) {
+            if !body.contains(&format!("SettingsMsg::{message}")) {
                 violations.push(format!(
-                    "{module} declares `{setting}` as emitting `Message::{message}`, but the \
-                     module never emits it — the declaration describes a control that is not there"
+                    "{module} declares `{setting}` as emitting \
+                     `Message::Settings(SettingsMsg::{message})`, but the module never emits it \
+                     — the declaration describes a control that is not there"
                 ));
             }
         }
@@ -308,16 +309,24 @@ fn every_declared_setting_has_a_control_in_its_module() {
 
 /// And the message it names has to be a real one, so a renamed variant cannot leave the
 /// declaration pointing at nothing.
+///
+/// The declaration names a variant of `features::settings::Msg`, not of `app::Message`: since
+/// feature 028 the root carries one `Settings(settings::Msg)` arm and the variants live in the
+/// feature that owns them, so that module — not `app.rs` — is where "is this a real message?" is
+/// answered.
 #[test]
 fn every_declared_message_exists_on_the_application_message() {
-    let app = read(&client_dir().join("src/app.rs"));
+    let vocabulary = read(&client_dir().join("src/features/settings.rs"));
     let mut violations = Vec::new();
     for (module, src) in section_sources() {
         for (setting, message) in declared_by(&src) {
-            if !app.contains(&message) {
+            if !vocabulary.contains(&format!("{message}("))
+                && !vocabulary.contains(&format!("{message},"))
+            {
                 violations.push(format!(
-                    "{module} declares `{setting}` as `Message::{message}`, which `app.rs` does \
-                     not carry"
+                    "{module} declares `{setting}` as \
+                     `Message::Settings(SettingsMsg::{message})`, which \
+                     `features/settings.rs` does not carry"
                 ));
             }
         }

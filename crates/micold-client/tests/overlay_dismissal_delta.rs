@@ -37,7 +37,6 @@ use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
-use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;

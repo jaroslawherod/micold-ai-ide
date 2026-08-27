@@ -131,6 +131,12 @@ const COMPONENT_LOCAL: &[(&str, &str)] = &[
          *which* tab, so it outlives the tab widget that opened it",
     ),
     (
+        "session.start_press",
+        "tests/session_start_press.rs::the_list_the_primary_half_opens_hangs_from_the_press — the \
+         point is recorded on the press and read back on the release, a message later, so it \
+         outlives the button that reported it (018 BUG-008)",
+    ),
+    (
         "sidebar.default_expanded",
         "tests/switch_active.rs::view_state_does_not_carry_from_the_project_you_left — the flag is \
          reset by a project switch, which happens above the sidebar",

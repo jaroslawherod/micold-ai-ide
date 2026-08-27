@@ -24,13 +24,10 @@ use micold_core::tokens::Roles;
 // so to the compiler this is unused. Deleting it would take the gate's evidence with it.
 #[allow(dead_code)]
 pub const SETTINGS: &[(&str, &str)] = &[
-    ("env_include_enabled", "SettingsEnvIncludeEnabledToggled"),
-    ("env_include_script_path", "SettingsEnvIncludePathChanged"),
-    (
-        "env_include_timeout_secs",
-        "SettingsEnvIncludeTimeoutChanged",
-    ),
-    ("default_ai_cli", "SettingsDefaultAiCliChanged"),
+    ("env_include_enabled", "EnvIncludeEnabledToggled"),
+    ("env_include_script_path", "EnvIncludePathChanged"),
+    ("env_include_timeout_secs", "EnvIncludeTimeoutChanged"),
+    ("default_ai_cli", "DefaultAiCliChanged"),
 ];
 
 /// The failure category and its diagnostic for the most recent resolution attempt, or `None` when

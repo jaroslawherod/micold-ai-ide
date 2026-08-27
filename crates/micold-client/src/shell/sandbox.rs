@@ -11,6 +11,8 @@
 
 use std::path::PathBuf;
 
+use iced::Task;
+use micold_client::app::Message;
 use micold_client::features::sandbox::Msg as SandboxMsg;
 use micold_core::endpoint::DEFAULT_SANDBOX_PORT;
 use micold_core::protocol::auth::{host_token_path, Token, CONTAINER_TOKEN_PATH};
@@ -284,31 +286,6 @@ pub fn control_port() -> u16 {
     DEFAULT_SANDBOX_PORT
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_container_name_is_fixed() {
-        // A name derived from the working directory or a timestamp would accumulate a container per
-        // run, which is the leftover-sandbox failure the spec names (US6 scenario 5).
-        assert_eq!(CONTAINER_NAME, "micold-sandbox");
-    }
-
-    #[test]
-    fn host_facts_are_gathered_without_reading_a_runtime() {
-        // Cheap and side-effect-free: gathering must not depend on Docker being installed, or the
-        // "runtime is not installed" failure could never be reported properly.
-        let facts = HostFacts::gather(std::env::temp_dir());
-        assert!(facts.layout.git_config.is_some());
-    }
-
-    #[test]
-    fn the_control_port_is_the_documented_default() {
-        assert_eq!(control_port(), DEFAULT_SANDBOX_PORT);
-    }
-}
-
 /// This feature's entry point: one arm in `main.rs` routes here (feature 028, contract M2).
 ///
 /// Shape **B** with no pure half, like `shell/connection.rs` beside it: every arm returns a
@@ -316,10 +293,7 @@ mod tests {
 /// `features/sandbox.rs`. The bodies did not move — they are `main.rs`'s six arms, verbatim, with
 /// the routing decision stated once next to them instead of interleaved with the overlay and
 /// session arms that surrounded them.
-pub fn update(
-    app: &mut crate::App,
-    msg: micold_client::features::sandbox::Msg,
-) -> iced::Task<micold_client::app::Message> {
+pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
     use micold_client::features::sandbox::Msg;
 
     match msg {
@@ -396,5 +370,30 @@ pub fn update(
             }
             iced::Task::none()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_container_name_is_fixed() {
+        // A name derived from the working directory or a timestamp would accumulate a container per
+        // run, which is the leftover-sandbox failure the spec names (US6 scenario 5).
+        assert_eq!(CONTAINER_NAME, "micold-sandbox");
+    }
+
+    #[test]
+    fn host_facts_are_gathered_without_reading_a_runtime() {
+        // Cheap and side-effect-free: gathering must not depend on Docker being installed, or the
+        // "runtime is not installed" failure could never be reported properly.
+        let facts = HostFacts::gather(std::env::temp_dir());
+        assert!(facts.layout.git_config.is_some());
+    }
+
+    #[test]
+    fn the_control_port_is_the_documented_default() {
+        assert_eq!(control_port(), DEFAULT_SANDBOX_PORT);
     }
 }

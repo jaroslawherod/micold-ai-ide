@@ -103,7 +103,7 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
     // Feature 026: the "start a session on…" list, opened from a row's chevron. A menu rather than
     // a dialog — summoned from a control, anchored to the sidebar, dismissed by clicking away —
     // so it registers in the context-menu band with the other two.
-    ("session_start_menu", "session_start_menu", |s| {
+    ("session.start_menu", "session_start_menu", |s| {
         s.session.start_menu = Some(micold_client::features::session::StartMenu {
             location: SessionLocation::Default,
             anchor: (4, 2),

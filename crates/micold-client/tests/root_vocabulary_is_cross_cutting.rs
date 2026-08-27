@@ -634,15 +634,14 @@ fn the_scan_finds_the_vocabulary_it_is_meant_to_read() {
     // the live scroll doors (`SidebarScrolled`, `TabStripScrolled`) route to the same
     // `close_on_scroll_beneath`, but they are feature vocabulary and reach it from inside their
     // own modules, so the root has exactly one arm left that resolves through a registry helper.
-    for expected in ["EscapePressed"] {
-        assert!(
-            scan.owners
-                .get(expected)
-                .is_some_and(|o| o.contains("registry")),
-            "`Message::{expected}` no longer resolves to the overlay registry, so the helper \
-             following this guard depends on has stopped working"
-        );
-    }
+    let expected = "EscapePressed";
+    assert!(
+        scan.owners
+            .get(expected)
+            .is_some_and(|o| o.contains("registry")),
+        "`Message::{expected}` no longer resolves to the overlay registry, so the helper \
+         following this guard depends on has stopped working"
+    );
     assert!(
         scan.producers.values().any(|&n| n > 0),
         "no variant has a producer, so the no-producer verdict is unreachable by construction"

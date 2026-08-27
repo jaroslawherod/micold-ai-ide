@@ -42,18 +42,15 @@ use micold_core::tokens::Roles;
 // so to the compiler this is unused. Deleting it would take the gate's evidence with it.
 #[allow(dead_code)]
 pub const SETTINGS: &[(&str, &str)] = &[
-    ("daemon.placement", "SettingsPlacementChanged"),
-    ("daemon.sandbox.runtime", "SettingsRuntimeChanged"),
-    ("daemon.sandbox.image", "SettingsImageKindChanged"),
-    ("daemon.sandbox.credentials", "SettingsCredentialToggled"),
-    (
-        "daemon.sandbox.survive_logout",
-        "SettingsSurviveLogoutToggled",
-    ),
+    ("daemon.placement", "PlacementChanged"),
+    ("daemon.sandbox.runtime", "RuntimeChanged"),
+    ("daemon.sandbox.image", "ImageKindChanged"),
+    ("daemon.sandbox.credentials", "CredentialToggled"),
+    ("daemon.sandbox.survive_logout", "SurviveLogoutToggled"),
     // One persisted field with four controls, declared once against the first of them — the same
     // shape as `daemon.sandbox.image` above.
-    ("daemon.sandbox.budget", "SettingsCpuLimitChanged"),
-    ("daemon.sandbox.network", "SettingsNetworkChanged"),
+    ("daemon.sandbox.budget", "CpuLimitChanged"),
+    ("daemon.sandbox.network", "NetworkChanged"),
 ];
 
 const PLACEMENTS: &[Named<PlacementKind>] = &[

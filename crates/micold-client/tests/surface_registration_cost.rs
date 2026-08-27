@@ -380,9 +380,7 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
             }),
             selector: Some(Selector::open_at(PathBuf::from("/tmp"))),
             forget_target: Some(PathBuf::from("/p")),
-            ..Default::default()
         },
-
         worktree_form: worktree_form::State {
             form: Some(Default::default()),
             ..Default::default()
@@ -390,7 +388,6 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
         help: help::State {
             about_open: true,
             help_menu_open: true,
-            ..Default::default()
         },
         ..State::default()
     };

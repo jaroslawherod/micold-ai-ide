@@ -136,10 +136,9 @@ fn dialogs() -> Vec<Dialog> {
 fn state(dialog: Option<&Dialog>, filter_open: bool) -> State {
     let mut state = State {
         sidebar: sidebar::State {
-            filter_open: filter_open,
+            filter_open,
             ..Default::default()
         },
-
         ..Default::default()
     };
     if let Some(dialog) = dialog {

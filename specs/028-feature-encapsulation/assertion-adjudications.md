@@ -874,3 +874,63 @@ Only the message was rewritten, to say why `workspace.` is now the whole of the 
 
 Under B1 this is a strengthening with a reworded explanation, not a relaxation. The freeze's
 near-match scoring reads the message, not the predicate, so it cannot see that on its own.
+
+## T058 — the merge: features 026 and 027 arrive flat and are folded in
+
+`main` moved while Story 1 and Story 2 were being written. Three features landed there — 026 (a
+session records which AI CLI it runs, and Copilot joins as a second provider), 027 (the session
+daemon inside a container sandbox), and 021's T079/T081 — and every one of them was written against
+the flat root: flat `Message::Session*` and `Message::Settings*` variants, flat `state.default_ai_cli`
+and `state.notify`. Their tests assert in that vocabulary.
+
+Merging them means applying this feature's transformation to assertions that were written after the
+transformation was designed and before it was merged. It is the same move the thirteen sections
+above record, performed once more on a later arrival; the only reason it needs its own entry is that
+the freeze's key includes the assertion's *text*, so a path getting one segment longer reads as a
+loss no matter how many times it has already been adjudicated.
+
+Three renames account for all 32:
+
+| Was (flat, on `main`) | Is | Owner |
+|---|---|---|
+| `core.notify` / `app.core.notify` | `…notifications.queue` | T028 |
+| `state.default_ai_cli`, `.offered_providers()`, `.provider_for_start()`, `.start_intent()`, `.start_affordance_offers_a_choice()`, `.default_ai_cli_is_available()`, `core.announced_start_failures` | `…session.<same>` | T036 |
+| `Message::SessionStartRequested`, `SessionStartMenuOpened`, `SessionStartMenuAnchored` | `Message::Session(SessionMsg::StartRequested \| StartMenuOpened \| StartMenuAnchored)` | T014 |
+
+Every predicate is byte-for-byte what `main` wrote, and every message string is unchanged — the
+near-match column in the report reads 83–98% for all of them, and the residue is the inserted
+`.session.` / `.notifications.queue.` / `SessionMsg::` segment and nothing else. No assertion was
+weakened, none was dropped, and no test lost a case: the count on both sides of the merge is the
+same. Under B1 these are the same expectations, reached by a longer path.
+
+was: assert!(!core.announced_start_failures.contains_key(&id()),"asessionthatisnolongerfailedhasnofailureoutstandingtohavebeenreported")
+was: assert!(!published.iter().any(|m|matches!(m,MSessionStartMenuOpened(_))),"andnolistinthewayofit.Published:{published:?}")
+was: assert!(!published.iter().any(|m|matches!(m,MSessionStartRequested{..})),"nothingmaybestartedonaCLIthatisnotinstalled—notthemissingdefault,andnot\asilentsubstitutionoftheonethatis(FR-002/FR-004).Published:{published:?}")
+was: assert!(!state.default_ai_cli_is_available())
+was: assert!(!state.offered_providers().contains(&AiCCopilot))
+was: assert!(!state.start_affordance_offers_a_choice())
+was: assert!(app.core.notify.visible().is_none(),"normayanythingberefused:noverdicthasbeengivenyet")
+was: assert!(published.iter().any(|m|matches!(m,MSessionStartMenuAnchored(_))),"withapointtohangthelistfrom,sincetheprimaryhalfcannowopenoneandasidebar\row'spositionisnotsomethingtheviewholds(018BUG-008).Published:{published:?}")
+was: assert!(published.iter().any(|m|matches!(m,MSessionStartMenuOpened(SessionLDefault))),"andthepresshasto*do*something:theavailableCLIsareofferedatthatmoment,which\isthesamelistthechevronopens.Published:{published:?}")
+was: assert!(published.iter().any(|m|matches!(m,MSessionStartRequested{location:SessionLDefault,provider:AiCCopilot,})),"onepress,thestoreddefault,started(SC-001).Published:{published:?}")
+was: assert_eq!(app.core.notify.visible().map(|n|n.message.as_str()),Some(NOT_A_REPOSITORY),"thewordingmustnotforkbywhoanswered")
+was: assert_eq!(core.notify.visible(),None)
+was: assert_eq!(core.notify.visible(),None,"andeverysnapshotafteritisthesamefact,notanewone—abadgemovingpublishesa\catalog(T086),soabannerpersnapshotwouldbeoneeveryfewsecondsforaslongas\thesessionstayedfailed")
+was: assert_eq!(core.notify.visible(),None,"anunchangedfailureisnotnewsoneverysnapshotthatcarriesit")
+was: assert_eq!(core.notify.visible(),None,"asessionthathasnotbeenstartedhasnothingtoreport")
+was: assert_eq!(core.notify.visible().map(|n|n.message.clone()),Some(REASON.to_string()),"thefirstreportofafailureisnews")
+was: assert_eq!(core.notify.visible().map(|n|n.message.clone()),Some(REASON.to_string()),"thisisasecondfailureandtheuserhasnotbeentoldaboutit—suppressingitbecause\thesentencematchesthelastonewouldsilencearealreport")
+was: assert_eq!(core.notify.visible().map(|n|n.message.clone()),Some(gone.to_string()),"theCLIgoingmissingandtheconversationgoingmissingaretwodifferentthingstofix,\andthesecondmustnotbeswallowedbecausethefirstwasalreadysaid")
+was: assert_eq!(core.notify.visible().map(|n|n.message.clone()),Some(reason.clone()),"thegive-upthedaemonrecordediswhattheuseristold")
+was: assert_eq!(opened,vec![&MSessionStartMenuOpened(SessionLDefault)],"oneopen,forthisrow'slocation—thechevron'smessage,sotherefreshthebinarydoes\onithappensforthispresstoo.Published:{published:?}")
+was: assert_eq!(state.default_ai_cli,AiCClaudeCode,"choosinganoverrideforonesessionmustnotchangewhatthenextonedefaultsto")
+was: assert_eq!(state.default_ai_cli,AiCCopilot,"andthestoreddefaultisnotrewrittenonthewaypast(researchR11)")
+was: assert_eq!(state.offered_providers(),vec![AiCClaudeCode])
+was: assert_eq!(state.provider_for_start(None),AiCClaudeCode,"andthenextnewonetakesthenewdefault")
+was: assert_eq!(state.provider_for_start(None),AiCCopilot)
+was: assert_eq!(state.provider_for_start(Some(AiCCopilot)),AiCCopilot)
+was: assert_eq!(state.start_intent(PressTPrimary),StartIOfferChoice(vec![AiCClaudeCode]))
+was: assert_eq!(state.start_intent(PressTPrimary),StartIStart(AiCClaudeCode))
+was: assert_eq!(state.start_intent(PressTPrimary),StartIStart(AiCClaudeCode),"andtheprimaryhalfisunchanged—thesingle-CLIuserisunaffectedbythisfeature")
+was: assert_eq!(state.start_intent(PressTSecondary),StartIOfferChoice(vec![AiCClaudeCode,AiCCopilot]))
+was: assert_eq!(state.start_intent(target),StartINothingAvailable)
