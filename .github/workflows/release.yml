@@ -105,6 +105,22 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: Install iced + packaging system dependencies
         run: |
+          # Drop the vendor apt repositories the runner image preconfigures (Microsoft's
+          # `azure-cli` and `prod`, Google Chrome) before updating. Every package installed below
+          # comes from the Ubuntu archive; none has ever come from those. But `apt-get update`
+          # exits 100 if *any* configured repository fails, so an outage in software this project
+          # does not use fails the job -- as one did on 2026-08-27, when packages.microsoft.com
+          # answered 403 for both of its repositories and the only consequence was a red build
+          # that a re-run cleared.
+          #
+          # Emptying `sources.list.d` except for `ubuntu.sources` leaves the archive itself alone on
+          # both runner generations: jammy keeps it in `/etc/apt/sources.list`, noble in
+          # `sources.list.d/ubuntu.sources`. Deleting by exception rather than by `*.list` matters
+          # because the vendor repositories are defined as `.list` on one image generation and as
+          # deb822 `.sources` on the other. If a future image moved the archive somewhere this does
+          # remove, the install below would fail immediately on a missing package rather than
+          # silently install the wrong thing.
+          sudo find /etc/apt/sources.list.d -mindepth 1 -not -name ubuntu.sources -delete
           sudo apt-get update
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libx11-dev \
