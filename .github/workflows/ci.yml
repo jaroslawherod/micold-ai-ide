@@ -417,9 +417,12 @@ jobs:
           base="https://github.com/lycheeverse/lychee/releases/download/$LYCHEE_TAG"
           curl -fsSL -O "$base/$LYCHEE_ASSET" -O "$base/$LYCHEE_ASSET.sha256"
           sha256sum -c "$LYCHEE_ASSET.sha256"
-          tar xzf "$LYCHEE_ASSET" lychee
-          sudo install -m 0755 lychee /usr/local/bin/lychee
-          rm -f "$LYCHEE_ASSET" "$LYCHEE_ASSET.sha256" lychee
+          # The binary is inside a directory named after the asset, not at the root of the
+          # archive -- `tar xzf "$LYCHEE_ASSET" lychee` finds nothing and fails the job.
+          tar xzf "$LYCHEE_ASSET"
+          sudo install -m 0755 "${LYCHEE_ASSET%.tar.gz}/lychee" /usr/local/bin/lychee
+          rm -rf "$LYCHEE_ASSET" "$LYCHEE_ASSET.sha256" "${LYCHEE_ASSET%.tar.gz}"
+          lychee --version
       - name: Every page is listed, and the theme is drawn from the tokens
         run: site/checks/page-set.sh
       - name: The pages, the media manifest and the scenes agree
