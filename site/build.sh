@@ -101,6 +101,18 @@ if [ "$render" -eq 1 ]; then
   command -v mdbook >/dev/null 2>&1 ||
     die "mdbook is not installed -- see site/README.md for the toolchain"
   mdbook build "$site"
+
+  # A clip is encoded out of a directory of frame PNGs, and `capture.sh` writes that directory
+  # beside the encodes and requires it to still be there on the next run -- that is how it tells a
+  # clip that was captured from one that was half-captured -- so it cannot be deleted from the
+  # staging tree. mdBook copies everything under `src/` into the book, so the frames arrive in the
+  # built site too: on this repository ~4 MB of PNGs that are already inside the .webm and the .mp4,
+  # that no page links to and no reader ever downloads. They are dropped from the rendered copy
+  # here, which is the only copy that is deployed. `media-budget.sh` then asserts the result rather
+  # than trusting this line, so an intermediate that lands the same way in future fails the build
+  # instead of quietly shipping.
+  [ -d "$book/media" ] &&
+    find "$book/media" -maxdepth 1 -type d -name '*.frames' -exec rm -rf {} +
 fi
 
 [ -d "$book" ] || die "there is no built site at $book -- run without --checks-only first"

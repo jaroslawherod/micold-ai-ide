@@ -13,6 +13,11 @@
 # single clip file (SC-012). A picture shown on two pages is counted on both, because it is
 # downloaded on both.
 #
+# The third rule is not a budget at all: nothing may be published under `media/` that no page
+# references. Such a file is invisible to the budgets above -- no page links to it, so it is on no
+# page's total -- and the deploy carries it anyway. See the rule itself, below, for the case that
+# put it here.
+#
 # The check never repairs anything. Downscaling on the author's behalf is the obvious convenience
 # and the wrong one: the published picture would then differ from the captured one with nobody
 # having compared them, and a scene that quietly got heavier would be papered over on every
@@ -62,6 +67,15 @@ mb() { awk -v b="$1" 'BEGIN { printf "%.1f MB", b / 1000000 }'; }
 
 root="$(cd "$dir" && pwd)"
 
+# Two pages reach the same picture by different relative paths -- `media/x.png` from the root and
+# `../media/x.png` one directory down -- so the paths have to be resolved before they can be
+# compared with what is on disk. `realpath` and `readlink -f` are not both present everywhere; `cd`
+# is.
+declare -A referenced=()
+canon() {
+  printf '%s/%s\n' "$(cd "$(dirname "$1")" && pwd -P)" "$(basename "$1")"
+}
+
 pages=0
 while IFS= read -r page; do
   pages=$((pages + 1))
@@ -85,6 +99,7 @@ while IFS= read -r page; do
       *) file="$page_dir/$ref" ;;
     esac
     [ -f "$file" ] || continue
+    referenced["$(canon "$file")"]=1
     size="$(wc -c <"$file")"
     rel="${file#"$root"/}"
     case "${ref##*.}" in
@@ -113,10 +128,39 @@ if [ "$pages" -eq 0 ]; then
   exit 2
 fi
 
+# Every page has now said what it wants, so anything left under media/ is weight nobody asked for.
+# The capture step is where it comes from: a clip is encoded out of a directory of frame PNGs that
+# is written beside the encodes, in the same staged directory the renderer copies wholesale into the
+# built site. Those frames are already inside the .webm and the .mp4, so publishing them costs
+# megabytes on every deploy that no reader ever downloads -- and no per-page budget above can catch
+# it, because catching it there would require a page to link to them, which is the very thing that
+# is not happening.
+if [ -d "$root/media" ]; then
+  orphans=()
+  orphan_bytes=0
+  while IFS= read -r file; do
+    [ -n "${referenced["$(canon "$file")"]:-}" ] && continue
+    size="$(wc -c <"$file")"
+    orphan_bytes=$((orphan_bytes + size))
+    orphans+=("${file#"$root"/}|$size")
+  done < <(find "$root/media" -type f | sort)
+
+  if [ "${#orphans[@]}" -gt 0 ]; then
+    report "$(printf '%d file(s) under media/ totalling %s are published but no page references them' \
+      "${#orphans[@]}" "$(mb "$orphan_bytes")")"
+    # Enough of them to recognise the shape -- a whole `.frames` directory reads the same in five
+    # lines as in seventy -- and a count for the rest.
+    for entry in "${orphans[@]:0:5}"; do
+      detail "$(printf '%-52s %s' "${entry%%|*}" "$(mb "${entry##*|}")")"
+    done
+    [ "${#orphans[@]}" -gt 5 ] && detail "... and $(( ${#orphans[@]} - 5 )) more"
+  fi
+fi
+
 if [ "$problems" -eq 0 ]; then
-  printf 'media-budget: %d page(s) under %s -- every page inside %s of stills, every clip inside %s\n' \
+  printf 'media-budget: %d page(s) under %s -- every page inside %s of stills, every clip inside %s, nothing published unreferenced\n' \
     "$pages" "$dir" "$(mb "$still_budget")" "$(mb "$clip_budget")"
   exit 0
 fi
-printf 'media-budget: %d page(s) over budget\n' "$problems" >&2
+printf 'media-budget: %d problem(s) in %d page(s) under %s\n' "$problems" "$pages" "$dir" >&2
 exit 1

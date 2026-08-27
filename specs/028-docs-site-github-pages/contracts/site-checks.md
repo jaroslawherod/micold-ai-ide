@@ -59,6 +59,13 @@ suite, so a token change that would break the site's contrast fails in the chang
 **Fails when** a page's still images total more than 1 MB, or a clip file exceeds 3 MB. Reports the
 page, the assets and the total. Never downscales. — FR-015c, SC-012
 
+**Also fails when** a file under `media/` is published that no page references. The per-page budgets
+cannot see such a file — nothing links to it, so it is on no page's total — while the deploy still
+carries it. The case that produced this rule is the frame directory a clip is encoded from: written
+beside the encodes because `capture.sh` needs it there, copied into the book by the renderer, and
+already contained in the `.webm` and the `.mp4`. `build.sh` drops those from the rendered copy after
+the render; this asserts the result rather than trusting it. — FR-015c
+
 ### `site/checks/page-checks.mjs <dir>`
 
 One headless browser, four assertions per run:

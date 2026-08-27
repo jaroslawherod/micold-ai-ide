@@ -158,6 +158,25 @@ else
     "$(tail -8 "$work/out")"
 fi
 
+printf '== nothing is shipped that no page asks for ==\n'
+#
+# The capture step leaves its intermediates beside its output -- a clip is encoded from a directory
+# of frame PNGs, and that directory sits in the same staged media directory the renderer copies
+# wholesale into the built site. Every one of those frames is already inside the .webm and the .mp4;
+# published, they are megabytes the deploy carries, the reader never downloads and nobody notices,
+# because no page links to them and so no per-page budget above ever counts them.
+build_site "$work/site"
+mkdir -p "$work/site/media/new-worktree.frames"
+bytes 300000 "$work/site/media/new-worktree.frames/frame-0001.png"
+bytes 300000 "$work/site/media/new-worktree.frames/frame-0002.png"
+expect_fail "a media file no page references fails" "new-worktree.frames/frame-0001.png" \
+  "$work/site"
+
+# The control the rule above could pass for the wrong reason: every fixture asset IS referenced, so
+# a check that simply reported everything under media/ would fail the clean site too.
+build_site "$work/site"
+expect_pass "a site whose every media file is referenced still passes" "$work/site"
+
 printf '== nothing is repaired (FR-015c) ==\n'
 build_site "$work/site"
 bytes 900000 "$work/site/media/sidebar.png"
