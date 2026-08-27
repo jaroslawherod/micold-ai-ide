@@ -413,7 +413,13 @@ fn starting_a_session_announces_the_new_lifecycle_to_connected_clients() {
     let store = tempfile::tempdir().unwrap();
     let id = SessionId::from_uuid(Uuid::from_u128(0x5E55));
     let state = DaemonState::new(catalog_with_shell_session(project.path(), store.path()));
-    let (_client, mut rx) = state.register("test".to_string());
+    let (_client, mut rx) = state.register(micold_core::protocol::messages::ClientIdentity::new(
+        "test",
+        micold_core::protocol::messages::ClientInstance {
+            pid: 0,
+            nonce: "test".into(),
+        },
+    ));
 
     state
         .start_session(id, micold_core::terminal::LaunchMode::Resume)

@@ -203,6 +203,14 @@ all fully live and never interfering with one another.
   closes — or crashes — the project becomes attachable again with no ceremony and no service restart.
   The next window to ask for it just gets it.
 
+- **A window never displaces itself.** A window whose connection dies reconnects on its own, and for
+  a moment the service can be holding the project for a connection that no longer exists — the
+  window's own. Both the refusal and the displacement name the *window* that holds it, not just the
+  build, so a window recognises its own superseded connection and simply reclaims the project.
+  Nothing is shown and nothing is asked, because there is no other window to ask about. Two
+  genuinely different windows of the same build are still two windows, and still displace each
+  other.
+
 ### Detecting a dead connection
 
 An ordinary close sends a clean disconnect, so the daemon frees the project at once. A **half-open**
@@ -359,8 +367,9 @@ That transport carries none of the protection a `0700` directory gives: any loca
 to a loopback port. What replaces it is a shared secret, generated per sandbox start, written `0600`
 and bind-mounted read-only into the container. The guarantee moves from "you cannot reach it" to "you
 cannot answer for it", and the filesystem permission is still what enforces it. This is why the wire
-protocol grew an authenticated handshake — version 6 when the sandbox landed, and version 7 today,
-after the repository-root query the container placement also needed (below).
+protocol grew an authenticated handshake — version 6 when the sandbox landed, version 7 after the
+repository-root query the container placement also needed (below), and version 9 today, after a
+window became nameable on the wire so it could stop displacing itself.
 
 ### The lifecycle
 

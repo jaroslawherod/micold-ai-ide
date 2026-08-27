@@ -16,7 +16,7 @@ use micold_core::project::validate_rename;
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
 use micold_core::protocol::messages::{
-    ClientMsg, DaemonMsg, ErrorKind, LogSink, OperationResult, SessionProcess,
+    ClientIdentity, ClientMsg, DaemonMsg, ErrorKind, LogSink, OperationResult, SessionProcess,
 };
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
@@ -310,6 +310,7 @@ where
             protocol_version,
             schema_hash,
             client_build,
+            client_instance,
             client_package_version,
             auth_token,
             client_fingerprint,
@@ -319,6 +320,7 @@ where
             schema_hash,
             package_version: client_package_version,
             build: client_build,
+            instance: client_instance,
             auth_token,
             fingerprint: client_fingerprint,
             require_fingerprint_match,
@@ -333,6 +335,7 @@ where
         None => return Ok(()), // hung up before saying hello
     };
     let client_build = intro.build.clone();
+    let client_identity = ClientIdentity::new(intro.build.clone(), intro.instance.clone());
     let client_version = intro.protocol_version;
     let client_package_version = intro.package_version.clone();
 
@@ -365,8 +368,15 @@ where
         .map_err(io::Error::other)?;
 
     // --- Register, split, and run the reader/writer split. ---
-    tracing::info!(client_build = %client_build, "client attached to daemon");
-    let (id, mut rx) = state.register(client_build);
+    // `client_window` is what makes two windows of one build distinguishable in the log — and the
+    // reason it is here rather than only on the wire: the reconnect that BUG-022 is about is
+    // invisible in a log that records only the build, because both connections print the same one.
+    tracing::info!(
+        client_build = %client_build,
+        client_window = client_identity.instance.pid,
+        "client attached to daemon"
+    );
+    let (id, mut rx) = state.register(client_identity);
     let (mut sink, mut incoming) = framed.split();
 
     // Writer task: drain this client's push channel to the wire. The channel already carries fully

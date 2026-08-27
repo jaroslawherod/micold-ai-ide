@@ -157,7 +157,8 @@ format throughout.
 Strict exact-match, no negotiation, no compatibility range (FR-021).
 
 ```text
-client ──► Hello { protocol_version: u32, schema_hash: [u8; 32], client_build: String }
+client ──► Hello { protocol_version: u32, schema_hash: [u8; 32], client_build: String,
+                   client_instance: ClientInstance }
 daemon ──► Welcome { daemon_build: String, catalog, settings }
        or  Refused { reason: VersionMismatch { client: u32, daemon: u32,
                                                client_hash, daemon_hash,
