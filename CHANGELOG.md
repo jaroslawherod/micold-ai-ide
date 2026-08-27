@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.11.0...micold-ai-ide-v0.12.0) (2026-08-27)
+
+
+### Features
+
+* **027:** publish the sandbox image with the release (FR-024) ([348bb46](https://github.com/jaroslawherod/micold-ai-ide/commit/348bb46887ffce1b2c564c30ae1986302d0e6a36))
+
 ## [0.11.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.10.0...micold-ai-ide-v0.11.0) (2026-08-27)
 
 
