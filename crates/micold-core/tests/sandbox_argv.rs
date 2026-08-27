@@ -77,6 +77,7 @@ fn spec_for(windows_host: bool) -> SandboxSpec {
         &profile,
         &layout,
         state,
+        Path::new(home),
         SecretMount {
             host: PathBuf::from(token),
             container: PathBuf::from("/run/micold/token"),
@@ -118,12 +119,18 @@ fn volumes(args: &[std::ffi::OsString]) -> Vec<(String, String, String)> {
         .collect()
 }
 
-/// The mounts whose container path comes from [`pathmap`], which is not all of them.
+/// The mounts that show one host location under two spellings, which is not all of them.
 ///
 /// The state directory and the token are mounted at *fixed* container paths — `/var/lib/...` and
 /// `/run/micold/token` — because they are where the daemon inside the image looks, on every host.
 /// So they are never an identity mount, not even on Linux, and a test that demanded they were
 /// would be asserting the wrong invariant about the right code.
+///
+/// The sandbox's home is excluded for a different reason (FR-004d): it is a **substitution**, not a
+/// mapping. Its host half is an application-owned directory and its container half is the user's
+/// home path, and the two are supposed to differ on every platform — that is what shadowing the
+/// host home means. Only its container half comes from [`pathmap`], which the Windows test below
+/// still covers by asserting every container half is a Linux path.
 fn mapped_volumes(
     spec: &SandboxSpec,
     args: &[std::ffi::OsString],
@@ -131,6 +138,7 @@ fn mapped_volumes(
     let fixed = [
         spec.mounts.state.host.to_string_lossy().into_owned(),
         spec.mounts.secret.host.to_string_lossy().into_owned(),
+        spec.mounts.home.host.to_string_lossy().into_owned(),
     ];
     volumes(args)
         .into_iter()

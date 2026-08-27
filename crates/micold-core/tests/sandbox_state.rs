@@ -5,7 +5,7 @@
 //! that a failure names the stage it happened in — and, the one that matters, that no path through
 //! it produces a working unsandboxed daemon.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use micold_core::sandbox::cli::CliRuntime;
 use micold_core::sandbox::exec::{CommandOutput, RecordingRunner};
@@ -37,6 +37,7 @@ fn mounts() -> MountSet {
         &SandboxProfile::default(),
         &CredentialLayout::default(),
         PathBuf::from("/home/u/.local/share/micold-ai-ide"),
+        Path::new("/home/u"),
         SecretMount {
             host: PathBuf::from("/run/user/1000/micold/sandbox.token"),
             container: PathBuf::from("/run/micold/token"),

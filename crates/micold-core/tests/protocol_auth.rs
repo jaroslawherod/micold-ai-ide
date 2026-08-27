@@ -279,6 +279,7 @@ fn the_token_is_in_no_generated_argument_vector() {
             &profile,
             &CredentialLayout::conventional(dir.path(), None),
             dir.path().join("state"),
+            dir.path(),
             SecretMount {
                 host: host_path.clone(),
                 container: PathBuf::from(CONTAINER_TOKEN_PATH),
