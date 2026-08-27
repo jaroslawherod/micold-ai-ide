@@ -1,6 +1,10 @@
 [tools]
 rust = "stable"
 uv = "latest"
+# The documentation site's accessibility check runs axe-core in a real browser (feature 028): the
+# rules it implements -- rendered contrast, focus visibility, reachable names -- are properties of a
+# rendered page, not of markup, so there is nothing in the Rust toolchain that could take its place.
+node = "20"
 
 # Every cargo task below goes through scripts/build-lock.sh, which points cargo
 # at one shared target directory beside the main checkout instead of a ~30 GB
@@ -137,3 +141,11 @@ command -v cargo-deb >/dev/null 2>&1 || cargo install cargo-deb --locked
 echo 'Built:'
 ls -1 "$({{config_root}}/scripts/build-lock.sh --print-target-dir)"/debian/*.deb
 """
+
+[tasks.site-build]
+description = "Build the documentation site (feature 028): emit theme, capture, stage, render, check"
+run = "{{config_root}}/site/build.sh"
+
+[tasks.site-check]
+description = "Run the site's checks against an existing build (feature 028)"
+run = "{{config_root}}/site/build.sh --checks-only"

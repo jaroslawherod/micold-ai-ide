@@ -40,8 +40,10 @@ icons re-color together with the rest of the window.
 The icons come from Google's Material Symbols, distributed under the Apache License 2.0 — the
 same license as this project. The bundled font ships with full glyph coverage (every icon the
 upstream font defines), so adding a new icon never requires touching the font file itself — see
-[`assets/fonts/PROVENANCE.md`](../../assets/fonts/PROVENANCE.md). The font is embedded in the
+[`assets/fonts/PROVENANCE.md`][provenance] in the repository. The font is embedded in the
 application and needs no internet connection.
+
+[provenance]: https://github.com/Cumulocity-IoT/micold-ai-ide/blob/{{MICOLD_TAG}}/assets/fonts/PROVENANCE.md
 
 ## For contributors: adding a new icon
 

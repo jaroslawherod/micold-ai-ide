@@ -1,0 +1,618 @@
+/*
+ * The documentation site's own stylesheet.
+ *
+ * Every colour, type size, corner radius, shadow, duration and state opacity here comes from
+ * `tokens.css`, which is generated from `crates/micold-core/src/tokens/` on every build. There is
+ * no literal of any of those kinds in this file, and the build greps for one (SC-014): the fix for
+ * a missing value is a new variable in the emitter, never a number written here. What is left --
+ * layout geometry and the font stacks -- is not a design token, and is written in relative units so
+ * it follows the reader's own text size.
+ *
+ * Two things follow from that rule and are worth stating once:
+ *
+ *   - Panels are separated by surface shade and elevation, never by an outline, because that is how
+ *     the application separates them (FR-029a). Outlines appear in the three places the application
+ *     uses them: a divider, an outlined control, and the focus indicator.
+ *   - Where a surface needs a hover, focus or selected treatment it gets a Material state layer --
+ *     a translucent wash of the *foreground* colour at `--micold-state-*-opacity` -- rather than a
+ *     different background role. That keeps every text-on-background pair in this file one of the
+ *     pairs `site_theme_contrast.rs` actually checks (FR-033).
+ */
+
+/* ------------------------------------------------------------------------------------------------
+ * Fonts.
+ *
+ * All three are served from this site's own origin (FR-031, SC-015): the site loads nothing from
+ * Google Fonts or any other host, so it works offline, behind a proxy, and without telling a third
+ * party who is reading. `assets/fonts/` is the application's own copy, staged into the book by
+ * `stage.sh`; the files are the same ones the client renders with, which is what makes the prose
+ * and the screenshots look like one thing.
+ *
+ * Code and terminal output deliberately use the *system* monospace stack instead (FR-031a). The
+ * application does not ship a monospace face, and shipping one only for the documentation would be
+ * a font the reader downloads to see something the application never renders that way.
+ * ---------------------------------------------------------------------------------------------- */
+
+@font-face {
+    font-family: "Roboto";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../../fonts/Roboto-Regular.ttf") format("truetype");
+}
+
+@font-face {
+    font-family: "Roboto";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("../../fonts/Roboto-Medium.ttf") format("truetype");
+}
+
+@font-face {
+    font-family: "Material Symbols Outlined";
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+    src: url("../../fonts/MaterialSymbolsOutlined.ttf") format("truetype");
+}
+
+/* The application's icon face, available to prose that needs to name a control by its icon.
+   `font-display: block` above is deliberate: an icon ligature rendered in a fallback face shows its
+   own name as text, which is worse than showing nothing for a moment. */
+.icon {
+    font-family: "Material Symbols Outlined", sans-serif;
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    font-size: var(--micold-type-title-large-size);
+    line-height: 1;
+    vertical-align: text-bottom;
+    -webkit-font-feature-settings: "liga";
+    font-feature-settings: "liga";
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * mdBook's own variables, re-pointed at the application's tokens.
+ *
+ * mdBook's chrome is styled entirely through the custom properties below, so redefining them here
+ * dresses the whole site -- sidebar, search, popup, tables, callouts -- in the application's roles
+ * without restyling each component by hand. The values are `var(--micold-*)`, so a scheme change
+ * flows through automatically: `tokens.css` redefines the `--micold-*` names under
+ * `[data-scheme="dark"]`, and everything below follows.
+ *
+ * The selector list repeats mdBook's own theme classes (and its no-JS `html:not(.js)` case) so that
+ * this block wins at equal specificity by coming later, whichever theme class `book.js` has set.
+ * ---------------------------------------------------------------------------------------------- */
+
+:root,
+html:not(.js),
+.light,
+.rust,
+.coal,
+.navy,
+.ayu {
+    --bg: var(--micold-surface);
+    --fg: var(--micold-on-surface);
+
+    --sidebar-bg: var(--micold-surface-container-low);
+    --sidebar-fg: var(--micold-on-surface);
+    --sidebar-non-existant: var(--micold-on-surface-variant);
+    --sidebar-active: var(--micold-primary);
+    --sidebar-spacer: var(--micold-outline-variant);
+    --sidebar-header-border-color: var(--micold-outline-variant);
+
+    --scrollbar: var(--micold-outline);
+
+    --icons: var(--micold-on-surface-variant);
+    --icons-hover: var(--micold-on-surface);
+
+    --links: var(--micold-primary);
+
+    --inline-code-color: var(--micold-on-surface);
+
+    --theme-popup-bg: var(--micold-surface-container-high);
+    --theme-popup-border: var(--micold-outline-variant);
+    --theme-hover: var(--micold-surface-container-highest);
+
+    --quote-bg: var(--micold-surface-container);
+    --quote-border: var(--micold-outline-variant);
+
+    --warning-border: var(--micold-error);
+
+    --table-border-color: var(--micold-outline-variant);
+    --table-header-bg: var(--micold-surface-container-high);
+    --table-alternate-bg: var(--micold-surface-container-low);
+
+    --searchbar-border-color: var(--micold-outline);
+    --searchbar-bg: var(--micold-surface-container-high);
+    --searchbar-fg: var(--micold-on-surface);
+    --searchbar-shadow-color: var(--micold-outline);
+    --searchresults-header-fg: var(--micold-on-surface-variant);
+    --searchresults-border-color: var(--micold-outline-variant);
+    --searchresults-li-bg: var(--micold-surface-container);
+    --search-mark-bg: var(--micold-tertiary-container);
+
+    --footnote-highlight: var(--micold-tertiary);
+
+    /* The dimming behind the mobile sidebar: the application's scrim role at the application's
+       scrim opacity, rather than a grey invented here. */
+    --overlay-bg: color-mix(in srgb,
+        var(--micold-scrim) calc(var(--micold-scrim-opacity) * 100%),
+        transparent);
+
+    /* GitHub's alert callouts. The palette has no dedicated "warning" role, so warning and caution
+       both take the error role -- the alternative is a colour with no token behind it. */
+    --blockquote-note-color: var(--micold-primary);
+    --blockquote-tip-color: var(--micold-tertiary);
+    --blockquote-important-color: var(--micold-secondary);
+    --blockquote-warning-color: var(--micold-error);
+    --blockquote-caution-color: var(--micold-error);
+
+    /* Layout geometry, not design tokens -- except where a spacing token already says it. The page
+       gutter and the app bar height are the application's spacing scale; the measure is a reading
+       width, which the token set has no opinion about. mdBook's root font-size is 62.5%, so 1rem is
+       ten CSS pixels here. */
+    --page-padding: var(--micold-spacing-md);
+    --menu-bar-height: calc(var(--micold-spacing-xl) * 2);
+    --content-max-width: 78rem;
+
+    --mono-font: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --code-font-size: var(--micold-type-body-medium-size);
+}
+
+/* `color-scheme` tells the browser which form controls, scrollbars and default backgrounds to draw,
+   so it has to be the keyword and not a token. Both selectors outrank mdBook's per-theme classes,
+   so the pair below is what decides it, in both directions. */
+:root:not([data-scheme="dark"]) {
+    --color-scheme: light;
+}
+
+:root[data-scheme="dark"] {
+    --color-scheme: dark;
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Type.
+ * ---------------------------------------------------------------------------------------------- */
+
+body {
+    font-family: "Roboto", system-ui, sans-serif;
+    font-size: var(--micold-type-body-large-size);
+    line-height: var(--micold-type-body-large-line-height);
+    font-weight: var(--micold-type-body-large-weight);
+}
+
+.content p,
+.content ul,
+.content ol,
+.content dl {
+    font-size: var(--micold-type-body-large-size);
+    line-height: var(--micold-type-body-large-line-height);
+}
+
+.content h1 {
+    font-size: var(--micold-type-headline-large-size);
+    line-height: var(--micold-type-headline-large-line-height);
+    font-weight: var(--micold-type-headline-large-weight);
+    margin-block: var(--micold-spacing-xl) var(--micold-spacing-md);
+}
+
+.content h2 {
+    font-size: var(--micold-type-headline-medium-size);
+    line-height: var(--micold-type-headline-medium-line-height);
+    font-weight: var(--micold-type-headline-medium-weight);
+    margin-block: var(--micold-spacing-xl) var(--micold-spacing-sm);
+}
+
+.content h3 {
+    font-size: var(--micold-type-headline-small-size);
+    line-height: var(--micold-type-headline-small-line-height);
+    font-weight: var(--micold-type-headline-small-weight);
+    margin-block: var(--micold-spacing-lg) var(--micold-spacing-sm);
+}
+
+.content h4 {
+    font-size: var(--micold-type-title-large-size);
+    line-height: var(--micold-type-title-large-line-height);
+    font-weight: var(--micold-type-title-large-weight);
+    margin-block: var(--micold-spacing-lg) var(--micold-spacing-xs);
+}
+
+.content h5 {
+    font-size: var(--micold-type-title-medium-size);
+    line-height: var(--micold-type-title-medium-line-height);
+    font-weight: var(--micold-type-title-medium-weight);
+    margin-block: var(--micold-spacing-md) var(--micold-spacing-xs);
+}
+
+.content h6 {
+    font-size: var(--micold-type-title-small-size);
+    line-height: var(--micold-type-title-small-line-height);
+    font-weight: var(--micold-type-title-small-weight);
+    margin-block: var(--micold-spacing-md) var(--micold-spacing-xs);
+    color: var(--micold-on-surface-variant);
+}
+
+.content a {
+    color: var(--micold-primary);
+    text-decoration-thickness: from-font;
+    text-underline-offset: 0.15em;
+}
+
+.content a:hover {
+    text-decoration-thickness: from-font;
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * The app bar.
+ *
+ * The application's top app bar: a container surface carrying the title, flat while the page is at
+ * the top and raised once content scrolls under it. `book.js` adds `.bordered` at that moment, and
+ * mdBook draws a border there; the application raises the bar instead, so the border is dropped and
+ * the elevation takes over (FR-029a).
+ * ---------------------------------------------------------------------------------------------- */
+
+#mdbook-menu-bar {
+    background-color: var(--micold-surface-container);
+    color: var(--micold-on-surface);
+    box-shadow: var(--micold-elevation-0);
+    transition: box-shadow var(--micold-motion-duration-short-4) var(--micold-motion-easing-standard);
+}
+
+#mdbook-menu-bar.bordered {
+    border-block-end: none;
+    box-shadow: var(--micold-elevation-2);
+}
+
+#mdbook-menu-bar .menu-title {
+    font-size: var(--micold-type-title-large-size);
+    line-height: var(--micold-type-title-large-line-height);
+    font-weight: var(--micold-type-title-large-weight);
+    opacity: 1;
+    /* The application's app bar truncates its title rather than wrapping it: a bar whose height
+       changes with the length of what is in it stops being a fixed piece of chrome, and on a phone
+       this title shares the row with four controls. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The bar's own gutter, and the gap between its controls, from the same spacing scale the
+   application lays its own app bar out on. */
+#mdbook-menu-bar {
+    padding-inline: var(--micold-spacing-sm);
+}
+
+#mdbook-menu-bar .left-buttons,
+#mdbook-menu-bar .right-buttons {
+    display: flex;
+    align-items: center;
+    gap: var(--micold-spacing-xs);
+}
+
+#mdbook-menu-bar .icon-button,
+#mdbook-menu-bar .right-buttons a {
+    border-radius: var(--micold-shape-corner-full);
+    transition: background-color var(--micold-motion-duration-short-2) var(--micold-motion-easing-standard);
+}
+
+#mdbook-menu-bar .icon-button:hover,
+#mdbook-menu-bar .right-buttons a:hover {
+    background-color: color-mix(in srgb,
+        var(--micold-on-surface) calc(var(--micold-state-hover-opacity) * 100%),
+        transparent);
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * The table of contents.
+ *
+ * A navigation drawer: its own container shade, and a full-round selected item carrying a state
+ * layer rather than a second background role.
+ * ---------------------------------------------------------------------------------------------- */
+
+#mdbook-sidebar {
+    box-shadow: var(--micold-elevation-0);
+}
+
+#mdbook-sidebar .sidebar-scrollbox {
+    padding-inline: var(--micold-spacing-sm);
+}
+
+#mdbook-sidebar .chapter li a,
+#mdbook-sidebar .chapter li .part-title {
+    border-radius: var(--micold-shape-corner-full);
+    padding-inline: var(--micold-spacing-md);
+    font-size: var(--micold-type-label-large-size);
+    line-height: var(--micold-type-label-large-line-height);
+}
+
+/* A label-sized line of text is about twenty pixels tall, which is under the twenty-four a target
+ * has to be for someone aiming with a finger or a shaky hand to hit it reliably (WCAG 2.2 AA,
+ * 2.5.8 Target Size (Minimum)). The spacing scale's `lg` step *is* twenty-four, so the fix is the
+ * application's own dimension rather than a number invented here: each entry becomes a row that
+ * tall, with the text centred in it, and the rows stay flush so the whole strip is hittable. */
+#mdbook-sidebar .chapter li a,
+#mdbook-sidebar a.header-in-summary {
+    display: flex;
+    align-items: center;
+    min-height: var(--micold-spacing-lg);
+}
+
+#mdbook-sidebar .chapter li .part-title {
+    font-size: var(--micold-type-title-small-size);
+    line-height: var(--micold-type-title-small-line-height);
+    font-weight: var(--micold-type-title-small-weight);
+    color: var(--micold-on-surface-variant);
+}
+
+#mdbook-sidebar .chapter li a:hover {
+    background-color: color-mix(in srgb,
+        var(--micold-on-surface) calc(var(--micold-state-hover-opacity) * 100%),
+        transparent);
+}
+
+#mdbook-sidebar .chapter li a.active {
+    color: var(--micold-primary);
+    background-color: color-mix(in srgb,
+        var(--micold-primary) calc(var(--micold-state-selected-opacity) * 100%),
+        transparent);
+}
+
+#mdbook-sidebar .spacer {
+    background-color: var(--micold-outline-variant);
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Panels: code, callouts, tables, search.
+ * ---------------------------------------------------------------------------------------------- */
+
+.content pre,
+.content pre > code {
+    font-family: var(--mono-font);
+    font-size: var(--code-font-size);
+}
+
+.content pre {
+    background-color: var(--micold-surface-container-low);
+    border-radius: var(--micold-shape-corner-medium);
+    padding: var(--micold-spacing-md);
+}
+
+.content code {
+    font-family: var(--mono-font);
+}
+
+.content :not(pre) > code {
+    background-color: var(--micold-surface-container);
+    border-radius: var(--micold-shape-corner-extra-small);
+    padding-inline: var(--micold-spacing-xs);
+}
+
+.content blockquote {
+    background-color: var(--micold-surface-container);
+    border-inline-start: var(--micold-state-focus-ring-width) solid var(--micold-outline-variant);
+    border-radius: var(--micold-shape-corner-medium);
+    padding: var(--micold-spacing-md);
+    color: var(--micold-on-surface);
+}
+
+.content table {
+    border-radius: var(--micold-shape-corner-medium);
+    overflow: hidden;
+}
+
+.content table thead th {
+    font-weight: var(--micold-type-title-small-weight);
+}
+
+.content table td,
+.content table th {
+    border: thin solid var(--micold-outline-variant);
+    padding: var(--micold-spacing-sm);
+}
+
+#mdbook-searchbar {
+    background-color: var(--micold-surface-container-high);
+    color: var(--micold-on-surface);
+    border: thin solid var(--micold-outline);
+    border-radius: var(--micold-shape-corner-full);
+    padding-inline: var(--micold-spacing-md);
+    font-family: "Roboto", system-ui, sans-serif;
+    font-size: var(--micold-type-body-large-size);
+}
+
+#mdbook-searchresults-outer {
+    background-color: var(--micold-surface-container-low);
+    border-radius: var(--micold-shape-corner-medium);
+    box-shadow: var(--micold-elevation-1);
+    border: none;
+    padding: var(--micold-spacing-sm);
+}
+
+.theme-popup {
+    background-color: var(--micold-surface-container-high);
+    border: none;
+    border-radius: var(--micold-shape-corner-medium);
+    box-shadow: var(--micold-elevation-2);
+    padding-block: var(--micold-spacing-xs);
+}
+
+.theme-popup .theme {
+    font-family: "Roboto", system-ui, sans-serif;
+    font-size: var(--micold-type-label-large-size);
+    line-height: var(--micold-type-label-large-line-height);
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Figures.
+ *
+ * Screenshots and clips are the point of the site, so they get the treatment a surface gets in the
+ * application: raised, rounded, and captioned in the secondary text role. `width`/`height` come
+ * from the file itself (see `stage.sh`), so the space is reserved before the image arrives and the
+ * page does not jump.
+ * ---------------------------------------------------------------------------------------------- */
+
+figure.media {
+    margin-block: var(--micold-spacing-lg);
+    margin-inline: 0;
+}
+
+figure.media img,
+figure.media video {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--micold-shape-corner-large);
+    box-shadow: var(--micold-elevation-1);
+    background-color: var(--micold-surface-container-lowest);
+}
+
+figure.media figcaption {
+    margin-block-start: var(--micold-spacing-sm);
+    color: var(--micold-on-surface-variant);
+    font-size: var(--micold-type-body-small-size);
+    line-height: var(--micold-type-body-small-line-height);
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * The phone (FR-025).
+ *
+ * The narrowest layout that has to work is 360 CSS pixels wide, and the property that has to hold
+ * there is that the *page* never scrolls sideways. Wide things still exist -- a screenshot of a
+ * desktop window, a table of runtimes, a terminal transcript -- so each of them scrolls inside its
+ * own box instead. A page that scrolls sideways as a whole hides the start of every line at once,
+ * which is the one failure a reader cannot work around.
+ *
+ * The table of contents is already a control at this width: mdBook hides the sidebar below 1080px
+ * and the app bar's first button opens it. What is added here is that the open sidebar covers the
+ * page rather than pushing it, so opening it cannot widen the document.
+ * ---------------------------------------------------------------------------------------------- */
+
+html,
+body {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+/* Anything that can exceed the measure carries its own scroller. `max-width` alone is not enough
+   for a table or a code block: their content has a minimum width of its own, and without a
+   scrolling box that minimum becomes the page's. */
+.content pre,
+.content table,
+figure.media {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+/* A long unbroken token -- a path, a flag, a URL in prose -- is the other way a page grows wider
+   than its viewport, and the one that markup cannot anticipate. */
+.content p code,
+.content li code,
+.content td code,
+.content a {
+    overflow-wrap: break-word;
+}
+
+/* 43.75rem is 700 CSS pixels at the initial font size -- and *only* at the initial font size: a
+   media query's rem ignores the root's own font-size, so a reader who has set a larger default text
+   size reaches this layout sooner, which is the direction that helps them. */
+@media (max-width: 43.75rem) {
+    /* The images are the widest things on the site by a wide margin, and on a phone they are read
+       as "what it looks like" rather than for their detail, so they are fitted rather than scrolled
+       -- a screenshot the reader has to pan across tells them less than one they can see whole. */
+    figure.media {
+        overflow-x: visible;
+    }
+
+    figure.media img,
+    figure.media video {
+        width: 100%;
+    }
+
+    #mdbook-sidebar {
+        /* Over the page, not beside it. */
+        z-index: 1;
+        box-shadow: var(--micold-elevation-2);
+    }
+
+    .content {
+        padding-inline: var(--micold-spacing-sm);
+    }
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * The release footer.
+ *
+ * `stage.sh` generates `theme/header.hbs` with the version this site was built from and a link to
+ * the page's source at that tag (FR-007). It sits under the prose, separated by a divider -- one of
+ * the three places an outline is allowed.
+ * ---------------------------------------------------------------------------------------------- */
+
+.micold-release {
+    margin-block-start: var(--micold-spacing-xl);
+    padding-block-start: var(--micold-spacing-md);
+    border-block-start: thin solid var(--micold-outline-variant);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--micold-spacing-sm);
+    justify-content: space-between;
+    color: var(--micold-on-surface-variant);
+    font-size: var(--micold-type-label-medium-size);
+    line-height: var(--micold-type-label-medium-line-height);
+}
+
+.micold-release-source {
+    color: var(--micold-primary);
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Focus and motion.
+ * ---------------------------------------------------------------------------------------------- */
+
+:focus-visible {
+    outline: var(--micold-state-focus-ring-width) solid var(--micold-primary);
+    outline-offset: var(--micold-spacing-xs);
+    border-radius: var(--micold-shape-corner-extra-small);
+}
+
+/* The content region is focused only by the skip link, and a ring drawn around the whole page is
+   noise rather than guidance -- the reader asked to be *there*, and the next Tab shows them where
+   they landed. */
+#mdbook-content:focus-visible {
+    outline: none;
+}
+
+/* The skip link is present on every page and shown on none of them until it is focused: moved out
+   of the viewport rather than hidden, because `display: none` and `visibility: hidden` both take an
+   element out of the focus order, which is the one thing this element exists to be in. It sits above
+   the sticky menu bar, which is the only thing it could otherwise appear behind. */
+.micold-skip-link {
+    position: fixed;
+    inset-block-start: var(--micold-spacing-sm);
+    inset-inline-start: var(--micold-spacing-sm);
+    z-index: 1001;
+    padding: var(--micold-spacing-sm) var(--micold-spacing-md);
+    border-radius: var(--micold-shape-corner-small);
+    background: var(--micold-surface-container-highest);
+    color: var(--micold-on-surface);
+    font-size: var(--micold-type-label-large-size);
+    line-height: var(--micold-type-label-large-line-height);
+    text-decoration: none;
+    transform: translateY(-200%);
+}
+
+.micold-skip-link:focus {
+    transform: none;
+}
+
+/* Nothing on this site conveys meaning by moving, so a reader who asks for less motion loses
+   nothing by having all of it removed (FR-030b). Clips are exempt by construction: they never
+   autoplay, so they move only when the reader presses play. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition: none !important;
+        animation: none !important;
+        scroll-behavior: auto !important;
+    }
+}

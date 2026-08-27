@@ -221,7 +221,7 @@ reading the detail.
 | The runtime rejected a resource limit | *The runtime refused the storage limit: …* | Clear that limit in **Settings → Session service**, then retry. See [Limits](#limits) — the writable-storage cap is the one most often unavailable. |
 | The container was stopped or removed from outside | *The sandbox container `micold-sandbox` is no longer running.* | Restart the sandbox. Sessions resume from where they were — their processes stopped with the container, but their history and layout did not. |
 | A step did not finish | *Pulling the image did not finish in time.* | Retry; if it persists, restart the runtime. |
-| Anything else | *The runtime reported: <its first line of output>* | Retry. The runtime's full output is in the diagnostics. |
+| Anything else | *The runtime reported: `<its first line of output>`* | Retry. The runtime's full output is in the diagnostics. |
 
 The path in the mount row is the *project's* path, not the directory that happens to contain it —
 if two registered projects nest, the message names the one that was actually rejected.

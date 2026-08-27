@@ -1,0 +1,66 @@
+# site/media.toml -- the declared capture set. Code, not documentation:
+# it is a build input, so a change here takes the full pipeline.
+#
+# Every id here is referenced by at least one `<!-- media: id -->` directive in docs/, and every
+# directive names an id here. `site/checks/media-references.sh` holds the two to each other in both
+# directions before merge (FR-022, FR-011a); `site/build.sh` fails a publication in which any
+# declared entry produced no file (SC-004).
+#
+# Fields: kind = still|clip, scene = site/capture/scenes/<scene>.sh, scheme = light|dark,
+#         alt = required and non-empty (FR-014), caption = optional.
+
+[media.main-window-light]
+kind    = "still"
+scene   = "main-window"
+scheme  = "light"
+alt     = "The Micold AI IDE window with the demonstration project open: a sidebar listing the project's worktrees on the left, and the active project's details filling the rest of the window."
+caption = "The main window, with the demonstration project open."
+
+[media.main-window-dark]
+kind    = "still"
+scene   = "main-window"
+scheme  = "dark"
+alt     = "The same window in the dark theme: the same worktree sidebar and project details, on dark surfaces."
+caption = "The same window in the dark theme."
+
+[media.worktree-sidebar-light]
+kind    = "still"
+scene   = "worktree-sidebar"
+scheme  = "light"
+alt     = "The worktree sidebar listing the project's own checkout and three worktrees, each tagged with the kind of branch it holds -- docs, feat and fix. The second worktree is expanded, and the session open inside it is selected; the terminal beside it says the session is working in that worktree, on its branch."
+caption = "A session open in the second worktree. The sidebar and the terminal name the same branch."
+
+[media.worktree-sidebar-dark]
+kind    = "still"
+scene   = "worktree-sidebar"
+scheme  = "dark"
+alt     = "The same worktree sidebar and open session in the dark theme."
+caption = "The same sidebar in the dark theme."
+
+[media.session-terminal-light]
+kind    = "still"
+scene   = "session-terminal"
+scheme  = "light"
+alt     = "A session running in the telemetry-drift worktree. The terminal holds two questions and their answers, ending in a two-line diff -- the removed line in red, the added line in green -- that changes a comparison from greater-than to greater-than-or-equal."
+caption = "A session mid-conversation, in the application's own terminal."
+
+[media.session-terminal-dark]
+kind    = "still"
+scene   = "session-terminal"
+scheme  = "dark"
+alt     = "The same session and the same coloured diff in the dark theme."
+caption = "The same session in the dark theme."
+
+[media.settings-view-light]
+kind    = "still"
+scene   = "settings-view"
+scheme  = "light"
+alt     = "The settings view: a list of its four sections -- appearance, terminal, environment and session service -- beside the appearance section itself, which holds the theme setting and a note that following the system switches with it while the application is running."
+caption = "The settings view, on the section it opens with. Each section is shown on its own."
+
+[media.settings-view-dark]
+kind    = "still"
+scene   = "settings-view"
+scheme  = "dark"
+alt     = "The same settings view in the dark theme."
+caption = "The same view in the dark theme."

@@ -24,6 +24,8 @@ choose a folder.
   shows its name in the error color with a **missing** or **invalid** status tag — you cannot
   start new sessions on it until it is resolved.
 
+<!-- media: worktree-sidebar-light -->
+
 ### Reading a worktree: name & tags
 
 Each worktree is shown as a clean, human-friendly **name** on the first line, with small
@@ -677,6 +679,8 @@ The embedded terminal renders the AI CLI's output like a real terminal, not as f
   programs redraw cleanly, with the cursor shown at its current position.
 - **Focus** — the terminal you are looking at is where the keyboard goes, unless you have handed
   it away or something that types has taken it (a colored border marks the focused terminal).
+
+<!-- media: session-terminal-light -->
 
 ## Interacting with the terminal
 
