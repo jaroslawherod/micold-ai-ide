@@ -152,6 +152,15 @@ css_case "a literal corner radius fails" "border-radius" "border-radius: 6px;"
 css_case "a literal elevation fails" "box-shadow" "box-shadow: 0 1px 2px var(--micold-color-shadow);"
 css_case "a literal motion duration fails" "150ms" "transition: opacity 150ms ease;"
 
+# The declarations above are each on their own line, which is how `site.css` is written. A rule
+# written on one line is not, and a check that only reads line-leading declarations would pass it
+# -- so a pasted snippet could put a literal into the theme without anyone being told.
+cat >"$work/oneline.css" <<'CSS'
+.page { color: #1a2b3c; }
+CSS
+expect_fail "a one-line rule with a literal colour fails" "#1a2b3c" \
+  --docs "$work/docs-good" --css "$work/oneline.css"
+
 # Prose is not code. `site.css` explains itself at length -- two of its comments discuss mdBook's
 # own root font-size, and one names a hex colour to say why the theme does not. A check that read
 # those would be a check nobody could keep passing without deleting the explanations.

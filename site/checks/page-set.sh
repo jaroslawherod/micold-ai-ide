@@ -133,26 +133,13 @@ css_problems="$(
     function literal_length(v) { return v ~ /[0-9]+(\.[0-9]+)?(px|pt|rem|em|ex|ch|vh|vw|%)/ }
     function duration(v)       { return v ~ /[0-9]+(\.[0-9]+)?m?s([^a-z]|$)/ }
     function say(why)          { printf "%s|%s: %s -- %s\n", NR, prop, shown, why }
-    {
-      # Strip comments, keeping the line numbering: what is reported has to be what an author can
-      # open the file at.
-      line = $0; out = ""
-      while (length(line) > 0) {
-        if (incomment) {
-          p = index(line, "*/")
-          if (p == 0) { line = "" } else { line = substr(line, p + 2); incomment = 0 }
-        } else {
-          p = index(line, "/*")
-          if (p == 0) { out = out line; line = "" }
-          else { out = out substr(line, 1, p - 1); line = substr(line, p + 2); incomment = 1 }
-        }
-      }
-      # A declaration, not a selector: a name, a colon, and a value. `#mdbook-menu-bar {` and
-      # `@media (min-width: 700px)` are neither, and are not read.
-      if (!match(out, /^[ \t]*(--)?[A-Za-z][-A-Za-z0-9]*[ \t]*:/)) next
-      colon = index(out, ":")
-      prop  = substr(out, 1, colon - 1); sub(/^[ \t]+/, "", prop); sub(/[ \t]+$/, "", prop)
-      shown = substr(out, colon + 1);    sub(/^[ \t]+/, "", shown); sub(/[ \t;]+$/, "", shown)
+    # A declaration, not a selector: a name, a colon, and a value. `#mdbook-menu-bar` and
+    # `@media (min-width: 700px)` are neither, and are not read.
+    function check(text,   colon, value) {
+      if (!match(text, /^[ \t]*(--)?[A-Za-z][-A-Za-z0-9]*[ \t]*:/)) return
+      colon = index(text, ":")
+      prop  = substr(text, 1, colon - 1); sub(/^[ \t]+/, "", prop); sub(/[ \t]+$/, "", prop)
+      shown = substr(text, colon + 1);    sub(/^[ \t]+/, "", shown); sub(/[ \t;]+$/, "", shown)
 
       # Variable *names* carry digits -- `--micold-elevation-1` is not a one-pixel offset -- so the
       # names come out before anything counts digits. A fallback inside `var(--x, 4px)` deliberately
@@ -170,6 +157,28 @@ css_problems="$(
         say("a literal elevation; use a --micold-elevation-* variable")
       if (prop ~ /^(transition|animation)/ && duration(value))
         say("a literal duration; use a --micold-motion-duration-* variable")
+    }
+    {
+      # Strip comments, keeping the line numbering: what is reported has to be what an author can
+      # open the file at.
+      line = $0; out = ""
+      while (length(line) > 0) {
+        if (incomment) {
+          p = index(line, "*/")
+          if (p == 0) { line = "" } else { line = substr(line, p + 2); incomment = 0 }
+        } else {
+          p = index(line, "/*")
+          if (p == 0) { out = out line; line = "" }
+          else { out = out substr(line, 1, p - 1); line = substr(line, p + 2); incomment = 1 }
+        }
+      }
+      # One line can hold several declarations -- `.page { color: #fff; margin: 0 }` is legal CSS,
+      # and reading only the first thing on the line would let a pasted one-line rule put a literal
+      # into the theme unremarked. Braces and semicolons are what separate a selector from the
+      # declarations it opens and one declaration from the next, so the line is cut on them and
+      # every piece is read.
+      n = split(out, piece, /[{};]/)
+      for (i = 1; i <= n; i++) check(piece[i])
     }
   ' "$css"
 )"

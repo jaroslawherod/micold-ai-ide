@@ -19,7 +19,7 @@
 //! product it documents.
 
 use micold_core::tokens::css;
-use micold_core::tokens::{AA_NON_TEXT, AA_TEXT, Rgb, contrast};
+use micold_core::tokens::{contrast, Rgb, AA_NON_TEXT, AA_TEXT};
 use std::collections::BTreeMap;
 
 /// The surfaces the site puts content on: the page, code blocks, callouts and the table of

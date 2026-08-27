@@ -31,6 +31,23 @@ Three jobs on a documentation-only run, all on Linux. No macOS or Windows runner
 actually break, so skipping the build must not skip it. Delete a required document and the run
 fails, exactly as before.
 
+For the same reason it is where the documentation site's pre-merge checks live — as steps in this
+job, never as a job of their own, which a documentation-only change would skip. Besides the
+required-document lists, `docs check` runs:
+
+- `site/checks/page-set.sh` — every page under `docs/` is listed in `SUMMARY.md` and every entry
+  names a file that exists, and the site stylesheet is still drawn from the design tokens rather
+  than from literals;
+- `site/checks/media-references.sh` — every media directive in a page names a manifest entry, and
+  every manifest entry names a scene that exists and is referenced by some page;
+- `site/checks/links.sh --sources` — every internal link and heading fragment in the sources
+  resolves, without fetching a single external URL.
+
+They fail on the pull request, where the page is still in front of its author, rather than at
+render time on the release branch after the tag. The rest of a publication — the capture, the
+render, and the checks that need a built site — is described in
+[The documentation site](docs-site.md).
+
 ## What counts as documentation
 
 The declaration lives in **`.gitattributes`**, as the attribute `micold-docs`:

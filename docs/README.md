@@ -70,6 +70,10 @@ follows describes the version you are reading it from (constitution, Principle V
   specs skips the build entirely, where the documentation set is declared, the single status check
   the default branch requires and the two properties that keep it honest, how to force a full run,
   and what to do when the pipeline surprises you.
+- [The documentation site](development/docs-site.md) — how a publication works: the five steps a
+  build runs in, what each pre-merge and pre-deploy check catches, what triggers a publication and
+  how to republish without cutting a release, what a failed publication leaves behind, and why the
+  fonts ship whole.
 
 ## The session service (daemon)
 

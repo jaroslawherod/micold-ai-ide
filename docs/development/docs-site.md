@@ -117,3 +117,14 @@ Reproduce any of them locally with `mise run site-check`, which runs the pre-dep
 
 Enabling GitHub Pages with source **GitHub Actions** is a repository setting, done once. Until the
 first successful publication the address serves GitHub's own 404 page.
+
+## Why the fonts are shipped whole
+
+The fonts are not subsetted. `site/theme/fonts/` ships the two Inter faces and
+`MaterialSymbolsOutlined.ttf` whole — about 1.2 MB across the three files, of which the icon font
+is the bulk. A subset would be smaller, but the browser fetches each face once and reuses it on
+every page after the first, and the site's page-weight rule is a per-page ceiling on *still
+images*, which fonts are not. So subsetting buys a faster first page and nothing after it, at the
+cost of a build step that has to be re-run whenever a page uses an icon it did not use before —
+and a missing glyph is the kind of breakage nobody notices until a reader reports it. It is a
+later optimisation, not a requirement.

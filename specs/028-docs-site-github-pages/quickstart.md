@@ -57,7 +57,7 @@ Their fixture-driven counterparts live in `scripts/tests/` and run in the same j
 ### A2. The theme is derived, not transcribed
 
 ```sh
-cargo test -p micold-core tokens::css
+cargo test -p micold-core --lib tokens::css
 cargo test -p micold-core --test site_theme_contrast
 cargo run -p micold-core --bin micold-tokens-css | head -20
 ```
@@ -75,28 +75,32 @@ follows with no edit anywhere in `site/`. Revert.
 ### A3. Build the site without media
 
 ```sh
-site/build.sh --no-capture --release-tag micold-ai-ide-v0.0.0-local
+site/build.sh --no-media --tag micold-ai-ide-v0.0.0-local
 ```
 
-**Expected**: a built site under the staging output directory; every page present; the header is the
+**Expected**: a built site under `site/book`; every page present; the header is the
 application's app bar; panels are separated by shade and shadow, not outlines.
 
 ### A4. Link and budget checks over the built site
 
 ```sh
-site/checks/links.sh --built <output>
-site/checks/media-budget.sh <output>
+site/checks/links.sh --built site/book
+site/checks/media-budget.sh site/book
 ```
+
+Or `site/build.sh --checks-only`, which runs every pre-deploy check against the site already in
+`site/book`.
 
 **Expected**: 0 broken internal links; every page under 1 MB of stills; every clip under 3 MB.
 
 ### A5. Capture, once
 
 ```sh
-site/capture/display.sh start
-site/build.sh --release-tag micold-ai-ide-v0.0.0-local
-site/capture/display.sh stop
+site/build.sh --tag micold-ai-ide-v0.0.0-local
 ```
+
+`build.sh` starts the private display for the capture and stops it again; `site/capture/display.sh
+start` / `stop` are there for driving a single scene by hand.
 
 **Expected**: every entry in `site/media.toml` has a produced file. A declared capture that failed
 fails the build — it is never published as a gap or filled from an earlier run (FR-011a).
@@ -109,14 +113,18 @@ contract or build mismatch` **while printing matching version numbers on both si
 ### A6. Capture is deterministic (FR-011d)
 
 ```sh
-site/build.sh --capture-only --out /tmp/cap-a
-site/build.sh --capture-only --out /tmp/cap-b
-diff <(sha256sum /tmp/cap-a/* | awk '{print $1}') <(sha256sum /tmp/cap-b/* | awk '{print $1}')
+site/capture/verify-determinism.sh                          # every entry in site/media.toml
+site/capture/verify-determinism.sh --only main-window-light # one entry, for a quick check
 ```
+
+It captures twice into `<out>/a` and `<out>/b` and compares the two trees by hash; `--keep` leaves
+both behind so a difference can be looked at rather than guessed at.
 
 **Expected**: no difference. A difference is a bug in a scene — a timer instead of a settle, a clock
 or a host path in frame, unfixed commit metadata in the demonstration project — not an acceptable
-variance.
+variance. The first thing it caught was a clock: ImageMagick stamps every PNG it writes with the
+wall time, so two identical grabs differed in their bytes while every pixel matched. `scene_grab`
+now excludes those chunks.
 
 ### A7. Capture is credential-free and contains nothing personal (FR-011c, FR-013)
 

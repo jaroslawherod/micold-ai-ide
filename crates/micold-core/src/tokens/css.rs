@@ -19,7 +19,7 @@
 //!   documentation does not have (FR-029b). The site borrows the application's *look*, not its
 //!   widgets.
 
-use super::{ColorScheme, Rgb, Roles, elevation, motion, roles, shape, spacing, state, typography};
+use super::{elevation, motion, roles, shape, spacing, state, typography, ColorScheme, Rgb, Roles};
 use std::fmt::Write as _;
 
 /// The header every generated sheet opens with. Someone will open this file in an editor; the first
@@ -259,7 +259,11 @@ fn spacing_scale(out: &mut String) {
         ("lg", spacing::LG),
         ("xl", spacing::XL),
     ] {
-        declare(out, &format!("--micold-spacing-{name}"), &format!("{value}px"));
+        declare(
+            out,
+            &format!("--micold-spacing-{name}"),
+            &format!("{value}px"),
+        );
     }
 }
 
@@ -280,10 +284,7 @@ mod tests {
             .find(opener)
             .unwrap_or_else(|| panic!("the emitted sheet has no `{opener}` block"))
             + opener.len();
-        let end = start
-            + sheet[start..]
-                .find('}')
-                .expect("the block is never closed");
+        let end = start + sheet[start..].find('}').expect("the block is never closed");
         let mut out = BTreeMap::new();
         for line in sheet[start..end].lines() {
             let line = line.trim();
