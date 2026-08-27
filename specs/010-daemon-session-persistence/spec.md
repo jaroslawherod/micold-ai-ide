@@ -705,6 +705,12 @@ plus a new Edge Case and SC-011a. See `bugs/BUG-009.md`.
 - **SC-004**: Typing in an attached session produces visible output with no perceptible delay compared
   with the pre-change in-process behavior; scrolling, selection, and resizing never block on the
   service.
+- **SC-004a** *(added — BUG-008)*: One repaint of an attached terminal pane costs at most **2 ms mean
+  and 4 ms p95**, measured over at least 400 counted frames at the shipped grid size. SC-004 says "no
+  perceptible delay", which is a property of the observer and so cannot be checked by anyone who is not
+  one; this is the number that stands behind it. The bound is a quarter of a 60 Hz frame's 16.7 ms, so
+  a pane that meets it leaves the rest of the frame to everything else on screen. Measured, not gated —
+  see the verification table for why a wall-clock budget is not asserted in CI.
 - **SC-005**: Switching to a different session or project presents its correct current screen within
   200 milliseconds.
 - **SC-006**: A session producing continuous high-volume output for 10 minutes causes no unbounded
@@ -774,6 +780,68 @@ plus a new Edge Case and SC-011a. See `bugs/BUG-009.md`.
   a client would receive** rather than on the lifecycle state machine — every pre-existing lifecycle
   test drives the machine directly, which is how a correct machine that production never called
   stayed green for the whole of this defect's life.
+
+### How each criterion is observed *(added 2026-08-27 — BUG-008)*
+
+A criterion states a property. This table states **what is observed and by what**, which is the part
+BUG-008 found missing: six of this feature's verification tasks were written as "a person operates the
+GUI and confirms", and five of the six then sat unrun for the life of the feature. The one that closed
+did so by being *rewritten* around an observable a machine could read (`input_serial` advances only for
+input the daemon applied), which is the tell — the criteria were satisfiable all along, and nothing had
+asked for the observable up front.
+
+**The rule this table exists to enforce**: a success criterion here MUST name its observable, or be
+marked `human-only` with the reason it cannot have one. A criterion phrased in terms of the *observer*
+("looks right", "no perceptible delay") is unverifiable by any automated agent in any environment, and
+will be skipped for as long as no human is available — which the table in `bugs/BUG-008.md` measured at
+indefinitely. `scripts/check-criteria-observables.sh` fails the build when a criterion in this file has
+no row here — all **28** of them, SC-001 through SC-025 including SC-004a, SC-009a and SC-011a — so
+the next one cannot be written by accident.
+
+Later criteria already say this in their own text — SC-022, SC-023, SC-024 and SC-025 each read
+"proven by an executable test, not a walkthrough". This table is that habit made checkable and applied
+backwards.
+
+`Where` names the file the assertion lives in, not the test function: identifiers are feature-scoped
+(`SC-001` names a different criterion in six other features), so a reader following a bare id with
+`grep` finds the wrong thing. The file is the smallest handle that is unambiguous.
+
+| # | Observable | Where |
+|---|---|---|
+| SC-001 | a session's process and output continue with no client reading, and the same session accepts input from a *new* client process | `micold-daemon/tests/session_survival.rs`, `micold-daemon/tests/client_restart_input.rs`; the three-platform half is CI's `[ubuntu, macos, windows]` matrix — see the note on SC-013 and T083 below |
+| SC-002 | `LineId` contiguity across the detach window, and the retained watermark that bounds it — no gap, no repeat, clamp rather than error past the bound | `micold-daemon/tests/reattach_snapshot.rs`, `micold-daemon/tests/scrollback_range.rs` |
+| SC-003 | a cold start with no daemon listening reaches attached with no manual command; the sandbox's added cost is measured separately | `micold-daemon/tests/autospawn.rs`, `micold-daemon/tests/sandbox_real_session_start.rs`. **The 3 s budget itself is not asserted** — it is wall-clock on developer hardware, and this project's only headless display is a software rasteriser. Human-only, and the reason is the number, not the GUI |
+| SC-004 | round trips issued by scroll, select and resize (must be zero) and frames emitted per frame-interval (must be ≤ 1); the repaint cost itself is SC-004a | `micold-client/tests/local_interactions.rs`, `micold-daemon/tests/frame_coalescing.rs` |
+| SC-004a | *(added — BUG-008)* `render(app)` mean and p95 over ≥ 400 counted frames, via `MICOLD_FRAME_PROBE` (feature 018 FR-039b), against the budget in the criterion | measured on a display and recorded in `evidence/T085-terminalpane-repaint-cost.md`. **Measured, not gated**: a wall-clock budget asserted in CI would be flaky on shared runners, so the threshold is a number a re-measurement can fail against rather than a test that runs on every push |
+| SC-005 | frames per frame-interval on a switch, and that the switch reads local state rather than waiting on the wire | `micold-daemon/tests/frame_coalescing.rs`, `micold-client/tests/local_interactions.rs`. The 200 ms is bounded by construction — the screen is served from the local `GridCache` — rather than timed |
+| SC-006 | daemon-side memory across a sustained unread burst, and the screen converging to the true screen once output stops | `micold-daemon/tests/slow_client.rs` |
+| SC-007 | every mutating RPC's terminal state: an `OperationOk`, a specific `OperationError`, or the client's explicit unknown-outcome state when the connection drops | `micold-daemon/tests/mutation_semantics.rs`, `micold-daemon/tests/mutation_atomicity.rs`, `micold-client/src/main.rs` (the BUG-020 gates) |
+| SC-008 | catalog entries, directories and git state after a forced failure — counted, not eyeballed | `micold-daemon/tests/mutation_semantics.rs`, `micold-daemon/tests/mutation_atomicity.rs` |
+| SC-009 | the handshake's decision on a mismatched `protocol_version`/`schema_hash`, and that the refusal names both sides | `micold-daemon/tests/handshake_flow.rs`, `micold-daemon/tests/version_recovery.rs` |
+| SC-009a | the same decision on a matching contract with a differing `client_package_version` | `micold-daemon/tests/handshake_flow.rs` (T093) |
+| SC-010 | the second attach's refusal, the takeover, and the displaced window's subsequent input count (must be zero) and exit count (must be zero) | `micold-daemon/tests/exclusivity.rs`, `micold-client/src/main.rs` |
+| SC-011 | wall-clock from a silently half-open connection to a `Disconnected` report, against the 3 s-`Ping`/9 s-deadline keepalive | `micold-daemon/tests/liveness.rs` (T068a) |
+| SC-011a | an operation held for a multiple of the liveness deadline: its own outcome arrives, and no disconnect, unknown-outcome or read-only notice is raised on the way | `micold-daemon/tests/busy_connection.rs`, `micold-daemon/tests/busy_session_start.rs`. The deadline is shortened rather than the test lengthened; the ratio is what SC-011a is about |
+| SC-012 | attempt count, timing policy and give-up state, with and without a client attached, compared | `micold-daemon/tests/supervision_restart.rs`, `micold-daemon/tests/supervision_giveup.rs` |
+| SC-013 | `cargo test --workspace` green on all three platforms in CI, on every pull request | `.github/workflows/ci.yml`, `build + test` matrix. **What a green Windows column does *not* say** is recorded at T083 and split out as T144: `platform/windows.rs::terminate_process_tree` is an empty no-op, so the Windows *behaviours* named there have nothing to exercise |
+| SC-014 | an existing `projects.json` adopted in place, with its projects and sessions present and no re-entry | `micold-daemon/tests/catalog_adoption.rs` (T021) |
+| SC-015 | that the awaiting-input state reaches the session *row* — the list alone, with no session opened | `micold-daemon/tests/activity_pipeline.rs`, `micold-client/tests/sidebar_tree.rs`. **The 5 s is human-only**: it measures a person's reading, and no observable stands in for that. The half that is not human-only — the information being present in the row at all — is asserted |
+| SC-016 | activity transitions driven by real agent event logs: no `AwaitingInput` during continuous work, and the blocked→awaiting transition | `micold-daemon/tests/activity_pipeline.rs`, `micold-daemon/tests/copilot_activity.rs`, `micold-daemon/tests/hooks_receiver.rs` |
+| SC-017 | for each committed failure mode, a log line naming its cause, at the shipped verbosity, in the sink the app surfaces | `micold-daemon/tests/log_events.rs`, `micold-daemon/tests/refused_mutations_are_logged.rs`, `micold-daemon/tests/logging_sink.rs`, `micold-daemon/tests/diagnostics.rs` |
+| SC-018 | no icon-like character literal in any UI surface, and every `Icon::ALL` codepoint resolving to a real glyph in the shipped font | `micold-client/tests/ui_glyph_literals.rs`, `micold-client/tests/icons_font.rs` |
+| SC-019 | `item.icon.is_none()` on a session row, and `element.size().width` identical across all four `ActivitySignal` variants | `micold-client/src/ui/sidebar.rs`, `micold-client/src/ui/material/activity_badge.rs` (T108). T109 was closed as redundant against this — the first BUG-008 disposition applied |
+| SC-020 | `input_serial` after a client-process restart against a surviving daemon: it advances on the first keystroke, over a real socket, with the real client-side stamper | `micold-daemon/tests/client_restart_input.rs` (the T115 substitute — the worked example this table generalises) |
+| SC-021 | the read-only flag after every route into an accepted attach, and the absence of a takeover affordance while the project is held | `micold-client/src/main.rs` |
+| SC-022 | a hook payload posted at the measured size of a real large-file edit — accepted and applied; one past the bound — refused | `micold-daemon/tests/hooks_receiver.rs` |
+| SC-023 | the size a session's process is actually spawned at, for a session with no process, across first start, crash respawn and additional-instance spawn | `micold-daemon/tests/supervision_restart.rs`, `micold-client/tests/terminal_size_reporting.rs` |
+| SC-024 | the spawn decision for a session whose directory does not exist — refused, no process registered — and for one whose directory does | `micold-daemon/tests/session_cwd_guard.rs` |
+| SC-025 | the **snapshot a client would receive**, not the lifecycle machine, from the moment the process exists | `micold-daemon/tests/session_start.rs` |
+
+Three rows say `human-only` and each names why: SC-003's 3 s (wall-clock on real hardware), SC-004a's
+budget (measured on a display, not gated in CI), SC-015's 5 s (a person's reading speed). That is the
+count the project can now state. Before this table it could not: nothing distinguished a criterion that
+must be seen by a person from one that was merely written that way, so every one of them looked equally
+blocked.
 
 ---
 

@@ -334,6 +334,20 @@ jobs:
           # user guide. This check runs on documentation-only changes too -- which is the point.
           test -f docs/development/ci-pipeline.md
 
+      # Feature 010, BUG-008. A success criterion that names no observable cannot be checked by
+      # anyone who is not standing at the machine, so it is skipped -- and CI stays green while it
+      # is, because nothing can fail a criterion nobody can run. This gate is deliberately in the
+      # `docs check` job: the omission is made in a spec file, on documentation-only changes, which
+      # is exactly when the rest of the pipeline is skipped.
+      #
+      # The check's own cases run FIRST, and this ordering is the point rather than tidiness: the
+      # assertion-freeze gate beside it shipped with cases that existed and nothing ran, which is
+      # this same bug one level down.
+      - name: The criteria check's own cases
+        run: scripts/tests/check-criteria-observables.test.sh
+      - name: Every success criterion names its observable
+        run: scripts/check-criteria-observables.sh
+
   # The single status check the default branch's ruleset requires (feature 023). It states the
   # outcome of the run instead of enumerating the pipeline's internals, which is what lets the jobs
   # above be skipped on a documentation-only change without making a pull request unmergeable.
