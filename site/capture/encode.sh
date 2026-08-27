@@ -72,7 +72,13 @@ done
 # terminal would die on a tool the repository has already installed for it, saying only that it is
 # not there. The same fallback `site/build.sh` uses for Node, for the same reason.
 if ! command -v ffmpeg >/dev/null 2>&1 && command -v mise >/dev/null 2>&1; then
-  ffmpeg_bin="$(mise where ffmpeg 2>/dev/null || true)/bin"
+  # Asked twice, because the capture harness points `XDG_DATA_HOME` at a throwaway state directory
+  # so the application it drives has no profile of the machine's -- and mise keeps its installs
+  # under `$XDG_DATA_HOME/mise`, so inside a capture it looks in that empty directory and reports a
+  # tool it installed as not installed. The second attempt asks with the variable out of the way.
+  # The first is still tried first: a machine that really does keep its data home elsewhere is
+  # answered correctly there, and only a run whose data home is not its own falls through.
+  ffmpeg_bin="$(mise where ffmpeg 2>/dev/null || env -u XDG_DATA_HOME mise where ffmpeg 2>/dev/null || true)/bin"
   [ -x "$ffmpeg_bin/ffmpeg" ] && PATH="$ffmpeg_bin:$PATH" && export PATH
 fi
 command -v ffmpeg >/dev/null 2>&1 || die "ffmpeg is not installed -- see site/README.md"
