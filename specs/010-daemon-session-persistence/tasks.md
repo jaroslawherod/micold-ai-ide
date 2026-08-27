@@ -387,6 +387,10 @@ docs state per-platform support (quickstart S14).
   says (and the daemon states its own sink on its first line), and S3's third expectation — "the
   stopped one reads *ended*" — has a producer for the first time; it was unreachable in that run
   because nothing in production code ever constructed the signal. Neither was re-walked on a display.
+  *Amended 2026-08-27*: BUG-020 is fixed too, so S8's last row — the one failure mode that run
+  recorded — has an implementation behind it: a mutation whose connection drops now resolves to an
+  explicit unknown outcome instead of leaving the dialog animating for ever. The same change closes
+  S13's other half for mutations, which logged nothing at all. Not re-walked on a display either.
 - [x] T085 [P] Measure retargeted `TerminalPane` repaint cost at 60 Hz on the client (Risk 2 — all
   streaming measurements were daemon-side); record whether the tick rate is the right knob.
   **Measured 2026-08-25** — the "blocked" note above was wrong on both halves: the frame profiler
