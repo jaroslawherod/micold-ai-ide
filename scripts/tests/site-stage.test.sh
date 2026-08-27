@@ -62,6 +62,8 @@ This is version {{MICOLD_VERSION}}, released as {{MICOLD_TAG}}.
 
 <!-- media: probe-still -->
 
+<!-- media: probe-clip -->
+
 Trailing prose.
 MD
 
@@ -78,6 +80,13 @@ scene  = "probe"
 scheme = "light"
 alt    = "A probe still, described for a reader who cannot see it."
 caption = "The probe still."
+
+[media.probe-clip]
+kind   = "clip"
+scene  = "probe"
+scheme = "light"
+alt    = "A probe clip, described for a reader who cannot see it."
+caption = "The probe clip."
 MD
 
 before="$(find "$fixture/docs" -type f -exec sha256sum {} + | sort)"
@@ -122,6 +131,32 @@ contains "surrounding prose survives" "$fixture/out/src/README.md" "Trailing pro
 # kind of break that only shows up after deployment.
 contains "a nested page reaches media through its own depth" \
   "$fixture/out/src/user-guide/deep.md" 'src="../media/probe-still.png"'
+
+echo
+echo "== a clip directive (FR-015a, FR-015b, FR-028) =="
+# A clip is the one figure that can *do* something on its own, and both of the things it must not do
+# are single attributes. `autoplay` starts motion nobody asked for; a preload that fetches downloads
+# a video to a reader who never presses play, on a connection that may be paying for it. The check
+# in `site/checks/page-checks.mjs` catches either in the rendered HTML -- this catches them one step
+# earlier, in the markup this script writes, where the attribute list is actually decided.
+contains "a clip is a video element" "$fixture/out/src/README.md" "<video controls loop muted playsinline"
+contains "nothing is fetched before the reader presses play" "$fixture/out/src/README.md" \
+  'preload="none"'
+absent "a clip never plays by itself" "$fixture/out/src/README.md" "autoplay"
+contains "the poster is the clip's own first frame" "$fixture/out/src/README.md" \
+  'poster="media/probe-clip.png"'
+# Two sources, WebM first: a browser takes the first type it can decode, and the VP9 is the smaller
+# of the two on flat interface frames (FR-015c).
+contains "the WebM is offered first" "$fixture/out/src/README.md" \
+  '<source src="media/probe-clip.webm" type="video/webm">'
+contains "the H.264 is offered as well" "$fixture/out/src/README.md" \
+  '<source src="media/probe-clip.mp4" type="video/mp4">'
+# A video has no `alt`, so the description the manifest carries has to arrive as a label instead --
+# without it the clip is unannounced to a reader using a screen reader (FR-014).
+contains "the description reaches a screen reader" "$fixture/out/src/README.md" \
+  'aria-label="A probe clip, described for a reader who cannot see it."'
+contains "the clip's caption comes from the manifest" "$fixture/out/src/README.md" \
+  "<figcaption>The probe clip.</figcaption>"
 
 echo
 echo "== a directive naming an id the manifest does not declare =="

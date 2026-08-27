@@ -136,6 +136,8 @@ The cycle order is Auto → Light → Dark → Auto. The menu stays open while y
 click again. Your choice takes effect immediately and is remembered across restarts. Cycling
 back to **Auto** resumes tracking your OS preference and switching live when it changes.
 
+<!-- media: theme-follow-light -->
+
 ## Motion & animations
 
 The interface uses brief, consistent motion so changes feel considered rather than abrupt:

@@ -180,6 +180,8 @@ worktree at `.claude/worktrees/feat-abc-123_login-page`. With no ticket, `chore`
 simplified (slugified), so `#123` is a perfectly good ticket; it shows up as a `#123` tag in the
 sidebar.
 
+<!-- media: create-worktree-light -->
+
 The `_` separates the ticket from the description, and it is on the branch as well as the folder.
 That is what lets the app read the ticket back later: delete a worktree and re-create it from the
 branch and the tag comes back, instead of the app having to guess where the ticket ended.
@@ -552,6 +554,8 @@ commands, scripts, or anything else scoped to that session's worktree without le
   even mid-turn. It keeps running in the background exactly as it was, including its own
   crash-auto-restart if it happens to exit while you're looking at the shell, and switching back
   reattaches to that same conversation with nothing lost.
+
+<!-- media: switch-session-light -->
 
 ### Running more than one Regular Terminal instance
 

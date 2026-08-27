@@ -119,17 +119,41 @@ for run in "${runs[@]}"; do
   fi
 done
 
+# --- the clips -------------------------------------------------------------------------------------
+#
+# A clip scene writes frames and stops there; `encode.sh` is what turns a directory of frames into
+# the three files a page references -- the poster, the H.264 and the VP9. It runs here rather than
+# inside the scene because it is the same step for every clip and because the length limit it
+# enforces (FR-015) belongs to the manifest's idea of a clip, not to any one scene.
+#
+# A scene that failed above has already been recorded; encoding its half-written frames would bury
+# that failure under a second one, so the encode is skipped for those.
+for id in "${ids[@]}"; do
+  [ "${media_kind[$id]}" = "clip" ] || continue
+  case " ${failed[*]-} " in *" ${media_scene[$id]} (${media_scheme[$id]}) "*) continue ;; esac
+  if [ ! -d "$out/$id.frames" ]; then
+    # Not fatal here: the completeness check below is where a missing file is reported, once, in the
+    # same shape for every kind of media.
+    continue
+  fi
+  if ! "$root/site/capture/encode.sh" --frames "$out/$id.frames" --id "$id" --out "$out"; then
+    failed+=("$id (encode)")
+  fi
+done
+
 # --- what the manifest promised ------------------------------------------------------------------
 
 missing=()
 for id in "${ids[@]}"; do
   [ -f "$out/$id.png" ] || { missing+=("$id.png"); continue; }
-  # A clip's poster is its first frame, so the still above is necessary but not sufficient: the
-  # frames the encoder turns into the clip have to be there too.
+  # A clip is four files and a page references three of them, so the poster above is necessary and
+  # not sufficient: the frames it was made from, and both encodes, have to be there too.
   if [ "${media_kind[$id]}" = "clip" ]; then
     if [ ! -d "$out/$id.frames" ] || [ -z "$(ls -A "$out/$id.frames" 2>/dev/null)" ]; then
       missing+=("$id.frames/")
     fi
+    [ -f "$out/$id.mp4" ] || missing+=("$id.mp4")
+    [ -f "$out/$id.webm" ] || missing+=("$id.webm")
   fi
 done
 

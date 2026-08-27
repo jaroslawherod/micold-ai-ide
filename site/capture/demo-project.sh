@@ -13,13 +13,18 @@
 # committer's identity, so both are pinned. Two publications that differ only in a timestamp inside
 # a PNG are two publications whose diff tells nobody anything (FR-011b).
 #
-#   site/capture/demo-project.sh <dir> [--state <data-home>]
+#   site/capture/demo-project.sh <dir> [--state <data-home>] [--no-active]
 #
 # Writes the project to <dir> and the catalogue the application reads at startup to
 # <data-home>/micold-ai-ide/projects.json -- `$XDG_DATA_HOME` when the capture display has set one,
 # and `<dir>-state` otherwise. The catalogue is what lets the capture open a project without a CLI:
 # the client has no command line to speak of, so the way to start it on a project is to have the
 # project already in its catalogue.
+#
+# `--no-active` writes the same catalogue with no active project, which is how a scene reaches the
+# empty state: the project is known, so it can be opened from the window, but nothing is open yet.
+# It is the state a reader is in the first time they start the application, and the only way to
+# photograph it is to seed it -- the application remembers the last project it had open.
 
 set -euo pipefail
 
@@ -30,17 +35,19 @@ die() {
 
 dir=""
 state="${XDG_DATA_HOME:-}"
+active=1
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --state) state="$2"; shift 2 ;;
-    -h | --help) sed -n '2,23p' "$0"; exit 0 ;;
+    --no-active) active=0; shift ;;
+    -h | --help) sed -n '2,28p' "$0"; exit 0 ;;
     -*) die "unknown argument: $1" ;;
     *) [ -z "$dir" ] || die "only one project directory, got $dir and $1"; dir="$1"; shift ;;
   esac
 done
 
-[ -n "$dir" ] || die "usage: demo-project.sh <dir> [--state <data-home>]"
+[ -n "$dir" ] || die "usage: demo-project.sh <dir> [--state <data-home>] [--no-active]"
 
 rm -rf "$dir"
 mkdir -p "$dir"
@@ -265,11 +272,16 @@ json_escape() {
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
 }
 
+# `last_active` is optional in the shape `store.rs` reads, and an absent one is "no active
+# project" rather than an error -- so the empty state is the same catalogue with one line left out.
+last_active="  \"last_active\": \"$(json_escape "$dir")\",
+"
+[ "$active" -eq 1 ] || last_active=""
+
 cat >"$catalog_dir/projects.json" <<EOF
 {
   "schema_version": 1,
-  "last_active": "$(json_escape "$dir")",
-  "projects": [
+${last_active}  "projects": [
     {
       "path": "$(json_escape "$dir")",
       "display_name": "$(json_escape "$name")",
@@ -279,4 +291,5 @@ cat >"$catalog_dir/projects.json" <<EOF
 }
 EOF
 
-printf 'demo-project.sh: %s (catalogue in %s)\n' "$dir" "$catalog_dir" >&2
+printf 'demo-project.sh: %s (catalogue in %s%s)\n' "$dir" "$catalog_dir" \
+  "$([ "$active" -eq 1 ] || printf ', no active project')" >&2
