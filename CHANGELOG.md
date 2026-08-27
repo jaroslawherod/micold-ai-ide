@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.12.0...micold-ai-ide-v0.12.1) (2026-08-27)
+
+
+### Build & CI
+
+* stop a vendor repository outage from failing every Linux job ([2aa5ad9](https://github.com/jaroslawherod/micold-ai-ide/commit/2aa5ad984f704da5d2d69954e12ca17afda6fe34))
+
 ## [0.12.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.11.0...micold-ai-ide-v0.12.0) (2026-08-27)
 
 
