@@ -22,10 +22,20 @@ shapes:
 | `build + test (macos-latest)` | runs | **skipped** |
 | `build + test (windows-latest)` | runs | **skipped** |
 | `assertion freeze (advisory)` | runs | **skipped** |
+| `sandbox against a real runtime (linux)` | runs | **skipped** |
 | `docs check` | runs | **runs** |
 | `ci complete` | runs | runs |
 
 Three jobs on a documentation-only run, all on Linux. No macOS or Windows runner is started.
+
+`sandbox against a real runtime` is Linux-only because Docker Desktop is not available on GitHub's
+macOS and Windows runners, so the alternative is no real-runtime job at all. It builds the `:dev`
+sandbox image from the branch and then runs the `sandbox_real_*` tests in **two** steps, one per
+crate — `micold-core` for the adapter layer, `micold-daemon` for what the isolation is for. The
+second step is not optional tidiness: it was missing until feature 027's T147, and its eleven tests
+carry the sandbox's headline claims. A `-p` that names one crate does not report the other as
+skipped; it produces no output about it at all, which is why the job looked complete for the whole
+of the feature it was written for.
 
 `docs check` is deliberately unconditional: it is the one gate a documentation-only change can
 actually break, so skipping the build must not skip it. Delete a required document and the run

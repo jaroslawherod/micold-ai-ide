@@ -729,6 +729,53 @@ That is why the fix is a protocol pair and a gate, not a better probe.
 **Requirements closed**: FR-023b, FR-023c. With them the feature has no unimplemented requirement
 left. T146 closed the last §B box with it.
 
+---
+
+## Phase 14: the real-runtime job was testing half the feature
+
+**Goal**: Make the claims the sandbox exists for re-check themselves, rather than resting on one
+manual pass. T006 asked for a job "running the `sandbox_real_*` tests"; what it delivered runs
+`-p micold-core`, and the other eleven live in `micold-daemon`.
+
+The eleven are not the remainder — they are the headline. `micold-core`'s twelve cover the adapter:
+argv a real runtime accepts, the isolation it produces, egress, storage, lifecycle. `micold-daemon`'s
+cover what that isolation is *for*, and every one of them is a user story's own claim: the boundary
+probed from **inside a session the daemon spawned** (US1, quickstart §B.2), a sandboxed terminal
+answering exactly as an unsandboxed one (US2, §B.3), a limit stopping the session and not the
+service (US4), the image carrying every AI CLI the application offers (FR-023a), the fingerprint
+refusal (FR-024d), and sessions surviving a client restart with the survival opt-in bringing the
+sandbox back unasked (FR-014a/b/c).
+
+They ran on no machine at all. Not skipped, not disabled — never built, because cargo was never
+asked for that crate's targets, and a package nobody names produces no output to notice. The one
+run they have had is T120's, by hand, on 2026-08-26. Meanwhile §B.2 says in writing that its boxes
+"re-check themselves on every `sandbox-runtime` CI run", which was false the day it was written.
+This is the same shape as the assertion gate's own untested cases, recorded in `ci.yml`: *"They
+existed and nothing ran them."*
+
+- [x] T147 `.github/workflows/ci.yml`: a second step in `sandbox-runtime`, `cargo test --release -p
+      micold-daemon --features sandbox-real-runtime sandbox_real_ --no-fail-fast --
+      --test-threads=1`. `--release` is required rather than preferred — the daemon inside the image
+      is release-built, `sandbox_real_session_start` compares it against `CARGO_BIN_EXE_micold-daemon`,
+      and a debug host daemon against a release containerised one flatters the container, which is
+      the wrong direction for a claim of the form "the sandbox is not much slower". The test refuses
+      to report a number when the profiles disagree, refusing is a failure, and without
+      `--no-fail-fast` cargo stops at that target and skips every one after it in silence —
+      `sandbox_real_staleness` included. That is T120's lesson, which until now was written down in
+      a task and enforced nowhere.
+- [x] T148 `mise.toml`: `mise run test-sandbox`, both crates in the one invocation that reports the
+      truth, refusing early when the runtime or `micold-daemon:dev` is missing. Every way of
+      getting this invocation wrong is silent and reports success — naming one crate, dropping
+      `--release`, dropping `--no-fail-fast`, dropping `--test-threads=1`, or expecting
+      `sandbox_real_` to match file names rather than test names. A one-command form is what stops
+      the next pass from rediscovering that list.
+- [x] T149 Run all 23 against a real runtime on the branch that adds the job, so the job is landed
+      green rather than hopefully: `evidence/real-runtime-ci-coverage.md`.
+
+**Requirements closed**: none new. What closes here is a gap between what the feature claims to
+verify continuously and what it verified continuously — which is the sort of gap that is only ever
+found by counting.
+
 ## Parallel Opportunities
 
 **Phase 1**: T002, T003, T005, T006 in parallel after T001.
@@ -755,6 +802,9 @@ clearest parallel block in the feature; T074 parallel throughout.
 **Phase 13**: T138, T139 and T141 are three independent test files. T140 is the only one that has to
 follow its implementation, because what it asserts is an absence that does not exist yet. T146 is a
 manual pass and follows everything.
+
+**Phase 14**: T147 and T148 are independent files. T149 has to follow both, since what it records is
+those two run.
 
 ## Implementation Strategy
 

@@ -93,8 +93,12 @@ This is the feature. In a sandboxed session's terminal:
 Covered twice, and the second pass is the one that counts: `evidence/us1-isolation.md` probed the
 container with `docker exec` and a replaced entrypoint, `evidence/us1-isolation-from-a-session.md`
 probes it through a session the daemon spawned, over the control channel, as
-`crates/micold-daemon/tests/sandbox_real_boundary.rs` — so these boxes now re-check themselves on
-every `sandbox-runtime` CI run.
+`crates/micold-daemon/tests/sandbox_real_boundary.rs` — so these boxes re-check themselves on every
+`sandbox-runtime` CI run.
+
+That last clause was untrue when it was written, and stayed untrue for the rest of the feature. The
+job's only test step named `-p micold-core`; this file is in `micold-daemon`, so cargo never built
+it and the boxes re-checked themselves nowhere. T147 added the step that makes the sentence true.
 
 - [x] `ls /` shows the container's root, not the host's
 - [x] A registered project is present **at its host absolute path** (R2)
