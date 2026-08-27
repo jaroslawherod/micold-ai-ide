@@ -236,6 +236,71 @@ See [research.md](./research.md) for decisions, rationale and rejected alternati
 - [quickstart.md](./quickstart.md) — Part A automated gates, Part B the manual visual/behavioural
   pass (runnable with the repo's `visual-pass` skill for the view work).
 
+## Phase 2 → increments planned after the design artifacts
+
+Two bodies of work were specified after Phases 0 and 1 were written, from questions the surface
+itself raised once it existed. Both are recorded here rather than folded into the Summary, because
+each adds requirements the original plan did not carry.
+
+### The image ships the AI CLIs, and the sandbox gets a home (FR-023a/b/c, FR-004d, SC-012)
+
+FR-023 said the image carries "the tooling a session needs" without saying who owns that when the
+user substitutes an image of their own — and nothing at all said the sandbox has a home directory.
+An image could satisfy FR-023 on paper and still fail to run the CLI it shipped, because the first
+thing an AI CLI does is write to `~`, before any prompt, and `HOME` pointed at a path the container
+had no writable directory at.
+
+The approach:
+
+- **The published image installs every `AiCli` variant at build time**, pinned. `node:22-trixie-slim`
+  is the base, and both halves of that tag are load bearing: trixie for glibc 2.39 (the daemon is
+  built on the host and copied in), 22 because `@anthropic-ai/claude-code` declares
+  `engines: node >=22.0.0` while trixie itself ships Node 20. Pinned rather than floating, because
+  the staleness check fingerprints the *service* — a silently changed CLI would not trip it.
+- **The sandbox's home is a mount, not an inheritance.** `HomeMount` is a fifth member of
+  `MountSet`, mounting `<state>/sandbox-home` at the host home path, so the container's `HOME`
+  resolves to an application-owned directory that shadows the user's rather than sharing it. It is
+  declared in the set rather than emitted by `argv` because obligation C-3 is that `argv` invents no
+  mount; an implicit home mount is exactly the convenience C-3 forbids. `argv` emits it first, since
+  a project under the user's home has to land on top of it, and the client creates the directory
+  before `create` — a bind source the runtime has to create, it creates as root.
+- **Substituted images inherit the obligation, and availability is answered where sessions run.**
+  FR-023b and FR-023c are specified and *not* built in that increment: reporting a missing CLI where
+  the image is chosen, and replacing `provider.rs::resolves_on_path` (which asks the client's host)
+  with a check inside the container, are a settings-surface change with their own tests.
+
+### The rail becomes a navigation rail, and the menu stops duplicating it (FR-026b–e, FR-014d, SC-013/014)
+
+The full-surface Settings of FR-026 left two things unfinished. The rail lists section *names* at a
+fixed width and cannot be given back; and because the surface no longer covers the app bar, controls
+that were harmlessly duplicated in the overflow menu became reachable at the same time as their
+settings counterparts — which is how BUG-001 happened.
+
+The approach:
+
+- **Icons belong to the section, not to the view.** `SettingsSection` gains an icon the same way it
+  has a label, so the rail, any future presentation of it, and the tests all read one source. The
+  icons come from the existing `Icon` set (Principle VIII), not a set introduced here.
+- **Collapse is a property of the shared component.** `SectionList` learns a collapsed rendering —
+  icons alone, at the Material rail width — rather than the settings view growing a private
+  alternative, because FR-026a forbids exactly that. The existing width gates keep their meaning by
+  becoming width gates *per state*: one width when expanded, one when collapsed, each stable across
+  which section is current and whether a badge is shown.
+- **The collapsed flag is view state.** It lives beside `settings_section` in `State`, not in
+  `SettingsDraft` and not in the on-disk settings — so it needs no schema version, is not saved with
+  the form, and cannot be reverted by Cancel (FR-026d).
+- **The menu keeps actions and gives up settings.** The theme cycle and "keep sessions after logout"
+  leave `toolbar::overflow_items`; open Settings, diagnostics and About stay. Removing the theme
+  cycle removes `Message::ThemeModeCycled` and, with it, the second writer BUG-001 was about — the
+  fix stays, since a live change from outside the form is still newer than the draft, but the
+  scenario that produced it is gone.
+- **Session survival consolidates onto one control that knows the placement.** The menu item ran the
+  Linux service-manager flow directly, which is only half of FR-014a's single opt-in; the settings
+  checkbox set the container restart policy, which is the other half. `logout_survival::enable_for`
+  already dispatches on the resolved placement and has no caller — saving the checkbox becomes that
+  caller, so one control covers both placements and reports `Unsupported` where a placement cannot
+  offer it (FR-014d).
+
 ## Complexity Tracking
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |

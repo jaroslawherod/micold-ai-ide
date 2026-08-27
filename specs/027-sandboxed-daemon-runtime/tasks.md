@@ -551,6 +551,69 @@ carries what a session needs without saying who owns that when the user substitu
 nothing said the sandbox has a home of its own — which is why an image that satisfied FR-023 on
 paper still could not run the CLI it shipped.
 
+## Phase 12: FR-026b–e and FR-014d — the rail becomes a navigation rail, and the menu stops duplicating it
+
+**Goal**: every section identified by an icon as well as a name; the rail collapsible to those icons
+and still fully navigable; and no setting offered by two controls, with nothing lost when the
+duplicates go.
+
+**Why now**: FR-026 made Settings a full surface that no longer covers the app bar, which turned two
+long-harmless duplicates into two live writers of one value — that is BUG-001's whole mechanism. The
+rail's fixed width is the other half of the same surface: it was introduced to make Settings roomy
+and is the one part of it that cannot be given back.
+
+### Tests first
+
+- [ ] T128 [US3] *(test)* `crates/micold-client/tests/settings_sections.rs`: every `SettingsSection`
+      carries an icon, and no two share one (FR-026b). Written against `SettingsSection::icon`
+      rather than against the rendered rail, because the rail is one presentation of the section and
+      a second one must not be able to invent its own icons.
+- [ ] T129 [US3] *(test)* `ui/material/section_list.rs` unit tests: a collapsed rail renders one
+      pressable node per section and no label text; its width is the Material navigation-rail width
+      and is stable across which section is current and whether a badge is shown — the same two
+      claims the expanded gates already make, now made per state (FR-026c).
+- [ ] T130 [US3] *(test)* `crates/micold-client/tests/settings_rail_collapse.rs`: pressing a
+      section's node while collapsed emits `SettingsSectionShown` for that section; the toggle flips
+      the flag; the flag survives closing and reopening Settings within the session; Cancel does not
+      revert it and Save does not write it (FR-026c, FR-026d).
+- [ ] T131 [US3] *(test)* `crates/micold-client/tests/settings_sections.rs`: no message the app
+      bar's overflow menu emits is one a settings section owns — asserted over
+      `toolbar::overflow_items` against the sections' declared `SETTINGS`, so a duplicate added
+      later fails here rather than being noticed by a user (FR-026e, SC-014).
+- [ ] T132 [US3] *(test)* `crates/micold-client/tests/features_settings.rs`: saving with the
+      survival opt-in on resolves through `logout_survival::enable_for` for the *configured*
+      placement — the service-manager flow under host-process, the restart policy under sandboxed —
+      and reports `Unsupported` where the placement cannot offer it (FR-014d, SC-014).
+
+### Implementation
+
+- [ ] T133 [US3] `features/settings.rs`: `SettingsSection::icon`, beside `label` and `index`;
+      `ui/material/section_list.rs`'s `Section` gains an icon and renders it in the leading slot
+      `Button` already has. Icons from the existing `Icon` set — Principle VIII, and FR-026b says so
+      explicitly because a settings-only icon set is the obvious shortcut here.
+- [ ] T134 [US3] `ui/material/section_list.rs`: the collapsed rendering, plus the affordance that
+      toggles it. In the shared component rather than in the view, because FR-026a forbids a private
+      rail and a collapsed rail built in `settings_view.rs` would be exactly that.
+- [ ] T135 [US3] `app.rs`/`ui/settings_view.rs`: `settings_rail_collapsed` on `State` beside
+      `settings_section`, a message that toggles it, and the rail rendered in the state it names.
+      Not in `SettingsDraft` and not in `settings.json`: FR-026d makes it view state, which is what
+      keeps it out of the save-together rule and off the schema.
+- [ ] T136 [US3] `ui/toolbar.rs`: drop the theme cycle and "Keep sessions after logout"; keep open
+      Settings, diagnostics and About. `Message::ThemeModeCycled` and `mode_icon` go with the first,
+      and `ui/settings/appearance.rs`'s note and module doc — which argue for keeping the toolbar
+      shortcut — are rewritten to say why it went. The BUG-001 fix stays: a live change from outside
+      the form is still newer than the draft, and its test moves onto the writer that remains.
+- [ ] T137 [US3] `features/settings.rs`/`shell/service_control.rs`: applying the survival opt-in
+      calls `logout_survival::enable_for` with the resolved placement, which is the caller that
+      function was written for and has never had. This is what makes removing the menu item safe:
+      without it, dropping the item drops the host-process capability with it.
+
+**Not in this phase**: FR-023b and FR-023c, still. They are a settings-surface change and this phase
+is a settings-surface phase, but they are about *the image* and are gated on asking the container
+what it has rather than asking the client's `PATH` — a protocol question, not a layout one.
+
+**Requirements added**: FR-026b, FR-026c, FR-026d, FR-026e, FR-014d, SC-013, SC-014.
+
 ## Parallel Opportunities
 
 **Phase 1**: T002, T003, T005, T006 in parallel after T001.

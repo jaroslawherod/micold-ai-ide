@@ -159,6 +159,14 @@ found a real defect: `overlayfs` was classified as enforcing a storage limit it 
 - [ ] Idle with the view open: no repainting (the automated counterpart is
       `idle_requests_no_frames.rs`) — **inconclusive under lavapipe**; the view costs no more idle
       than the main surface, but the absolute claim rests on the automated test
+- [ ] Every section in the rail carries an icon, and the icons are distinguishable from one another
+      at the rail's own size (FR-026b)
+- [ ] Collapsed, the rail shows icons alone, still marks the current section, still navigates by
+      pointer and by keyboard, and the width it gives up goes to the section's content (FR-026c)
+- [ ] The collapsed state survives leaving and reopening Settings, and Save and Cancel both leave it
+      alone (FR-026d)
+- [ ] The overflow menu offers no control a section owns — no theme, no session survival — and
+      session survival still works from its section under both placements (FR-026e, FR-014d)
 
 ### B.7 — The development loop (FR-024c)
 
