@@ -582,6 +582,31 @@ impl DaemonState {
 
     /// Send one message to a specific client (best-effort; a dead channel is ignored).
     pub fn send(&self, id: ClientId, msg: DaemonMsg) {
+        // A refused mutation is a failure of this service, so it belongs in this service's log
+        // (S13: "for each failure in S7, S8 and S11, confirm the cause is determinable from
+        // logs"). It was determinable only from the UI: every `OperationError` was sent and none
+        // was logged, so a user who had closed the dialog had nothing left to read (`010`
+        // BUG-020).
+        //
+        // Here rather than at the call sites: there are twenty-five of them across `server.rs` and
+        // this is the one door they all leave by, so a new refusal is logged without anyone having
+        // to remember to. `detail` is included because it is usually the only part that names the
+        // cause — git's own stderr for a worktree create — and it is never terminal content or
+        // session input, which is the only thing FR-047 forbids.
+        if let DaemonMsg::OperationError {
+            req,
+            kind,
+            message,
+            detail,
+        } = &msg
+        {
+            tracing::warn!(
+                req = %req,
+                kind = ?kind,
+                detail = detail.as_deref().unwrap_or("-"),
+                "operation refused: {message}"
+            );
+        }
         if let Some(client) = self.lock().clients.get(&id) {
             let _ = client.tx.send(Frame::Control(msg));
         }

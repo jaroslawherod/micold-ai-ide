@@ -234,11 +234,25 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
     // that request (`010` BUG-021).
     app.scrollback_inflight.clear();
     for (_req, op) in app.pending_ops.drain() {
-        app.core.notify_error(format!(
+        let text = format!(
             "The session service disconnected before confirming the request to {} — \
              it may or may not have taken effect; reconnecting will show the current state.",
             op.describe()
-        ));
+        );
+        match op {
+            // A create's pending state lives on the add-worktree form, and the form is a modal:
+            // the notification below is raised into the surface its scrim covers, and the
+            // indeterminate bar it leaves running has no target to arrive at, so it claims the
+            // operation is still in flight for ever (`010` BUG-020). Resolving the op has to
+            // resolve the *indicator*, not only announce the outcome, and it has to do it where
+            // the user is actually looking. With no form on screen there is no scrim and the
+            // notification is the right place, which is what the guard distinguishes.
+            PendingOp::WorktreeCreate(_) if app.core.worktree_form.is_some() => {
+                app.core
+                    .update(Message::WorktreeForm(FormMsg::CreateInterrupted(text)));
+            }
+            _ => app.core.notify_error(text),
+        }
     }
     // The connection went away. That is *usually* the daemon restarting and the subscription
     // reconnecting on its own — but it is also what a container stopped from outside looks like

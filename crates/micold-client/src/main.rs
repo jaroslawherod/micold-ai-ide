@@ -1954,6 +1954,193 @@ pub(crate) mod tests {
         );
     }
 
+    // --- `010` BUG-020: a mutation whose daemon dies mid-flight ------------------------------
+
+    /// An app with a connected daemon, the add-worktree form open, and a create in flight — the
+    /// state the report's reproduction was in when the daemon was `kill -9`ed.
+    fn app_creating_a_worktree() -> (
+        App,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) {
+        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = base_app();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        let project = PathBuf::from("/repo/demo");
+        app.core.workspace.active = Some(project.clone());
+        app.core.update(Message::WorktreeForm(FormMsg::Opened));
+        shell::daemon_sync::send_worktree_create(
+            &mut app,
+            project,
+            micold_core::naming::DerivedNames {
+                dir_name: "feat-probe-two".into(),
+                branch: "feat/probe-two".into(),
+            },
+            micold_core::worktree::CreateMode::NewBranch,
+        );
+        (app, rx)
+    }
+
+    fn form_status(
+        app: &App,
+    ) -> Option<micold_client::features::worktree_form::WorktreeFormStatus> {
+        app.core.worktree_form.as_ref().map(|f| f.status)
+    }
+
+    fn form_notice(app: &App) -> Option<String> {
+        app.core.worktree_form.as_ref()?.interrupted.clone()
+    }
+
+    /// The dialog must not keep claiming an operation is running on a connection that is gone.
+    ///
+    /// `on_disconnected` already drains `pending_ops` and raises a notification per op. That is
+    /// invisible here: the add-worktree form is a modal, its scrim covers the surface notifications
+    /// are raised into, and the form's own pending state — `Creating`, with an indeterminate bar
+    /// that has no target to arrive at — is not touched by the drain. The reported symptom is that
+    /// bar animating at +90 s over a sidebar that had already reconciled correctly.
+    #[test]
+    fn a_create_whose_connection_drops_stops_claiming_to_be_running() {
+        let (mut app, _rx) = app_creating_a_worktree();
+        assert_eq!(
+            form_status(&app),
+            Some(micold_client::features::worktree_form::WorktreeFormStatus::Creating),
+            "the fixture must have a create in flight for this to be about anything"
+        );
+
+        let _ = shell::daemon_sync::on_disconnected(&mut app);
+
+        assert_eq!(
+            form_status(&app),
+            Some(micold_client::features::worktree_form::WorktreeFormStatus::Editing),
+            "the create can never be answered on this connection, so the form must stop showing \
+             it as in flight — an indeterminate bar with nothing in flight is a defect that \
+             outlives the operation for ever (`010` BUG-020, FR-039d)"
+        );
+        let notice = form_notice(&app).unwrap_or_default();
+        assert!(
+            notice.contains("feat-probe-two"),
+            "the notice must name the operation whose outcome is unknown, got {notice:?}"
+        );
+    }
+
+    /// ...and the notice must outlive the refresh it points at.
+    ///
+    /// The message's whole content is "the list is the authority now". The list arriving is what
+    /// makes it true, so a notice cleared by that arrival is a notice nobody can read: reconnect
+    /// follows the drop within a second or two, and `set_worktrees` reports `WorktreesReplaced`
+    /// unconditionally, which clears `worktree_error` (T067a-4). That clear is right for a create
+    /// *failure* shown against the old list and wrong for this, which is why the two are separate
+    /// fields rather than one.
+    #[test]
+    fn the_unknown_outcome_survives_the_list_refresh_it_points_at() {
+        let (mut app, _rx) = app_creating_a_worktree();
+        let _ = shell::daemon_sync::on_disconnected(&mut app);
+        assert!(
+            form_notice(&app).is_some(),
+            "precondition: the notice is up"
+        );
+
+        // What reconnecting does: a fresh catalog replaces the worktree list.
+        let outcomes = app.core.set_worktrees(vec![]);
+        micold_client::app::drain(outcomes, |o| {
+            micold_client::app::interpret(&mut app.core, o)
+        });
+
+        assert!(
+            form_notice(&app).is_some(),
+            "the refresh the notice points at cleared the notice — the user is left with a form \
+             that silently stopped and no statement that the service went away mid-flight"
+        );
+    }
+
+    /// The over-correction half: a disconnect with nothing in flight must not invent a notice.
+    ///
+    /// An assertion that the form leaves `Creating` is satisfied just as well by a form that is
+    /// reset on every disconnect, which would throw away a half-filled form for a drop that had
+    /// nothing to do with it (FR-007 keeps the inputs even across a cancel).
+    #[test]
+    fn a_disconnect_with_no_create_in_flight_leaves_the_form_alone() {
+        let (tx, _rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = base_app();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.core.update(Message::WorktreeForm(FormMsg::Opened));
+        app.core
+            .update(Message::WorktreeForm(FormMsg::NameChanged("probe".into())));
+
+        let _ = shell::daemon_sync::on_disconnected(&mut app);
+
+        assert_eq!(
+            form_status(&app),
+            Some(micold_client::features::worktree_form::WorktreeFormStatus::Editing)
+        );
+        assert_eq!(
+            form_notice(&app),
+            None,
+            "nothing was in flight, so there is no unknown outcome to report"
+        );
+        assert_eq!(
+            app.core.worktree_form.as_ref().map(|f| f.name.clone()),
+            Some("probe".to_string()),
+            "a drop that interrupted nothing must not discard what the user had typed"
+        );
+    }
+
+    /// With no form on screen there is no scrim, so the notification is the right place — and it
+    /// must still be raised. Routing every create through the form would lose the message for a
+    /// create whose form the user had already cancelled.
+    #[test]
+    fn a_create_with_no_form_open_is_still_reported() {
+        let (mut app, _rx) = app_creating_a_worktree();
+        app.core.worktree_form = None;
+        assert!(app.core.notify.visible().is_none(), "nothing said yet");
+
+        let _ = shell::daemon_sync::on_disconnected(&mut app);
+
+        let said = app
+            .core
+            .notify
+            .visible()
+            .map(|n| n.message.clone())
+            .unwrap_or_default();
+        assert!(
+            said.contains("feat-probe-two"),
+            "with no modal covering it, the unknown outcome must reach the user as a \
+             notification naming the operation, got {said:?}"
+        );
+    }
+
+    /// A new attempt starts with a clean slate.
+    ///
+    /// The stale error from the previous attempt stood through the whole of the next one's pending
+    /// state: an error line and an animating progress bar on screen together, describing different
+    /// attempts, with nothing to say which (`010` BUG-020, second note).
+    #[test]
+    fn a_new_attempt_does_not_show_the_previous_attempts_error() {
+        let (mut app, _rx) = app_creating_a_worktree();
+        app.core.update(Message::WorktreeForm(FormMsg::CreateFailed(
+            "a worktree folder named 'feat-probe-two' already exists".into(),
+        )));
+        assert!(
+            app.core.worktree_error.is_some(),
+            "precondition: the first attempt left an error on screen"
+        );
+
+        shell::daemon_sync::send_worktree_create(
+            &mut app,
+            PathBuf::from("/repo/demo"),
+            micold_core::naming::DerivedNames {
+                dir_name: "feat-probe-three".into(),
+                branch: "feat/probe-three".into(),
+            },
+            micold_core::worktree::CreateMode::NewBranch,
+        );
+
+        assert_eq!(
+            app.core.worktree_error, None,
+            "the error describes an attempt that is over; leaving it up beside the new attempt's \
+             progress bar says two contradictory things about one form"
+        );
+    }
+
     #[test]
     fn an_accepted_attach_ends_the_read_only_state_a_refusal_started() {
         // The reported sequence: this window is refused a project another window holds, the holder
