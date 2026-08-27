@@ -75,7 +75,7 @@ fn the_snackbar_clock_is_subscribed_only_while_a_notification_is_showing() {
     let guard = enclosing_block(&src, "every(SNACKBAR_TICK)")
         .expect("the snackbar tick is subscribed unconditionally — it must be inside an `if`");
     assert!(
-        guard.contains("notify.is_active()"),
+        guard.contains("notifications.queue.is_active()"),
         "the snackbar clock is inside `{guard}`, which does not test whether a notification is \
          showing. Subscribed at rest it wakes the process four times a second for the life of the \
          application, and no behavioural test in this workspace can see it (FR-032a, SC-017)."

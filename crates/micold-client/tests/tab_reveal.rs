@@ -24,15 +24,16 @@
 //! scroll away by hand).
 
 use micold_client::app::{Message, State};
+use micold_client::features::session::Msg as SessionMsg;
 use micold_core::session::{AiCli, Session, SessionLocation};
 
 /// One session, displayed, with a terminal in front of the user.
 fn showing_a_terminal() -> State {
     let mut s = State::default();
-    s.update(Message::SessionStarted(Session::start_new(
+    s.update(Message::Session(SessionMsg::Started(Session::start_new(
         SessionLocation::Worktree("feat-x".to_string()),
         AiCli::ClaudeCode,
-    )));
+    ))));
     s
 }
 
@@ -45,24 +46,32 @@ fn every_strip_control_that_moves_the_mark_arms_the_reveal() {
     let presses: Vec<Press> = vec![
         (
             "ShellInstanceOpenRequested",
-            Box::new(|_: &State| Message::ShellInstanceOpenRequested),
+            Box::new(|_: &State| Message::Session(SessionMsg::ShellInstanceOpenRequested)),
         ),
         (
             "ShellInstanceSelected",
             Box::new(move |s: &State| {
-                Message::ShellInstanceSelected(s.active_session.expect("displayed"), shell)
+                Message::Session(SessionMsg::ShellInstanceSelected(
+                    s.session.active.expect("displayed"),
+                    shell,
+                ))
             }),
         ),
         (
             "ShellInstanceCloseRequested",
             Box::new(move |s: &State| {
-                Message::ShellInstanceCloseRequested(s.active_session.expect("displayed"), shell)
+                Message::Session(SessionMsg::ShellInstanceCloseRequested(
+                    s.session.active.expect("displayed"),
+                    shell,
+                ))
             }),
         ),
         (
             "TerminalAiCliSelected",
             Box::new(|s: &State| {
-                Message::TerminalAiCliSelected(s.active_session.expect("displayed"))
+                Message::Session(SessionMsg::TerminalAiCliSelected(
+                    s.session.active.expect("displayed"),
+                ))
             }),
         ),
     ];
@@ -70,7 +79,7 @@ fn every_strip_control_that_moves_the_mark_arms_the_reveal() {
     for (name, build) in presses {
         let mut s = showing_a_terminal();
         assert!(
-            !s.pending_tab_reveal,
+            !s.session.pending_tab_reveal,
             "{name}: precondition — nothing armed yet"
         );
 
@@ -78,7 +87,7 @@ fn every_strip_control_that_moves_the_mark_arms_the_reveal() {
         s.update(message);
 
         assert!(
-            s.pending_tab_reveal,
+            s.session.pending_tab_reveal,
             "{name} changes which tab is marked, so it must ask for that tab to be scrolled into \
              view (feature 026 FR-002d).\n\n\
              Unarmed, the mark can land outside the strip's viewport and stay there: the tab is \

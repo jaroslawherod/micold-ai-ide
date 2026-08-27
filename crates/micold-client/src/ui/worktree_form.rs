@@ -9,6 +9,7 @@
 
 use crate::app::{Message, State};
 use crate::features::window::FieldId;
+use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::{
     BranchSource, ResolutionState, WorktreeForm, WorktreeFormStatus,
@@ -108,6 +109,16 @@ pub fn modal<'a>(
         .or_else(|| error.map(str::to_string));
     if let Some(message) = message {
         fields = fields.push(Text::new(message, TypeRole::Caption, r).tint(r.error));
+    }
+
+    // The unknown outcome of a create the connection dropped mid-flight (`010` BUG-020). Its own
+    // line, and muted rather than tinted `error`: the operation may well have succeeded — in the
+    // reported case it had — so colouring it as a failure would state something the client does not
+    // know. It sits below the error line because the two can legitimately co-exist: a create that
+    // failed, then a retry whose connection dropped.
+    if let Some(notice) = &form.interrupted {
+        fields =
+            fields.push(Text::new(notice.clone(), TypeRole::Caption, r).tint(r.on_surface_variant));
     }
 
     // In-progress state while the daemon runs the create (T055). The daemon reports the stage, and
@@ -405,10 +416,9 @@ fn resolution_panel<'a>(state: &ResolutionState, r: Roles) -> Element<'a, Messag
             BranchSituation::Blocked { branch, reason } => {
                 let mut actions = row![].spacing(spacing::SM);
                 if let BlockReason::CheckedOutOutsideApp { path } = reason {
-                    actions = actions.push(
-                        Button::filled("Include that worktree", r)
-                            .on_press(Message::WorktreeIncludeRequested(path.clone())),
-                    );
+                    actions = actions.push(Button::filled("Include that worktree", r).on_press(
+                        Message::Worktree(WorktreeMsg::IncludeRequested(path.clone())),
+                    ));
                 }
                 column![
                     Text::new(reason.explain(branch), TypeRole::Body, r).tint(r.error),
@@ -499,12 +509,12 @@ pub fn dialog<'a>(
     scheme: ColorScheme,
     _env_include_outcome: &'a EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
-    state.worktree_form.as_ref().map(|form| {
+    state.worktree_form.form.as_ref().map(|form| {
         modal(
             form,
-            state.worktree_error.as_deref(),
+            state.worktree_form.worktree_error.as_deref(),
             scheme,
-            state.focused_field,
+            state.window.focused_field,
         )
     })
 }

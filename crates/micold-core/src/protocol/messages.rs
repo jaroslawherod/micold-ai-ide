@@ -77,6 +77,81 @@ impl fmt::Debug for PresentedToken {
     }
 }
 
+/// Identifies one client *process* — one window — across every connection it makes.
+///
+/// The protocol had no such thing until `010` BUG-022: a connection was identified by its
+/// `ClientId`, which dies with it, and a client was described by its build string, which is
+/// identical for every window of one binary. Between those two there was no way to say "the
+/// connection that just attached and the connection that just dropped are the same window", and a
+/// window whose keepalive expired therefore displaced *itself* on reconnect and locked itself out
+/// of its own project.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ClientInstance {
+    /// The client process's OS pid. Human-facing: it is what a banner can name so that two windows
+    /// of one build are told apart by something the user can also see in a process list. Not
+    /// unique on its own — pids are reused, and two clients dialling one daemon need not share a
+    /// host — which is what `nonce` is for.
+    pub pid: u32,
+    /// A per-process random token. This is what makes the identity *unique*; comparisons are on
+    /// the whole struct, never on `pid` alone.
+    pub nonce: String,
+}
+
+impl ClientInstance {
+    /// This process's instance, generated once and stable for the life of the process.
+    ///
+    /// Stability across reconnects is the entire point: a window that reconnects must present the
+    /// same instance it presented before, or the daemon's refusal and displacement frames cannot
+    /// be recognised as being about itself.
+    pub fn current() -> Self {
+        static CURRENT: std::sync::OnceLock<ClientInstance> = std::sync::OnceLock::new();
+        CURRENT
+            .get_or_init(|| ClientInstance {
+                pid: std::process::id(),
+                nonce: uuid::Uuid::new_v4().simple().to_string(),
+            })
+            .clone()
+    }
+}
+
+/// Who a client is, as the daemon reports it to *other* clients: a build string to show and an
+/// instance to compare.
+///
+/// Both halves are load-bearing and neither substitutes for the other. `build` is what a person
+/// reads; `instance` is what a window compares against its own to know whether a displacement or a
+/// refusal is about itself (`010` BUG-022) — a comparison `build` cannot make, because two windows
+/// of one binary carry the same one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClientIdentity {
+    /// The client's human-facing build string.
+    pub build: String,
+    /// The client's process instance.
+    pub instance: ClientInstance,
+}
+
+impl ClientIdentity {
+    /// Build an identity from its two halves.
+    pub fn new(build: impl Into<String>, instance: ClientInstance) -> Self {
+        Self {
+            build: build.into(),
+            instance,
+        }
+    }
+
+    /// Whether this identity names `instance` — i.e. the same window.
+    pub fn is(&self, instance: &ClientInstance) -> bool {
+        self.instance == *instance
+    }
+}
+
+impl fmt::Display for ClientIdentity {
+    /// The banner form. Names the window, not only the build: `010` BUG-023 filed the build-only
+    /// string as naming nothing, because it is the same for the window reading it.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} (window {})", self.build, self.instance.pid)
+    }
+}
+
 /// A message from a client to the daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientMsg {
@@ -89,6 +164,11 @@ pub enum ClientMsg {
         schema_hash: [u8; 32],
         /// Human-facing build string for diagnostics.
         client_build: String,
+        /// Which *window* this is (`010` BUG-022). Unlike `client_build` it is unique per client
+        /// process and stable across the connections that process makes, so the daemon can tell
+        /// another window's attach from this one's reconnect — and so a client can recognise a
+        /// displacement or a refusal that names itself.
+        client_instance: ClientInstance,
         /// The client's compiled [`crate::protocol::version::PACKAGE_VERSION`] — changes on every
         /// release, wire-visible or not, so a same-contract `.deb` upgrade over an already-running
         /// daemon is still detected (FR-022a, BUG-002).
@@ -378,6 +458,22 @@ pub enum ClientMsg {
         default_ai_cli: Option<AiCli>,
     },
 
+    // --- AI CLIs ---
+    /// Ask which AI CLIs exist **where sessions run** (feature 027, FR-023c).
+    ///
+    /// The client cannot answer this for itself. Under sandboxed placement it is on the host and
+    /// the sessions are in the container, so its own `PATH` describes the wrong machine — and
+    /// describes it plausibly, which is worse than describing nothing. The service is the process
+    /// that spawns the CLI, so the service is the one that gets to say whether it is there.
+    ///
+    /// Answered with [`DaemonMsg::AiCliAvailability`]. Asked when the choice is *offered* — the
+    /// Settings view opening, the per-session override menu opening — and never per frame: the
+    /// answer changes when an image changes, not between renders.
+    AiCliAvailabilityRequest {
+        /// Correlation id.
+        req: u64,
+    },
+
     // --- Diagnostics ---
     /// Ask where the daemon writes its log.
     LogLocationRequest {
@@ -440,8 +536,9 @@ pub enum DaemonMsg {
     Displaced {
         /// Project identity path.
         project: PathBuf,
-        /// Who took over (build/identity string).
-        by: String,
+        /// Who took over. Carries the instance as well as the build so the receiver can tell a
+        /// real takeover from its own reconnect displacing its own dead connection (BUG-022).
+        by: ClientIdentity,
     },
     /// Keepalive reply.
     Pong {
@@ -560,6 +657,21 @@ pub enum DaemonMsg {
         detail: Option<String>,
     },
 
+    // --- AI CLIs ---
+    /// Which AI CLIs the service found in its own environment (feature 027, FR-023c).
+    ///
+    /// Only the fact the service alone has. It does **not** say which image it is running or
+    /// whether it is containerised at all: the client started it and holds both, and a second
+    /// copy of a fact the client already owns is a second thing that can disagree. What the client
+    /// composes from the two is FR-023b's sentence — naming the CLI, the image, and that the image
+    /// must provide it.
+    AiCliAvailability {
+        /// Correlation id.
+        req: u64,
+        /// Present, in `AiCli::ALL`'s order. Empty is a real answer, not an error.
+        available: Vec<AiCli>,
+    },
+
     // --- Diagnostics ---
     /// Where the daemon logs.
     LogLocation {
@@ -614,8 +726,9 @@ pub enum RefusalReason {
     ProjectBusy {
         /// Project identity path.
         project: PathBuf,
-        /// The current holder's identity.
-        holder: String,
+        /// The current holder's identity — instance included, so a client refused by a
+        /// connection of its *own* that the daemon has not yet reaped can say so (BUG-022).
+        holder: ClientIdentity,
         /// How long it has been held.
         since_secs: u64,
     },

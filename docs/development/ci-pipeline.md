@@ -22,10 +22,20 @@ shapes:
 | `build + test (macos-latest)` | runs | **skipped** |
 | `build + test (windows-latest)` | runs | **skipped** |
 | `assertion freeze (advisory)` | runs | **skipped** |
+| `sandbox against a real runtime (linux)` | runs | **skipped** |
 | `docs check` | runs | **runs** |
 | `ci complete` | runs | runs |
 
 Three jobs on a documentation-only run, all on Linux. No macOS or Windows runner is started.
+
+`sandbox against a real runtime` is Linux-only because Docker Desktop is not available on GitHub's
+macOS and Windows runners, so the alternative is no real-runtime job at all. It builds the `:dev`
+sandbox image from the branch and then runs the `sandbox_real_*` tests in **two** steps, one per
+crate — `micold-core` for the adapter layer, `micold-daemon` for what the isolation is for. The
+second step is not optional tidiness: it was missing until feature 027's T147, and its eleven tests
+carry the sandbox's headline claims. A `-p` that names one crate does not report the other as
+skipped; it produces no output about it at all, which is why the job looked complete for the whole
+of the feature it was written for.
 
 `docs check` is deliberately unconditional: it is the one gate a documentation-only change can
 actually break, so skipping the build must not skip it. Delete a required document and the run
@@ -174,3 +184,4 @@ that check (v1.6.0).
 | `ci complete` is pending forever | The ruleset requires a context nothing produced — usually the gate job was renamed | Restore the job name, or update the ruleset. Only the latter is possible from repository settings |
 | `ci complete` is green but a job failed | The job is missing from the gate's `needs:`, or `if: always()` was dropped | Fix both, and check why `ci_gate_covers_every_job` did not catch it |
 | `documentation_is_not_read` fails on a literal that reads nothing | A fixture string that happens to name a real documentation path | Add it to the test's `ALLOWED` list with a reason |
+| A job fails in `Install … system dependencies` with `apt-get update` exit 100 and a 403 or timeout from a host this project does not use | A vendor repository the runner image preconfigures (Microsoft, Google Chrome) had an outage. `apt-get update` fails if *any* configured repository fails | Already handled: the step empties `/etc/apt/sources.list.d` except `ubuntu.sources` before updating, so only the Ubuntu archive is consulted. If this reappears, the archive itself is down — re-run |

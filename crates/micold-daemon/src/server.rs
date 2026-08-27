@@ -16,7 +16,7 @@ use micold_core::project::validate_rename;
 use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
 use micold_core::protocol::messages::{
-    ClientMsg, DaemonMsg, ErrorKind, LogSink, OperationResult, SessionProcess,
+    ClientIdentity, ClientMsg, DaemonMsg, ErrorKind, LogSink, OperationResult, SessionProcess,
 };
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
@@ -310,6 +310,7 @@ where
             protocol_version,
             schema_hash,
             client_build,
+            client_instance,
             client_package_version,
             auth_token,
             client_fingerprint,
@@ -319,6 +320,7 @@ where
             schema_hash,
             package_version: client_package_version,
             build: client_build,
+            instance: client_instance,
             auth_token,
             fingerprint: client_fingerprint,
             require_fingerprint_match,
@@ -333,6 +335,7 @@ where
         None => return Ok(()), // hung up before saying hello
     };
     let client_build = intro.build.clone();
+    let client_identity = ClientIdentity::new(intro.build.clone(), intro.instance.clone());
     let client_version = intro.protocol_version;
     let client_package_version = intro.package_version.clone();
 
@@ -365,8 +368,15 @@ where
         .map_err(io::Error::other)?;
 
     // --- Register, split, and run the reader/writer split. ---
-    tracing::info!(client_build = %client_build, "client attached to daemon");
-    let (id, mut rx) = state.register(client_build);
+    // `client_window` is what makes two windows of one build distinguishable in the log — and the
+    // reason it is here rather than only on the wire: the reconnect that BUG-022 is about is
+    // invisible in a log that records only the build, because both connections print the same one.
+    tracing::info!(
+        client_build = %client_build,
+        client_window = client_identity.instance.pid,
+        "client attached to daemon"
+    );
+    let (id, mut rx) = state.register(client_identity);
     let (mut sink, mut incoming) = framed.split();
 
     // Writer task: drain this client's push channel to the wire. The channel already carries fully
@@ -497,6 +507,23 @@ where
                 tracing::info!(client = id, project = %project.display(), "project detached");
                 state.detach(id, &project);
             }
+            // --- AI CLIs (feature 027, FR-023c) ---
+            //
+            // Answered *here*, in the service, because here is where sessions run. Under sandboxed
+            // placement this process is inside the container, so `available_here` reads the
+            // image's `PATH` — which is the question FR-023c asks and the one the client cannot
+            // ask for itself. Under host placement it reads the host's, and the same code path
+            // gives the same right answer for the same reason.
+            //
+            // Recomputed per request rather than cached at boot: it is one `PATH` walk per
+            // variant, the client only asks when a choice is offered, and research R11's rule is
+            // that this answer is never stored.
+            ClientMsg::AiCliAvailabilityRequest { req } => {
+                let available = micold_core::provider::available_here();
+                tracing::debug!(client = id, ?available, "AI CLI availability reported");
+                state.send(id, DaemonMsg::AiCliAvailability { req, available });
+            }
+
             // --- Diagnostics (US6/Phase 10, FR-043–046) ---
             ClientMsg::LogLocationRequest { req } => {
                 let (path, sink) = state

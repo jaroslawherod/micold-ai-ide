@@ -103,6 +103,27 @@ Thread-per-session is comfortably within budget at this scale and is required an
       integration tests before implementation. The daemon is testable headlessly (no iced), which
       *improves* on today's position where `spawn_pty`, the reader thread, `pump`, `has_exited` and
       `handle_process_exits` have **no automated coverage at all** and rely on manual quickstarts.
+
+      **Amended 2026-08-27 (BUG-008) — the principle does not stop at the rendering boundary.**
+      Test-first was applied to every workstream and then quietly suspended for the *success
+      criteria*, six of which were written as "a person operates the GUI and confirms". Five of the six
+      were still unrun when the feature otherwise completed; the one that closed did so by being
+      rewritten around an observable a machine could read. A criterion phrased in terms of the observer
+      ("no perceptible delay", "the user can identify") has no failing test to write first, so it is
+      not merely untested — it is outside the principle entirely, and nothing notices.
+
+      So: **a success criterion MUST name its observable, or be marked `human-only` with the reason it
+      cannot have one.** "Needs a GUI" is not that reason — the visual-pass skill drives the real
+      binary on Xvfb, and most of these criteria were never about pixels anyway. A real reason names
+      something no instrument in this repository can read: a wall-clock budget on the user's own
+      hardware, or a human's reading speed. Where the criterion is a number, the number is the
+      observable and it belongs in the criterion (SC-004a). The dispositions live in a table in
+      `spec.md`, and `scripts/check-criteria-observables.sh` fails the build when a criterion in a spec
+      that carries such a table has no row in it.
+
+      The same applies to a task recorded as **blocked**: it MUST name what would unblock it,
+      precisely enough that the claim can be checked. T083 carried "no macOS/Windows runners" through
+      an entire feature while CI had had both for months.
 - [x] **II. Multi-Session Support**: Sessions remain independently addressable and isolated; the
       daemon strengthens this by making persistence real rather than best-effort. Per-session state
       is per-session in the daemon (`FairMutex<Term>` each), and cross-session leakage is covered by

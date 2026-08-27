@@ -16,7 +16,12 @@
 //! widget deciding whether a destructive action is available.
 
 use micold_client::app::{Message, State, SIDEBAR_MIN_WIDTH};
+use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::settings::Msg as SettingsMsg;
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::TagFilter;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
 use micold_core::theme::ThemePreference;
@@ -43,9 +48,9 @@ fn with_project() -> State {
 #[test]
 fn sidebar_visibility_is_application_owned() {
     let mut state = State::default();
-    assert!(!state.sidebar_hidden);
-    state.update(Message::SidebarToggled);
-    assert!(state.sidebar_hidden, "the flag must live on State");
+    assert!(!state.sidebar.hidden);
+    state.update(Message::Sidebar(SidebarMsg::Toggled));
+    assert!(state.sidebar.hidden, "the flag must live on State");
 }
 
 /// Likewise the width. The handle reports where the pointer is; the application decides what width
@@ -53,7 +58,7 @@ fn sidebar_visibility_is_application_owned() {
 #[test]
 fn sidebar_width_is_application_owned_and_clamped_here() {
     let mut state = State::default();
-    state.update(Message::SidebarDragMoved(10));
+    state.update(Message::Sidebar(SidebarMsg::DragMoved(10)));
     assert_eq!(
         state.sidebar_width_px(),
         SIDEBAR_MIN_WIDTH,
@@ -69,7 +74,7 @@ fn open_overlay_identity_is_application_owned() {
     // through the registry — the same answer to the same question, asked of what now holds it.
     let mut state = State::default();
     assert!(micold_client::overlay::registry::open_dialog(&state).is_none());
-    state.update(Message::AboutOpened);
+    state.update(Message::Help(HelpMsg::AboutOpened));
     assert_eq!(
         micold_client::overlay::registry::open_dialog(&state).map(|open| open.id()),
         Some(micold_client::overlay::SurfaceId::new("about"))
@@ -82,28 +87,32 @@ fn open_overlay_identity_is_application_owned() {
 #[test]
 fn open_menu_identity_is_application_owned() {
     let mut state = State::default();
-    state.update(Message::WorktreeMenuToggled(
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-a".to_string(),
         (120, 300),
-    ));
-    let open = state.worktree_menu_open.as_ref().expect("the menu is open");
+    )));
+    let open = state.worktree.menu_open.as_ref().expect("the menu is open");
     assert_eq!(open.dir_name, "feat-a");
     assert_eq!(open.anchor, (120, 300));
-    state.update(Message::WorktreeMenuToggled(
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-a".to_string(),
         (120, 300),
-    ));
-    assert_eq!(state.worktree_menu_open, None);
+    )));
+    assert_eq!(state.worktree.menu_open, None);
 }
 
 /// Expanded tree nodes decide what the sidebar contains, not how it looks getting there.
 #[test]
 fn expanded_nodes_are_application_owned() {
     let mut state = with_project();
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
-    assert!(state.expanded.contains("feat-a"));
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
-    assert!(!state.expanded.contains("feat-a"));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
+    assert!(state.sidebar.expanded.contains("feat-a"));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
+    assert!(!state.sidebar.expanded.contains("feat-a"));
 }
 
 /// A filter changes which rows exist. A component that owned it would be a component deciding what
@@ -112,10 +121,10 @@ fn expanded_nodes_are_application_owned() {
 fn tag_filters_are_application_owned() {
     let mut state = State::default();
     let feature = TagFilter::Type(ConventionalType::Feat);
-    state.update(Message::SidebarFilterToggled(feature));
-    assert!(state.sidebar_filters.contains(&feature));
-    state.update(Message::SidebarFilterToggled(feature));
-    assert!(!state.sidebar_filters.contains(&feature));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feature)));
+    assert!(state.sidebar.filters.contains(&feature));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feature)));
+    assert!(!state.sidebar.filters.contains(&feature));
 }
 
 /// The theme preference is written to disk and restored, so it could not live in a widget tree
@@ -123,11 +132,13 @@ fn tag_filters_are_application_owned() {
 #[test]
 fn theme_preference_is_application_owned() {
     let mut state = State::default();
-    let before = state.theme_pref;
-    state.update(Message::ThemeModeCycled);
-    assert_ne!(state.theme_pref, before);
+    let before = state.settings.theme_pref;
+    state.update(Message::Settings(SettingsMsg::ThemePreferenceChanged(
+        before.next(),
+    )));
+    assert_ne!(state.settings.theme_pref, before);
     assert!(matches!(
-        state.theme_pref,
+        state.settings.theme_pref,
         ThemePreference::FollowSystem | ThemePreference::Light | ThemePreference::Dark
     ));
 }
@@ -137,12 +148,17 @@ fn theme_preference_is_application_owned() {
 #[test]
 fn drafts_are_application_owned() {
     let mut state = with_project();
-    assert!(state.rename_draft.is_none());
+    assert!(state.project.rename_draft.is_none());
 
-    state.update(Message::RenameStarted(PathBuf::from("/repo")));
-    state.update(Message::RenameTextChanged("renamed".to_string()));
+    state.update(Message::Project(ProjectMsg::RenameStarted(PathBuf::from(
+        "/repo",
+    ))));
+    state.update(Message::Project(ProjectMsg::RenameTextChanged(
+        "renamed".to_string(),
+    )));
 
     let draft = state
+        .project
         .rename_draft
         .as_ref()
         .expect("an in-progress rename must survive on State, not in a rebuilt widget");
@@ -156,7 +172,7 @@ fn drafts_are_application_owned() {
 #[test]
 fn active_session_is_application_owned() {
     let state = with_project();
-    assert!(state.active_session.is_none());
+    assert!(state.session.active.is_none());
     // The field exists and is readable without a renderer, which is the property under test:
     // nothing about it requires a widget tree to interpret.
 }

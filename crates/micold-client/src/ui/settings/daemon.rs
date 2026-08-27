@@ -20,11 +20,13 @@
 
 use crate::app::Message;
 use crate::features::sandbox::SandboxLimit;
-use crate::features::settings::{SettingsDraft, SettingsSection};
+use crate::features::session::CliAvailability;
+use crate::features::settings::Msg as SettingsMsg;
+use crate::features::settings::{missing_cli_notice, SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{Checkbox, Select, TextField};
-use crate::ui::settings::{caution, group, name_of, note, page, Named};
+use crate::ui::settings::{caution, field_note, group, name_of, note, page, Named};
 use iced::Element;
 use micold_core::sandbox::image::ImageSourceKind;
 use micold_core::sandbox::placement::PlacementKind;
@@ -41,18 +43,15 @@ use micold_core::tokens::Roles;
 // so to the compiler this is unused. Deleting it would take the gate's evidence with it.
 #[allow(dead_code)]
 pub const SETTINGS: &[(&str, &str)] = &[
-    ("daemon.placement", "SettingsPlacementChanged"),
-    ("daemon.sandbox.runtime", "SettingsRuntimeChanged"),
-    ("daemon.sandbox.image", "SettingsImageKindChanged"),
-    ("daemon.sandbox.credentials", "SettingsCredentialToggled"),
-    (
-        "daemon.sandbox.survive_logout",
-        "SettingsSurviveLogoutToggled",
-    ),
+    ("daemon.placement", "PlacementChanged"),
+    ("daemon.sandbox.runtime", "RuntimeChanged"),
+    ("daemon.sandbox.image", "ImageKindChanged"),
+    ("daemon.sandbox.credentials", "CredentialToggled"),
+    ("daemon.sandbox.survive_logout", "SurviveLogoutToggled"),
     // One persisted field with four controls, declared once against the first of them — the same
     // shape as `daemon.sandbox.image` above.
-    ("daemon.sandbox.budget", "SettingsCpuLimitChanged"),
-    ("daemon.sandbox.network", "SettingsNetworkChanged"),
+    ("daemon.sandbox.budget", "CpuLimitChanged"),
+    ("daemon.sandbox.network", "NetworkChanged"),
 ];
 
 const PLACEMENTS: &[Named<PlacementKind>] = &[
@@ -177,7 +176,7 @@ pub fn limits(draft: &SettingsDraft) -> [LimitControl<'_>; 4] {
             &d.cpus,
             "Cores, e.g. 2 or 1.5. Empty leaves the runtime's own default.",
             caps.map(|c| &c.cpus),
-            Message::SettingsCpuLimitChanged,
+            |v| Message::Settings(SettingsMsg::CpuLimitChanged(v)),
         ),
         limit(
             FieldId::SettingsMemoryLimit,
@@ -185,7 +184,7 @@ pub fn limits(draft: &SettingsDraft) -> [LimitControl<'_>; 4] {
             &d.memory_mib,
             "Mebibytes. Empty leaves the runtime's own default.",
             caps.map(|c| &c.memory),
-            Message::SettingsMemoryLimitChanged,
+            |v| Message::Settings(SettingsMsg::MemoryLimitChanged(v)),
         ),
         limit(
             FieldId::SettingsPidLimit,
@@ -193,7 +192,7 @@ pub fn limits(draft: &SettingsDraft) -> [LimitControl<'_>; 4] {
             &d.pids,
             "Processes the sandbox may run at once. Empty leaves the runtime's own default.",
             caps.map(|c| &c.pids),
-            Message::SettingsPidLimitChanged,
+            |v| Message::Settings(SettingsMsg::PidLimitChanged(v)),
         ),
         limit(
             FieldId::SettingsStorageLimit,
@@ -201,7 +200,7 @@ pub fn limits(draft: &SettingsDraft) -> [LimitControl<'_>; 4] {
             &d.storage_mib,
             "Mebibytes the sandbox may write. Not enforceable on every storage driver.",
             caps.map(|c| &c.storage),
-            Message::SettingsStorageLimitChanged,
+            |v| Message::Settings(SettingsMsg::StorageLimitChanged(v)),
         ),
     ]
 }
@@ -235,6 +234,7 @@ fn limit<'a>(
 /// The Session service page.
 pub fn view<'a>(
     draft: &'a SettingsDraft,
+    availability: Option<&'a CliAvailability>,
     focused: Option<FieldId>,
     roles: Roles,
 ) -> Element<'a, Message> {
@@ -244,7 +244,7 @@ pub fn view<'a>(
             draft.daemon.placement,
             name_of(PLACEMENTS, draft.daemon.placement),
         )),
-        |chosen: Named<PlacementKind>| Message::SettingsPlacementChanged(chosen.0),
+        |chosen: Named<PlacementKind>| Message::Settings(SettingsMsg::PlacementChanged(chosen.0)),
         roles,
     )
     .label("Where sessions run")
@@ -256,7 +256,7 @@ pub fn view<'a>(
             draft.daemon.profile.runtime,
             name_of(RUNTIMES, draft.daemon.profile.runtime),
         )),
-        |chosen: Named<RuntimeKind>| Message::SettingsRuntimeChanged(chosen.0),
+        |chosen: Named<RuntimeKind>| Message::Settings(SettingsMsg::RuntimeChanged(chosen.0)),
         roles,
     )
     .label("Container runtime");
@@ -267,7 +267,7 @@ pub fn view<'a>(
             draft.daemon.profile.image.kind,
             name_of(IMAGE_SOURCES, draft.daemon.profile.image.kind),
         )),
-        |chosen: Named<ImageSourceKind>| Message::SettingsImageKindChanged(chosen.0),
+        |chosen: Named<ImageSourceKind>| Message::Settings(SettingsMsg::ImageKindChanged(chosen.0)),
         roles,
     )
     .label("Image source")
@@ -286,8 +286,8 @@ pub fn view<'a>(
             FieldId::SettingsImageReference,
         ))
         .track_focus(FieldId::SettingsImageReference, focused)
-        .on_input(Message::SettingsImageReferenceChanged)
-        .on_submit(Message::SettingsSaved);
+        .on_input(|v| Message::Settings(SettingsMsg::ImageReferenceChanged(v)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
 
     let archive = TextField::new("", &draft.daemon.image_path, roles)
         .label("Image file")
@@ -298,8 +298,8 @@ pub fn view<'a>(
             FieldId::SettingsImagePath,
         ))
         .track_focus(FieldId::SettingsImagePath, focused)
-        .on_input(Message::SettingsImagePathChanged)
-        .on_submit(Message::SettingsSaved);
+        .on_input(|v| Message::Settings(SettingsMsg::ImagePathChanged(v)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
 
     let survive = Checkbox::new(
         "Keep sessions running after I sign out",
@@ -307,7 +307,7 @@ pub fn view<'a>(
         roles,
     )
     .track_focus(FieldId::SettingsSurviveLogout, focused)
-    .on_toggle(Message::SettingsSurviveLogoutToggled);
+    .on_toggle(|v| Message::Settings(SettingsMsg::SurviveLogoutToggled(v)));
 
     let mut controls: Vec<Element<'a, Message>> = vec![
         placement.into(),
@@ -321,21 +321,43 @@ pub fn view<'a>(
         group("Container", roles),
         runtime.into(),
         image_kind.into(),
-        reference.into(),
+    ];
+
+    // FR-023b, at the point the image is chosen. The published image ships every AI CLI (FR-023a);
+    // a substituted one inherits that obligation and nothing can make it keep it, so the only
+    // honest thing to do is say which CLI the image running *now* does not provide. It sits
+    // directly under the reference rather than at the foot of the section, because it is a fact
+    // about that field's value.
+    //
+    // The image it names is the one the service was actually started from, not the one in this
+    // field: the field is a draft and may say something the running container has never heard of.
+    // Naming the draft's value would describe a machine that does not exist yet.
+    //
+    // Attached to the reference field rather than stacked after it, so it shares the column that
+    // field's own supporting line sits in. See `field_note`.
+    controls.push(field_note(
+        reference,
+        missing_cli_notice(availability),
+        roles,
+    ));
+
+    controls.extend([
         archive.into(),
         group("Credentials", roles),
         note(
             "The container starts with none of your credentials. Share only what the agent needs.",
             roles,
         ),
-    ];
+    ]);
 
     for share in CredentialShare::ALL {
         let on = draft.shared_credentials().contains(&share);
         controls.push(
             Checkbox::new(share.label(), on, roles)
                 .track_focus(FieldId::SettingsCredential(share), focused)
-                .on_toggle(move |checked| Message::SettingsCredentialToggled(share, checked))
+                .on_toggle(move |checked| {
+                    Message::Settings(SettingsMsg::CredentialToggled(share, checked))
+                })
                 .into(),
         );
     }
@@ -350,7 +372,7 @@ pub fn view<'a>(
             draft.daemon.profile.network,
             name_of(NETWORKS, draft.daemon.profile.network),
         )),
-        |chosen: Named<NetworkPosture>| Message::SettingsNetworkChanged(chosen.0),
+        |chosen: Named<NetworkPosture>| Message::Settings(SettingsMsg::NetworkChanged(chosen.0)),
         roles,
     )
     .label("Network");
@@ -379,13 +401,24 @@ pub fn view<'a>(
             .error(super::error_for(draft, SettingsSection::Daemon, l.field))
             .track_focus(l.field, focused);
         if let Some(on_input) = l.on_input {
-            input = input.on_input(on_input).on_submit(Message::SettingsSaved);
+            input = input
+                .on_input(on_input)
+                .on_submit(Message::Settings(SettingsMsg::Saved));
         }
         controls.push(input.into());
     }
 
     controls.push(group("Sessions", roles));
     controls.push(survive.into());
+    // FR-014d: where the configured placement cannot provide this, the control says so. It is not
+    // hidden and it is not left to do nothing — either would leave the user believing they had
+    // arranged something.
+    let (support, cannot) = survival_support(draft.daemon.placement);
+    controls.push(if cannot {
+        caution(support, roles)
+    } else {
+        note(support, roles)
+    });
 
     page(
         "Session service",
@@ -393,4 +426,74 @@ pub fn view<'a>(
         controls,
         roles,
     )
+}
+
+/// What to say beneath the survival opt-in, and whether it is a caution (feature 027, FR-014d).
+///
+/// A free function rather than a `match` inside the view, because the claim FR-014d makes is about
+/// *every* placement — "where the configured placement cannot provide it, the control must say so"
+/// — and a rule stated over a set is only checkable if it can be enumerated. In the view it could
+/// only be read.
+///
+/// `cfg!` rather than a parameter: which platform this is running on is not a thing the user picks,
+/// and threading it through would invite a call site that passes the wrong one. The consequence is
+/// that this test only ever exercises its own platform's branch, which is the same bargain every
+/// `#[cfg]` in this crate makes.
+fn survival_support(placement: PlacementKind) -> (&'static str, bool) {
+    match placement {
+        // The container runtime's restart policy is run by a service the platform keeps alive
+        // across logout and reboot, on all three platforms — so this is the one that always works
+        // (FR-014b). It is applied at container creation, which is why it names the next start.
+        PlacementKind::LocalSandbox => (
+            "The container is created with a restart policy, so this takes effect the next time \
+             the sandbox starts.",
+            false,
+        ),
+        PlacementKind::HostProcess if cfg!(target_os = "linux") => (
+            "Your systemd user manager keeps the service running after you sign out.",
+            false,
+        ),
+        PlacementKind::HostProcess => (
+            "A service running directly on this platform can't outlive signing out — that's \
+             Linux-only. Run it in a container to get this here.",
+            true,
+        ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// FR-014d, stated over the whole set: no placement leaves this control unexplained, and the
+    /// one that cannot honour the opt-in is the one that warns.
+    #[test]
+    fn every_placement_says_what_it_will_do() {
+        for Named(placement, label) in PLACEMENTS {
+            let (support, cannot) = survival_support(*placement);
+            assert!(!support.is_empty(), "{label} explains nothing");
+            match placement {
+                // The sandbox can always do it — that is FR-014b's whole point — so a caution here
+                // would be telling the user the opposite of the truth.
+                PlacementKind::LocalSandbox => assert!(!cannot, "{label} warned when it can do it"),
+                PlacementKind::HostProcess => {
+                    assert_eq!(
+                        cannot,
+                        !cfg!(target_os = "linux"),
+                        "{label} must warn exactly where the host mechanism is unavailable"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The warning has to name the way out, or it is only a refusal. A user told "not here" and
+    /// nothing else has no reason to look at the placement select two groups above.
+    #[test]
+    fn the_warning_names_the_placement_that_does_support_it() {
+        let (support, cannot) = survival_support(PlacementKind::HostProcess);
+        if cannot {
+            assert!(support.contains("container"));
+        }
+    }
 }

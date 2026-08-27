@@ -35,6 +35,8 @@ mod inventory;
 
 use inventory::{code_only, declarations_in, sources_in, src_dir};
 use micold_client::app::Message;
+use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::overlay::registry::Open;
 use micold_client::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::overlay::{Layer, Surface, Trigger};
@@ -99,7 +101,8 @@ fn a_surface_description_terminates_in_a_conversion() {
             Layer::Dialog
         }
         fn dismissal(&self) -> DismissalRules {
-            DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::AboutClosed)
+            DismissalRules::for_layer(Layer::Dialog)
+                .cancelled_by(Message::Help(HelpMsg::AboutClosed))
         }
     }
 
@@ -107,7 +110,10 @@ fn a_surface_description_terminates_in_a_conversion() {
 
     assert_eq!(open.id(), SurfaceId::new("probe"));
     assert_eq!(open.layer(), Layer::Dialog);
-    assert_eq!(open.on(Trigger::Escape), Some(&Message::AboutClosed));
+    assert_eq!(
+        open.on(Trigger::Escape),
+        Some(&Message::Help(HelpMsg::AboutClosed))
+    );
 }
 
 #[test]
@@ -115,11 +121,11 @@ fn the_optional_steps_are_chainable_in_any_order() {
     // The property that makes a step optional: it composes, and it does not care what came before.
     // A step implemented as anything other than `self -> Self` would not survive being reordered.
     let a = DismissalRules::for_layer(Layer::Dialog)
-        .cancelled_by(Message::SettingsCancelled)
+        .cancelled_by(Message::Settings(SettingsMsg::Cancelled))
         .protecting_input();
     let b = DismissalRules::for_layer(Layer::Dialog)
         .protecting_input()
-        .cancelled_by(Message::SettingsCancelled);
+        .cancelled_by(Message::Settings(SettingsMsg::Cancelled));
 
     assert_eq!(a, b);
     assert_eq!(a.kind(), Surface::NonDismissibleDialog);

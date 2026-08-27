@@ -12,6 +12,8 @@
 //! worktrees, configuration or session store — a fixture that recorded the author's own workspace
 //! would be unreproducible anywhere else, including on the same machine tomorrow.
 
+use micold_client::features::sidebar;
+use micold_client::features::worktree;
 use std::path::PathBuf;
 
 use micold_client::app::State;
@@ -179,13 +181,20 @@ fn with_project() -> State {
     workspace.active = workspace.projects.first().map(|p| p.path.clone());
 
     let state = State {
+        sidebar: sidebar::State {
+            width: 260,
+            ..Default::default()
+        },
+
         workspace,
-        worktrees: vec![
-            worktree("feat-short", "feat/short"),
-            worktree(LONG_NAME, "feat/long"),
-            worktree("fix-a-bug", "fix/a-bug"),
-        ],
-        sidebar_width: 260,
+        worktree: worktree::State {
+            worktrees: vec![
+                worktree("feat-short", "feat/short"),
+                worktree(LONG_NAME, "feat/long"),
+                worktree("fix-a-bug", "fix/a-bug"),
+            ],
+            ..Default::default()
+        },
         ..State::default()
     };
     assert!(
@@ -246,7 +255,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "main-shell-sidebar-collapsed",
             build: || {
                 let mut state = with_project();
-                state.sidebar_hidden = true;
+                state.sidebar.hidden = true;
                 StateUnderTest::new(state)
             },
             anchors: &[
@@ -264,7 +273,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "add-worktree-dialog-new-branch",
             build: || {
                 let mut state = with_project();
-                state.worktree_form = Some(WorktreeForm {
+                state.worktree_form.form = Some(WorktreeForm {
                     source: BranchSource::New,
                     name: "example".to_string(),
                     ..WorktreeForm::default()
@@ -291,7 +300,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "add-worktree-dialog-existing-branch",
             build: || {
                 let mut state = with_project();
-                state.worktree_form = Some(WorktreeForm {
+                state.worktree_form.form = Some(WorktreeForm {
                     source: BranchSource::Existing,
                     ..WorktreeForm::default()
                 });
@@ -343,7 +352,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // `branch_matches` could disagree with `candidates` in a way no reducer can
                 // produce, and the fixture would then pin a state that cannot happen.
                 let branch_matches = rank(&candidates, |c| c.name.as_str(), &Query::new(""));
-                state.worktree_form = Some(WorktreeForm {
+                state.worktree_form.form = Some(WorktreeForm {
                     source: BranchSource::Existing,
                     candidates,
                     branch_matches,
@@ -374,8 +383,8 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // sidebar precisely because the defect was invisible at the top of the list: the
                 // panel used to be recorded at 24, 96 whichever row it belonged to, and a fixture
                 // that only ever opened it near there could not tell the two apart.
-                state.window_size = (1280, 800);
-                state.worktree_menu_open = Some(WorktreeMenu {
+                state.window.window_size = (1280, 800);
+                state.worktree.menu_open = Some(WorktreeMenu {
                     dir_name: LONG_NAME.to_string(),
                     anchor: (120, 420),
                 });
@@ -405,9 +414,9 @@ pub fn covered_states() -> &'static [CoveredState] {
 
                 let mut state = with_project();
                 state.workspace = workspace;
-                state.expanded.insert("feat-short".to_string());
-                state.window_size = (1280, 800);
-                state.session_menu_open = Some(SessionMenu {
+                state.sidebar.expanded.insert("feat-short".to_string());
+                state.window.window_size = (1280, 800);
+                state.session.menu_open = Some(SessionMenu {
                     id,
                     anchor: (120, 760),
                 });
@@ -433,7 +442,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "empty-project-without-worktrees",
             build: || {
                 let mut state = with_project();
-                state.worktrees.clear();
+                state.worktree.worktrees.clear();
                 StateUnderTest::new(state)
             },
             anchors: &[Anchor {
@@ -458,12 +467,12 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "error-add-worktree-failed",
             build: || {
                 let mut state = with_project();
-                state.worktree_form = Some(WorktreeForm {
+                state.worktree_form.form = Some(WorktreeForm {
                     source: BranchSource::New,
                     name: "example".to_string(),
                     ..WorktreeForm::default()
                 });
-                state.worktree_error =
+                state.worktree_form.worktree_error =
                     Some("could not create the worktree: branch already checked out".to_string());
                 StateUnderTest::new(state)
             },
@@ -520,7 +529,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "main-shell-sidebar-scrolled-to-top",
             build: || {
                 let mut state = with_project();
-                state.worktrees = (0..30)
+                state.worktree.worktrees = (0..30)
                     .map(|i| worktree(&format!("feat-{i:02}"), &format!("feat/{i:02}")))
                     .collect();
                 StateUnderTest::new(state)
@@ -546,7 +555,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "add-worktree-dialog-type-menu-open",
             build: || {
                 let mut state = with_project();
-                state.worktree_form = Some(WorktreeForm {
+                state.worktree_form.form = Some(WorktreeForm {
                     source: BranchSource::New,
                     name: "example".to_string(),
                     ..WorktreeForm::default()
@@ -619,7 +628,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     section: SettingsSection::Terminal,
                     message: "Enter a number between 100 and 1000000.".to_string(),
                 });
-                state.settings_draft = Some(draft);
+                state.settings.settings_draft = Some(draft);
                 StateUnderTest::new(state)
             },
             anchors: &[
@@ -632,6 +641,54 @@ pub fn covered_states() -> &'static [CoveredState] {
                     path: &[0, 0, 1, 0, 1, 1],
                 },
             ],
+        },
+        // The same surface with the rail collapsed to its icons (feature 027, FR-026c/d).
+        //
+        // A second state rather than a variation of the one above, because the two differ in the
+        // one thing a fixture is for: the rail's width, and therefore where the section beside it
+        // starts. FR-026c says the width the labels give up goes to the content, and until this
+        // was recorded nothing anywhere held that to a number.
+        //
+        // The `Appearance` section, not `Terminal`: it is the shortest page here, so what the
+        // fixture records of it is the rail and the boundary rather than a form that would move
+        // whenever a field's copy changed.
+        CoveredState {
+            name: "settings-view-rail-collapsed",
+            build: || {
+                let mut state = with_project();
+                let mut draft = SettingsDraft {
+                    section: SettingsSection::Appearance,
+                    appearance: AppearanceDraft {
+                        theme: micold_core::theme::ThemePreference::Dark,
+                    },
+                    terminal: TerminalDraft {
+                        scrollback_lines: "12000".to_string(),
+                    },
+                    environment: EnvironmentDraft {
+                        enabled: true,
+                        script_path: "~/.config/micold/session-env.sh".to_string(),
+                        timeout_secs: "5".to_string(),
+                        default_ai_cli: micold_core::session::AiCli::ClaudeCode,
+                    },
+                    daemon: DaemonDraft::default(),
+                    error: None,
+                };
+                // The badge again, for the reason the state above states it: collapsed, a badge
+                // has nowhere to be a chip and becomes a tint on the glyph, so a rail without one
+                // would record a row shape the application does not always produce.
+                draft
+                    .daemon
+                    .profile
+                    .credentials
+                    .insert(micold_core::sandbox::CredentialShare::GitConfig);
+                state.settings.settings_draft = Some(draft);
+                state.settings.settings_rail_collapsed = true;
+                StateUnderTest::new(state)
+            },
+            anchors: &[Anchor {
+                name: "settings.rail",
+                path: &[0, 0, 1, 0, 0, 0],
+            }],
         },
         // --- Added by BUG-002 -------------------------------------------------------------------
         //
@@ -663,7 +720,7 @@ pub fn covered_states() -> &'static [CoveredState] {
 
                 let mut state = with_project();
                 state.workspace = workspace;
-                state.active_session = Some(active);
+                state.session.active = Some(active);
                 StateUnderTest::new(state)
             },
             anchors: &[
@@ -765,7 +822,7 @@ pub fn covered_states() -> &'static [CoveredState] {
 
                 let mut state = with_project();
                 state.workspace = workspace;
-                state.active_session = Some(active);
+                state.session.active = Some(active);
                 // The width the bar actually gives the scrolling region, which the running
                 // application learns from `Scrollable::on_viewport_resize` and a hand-built state
                 // does not. Feature 027 FR-003 spends whatever of it the tabs do not need as
@@ -776,7 +833,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // Not a magic number: that gate compares the strip's leading gap against the
                 // recorded viewport, so a figure that has drifted from what the bar hands out fails
                 // there with the current one in the message.
-                state.tab_strip_viewport_width = TAB_STRIP_VIEWPORT;
+                state.session.tab_strip_viewport_width = TAB_STRIP_VIEWPORT;
                 StateUnderTest::new(state)
             },
             anchors: &[
@@ -869,7 +926,7 @@ pub fn covered_states() -> &'static [CoveredState] {
 
                 let mut state = with_project();
                 state.workspace = workspace;
-                state.active_session = Some(active);
+                state.session.active = Some(active);
                 // The width the bar actually gives the scrolling region, which the running
                 // application learns from `Scrollable::on_viewport_resize` and a hand-built state
                 // does not. Feature 027 FR-003 spends whatever of it the tabs do not need as
@@ -880,7 +937,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 // Not a magic number: that gate compares the strip's leading gap against the
                 // recorded viewport, so a figure that has drifted from what the bar hands out fails
                 // there with the current one in the message.
-                state.tab_strip_viewport_width = TAB_STRIP_VIEWPORT;
+                state.session.tab_strip_viewport_width = TAB_STRIP_VIEWPORT;
                 StateUnderTest::new(state)
             },
             anchors: &[
@@ -936,7 +993,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 state.workspace = workspace;
                 // The one line this state is about. Without it the session exists in the workspace
                 // and the sidebar still draws a flat list of depth-0 rows.
-                state.expanded.insert("feat-short".to_string());
+                state.sidebar.expanded.insert("feat-short".to_string());
                 StateUnderTest::new(state)
             },
             anchors: &[
@@ -970,7 +1027,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             name: "toolbar-overflow-menu-open",
             build: || {
                 let mut state = with_project();
-                state.help_menu_open = true;
+                state.help.help_menu_open = true;
                 StateUnderTest::new(state)
             },
             anchors: &[
@@ -1002,7 +1059,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 let mut workspace = super::workspace_with(vec![(PROJECT, vec![]), (OTHER, vec![])]);
                 workspace.active = workspace.projects.first().map(|p| p.path.clone());
                 state.workspace = workspace;
-                state.project_switcher_open = true;
+                state.project.switcher_open = true;
                 StateUnderTest::new(state)
             },
             anchors: &[
@@ -1043,7 +1100,7 @@ pub fn revealing_states() -> &'static [RevealingState] {
         RevealingState {
             name: "sidebar-filter-panel-mid-reveal",
             build: || StateUnderTest::new(with_project()),
-            toward: |state| state.sidebar_filter_open = true,
+            toward: |state| state.sidebar.filter_open = true,
             frames: 2,
             node: "0/0/0/1/0/0/0/1",
             // Widened when the reveal took §6.2's easing (T064). A *decelerating* curve covers

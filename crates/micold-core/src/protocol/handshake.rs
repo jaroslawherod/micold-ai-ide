@@ -11,6 +11,7 @@
 //! that gap as a second, independent check (FR-022a, BUG-002).
 
 use crate::protocol::auth::Token;
+use crate::protocol::messages::ClientInstance;
 use crate::protocol::messages::PresentedToken;
 use crate::protocol::messages::RefusalReason;
 use crate::protocol::version::{BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
@@ -30,6 +31,11 @@ pub struct Introduction {
     pub package_version: String,
     /// The client's build string.
     pub build: String,
+    /// Which window the client is (`010` BUG-022). Not compared by
+    /// [`evaluate_introduction`] — nothing about a window makes a handshake acceptable or not —
+    /// but carried here because this is what the daemon keeps about a connection, and the identity
+    /// it reports to other clients is built from it.
+    pub instance: ClientInstance,
     /// The token the client presented, if any (feature 027, research R1).
     ///
     /// [`PresentedToken`] rather than `String`, so this struct's derived `Debug` — which reaches
@@ -136,6 +142,7 @@ mod tests {
             schema_hash: SCHEMA_HASH,
             package_version: PACKAGE_VERSION.to_string(),
             build: "client".to_string(),
+            instance: ClientInstance::current(),
             auth_token: None,
             fingerprint: BUILD_FINGERPRINT.to_string(),
             require_fingerprint_match: false,

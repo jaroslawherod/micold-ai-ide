@@ -79,7 +79,14 @@ async fn sandbox_real_boundary_holds_from_inside_a_session() {
     // The daemon's own `HOME`, and so the session's. Passing the *host* home is the realistic
     // setting — it is what `argv::create` does — and it is precisely what makes "`ls ~` shows
     // nothing" worth asserting: the path exists on the host and resolves to nothing inside.
+    //
+    // What resolves there is the application's own directory, mounted over it (FR-004d). That is
+    // the whole trick: the same path, a different filesystem. `sandbox_home` is the host side, and
+    // the probes at the end of this test check both halves of it.
     let host_home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    let sandbox_home = data
+        .join("micold-ai-ide")
+        .join(micold_core::sandbox::SANDBOX_HOME_DIR);
 
     let token = Token::generate();
     let token_path = data.join("micold-ai-ide").join("sandbox.token");
@@ -166,6 +173,32 @@ async fn sandbox_real_boundary_holds_from_inside_a_session() {
             "{what}: nothing outside the project may carry the project's marker; got:\n{out}"
         );
     }
+
+    // `~` is writable, and what lands there is the application's, not the user's (FR-004d) -------
+    //
+    // The negative probes above pass just as well with *no* home at all — a `HOME` pointing at a
+    // path that does not exist inside the container lists nothing either. That was in fact the
+    // state of this feature until the AI CLIs went into the image and `copilot` died on its first
+    // run with `EACCES: mkdir '/home/<user>'`, because it writes to `~` before it does anything
+    // else. So the write is the probe: it is what a session's first minute actually does.
+    let wrote = term
+        .run("touch ~/.probe && echo wrote || echo denied")
+        .await;
+    assert!(
+        wrote.contains("wrote"),
+        "a session must be able to write to its own home; got:\n{wrote}"
+    );
+    assert!(
+        sandbox_home.join(".probe").exists(),
+        "what a session writes to `~` must land in the application's own directory ({}), which is \
+         what makes the home writable without sharing the user's",
+        sandbox_home.display()
+    );
+    assert!(
+        !std::path::Path::new(&host_home).join(".probe").exists(),
+        "a session's write to `~` reached the *user's* home at {host_home} — the mount is \
+         supposed to shadow it, not share it"
+    );
 
     // No ssh agent was forwarded, so no key can be listed ---------------------------------------
     //

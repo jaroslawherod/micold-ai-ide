@@ -93,8 +93,12 @@ This is the feature. In a sandboxed session's terminal:
 Covered twice, and the second pass is the one that counts: `evidence/us1-isolation.md` probed the
 container with `docker exec` and a replaced entrypoint, `evidence/us1-isolation-from-a-session.md`
 probes it through a session the daemon spawned, over the control channel, as
-`crates/micold-daemon/tests/sandbox_real_boundary.rs` — so these boxes now re-check themselves on
-every `sandbox-runtime` CI run.
+`crates/micold-daemon/tests/sandbox_real_boundary.rs` — so these boxes re-check themselves on every
+`sandbox-runtime` CI run.
+
+That last clause was untrue when it was written, and stayed untrue for the rest of the feature. The
+job's only test step named `-p micold-core`; this file is in `micold-daemon`, so cargo never built
+it and the boxes re-checked themselves nowhere. T147 added the step that makes the sentence true.
 
 - [x] `ls /` shows the container's root, not the host's
 - [x] A registered project is present **at its host absolute path** (R2)
@@ -156,9 +160,28 @@ found a real defect: `overlayfs` was classified as enforcing a storage limit it 
 - [x] Keyboard navigation reaches every section and every control; focus order is sane
 - [x] Both themes; clean to 640pt wide, degrading below it — no minimum is declared anywhere
       (evidence/us3-settings-view.md)
-- [ ] Idle with the view open: no repainting (the automated counterpart is
-      `idle_requests_no_frames.rs`) — **inconclusive under lavapipe**; the view costs no more idle
-      than the main surface, but the absolute claim rests on the automated test
+- [x] Idle with the view open: no repainting (the automated counterpart is
+      `idle_requests_no_frames.rs`) — measured by sampling the **X server's** CPU alongside the
+      client's: 6 ticks/20s with the view open, 6 with it closed, and 741 while the pointer is
+      moved. lavapipe makes a presented frame expensive, which is what makes its absence readable
+      (evidence/us3-settings-view.md)
+- [x] Every section in the rail carries an icon, and the icons are distinguishable from one another
+      at the rail's own size (FR-026b)
+- [x] Collapsed, the rail shows icons alone, still marks the current section, still navigates by
+      pointer and by keyboard, and the width it gives up goes to the section's content (FR-026c) —
+      this found the current row's icon 12dp off the column the other three form; fixed, and
+      `gates/rail_icons_align.rs` now asserts it
+- [x] The collapsed state survives leaving and reopening Settings, and Save and Cancel both leave it
+      alone (FR-026d)
+- [x] The overflow menu offers no control a section owns — no theme, no session survival — and
+      session survival still works from its section under both placements (FR-026e, FR-014d)
+- [x] A CLI the image does not provide is named where a CLI is chosen and where the image is
+      chosen, reads as a statement about the image rather than as the application failing, and does
+      not sit in the caution register (FR-023b) — driven with a real `PATH` holding one of the two
+      CLIs, so the service's answer was a round trip rather than a fixture. This found the notice
+      lined up with the control *below* it rather than the one it is about; fixed by the shared
+      `field_note`, and `a_field_note_shares_its_fields_column.rs` now asserts it. The `Image`
+      wording is asserted but unseen — no runtime here (evidence/us3-settings-view.md)
 
 ### B.7 — The development loop (FR-024c)
 

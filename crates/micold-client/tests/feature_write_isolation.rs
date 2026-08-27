@@ -12,13 +12,17 @@
 //! invisible halves would break the reads the spec's Edge Cases require. plan.md's Complexity
 //! Tracking records the deviation from Principle V; this file is what pays for it.
 //!
-//! # Ownership is a map of *paths*, not of fields
+//! # Ownership is read off the declaration, except once
 //!
-//! `State` has 41 fields, but one of them — `workspace` — holds the project catalog, the session
-//! lists and two worktree maps in a single value. A field-level map would have to assign it to one
-//! feature and would then be wrong for the other two, so [`OWNERS`] is keyed by path and
-//! `workspace` appears only through its six members. Anything writing `state.workspace` **whole**
-//! is writing all three features' data at once, and is reported as such.
+//! Since feature 028 a root field's *type* names its owner: `pub sidebar:
+//! crate::features::sidebar::State` is the claim, the compiler checks it, and nobody can forget to
+//! update it. Nine of the ten root fields answer that way and this file no longer restates them.
+//!
+//! The tenth is `workspace`, which holds the project catalog, the session lists and two worktree
+//! maps in a single core value. A field-level claim would have to assign it to one feature and
+//! would then be wrong for the other two, so [`OWNERS`] survives keyed by *path* and `workspace`
+//! appears only through its six members. Anything writing `state.workspace` **whole** is writing
+//! all three features' data at once, and is reported as such.
 //!
 //! # What counts as a feature's code today
 //!
@@ -62,127 +66,40 @@
 //! # What this cannot see, stated rather than discovered later
 //!
 //! - **Writes through a function that does not take `&mut State`.** A helper handed
-//!   `&mut state.worktrees` is flagged at the `&mut` site, but one handed an owned value that is
+//!   `&mut state.worktree.worktrees` is flagged at the `&mut` site, but one handed an owned value that is
 //!   later assigned back is not.
 //! - **Interior mutability.** Nothing in `State` uses it today; if that changes, this scan goes
 //!   quiet rather than loud.
 //! - **Method calls it has never seen.** That one is not silent: an unclassified method on a state
 //!   path fails [`every_method_called_on_state_is_classified`] asking to be sorted into
-//!   [`MUTATORS`] or [`READERS`], because guessing would make the guard leak in whichever
-//!   direction the guess was wrong.
+//!   [`state_scan::MUTATORS`] or [`state_scan::READERS`], because guessing would make the guard
+//!   leak in whichever direction the guess was wrong.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::{Path, PathBuf};
 
-/// Which feature owns each writable path of the shared state.
+/// Which feature owns each member of the one field whose type cannot say (feature 028, T047).
 ///
-/// Every entry names a module under `src/features/`. There is no `root` owner any more: the
-/// pointer, the window size and the focus slot were the last three, and T063 gave them
-/// `features/window.rs` rather than leaving the root entitled to decide about them (FR-002).
+/// It used to have 51 rows, and then 15: one per root field, restating in a `const` what the field
+/// was already called. Feature 028 gave every feature its own `State` struct, so
+/// `pub sidebar: crate::features::sidebar::State` **is** the ownership claim — the compiler checks
+/// it, and nobody can forget to update it. [`declared_owners`] reads those nine straight off the
+/// declaration, and this table shrank to what the declaration cannot express (SC-007).
+///
+/// What it cannot express is `workspace`. `Workspace` holds the project catalog, the session lists
+/// and two worktree maps in a single core value; a field-level claim would have to name one feature
+/// and would then be wrong for the other two. So it is keyed by member, and anything writing
+/// `state.workspace` **whole** is writing all three features' data at once and is reported as such.
+///
+/// The split is an artefact of how this guard is written rather than a boundary through the middle
+/// of a core type — which is what [`CORE_MEDIATED`] exists to say.
 const OWNERS: &[(&str, &str)] = &[
-    // --- help ---------------------------------------------------------------------------------
-    ("about_open", "help"),
-    ("help_menu_open", "help"),
-    // --- project ------------------------------------------------------------------------------
     ("workspace.projects", "project"),
     ("workspace.active", "project"),
-    ("selector", "project"),
-    ("rename_draft", "project"),
-    ("project_switcher_open", "project"),
-    ("project_menu_open", "project"),
-    ("forget_target", "project"),
-    // --- session ------------------------------------------------------------------------------
     ("workspace.sessions", "session"),
     ("workspace.foreground_by_project", "session"),
-    ("active_session", "session"),
-    ("reveal_suppressed_for", "session"),
-    ("last_foreground_choice", "session"),
-    ("restarted_while_inactive", "session"),
-    // What the user has already been told about a session that would not start (feature 026,
-    // T088). A record of what was *said*, not of what the session is — the lifecycle itself
-    // belongs to the daemon and arrives in the catalog — but what it is said about is a session.
-    ("announced_start_failures", "session"),
-    ("session_menu_open", "session"),
-    // The "start a session on…" list is opened from a sidebar row and starts a session; what it
-    // holds is a session's location (feature 026, FR-004).
-    ("session_start_menu", "session"),
-    // And where the press that opens it landed. Separate from the menu because it is known one
-    // event phase earlier — see `features/session.rs::start_menu_anchored` (feature 026, T089).
-    ("session_start_press", "session"),
-    ("session_remove_target", "session"),
-    // The terminal is the session's pane: both fields are written only by `focus_terminal` /
-    // `release_terminal`, and `tests/terminal_bar_stability.rs` already holds that line.
-    ("terminal_released", "session"),
-    // The tab strip draws a *session's* tabs, so which one is marked and whether it is in view are
-    // the session's business (feature 026, arriving on `main` mid-feature). `arm_tab_reveal` came
-    // over as an `impl State` helper in `app.rs` and moved here for the reason T067a-7 gave for
-    // `focus_terminal`: root code the guard cannot attribute is reported against every caller.
-    ("pending_tab_reveal", "session"),
-    ("tab_strip_scroll_offset", "session"),
-    ("tab_strip_viewport_width", "session"),
-    ("terminal_context_menu", "session"),
-    // The terminal *tab* menu (feature 012, BUG-005), which landed on `main` while this feature was
-    // in flight. Same owner as the pane's own menu, and for the same reason: it acts on a shell
-    // instance, and a shell instance belongs to a session.
-    ("shell_instance_menu", "session"),
-    // --- worktree -----------------------------------------------------------------------------
     ("workspace.worktree_names", "worktree"),
     ("workspace.included_worktrees", "worktree"),
-    ("worktrees", "worktree"),
-    ("worktree_menu_open", "worktree"),
-    ("worktree_delete_target", "worktree"),
-    ("worktree_delete_keep_branch", "worktree"),
-    ("worktree_rename_draft", "worktree"),
-    // Hover is on a *worktree* row and drives that row's actions (add-session, delete). It is
-    // named here rather than under `sidebar` because what it identifies is a worktree; the sidebar
-    // is where it happens to be drawn.
-    ("hovered_worktree", "worktree"),
-    // --- worktree_form ------------------------------------------------------------------------
-    ("worktree_form", "worktree_form"),
-    // The add-worktree modal's error line. `crate::ui::worktree_form` is its ONLY render site —
-    // `tests/open_project_git_gate.rs` exists because an assertion on it passed green for as long
-    // as a refusal wrote here with the modal shut, invisible to users — so despite the name it is
-    // the form's field, not the worktree feature's, and T067a-4 moved it (see
-    // specs/021-mvu-slice-architecture/cross-feature-writes.md, group G).
-    ("worktree_error", "worktree_form"),
-    // --- sidebar ------------------------------------------------------------------------------
-    ("expanded", "sidebar"),
-    ("default_expanded", "sidebar"),
-    ("sidebar_viewport_height", "sidebar"),
-    ("pending_reveal_scroll", "sidebar"),
-    ("sidebar_hidden", "sidebar"),
-    ("sidebar_width", "sidebar"),
-    ("sidebar_scroll_offset", "sidebar"),
-    ("sidebar_filters", "sidebar"),
-    ("sidebar_filter_open", "sidebar"),
-    // Which worktrees the sidebar lists, not a fact about any worktree — its own doc calls it view
-    // state and contrasts it with `sidebar_filters` beside it.
-    ("show_agent_worktrees", "sidebar"),
-    // --- settings -----------------------------------------------------------------------------
-    ("theme_pref", "settings"),
-    ("system_scheme", "settings"),
-    ("settings_draft", "settings"),
-    // Both are settings the shell fills at the I/O boundary and every other feature only reads
-    // (feature 026, FR-003/FR-006): the stored default, mirrored from `DaemonSettings`, and the
-    // availability snapshot refreshed when the choice is offered.
-    ("default_ai_cli", "settings"),
-    ("available_providers", "settings"),
-    // --- notifications ------------------------------------------------------------------------
-    ("notify", "notifications"),
-    // --- window -------------------------------------------------------------------------------
-    // T063 named these. They were `root` until T062 left three arms in the root reducer writing
-    // them and nothing else, at which point "no feature owns it" stopped being an answer: FR-002
-    // asks the root for routing only, so a field the root still decides about is a feature nobody
-    // has named. `focused_field`'s own doc — "one fact about the application, not four" — argues
-    // for a single owner; it does not argue that the owner must be the root.
-    ("focused_field", "window"),
-    // `cursor` was the third of the three fields T063 created this feature for. `main`'s 018
-    // BUG-008 fix deleted it: a context menu now anchors at the point its own press landed on,
-    // carried by the message, rather than at a pointer position tracked separately and read later.
-    // That is a better answer than the one this feature was defending, and the window feature is
-    // two fields rather than three.
-    ("window_size", "window"),
 ];
 
 /// Cross-feature writes that exist today, each with the feature that performs it and the path it
@@ -340,625 +257,44 @@ const CORE_MEDIATED: &[(&str, &str, &str, &str)] = &[
     ),
 ];
 
-/// Methods that mutate the receiver, for state paths whose type this file does not decompose.
+/// The shared source-text scan (feature 028, T042): what every operation on `State` writes,
+/// resolved transitively. It lived in this file from T059 until G2 needed the same walk to name
+/// the single writer of a loose root field; see the module's own header for why it is shared
+/// rather than copied.
+#[path = "support/state_scan.rs"]
+mod state_scan;
+
+use state_scan::{
+    code_only, feature_of, operations_in, sources, src_dir, struct_field_types, struct_fields,
+    transitive_writes, workspace_rs, Call, Operation,
+};
+
+/// `crate::features::<n>::State` -> `<n>`, for the three spellings that compile.
 ///
-/// `Workspace` is not in here: its members belong to three different features, so a call on it is
-/// resolved to the members it actually writes rather than treated as one opaque mutation.
-const MUTATORS: &[&str] = &[
-    "advance",
-    "append",
-    "clear",
-    "dismiss",
-    "drain",
-    "entry",
-    "extend",
-    "get_mut",
-    "get_or_insert",
-    "get_or_insert_with",
-    "insert",
-    "iter_mut",
-    "last_mut",
-    "pop",
-    "push",
-    "push_str",
-    "remove",
-    "replace",
-    "retain",
-    "sort",
-    "sort_by",
-    "sort_by_key",
-    "take",
-    "truncate",
-    "values_mut",
-];
-
-/// Methods that only read the receiver.
-const READERS: &[&str] = &[
-    "all",
-    "and_then",
-    "any",
-    "as_deref",
-    "as_ref",
-    "as_str",
-    "clone",
-    "cloned",
-    "contains",
-    "contains_key",
-    "copied",
-    "count",
-    "filter",
-    "find",
-    "first",
-    "get",
-    "is_empty",
-    "is_none",
-    "is_some_and",
-    "is_some",
-    "iter",
-    "keys",
-    "last",
-    "len",
-    "map",
-    // `ThemePreference::next` takes `self` by value and returns the next one — the assignment that
-    // stores it is what this scan flags, at its own site.
-    "next",
-    "position",
-    "to_string",
-    "to_vec",
-    "unwrap_or",
-    "unwrap_or_default",
-    "values",
-];
-
-fn src_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
+/// A guard that accepted only the longest one would fail the day someone added a `use`.
+fn feature_of_type(ty: &str) -> Option<String> {
+    let ty: String = ty.chars().filter(|c| !c.is_whitespace()).collect();
+    let ty = ty.strip_prefix("crate::").unwrap_or(&ty).to_string();
+    let ty = ty.strip_prefix("features::").unwrap_or(&ty).to_string();
+    let (name, tail) = ty.split_once("::")?;
+    (tail == "State").then(|| name.to_string())
 }
 
-fn workspace_rs() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../micold-core/src/workspace.rs")
-}
-
-/// Every `.rs` file under `src/`, as `(path relative to src/, source with comments stripped)`.
-fn sources() -> Vec<(String, String)> {
-    fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
-        let entries = fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
-        for entry in entries {
-            let path = entry.expect("dir entry").path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let name = path
-                    .strip_prefix(src_dir())
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string()
-                    .replace('\\', "/");
-                let src = fs::read_to_string(&path).expect("read source");
-                out.push((name, code_only(&src)));
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(&src_dir(), &mut out);
-    out.sort();
-    out
-}
-
-/// Strips comments and string literals, so the doc comments explaining this rule — and any test
-/// fixture quoting a field name — cannot trip it.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    let mut in_line = false;
-    let mut in_str = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        if in_line {
-            if c == '\n' {
-                in_line = false;
-                out.push('\n');
-            }
-            continue;
-        }
-        if in_str {
-            if c == '\\' {
-                chars.next();
-            } else if c == '"' {
-                in_str = false;
-            }
-            continue;
-        }
-        match c {
-            '"' => {
-                in_str = true;
-                continue;
-            }
-            '/' if chars.peek() == Some(&'/') => {
-                in_line = true;
-                continue;
-            }
-            '/' if chars.peek() == Some(&'*') => {
-                chars.next();
-                in_block = true;
-                continue;
-            }
-            _ => {}
-        }
-        out.push(c);
-    }
-    out
-}
-
-/// Length of the braced block whose opening brace has already been consumed.
-fn block_len(src: &str) -> usize {
-    delimited_len(src, '{', '}')
-}
-
-/// Length of the parenthesised list whose opening paren has already been consumed.
-fn paren_len(src: &str) -> usize {
-    delimited_len(src, '(', ')')
-}
-
-fn delimited_len(src: &str, open: char, close: char) -> usize {
-    let mut depth = 1usize;
-    for (i, c) in src.char_indices() {
-        if c == open {
-            depth += 1;
-        } else if c == close {
-            depth -= 1;
-            if depth == 0 {
-                return i;
-            }
-        }
-    }
-    panic!("unbalanced `{open}{close}`");
-}
-
-/// The field names of `pub struct <name>`, in declaration order.
-fn struct_fields(src: &str, name: &str) -> Vec<String> {
-    let needle = format!("pub struct {name} {{");
-    let start = src
-        .find(&needle)
-        .unwrap_or_else(|| panic!("`{needle}` not found — has the struct been renamed?"))
-        + needle.len();
-    let body = &src[start..start + block_len(&src[start..])];
-    let mut out = Vec::new();
-    for line in body.lines() {
-        let t = line.trim();
-        let Some((head, _)) = t.split_once(':') else {
-            continue;
-        };
-        let head = head
-            .trim_start_matches("pub(crate) ")
-            .trim_start_matches("pub ")
-            .trim();
-        if !head.is_empty()
-            && head
-                .chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
-        {
-            out.push(head.to_string());
-        }
-    }
-    out
-}
-
-/// One method or free function that can mutate the struct under scrutiny.
-struct Operation {
-    /// `features/session.rs`
-    file: String,
-    /// `restore_after_activation`
-    name: String,
-    /// What the value is bound to inside the body — `self`, or the parameter's name.
-    binding: String,
-    /// Whether it can mutate at all. Read-only methods are collected so a call to one classifies
-    /// as a read rather than as an unclassified method.
-    mutating: bool,
-    body: String,
-}
-
-impl Operation {
-    /// `features/session.rs::restore_after_activation` — the identity of one operation.
-    ///
-    /// The file has to be part of it: T062 gives five feature modules a `menu_toggled` each, and a
-    /// bare name merges them. See [`transitive_writes`].
-    fn key(&self) -> String {
-        format!("{}::{}", self.file, self.name)
-    }
-}
-
-/// Byte ranges of each `impl … <name> { … }` block body, inherent or trait.
-///
-/// **The type is matched by its last path segment, and a probe is why.** An earlier version looked
-/// for the literal `impl State {`, so a module writing `impl crate::app::State { … }` — which
-/// compiles identically and is what a fresh feature module is most likely to write, having no
-/// `use` for it yet — was invisible to the whole scan. Two live-fire probes planted a cross-feature
-/// write that way and fired nothing at all.
-///
-/// Trait impls count too: `impl SomeTrait for State` can carry `&mut self` methods just as an
-/// inherent block can. `impl Default for State` is swept in by the same rule and contributes
-/// nothing, its `default()` taking no receiver.
-fn impl_blocks(src: &str, name: &str) -> Vec<(usize, usize)> {
-    let mut out = Vec::new();
-    let mut from = 0usize;
-    while let Some(at) = src[from..].find("\nimpl ") {
-        let head_start = from + at + "\nimpl ".len();
-        let Some(brace) = src[head_start..].find('{') else {
-            break;
-        };
-        let body_start = head_start + brace + 1;
-        from = body_start;
-        let header = src[head_start..head_start + brace].trim();
-        // `impl Trait for Type` — the target is what follows `for`.
-        let target = header.rsplit(" for ").next().unwrap_or(header).trim();
-        let target = target.split_whitespace().next().unwrap_or(target);
-        let target = target.split('<').next().unwrap_or(target);
-        if target.rsplit("::").next() == Some(name) {
-            let len = block_len(&src[body_start..]);
-            out.push((body_start, body_start + len));
-            from = body_start + len;
-        }
-    }
-    out
-}
-
-/// Every operation on `struct_name` in one source file: its inherent methods, plus free functions
-/// taking `&mut <struct_name>`.
-fn operations_in(file: &str, src: &str, struct_name: &str) -> Vec<Operation> {
-    let blocks = impl_blocks(src, struct_name);
-    let mut out = Vec::new();
-    let mut from = 0usize;
-    while let Some(at) = src[from..].find("fn ") {
-        let start = from + at;
-        from = start + 3;
-        let Some(paren) = src[start..].find('(') else {
-            break;
-        };
-        let name = src[start + 3..start + paren].trim();
-        if name.is_empty() || !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
-            continue;
-        }
-        let args_start = start + paren + 1;
-        let args_len = paren_len(&src[args_start..]);
-        let args = &src[args_start..args_start + args_len];
-        let trimmed = args.trim_start();
-        let in_impl = blocks.iter().any(|(s, e)| start >= *s && start < *e);
-        let (binding, mutating) = if in_impl && trimmed.starts_with("&mut self") {
-            ("self".to_string(), true)
-        } else if in_impl && trimmed.starts_with("&self") {
-            ("self".to_string(), false)
-        } else if let Some(param) = mut_param(args, struct_name) {
-            (param, true)
-        } else {
-            continue;
-        };
-        let Some(brace) = src[args_start + args_len..].find('{') else {
-            continue;
-        };
-        let body_start = args_start + args_len + brace + 1;
-        let body_len = block_len(&src[body_start..]);
-        out.push(Operation {
-            file: file.to_string(),
-            name: name.to_string(),
-            binding,
-            mutating,
-            body: src[body_start..body_start + body_len].to_string(),
-        });
-        from = body_start + body_len;
-    }
-    out
-}
-
-/// The name of the first parameter declared `&mut <struct_name>`.
-///
-/// The reference has to be *peeled*, not merely detected. Whitespace is stripped first, so the
-/// type reads `&mutState` — and asking whether that ends in `State` after splitting on `::` is
-/// asking whether `&mutState` equals `State`, which it never does. That was the shape of this
-/// function until T062, and it is why the guard reported every feature clean the moment Tier 3
-/// turned `impl State` methods into free functions: it could not see a single one of them, while
-/// this file's own header promised it could. An optional lifetime is peeled too, since `&'a mut
-/// State` is the same parameter written differently.
-fn mut_param(args: &str, struct_name: &str) -> Option<String> {
-    for arg in args.split(',') {
-        let Some((name, ty)) = arg.split_once(':') else {
-            continue;
-        };
-        let ty = ty.replace([' ', '\n'], "");
-        let Some(rest) = ty.strip_prefix('&') else {
-            continue;
-        };
-        let rest = match rest.strip_prefix('\'') {
-            Some(after) => after.trim_start_matches(|c: char| c.is_alphanumeric() || c == '_'),
-            None => rest,
-        };
-        let Some(ty) = rest.strip_prefix("mut") else {
-            continue;
-        };
-        if ty.split("::").last() == Some(struct_name) {
-            return Some(name.trim().to_string());
-        }
-    }
-    None
-}
-
-/// What one operation writes directly, and which sibling operations it calls.
-///
-/// `writes` is what the operation's own lines write. `core_writes` is what it writes by calling a
-/// method of the nested core type — `state.workspace.forget(p)` — mapped to the method names that
-/// carried it, because that is the fact the message needs to state.
-#[derive(Default)]
-struct Reach {
-    writes: BTreeSet<String>,
-    core_writes: BTreeMap<String, BTreeSet<String>>,
-    calls: BTreeSet<String>,
-}
-
-/// How a `path.method(` call is resolved.
-enum Call<'a> {
-    /// Writes exactly these paths.
-    Writes(&'a BTreeSet<String>),
-    /// Reads only.
-    Reads,
-}
-
-/// Scan one body for writes to `<binding>.<field>` and for calls to sibling operations.
-///
-/// `nested` names a field whose own members are tracked separately — `workspace` for `State` — so
-/// `state.workspace.sessions` resolves to one path rather than to the whole struct. `nested_api`
-/// resolves method calls on that field: `state.workspace.forget(p)` writes five members across
-/// three features, which no single mutator/reader verdict could express.
-fn reach(
-    op: &Operation,
-    fields: &BTreeSet<String>,
-    nested: Option<(&str, &BTreeSet<String>)>,
-    nested_api: &BTreeMap<String, Call<'_>>,
-    siblings: &BTreeSet<String>,
-    unclassified: &mut BTreeSet<String>,
-) -> Reach {
-    let mut r = Reach::default();
-    let anchor = format!("{}.", op.binding);
-    let bytes = op.body.as_bytes();
-    let mut i = 0usize;
-    while let Some(at) = op.body[i..].find(&anchor) {
-        let start = i + at;
-        i = start + anchor.len();
-        if start > 0 {
-            let prev = bytes[start - 1] as char;
-            if prev.is_alphanumeric() || prev == '_' {
-                continue; // the tail of a longer identifier
-            }
-        }
-        let (ident, after) = read_ident(&op.body, i);
-        if ident.is_empty() {
-            continue;
-        }
-        if siblings.contains(&ident) && op.body[after..].trim_start().starts_with('(') {
-            r.calls.insert(ident);
-            continue;
-        }
-        if !fields.contains(&ident) {
-            continue;
-        }
-        let mut path = ident;
-        let mut after = after;
-        if let Some((nested_name, nested_fields)) = nested {
-            if path == nested_name && op.body[after..].starts_with('.') {
-                let (sub, next) = read_ident(&op.body, after + 1);
-                if nested_fields.contains(&sub) {
-                    path = format!("{nested_name}.{sub}");
-                    after = next;
-                } else if !sub.is_empty() && op.body[next..].trim_start().starts_with('(') {
-                    match nested_api.get(&sub) {
-                        Some(Call::Writes(paths)) => {
-                            for path in paths.iter() {
-                                r.core_writes
-                                    .entry(path.clone())
-                                    .or_default()
-                                    .insert(sub.clone());
-                            }
-                        }
-                        Some(Call::Reads) => {}
-                        None => {
-                            unclassified.insert(format!("{nested_name}.{sub}"));
-                        }
-                    }
-                    i = next;
-                    continue;
-                }
-            }
-        }
-        let preceded_by_mut = op.body[..start].trim_end().ends_with("&mut");
-        let tail = op.body[after..].trim_start();
-        let is_write = if preceded_by_mut {
-            true
-        } else if let Some(rest) = tail.strip_prefix('=') {
-            !rest.starts_with('=')
-        } else if ["+=", "-=", "*=", "|=", "&="]
-            .iter()
-            .any(|o| tail.starts_with(o))
-        {
-            true
-        } else if let Some(rest) = tail.strip_prefix('.') {
-            let (method, next) = read_ident(rest, 0);
-            if method.is_empty() || !rest[next..].trim_start().starts_with('(') {
-                false // a tuple or struct member access, not a call
-            } else if MUTATORS.contains(&method.as_str()) {
-                true
-            } else if READERS.contains(&method.as_str()) {
-                false
-            } else {
-                unclassified.insert(format!("{path}.{method}"));
-                false
-            }
-        } else {
-            false
-        };
-        if is_write {
-            r.writes.insert(path);
-        }
-        i = after;
-    }
-    r
-}
-
-/// The identifier starting at `src[from]`, and the index just past it.
-fn read_ident(src: &str, from: usize) -> (String, usize) {
-    let mut end = from;
-    for (i, c) in src[from..].char_indices() {
-        if c.is_alphanumeric() || c == '_' {
-            end = from + i + c.len_utf8();
-        } else {
-            break;
-        }
-    }
-    (src[from..end].to_string(), end)
-}
-
-/// What each operation writes, keyed by `file::name`.
-type Writes = BTreeMap<String, BTreeSet<String>>;
-
-/// What each operation writes *through a core method*, and which methods carried it — the same
-/// keying, with the path mapped to the `Workspace` methods responsible.
-type CoreWrites = BTreeMap<String, BTreeMap<String, BTreeSet<String>>>;
-
-/// Resolve every operation to the full set of paths it writes, following calls to a fixed point.
-///
-/// # Keyed by `file::name`, because names stopped being unique at T062
-///
-/// Under Tier 1 every operation was an `impl State` method, so a bare name identified one function
-/// and this map was keyed by it. Tier 3 gives each feature module a free function per reducer arm,
-/// and five of them are called `menu_toggled` — one each in `help`, `project`, `session`,
-/// `worktree` and `worktree_form` — with `opened`, `cancelled`, `rename_started` and others
-/// repeating too.
-///
-/// Keyed by bare name those five became **one** entry holding the union of all five bodies'
-/// writes, and the guard then reported each of them writing the other four's fields. It is a
-/// failure in the direction that looks like diligence — a wall of violations, every one of them
-/// false — and the symmetry gave it away: `settings::opened` was accused of writing
-/// `worktree_form`, and `worktree_form::opened` of writing `settings_draft`.
-///
-/// Calls are still *written* by bare name (`state.set_current_session(…)` says nothing about which
-/// file), so a callee resolves to every operation sharing that name. No colliding name is ever
-/// called that way — the reducer free functions are called only from the root, which is not a
-/// feature operation — but unioning is the conservative direction if one ever is: it over-reports
-/// rather than going quiet.
-fn transitive_writes(
-    ops: &[Operation],
-    fields: &BTreeSet<String>,
-    nested: Option<(&str, &BTreeSet<String>)>,
-    nested_api: &BTreeMap<String, Call<'_>>,
-    unclassified: &mut BTreeSet<String>,
-) -> (Writes, CoreWrites, BTreeMap<String, Reach>) {
-    let siblings: BTreeSet<String> = ops.iter().map(|o| o.name.clone()).collect();
-    let mut by_name: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    let mut direct: BTreeMap<String, Reach> = BTreeMap::new();
-    for op in ops {
-        let r = reach(op, fields, nested, nested_api, &siblings, unclassified);
-        by_name.entry(op.name.clone()).or_default().insert(op.key());
-        let entry = direct.entry(op.key()).or_default();
-        entry.writes.extend(r.writes);
-        for (path, methods) in r.core_writes {
-            entry.core_writes.entry(path).or_default().extend(methods);
-        }
-        entry.calls.extend(r.calls);
-    }
-    // Two closures over the same call graph. `core` is what a core method wrote, carried outward
-    // so a caller two steps up is judged on the same footing as the operation that made the call;
-    // `writes` is everything, which is what every other consumer of this scan means by a write.
-    let core = close(
-        direct
-            .iter()
-            .map(|(k, v)| (k.clone(), v.core_writes.clone()))
-            .collect(),
-        &direct,
-        &by_name,
-    );
-    let seed: BTreeMap<String, BTreeSet<String>> = direct
-        .iter()
-        .map(|(k, v)| {
-            let mut paths = v.writes.clone();
-            paths.extend(v.core_writes.keys().cloned());
-            (k.clone(), paths)
-        })
-        .collect();
-    let writes = close(seed, &direct, &by_name);
-    (writes, core, direct)
-}
-
-/// Everything a value in `seed` reaches by following calls, to a fixed point.
-///
-/// Generic over the value so the same walk serves the set of paths written and the map of paths to
-/// the core methods that wrote them: bounded by the call graph, so a cycle terminates rather than
-/// spinning.
-fn close<T: Merge + Clone>(
-    seed: BTreeMap<String, T>,
-    direct: &BTreeMap<String, Reach>,
-    by_name: &BTreeMap<String, BTreeSet<String>>,
-) -> BTreeMap<String, T> {
-    let mut out = seed;
-    loop {
-        let mut changed = false;
-        let snapshot = out.clone();
-        for (key, r) in direct {
-            for callee in &r.calls {
-                for callee_key in by_name.get(callee).into_iter().flatten() {
-                    let Some(inherited) = snapshot.get(callee_key) else {
-                        continue;
-                    };
-                    changed |= out.entry(key.clone()).or_default().merge(inherited);
-                }
-            }
-        }
-        if !changed {
-            break;
-        }
-    }
-    out
-}
-
-/// Absorb another value of the same shape, answering whether anything was new.
-trait Merge: Default {
-    fn merge(&mut self, other: &Self) -> bool;
-}
-
-impl Merge for BTreeSet<String> {
-    fn merge(&mut self, other: &Self) -> bool {
-        let mut changed = false;
-        for path in other {
-            changed |= self.insert(path.clone());
-        }
-        changed
-    }
-}
-
-impl Merge for BTreeMap<String, BTreeSet<String>> {
-    fn merge(&mut self, other: &Self) -> bool {
-        let mut changed = false;
-        for (path, methods) in other {
-            changed |= self.entry(path.clone()).or_default().merge(methods);
-        }
-        changed
-    }
-}
-
-/// The feature a source file belongs to, or `None` for shell, view and root code.
-fn feature_of(file: &str) -> Option<String> {
-    let stem = file.strip_prefix("features/")?.strip_suffix(".rs")?;
-    (stem != "mod").then(|| stem.to_string())
-}
-
-fn owners() -> BTreeMap<String, String> {
-    OWNERS
-        .iter()
-        .map(|(p, f)| (p.to_string(), f.to_string()))
+/// The root fields whose own type names their owner — the nine feature structs.
+fn declared_owners() -> BTreeMap<String, String> {
+    let app = code_only(&fs::read_to_string(src_dir().join("app.rs")).expect("read app.rs"));
+    struct_field_types(&app, "State")
+        .into_iter()
+        .filter_map(|(field, ty)| feature_of_type(&ty).map(|f| (field, f)))
         .collect()
+}
+
+/// Ownership as this guard resolves it: read off the declaration where the type says so, and taken
+/// from [`OWNERS`] for the one field whose type cannot.
+fn owners() -> BTreeMap<String, String> {
+    let mut out = declared_owners();
+    out.extend(OWNERS.iter().map(|(p, f)| (p.to_string(), f.to_string())));
+    out
 }
 
 /// The whole analysis, run once per test that needs it.
@@ -973,6 +309,8 @@ struct Scan {
     unclassified: BTreeSet<String>,
     /// Mutating operations found under `src/features/`.
     feature_ops: usize,
+    /// Fields a write can resolve to: `app::State`'s own, plus the members of every
+    /// feature struct it holds. Both levels, so feature 028's moves leave it unchanged.
     state_fields: usize,
 }
 
@@ -1001,7 +339,7 @@ fn scan() -> Scan {
     let (ws_writes, _, _) = transitive_writes(
         &ws_mutating,
         &workspace_fields,
-        None,
+        &BTreeMap::new(),
         &BTreeMap::new(),
         &mut unclassified,
     );
@@ -1015,15 +353,19 @@ fn scan() -> Scan {
             (name, v.iter().map(|p| format!("workspace.{p}")).collect())
         })
         .collect();
-    let mut nested_api: BTreeMap<String, Call<'_>> = BTreeMap::new();
+    let mut workspace_api: BTreeMap<String, Call<'_>> = BTreeMap::new();
     for op in &ws_ops {
         if !op.mutating {
-            nested_api.insert(op.name.clone(), Call::Reads);
+            workspace_api.insert(op.name.clone(), Call::Reads);
         }
     }
     for (name, paths) in &ws_writes {
-        nested_api.insert(name.clone(), Call::Writes(paths));
+        workspace_api.insert(name.clone(), Call::Writes(paths));
     }
+    let nested_api: BTreeMap<String, BTreeMap<String, Call<'_>>> =
+        [("workspace".to_string(), workspace_api)]
+            .into_iter()
+            .collect();
 
     let app = sources
         .iter()
@@ -1033,21 +375,49 @@ fn scan() -> Scan {
     let state_field_list = struct_fields(&app, "State");
     let fields: BTreeSet<String> = state_field_list.iter().cloned().collect();
 
+    // What a write can resolve to, for the non-vacuity floor below. Feature 028 moves each
+    // feature's fields behind a struct of its own, so the *root's* field count falls as the
+    // refactor lands — 60 before it started, headed for the ten-odd members left once every
+    // feature owns its own. Counting only the root would turn the floor into a countdown, and a
+    // floor lowered every commit stops catching what it was for. So count both levels: the root's
+    // fields, plus the members of every feature struct the root holds. The move preserves that
+    // total, which is the point of the move.
+    let resolvable_fields = state_field_list.len()
+        + sources
+            .iter()
+            .filter(|(file, src)| {
+                feature_of(file).is_some_and(|n| fields.contains(&n))
+                    && src.contains("pub struct State {")
+            })
+            .map(|(_, src)| struct_fields(src, "State").len())
+            .sum::<usize>();
+
     let ops: Vec<Operation> = sources
         .iter()
         .flat_map(|(file, src)| operations_in(file, src, "State"))
         .filter(|o| o.mutating)
         .collect();
-    let (writes, core, direct) = transitive_writes(
-        &ops,
-        &fields,
-        Some(("workspace", &workspace_fields)),
-        &nested_api,
-        &mut unclassified,
-    );
+    // Every field whose own members this scan can name: the core type the root still holds
+    // flat, and each of the nine feature structs feature 028 moved the rest behind. Without the
+    // second group a reducer's `state.sidebar.expanded.insert(..)` reads as a member access and
+    // the write vanishes — see [`state_scan::reach`].
+    let mut nested: BTreeMap<String, BTreeSet<String>> =
+        [("workspace".to_string(), workspace_fields.clone())]
+            .into_iter()
+            .collect();
+    for (file, src) in &sources {
+        let Some(name) = feature_of(file).filter(|n| fields.contains(n)) else {
+            continue;
+        };
+        if src.contains("pub struct State {") {
+            nested.insert(name, struct_fields(src, "State").into_iter().collect());
+        }
+    }
+    let (writes, core, direct) =
+        transitive_writes(&ops, &fields, &nested, &nested_api, &mut unclassified);
 
     // Report each write once, at the innermost feature operation that reaches it. Without this a
-    // single `self.expanded.insert(..)` is reported three times over — at the write, and again at
+    // single `self.sidebar.expanded.insert(..)` is reported three times over — at the write, and again at
     // each feature-module caller that inherits it — and the allowlist would then name callers that
     // converting the write would silently fix, which is the opposite of what T067a needs.
     // Every key an operation of that bare name resolves to, and whether any of them is a feature
@@ -1075,8 +445,13 @@ fn scan() -> Scan {
             continue;
         };
         for path in paths {
+            // Keyed by path, then by the path's first segment. `workspace.sessions` is named
+            // outright because its five siblings answer to other features; `sidebar.expanded` is
+            // not, because feature 028 made the first segment the feature — the field *is* the
+            // struct, so naming every member would be a second copy of the declaration.
             let owner = owners
                 .get(path)
+                .or_else(|| owners.get(path.split('.').next().unwrap_or(path)))
                 .unwrap_or_else(|| panic!("`{path}` has no owner — add it to OWNERS"));
             if owner == &feature {
                 continue;
@@ -1141,7 +516,7 @@ fn scan() -> Scan {
         core_mediated,
         unclassified,
         feature_ops: ops.iter().filter(|o| feature_of(&o.file).is_some()).count(),
-        state_fields: state_field_list.len(),
+        state_fields: resolvable_fields,
     }
 }
 
@@ -1159,15 +534,16 @@ fn every_state_field_has_an_owner() {
         "these `State` fields have no owning feature: {missing:?}\n\
          Add each to OWNERS. A field nobody owns is a field this guard cannot police."
     );
-    let known: BTreeSet<&str> = fields.iter().map(String::as_str).collect();
     let stale: Vec<&str> = OWNERS
         .iter()
         .map(|(p, _)| *p)
-        .filter(|p| !p.starts_with("workspace.") && !known.contains(p))
+        .filter(|p| !p.starts_with("workspace."))
         .collect();
     assert!(
         stale.is_empty(),
-        "OWNERS names paths that are not `State` fields any more: {stale:?}"
+        "OWNERS names {stale:?}, which is not a `workspace` member. Since T047 the table holds \
+         only the split of the one field whose type cannot name its owner; a root field says who \
+         owns it by being declared `crate::features::<n>::State`."
     );
 }
 
@@ -1348,7 +724,8 @@ fn the_scan_finds_the_operations_it_is_meant_to_read() {
     );
     assert!(
         scan.state_fields >= 40,
-        "`State` parsed to only {} fields — the struct scan is not reading what it thinks it is",
+        "`State` and the feature structs it holds parsed to only {} fields between them — the \
+         struct scan is not reading what it thinks it is",
         scan.state_fields
     );
 }

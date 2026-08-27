@@ -57,6 +57,34 @@ run = "{{config_root}}/scripts/build-lock.sh cargo test --workspace"
 description = "Test the render-free core only (fast, no GUI / no iced) [build-locked]"
 run = "{{config_root}}/scripts/build-lock.sh cargo test -p micold-core --all-targets"
 
+[tasks.test-sandbox]
+description = "Run the real-runtime sandbox tests against an installed container runtime (feature 027) [build-locked]"
+run = """
+# Both halves of the real-runtime suite, in the one shape that reports the truth. Getting this
+# invocation wrong is not loud -- it is silent, and every way of getting it wrong reports success:
+#
+#   * omitting `micold-daemon` skips the eleven tests carrying the headline claims,
+#   * omitting `--release` makes `sandbox_real_session_start` refuse to measure, and without
+#     `--no-fail-fast` cargo then stops there and skips every target after it,
+#   * omitting `--test-threads=1` lets two tests contend for one container name and one port,
+#   * `sandbox_real_` is matched against **test names**, not file names.
+#
+# It needs `micold-daemon:dev` present: build it with `mise run image` first.
+set -e
+
+runtime="${MICOLD_RUNTIME:-docker}"
+command -v "$runtime" >/dev/null 2>&1 || { echo "test-sandbox: $runtime is not installed" >&2; exit 1; }
+"$runtime" image inspect "${MICOLD_IMAGE_TAG:-micold-daemon:dev}" >/dev/null 2>&1 || {
+  echo "test-sandbox: ${MICOLD_IMAGE_TAG:-micold-daemon:dev} is not built -- run 'mise run image'" >&2
+  exit 1
+}
+
+{{config_root}}/scripts/build-lock.sh cargo test --release \
+  -p micold-core -p micold-daemon \
+  --features micold-core/sandbox-real-runtime,micold-daemon/sandbox-real-runtime \
+  sandbox_real_ --no-fail-fast -- --test-threads=1
+"""
+
 [tasks.build]
 description = "Build the release GUI binary [build-locked]"
 run = "{{config_root}}/scripts/build-lock.sh cargo build --release -p micold-client"

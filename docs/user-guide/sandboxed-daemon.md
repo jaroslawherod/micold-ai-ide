@@ -173,8 +173,8 @@ The sandbox does not need a registry. If the machine cannot reach one, bring the
 
 ```sh
 # Somewhere with a connection
-docker pull ghcr.io/micold/micold-daemon:<version>
-docker save ghcr.io/micold/micold-daemon:<version> -o micold-daemon.tar
+docker pull ghcr.io/jaroslawherod/micold-daemon:<version>
+docker save ghcr.io/jaroslawherod/micold-daemon:<version> -o micold-daemon.tar
 
 # On the machine without one
 docker load -i micold-daemon.tar

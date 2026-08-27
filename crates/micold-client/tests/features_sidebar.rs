@@ -367,7 +367,7 @@ fn the_current_sessions_row_is_found_by_walking_the_rows_as_drawn() {
 
 // --- the §B5 test hook (MICOLD_SIDEBAR_FILTER) ------------------------------------------------
 //
-// Parsing only. What the value is *applied to* is `Message::SidebarFilterToggled`, which the rest
+// Parsing only. What the value is *applied to* is `Message::Sidebar(SidebarMsg::FilterToggled)`, which the rest
 // of this file and `sidebar_state.rs` already cover — the hook deliberately owns no state of its
 // own, so that what a visual pass then photographs is the real filter.
 

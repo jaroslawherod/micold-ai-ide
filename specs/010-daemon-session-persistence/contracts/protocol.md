@@ -39,6 +39,15 @@ is predictable:
 
 Any failure **MUST bail loudly**. Wrong ownership means an active attack, not a mess to tidy.
 
+**Verification MUST precede any repair**, and a pre-existing directory MUST NOT be repaired at all
+(BUG-019). Creating the directory `0700` and *then* verifying it is not this rule: `mkdir -p`
+succeeds on an existing directory and a following `chmod` overwrites whatever mode it had, so the
+three checks above can never fail and the refusal is unreachable. A hostile directory is then
+silently tightened and bound into — and whatever an attacker placed inside it while it was
+world-writable outlives the `chmod`. The implementation MUST therefore distinguish "created it" from
+"found it" atomically (`mkdir` without `-p` semantics; `AlreadyExists` is the second case) and run
+the verifier on the directory as found.
+
 **Windows DACL** is required even though the SID appears in the pipe name — the name buys collision
 avoidance, not security, and the default descriptor grants read access to Everyone and the anonymous
 account:
@@ -157,7 +166,8 @@ format throughout.
 Strict exact-match, no negotiation, no compatibility range (FR-021).
 
 ```text
-client ──► Hello { protocol_version: u32, schema_hash: [u8; 32], client_build: String }
+client ──► Hello { protocol_version: u32, schema_hash: [u8; 32], client_build: String,
+                   client_instance: ClientInstance }
 daemon ──► Welcome { daemon_build: String, catalog, settings }
        or  Refused { reason: VersionMismatch { client: u32, daemon: u32,
                                                client_hash, daemon_hash,
@@ -340,6 +350,17 @@ daemon ──► ScrollbackResponse { session, req, oldest_available, newest, li
   socket or approach the frame cap.
 - The daemon **SHOULD** speculatively include the cursor's line and a screenful either side of the
   requested range, which removes a round trip on scroll for a few hundred bytes.
+- **A request is sized by the viewport, never by the scroll depth** (BUG-021). The client MUST bound
+  each range to the rows the scroll reveals plus a bounded prefetch — a small constant number of
+  screenfuls — and MUST NOT ask for everything between the revealed line and the live tail. The
+  daemon serves a range faithfully and serially under the session's terminal lock, so a range whose
+  size grows with depth makes the total cost of a gesture quadratic in how far it goes.
+- **The client MUST NOT re-ask for a range still in flight.** `req` correlates the answer, so an
+  outstanding range is one the client knows is coming; without that record every wheel notch of a
+  fast gesture re-computes and re-sends the same un-cached run, because nothing it asked for has
+  arrived yet. The client releases those records when the answer arrives and when the connection
+  drops — `req`s are per-connection, and a range awaiting an answer that will never come would
+  suppress the very request that would fill those rows.
 
 ---
 

@@ -8,10 +8,28 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+/// The registry namespace the release publishes into — this repository's owner on GHCR.
+///
+/// Split out from [`DEFAULT_IMAGE`] so the release workflow has one string to check itself
+/// against. `.github/workflows/release.yml` greps this file for the repository it is about to push
+/// to, and fails the release if it does not appear: a default that points somewhere nothing is
+/// published is exactly the state this feature shipped in until 0.11.0, and it is invisible —
+/// the app looks correct, and only a user's first pull discovers the name resolves to nothing.
+pub const DEFAULT_IMAGE_REPOSITORY: &str = "ghcr.io/jaroslawherod/micold-daemon";
+
 /// The registry reference the app ships with. An immutable version tag, never a moving one — a
 /// moving tag can change under a running sandbox, which is the case [`ImageRef::is_moving`] exists
 /// to detect.
-pub const DEFAULT_IMAGE: &str = concat!("ghcr.io/micold/micold-daemon:", env!("CARGO_PKG_VERSION"));
+///
+/// The tag is the application's own version, so the client and the image it asks for are released
+/// together (FR-024). What makes that reference resolvable is the `image` job in
+/// `.github/workflows/release.yml`, which builds this exact tag for amd64 and arm64 and pushes it
+/// before the release leaves draft — so a published release cannot name an image that does not
+/// exist.
+pub const DEFAULT_IMAGE: &str = concat!(
+    "ghcr.io/jaroslawherod/micold-daemon:",
+    env!("CARGO_PKG_VERSION")
+);
 
 /// The tag `mise run image` produces, and the one a stale-image refusal names (FR-024c).
 pub const DEV_IMAGE_TAG: &str = "micold-daemon:dev";
@@ -44,7 +62,7 @@ pub struct ImageSource {
     /// Which acquisition path applies.
     #[serde(default)]
     pub kind: ImageSourceKind,
-    /// The image reference, e.g. `ghcr.io/micold/micold-daemon:0.27.0`.
+    /// The image reference, e.g. `ghcr.io/jaroslawherod/micold-daemon:0.11.0`.
     #[serde(default = "default_reference")]
     pub reference: String,
     /// The archive to load, set only when [`Self::kind`] is [`ImageSourceKind::ImportedFile`].
@@ -147,7 +165,7 @@ impl ImageSourceProblem {
 pub struct ImageRef {
     /// The registry host, if the reference named one.
     pub registry: Option<String>,
-    /// The repository path, e.g. `micold/micold-daemon`.
+    /// The repository path, e.g. `jaroslawherod/micold-daemon`.
     pub repository: String,
     /// The tag, if the reference is tagged rather than digest-pinned.
     pub tag: Option<String>,
@@ -280,11 +298,14 @@ mod tests {
 
     #[test]
     fn a_registry_reference_round_trips() {
-        let r = ImageRef::parse("ghcr.io/micold/micold-daemon:0.27.0").unwrap();
+        let r = ImageRef::parse("ghcr.io/jaroslawherod/micold-daemon:0.11.0").unwrap();
         assert_eq!(r.registry.as_deref(), Some("ghcr.io"));
-        assert_eq!(r.repository, "micold/micold-daemon");
-        assert_eq!(r.tag.as_deref(), Some("0.27.0"));
-        assert_eq!(r.to_reference(), "ghcr.io/micold/micold-daemon:0.27.0");
+        assert_eq!(r.repository, "jaroslawherod/micold-daemon");
+        assert_eq!(r.tag.as_deref(), Some("0.11.0"));
+        assert_eq!(
+            r.to_reference(),
+            "ghcr.io/jaroslawherod/micold-daemon:0.11.0"
+        );
     }
 
     #[test]
@@ -306,9 +327,9 @@ mod tests {
 
     #[test]
     fn a_first_segment_without_a_dot_is_part_of_the_repository() {
-        let r = ImageRef::parse("micold/micold-daemon:0.1.0").unwrap();
+        let r = ImageRef::parse("jaroslawherod/micold-daemon:0.1.0").unwrap();
         assert_eq!(r.registry, None);
-        assert_eq!(r.repository, "micold/micold-daemon");
+        assert_eq!(r.repository, "jaroslawherod/micold-daemon");
     }
 
     #[test]
@@ -349,6 +370,29 @@ mod tests {
         assert!(
             !r.is_moving(),
             "the shipped default must not be a moving tag"
+        );
+    }
+
+    #[test]
+    fn the_default_names_the_repository_the_release_publishes_to() {
+        // Two constants, one fact. The release workflow greps this file for
+        // `DEFAULT_IMAGE_REPOSITORY`'s value and refuses to publish a release whose image job
+        // would push anywhere else; that check is only worth anything while the reference the app
+        // actually resolves is built from the same string. Splitting them and letting them drift
+        // would leave the grep passing against a constant nothing reads.
+        let r = ImageSource::default().parsed().expect("default parses");
+        assert_eq!(
+            format!(
+                "{}/{}",
+                r.registry.as_deref().unwrap_or_default(),
+                r.repository
+            ),
+            DEFAULT_IMAGE_REPOSITORY
+        );
+        assert_eq!(
+            r.tag.as_deref(),
+            Some(env!("CARGO_PKG_VERSION")),
+            "the image is tagged with the application version it ships beside (FR-024)"
         );
     }
 

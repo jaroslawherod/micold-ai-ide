@@ -8,6 +8,12 @@
 **/*.rs.bk
 *.pdb
 
+# Stray run output. `debug/`, `release/` and `*.rlib` are deliberately absent: they only ever appear
+# inside a target directory, which is already ignored whole, and as bare patterns they would also
+# swallow any source directory that happened to be named that.
+*.log
+.env*
+
 # Editor / OS
 .idea/
 .vscode/

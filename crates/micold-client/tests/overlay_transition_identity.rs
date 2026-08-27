@@ -33,6 +33,7 @@
 use std::path::PathBuf;
 
 use micold_client::app::State;
+use micold_client::features::help;
 use micold_client::features::project::RenameDraft;
 use micold_client::features::worktree::WorktreeRenameDraft;
 use micold_client::overlay::registry::Closing;
@@ -49,35 +50,35 @@ use micold_core::session::SessionId;
 /// the state it draws from, so the row has to build that state.
 #[allow(clippy::type_complexity)]
 const DIALOGS: &[(&str, fn(&mut State))] = &[
-    ("about", |state| state.about_open = true),
+    ("about", |state| state.help.about_open = true),
     ("project_selector", |state| {
-        state.selector = Some(Selector::open_at(PathBuf::from("/tmp")))
+        state.project.selector = Some(Selector::open_at(PathBuf::from("/tmp")))
     }),
     ("rename_project", |state| {
-        state.rename_draft = Some(RenameDraft {
+        state.project.rename_draft = Some(RenameDraft {
             path: PathBuf::from("/tmp"),
             text: String::new(),
             error: None,
         })
     }),
     ("add_worktree", |state| {
-        state.worktree_form = Some(Default::default())
+        state.worktree_form.form = Some(Default::default())
     }),
     ("confirm_worktree_delete", |state| {
-        state.worktree_delete_target = Some("wt".to_string())
+        state.worktree.delete_target = Some("wt".to_string())
     }),
     ("rename_worktree", |state| {
-        state.worktree_rename_draft = Some(WorktreeRenameDraft {
+        state.worktree.rename_draft = Some(WorktreeRenameDraft {
             dir_name: "wt".to_string(),
             text: String::new(),
             error: None,
         })
     }),
     ("confirm_session_remove", |state| {
-        state.session_remove_target = Some(SessionId::new())
+        state.session.remove_target = Some(SessionId::new())
     }),
     ("confirm_forget_project", |state| {
-        state.forget_target = Some(PathBuf::from("/p"))
+        state.project.forget_target = Some(PathBuf::from("/p"))
     }),
 ];
 
@@ -188,16 +189,19 @@ fn a_snapshot_still_knows_how_to_draw_itself() {
 #[test]
 fn a_snapshot_does_not_follow_the_state_it_came_from() {
     let mut state = State {
-        about_open: true,
+        help: help::State {
+            about_open: true,
+            ..Default::default()
+        },
         ..Default::default()
     };
     let closing = Closing::of(&state).expect("About is open");
 
-    state.about_open = false;
+    state.help.about_open = false;
 
     assert_eq!(closing.id(), SurfaceId::new("about"));
     assert!(
-        closing.state().about_open,
+        closing.state().help.about_open,
         "the snapshot must keep the state as it was, not track the live one"
     );
 }

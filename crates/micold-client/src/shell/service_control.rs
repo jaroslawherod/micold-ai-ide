@@ -20,8 +20,10 @@
 use iced::Task;
 
 use micold_client::app::Message;
+use micold_core::sandbox::placement::Placement;
 
 use crate::App;
+use micold_client::features::connection::Msg as ConnectionMsg;
 
 /// "Restart service" (FR-022/022a): stop the mismatched daemon by its recorded pid.
 ///
@@ -60,23 +62,36 @@ pub(crate) fn on_restart_service_requested(app: &mut App) -> Task<Message> {
         },
         |r: Result<bool, String>| match r {
             Ok(_) => Message::NoOp,
-            Err(e) => {
-                Message::DaemonConnectFailed(format!("could not stop the mismatched service: {e}"))
-            }
+            Err(e) => Message::Connection(ConnectionMsg::ConnectFailed(format!(
+                "could not stop the mismatched service: {e}"
+            ))),
         },
     )
 }
 
-/// Make sessions survive logout (US7, FR-038; Linux only). Runs off-thread — it spawns
-/// `loginctl`/`systemctl` — and reports the outcome as a toast. Never enabled by install.
-pub(crate) fn on_logout_survival_requested() -> Task<Message> {
+/// Apply the logout-survival opt-in for the configured placement (feature 027, FR-014a/b/d).
+///
+/// One entry point for both directions and all three placements, because there is one control: the
+/// Settings checkbox. It used to be a menu command that only ever *enabled*, and only ever through
+/// the Linux service manager — so a sandboxed user's menu item silently configured the wrong
+/// mechanism, and nobody could turn it off at all.
+///
+/// Runs off-thread: under host-process placement it spawns `loginctl`/`systemctl`. Under the
+/// sandbox it is pure and answers immediately, which costs one task and keeps one shape.
+///
+/// Never enabled by install (FR-038) — this runs only from a save that changed the value.
+pub(crate) fn on_survival_opt_in_changed(placement: Placement, enabling: bool) -> Task<Message> {
     Task::perform(
-        async {
-            tokio::task::spawn_blocking(|| {
+        async move {
+            tokio::task::spawn_blocking(move || {
                 let endpoint = micold_core::endpoint::resolve().map_err(|e| {
                     micold_core::logout_survival::SurvivalOutcome::Failed(e.to_string())
                 })?;
-                Ok(micold_core::logout_survival::enable(&endpoint))
+                Ok(if enabling {
+                    micold_core::logout_survival::enable_for(&placement, &endpoint)
+                } else {
+                    micold_core::logout_survival::disable_for(&placement, &endpoint)
+                })
             })
             .await
             .unwrap_or_else(|e| {
@@ -90,7 +105,7 @@ pub(crate) fn on_logout_survival_requested() -> Task<Message> {
             micold_core::logout_survival::SurvivalOutcome,
         >| {
             let outcome = r.unwrap_or_else(|e| e);
-            Message::LogoutSurvivalOutcome(outcome.user_message())
+            Message::Connection(ConnectionMsg::LogoutSurvivalOutcome(outcome.user_message()))
         },
     )
 }
@@ -129,7 +144,8 @@ mod tests {
 
         let said = app
             .core
-            .notify
+            .notifications
+            .queue
             .visible()
             .is_some_and(|n| n.message.contains("sandbox"));
         assert!(
@@ -166,7 +182,7 @@ mod tests {
         let _ = on_restart_service_requested(&mut app);
 
         assert!(
-            app.core.notify.is_active(),
+            app.core.notifications.queue.is_active(),
             "restarting the service must tell the user what it costs"
         );
     }
@@ -178,6 +194,6 @@ mod tests {
 
         let _ = on_logout_survival_outcome(&mut app, "it worked".to_string());
 
-        assert!(app.core.notify.is_active());
+        assert!(app.core.notifications.queue.is_active());
     }
 }

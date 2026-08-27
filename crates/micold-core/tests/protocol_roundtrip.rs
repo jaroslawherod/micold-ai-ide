@@ -12,9 +12,9 @@ use micold_core::protocol::grid::{
     WireStyle,
 };
 use micold_core::protocol::messages::{
-    ActivitySignal, CatalogSnapshot, ClientMsg, DaemonMsg, DaemonSettings, ErrorKind, ExitStatus,
-    LogEntry, LogSink, OperationResult, ProjectSnapshot, RefusalReason, SessionSummary,
-    WireLifecycle, WorktreeSnapshot, WorktreeStatus,
+    ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, ClientMsg, DaemonMsg,
+    DaemonSettings, ErrorKind, ExitStatus, LogEntry, LogSink, OperationResult, ProjectSnapshot,
+    RefusalReason, SessionSummary, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use micold_core::worktree::{CreateMode, CreateStage};
@@ -48,6 +48,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             protocol_version: 1,
             schema_hash: [7u8; 32],
             client_build: "client-abc".into(),
+            client_instance: micold_core::protocol::messages::ClientInstance::current(),
             client_package_version: "0.4.0".into(),
             // Feature 027. `Some` here on purpose: an `Option` that is only ever encoded as `None`
             // in the round-trip sample would not prove the token survives the wire.
@@ -318,7 +319,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
         DaemonMsg::Refused {
             reason: RefusalReason::ProjectBusy {
                 project: PathBuf::from("/a"),
-                holder: "other".into(),
+                holder: ClientIdentity::new("other", ClientInstance::current()),
                 since_secs: 120,
             },
         },
@@ -340,7 +341,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
         },
         DaemonMsg::Displaced {
             project: PathBuf::from("/a"),
-            by: "other-client".into(),
+            by: ClientIdentity::new("other-client", ClientInstance::current()),
         },
         DaemonMsg::Pong { nonce: 5 },
         DaemonMsg::OperationProgress {
