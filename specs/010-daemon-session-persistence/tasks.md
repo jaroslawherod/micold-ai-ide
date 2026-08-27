@@ -391,6 +391,14 @@ docs state per-platform support (quickstart S14).
   recorded — has an implementation behind it: a mutation whose connection drops now resolves to an
   explicit unknown outcome instead of leaving the dialog animating for ever. The same change closes
   S13's other half for mutations, which logged nothing at all. Not re-walked on a display either.
+  *Amended 2026-08-27*: BUG-016 is settled, so S5's split has a resolution — a **specification** one.
+  No client or daemon code changed: the daemon obeyed FR-006b throughout, and the resume the run saw
+  is the behaviour `025-last-session-memory` FR-004a asks for. FR-006b, the S5 row, User Story 6's
+  third scenario and data-model L4 now say what actually holds — the service relaunches nothing, and
+  the client resumes exactly one session, the one the reopened project displays.
+  `a_service_restart_resumes_only_the_session_being_restored` pins the count. S5 is therefore no
+  longer a fail against a promise the build never made; re-walking it would now be checking the
+  *other* sessions stay processless, which that run already observed for the one it had.
 - [x] T085 [P] Measure retargeted `TerminalPane` repaint cost at 60 Hz on the client (Risk 2 — all
   streaming measurements were daemon-side); record whether the tick rate is the right knob.
   **Measured 2026-08-25** — the "blocked" note above was wrong on both halves: the frame profiler

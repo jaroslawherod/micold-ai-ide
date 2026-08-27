@@ -1497,6 +1497,74 @@ pub(crate) mod tests {
         );
     }
 
+    /// A service restart resumes at most the one session being restored (`010` FR-006b — BUG-016).
+    ///
+    /// This is the case a daemon restart actually produces, and it is the one
+    /// [`connecting_starts_only_the_session_it_restores`] above does not cover: after the service
+    /// comes back, *every* session it recovered is `InterruptedResumable`, not just the remembered
+    /// one. `010` FR-006b used to promise that no agent takes action after a restart at all, which
+    /// the client has not done since `025` FR-004a made a restore resume its session; what survives
+    /// the amendment is the scope — one start, for the session the user is being shown, and nothing
+    /// for the sessions sitting beside it waiting to be asked.
+    ///
+    /// An agent that resumes reads the conversation, can call tools, and costs tokens, so the count
+    /// here is the point: two interrupted-resumable sessions in the reopened project, one in another
+    /// project, and exactly one `SessionStart`.
+    #[test]
+    fn a_service_restart_resumes_only_the_session_being_restored() {
+        let project = PathBuf::from("/repo/demo");
+        let restored = SessionId::new();
+        let interrupted_neighbour = SessionId::new();
+        let elsewhere = SessionId::new();
+        let mut app = base_app();
+        app.core.workspace.active = Some(project.clone());
+        app.core.active_session = Some(restored);
+
+        // What the daemon reports after a restart: it relaunched nothing, so both of this project's
+        // live-before-the-restart sessions come back interrupted-resumable (`server.rs`, the only
+        // lifecycle daemon startup may produce), and so does the other project's.
+        let mut catalog = snapshot_with(
+            "/repo/demo",
+            vec![
+                summary(
+                    restored,
+                    "was displayed",
+                    WireLifecycle::InterruptedResumable,
+                ),
+                summary(
+                    interrupted_neighbour,
+                    "was running, not displayed",
+                    WireLifecycle::InterruptedResumable,
+                ),
+            ],
+        );
+        let mut other = snapshot_with(
+            "/repo/other",
+            vec![summary(
+                elsewhere,
+                "another project entirely",
+                WireLifecycle::InterruptedResumable,
+            )],
+        );
+        catalog.projects.append(&mut other.projects);
+
+        let sent = connect(&mut app, catalog);
+
+        let started: Vec<SessionId> = sent
+            .iter()
+            .filter_map(|m| match m {
+                ClientMsg::SessionStart { session } => Some(*session),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            started,
+            vec![restored],
+            "a restart resumes the restored session and no other: its interrupted neighbour and \
+             the other project's session must still wait for an explicit resume"
+        );
+    }
+
     /// With nothing remembered, a launch starts nothing at all (FR-007, SC-005a).
     ///
     /// The overview is a legitimate place to land, and landing there must stay free of side effects:

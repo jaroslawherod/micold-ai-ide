@@ -126,10 +126,25 @@ mise run run
 ```
 
 **Expected**: previously running sessions appear in a **distinct interrupted-resumable state** — not
-`Running`, not indistinguishable from a deliberate stop — and **no agent process is auto-relaunched**.
-A single explicit action resumes each, continuing the prior conversation.
+`Running`, not indistinguishable from a deliberate stop. **The service relaunches nothing**: every
+session it recovered is presented, none is respawned.
 
-This is the safety property: a service restart must never cause an agent to take action unasked.
+The client then restores the session you were last on in the project it reopens, and restoring a
+session resumes it (`025-last-session-memory` FR-004a) — so **that one** leaves the interrupted-
+resumable state because you opened the project, exactly as clicking it would have. Every other session
+— its neighbours in the same project, and every session in every other project — MUST still be
+interrupted-resumable with no process behind it, and MUST take one explicit action to resume,
+continuing the prior conversation.
+
+So this is a check on the **count**, not on silence: after the relaunch there is at most **one** new
+agent process and it belongs to the session on screen. Count them rather than judging by the pane in
+front of you — `pgrep -fa 'claude|copilot'` before the relaunch and after — since the failure worth
+catching is a restart that quietly wakes the sessions nobody opened.
+
+*(Amended 2026-08-27 — BUG-016. Until then this row asked for no agent process at all and called that
+"the safety property"; the client had resumed the displayed session since `025`'s BUG-002, so the row
+described something the build had stopped doing. What is true, and is what `025` says it traded for,
+is the bound on scope above.)*
 
 ---
 
