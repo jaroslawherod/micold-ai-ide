@@ -6,6 +6,7 @@
 //! sandbox that quietly mounts one extra directory still starts, still runs sessions, and still
 //! looks exactly like a working sandbox.
 
+use micold_core::sandbox::pathmap;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -58,13 +59,24 @@ fn the_default_profile_mounts_no_credentials() {
     assert!(paths.iter().any(|p| p.ends_with("projects/micold")));
     assert!(paths.iter().any(|p| p.ends_with("micold-ai-ide")));
     assert!(paths.iter().any(|p| p.ends_with("sandbox.token")));
-    assert!(paths
-        .iter()
-        .any(|p| p.ends_with("micold-ai-ide/sandbox-home")));
+    // Spelled with the platform's own separator, so this reads the same on Windows, where the
+    // host half of a mount keeps its native spelling (`pathmap` maps only the container half).
+    let home_under_state = Path::new("micold-ai-ide")
+        .join("sandbox-home")
+        .display()
+        .to_string();
+    assert!(
+        paths.iter().any(|p| p.ends_with(&home_under_state)),
+        "reachable host paths: {paths:?}"
+    );
 
     // The one thing this mount must never become: the user's home shared back in. It is mounted
     // *at* the home path, so only the host half distinguishes the two.
-    assert_eq!(mounts.home.container.display().to_string(), "/home/u");
+    assert_eq!(
+        mounts.home.container,
+        pathmap::map_for(Path::new("/home/u"), cfg!(windows)),
+        "the sandbox's home belongs at the user's home path, under this platform's mapping"
+    );
     assert!(
         !paths.iter().any(|p| p == "/home/u"),
         "the sandbox's home must shadow the user's, never share it: {paths:?}"
