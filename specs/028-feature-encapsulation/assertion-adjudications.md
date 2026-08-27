@@ -848,3 +848,29 @@ message is the *last* resort — nine root fields answer by their type — so a 
 field whose type names no feature, which is precisely what G2 exists to say more clearly.
 
 Reverted with `git checkout -- crates/micold-client`; both files' tests pass again.
+
+## T047 — `OWNERS` shrank to the one field whose type cannot name its owner
+
+was: assert!(stale.is_empty(),"OWNERSnamespathsthatarenot`State`fieldsanymore:{stale:?}")
+
+`feature_write_isolation.rs` used to carry a fifteen-row `OWNERS` table naming, for each root
+`State` field, the feature that may write it. Since G2 (T042–T050) every root field but one *is* a
+feature's own `State`, so its type already says who owns it; `declared_owners()` reads the answer
+off `app.rs` instead. `OWNERS` keeps only the six `workspace.*` members, because `workspace` is the
+one declared shared member and `micold_core::workspace::Workspace` names no feature.
+
+The guard against a rotting table moved with it. The predicate is the same expression —
+`stale.is_empty()` — and the set it ranges over grew rather than shrank: it was every entry that is
+neither a `workspace.` path nor a live `State` field, and it is now *every* entry that is not a
+`workspace.` path, live or not. Anything the old assertion caught the new one still catches, plus
+every row that would sneak back in naming a root field whose type already answers the question.
+Only the message was rewritten, to say why `workspace.` is now the whole of the table:
+
+```
+"OWNERS names {stale:?}, which is not a `workspace` member. Since T047 the table holds only the
+ split of the one field whose type cannot name its owner; a root field says who owns it by being
+ declared `crate::features::<n>::State`."
+```
+
+Under B1 this is a strengthening with a reworded explanation, not a relaxation. The freeze's
+near-match scoring reads the message, not the predicate, so it cannot see that on its own.

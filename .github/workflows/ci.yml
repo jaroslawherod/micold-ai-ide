@@ -153,6 +153,13 @@ jobs:
       - name: Test (component library + showcase gates, all platforms)
         # Windows defaults to `pwsh`, which does not treat `\` as a line continuation; pin bash so the
         # one readable multi-line invocation below parses identically on all three runners.
+        #
+        # The last six carry seven architecture guards (feature 028, T052 — FR-018), and they are
+        # here rather than only in the Linux full-workspace run because every one of them reports
+        # its findings *by path*: `features/sidebar.rs`, `ui/mod.rs`, `state.sidebar.expanded`. A
+        # `\` vs `/` difference in how a path is built goes unnoticed on a Linux-only run and then
+        # fails, or worse silently passes, on a contributor's Windows checkout. Feature 021 recorded
+        # this omission twice (T058, T077) without closing it.
         shell: bash
         run: |
           cargo test -p micold-client \
@@ -166,7 +173,13 @@ jobs:
             --test material_boundary \
             --test material_builder_api \
             --test idle_requests_no_frames \
-            --test animated_layout_relayouts
+            --test animated_layout_relayouts \
+            --test root_vocabulary_is_cross_cutting \
+            --test root_state_is_shared \
+            --test feature_registration_cost \
+            --test feature_write_isolation \
+            --test root_is_routing_only \
+            --test logical_state_ownership
       # Run the client + daemon test suites where the iced system deps are present.
       - name: Test (full workspace)
         if: runner.os == 'Linux'

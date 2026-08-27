@@ -81,6 +81,26 @@ above is evidence and the guard is the criterion.
 SC-002 reproduces alongside it: §A.1 reports **15**, and every one of the ten wrappers resolves to
 its own feature under G1, so no root variant is produced and consumed by exactly one feature.
 
+### A.5 The cost of one interaction (SC-001)
+
+SC-001 is measured once rather than guarded (clarification of 2026-08-25). Make the change and
+count:
+
+```bash
+git diff --name-only | wc -l
+```
+
+Observed at T051: **2**. A "Collapse all" interaction was added to the sidebar — a `Msg::AllCollapsed`
+variant, a `pub fn all_collapsed` writing `state.sidebar.expanded`, its arm in `update`, and a button
+in the view emitting it — and the two files it touched were `src/features/sidebar.rs` and
+`src/ui/sidebar.rs`. Nothing in `app.rs`, `main.rs`, `features/mod.rs` or any other feature. All four
+guards stayed green across the injection, which is the other half of the claim: the pattern needs no
+root registration, so there is no third file to forget. Reverted with
+`git checkout -- crates/micold-client`.
+
+Before this feature the same interaction cost four files — the variant in `app::Message`, the arm in
+`State::update`, the field in `app::State`, and the view — which is the coupling SC-001 names.
+
 ---
 
 ## B. Guards observed failing (SC-005, FR-017)
