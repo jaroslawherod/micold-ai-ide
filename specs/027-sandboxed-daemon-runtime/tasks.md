@@ -444,6 +444,37 @@ does a session start unsandboxed without an explicit choice.
 
 ---
 
+## Phase 10: Bugfix BUG-001 — Save reverts a theme chosen from the app bar
+
+**Goal**: Stop the Settings view undoing a choice the user made outside it and can see applied. The
+T075 visual pass observed this twice and recorded it as out of scope; it is not — the two writers on
+the theme were harmless while Settings was a modal covering the app bar, and FR-026 is what put them
+both on screen at once.
+
+### Tests for BUG-001 (MANDATORY — Constitution Principle I) ⚠️
+
+- [x] T121 [BUG-001] `crates/micold-client/tests/settings_draft_tracks_the_live_theme.rs`: four
+      rules over the reducer — the cycle, the outright pick, that an Appearance edit is *still* only
+      a draft, and that the menu works with no form open. The middle two are the ones that make this
+      a gate rather than a patch: a fix applied to `ThemeModeCycled` alone leaves
+      `ThemePreferenceChanged` reachable, and "fixing" it by applying the theme live would leave
+      Cancel nothing to discard. The first two were confirmed red against the unfixed reducer.
+
+### Implementation for BUG-001
+
+- [x] T122 [BUG-001] `features/settings.rs::apply_theme`, called by both app-bar entry points: set
+      `theme_pref`, and carry it into `settings_draft.appearance.theme` when a form is open. A
+      change made outside the form is newer than the draft, so the draft takes it. Deliberately not
+      via `edit()` — that clears `draft.error`, and a theme picked from the app bar is not the user
+      acting on the form, so clearing it would empty the message FR-029 sends them to read.
+
+**Bugfix**: 2026-08-27 — BUG-001. **No requirement added**: FR-020's save semantics and FR-026's
+full-surface view are each correct; the defect is in their interaction, which neither had to state.
+**No task reopened**: T065 renders the Appearance section as specified, and the staleness is on the
+seeding side. See `bugs/BUG-001.md`.
+
+---
+
 ## Dependencies
 
 ```text

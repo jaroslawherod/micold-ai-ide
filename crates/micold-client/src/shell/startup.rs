@@ -276,6 +276,7 @@ fn boot() -> (App, Task<Message>) {
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
+            scrollback_inflight: HashMap::new(),
             pending_ops: HashMap::new(),
             probe: probe_config().map(|config| RefCell::new(config.probe())),
             scene_ready: false,

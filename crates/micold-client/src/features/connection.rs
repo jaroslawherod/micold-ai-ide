@@ -39,6 +39,52 @@
 //! recorded in the paragraph above rather than shipped as an empty function. Nine feature structs
 //! and one shared member is the whole of `app::State` (T037, T038).
 
+/// Why the service says this window may not write to a project, and who it named as the holder
+/// (`010` BUG-023).
+///
+/// Both causes leave the window read-only with the same take-over offer, which is why the refusal
+/// was folded onto the displacement to begin with. What the fold could not carry is *which of the
+/// two happened*, and by the time the banner is drawn nothing else in the app distinguishes them:
+/// the event is over and only its consequence is still visible. So the cause travels with the
+/// holder, from the frame that raised it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Hold {
+    /// The holding window's identity string, **as of the takeover or refusal that raised this
+    /// state**. See [`ConnectionStatus::Displaced`] on why it is not a live claim.
+    pub holder: String,
+    /// Which of the two events put this window in the read-only state.
+    pub cause: HoldCause,
+}
+
+/// The two ways the service can leave a window read-only on a project (`010` BUG-023).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoldCause {
+    /// This window held the project and another one took it (`Displaced`, FR-024). Something
+    /// happened *to* this window, and it happened after it was already working.
+    TakenOver,
+    /// This window asked for a project another window already held and was refused
+    /// (`Refused { ProjectBusy }`, FR-023). Nothing was taken from it; it was turned away.
+    AlreadyOpen,
+}
+
+impl Hold {
+    /// A hold raised by a takeover (FR-024).
+    pub fn taken_over(holder: impl Into<String>) -> Self {
+        Self {
+            holder: holder.into(),
+            cause: HoldCause::TakenOver,
+        }
+    }
+
+    /// A hold raised by a refused attach (FR-023).
+    pub fn already_open(holder: impl Into<String>) -> Self {
+        Self {
+            holder: holder.into(),
+            cause: HoldCause::AlreadyOpen,
+        }
+    }
+}
+
 /// The daemon-connection state, as it concerns the *active* project (US5, FR-024/027). Computed by
 /// the binary (the connection is binary-owned runtime state) and passed to `ui::view` so the shell
 /// can show a persistent status banner. `Connected` renders nothing.
@@ -53,13 +99,22 @@ pub enum ConnectionStatus {
     /// (FR-024a) — the service decides who holds a project, so its acceptance ends this state
     /// whether or not the user pressed the takeover button.
     Displaced {
-        /// The taking-over window's identity string, **as of the takeover or refusal that raised
-        /// this state**. It is a point-in-time label, not a live one: it is never re-derived, so a
+        /// The taking-over window's identity string, **as of the takeover that raised this
+        /// state**. It is a point-in-time label, not a live one: it is never re-derived, so a
         /// window that has since exited can still be named here. That is tolerable because the
         /// label's job is to explain *why* this window is read-only, and the reason is historical
         /// by nature — but it must not be read as a claim that the named window is running now
         /// (BUG-007, T118).
         by: String,
+    },
+    /// This window asked for the active project and the service refused: another window already
+    /// holds it (FR-023). Read-only with the same take-over offer as
+    /// [`ConnectionStatus::Displaced`] — and a different thing to say about it, because nothing was
+    /// taken from this window (`010` BUG-023).
+    ProjectBusy {
+        /// The holding window's identity, as the refusal named it. The same point-in-time label as
+        /// `Displaced`'s, with the same caveat.
+        holder: String,
     },
     /// The running service speaks a different contract version (US6, FR-021/022). Names both versions
     /// and offers a one-click restart of the service.
@@ -97,7 +152,7 @@ pub enum ConnectionStatus {
 pub fn connection_status(
     version_mismatch: Option<&(u32, u32, String)>,
     build_mismatch: Option<&(String, String)>,
-    displaced_by: Option<&str>,
+    hold: Option<&Hold>,
     disconnected: bool,
 ) -> ConnectionStatus {
     if let Some((client, daemon, daemon_build)) = version_mismatch {
@@ -113,8 +168,17 @@ pub fn connection_status(
             daemon_build: daemon_build.clone(),
         };
     }
-    if let Some(by) = displaced_by {
-        return ConnectionStatus::Displaced { by: by.to_string() };
+    // One precedence slot for both, because the user can do exactly one thing about either: take
+    // the project over. Which sentence they are shown is the whole difference (`010` BUG-023).
+    if let Some(hold) = hold {
+        return match hold.cause {
+            HoldCause::TakenOver => ConnectionStatus::Displaced {
+                by: hold.holder.clone(),
+            },
+            HoldCause::AlreadyOpen => ConnectionStatus::ProjectBusy {
+                holder: hold.holder.clone(),
+            },
+        };
     }
     if disconnected {
         ConnectionStatus::Disconnected

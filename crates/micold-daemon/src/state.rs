@@ -17,8 +17,8 @@ use micold_core::git::GitCli;
 use micold_core::input::{InputOutcome, InputReceiver};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
-    CatalogSnapshot, DaemonMsg, DaemonSettings, RefusalReason, SessionProcess, SessionSummary,
-    WireLifecycle, WorktreeSnapshot, WorktreeStatus,
+    CatalogSnapshot, ClientIdentity, ClientInstance, DaemonMsg, DaemonSettings, RefusalReason,
+    SessionProcess, SessionSummary, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
@@ -210,7 +210,11 @@ struct ClientHandle {
     /// `Frame::Control`) and pushed grid frames (`Frame::Grid`) so the writer task delivers them in
     /// one ordered stream — a grid delta never overtakes the control message that announced it.
     tx: mpsc::UnboundedSender<Frame<DaemonMsg>>,
-    build: String,
+    /// Who this connection's client is: its build string *and* its window instance. The instance
+    /// is what the daemon reports back to other clients so a window can recognise itself
+    /// (`010` BUG-022); the daemon itself never compares instances — exclusivity is per
+    /// connection, and always was.
+    identity: ClientIdentity,
     /// Which session (if any) this client is viewing per project (FR-016).
     viewed: HashMap<PathBuf, Option<SessionId>>,
 }
@@ -433,6 +437,27 @@ impl DaemonState {
     /// `input_serial` is what lets a **new client process** drive a session it did not start: its
     /// stamper is empty, so without this it would stamp `0` into a receiver already at `N` and have
     /// every keystroke discarded as `Stale` (BUG-006).
+    /// How one client is named to another: build **and** window instance (`010` BUG-022).
+    ///
+    /// A client that has already gone is named by a placeholder whose nonce is empty, so it can
+    /// never compare equal to a live window's instance — a "who holds it" answer about a
+    /// connection that no longer exists must not read as "you do".
+    fn identify(inner: &Inner, id: ClientId) -> ClientIdentity {
+        inner
+            .clients
+            .get(&id)
+            .map(|c| c.identity.clone())
+            .unwrap_or_else(|| {
+                ClientIdentity::new(
+                    "(a client that has since disconnected)",
+                    ClientInstance {
+                        pid: 0,
+                        nonce: String::new(),
+                    },
+                )
+            })
+    }
+
     fn overlay_live_summaries(inner: &Inner, summaries: &mut [SessionSummary]) {
         for summary in summaries {
             if let Some(live) = inner.sessions.get(&summary.id) {
@@ -471,14 +496,17 @@ impl DaemonState {
 
     /// Register a client, returning its id and the receiver its writer task drains. Increments the
     /// connected-client count (FR-002).
-    pub fn register(&self, build: String) -> (ClientId, mpsc::UnboundedReceiver<Frame<DaemonMsg>>) {
+    pub fn register(
+        &self,
+        identity: ClientIdentity,
+    ) -> (ClientId, mpsc::UnboundedReceiver<Frame<DaemonMsg>>) {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let (tx, rx) = mpsc::unbounded_channel();
         self.lock().clients.insert(
             id,
             ClientHandle {
                 tx,
-                build,
+                identity,
                 viewed: HashMap::new(),
             },
         );
@@ -550,11 +578,7 @@ impl DaemonState {
         if let Some(att) = inner.attachments.get(&project) {
             if att.client != id {
                 if !force {
-                    let holder = inner
-                        .clients
-                        .get(&att.client)
-                        .map(|c| c.build.clone())
-                        .unwrap_or_default();
+                    let holder = Self::identify(&inner, att.client);
                     return Err(RefusalReason::ProjectBusy {
                         project,
                         holder,
@@ -563,11 +587,7 @@ impl DaemonState {
                 }
                 // Forced takeover: notify the displaced holder, but do NOT terminate it (T4).
                 let displaced = att.client;
-                let by = inner
-                    .clients
-                    .get(&id)
-                    .map(|c| c.build.clone())
-                    .unwrap_or_default();
+                let by = Self::identify(&inner, id);
                 if let Some(prev) = inner.clients.get(&displaced) {
                     let _ = prev.tx.send(Frame::Control(DaemonMsg::Displaced {
                         project: project.clone(),

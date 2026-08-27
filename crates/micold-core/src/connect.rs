@@ -22,7 +22,7 @@ use tokio_util::codec::Framed;
 use crate::endpoint::{DialAddress, Endpoint};
 use crate::protocol::codec::{ClientCodec, Frame};
 use crate::protocol::messages::{
-    CatalogSnapshot, ClientMsg, DaemonMsg, DaemonSettings, RefusalReason,
+    CatalogSnapshot, ClientInstance, ClientMsg, DaemonMsg, DaemonSettings, RefusalReason,
 };
 use crate::protocol::version::{BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
 use crate::sandbox::placement::Placement;
@@ -189,6 +189,10 @@ pub async fn handshake_with(
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: client_build.to_string(),
+            // This process's own instance, not a parameter: an instance identifies the *process*,
+            // so letting a caller pass one in would let two connections of one process disagree
+            // about which window they are — the exact confusion BUG-022 is about.
+            client_instance: ClientInstance::current(),
             client_package_version: PACKAGE_VERSION.to_string(),
             auth_token: credentials.auth_token.clone(),
             client_fingerprint: BUILD_FINGERPRINT.to_string(),

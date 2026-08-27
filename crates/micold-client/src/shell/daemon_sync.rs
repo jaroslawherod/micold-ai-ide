@@ -55,7 +55,7 @@ use micold_client::features::worktree_form::{
     BranchSource, Msg as FormMsg, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
 use micold_core::protocol::messages::{
-    CatalogSnapshot, ClientMsg, DaemonMsg, OperationResult, SessionProcess,
+    CatalogSnapshot, ClientInstance, ClientMsg, DaemonMsg, OperationResult, SessionProcess,
 };
 use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId, TerminalMode};
 use micold_core::worktree::{BranchOrigin, CreateMode};
@@ -232,6 +232,10 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
     // success or failure — and reconcile against authoritative state on reconnect
     // (FR-031/035). The daemon applied its mutation atomically before replying, so the fresh
     // welcome catalog is the source of truth for whether it actually took effect.
+    // Same reasoning, no message: a scrollback fetch is advisory, and the rows it would have
+    // filled are re-requested by the next scroll. Keeping the entries would suppress exactly
+    // that request (`010` BUG-021).
+    app.scrollback_inflight.clear();
     for (_req, op) in app.pending_ops.drain() {
         app.core.notify_error(format!(
             "The session service disconnected before confirming the request to {} — \
@@ -357,11 +361,17 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // Fetched scrollback: resolve + insert into the session's grid cache (FR-016/017).
         DaemonMsg::ScrollbackResponse {
             session,
+            req,
             lines,
             styles,
             hyperlinks,
             ..
         } => {
+            // The range is no longer in flight, whatever it brought back (`010` BUG-021).
+            // Removed *before* the lines are applied, not after, so a range the daemon could
+            // not serve stops suppressing its own re-request rather than staying blank
+            // forever.
+            app.scrollback_inflight.remove(&req);
             if let Some(grid) = app.grids.get_mut(&session) {
                 grid.apply_scrollback(&lines, &styles, &hyperlinks);
             }
@@ -612,17 +622,55 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // Another window took over a project we held (US5, FR-024). Mark it read-only here —
         // input is suppressed and a "take over" banner is shown — but never terminate.
         DaemonMsg::Displaced { project, by } => {
-            app.displaced.insert(project, by);
+            // ...unless the window it names is *this* one (`010` BUG-022). A reconnect attaches
+            // before the daemon has noticed the old connection is dead, so the old connection is
+            // displaced — by us — and its `Displaced` arrives on the new one, after the `Attached`
+            // that cleared the flag. Order decided, and the stale frame won: one window, no second
+            // window anywhere, read-only until the user clicked "Take over".
+            //
+            // The identity is what settles it, not an ordering rule. A generation counter would
+            // drop this frame as stale, but the same self-collision also arrives as a *timely*
+            // `Refused { ProjectBusy }` on the current connection (below), which no ordering rule
+            // can recognise. Comparing the build string cannot do it either: two genuinely
+            // different windows of one binary carry the same one, and they must still displace
+            // each other — which is why they carry an instance now.
+            if by.is(&ClientInstance::current()) {
+                return follow_up;
+            }
+            app.displaced.insert(
+                project,
+                micold_client::features::connection::Hold::taken_over(by.to_string()),
+            );
         }
-        // A (re)attach was refused. `ProjectBusy` means another window holds it: surface the
-        // same take-over banner as a live displacement, naming the current holder.
+        // A (re)attach was refused. `ProjectBusy` means another window holds it: the same
+        // read-only state and the same take-over offer as a live displacement, recorded as the
+        // refusal it is so the banner can say so rather than announce a takeover that never
+        // happened (`010` BUG-023).
         DaemonMsg::Refused {
             reason:
                 micold_core::protocol::messages::RefusalReason::ProjectBusy {
                     project, holder, ..
                 },
         } => {
-            app.displaced.insert(project, holder);
+            // Unless the holder is this window's own superseded connection (`010` BUG-022). The
+            // daemon releases an attachment when the connection dies, but it learns that from the
+            // transport, which can lag a reconnect that the keepalive triggered — so the window
+            // that has just reconnected is refused its own project by its own corpse. Nothing is
+            // taken over by forcing here: the only holder is a connection this process has already
+            // replaced, and the user was never asked because there is nobody to ask about.
+            if holder.is(&ClientInstance::current()) {
+                if let Some(d) = &app.daemon {
+                    d.send(ClientMsg::Attach {
+                        project,
+                        force: true,
+                    });
+                }
+                return follow_up;
+            }
+            app.displaced.insert(
+                project,
+                micold_client::features::connection::Hold::already_open(holder.to_string()),
+            );
         }
         // An attach this window asked for was accepted (FR-024a). This is the fact that
         // falsifies a recorded displacement: the daemon decides who holds a project, and it
@@ -781,6 +829,8 @@ pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
                 .session_ids_of_project(&path)
                 .contains(id)
         });
+        app.scrollback_inflight
+            .retain(|_, (session, _)| app.grids.contains_key(session));
         let remove_path = path.clone();
         send_op(app, PendingOp::ProjectRemove, move |req| {
             ClientMsg::ProjectRemove {
@@ -1013,6 +1063,8 @@ pub fn on_session_selected(app: &mut App, id: SessionId) -> Task<Message> {
 /// archives the record in memory for instant feedback; the daemon reconciles other windows.
 pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message> {
     app.grids.remove(&id);
+    app.scrollback_inflight
+        .retain(|_, (session, _)| *session != id);
     // Release the input counter too (T114): ids are unique UUIDs so it can never be reused,
     // and a session being archived will take no more input. Never on a mere detach — the
     // counter must survive a reconnect for loss detection to hold.
@@ -1031,6 +1083,8 @@ pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message>
 pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
     if let Some(id) = app.core.session.remove_target {
         app.grids.remove(&id);
+        app.scrollback_inflight
+            .retain(|_, (session, _)| *session != id);
         app.stamper.forget(id); // T114, as in the close path above.
         send_op(app, PendingOp::DeleteSession, move |req| {
             ClientMsg::SessionDelete { req, session: id }

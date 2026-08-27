@@ -395,7 +395,13 @@ fn start_press(state: &State, location: SessionLocation) -> Message {
         StartIntent::Start(provider) => {
             Message::Session(SessionMsg::StartRequested { location, provider })
         }
-        StartIntent::OfferChoice(_) => Message::Session(SessionMsg::StartMenuOpened(location)),
+        StartIntent::OfferChoice {
+            unavailable_default,
+            ..
+        } => Message::Session(SessionMsg::StartMenuOpened {
+            location,
+            unavailable_default,
+        }),
         // Nothing at all is installed, so there is no list: FR-006 forbids opening one that is
         // present-and-empty, and an inert `+` would leave the user with a control that answers
         // nothing. The stored default goes to the daemon, whose report names the CLI to install
@@ -434,10 +440,15 @@ fn start_session_action(
         .primary_tooltip(tooltip)
         .secondary_tooltip("Start a session on a different AI CLI")
         .on_press_maybe(active.then_some(press))
-        .on_secondary_press_maybe(
-            (active && offers_a_choice)
-                .then(|| Message::Session(SessionMsg::StartMenuOpened(location))),
-        )
+        .on_secondary_press_maybe((active && offers_a_choice).then(|| {
+            Message::Session(SessionMsg::StartMenuOpened {
+                location,
+                // The chevron asked for the list. Nothing about it needs explaining, and a banner
+                // here would fire on every override open for a user who knows their default is
+                // gone (BUG-001).
+                unavailable_default: None,
+            })
+        }))
         // Where the list hangs from: the press point of whichever half opened it, since a sidebar
         // row's position is not something the view holds (018 BUG-008, FR-029d). Both halves can
         // open it — the chevron always, the primary half when the default is not installed.

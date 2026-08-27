@@ -35,6 +35,7 @@ use micold_core::session::{SessionId, SessionLocation, ShellInstanceId, Terminal
 use micold_core::theme::observe_system_scheme;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -100,11 +101,16 @@ struct App {
     /// The last catalog snapshot the daemon sent (welcome or `CatalogChanged`). Not yet rendered —
     /// the sidebar/session-list retarget onto it lands with the render switch (T042).
     daemon_catalog: Option<micold_core::protocol::messages::CatalogSnapshot>,
-    /// Projects this window has been displaced from by another window's takeover (US5, FR-024),
-    /// keyed by project path → the taking-over window's identity. A displaced project is read-only
-    /// here (input suppressed, a banner shown) until the user takes it back or reconnects. Cleared
-    /// on a fresh connect. Empty in the common single-window case.
-    displaced: HashMap<PathBuf, String>,
+    /// Projects this window may not write to because another window holds them, keyed by project
+    /// path → who holds it and which of the two events said so (US5, FR-023/FR-024): a takeover
+    /// this window lost, or an attach it was refused. Read-only here (input suppressed, a banner
+    /// shown) until the user takes it back or reconnects. Cleared on a fresh connect. Empty in the
+    /// common single-window case.
+    ///
+    /// The cause is stored rather than derived because it is not recoverable afterwards — the
+    /// banner would otherwise have to describe one event in the words of the other, which is what
+    /// it did (`010` BUG-023).
+    displaced: HashMap<PathBuf, micold_client::features::connection::Hold>,
     /// Whether the daemon connection is currently down (between a `DaemonDisconnected` and the next
     /// `DaemonConnected`). Drives the stale-content banner (FR-027). `daemon.is_none()` also implies
     /// this, but the flag is explicit for clarity at the render site.
@@ -143,6 +149,17 @@ struct App {
     /// In-flight mutating RPCs keyed by `req` (T055). Lets a reply be matched, a duplicate
     /// submission suppressed, and an in-flight op resolved as *unknown* if the connection drops.
     pending_ops: HashMap<u64, PendingOp>,
+    /// Scrollback ranges asked for and not yet answered, keyed by `req` (`010` BUG-021).
+    ///
+    /// A scroll gesture computes the same un-cached run on every wheel notch, because nothing it
+    /// asked for has arrived yet. Without this, each notch sent that run again; three seconds of
+    /// scrolling queued hundreds of overlapping ranges the daemon then ground through in silence.
+    /// A range recorded here is one [`GridCache::needed_scrollback`] treats as already on its way,
+    /// so a request covers a viewport of travel and the notches in between send nothing.
+    ///
+    /// Entries are removed by the matching `ScrollbackResponse`, and dropped wholesale on
+    /// disconnect (`req`s are per-connection) and with the session's grid.
+    scrollback_inflight: HashMap<u64, (SessionId, Range<LineId>)>,
     /// The frame-time measurement run, when one was asked for (feature 018, FR-039b — T000z/T076a).
     /// `None` for every ordinary launch, which is what keeps this out of the way of the running
     /// application: with no run configured, [`view`] does not read the clock and [`subscription`]
@@ -613,10 +630,16 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // This and `Settings(Opened)` are the two named events research R11 means by "when the
         // choice is offered" — the set is never re-probed per frame, which would be a `PATH`
         // lookup per render and exactly the scheduled work SC-006 forbids.
-        Message::Session(SessionMsg::StartMenuOpened(location)) => {
+        Message::Session(SessionMsg::StartMenuOpened {
+            location,
+            unavailable_default,
+        }) => {
             app.core.session.available_providers = app.caps.available_providers();
             app.core
-                .update(Message::Session(SessionMsg::StartMenuOpened(location)));
+                .update(Message::Session(SessionMsg::StartMenuOpened {
+                    location,
+                    unavailable_default,
+                }));
             Task::none()
         }
         Message::Session(SessionMsg::Selected(id)) => {
@@ -830,18 +853,17 @@ fn active_project_displaced(app: &App) -> bool {
 /// The precedence lives in `features::connection` so it is testable without a window; what is left
 /// here is the one thing that needs the shell: turning the active project into a displacement.
 fn connection_status(app: &App) -> micold_client::features::connection::ConnectionStatus {
-    let displaced_by = app
+    let hold = app
         .core
         .workspace
         .active
         .as_ref()
-        .and_then(|project| app.displaced.get(project))
-        .map(String::as_str);
+        .and_then(|project| app.displaced.get(project));
 
     micold_client::features::connection::connection_status(
         app.version_mismatch.as_ref(),
         app.build_mismatch.as_ref(),
-        displaced_by,
+        hold,
         app.disconnected,
     )
 }
@@ -856,45 +878,47 @@ fn row_line_id(grid: &GridCache, offset: usize, row: u16) -> LineId {
 }
 
 /// Update the displayed session's scroll offset via `f(current, history)`, then fetch any revealed
-/// scrollback the cache doesn't yet hold from the daemon (`ScrollbackRequest`). `history` is the
-/// daemon's full retained depth (`viewport_top - oldest_available`), so the view can scroll into
-/// history; un-fetched lines render blank until the `ScrollbackResponse` fills them (FR-016/017).
+/// scrollback the cache doesn't yet hold and hasn't already asked for (`ScrollbackRequest`).
+/// `history` is the daemon's full retained depth (`viewport_top - oldest_available`), so the view
+/// can scroll into history; un-fetched lines render blank until the `ScrollbackResponse` fills them
+/// (FR-016/017).
+///
+/// **Which range to ask for is [`GridCache::needed_scrollback`]'s decision, not this function's**
+/// (`010` BUG-021). It used to be made here, from the revealed line to the live tail, and that is
+/// the range whose size grows with scroll depth. Moving it left this function with the two things
+/// that genuinely need the shell — the correlation id and the socket.
 fn scroll_view(app: &mut App, f: impl FnOnce(usize, usize) -> usize) {
     let Some(id) = app.core.session.active else {
         return;
     };
-    let (vt, new_off, need_from) = {
+    let inflight: Vec<Range<LineId>> = app
+        .scrollback_inflight
+        .values()
+        .filter(|(session, _)| *session == id)
+        .map(|(_, range)| range.clone())
+        .collect();
+    let (new_off, needed) = {
         let Some(grid) = app.grids.get(&id) else {
             return;
         };
-        let vt = grid.viewport_top().0;
-        let oldest = grid.oldest_available().0;
-        let history = (vt - oldest).max(0) as usize;
+        let history = (grid.viewport_top().0 - grid.oldest_available().0).max(0) as usize;
         let new_off = f(app.display_offset, history);
-        // The visible window's top line; find the lowest un-cached line in [top, viewport_top).
-        let top = (vt - new_off as i64).max(oldest);
-        let rows = grid.rows() as i64;
-        let mut need_from = None;
-        let mut lid = top;
-        while lid < vt && lid < top + rows {
-            if grid.line(LineId(lid)).is_none() {
-                need_from = Some(lid);
-                break;
-            }
-            lid += 1;
-        }
-        (vt, new_off, need_from)
+        (new_off, grid.needed_scrollback(new_off, &inflight))
     };
     app.display_offset = new_off;
-    if let Some(from) = need_from {
+    if let Some(range) = needed {
         let req = app.next_req;
         app.next_req += 1;
         if let Some(d) = &app.daemon {
             d.send(ClientMsg::ScrollbackRequest {
                 session: id,
                 req,
-                ranges: vec![LineId(from)..LineId(vt)],
+                ranges: vec![range.clone()],
             });
+            // Recorded only once it is actually on the wire. A range marked in flight with no
+            // request behind it is a range nothing will ever answer, and those rows would stay
+            // blank for as long as the view stayed there.
+            app.scrollback_inflight.insert(req, (id, range));
         }
     }
 }
@@ -1084,6 +1108,7 @@ pub(crate) mod tests {
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
+            scrollback_inflight: HashMap::new(),
             pending_ops: HashMap::new(),
             probe: None,
             scene_ready: false,
@@ -1132,6 +1157,7 @@ pub(crate) mod tests {
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
+            scrollback_inflight: HashMap::new(),
             pending_ops: HashMap::new(),
             probe: None,
             scene_ready: false,
@@ -1544,6 +1570,7 @@ pub(crate) mod tests {
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
+            scrollback_inflight: HashMap::new(),
             pending_ops: HashMap::new(),
             probe: None,
             scene_ready: false,
@@ -1649,6 +1676,27 @@ pub(crate) mod tests {
     // --- T117 / FR-024a / SC-021: the read-only state must end when the daemon says we hold the
     // project (BUG-007) -----------------------------------------------------------------------
 
+    /// A *different* window: same build as this one, its own instance. Every gate below that
+    /// speaks of "another window" means this — a second process, which is what the daemon reports
+    /// when the takeover is real. `010` BUG-022 is the case where it is not.
+    fn other_window() -> micold_core::protocol::messages::ClientIdentity {
+        micold_core::protocol::messages::ClientIdentity::new(
+            "other-window",
+            micold_core::protocol::messages::ClientInstance {
+                pid: 4242,
+                nonce: "a-second-process".into(),
+            },
+        )
+    }
+
+    /// This window, as the daemon would name it back to us.
+    fn this_window() -> micold_core::protocol::messages::ClientIdentity {
+        micold_core::protocol::messages::ClientIdentity::new(
+            "micold-ai-ide/test",
+            micold_core::protocol::messages::ClientInstance::current(),
+        )
+    }
+
     /// An `App` holding `project` as its active project, with nothing else varied.
     fn app_on_project(project: &Path) -> App {
         let mut app = base_app();
@@ -1658,6 +1706,194 @@ pub(crate) mod tests {
 
     fn feed(app: &mut App, msg: DaemonMsg) {
         let _ = update_inner(app, Message::Connection(ConnectionMsg::Event(msg)));
+    }
+
+    // --- `010` BUG-021: what a scroll gesture costs -------------------------------------------
+
+    /// A grid sitting at the live tail: `rows` visible lines at `viewport_top`, no history cached.
+    fn at_the_tail(session: SessionId, viewport_top: i64, rows: u16) -> GridCache {
+        use micold_core::protocol::grid::{
+            GridFrame, WireCursor, WireCursorShape, WireLine, WireStyle,
+        };
+        let mut cache = GridCache::new();
+        cache.apply(&GridFrame {
+            session,
+            seq: 1,
+            generation: 1,
+            full: true,
+            viewport_top: LineId(viewport_top),
+            oldest_available: LineId(0),
+            cols: 80,
+            rows,
+            cursor: WireCursor {
+                line: LineId(viewport_top),
+                col: 0,
+                shape: WireCursorShape::Block,
+                visible: true,
+                blinking: false,
+            },
+            styles: vec![WireStyle {
+                fg: micold_core::protocol::grid::WireColor::Named(7),
+                bg: micold_core::protocol::grid::WireColor::Named(0),
+                flags: 0,
+                underline_color: None,
+            }],
+            hyperlinks: Vec::new(),
+            lines: (0..rows as i64)
+                .map(|i| WireLine {
+                    id: LineId(viewport_top + i),
+                    text: "x".into(),
+                    runs: vec![micold_core::protocol::grid::StyleRun { len: 1, style: 0 }],
+                    extras: Vec::new(),
+                    wrapped: false,
+                })
+                .collect(),
+            mode: 0,
+            input_serial: None,
+        });
+        cache
+    }
+
+    /// An `App` scrolled-ready: one session, its grid at the tail, and a socket to read.
+    fn app_at_the_tail() -> (
+        App,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) {
+        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = base_app();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        let id = SessionId::new();
+        app.core.session.active = Some(id);
+        app.grids.insert(id, at_the_tail(id, 4000, 69));
+        (app, rx)
+    }
+
+    fn scrollback_ranges(
+        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) -> Vec<Range<LineId>> {
+        let mut out = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            if let ClientMsg::ScrollbackRequest { ranges, .. } = msg {
+                out.extend(ranges);
+            }
+        }
+        out
+    }
+
+    /// `010` BUG-021, measured the way the report measured it: not one request, but a gesture.
+    ///
+    /// The unit gates in `grid.rs` pin the shape of a single range. This one drives 150 wheel
+    /// notches of two lines each through the real dispatcher against a real `Outbox` and reads what
+    /// went on the wire. Before the fix that was 150 requests — one per notch, because no answer
+    /// had arrived to cache — each running from the revealed line to the live tail, summing to tens
+    /// of thousands of lines for a gesture that revealed three hundred. The daemon served every one
+    /// of them serially under the session's terminal lock, which is why a three-second scroll left
+    /// it saturated for fifteen seconds afterwards and the pane blank throughout.
+    ///
+    /// Both numbers below are ceilings with slack in them, deliberately: what is load-bearing is
+    /// that the cost of a gesture tracks the lines it *reveals*, not the notches it takes or the
+    /// depth it reaches. An exact count would pin the prefetch size, which is a tuning decision.
+    #[test]
+    fn a_scroll_gesture_asks_once_per_viewport_not_once_per_notch() {
+        let (mut app, mut rx) = app_at_the_tail();
+
+        for _ in 0..150 {
+            let _ = update_inner(&mut app, Message::Session(SessionMsg::TerminalScrolled(2)));
+        }
+
+        let asked = scrollback_ranges(&mut rx);
+        assert_eq!(app.display_offset, 300, "the gesture went 300 lines back");
+        assert!(
+            asked.len() <= 6,
+            "150 notches over 300 lines sent {} requests; one per viewport of travel is ~5",
+            asked.len()
+        );
+        let lines: i64 = asked.iter().map(|r| r.end.0 - r.start.0).sum();
+        assert!(
+            lines <= 4 * 300,
+            "a gesture revealing 300 lines asked the daemon for {lines}"
+        );
+        assert!(
+            asked.iter().all(|r| r.end.0 - r.start.0 <= 2 * 69),
+            "every request is bounded by the viewport, however deep the gesture went: {asked:?}"
+        );
+    }
+
+    /// The gap probe D found, and the reason it is worth writing down: an in-flight record is
+    /// released by its *answer*, and removing that release broke nothing.
+    ///
+    /// Every other gate here stops at the request. None of them let an answer arrive and then
+    /// scrolled again, so nothing said the record was ever cleared — and a record that is never
+    /// cleared is a range this view will never ask for twice. That is harmless while the answer
+    /// carries the lines (the cache then holds them, and `held` is true either way) and permanent
+    /// when it does not: the daemon trimmed them, or the session went away, and those rows stay
+    /// blank for as long as the window stays there. A storm traded for a hole.
+    #[test]
+    fn a_range_whose_answer_brought_nothing_is_asked_for_again() {
+        let (mut app, mut rx) = app_at_the_tail();
+        let session = app
+            .core
+            .session
+            .active
+            .expect("the fixture views a session");
+
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::TerminalScrolled(2)));
+        let asked = scrollback_ranges(&mut rx);
+        assert_eq!(
+            asked.len(),
+            1,
+            "one notch into un-cached history, one request"
+        );
+        let req = *app
+            .scrollback_inflight
+            .keys()
+            .next()
+            .expect("and it is on the record as in flight");
+
+        feed(
+            &mut app,
+            DaemonMsg::ScrollbackResponse {
+                session,
+                req,
+                oldest_available: LineId(0),
+                newest: LineId(4068),
+                lines: Vec::new(),
+                styles: Vec::new(),
+                hyperlinks: Vec::new(),
+                more: false,
+            },
+        );
+
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::TerminalScrolled(0)));
+        assert_eq!(
+            scrollback_ranges(&mut rx),
+            asked,
+            "the answer brought none of that range, so it is not on its way and must be asked \
+             for again"
+        );
+    }
+
+    /// The in-flight record is what stops the storm, so it must never outlive its answer.
+    ///
+    /// `req`s are per-connection: a request outstanding when the socket drops will never be
+    /// answered on the next one. Keeping the record would suppress exactly the request that would
+    /// have filled those rows, and the pane would stay blank for as long as the view stayed there —
+    /// trading a storm for a permanent hole.
+    #[test]
+    fn a_disconnect_releases_the_ranges_that_will_never_be_answered() {
+        let (mut app, _rx) = app_at_the_tail();
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::TerminalScrolled(2)));
+        assert!(
+            !app.scrollback_inflight.is_empty(),
+            "the gesture must have left a request outstanding for this to be about anything"
+        );
+
+        let _ = shell::daemon_sync::on_disconnected(&mut app);
+
+        assert!(
+            app.scrollback_inflight.is_empty(),
+            "a range asked for on a dead connection is not on its way"
+        );
     }
 
     #[test]
@@ -1675,7 +1911,7 @@ pub(crate) mod tests {
             DaemonMsg::Refused {
                 reason: micold_core::protocol::messages::RefusalReason::ProjectBusy {
                     project: project.clone(),
-                    holder: "other-window".into(),
+                    holder: other_window(),
                     since_secs: 12,
                 },
             },
@@ -1704,6 +1940,202 @@ pub(crate) mod tests {
         );
     }
 
+    /// `010` BUG-023: the refusal and the takeover are one state and must not be one sentence.
+    ///
+    /// Both leave the window read-only with the same take-over button, which is why the refusal was
+    /// folded onto `displaced` in the first place. What the fold also did was tell a window that had
+    /// merely been turned away that another window "took over this project" — the opposite event,
+    /// described in the past tense, about something that never happened to it. The distinction has
+    /// to survive as far as the banner, so the banner is chosen from the status and the status is
+    /// what this pins.
+    #[test]
+    fn a_refused_attach_reaches_the_banner_as_a_refusal_not_a_takeover() {
+        use micold_client::features::connection::ConnectionStatus;
+
+        let project = PathBuf::from("/repo/demo");
+
+        let mut refused = app_on_project(&project);
+        feed(
+            &mut refused,
+            DaemonMsg::Refused {
+                reason: micold_core::protocol::messages::RefusalReason::ProjectBusy {
+                    project: project.clone(),
+                    holder: other_window(),
+                    since_secs: 12,
+                },
+            },
+        );
+
+        let mut taken = app_on_project(&project);
+        feed(
+            &mut taken,
+            DaemonMsg::Displaced {
+                project: project.clone(),
+                by: other_window(),
+            },
+        );
+
+        assert_eq!(
+            connection_status(&refused),
+            ConnectionStatus::ProjectBusy {
+                holder: other_window().to_string()
+            },
+            "nobody took anything from this window — it asked and was told no"
+        );
+        assert_eq!(
+            connection_status(&taken),
+            ConnectionStatus::Displaced {
+                by: other_window().to_string()
+            },
+            "and the window that really did lose the project keeps the sentence that fits it"
+        );
+        assert!(
+            active_project_displaced(&refused) && active_project_displaced(&taken),
+            "the difference is in what the user is told, not in what they may do: both are \
+             read-only and both are resolved by the same take-over"
+        );
+    }
+
+    // --- `010` BUG-022: a window must not displace itself ---------------------------------------
+
+    /// The reported defect, end to end: one window, one project, no second window anywhere, and
+    /// the window goes read-only above a banner naming its own build.
+    ///
+    /// The sequence is a reconnect. The keepalive declares the link dead, the outer loop dials
+    /// again, the new connection attaches — and the daemon, which has not yet noticed the old
+    /// socket is gone, does exactly what FR-024 says: it displaces the holder and tells it so.
+    /// Both connections feed one `App`, so that `Displaced` lands after the new connection's
+    /// `Attached`, which is the frame that clears the flag. The stale frame wins, and re-latches
+    /// read-only on a window that just successfully attached.
+    ///
+    /// The pair is the point. A window that really did lose the project must still be told; what
+    /// must not happen is a window being told it lost the project to itself.
+    #[test]
+    fn a_window_is_not_displaced_by_its_own_reconnect_but_is_by_another_window() {
+        use micold_client::features::connection::ConnectionStatus;
+
+        let project = PathBuf::from("/repo/demo");
+
+        let mut myself = app_on_project(&project);
+        feed(
+            &mut myself,
+            DaemonMsg::Displaced {
+                project: project.clone(),
+                by: this_window(),
+            },
+        );
+
+        let mut other = app_on_project(&project);
+        feed(
+            &mut other,
+            DaemonMsg::Displaced {
+                project: project.clone(),
+                by: other_window(),
+            },
+        );
+
+        assert_eq!(
+            connection_status(&myself),
+            ConnectionStatus::Connected,
+            "the only window the user has must keep its project when its own reconnect \
+             supersedes its own dead connection (BUG-022)"
+        );
+        assert!(
+            !active_project_displaced(&myself),
+            "and it must keep typing into it — input suppression is the harm, the banner is only \
+             how the user finds out about it"
+        );
+        assert_eq!(
+            connection_status(&other),
+            ConnectionStatus::Displaced {
+                by: other_window().to_string()
+            },
+            "two genuinely different windows of one build must still displace each other, which \
+             is why the identity is compared and not the build string"
+        );
+    }
+
+    /// The same collision arriving as a refusal rather than a displacement — and the reason the
+    /// fix is an identity and not a connection generation.
+    ///
+    /// When the reconnect wins the race the other way round, the daemon still has the old
+    /// attachment and refuses the new connection's attach as `ProjectBusy`, naming the holder.
+    /// That frame is *timely*: it arrives on the current connection, in answer to a request this
+    /// window just made, so no staleness rule can discard it. Only the holder's identity says what
+    /// it is — this window's own corpse — and the window can then reclaim the project instead of
+    /// asking the user to take it over from themselves.
+    #[test]
+    fn a_refusal_by_this_windows_own_dead_connection_is_reclaimed_not_offered() {
+        use micold_client::features::connection::ConnectionStatus;
+
+        let project = PathBuf::from("/repo/demo");
+        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = app_on_project(&project);
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+
+        feed(
+            &mut app,
+            DaemonMsg::Refused {
+                reason: micold_core::protocol::messages::RefusalReason::ProjectBusy {
+                    project: project.clone(),
+                    holder: this_window(),
+                    since_secs: 3,
+                },
+            },
+        );
+
+        match rx.try_recv() {
+            Ok(ClientMsg::Attach { project: p, force }) => {
+                assert_eq!(p, project);
+                assert!(
+                    force,
+                    "a non-forced retry would be refused by the same dead connection forever"
+                );
+            }
+            other => panic!("expected a forced re-attach, got {other:?}"),
+        }
+        assert_eq!(
+            connection_status(&app),
+            ConnectionStatus::Connected,
+            "and the user is never shown a take-over offer against themselves"
+        );
+    }
+
+    /// The other half of that pair: a refusal naming a *different* window is still the user's
+    /// decision, and forcing it silently would be a takeover nobody confirmed (FR-023).
+    #[test]
+    fn a_refusal_by_another_window_is_still_offered_never_forced() {
+        use micold_client::features::connection::ConnectionStatus;
+
+        let project = PathBuf::from("/repo/demo");
+        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = app_on_project(&project);
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+
+        feed(
+            &mut app,
+            DaemonMsg::Refused {
+                reason: micold_core::protocol::messages::RefusalReason::ProjectBusy {
+                    project: project.clone(),
+                    holder: other_window(),
+                    since_secs: 3,
+                },
+            },
+        );
+
+        assert!(
+            rx.try_recv().is_err(),
+            "nothing may be sent: taking a project from another window is a confirmed action"
+        );
+        assert_eq!(
+            connection_status(&app),
+            ConnectionStatus::ProjectBusy {
+                holder: other_window().to_string()
+            },
+            "the window is told, and offered the take-over it must ask for"
+        );
+    }
+
     #[test]
     fn an_accepted_attach_ends_the_read_only_state_a_takeover_started() {
         // The same fix from the other direction: this window *was* displaced by a real takeover
@@ -1717,7 +2149,7 @@ pub(crate) mod tests {
             &mut app,
             DaemonMsg::Displaced {
                 project: project.clone(),
-                by: "other-window".into(),
+                by: other_window(),
             },
         );
         assert!(
@@ -1748,7 +2180,7 @@ pub(crate) mod tests {
                 &mut app,
                 DaemonMsg::Displaced {
                     project: p.clone(),
-                    by: "other-window".into(),
+                    by: other_window(),
                 },
             );
         }
@@ -1792,7 +2224,7 @@ pub(crate) mod tests {
             &mut app,
             DaemonMsg::Displaced {
                 project: project.clone(),
-                by: "other-window".into(),
+                by: other_window(),
             },
         );
         assert!(
@@ -1973,6 +2405,7 @@ pub(crate) mod tests {
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
+            scrollback_inflight: HashMap::new(),
             pending_ops: HashMap::new(),
             probe: None,
             scene_ready: false,
@@ -1988,11 +2421,14 @@ pub(crate) mod tests {
 
         let project = PathBuf::from("/repo/demo");
         app.core.workspace.active = Some(project.clone());
-        app.displaced.insert(project.clone(), "other-window".into());
+        app.displaced.insert(
+            project.clone(),
+            micold_client::features::connection::Hold::taken_over(other_window().to_string()),
+        );
         assert_eq!(
             connection_status(&app),
             ConnectionStatus::Displaced {
-                by: "other-window".into()
+                by: other_window().to_string()
             },
             "a takeover must win over a plain disconnect"
         );

@@ -548,7 +548,11 @@ fn the_secondary_half_offers_the_installed_clis_and_starts_nothing() {
     let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode, AiCli::Copilot]);
     assert_eq!(
         state.session.start_intent(PressTarget::Secondary),
-        StartIntent::OfferChoice(vec![AiCli::ClaudeCode, AiCli::Copilot])
+        StartIntent::OfferChoice {
+            providers: vec![AiCli::ClaudeCode, AiCli::Copilot],
+            unavailable_default: None,
+        },
+        "and nothing to announce — this press asked for the list (BUG-001)"
     );
 }
 
@@ -572,12 +576,19 @@ fn an_unavailable_default_offers_the_choice_rather_than_starting_or_substituting
     // silently start the other CLI (FR-002 forbids substituting), silently do nothing (the user
     // pressed a button), or start the missing one and let the spawn fail (that is FR-010's story,
     // not this one — the application knows *now* that it cannot).
+    //
+    // There is a fourth clause, and asserting only the three above is how it shipped missing:
+    // FR-002 says to *say* the default is unavailable. The answer therefore names it, and
+    // `tests/unavailable_default_says_so.rs` follows it from here to the sentence (BUG-001).
     let state = state_with(AiCli::Copilot, &[AiCli::ClaudeCode]);
 
     assert!(!state.session.default_ai_cli_is_available());
     assert_eq!(
         state.session.start_intent(PressTarget::Primary),
-        StartIntent::OfferChoice(vec![AiCli::ClaudeCode])
+        StartIntent::OfferChoice {
+            providers: vec![AiCli::ClaudeCode],
+            unavailable_default: Some(AiCli::Copilot),
+        }
     );
     assert_eq!(
         state.session.default_ai_cli,

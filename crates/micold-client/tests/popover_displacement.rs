@@ -94,9 +94,10 @@ fn opener(id: &str) -> Message {
             30,
             40,
         )),
-        "session_start_menu" => {
-            Message::Session(SessionMsg::StartMenuOpened(SessionLocation::Default))
-        }
+        "session_start_menu" => Message::Session(SessionMsg::StartMenuOpened {
+            location: SessionLocation::Default,
+            unavailable_default: None,
+        }),
         other => panic!("no opener for `{other}`"),
     }
 }
