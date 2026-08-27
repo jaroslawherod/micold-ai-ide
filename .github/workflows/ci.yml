@@ -261,8 +261,30 @@ jobs:
       # in `tests/sandbox_real_*.rs` whose function is not also named `sandbox_real_*` runs locally
       # and is silently skipped here — no failure, just a smaller number in the summary. Every
       # real-runtime test therefore carries the prefix in its own name.
-      - name: Test (real runtime)
+      - name: Test (real runtime, adapter layer)
         run: cargo test -p micold-core --features sandbox-real-runtime sandbox_real_ -- --test-threads=1
+      # The other half, and the half that carries the feature's headline claims. `micold-core`'s
+      # real-runtime targets cover the adapter -- argv a runtime accepts, the isolation it produces
+      # -- while `micold-daemon`'s cover what that isolation is *for*: the boundary probed from
+      # inside a session the daemon spawned (US1), terminal parity against a host daemon (US2),
+      # limits stopping the session and not the service (US4), the image carrying every AI CLI the
+      # application offers (FR-023a), the fingerprint refusal (FR-024d), and sessions surviving a
+      # client restart with the survival opt-in bringing the sandbox back unasked (FR-014a/b/c).
+      #
+      # They ran on no machine at all until now. The step above says `-p micold-core`, so cargo
+      # never built this crate's targets, and eleven tests -- including quickstart §B.2, which says
+      # in writing that its boxes "re-check themselves on every sandbox-runtime CI run" -- were
+      # verified exactly once, by hand, in the T120 pass. A test nothing runs is documentation.
+      #
+      # `--release` is required rather than preferred. The daemon inside the image is release-built,
+      # and `sandbox_real_session_start` compares it against `CARGO_BIN_EXE_micold-daemon`, which is
+      # whatever profile this run used: a debug host daemon against a release containerised one
+      # flatters the container, which is the wrong direction for "the sandbox is not much slower".
+      # The test refuses to report a number when the profiles disagree -- and refusing is a failure,
+      # which is why `--no-fail-fast` is here too. Without it cargo stops at that target and every
+      # target after it is skipped in silence, `sandbox_real_staleness` included.
+      - name: Test (real runtime, daemon)
+        run: cargo test --release -p micold-daemon --features sandbox-real-runtime sandbox_real_ --no-fail-fast -- --test-threads=1
 
   # Constitution Principle VII: documentation ships and is verified in CI.
   # Feature 021 (FR-027): the restructuring treats the existing suite as its behavior
