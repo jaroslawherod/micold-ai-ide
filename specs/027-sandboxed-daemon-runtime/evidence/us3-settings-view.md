@@ -191,3 +191,52 @@ and still passes. It is now corroborated rather than solely relied upon.
 ### What this still does not establish
 
 Frame pacing and perceived smoothness on a real GPU — unchanged, and out of reach of this rig.
+
+## The missing-CLI notice (§B.6, fourth pass)
+
+**2026-08-27, Xvfb `:81` at 1600×1400 with lavapipe**, from binaries pinned in `~/vp/bin027c` — not
+a real display. The client and the daemon were launched with a `PATH` holding `claude` and not
+`copilot`, so the service's answer to FR-023c's question was genuinely "one of the two", produced by
+a real round trip rather than by a fixture.
+
+**It appears where the CLI is chosen, and where the image is chosen (FR-023b).** Under *Default AI
+CLI*: "GitHub Copilot isn't installed on this computer, which is where sessions run." Under *Image
+reference*, the same sentence, with *Where sessions run* reading **On this computer** above it — the
+two agree, which is the point of stamping the answer with its subject.
+
+**It is a statement about a machine, not a failure.** Muted caption weight, no icon, no tint, in the
+same tone as the field's own supporting text. Nothing in the frame reads as an error; the red
+register in this view is still reserved for the fallback banner (`us6-fallback-banners.png`).
+
+**Both schemes.** Legible in dark and in light; the light pass was reached by picking *Light* in
+Appearance and saving, so it is the applied theme rather than a preview.
+
+### What this pass found
+
+**The notice sat in the wrong column.** A settings page stacks its controls at one margin, so a
+note pushed between two of them lands on the left edge of the control *below* it — and a left edge
+is the first thing the eye reads. The sentence lined up with the *Source a script* checkbox under
+it, 16dp left of the supporting line of the select it was about, with near-equal gaps above and
+below. `us3-missing-cli-notice-align.png`: before on top in red, after in blue, cropped at
+identical geometry.
+
+Every gate was green over it, for the reason the rail-icons finding gives: the wording tests read
+strings and never positions, and `layout_snapshot` records x-positions but a record compares
+against what it was shown.
+
+The fix is a shared helper — `ui::settings::field_note` attaches a note to the control above it,
+inset to that control's own supporting-text column and spaced against it, and emits a `Space` when
+there is nothing to say so the widget tree does not change depth. Both FR-023b call sites use it.
+The assertion is `tests/a_field_note_shares_its_fields_column.rs`, which fails on the old geometry
+naming the drift ("the notice starts at 312 and the select's own supporting line at 328").
+
+### What this pass could not answer
+
+**The image wording.** `AvailabilitySource::Image` renders a different sentence — one that names the
+image reference and says the image has to provide the CLI — and reaching it needs a sandbox actually
+running from a substituted image, which this rig has no runtime for. The sentence itself is asserted
+in `missing_cli_is_reported_where_it_is_chosen.rs` and its placement is asserted in
+`a_field_note_shares_its_fields_column.rs`, both against `AvailabilitySource::Image`; what is unseen
+is only how that variant looks composited, and it differs from the seen one by its words alone.
+
+Frame pacing and perceived smoothness on a real GPU — unchanged, and out of reach of this rig.

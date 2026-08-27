@@ -25,7 +25,7 @@ use crate::features::settings::{missing_cli_notice, SettingsDraft, SettingsSecti
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{Checkbox, Select, TextField};
-use crate::ui::settings::{caution, group, name_of, note, page, Named};
+use crate::ui::settings::{caution, field_note, group, name_of, note, page, Named};
 use iced::Element;
 use micold_core::sandbox::image::ImageSourceKind;
 use micold_core::sandbox::placement::PlacementKind;
@@ -323,7 +323,6 @@ pub fn view<'a>(
         group("Container", roles),
         runtime.into(),
         image_kind.into(),
-        reference.into(),
     ];
 
     // FR-023b, at the point the image is chosen. The published image ships every AI CLI (FR-023a);
@@ -335,9 +334,14 @@ pub fn view<'a>(
     // The image it names is the one the service was actually started from, not the one in this
     // field: the field is a draft and may say something the running container has never heard of.
     // Naming the draft's value would describe a machine that does not exist yet.
-    if let Some(text) = missing_cli_notice(availability) {
-        controls.push(note(text, roles));
-    }
+    //
+    // Attached to the reference field rather than stacked after it, so it shares the column that
+    // field's own supporting line sits in. See `field_note`.
+    controls.push(field_note(
+        reference,
+        missing_cli_notice(availability),
+        roles,
+    ));
 
     controls.extend([
         archive.into(),
