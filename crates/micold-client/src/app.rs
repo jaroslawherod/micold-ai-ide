@@ -105,12 +105,15 @@ pub enum Message {
     ProjectMenuToggled(PathBuf, (u16, u16)),
     /// Dismiss the project context menu (outside click, or after an action is chosen).
     ProjectMenuDismissed,
-    /// The user selected a theme preference (Follow system / Light / Dark) (FR-007, FR-008).
-    /// The binary persists the updated preference afterward.
+    /// The theme preference was set from outside the Settings form (FR-007, FR-008). The binary
+    /// persists the updated preference afterward.
+    ///
+    /// No control emits it since feature 027 removed the app bar's theme cycle (FR-026e), and it is
+    /// kept deliberately: it is the *contract* for a live theme change — apply it, and carry it into
+    /// an open draft rather than letting Save write the draft's stale copy back (BUG-001). Deleting
+    /// it would delete that rule along with it, and the rule is what a second writer would need to
+    /// obey the day one is added again.
     ThemePreferenceChanged(ThemePreference),
-    /// Cycle the theme mode to the next one (Auto → Light → Dark → Auto) from the toolbar
-    /// menu's mode toggle. The binary persists the updated preference; the menu stays open.
-    ThemeModeCycled,
     /// The OS light/dark preference poll observed a (changed) scheme (FR-006). Transient;
     /// never persisted. Carries the raw detection outcome — `Err(())` for a transient failure
     /// (e.g. `dark_light::detect()` timing out under CPU load) — rather than an
@@ -518,6 +521,11 @@ pub enum Message {
     SettingsEnvIncludeTimeoutChanged(String),
     /// The Settings **Default AI CLI** select changed (feature 026, FR-003).
     SettingsDefaultAiCliChanged(AiCli),
+    /// Collapse the Settings rail to its icons, or reopen it (feature 027, FR-026c/d).
+    ///
+    /// Deliberately not a `SettingsDraft` field: it is view state, so Cancel must not revert it and
+    /// Save must not write it to disk. See [`State::settings_rail_collapsed`].
+    SettingsRailToggled,
     /// Save the Settings form (validated + persisted by the binary) (FR-020, FR-021).
     SettingsSaved,
     /// Dismiss the Settings form without saving (Cancel or Esc).
@@ -617,9 +625,6 @@ pub enum Message {
     /// The user asked to see where the session service logs and its recent errors (Phase 10, FR-046).
     /// Handled by the binary: it requests both from the daemon and shows the answers as notices.
     DiagnosticsRequested,
-    /// The user asked to make sessions survive logout (US7, FR-038; Linux only). Handled by the
-    /// binary, which runs the enable flow off-thread. Never triggered by install — a deliberate choice.
-    LogoutSurvivalRequested,
     /// The logout-survival enable flow finished; carries a ready-to-show message (info or error).
     LogoutSurvivalOutcome(String),
 }
@@ -780,6 +785,14 @@ pub struct State {
     pub shell_instance_menu: Option<(crate::ui::terminal::StripTab, u16, u16)>,
     /// In-progress Settings form, present only while the Settings overlay is shown (feature 006).
     pub settings_draft: Option<SettingsDraft>,
+    /// Whether the Settings rail is showing icons alone (feature 027, FR-026c).
+    ///
+    /// Here rather than on [`SettingsDraft`], and that placement is the requirement: FR-026d calls
+    /// this view state, not a setting. On the draft it would be reverted by Cancel — so closing the
+    /// rail to read a page and then abandoning an edit would reopen it — written to disk on Save,
+    /// and subject to FR-029's save-together rule, which would make "the rail is closed" something
+    /// the user could fail to save. It outlives the draft and dies with the process.
+    pub settings_rail_collapsed: bool,
     /// Why entering a project landed on the session it did, from the most recent switch.
     ///
     /// Diagnostic only — nothing renders from it and nothing branches on it. It exists because
@@ -1075,7 +1088,6 @@ impl State {
             // [`Message::FocusMoved`].
             | Message::FocusMoved { .. }
             | Message::DiagnosticsRequested
-            | Message::LogoutSurvivalRequested
             | Message::LogoutSurvivalOutcome(_) => {}
             Message::HelpMenuToggled => {
                 let outcomes = crate::features::help::menu_toggled(self);
@@ -1123,7 +1135,6 @@ impl State {
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::ProjectForgetCancelled => crate::features::project::forget_cancelled(self),
-            Message::ThemeModeCycled => crate::features::settings::theme_mode_cycled(self),
             Message::ThemePreferenceChanged(pref) => {
                 crate::features::settings::theme_preference_changed(self, pref)
             }
@@ -1384,6 +1395,7 @@ impl State {
             Message::SettingsDefaultAiCliChanged(which) => {
                 crate::features::settings::default_ai_cli_changed(self, which)
             }
+            Message::SettingsRailToggled => crate::features::settings::rail_toggled(self),
             Message::SettingsSaved => crate::features::settings::saved(self),
             Message::SettingsCancelled => crate::features::settings::cancelled(self),
             Message::NotificationDismissed => self.notify.dismiss(),

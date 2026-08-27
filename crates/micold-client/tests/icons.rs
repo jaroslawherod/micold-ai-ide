@@ -38,6 +38,7 @@ fn expected(icon: Icon) -> char {
         Icon::ActivityWorking => '\u{e837}',
         Icon::ActivityEnded => '\u{e836}',
         Icon::SelectChevron => '\u{e5cf}',
+        Icon::SessionService => '\u{e875}',
     }
 }
 
@@ -64,7 +65,7 @@ fn all_covers_every_variant_without_duplicates() {
     // a magnifier, distinct from Filter's funnel), +1 for SelectChevron (feature 022's select
     // trailing affordance — `expand_more`, the glyph §7.7 gives the control and the one thing that
     // tells a select from a text field at a glance).
-    assert_eq!(Icon::ALL.len(), 30, "curated set size");
+    assert_eq!(Icon::ALL.len(), 31, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

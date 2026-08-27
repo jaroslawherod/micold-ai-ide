@@ -386,6 +386,15 @@ pub fn view<'a>(
 
     controls.push(group("Sessions", roles));
     controls.push(survive.into());
+    // FR-014d: where the configured placement cannot provide this, the control says so. It is not
+    // hidden and it is not left to do nothing — either would leave the user believing they had
+    // arranged something.
+    let (support, cannot) = survival_support(draft.daemon.placement);
+    controls.push(if cannot {
+        caution(support, roles)
+    } else {
+        note(support, roles)
+    });
 
     page(
         "Session service",
@@ -393,4 +402,74 @@ pub fn view<'a>(
         controls,
         roles,
     )
+}
+
+/// What to say beneath the survival opt-in, and whether it is a caution (feature 027, FR-014d).
+///
+/// A free function rather than a `match` inside the view, because the claim FR-014d makes is about
+/// *every* placement — "where the configured placement cannot provide it, the control must say so"
+/// — and a rule stated over a set is only checkable if it can be enumerated. In the view it could
+/// only be read.
+///
+/// `cfg!` rather than a parameter: which platform this is running on is not a thing the user picks,
+/// and threading it through would invite a call site that passes the wrong one. The consequence is
+/// that this test only ever exercises its own platform's branch, which is the same bargain every
+/// `#[cfg]` in this crate makes.
+fn survival_support(placement: PlacementKind) -> (&'static str, bool) {
+    match placement {
+        // The container runtime's restart policy is run by a service the platform keeps alive
+        // across logout and reboot, on all three platforms — so this is the one that always works
+        // (FR-014b). It is applied at container creation, which is why it names the next start.
+        PlacementKind::LocalSandbox => (
+            "The container is created with a restart policy, so this takes effect the next time \
+             the sandbox starts.",
+            false,
+        ),
+        PlacementKind::HostProcess if cfg!(target_os = "linux") => (
+            "Your systemd user manager keeps the service running after you sign out.",
+            false,
+        ),
+        PlacementKind::HostProcess => (
+            "A service running directly on this platform can't outlive signing out — that's \
+             Linux-only. Run it in a container to get this here.",
+            true,
+        ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// FR-014d, stated over the whole set: no placement leaves this control unexplained, and the
+    /// one that cannot honour the opt-in is the one that warns.
+    #[test]
+    fn every_placement_says_what_it_will_do() {
+        for Named(placement, label) in PLACEMENTS {
+            let (support, cannot) = survival_support(*placement);
+            assert!(!support.is_empty(), "{label} explains nothing");
+            match placement {
+                // The sandbox can always do it — that is FR-014b's whole point — so a caution here
+                // would be telling the user the opposite of the truth.
+                PlacementKind::LocalSandbox => assert!(!cannot, "{label} warned when it can do it"),
+                PlacementKind::HostProcess => {
+                    assert_eq!(
+                        cannot,
+                        !cfg!(target_os = "linux"),
+                        "{label} must warn exactly where the host mechanism is unavailable"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The warning has to name the way out, or it is only a refusal. A user told "not here" and
+    /// nothing else has no reason to look at the placement select two groups above.
+    #[test]
+    fn the_warning_names_the_placement_that_does_support_it() {
+        let (support, cannot) = survival_support(PlacementKind::HostProcess);
+        if cannot {
+            assert!(support.contains("container"));
+        }
+    }
 }

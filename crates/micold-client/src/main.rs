@@ -676,7 +676,6 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::ConnectionRestartServiceRequested => {
             shell::service_control::on_restart_service_requested(app)
         }
-        Message::LogoutSurvivalRequested => shell::service_control::on_logout_survival_requested(),
         Message::LogoutSurvivalOutcome(message) => {
             shell::service_control::on_logout_survival_outcome(app, message)
         }
@@ -698,9 +697,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::RenameConfirmed => shell::daemon_sync::on_rename_confirmed(app),
         Message::ProjectForgetConfirmed => shell::daemon_sync::on_project_forget_confirmed(app),
         Message::WorktreeRenameConfirmed => shell::daemon_sync::on_worktree_rename_confirmed(app),
-        Message::ThemePreferenceChanged(_) | Message::ThemeModeCycled => {
-            shell::persist::on_theme_changed(app, message)
-        }
+        Message::ThemePreferenceChanged(_) => shell::persist::on_theme_changed(app, message),
         Message::WorktreeForm(FormMsg::Submitted) => {
             shell::daemon_sync::on_add_worktree_submitted(app)
         }

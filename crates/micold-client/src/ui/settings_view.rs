@@ -43,6 +43,7 @@ pub fn view<'a>(
     env_include_outcome: &'a EnvIncludeOutcome,
     available_providers: &'a [AiCli],
     focused: Option<FieldId>,
+    rail_collapsed: bool,
     scheme: ColorScheme,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
@@ -51,6 +52,7 @@ pub fn view<'a>(
         .iter()
         .map(|section| {
             let mut row = Section::new(section.label(), Message::SettingsSectionShown(*section));
+            row.icon = Some(section.icon());
             if *section == SettingsSection::Daemon && draft.shares_credentials() {
                 row.badge = Some(SHARING.to_string());
             }
@@ -60,12 +62,19 @@ pub fn view<'a>(
 
     // The drawer, not a bare column: the rail slides in with the view rather than appearing whole,
     // which is the same transition the sidebar makes and the reason it is worth reaching for a
-    // component that owns both children. It is never closed here — Settings without its rail would
-    // be a page with no way off it — so the collapsed child is empty.
+    // component that owns both children.
+    //
+    // The drawer is never *closed* here, and collapsing the rail (FR-026c) is not the same thing:
+    // the drawer's closed child is empty, and an empty rail is a page with no way off it. What
+    // collapsing does is narrow the rail while keeping every destination pressable, which is the
+    // list's own question — so it is answered by `SectionList`, and the drawer stays open in both
+    // states.
     let rail: Element<'a, Message> = material::NavigationDrawer::new(
         SectionList::new(sections, r)
             .selected(draft.section.index())
-            .badge_accent(r.error, r.on_error),
+            .badge_accent(r.error, r.on_error)
+            .collapsed(rail_collapsed)
+            .toggle(Message::SettingsRailToggled),
         Space::new().width(Length::Fixed(0.0)).height(Length::Fill),
     )
     .open(true)
