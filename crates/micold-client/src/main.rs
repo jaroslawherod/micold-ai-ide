@@ -708,9 +708,15 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // This and `SettingsOpened` are the two named events research R11 means by "when the choice
         // is offered" — the set is never re-probed per frame, which would be a `PATH` lookup per
         // render and exactly the scheduled work SC-006 forbids.
-        Message::SessionStartMenuOpened(location) => {
+        Message::SessionStartMenuOpened {
+            location,
+            unavailable_default,
+        } => {
             app.core.available_providers = app.caps.available_providers();
-            app.core.update(Message::SessionStartMenuOpened(location));
+            app.core.update(Message::SessionStartMenuOpened {
+                location,
+                unavailable_default,
+            });
             Task::none()
         }
         Message::SessionSelected(id) => shell::daemon_sync::on_session_selected(app, id),

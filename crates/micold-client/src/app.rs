@@ -272,7 +272,19 @@ pub enum Message {
     /// Open the "start a session on…" list for a location (feature 026, FR-004). The binary
     /// refreshes the availability set first — this is one of the two named events research R11
     /// means by "when the choice is offered".
-    SessionStartMenuOpened(SessionLocation),
+    SessionStartMenuOpened {
+        /// Where a session started from this list would run.
+        location: SessionLocation,
+        /// The stored default, when the list is opening because that default is not installed
+        /// rather than because the user asked for it (feature 026 BUG-001, FR-002).
+        ///
+        /// It rides on *this* message rather than one of its own for the reason
+        /// `tests/session_start_press.rs` records: the binary re-probes `PATH` on this message, so
+        /// a separate one would open the list on a staler set. It says why the press happened,
+        /// which is knowledge only the press has; whether it is still true is settled by the
+        /// reducer, after that refresh.
+        unavailable_default: Option<AiCli>,
+    },
     /// Where a press on the start affordance landed, in window pixels (018 BUG-008, FR-029d).
     /// Arrives from the same click as [`Message::SessionStartMenuOpened`] and **before** it — this
     /// one is published on `ButtonPressed`, that one on the release, because it comes from the
@@ -1355,8 +1367,13 @@ impl State {
             Message::SettingsStorageLimitChanged(text) => {
                 crate::features::settings::storage_limit_changed(self, text)
             }
-            Message::SessionStartMenuOpened(location) => {
-                crate::features::session::start_menu_toggled(self, location)
+            Message::SessionStartMenuOpened {
+                location,
+                unavailable_default,
+            } => {
+                let outcomes =
+                    crate::features::session::start_menu_toggled(self, location, unavailable_default);
+                drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::SessionStartMenuAnchored(point) => {
                 crate::features::session::start_menu_anchored(self, point)

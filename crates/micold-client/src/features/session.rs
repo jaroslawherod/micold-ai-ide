@@ -904,11 +904,26 @@ pub enum StartIntent {
     Start(AiCli),
     /// Do not start anything; offer these CLIs to choose from.
     ///
-    /// Two different presses land here and they are the same answer: the secondary half, which
-    /// asks for the list; and the primary half when the stored default is not installed, where
-    /// FR-004 says to *tell* the user and offer what is available rather than silently substituting
-    /// or silently doing nothing.
-    OfferChoice(Vec<AiCli>),
+    /// Two different presses land here and they open the same list: the secondary half, which asks
+    /// for it, and the primary half when the stored default is not installed, where FR-004 says to
+    /// *tell* the user and offer what is available rather than silently substituting or silently
+    /// doing nothing.
+    ///
+    /// They are not the same answer, and BUG-001 is what it cost to treat them as one. The list a
+    /// user asked for explains itself; the list they got *instead of* a session does not, and by the
+    /// time the offer reached a surface there was nothing left to say why it had opened. So the
+    /// reason travels with the offer.
+    OfferChoice {
+        /// What is installed, in the order the list draws them.
+        providers: Vec<AiCli>,
+        /// The stored default, when this list is opening because that default cannot be run
+        /// (FR-002). `None` for a press that asked for the list.
+        ///
+        /// Why the CLI and not a bare flag: the sentence names it, and the name has to come from
+        /// the same read that decided it was missing. A surface re-deriving "which default?" later
+        /// would be answering a question about a different moment.
+        unavailable_default: Option<AiCli>,
+    },
     /// No AI CLI is installed, so there is nothing to start and nothing to offer (FR-006).
     NothingAvailable,
 }
@@ -962,9 +977,15 @@ impl State {
             PressTarget::Primary if self.default_ai_cli_is_available() => {
                 StartIntent::Start(self.default_ai_cli)
             }
-            // The default names a CLI that is not installed: say so and offer what is.
-            PressTarget::Primary => StartIntent::OfferChoice(self.offered_providers()),
-            PressTarget::Secondary => StartIntent::OfferChoice(self.offered_providers()),
+            // The default names a CLI that is not installed: say so, and offer what is.
+            PressTarget::Primary => StartIntent::OfferChoice {
+                providers: self.offered_providers(),
+                unavailable_default: Some(self.default_ai_cli),
+            },
+            PressTarget::Secondary => StartIntent::OfferChoice {
+                providers: self.offered_providers(),
+                unavailable_default: None,
+            },
         }
     }
 }
@@ -994,12 +1015,22 @@ pub struct StartMenu {
 /// 026 shipped — the correction never ran, because there was nothing open when the point arrived
 /// and by the time there was, the point had been dropped, so both halves of the split opened the
 /// list over the sidebar header (T089).
-pub fn start_menu_toggled(state: &mut State, location: SessionLocation) {
-    state.session_start_menu = if state
+///
+/// `unavailable_default` is why the list is opening, from
+/// [`StartIntent::OfferChoice`](StartIntent::OfferChoice): `Some(cli)` when the press was the
+/// primary half and the stored default cannot be run, `None` when the user asked for the list.
+/// Only the first says anything, and only when it opens — see the notice below (BUG-001).
+#[must_use = "the notice reaches the queue by draining this (BUG-001)"]
+pub fn start_menu_toggled(
+    state: &mut State,
+    location: SessionLocation,
+    unavailable_default: Option<AiCli>,
+) -> Vec<crate::features::Outcome> {
+    let closing = state
         .session_start_menu
         .as_ref()
-        .is_some_and(|open| open.location == location)
-    {
+        .is_some_and(|open| open.location == location);
+    state.session_start_menu = if closing {
         None
     } else {
         Some(StartMenu {
@@ -1007,6 +1038,20 @@ pub fn start_menu_toggled(state: &mut State, location: SessionLocation) {
             anchor: state.session_start_press.unwrap_or_default(),
         })
     };
+    if closing {
+        // The same press closes an open list, and a user dismissing one does not need to be told
+        // why it appeared.
+        return Vec::new();
+    }
+    unavailable_default
+        .filter(|cli| !state.available_providers.contains(cli))
+        .map(|cli| {
+            vec![crate::features::notifications::error(format!(
+                "{} isn't installed. Install it, or start this session on another AI CLI.",
+                cli.provider().display_name()
+            ))]
+        })
+        .unwrap_or_default()
 }
 
 /// Where a press on the start affordance landed (018 BUG-008, FR-029d).
