@@ -13,7 +13,7 @@ use crate::features::settings::{missing_cli_notice, SettingsDraft, SettingsSecti
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{Checkbox, Select, TextField};
-use crate::ui::settings::{caution, note, page};
+use crate::ui::settings::{caution, field_note, note, page};
 use iced::Element;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::session::AiCli;
@@ -114,10 +114,11 @@ pub fn view<'a>(
     .label("Default AI CLI")
     .supporting("Used for new sessions unless you choose otherwise");
 
-    let mut controls: Vec<Element<'a, Message>> = vec![default_ai_cli.into()];
-    if let Some(text) = missing_cli_notice(availability) {
-        controls.push(note(text, roles));
-    }
+    // Attached to the select rather than stacked after it, so the sentence sits in the column the
+    // select's own supporting line sits in. See `field_note`.
+    let cli = field_note(default_ai_cli, missing_cli_notice(availability), roles);
+
+    let mut controls: Vec<Element<'a, Message>> = vec![cli];
     controls.extend([enabled.into(), path.into(), timeout.into()]);
 
     if let Some((label, diagnostic)) = failure(outcome) {

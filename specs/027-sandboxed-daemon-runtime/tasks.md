@@ -719,13 +719,15 @@ That is why the fix is a protocol pair and a gate, not a better probe.
       caution: an image with one AI CLI may be exactly what its author intended, and a red warning
       on every visit is a nag rather than an answer.
 
-- [ ] T146 [US3] quickstart §B.6, last box: look at the notice in place. The wording is already
+- [x] T146 [US3] quickstart §B.6, last box: look at the notice in place. The wording is already
       gated on painted strings; what a test cannot settle is whether a muted line under a select
       reads as an answer about the image or as something gone wrong, in both schemes. Record it in
-      `evidence/us3-settings-view.md` with the rest of the §B.6 pass.
+      `evidence/us3-settings-view.md` with the rest of the §B.6 pass. It found one: the notice sat
+      in the column of the control *below* it. Fixed with a shared `field_note`, gated by
+      `a_field_note_shares_its_fields_column.rs`, which fails on the old geometry.
 
 **Requirements closed**: FR-023b, FR-023c. With them the feature has no unimplemented requirement
-left, and T146 is the last thing between it and a closed §B.
+left. T146 closed the last §B box with it.
 
 ## Parallel Opportunities
 
