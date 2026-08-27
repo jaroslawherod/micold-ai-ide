@@ -186,7 +186,11 @@ Then, for each, confirm the behaviour is **unchanged from `main`**:
    form, confirm the two stay expanded and the hover/menu state is not reset.
 3. **Settings draft survives a cancel-and-reopen.** Change scrollback, cancel, reopen — the saved
    value is shown, not the abandoned draft.
-4. **Terminal selection survives a tab switch and back.**
+4. **Terminal selection across a tab switch and back.** It is *cleared*, and the phrasing this
+   line used to carry ("survives") was wrong: `shell::daemon_sync::view_and_start` opens with
+   `app.selection = None;` deliberately, and so does the shell switch beside it — both identical
+   on `main` since feature 021. Unchanged from `main` is the requirement, so confirm the clear,
+   not a survival.
 5. **Project switch resets what it resets today.** Switch projects and confirm the agent-worktree
    reveal and the default-expanded row behave as they do on `main` (`Outcome::ProjectEntered`).
 6. **A dismissed popover loses its state; a dismissed dialog keeps what it keeps.** Open the sidebar
@@ -194,3 +198,7 @@ Then, for each, confirm the behaviour is **unchanged from `main`**:
 
 Any difference here is a bug in this feature, not a decision to make now: FR-020 requires it be
 recorded and pinned by a test before it is accepted.
+
+Run and recorded on 2026-08-27 — see [visual-pass.md](./visual-pass.md), which carries the six
+comparison images and the provenance of the binaries they were taken from. All six matched
+`main`; no difference needed pinning.
