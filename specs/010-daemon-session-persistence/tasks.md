@@ -368,6 +368,9 @@ docs state per-platform support (quickstart S14).
   about process-tree teardown, the `0x03` interrupt path, or the inverted `portable-pty` `kill()`
   result. Those need the implementation first and then their own tests; splitting the CI-gate clause
   (met) from the Windows-behaviour clause (not started) is what this checkbox now records.
+  *Amended 2026-08-27 (BUG-008)*: the split is no longer a note inside a ticked box — the
+  Windows-behaviour clause is now **T144**, open, with its unblocking condition named. This task's
+  checkbox covers the CI gate, which is met.
 - [x] T084 Run all quickstart.md scenarios S1–S15 and record outcomes.
   **Run 2026-08-25** — `evidence/T084-quickstart-pass.md`. The "needs a human at the GUI" note above
   was wrong: every scenario except two named clauses was driven headlessly against a real client on
@@ -1767,3 +1770,66 @@ respawned — [evidence](./evidence/BUG-013-fixed.png).
 
 **Bugfix**: 2026-08-19 — BUG-013. **No requirement added**: SC-001 already stated this. **No task
 reopened**: feature 025's restore is correct and was simply asked too early. See `bugs/BUG-013.md`.
+
+
+## Phase 29: Bugfix BUG-008 — success criteria written as human walkthroughs have no executable path
+
+The defect is not a wrong behaviour; it is a **verification** gap that a green CI column concealed.
+Six of this feature's verification tasks were written as "a person operates the GUI and confirms", and
+five of the six were still unrun when everything around them was ticked. The sixth closed only because
+someone rewrote it around an observable a machine could read.
+
+### Rules for BUG-008 (the part that must outlive this phase) ⚠️
+
+- [X] T145 [BUG-008] **A success criterion MUST name its observable, or be marked `human-only` with
+  the reason it cannot have one.** Recorded in `plan.md` Principle I (which stopped at the rendering
+  boundary) and enforced by T147. "Needs a GUI" is not a reason — the `visual-pass` skill drives the
+  real binary headlessly — and most of these criteria were never about pixels. A reason names
+  something no instrument here can read: wall-clock on the user's own hardware, or a human's reading
+  speed
+- [X] T146 [BUG-008] **A task recorded as blocked MUST name what would unblock it, precisely enough
+  that the claim can be checked.** Also in `plan.md` Principle I. The evidence for the rule is T083:
+  "no macOS/Windows runners" survived an entire feature while CI had had all three platforms for
+  months, because the claim named no condition anyone could go and test
+
+### The dispositions ⚠️
+
+- [X] T147 [BUG-008] A `### How each criterion is observed` table in `spec.md` covering all **28**
+  criteria (SC-001–SC-025 including SC-004a, SC-009a and SC-011a — 27 before T148 added one): for each, the observable and the file
+  asserting it, or `human-only` with the reason. Rows name **files**, not test functions —
+  requirement ids are feature-scoped (`SC-001` names a different criterion in six other features), so
+  a reader following a bare id with `grep` lands on the wrong feature. Three rows come out
+  `human-only` and each says why; that count is the thing the project could not previously state
+- [X] T148 [BUG-008] Give the repaint criterion the threshold it lacked: **SC-004a**, 2 ms mean /
+  4 ms p95 over ≥ 400 counted frames — a quarter of a 60 Hz frame, against a T085 measurement of
+  0.31 ms / 0.40 ms idle and 0.42 / 0.58 under flood. Measured on a display, not gated in CI: a
+  wall-clock assertion on a shared runner is a flake generator. The BUG-008 report cites this
+  criterion as SC-013; SC-013 is the test-migration criterion, and the mis-citation is recorded in
+  the bug's resolution rather than silently corrected
+- [X] T149 [BUG-008] Split T083's Windows-behaviour clause out of its ticked checkbox into **T144**,
+  open, so the feature's own task list stops implying the clause is done
+
+### The gate ⚠️
+
+- [X] T150 [BUG-008] `scripts/check-criteria-observables.sh`: for every spec carrying the verification
+  table, every `SC-xxx` it defines has a row, and every row names a criterion that exists. Opt-in per
+  spec — a spec with no table is not failed, so the rule spreads by adoption rather than by breaking
+  fourteen features at once
+- [X] T151 [BUG-008] `scripts/tests/check-criteria-observables.test.sh` — the check's own cases, run
+  in CI **before** the check itself, exactly as `check-assertions-frozen.sh` does. That precedent
+  exists because the earlier gate's cases "existed and nothing ran them", which is this bug in
+  miniature, one level down
+- [X] T152 [BUG-008] Wire both into the `docs check` job
+
+### Still open, with its unblocking condition named (the T146 rule applied to itself)
+
+- [ ] T144 [BUG-008] Exercise the three Windows behaviours T083 names — job-object process-tree
+  teardown, the `0x03` interrupt path (NOT via `cmd.exe`), and the inverted `portable-pty` `kill()`
+  result (Principle VI, Risk 3).
+  **Blocked on**: `crates/micold-daemon/src/platform/windows.rs::terminate_process_tree` being
+  implemented. It is today an 8-line file whose function body is empty, so a Windows test would
+  assert against a no-op and pass. **Not blocked on runners** — `.github/workflows/ci.yml` has run
+  `windows-latest` in its `build + test` matrix since PR #43. The check anyone can run:
+  `wc -l crates/micold-daemon/src/platform/windows.rs` and read the body. When that function creates
+  a job object and terminates it, this task is unblocked and its tests are writable
+
