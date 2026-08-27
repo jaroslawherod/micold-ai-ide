@@ -776,6 +776,62 @@ existed and nothing ran them."*
 verify continuously and what it verified continuously — which is the sort of gap that is only ever
 found by counting.
 
+## Phase 15: nothing published the image FR-024 requires
+
+**Goal**: Make the reference the application ships with resolve to something. FR-024 says the
+default image "MUST be published and versioned with the application release and acquired
+automatically, so a first run requires no manual image preparation." Through 0.11.0 none of that
+was true: `release.yml` built `.deb`s and nothing else, and `DEFAULT_IMAGE` named
+`ghcr.io/micold/micold-daemon:<version>` — a namespace this repository does not own, in which
+nothing had ever been pushed.
+
+This is the one requirement in the feature with no implementation behind it, and every property
+that would normally expose that was pointing the other way. The sandbox is opt-in, so no default
+path touches it. The image's *own* tests build `micold-daemon:dev` locally, so the whole
+real-runtime suite — all 23 of Phase 14's tests — passes without a registry existing. T117's
+performance evidence even wrote the symptom down, that "the route that would (a registry pull) has
+nothing published to pull", and read it as a measurement caveat rather than as a missing feature.
+What a first-time user would actually have met is a `denied`, on the one path FR-024 exists to make
+automatic.
+
+- [x] T150 `crates/micold-core/src/sandbox/image.rs`: point `DEFAULT_IMAGE` at
+      `ghcr.io/jaroslawherod/micold-daemon`, this repository's own GHCR namespace, and split the
+      repository out into `DEFAULT_IMAGE_REPOSITORY` so the release workflow has one string to
+      check itself against. A unit test binds the two together — the split is only worth anything
+      while the reference the app resolves is built from the same value the workflow greps for.
+- [x] T151 `.github/workflows/release.yml`: an `image` job per architecture (amd64 on
+      `ubuntu-22.04`, arm64 on `ubuntu-22.04-arm`) that builds the daemon natively, builds the
+      image, and pushes `:<version>-<arch>`; then `image-manifest` composing the multi-architecture
+      `:<version>` the client actually asks for. Three guards run before anything is built, because
+      each failure they catch produces a *successful* release that no user can pull from: the tag
+      must carry the expected prefix, `[workspace.package] version` must equal the tag's version,
+      and `image.rs` must name the namespace this job is about to push to.
+- [x] T152 The same two runtime checks the local `mise run image` does, now on the release path and
+      per architecture: the daemon must *execute* inside the image (a build only proves the file
+      was copied — glibc is what decides whether it runs, and the failure surfaces at a user's
+      first session, not here), and both AI CLIs must be on `PATH` (FR-023a). Per-architecture
+      rather than once, because an npm package with native components is precisely the thing that
+      is present on amd64 and absent on arm64.
+- [x] T153 `publish` waits for `image-manifest`. A GitHub release is immutable once published, so a
+      published release whose version names an unpullable image is permanent; a draft one is a
+      re-run. This orders the failure the recoverable way round.
+- [x] T154 `packaging/sandbox/Containerfile`: `org.opencontainers.image.source` and friends, so
+      GHCR attaches the package to this repository instead of leaving it loose under the account.
+      The URL is the real remote and deliberately not `[workspace.package] repository`, which still
+      names an older home — following the manifest here would break the link silently.
+- [x] T155 Docs: `packaging/sandbox/README.md` (publishing is the release's job, plus the one
+      manual step below), `docs/user-guide/sandboxed-daemon.md` and the settings-schema contract
+      moved off the namespace that never existed. `evidence/image-publishing.md` records what was
+      verified before the first release runs it.
+
+**Not automatable, and stated rather than hidden**: a GHCR package is private when first created,
+and a private package is a `denied` on a user's first pull — from the outside, identical to one
+that was never pushed. The first release to run these jobs needs the package's visibility flipped
+to Public once, by hand; there is no API that does it at push time. `packaging/sandbox/README.md`
+names the exact settings page.
+
+**Requirements closed**: FR-024.
+
 ## Parallel Opportunities
 
 **Phase 1**: T002, T003, T005, T006 in parallel after T001.
@@ -805,6 +861,11 @@ manual pass and follows everything.
 
 **Phase 14**: T147 and T148 are independent files. T149 has to follow both, since what it records is
 those two run.
+
+**Phase 15**: T150 and T154 are independent files. T151 has to follow T150 — its guard greps for
+what T150 writes — and T152/T153 are steps and edges within T151's job graph rather than separate
+work. T155 follows everything, because a release that has not run yet is the one thing it cannot
+record.
 
 ## Implementation Strategy
 
