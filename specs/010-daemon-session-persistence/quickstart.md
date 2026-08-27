@@ -235,7 +235,9 @@ mise run run                                # must reclaim it and start cleanly
 ```
 
 Hostile directory (Linux `/tmp` fallback) — with `XDG_RUNTIME_DIR` unset and a wrong-owner or
-wrong-mode `/tmp/micold-<uid>`, startup **MUST bail loudly**, not bind anyway.
+wrong-mode `/tmp/micold-<uid>`, startup **MUST bail loudly**, not bind anyway — and **MUST leave the
+directory as it found it**, so that what it refused is still there for a human to look at. Silently
+repairing the mode and continuing is the failure this block exists to catch (BUG-019).
 
 ---
 
