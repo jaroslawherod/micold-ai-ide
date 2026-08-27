@@ -122,8 +122,10 @@ fn a_new_run_does_not_inherit_the_previous_run_s_ending() {
         "precondition: the first run ended"
     );
 
-    // Run it again. `Ended` is absorbing within the run it describes, not across runs.
-    let handle = state.register_session(PtySession::spawn(ran, sh("sleep 30"), 100, None).unwrap());
+    // Run it again. `Ended` is absorbing within the run it describes, not across runs. The handle
+    // is held rather than dropped so the live entry is what the snapshot sees.
+    let _handle =
+        state.register_session(PtySession::spawn(ran, sh("sleep 30"), 100, None).unwrap());
     assert_eq!(
         summary(&state.catalog_snapshot(), ran).activity,
         ActivitySignal::Unknown,
