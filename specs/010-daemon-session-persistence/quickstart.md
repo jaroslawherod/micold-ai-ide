@@ -262,8 +262,12 @@ For each failure in S7, S8 and S11, confirm the cause is determinable from logs 
 the UI**, without rebuilding or reading source.
 
 ```bash
-ls -l ~/.local/state/micold-daemon/logs/    # Linux; see research R2.3 for macOS/Windows
+ls -l ~/.local/share/micold-ai-ide/micold-daemon.log*   # Linux; see research R2.3 for macOS/Windows
 ```
+
+The daemon reports its own choice on its first line, which is the quicker check when the file is not
+where you expect: `micold-daemon starting … sink=File log_path=Some("…")`. A `sink=Journald` there
+from an auto-spawned daemon means the log is being discarded — see BUG-015.
 
 **Expected**: total log size is hard-capped (rotation count × size limit) and does not grow without
 bound. **No terminal content or user input appears in any log entry** (FR-047) — grep for a string
