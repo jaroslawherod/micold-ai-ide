@@ -377,6 +377,9 @@ docs state per-platform support (quickstart S14).
   BUG-019, BUG-020, BUG-021/022 and BUG-023 — which is the point of walking a quickstart the
   tests already "cover". **Out of reach here and not claimed**: S2's 3 s cold-start budget (software
   rasteriser), S14's actual logout, S15's non-Linux platforms (CI is the gate; T083, BUG-008).
+  *Amended 2026-08-27*: BUG-021 and BUG-022 are both fixed, so S10's responsiveness clause has no
+  known open defect behind it — but it has **not** been re-walked on a display, and this line
+  records the 2026-08-25 run, not a new one.
 - [x] T085 [P] Measure retargeted `TerminalPane` repaint cost at 60 Hz on the client (Risk 2 — all
   streaming measurements were daemon-side); record whether the tick rate is the right knob.
   **Measured 2026-08-25** — the "blocked" note above was wrong on both halves: the frame profiler
