@@ -668,23 +668,33 @@ pub struct State {
     /// Worktrees discovered for the active project (feature 005, FR-018). Re-derived from git
     /// on open and after each mutation — never persisted.
     pub worktrees: Vec<Worktree>,
-    /// Which AI CLIs are installed, in `AiCli::ALL`'s order (feature 026, FR-006, T014a).
+    /// Which AI CLIs exist **where sessions run**, in `AiCli::ALL`'s order (feature 026 FR-006 and
+    /// T014a; re-sourced by feature 027 FR-023c).
     ///
-    /// Filled at the I/O boundary from `Capabilities::available_providers()`, the way `worktrees`
-    /// above is filled from git — and refreshed on a **named event**, when the choice is offered
-    /// (the Settings overlay opening, the override menu opening), never per frame. A `PATH` probe
-    /// per render is exactly the scheduled work SC-006 forbids.
+    /// `None` means the service has not said yet — a state that is neither "none available" nor a
+    /// guess, and the reason this is an `Option` rather than an empty `Vec`. An empty *answer* is a
+    /// real answer (an image that ships no AI CLI is FR-023b's whole scenario) and has to be
+    /// distinguishable from not having asked.
+    ///
+    /// **The client no longer probes its own `PATH` for this.** It used to, through
+    /// `Capabilities::available_providers()`, and that was wrong the moment 027 let the service run
+    /// in a container: the client is on the host, the sessions are not, and the host's answer is
+    /// plausible enough to look right while describing a different machine. FR-023c says the
+    /// question is settled where sessions run, so it is now filled from
+    /// `DaemonMsg::AiCliAvailability` — asked on connect and on the same **named events** as
+    /// before (the Settings view opening, the override menu opening), never per frame. The answer
+    /// is stamped with what it describes as it arrives, so FR-023b's sentence can name it; see
+    /// [`crate::features::session::CliAvailability`].
     ///
     /// It is here rather than reached for because there is no route to it otherwise, and the three
-    /// consumers each lack a different one: `features/` imports nothing from `shell::` and
-    /// `Capabilities` is a shell type; `ui/settings_form.rs`'s view is dispatched through the
-    /// shared `DialogView` fn-pointer and sees `&State` and nothing else; and the sidebar's
+    /// consumers each lack a different one: `features/` imports nothing from `shell::`;
+    /// `ui/settings_view.rs` sees a draft and nothing else; and the sidebar's
     /// `row_actions_cluster` takes narrow arguments rather than the whole state.
     ///
     /// Holding it in memory is not a violation of research R11's rule, which is "never
     /// *persisted*" — an in-memory snapshot refreshed when the choice is offered cannot go stale
     /// in a file.
-    pub available_providers: Vec<AiCli>,
+    pub available_providers: Option<crate::features::session::CliAvailability>,
     /// The default AI CLI a new session runs when nothing is chosen for it (feature 026, FR-003).
     ///
     /// Service-owned: this mirrors what the daemon reported in `DaemonSettings`, and is written

@@ -458,6 +458,22 @@ pub enum ClientMsg {
         default_ai_cli: Option<AiCli>,
     },
 
+    // --- AI CLIs ---
+    /// Ask which AI CLIs exist **where sessions run** (feature 027, FR-023c).
+    ///
+    /// The client cannot answer this for itself. Under sandboxed placement it is on the host and
+    /// the sessions are in the container, so its own `PATH` describes the wrong machine — and
+    /// describes it plausibly, which is worse than describing nothing. The service is the process
+    /// that spawns the CLI, so the service is the one that gets to say whether it is there.
+    ///
+    /// Answered with [`DaemonMsg::AiCliAvailability`]. Asked when the choice is *offered* — the
+    /// Settings view opening, the per-session override menu opening — and never per frame: the
+    /// answer changes when an image changes, not between renders.
+    AiCliAvailabilityRequest {
+        /// Correlation id.
+        req: u64,
+    },
+
     // --- Diagnostics ---
     /// Ask where the daemon writes its log.
     LogLocationRequest {
@@ -639,6 +655,21 @@ pub enum DaemonMsg {
         message: String,
         /// The underlying diagnostic, preserved verbatim (e.g. git's stderr).
         detail: Option<String>,
+    },
+
+    // --- AI CLIs ---
+    /// Which AI CLIs the service found in its own environment (feature 027, FR-023c).
+    ///
+    /// Only the fact the service alone has. It does **not** say which image it is running or
+    /// whether it is containerised at all: the client started it and holds both, and a second
+    /// copy of a fact the client already owns is a second thing that can disagree. What the client
+    /// composes from the two is FR-023b's sentence — naming the CLI, the image, and that the image
+    /// must provide it.
+    AiCliAvailability {
+        /// Correlation id.
+        req: u64,
+        /// Present, in `AiCli::ALL`'s order. Empty is a real answer, not an error.
+        available: Vec<AiCli>,
     },
 
     // --- Diagnostics ---

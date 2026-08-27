@@ -249,7 +249,7 @@ pub fn view<'a>(
             settings_view::view(
                 draft,
                 env_include_outcome,
-                &state.available_providers,
+                state.available_providers.as_ref(),
                 state.focused_field,
                 state.settings_rail_collapsed,
                 scheme,

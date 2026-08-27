@@ -238,8 +238,8 @@ See [research.md](./research.md) for decisions, rationale and rejected alternati
 
 ## Phase 2 → increments planned after the design artifacts
 
-Two bodies of work were specified after Phases 0 and 1 were written, from questions the surface
-itself raised once it existed. Both are recorded here rather than folded into the Summary, because
+Three bodies of work were specified after Phases 0 and 1 were written, from questions the surface
+itself raised once it existed. Each is recorded here rather than folded into the Summary, because
 each adds requirements the original plan did not carry.
 
 ### The image ships the AI CLIs, and the sandbox gets a home (FR-023a/b/c, FR-004d, SC-012)
@@ -267,7 +267,42 @@ The approach:
 - **Substituted images inherit the obligation, and availability is answered where sessions run.**
   FR-023b and FR-023c are specified and *not* built in that increment: reporting a missing CLI where
   the image is chosen, and replacing `provider.rs::resolves_on_path` (which asks the client's host)
-  with a check inside the container, are a settings-surface change with their own tests.
+  with a check inside the container, are a settings-surface change with their own tests. The
+  increment below is that change.
+
+### The answer comes from where sessions run, and the missing CLI is named (FR-023b/c)
+
+The client decided which AI CLIs exist by looking at its **own** `PATH`. That is right exactly when
+the daemon is a host process, and wrong the moment it is a container: the picker then offers what
+the developer happens to have installed and hides what the image actually ships, and neither list is
+about the place the session will start in.
+
+The approach:
+
+- **Ask the process that would run the CLI.** `provider::available_here()` names the question it
+  answers — this process's own environment — and one new request/reply pair
+  (`AiCliAvailabilityRequest` / `AiCliAvailability`) carries the answer over the existing protocol.
+  No version bump: `PROTOCOL_VERSION` is already at 6 for this feature. The client asks on connect
+  and again whenever a surface that offers a CLI opens, so a sandbox that started, stopped or
+  changed image between visits is not answered from a stale set.
+- **The client is forbidden from answering it itself**, by a source gate rather than by convention
+  (`cli_availability_comes_from_the_service.rs`). The gate has two halves — no client source probes
+  this process, *and* the shell asks and records — because a scan for an absence passes trivially if
+  the feature was deleted rather than moved. `Capabilities::available_providers` is gone and its
+  assertions moved to `micold-core/tests/available_here.rs` unchanged: what they claimed never
+  depended on who was asking.
+- **The set is stamped with what it is an answer about, at the moment it arrives.**
+  `CliAvailability { available, source }` pairs the list with `AvailabilitySource::{ThisComputer,
+  Image(reference)}`, so FR-023b's sentence can name the image without a second lookup that could
+  disagree. The stamp reads the sandbox's *running* state, not the configured placement, because
+  FR-035a's "run without it for now" makes those two disagree by design. The daemon deliberately
+  does not report the image: it is a fact the client already owns, and a second copy of a fact is a
+  second thing that can be wrong.
+- **The notice goes where the choice is made, and is not an error.** `missing_cli_notice` renders
+  under the Default AI CLI select and under Image reference — the two places FR-023b names — as a
+  muted note, not a caution. An image that ships one CLI may be exactly what its author intended;
+  presenting that as the application's own failure is what FR-023b forbids, and a red banner on
+  every visit is a nag rather than an answer.
 
 ### The rail becomes a navigation rail, and the menu stops duplicating it (FR-026b–e, FR-014d, SC-013/014)
 

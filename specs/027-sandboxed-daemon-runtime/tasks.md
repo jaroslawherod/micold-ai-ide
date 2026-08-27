@@ -642,9 +642,90 @@ and is the one part of it that cannot be given back.
 
 **Not in this phase**: FR-023b and FR-023c, still. They are a settings-surface change and this phase
 is a settings-surface phase, but they are about *the image* and are gated on asking the container
-what it has rather than asking the client's `PATH` — a protocol question, not a layout one.
+what it has rather than asking the client's `PATH` — a protocol question, not a layout one. Phase 13
+is that question.
 
 **Requirements added**: FR-026b, FR-026c, FR-026d, FR-026e, FR-014d, SC-013, SC-014.
+
+## Phase 13: FR-023b and FR-023c — the answer comes from where sessions run, and the missing one is named
+
+**Goal**: stop the client answering "which AI CLIs exist" from its own `PATH`, and say — at the two
+points of choice, and only there — which CLI the running sandbox does not provide.
+
+**Why now**: Phase 11 made the published image ship every AI CLI (FR-023a). That is the whole of the
+guarantee for a user on the default image, and it is worth nothing to a user who substituted one —
+FR-025 says they may, FR-023b says the obligation goes with the image, and nothing in this
+application can make a stranger's image keep it. What is left to do is the only honest thing: find
+out, and say so.
+
+**The defect underneath, which is not a UI defect.** `Capabilities::available_providers()` walked
+*this process's* `PATH`. That was correct while the session service was always a child of this
+process, and FR-021 ended that: the client is on the host, the sessions are in a container, and the
+same four lines went on answering confidently about the wrong machine. It does not crash, and it
+does not look wrong on any machine a developer would test it on — a workstation has both CLIs
+installed, so the host's answer and the container's agree everywhere except on the user's machine.
+That is why the fix is a protocol pair and a gate, not a better probe.
+
+### Tests first
+
+- [x] T138 [US3] *(test)* `crates/micold-core/tests/available_here.rs`: the probe over a scratch
+      `PATH` — nothing installed offers nothing, one installed offers exactly that one, uninstalling
+      shrinks the offer, and the order is `AiCli::ALL`'s rather than `PATH`'s. **Moved, not
+      written**: this suite was `shell/capabilities.rs`'s inline module and its assertions are
+      unchanged, because what they assert never depended on who was asking. FR-023c moved the
+      question into `micold-core`, so its test came with it.
+- [x] T139 [US3] *(test)* `crates/micold-daemon/tests/ai_cli_availability.rs`: over a real duplex
+      connection, `AiCliAvailabilityRequest` is answered from the **service's own** environment —
+      a stubbed `claude` on a scratch `PATH` comes back as exactly `[ClaudeCode]`, and an
+      environment with no CLI at all comes back as an empty set rather than as a failure. The two
+      together are what pin the answer to the process that ran it: either alone is satisfied by a
+      constant.
+- [x] T140 [US3] *(test)* `crates/micold-client/tests/cli_availability_comes_from_the_service.rs`:
+      no client source calls `available_here` or `provider().is_available()`, **and** the shell is
+      still seen issuing the request, handling the reply, and writing the field. Both halves,
+      because a scan for an absence passes trivially once the feature is deleted rather than moved.
+      Seen to fail: reintroducing a one-line probe into `features/session.rs` reports
+      "``features/session.rs`` calls ``provider().is_available()…)``".
+- [x] T141 [US3] *(test)*
+      `crates/micold-client/tests/missing_cli_is_reported_where_it_is_chosen.rs`: the notice names
+      the CLI, the image, and the obligation; says nothing before the service has answered; says
+      nothing when everything is present; names every CLI when the image provides none; and under
+      the host placement names no image at all. Asserted by parts rather than verbatim — the parts
+      are exactly what FR-023b enumerates, so an assertion that loses one is a requirement that
+      stopped being met.
+
+### Implementation
+
+- [x] T142 [US3] `micold-core`: `provider::available_here()`, and the `AiCliAvailabilityRequest` /
+      `AiCliAvailability` pair in `protocol/messages.rs`. The reply carries the set and **only** the
+      set — not the image, not whether it is containerised at all. The client started the service
+      and holds both already, and a second copy of a fact one side owns is a second thing that can
+      disagree.
+- [x] T143 [US3] `micold-daemon/src/server.rs`: answer the request from `available_here()`. Four
+      lines, and the whole of FR-023c: the process that will spawn the CLI is the process that says
+      whether it is there.
+- [x] T144 [US3] `micold-client`: delete `Capabilities::available_providers()`; change
+      `State::available_providers` to `Option<CliAvailability>`; ask on connect and on the two named
+      events research R11 already required (Settings opening, the override menu opening); fill the
+      field from the reply, **stamping it** with what it describes as it arrives. The stamp is read
+      from the sandbox's own state rather than the configured placement, because those come apart in
+      the one case that matters — after FR-035a's "run without it for now" the placement still says
+      the user wanted a container and the thing answering is a host process.
+- [x] T145 [US3] `features/settings.rs::missing_cli_notice`, rendered in `ui/settings/environment.rs`
+      under the CLI picker and in `ui/settings/daemon.rs` under the image reference — FR-023b's two
+      points of choice, and not session start. It names the image the service was **started from**,
+      never the one in the draft field: the field may say something the running container has never
+      heard of, and naming it would describe a machine that does not exist yet. Muted, not a
+      caution: an image with one AI CLI may be exactly what its author intended, and a red warning
+      on every visit is a nag rather than an answer.
+
+- [ ] T146 [US3] quickstart §B.6, last box: look at the notice in place. The wording is already
+      gated on painted strings; what a test cannot settle is whether a muted line under a select
+      reads as an answer about the image or as something gone wrong, in both schemes. Record it in
+      `evidence/us3-settings-view.md` with the rest of the §B.6 pass.
+
+**Requirements closed**: FR-023b, FR-023c. With them the feature has no unimplemented requirement
+left, and T146 is the last thing between it and a closed §B.
 
 ## Parallel Opportunities
 
@@ -668,6 +749,10 @@ clearest parallel block in the feature; T074 parallel throughout.
 **Phase 8**: T099–T103 parallel; T111 alongside.
 
 **Phase 9**: T114–T117 and T119 all parallel.
+
+**Phase 13**: T138, T139 and T141 are three independent test files. T140 is the only one that has to
+follow its implementation, because what it asserts is an absence that does not exist yet. T146 is a
+manual pass and follows everything.
 
 ## Implementation Strategy
 

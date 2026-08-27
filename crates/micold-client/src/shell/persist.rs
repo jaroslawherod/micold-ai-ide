@@ -133,9 +133,12 @@ pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core:
 pub fn on_settings_opened(app: &mut App) -> Task<Message> {
     app.core.update(Message::SettingsOpened);
     // Refresh the availability set here, on the named event research R11 asks for --
-    // "when the choice is offered" -- rather than per frame, which would be a `PATH` probe
-    // per render and exactly the scheduled work SC-006 forbids (feature 026, T014a).
-    app.core.available_providers = app.caps.available_providers();
+    // "when the choice is offered" -- rather than per frame, which would be a probe per render and
+    // exactly the scheduled work SC-006 forbids (feature 026, T014a). The refresh is now a request
+    // to the service rather than a local `PATH` walk (feature 027, FR-023c); the reply lands a
+    // moment later and the view redraws, which is why the field keeps its previous answer in the
+    // meantime instead of being cleared.
+    crate::shell::daemon_sync::ask_cli_availability(app);
     // Seeded from one `Settings` value rather than field by field, so that a setting added to the
     // persisted shape is carried into the draft by `from_settings` instead of needing a line here
     // that somebody has to remember to write.

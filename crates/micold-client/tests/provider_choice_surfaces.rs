@@ -15,14 +15,22 @@
 //!
 //! Named by `display_name()` on both surfaces (FR-006, T058e): these are menus, and `claude` /
 //! `copilot` is the row-label register.
+//!
+//! Feature 027 (T145) narrowed one of these claims rather than adding to it. FR-023b requires the
+//! *missing* CLI be named where a CLI is chosen, so "an uninstalled CLI appears nowhere in
+//! Settings" stopped being true and stopped being what FR-006 wants: the rule is that it is not
+//! **offered**, and the Settings test now says exactly that by allowing the one sentence whose
+//! whole job is to name it.
 
 #[path = "support/mod.rs"]
 mod support;
 
 use micold_client::app::State;
 use micold_client::features::connection::ConnectionStatus;
-use micold_client::features::session::StartMenu;
-use micold_client::features::settings::{EnvironmentDraft, SettingsDraft, SettingsSection};
+use micold_client::features::session::{AvailabilitySource, CliAvailability, StartMenu};
+use micold_client::features::settings::{
+    missing_cli_notice, EnvironmentDraft, SettingsDraft, SettingsSection,
+};
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::session::{AiCli, SessionLocation};
 use support::layout as lay;
@@ -80,7 +88,10 @@ fn painted(state: &State, press_at: Option<&[usize]>) -> Vec<String> {
 /// the list as the only thing that can name one.
 fn settings_state(available: &[AiCli]) -> State {
     State {
-        available_providers: available.to_vec(),
+        available_providers: Some(CliAvailability {
+            available: available.to_vec(),
+            source: AvailabilitySource::ThisComputer,
+        }),
         settings_draft: Some(SettingsDraft {
             // Feature 027 turned Settings into a sectioned full-surface view, and the Default AI
             // CLI select lives in Environment — the section has to be the shown one, or the
@@ -98,7 +109,10 @@ fn settings_state(available: &[AiCli]) -> State {
 
 fn start_menu_state(available: &[AiCli]) -> State {
     State {
-        available_providers: available.to_vec(),
+        available_providers: Some(CliAvailability {
+            available: available.to_vec(),
+            source: AvailabilitySource::ThisComputer,
+        }),
         session_start_menu: Some(StartMenu {
             location: SessionLocation::Default,
             anchor: (400, 300),
@@ -109,14 +123,27 @@ fn start_menu_state(available: &[AiCli]) -> State {
 
 #[test]
 fn the_settings_select_lists_only_the_installed_clis() {
-    let only_claude = painted(&settings_state(&[AiCli::ClaudeCode]), Some(SETTINGS_SELECT));
+    let state = settings_state(&[AiCli::ClaudeCode]);
+    let only_claude = painted(&state, Some(SETTINGS_SELECT));
     assert!(
         only_claude.iter().any(|s| s == "Claude Code"),
         "the installed CLI must be in the open list — painted: {only_claude:?}"
     );
+    // "Not offered" is not "not named". Feature 027's FR-023b *requires* the missing CLI be named
+    // here, in a sentence saying it is missing — so the rule this pins is that the only string in
+    // the whole surface mentioning it is that sentence. Comparing against `missing_cli_notice`
+    // itself, rather than allowing anything long enough to look like prose, keeps a stray second
+    // mention (an option row, a helper line, a tooltip) failing.
+    let notice = missing_cli_notice(state.available_providers.as_ref())
+        .expect("with one CLI uninstalled the surface owes the user a sentence about it");
+    let stray: Vec<&String> = only_claude
+        .iter()
+        .filter(|s| s.contains("Copilot") && **s != notice)
+        .collect();
     assert!(
-        !only_claude.iter().any(|s| s.contains("Copilot")),
-        "an uninstalled CLI must not be offered anywhere in Settings — painted: {only_claude:?}"
+        stray.is_empty(),
+        "an uninstalled CLI may be named only by the notice that says it is missing — stray: \
+         {stray:?}, painted: {only_claude:?}"
     );
 
     // The control: the same surface, the same press, with Copilot installed. Without this, the

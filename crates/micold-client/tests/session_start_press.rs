@@ -25,6 +25,7 @@ use iced::advanced::{clipboard, layout, mouse, Layout, Shell};
 use iced::{Element, Event, Point, Rectangle, Size};
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
+use micold_client::features::session::{AvailabilitySource, CliAvailability};
 use micold_client::icons::Icon;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::session::{AiCli, SessionLocation};
@@ -41,7 +42,10 @@ fn with_project(default_ai_cli: AiCli, available: &[AiCli]) -> State {
         sidebar_width: 300,
         window_size: (lay::WINDOW.width as u16, lay::WINDOW.height as u16),
         default_ai_cli,
-        available_providers: available.to_vec(),
+        available_providers: Some(CliAvailability {
+            available: available.to_vec(),
+            source: AvailabilitySource::ThisComputer,
+        }),
         ..State::default()
     }
 }

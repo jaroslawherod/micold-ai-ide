@@ -507,6 +507,23 @@ where
                 tracing::info!(client = id, project = %project.display(), "project detached");
                 state.detach(id, &project);
             }
+            // --- AI CLIs (feature 027, FR-023c) ---
+            //
+            // Answered *here*, in the service, because here is where sessions run. Under sandboxed
+            // placement this process is inside the container, so `available_here` reads the
+            // image's `PATH` — which is the question FR-023c asks and the one the client cannot
+            // ask for itself. Under host placement it reads the host's, and the same code path
+            // gives the same right answer for the same reason.
+            //
+            // Recomputed per request rather than cached at boot: it is one `PATH` walk per
+            // variant, the client only asks when a choice is offered, and research R11's rule is
+            // that this answer is never stored.
+            ClientMsg::AiCliAvailabilityRequest { req } => {
+                let available = micold_core::provider::available_here();
+                tracing::debug!(client = id, ?available, "AI CLI availability reported");
+                state.send(id, DaemonMsg::AiCliAvailability { req, available });
+            }
+
             // --- Diagnostics (US6/Phase 10, FR-043–046) ---
             ClientMsg::LogLocationRequest { req } => {
                 let (path, sink) = state

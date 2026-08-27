@@ -36,11 +36,12 @@ use std::path::{Path, PathBuf};
 /// not a write and not a violation of FR-020 — FR-003a permits reads outright — but it is the
 /// coupling SC-002 is about: it is how "adding a feature" starts to mean "and edit that one too".
 ///
-/// Both entries today are reads of a pure type. The sidebar renders a worktree's tags, and what a
+/// Every entry today is a read of a pure type. The sidebar renders a worktree's tags, and what a
 /// worktree's tags *are* is the worktree feature's to say; settings names the field a rejected save
-/// is about, and which fields can hold the keyboard is the window's. In each case the alternative —
-/// the naming feature deriving it itself — would be a second answer to the same question, which is
-/// worse.
+/// is about, and which fields can hold the keyboard is the window's; settings also names what the
+/// service answered about AI CLIs, and AI CLIs are what sessions run. In each case the alternative
+/// — the naming feature deriving it itself — would be a second answer to the same question, which
+/// is worse.
 const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
     (
         "sidebar",
@@ -54,6 +55,15 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
         "FieldId — a rejected save names the field it is about so the form can send the user to \
          it (feature 027, FR-029), and which fields the window can focus is the window's to say. \
          A second enum owned by settings would be the same list written twice (feature 027, T075)",
+    ),
+    (
+        "settings",
+        "session",
+        "CliAvailability — the settings form composes FR-023b's sentence about a CLI that is \
+         missing where sessions run, and which CLIs the app can run, and what the service's answer \
+         describes, is the session feature's to say. The read is of a pure value and its `missing` \
+         accessor; settings deriving the set itself would be a second answer to the question \
+         FR-023c exists to give exactly one of (feature 027, T145)",
     ),
 ];
 

@@ -146,10 +146,11 @@ fn boot() -> (App, Task<Message>) {
         // 026, FR-003).
         core.default_ai_cli = loaded.default_ai_cli;
     }
-    // The availability set, filled at the I/O boundary the way `worktrees` is (feature 026,
-    // T014a). Refreshed when the choice is offered — the Settings overlay opening, the override
-    // menu opening — and never per frame.
-    core.available_providers = caps.available_providers();
+    // The availability set is *not* filled here any more (feature 027, FR-023c). It used to be,
+    // from this process's own `PATH` — which is the host's, and under the sandboxed placement the
+    // sessions are not on the host. It stays `None` ("nobody has said yet") until the first
+    // `DaemonMsg::AiCliAvailability`, which `on_connected` asks for as soon as there is a service
+    // to ask. One frame of an empty picker is the honest cost of not guessing.
     // Feature 027: where the daemon runs. Read here rather than in the connection subscription
     // because the *bring-up* is what the user watches, and it starts before the first dial.
     let placement = caps

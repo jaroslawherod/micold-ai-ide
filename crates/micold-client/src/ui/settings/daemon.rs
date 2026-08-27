@@ -20,7 +20,8 @@
 
 use crate::app::Message;
 use crate::features::sandbox::SandboxLimit;
-use crate::features::settings::{SettingsDraft, SettingsSection};
+use crate::features::session::CliAvailability;
+use crate::features::settings::{missing_cli_notice, SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{Checkbox, Select, TextField};
@@ -235,6 +236,7 @@ fn limit<'a>(
 /// The Session service page.
 pub fn view<'a>(
     draft: &'a SettingsDraft,
+    availability: Option<&'a CliAvailability>,
     focused: Option<FieldId>,
     roles: Roles,
 ) -> Element<'a, Message> {
@@ -322,13 +324,29 @@ pub fn view<'a>(
         runtime.into(),
         image_kind.into(),
         reference.into(),
+    ];
+
+    // FR-023b, at the point the image is chosen. The published image ships every AI CLI (FR-023a);
+    // a substituted one inherits that obligation and nothing can make it keep it, so the only
+    // honest thing to do is say which CLI the image running *now* does not provide. It sits
+    // directly under the reference rather than at the foot of the section, because it is a fact
+    // about that field's value.
+    //
+    // The image it names is the one the service was actually started from, not the one in this
+    // field: the field is a draft and may say something the running container has never heard of.
+    // Naming the draft's value would describe a machine that does not exist yet.
+    if let Some(text) = missing_cli_notice(availability) {
+        controls.push(note(text, roles));
+    }
+
+    controls.extend([
         archive.into(),
         group("Credentials", roles),
         note(
             "The container starts with none of your credentials. Share only what the agent needs.",
             roles,
         ),
-    ];
+    ]);
 
     for share in CredentialShare::ALL {
         let on = draft.shared_credentials().contains(&share);
