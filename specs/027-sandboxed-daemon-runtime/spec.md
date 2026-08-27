@@ -111,6 +111,20 @@ runtime must be a replaceable part from the beginning rather than a refactor pro
   application re-resolves rather than pinning forever. A developer rebuilding the service many times
   a day must be able to run their own build sandboxed without publishing anything.
 
+### Session 2026-08-27
+
+- Q: Who is responsible for the AI CLI being present in the sandbox — the image we publish, or the
+  user? → A: **Both, at their own layer.** The image this project publishes ships every AI CLI the
+  application offers, so the default path needs nothing from the user. A user who substitutes their
+  own image takes on that obligation with it: the CLI must be in *their* image, because nothing is
+  injected into a substituted image at run time. What the application owes them in return is to say
+  so where they choose the image and where they choose the CLI — not to accept the image, accept the
+  choice, and fail when a session is started.
+- Q: Where is "is the AI CLI available?" answered from? → A: Wherever sessions actually run. Under
+  sandboxed placement that is inside the container, not on the client's host. Asking the host is not
+  a smaller version of the right check — it is a different machine's answer, wrong in both
+  directions: it hides a CLI the sandbox has, and it offers one the sandbox does not.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The agent can only touch the project (Priority: P1)
@@ -394,6 +408,13 @@ without the user having chosen that for the occasion.
 - **FR-004c**: The settings view MUST show, at a glance, whether any credential opt-in is currently
   active, so the user can tell a fully-isolated sandbox from a partially-shared one without
   inspecting each control.
+- **FR-004d**: The sandbox MUST provide a writable home directory of its own at the path its `HOME`
+  names, owned by the identity sessions run as, and containing nothing of the host user's. A tool
+  that writes to `~` — which most AI CLIs do on first run, before any prompt — MUST succeed without
+  that write reaching the host home or requiring a credential opt-in. This directory is a mount like
+  any other and MUST be declared as one: a home the sandbox merely inherits from the image, or an
+  unwritable one, are both failures of this requirement rather than of the image.
+
 - **FR-005**: The sandbox MUST NOT be granted access to the container runtime's own control
   interface, nor any capability that lets a session escape the sandbox or act on the host.
 - **FR-006**: Files a session creates under a shared project directory MUST appear on the host owned
@@ -464,6 +485,19 @@ without the user having chosen that for the occasion.
   requires — a shell, git, and the AI CLI — and the application MUST refuse to attach to an image
   whose service is not compatible with the running client, offering the same restart affordance the
   application already offers for a version mismatch.
+- **FR-023a**: The image this project publishes MUST ship every AI CLI the application offers, at a
+  version each one supports, together with whatever runtime those CLIs need. A user on the default
+  image MUST NOT have to install anything into the sandbox to start a session with any offered CLI.
+  Credentials are excluded from this: FR-004 governs those, and shipping a CLI is not shipping an
+  authenticated one.
+- **FR-023b**: A user who substitutes their own image (FR-025) takes on FR-023a's obligation for
+  that image — nothing is injected into a substituted image at run time. The application MUST NOT
+  present this as its own failure, and MUST NOT discover it at session start: a CLI missing from the
+  running sandbox MUST be reported where the user selects an image and where they select a CLI,
+  naming the CLI, the image, and that the image must provide it.
+- **FR-023c**: Whether an AI CLI is available MUST be determined where sessions run — inside the
+  sandbox under sandboxed placement, on the host under host placement. The application MUST NOT
+  answer it from the client's own environment when those differ.
 - **FR-024**: The default image MUST be published and versioned with the application release and
   acquired automatically, so a first run requires no manual image preparation.
 - **FR-024a**: The application MUST support acquiring the image without reaching the publishing
@@ -591,6 +625,10 @@ without the user having chosen that for the occasion.
   nothing the application created survives a reboot once session survival is opted out of.
 - **SC-011**: The session-survival opt-in produces the same observable outcome after a host reboot
   on all three supported platforms when the service is sandboxed.
+- **SC-012**: On the published image, every AI CLI the application offers starts a session in the
+  sandbox with no user-performed installation step. On an image missing one, the user is told which
+  CLI is missing and that their image must supply it — before they start a session, not by a session
+  failing.
 
 ## Out of Scope
 

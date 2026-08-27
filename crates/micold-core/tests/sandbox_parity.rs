@@ -26,6 +26,7 @@ fn mounts(profile: &SandboxProfile) -> MountSet {
         profile,
         &CredentialLayout::conventional(Path::new("/home/u"), None),
         PathBuf::from(STATE_DIR),
+        Path::new("/home/u"),
         SecretMount {
             host: PathBuf::from("/run/user/1000/micold/sandbox.token"),
             container: PathBuf::from("/run/micold/token"),

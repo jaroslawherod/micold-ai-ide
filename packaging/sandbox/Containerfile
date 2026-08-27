@@ -17,7 +17,18 @@
 # The durable fix is a static musl build, which removes the dependency entirely. It needs a musl
 # target and linker that are not assumed present here, so it is left for when publishing is set up —
 # at which point the base image stops mattering rather than merely being newer.
-FROM docker.io/library/debian:trixie-slim AS runtime-base
+#
+# `node:22-trixie-slim` rather than `debian:trixie-slim`, because FR-023a puts the AI CLIs in this
+# image and both are npm-distributed Node programs. Two constraints pick this exact tag and nothing
+# looser:
+#
+#   - **22, not the distribution's Node.** Trixie ships Node 20, and `@anthropic-ai/claude-code`
+#     declares `engines: node >=22.0.0`. `apt-get install nodejs` would build an image whose default
+#     AI CLI refuses to run.
+#   - **trixie, not the default slim.** `node:22-slim` is *bookworm* — glibc 2.36, the exact version
+#     the paragraph above is about. Taking it would reintroduce the failure that comment exists to
+#     prevent, while looking like a smaller change than switching distributions.
+FROM docker.io/library/node:22-trixie-slim AS runtime-base
 
 # Session tooling. `git` is not optional: the daemon runs it for worktree management, and feature
 # 027's whole path-identity decision (research R2) exists because it does.
@@ -49,6 +60,26 @@ ENV XDG_DATA_HOME=/var/lib
 # secret will be mounted at, and the secret itself never enters the image — that is the whole point
 # of delivering it through a bind mount rather than through the build or the command line.
 ENV MICOLD_TOKEN_PATH=/run/micold/token
+
+# The AI CLIs the application offers (FR-023a). Every variant of `AiCli` belongs here: the session
+# service will happily start whichever one the user picked, and a CLI the image lacks becomes a
+# failed session rather than a refused choice.
+#
+# Pinned, not floating. A `latest` here would make two builds of the same application release ship
+# different agents, which is precisely the reproducibility the image exists to provide — and the
+# staleness check (FR-024d) fingerprints the *service*, so a silently changed CLI would not trip it.
+# Upgrading is a deliberate edit to these two lines.
+#
+# `--omit=dev` and the cache purge keep the layer to what actually runs. `npm` needs a writable home
+# for its cache, and the container runs as an arbitrary host uid (see the note on USER below), so
+# the install happens here at build time as root and nothing is written to a home directory later.
+ARG CLAUDE_CODE_VERSION=2.1.247
+ARG COPILOT_CLI_VERSION=1.0.80
+RUN npm install -g --omit=dev \
+      "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+      "@github/copilot@${COPILOT_CLI_VERSION}" \
+ && npm cache clean --force \
+ && rm -rf /root/.npm
 
 COPY micold-daemon /usr/local/bin/micold-daemon
 

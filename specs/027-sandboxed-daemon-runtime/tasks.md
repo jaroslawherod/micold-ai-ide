@@ -497,6 +497,60 @@ shippable before US3 lands, and T070 retires it.
 **Cross-story ordering that is not a dependency.** US5's podman dialect is written against the same
 conformance suite as Docker's, so it can begin as soon as T037 exists, not when Phase 3 ends.
 
+## Phase 11: FR-023a and FR-004d — the image ships the AI CLIs, and `~` is writable
+
+**Goal**: Make "a sandboxed session can run the AI CLI the user picked" true rather than assumed.
+FR-023 has always said the image carries "the tooling a session needs"; the published image carried
+none of the AI CLIs, and the 22 green real-runtime probes could not see it because every one of them
+drives a shell. Shipping them then exposed a second defect underneath: `HOME` pointed at a path that
+does not exist inside the container, so the first thing an AI CLI does — write to `~` — failed.
+
+**Why the two are one phase.** Neither is shippable alone. The image without the home fix ships a
+`copilot` that dies on `EACCES: mkdir '/home/<user>'` at startup; the home fix without the image
+fixes a home nothing was using.
+
+### Tests (MANDATORY — Constitution Principle I) ⚠️
+
+- [x] T123 [US1] `crates/micold-daemon/tests/sandbox_real_ai_cli.rs`: for every `AiCli::ALL`
+      variant, its command is on `PATH` inside a real sandbox **and runs** (`--version` exits 0).
+      Driven from `AiCli::ALL` rather than a written-out list, so a third provider added to the
+      application fails this until the image ships it. Confirmed red twice: first with both CLIs
+      missing, then — after the image shipped them — with `[("copilot", "rc=1")]`, which is the
+      defect T125 fixes. Locating a binary is not enough here: `claude` tolerated the broken home
+      and `copilot` did not, so a `command -v` check would have passed while a session failed.
+- [x] T124 [US1] `crates/micold-daemon/tests/sandbox_real_boundary.rs`: `~` is writable, what lands
+      there appears in the application's own directory, and it does **not** appear in the user's
+      home. The file's existing probes all pass with *no* home at all — a `HOME` pointing nowhere
+      lists nothing either — so the write is what distinguishes a shadowed home from a missing one.
+
+### Implementation
+
+- [x] T125 [US1] `sandbox/mod.rs`: `HomeMount`, a fifth member of `MountSet`, mounting
+      `<state>/sandbox-home` at the host home path; `argv::mount_args` emits it first, since a
+      project under the user's home has to land on top of it. Declared in the set rather than
+      emitted by `argv` because obligation C-3 is that `argv` invents no mount — an implicit home
+      mount is exactly the convenience C-3 forbids, and an explicit one keeps the rule literally
+      true. `shell/sandbox.rs` creates the directory before `create`: a bind source the runtime has
+      to create, it creates as root.
+- [x] T126 [US1] `packaging/sandbox/Containerfile`: base `node:22-trixie-slim` and pinned
+      `@anthropic-ai/claude-code` and `@github/copilot`. Both constraints on that tag are load
+      bearing and recorded in the file — trixie for glibc, 22 because claude-code declares
+      `engines: node >=22.0.0` and trixie ships Node 20.
+- [x] T127 [US1] `sandbox_argv.rs`, `sandbox_credentials.rs`, `argv.rs`'s K-4 check: the mount-count
+      assertions move by one, and the home is excluded from `mapped_volumes` — it is a
+      *substitution*, not a mapping, so its two halves are supposed to differ on every platform.
+      The credentials test gains the assertion that keeps the two apart: the container half is the
+      user's home path and the host half is never it.
+
+**Not in this phase**: FR-023b and FR-023c. Reporting a missing CLI where the image is chosen, and
+answering availability from inside the sandbox instead of from the client's own `PATH`
+(`provider.rs::resolves_on_path`), are a settings-surface change with their own tests.
+
+**Requirement added**: FR-004d, and FR-023 split into FR-023a/b/c with SC-012. FR-023 said the image
+carries what a session needs without saying who owns that when the user substitutes an image, and
+nothing said the sandbox has a home of its own — which is why an image that satisfied FR-023 on
+paper still could not run the CLI it shipped.
+
 ## Parallel Opportunities
 
 **Phase 1**: T002, T003, T005, T006 in parallel after T001.

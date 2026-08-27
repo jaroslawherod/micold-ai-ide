@@ -100,11 +100,29 @@ pub fn start(
         });
     }
 
+    // The sandbox's own home, created here rather than left to the runtime (FR-004d). A bind
+    // source the runtime has to create it creates as **root**, which leaves the uid the container
+    // runs as unable to write to its own `HOME` — the failure this mount exists to fix, arriving by
+    // a different route. Created before `create` for the same reason the token is.
+    let sandbox_home = facts.state_dir.join(micold_core::sandbox::SANDBOX_HOME_DIR);
+    if let Err(e) = std::fs::create_dir_all(&sandbox_home) {
+        return Err(Failure {
+            stage: micold_core::sandbox::lifecycle::Stage::Creating,
+            error: micold_core::sandbox::runtime::RuntimeError::Unknown {
+                stderr: format!(
+                    "could not create the sandbox home directory {}: {e}",
+                    sandbox_home.display()
+                ),
+            },
+        });
+    }
+
     let mounts = MountSet::build(
         projects,
         profile,
         &facts.layout,
         facts.state_dir.clone(),
+        &facts.home,
         SecretMount {
             host: token_path,
             container: PathBuf::from(CONTAINER_TOKEN_PATH),
