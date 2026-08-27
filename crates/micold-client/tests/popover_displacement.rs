@@ -85,7 +85,10 @@ fn opener(id: &str) -> Message {
         "shell_instance_menu" => {
             Message::StripTabMenuRequested(StripTab::Instance(ShellInstanceId(1)), 30, 40)
         }
-        "session_start_menu" => Message::SessionStartMenuOpened(SessionLocation::Default),
+        "session_start_menu" => Message::SessionStartMenuOpened {
+            location: SessionLocation::Default,
+            unavailable_default: None,
+        },
         other => panic!("no opener for `{other}`"),
     }
 }

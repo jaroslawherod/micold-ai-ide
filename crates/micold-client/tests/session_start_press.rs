@@ -162,10 +162,14 @@ fn pressing_start_with_an_uninstalled_default_offers_the_choice_and_starts_nothi
     assert!(
         published.iter().any(|m| matches!(
             m,
-            Message::SessionStartMenuOpened(SessionLocation::Default)
+            Message::SessionStartMenuOpened {
+                location: SessionLocation::Default,
+                unavailable_default: Some(AiCli::Copilot),
+            }
         )),
         "and the press has to *do* something: the available CLIs are offered at that moment, which \
-         is the same list the chevron opens. Published: {published:?}"
+         is the same list the chevron opens — carrying which default could not be run, so the \
+         reducer can say so (BUG-001). Published: {published:?}"
     );
     assert!(
         published
@@ -196,7 +200,7 @@ fn pressing_start_with_the_default_installed_still_starts_it_in_one_interaction(
     assert!(
         !published
             .iter()
-            .any(|m| matches!(m, Message::SessionStartMenuOpened(_))),
+            .any(|m| matches!(m, Message::SessionStartMenuOpened { .. })),
         "and no list in the way of it. Published: {published:?}"
     );
 }
@@ -217,12 +221,15 @@ fn the_choice_is_offered_from_the_availability_set_the_press_can_still_refresh()
     let published = press_start(&state);
     let opened: Vec<&Message> = published
         .iter()
-        .filter(|m| matches!(m, Message::SessionStartMenuOpened(_)))
+        .filter(|m| matches!(m, Message::SessionStartMenuOpened { .. }))
         .collect();
 
     assert_eq!(
         opened,
-        vec![&Message::SessionStartMenuOpened(SessionLocation::Default)],
+        vec![&Message::SessionStartMenuOpened {
+            location: SessionLocation::Default,
+            unavailable_default: Some(AiCli::Copilot),
+        }],
         "one open, for this row's location — the chevron's message, so the refresh the binary does \
          on it happens for this press too. Published: {published:?}"
     );
