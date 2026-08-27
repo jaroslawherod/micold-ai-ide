@@ -975,3 +975,44 @@ was: assert_eq!(state.start_intent(PressTSecondary),StartIOfferChoice{providers:
 was: assert_eq!(state.theme_pref,ThemePDark)
 was: assert_eq!(state.theme_pref,ThemePDark,"precondition:themenuappliesitschoiceimmediately")
 was: assert_eq!(state.theme_pref,ThemePLight,"editingtheAppearancesectionmustnotapplythethemebeforeSave,orCancelwould\havenothingtodiscard")
+
+## T060 — the third merge: feature 027 arrives flat
+
+`main` moved a third time. Feature 027 landed while #228 waited: the CLI availability set
+re-sourced from where sessions actually run, the collapsible Settings rail, and FR-026e's removal
+of the app-bar theme cycle and the logout-survival item. It brings one brand-new gate file written
+against the flat vocabulary this feature has folded away —
+`crates/micold-client/tests/settings_rail.rs` — and it re-touched assertions in three files this
+branch had already converted, so the merge-base spelling of each is flat again.
+
+As in T058 and T059, they were rewritten here rather than kept flat, and for the same reason: an
+assertion whose *subject* moves is a new key even when the claim is byte-for-byte the one it was.
+Nothing is dropped and nothing is weakened — every loss below has a surviving twin at 88% or better
+whose only difference is the feature segment in the path. The renames are exactly three:
+
+| flat spelling (merge base) | encapsulated spelling (HEAD) | moved by |
+|---|---|---|
+| `state.settings_rail_collapsed`, `state.settings_draft`, `state.theme_pref` | `state.settings.settings_rail_collapsed`, `state.settings.settings_draft`, `state.settings.theme_pref` | T032 |
+| `app.core.notify.*` | `app.core.notifications.queue.*` | T028 |
+| `app.core.worktree_error`, `app.core.worktree_form`, `state.worktree_form` | `…worktree_form.worktree_error`, `…worktree_form.form` | T031 |
+
+027's own claims survive untouched. `settings_rail_collapsed` is still the flag that must not reach
+the draft and must outlive both Save and Cancel (FR-026c/d); it simply lives on
+`features::settings::State` now, and `tests/root_state_is_shared.rs` records it in `COMPONENT_LOCAL`
+naming `neither_save_nor_cancel_reopens_a_rail_the_user_closed` as the assertion that pins it to the
+application.
+
+was: assert!(!Sdefault().settings_rail_collapsed)
+was: assert!(!state.settings_rail_collapsed)
+was: assert!(app.core.notify.visible().is_none(),"nothingsaidyet")
+was: assert!(app.core.worktree_error.is_some(),"precondition:thefirstattemptleftanerroronscreen")
+was: assert!(state.settings_rail_collapsed)
+was: assert!(state.settings_rail_collapsed,"precondition")
+was: assert!(state.settings_rail_collapsed,"reopeningSettingsafter{ending:?}losttherail'sstate")
+was: assert!(state.settings_rail_collapsed,"{ending:?}revertedaviewpreference,whichiswhatdraftingitwoulddo")
+was: assert_eq!(app.core.worktree_error,None,"theerrordescribesanattemptthatisover;leavingitupbesidethenewattempt's\progressbarsaystwocontradictorythingsaboutoneform")
+was: assert_eq!(app.core.worktree_form.as_ref().map(|f|f.name.clone()),Some("probe".to_string()),"adropthatinterruptednothingmustnotdiscardwhattheuserhadtyped")
+was: assert_eq!(state.settings_draft,before,"therail'sstatereachedthedraft,soCancelwouldrevertitandSavewouldwriteit")
+was: assert_eq!(state.settings_draft.as_ref().map(|d:&SettingsDraft|d.section),Some(*section),"{section:?}couldnotbereachedfromthecollapsedrail")
+was: assert_eq!(state.theme_pref,ThemePDark,"precondition:achangefromoutsidetheformappliesimmediately")
+was: assert_eq!(state.worktree_form.as_ref().map(|f|f.status),Some(WorktreeFormSEditing),"anoperationnothingwilleveranswerisnotinflight")
