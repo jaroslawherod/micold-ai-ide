@@ -76,6 +76,12 @@ if [ "$render" -eq 1 ]; then
     step "media: capturing every entry in site/media.toml"
     [ -x "$site/capture/capture.sh" ] ||
       die "site/capture/capture.sh is not there yet -- pass --no-media to build without it"
+    # `site/build/src/media` survives a re-stage, on purpose -- it is where the capture writes and
+    # the stage reads. That is also how a picture from a previous run could be published as if it
+    # were this one's, so the moment this run started capturing is recorded and step 5 requires
+    # every published file to be newer than it.
+    mkdir -p "$staging"
+    : >"$staging/.capture-stamp"
     "$site/capture/capture.sh" --out "$staging/src/media"
   else
     step "media: skipped (--no-media) -- pages will show figures with no file behind them"
@@ -136,12 +142,52 @@ run_check() {
 }
 
 step "check: the built site"
+
+# --- what the manifest promised, in the site a reader would get ----------------------------------
+#
+# `capture.sh` already refuses a run that produced fewer files than the manifest declares, and this
+# says the same thing one stage later, about the built site rather than the staging tree. The two
+# are not the same assertion: between them lie the stage and the render, and a figure can lose its
+# file to either. A missing picture is not a small defect on this site -- the pictures are what it
+# is for -- so it is never published as a gap (FR-011a, SC-004).
+#
+# `-nt` is the second half. Without it the assertion is satisfied by whatever a previous run left
+# behind, which is exactly the failure that looks like success: a page showing last month's window,
+# captured from a build nobody is running any more.
+media_missing=0
+media_stale=0
+stamp="$staging/.capture-stamp"
+while IFS=$'\t' read -r id kind _scene _scheme; do
+  [ -n "$id" ] || continue
+  files=("$book/media/$id.png")
+  [ "$kind" = "clip" ] && files+=("$book/media/$id.webm" "$book/media/$id.mp4")
+  for file in "${files[@]}"; do
+    if [ ! -f "$file" ]; then
+      printf 'build.sh: %s declares "%s", and %s is not in the built site\n' \
+        "site/media.toml" "$id" "${file#"$book"/}" >&2
+      media_missing=$((media_missing + 1))
+    elif [ "$capture" -eq 1 ] && [ ! "$file" -nt "$stamp" ]; then
+      printf 'build.sh: %s is older than this run'"'"'s capture -- it is a file from a previous build\n' \
+        "${file#"$book"/}" >&2
+      media_stale=$((media_stale + 1))
+    fi
+  done
+done < <("$site/capture/capture.sh" --list)
+
+if [ "$media_missing" -ne 0 ] || [ "$media_stale" -ne 0 ]; then
+  die "$media_missing declared media file(s) missing from the built site, $media_stale left over from a previous run"
+fi
+printf -- '-- media completeness\n'
+
 run_check "internal links" "$site/checks/links.sh" --built "$book"
 run_check "media budget" "$site/checks/media-budget.sh" "$book"
 run_check "page checks" "$site/checks/page-checks.mjs" "$book"
 
 if [ "$missing" -eq 1 ] && [ -n "$strict" ]; then
   die "a check listed above is missing and MICOLD_SITE_STRICT is set -- refusing to call this built"
+fi
+if [ "$capture" -eq 0 ] && [ -n "$strict" ]; then
+  die "--no-media leaves the media from whatever ran last, and MICOLD_SITE_STRICT is set -- a publication captures"
 fi
 
 printf '\nBuilt %s\n' "$book"

@@ -175,16 +175,16 @@ fails on it while the three-platform matrix stays skipped.
 
 ### Tests for User Story 4 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T051 [P] [US4] Write the failing `scripts/tests/page-set.test.sh`: over fixture trees, `site/checks/page-set.sh` fails a Markdown file with no `SUMMARY.md` entry, an entry naming a missing file, and a literal colour / size / `border-radius` / `box-shadow` / duration in `site.css` (FR-023, SC-002, SC-008, SC-014)
-- [ ] T052 [P] [US4] Write the failing `scripts/tests/media-references.test.sh`: `site/checks/media-references.sh` fails a directive naming an undeclared id, a manifest entry no page references, a `scene` naming a script that does not exist, and an empty `alt` (FR-022, FR-011a, FR-014)
-- [ ] T053 [P] [US4] Write the failing `scripts/tests/media-budget.test.sh`: `site/checks/media-budget.sh` fails a page whose stills total more than 1 MB and a clip file over 3 MB, reports the page and its assets, and never downscales (FR-015c, SC-012)
+- [X] T051 [P] [US4] Write the failing `scripts/tests/page-set.test.sh`: over fixture trees, `site/checks/page-set.sh` fails a Markdown file with no `SUMMARY.md` entry, an entry naming a missing file, and a literal colour / size / `border-radius` / `box-shadow` / duration in `site.css` (FR-023, SC-002, SC-008, SC-014)
+- [X] T052 [P] [US4] Write the failing `scripts/tests/media-references.test.sh`: `site/checks/media-references.sh` fails a directive naming an undeclared id, a manifest entry no page references, a `scene` naming a script that does not exist, and an empty `alt` (FR-022, FR-011a, FR-014)
+- [X] T053 [P] [US4] Write the failing `scripts/tests/media-budget.test.sh`: `site/checks/media-budget.sh` fails a page whose stills total more than 1 MB and a clip file over 3 MB, reports the page and its assets, and never downscales (FR-015c, SC-012)
 
 ### Implementation for User Story 4
 
-- [ ] T054 [US4] Implement `site/checks/page-set.sh` (T051 green)
-- [ ] T055 [US4] Implement `site/checks/media-references.sh` (T052 green)
-- [ ] T056 [US4] Implement `site/checks/media-budget.sh` (T053 green)
-- [ ] T057 [US4] Add the completeness assertion to `site/build.sh`: every `[media.*]` entry has a produced file, and a missing capture is never published as a gap nor filled from a previous run (FR-011a, SC-004)
+- [X] T054 [US4] Implement `site/checks/page-set.sh` (T051 green)
+- [X] T055 [US4] Implement `site/checks/media-references.sh` (T052 green)
+- [X] T056 [US4] Implement `site/checks/media-budget.sh` (T053 green)
+- [X] T057 [US4] Add the completeness assertion to `site/build.sh`: every `[media.*]` entry has a produced file, and a missing capture is never published as a gap nor filled from a previous run (FR-011a, SC-004)
 - [ ] T058 [US4] Write `.github/workflows/pages.yml` as a reusable workflow — `workflow_call` + `workflow_dispatch` with `release_tag`/`docs_ref`, `concurrency: {group: pages, cancel-in-progress: true}` (FR-019), `permissions: {contents: read, pages: write, id-token: write}`, `environment: github-pages`, and the 13 ordered steps of [contracts/publication-workflow.md](./contracts/publication-workflow.md) with every check before the deploy (FR-018); third-party actions pinned to full commit SHAs
 - [ ] T059 [US4] Add the `pages` job to `.github/workflows/release.yml` — `needs: [release-please, publish]`, gated on `release_created`, calling `./.github/workflows/pages.yml` with the published tag. It MUST NOT be an `on: release: [published]` trigger: `GITHUB_TOKEN` raises that event and GitHub will not start a run from it (FR-016, research §9)
 - [ ] T060 [US4] Add the three pre-merge checks as **steps inside the existing `docs` job** of `.github/workflows/ci.yml` — `page-set.sh`, `media-references.sh`, `links.sh --sources` — adding no job, so `ci-complete`'s `needs:` and the required `ci complete` check name are untouched (FR-021, FR-022, FR-023, FR-020)
