@@ -21,6 +21,11 @@ cargo install mdbook lychee --locked
 npm i -g @axe-core/playwright playwright && npx playwright install --with-deps chromium
 ```
 
+`node` and `ffmpeg` are also declared in `mise.toml`, so on a machine with mise neither needs root
+and neither needs to be in that first line: `build.sh` and `capture/encode.sh` fall back to mise's
+copies when the tools are not on the `PATH`. CI installs the distribution's packages instead — the
+runner is throwaway and already root.
+
 macOS and Windows can run everything in Part A except capture (§A5–A7): the display, the software
 rasteriser and the window driver are Linux-verified here and nowhere else. That is a property of
 the publishing host, not of the product — see plan.md's Complexity Tracking.

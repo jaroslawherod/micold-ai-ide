@@ -235,9 +235,24 @@ and no video bytes were requested until a play control was pressed.
 - [X] T078 [P] Record the decision not to subset `MaterialSymbolsOutlined.ttf` in `site/README.md` and `docs/development/docs-site.md`, with the ~1.2 MB font total it costs and the note that fonts are cached across pages and sit outside the per-page still budget (research §4)
 - [X] T079 Run `cargo fmt --check`, `cargo clippy` and `mise run test` — CI stops at `cargo fmt --check` before any other job, so the local gate is not the CI gate
 - [X] T080 Confirm the merge gate is unchanged: `cargo test -p micold-core --test ci_gate_covers_every_job` and `cargo test -p micold-core --test documentation_is_not_read` both pass with the new checks in place (Principle VI, FR-020)
-- [ ] T081 Run the whole of [quickstart.md](./quickstart.md) Part A on a clean checkout, including the prove-they-fail commands for every check
+- [X] T081 Run the whole of [quickstart.md](./quickstart.md) Part A on a clean checkout, including the prove-they-fail commands for every check — A1–A8 run and green (A6 over all 12 media: 90 files identical across two captures); A9 is a publication and is deferred with T063/T064
 - [ ] T082 Run [quickstart.md](./quickstart.md) Part B against the published site and record the judgement halves of SC-001 and SC-006 in the pass record (FR-023a)
 - [X] T083 Cross-cutting documentation review: `docs/SUMMARY.md` matches the page set, `docs/README.md` still reads as the repository's documentation index on GitHub, and `docs/development/ci-pipeline.md` mentions the new `docs`-job steps
+
+---
+
+## Deferred — needs the upstream repository
+
+Four tasks act on `Cumulocity-IoT/micold-ai-ide` itself rather than on this tree, and this checkout's
+remote is not that repository. They are left unchecked rather than reported as done:
+
+- **T036 (second half)** — `gh repo edit --homepage`. The `README.md` half is done; the website
+  field is a repository setting.
+- **T063** — enabling Pages with source **GitHub Actions**. A repository setting, and the
+  prerequisite for everything below it.
+- **T064** — a `workflow_dispatch` publication, and the deliberate failure that proves the previous
+  site stays up. This is quickstart A9, so T081 carries A1–A8 only.
+- **T082** — Part B, the reader's judgement, which is run against the published site.
 
 ---
 
