@@ -251,6 +251,18 @@ impl<'a, M: Clone + 'a> From<SectionList<'a, M>> for Element<'a, M> {
                 }
             }
 
+            // Centred when the row is nothing but its glyph, and only then. The current row is
+            // `Filled` and inset by `PADDING_FILLED`; every other row is `Text` and inset by
+            // `PADDING_TEXT` — a difference the labels hide and a column of bare icons does not.
+            // Left-aligned, the current section's icon sat ~5dp right of the other three and the
+            // rail stopped reading as a column (found by the §B.6 visual pass). Padding is
+            // symmetric, so centring the content makes both variants land on the same axis.
+            let content: Element<'a, M> = if parts.label {
+                content.into()
+            } else {
+                container(content).center_x(Length::Fill).into()
+            };
+
             Button::with_content(content, variant, roles)
                 .width(Length::Fill)
                 .on_press(section.message)
@@ -307,6 +319,14 @@ fn collapse_control<'a, M: Clone + 'a>(
                 .width(Length::Fill),
         );
     }
+    // Centred once it is a bare glyph, on the same axis as the destinations above it — it is a
+    // `Text` button like the unselected rows, but the current row is `Filled` and inset further,
+    // so "match the rows" only holds if all of them are centred.
+    let content: Element<'a, M> = if collapsed {
+        container(content).center_x(Length::Fill).into()
+    } else {
+        content.into()
+    };
     Button::with_content(content, ButtonVariant::Text, roles)
         .width(Length::Fill)
         .on_press(message)
