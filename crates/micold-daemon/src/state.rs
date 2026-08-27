@@ -17,8 +17,8 @@ use micold_core::git::GitCli;
 use micold_core::input::{InputOutcome, InputReceiver};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
-    CatalogSnapshot, ClientIdentity, ClientInstance, DaemonMsg, DaemonSettings, RefusalReason,
-    SessionProcess, SessionSummary, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
+    ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, DaemonMsg, DaemonSettings,
+    RefusalReason, SessionProcess, SessionSummary, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
@@ -97,6 +97,28 @@ struct Inner {
     /// the text"; it is that the two failures are different failures. This one spends no restart
     /// budget (`attempts: 0`) and is cleared by a start rather than by a survival.
     start_failures: HashMap<SessionId, String>,
+    /// The final activity signal of a session whose process has exited, kept until it runs again
+    /// (`010` BUG-018).
+    ///
+    /// `Ended` is the FSM's absorbing state, but the FSM lives on the [`LiveSession`], and
+    /// supervision *drops* that entry the moment a session stops or gives up — so the one signal
+    /// that describes the session's whole remaining life was the one guaranteed not to survive to
+    /// be shown. A stopped row fell back to `Unknown` and drew nothing, exactly like a live session
+    /// whose hooks never fired.
+    ///
+    /// Runtime-only and per session, like `start_failures` beside it: activity resets to `Unknown`
+    /// on a daemon restart (H3/A4), and this holds no more than the FSM already produced.
+    ///
+    /// It is not derived from the lifecycle instead, which would need no field at all, because a
+    /// clean exit leaves the session `Idle` — and so does a session that was created and never
+    /// started. Deriving `Ended` from `Idle` would put a "finished" ring on a session that has
+    /// never run, which is precisely the invented state H1 forbids. `Failed` is unambiguous, but
+    /// covering only the crash-loop half would leave S3's actual case (a session that exited
+    /// cleanly) still reading nothing.
+    ///
+    /// Cleared when the session runs again ([`Self::register_session`]) and when it leaves the
+    /// catalog for good (`remove_live_by_ids`).
+    ended: HashMap<SessionId, ActivitySignal>,
     /// Per-directory cache of the environment-include-resolved variables (feature 011), already
     /// merged with the hardcoded `TERM` pair — ready to hand straight to a spawn site's `env`
     /// (FR-012b, BUG-003). Keyed by the directory the sourcing subprocess ran in, mirroring
@@ -236,6 +258,7 @@ impl DaemonState {
                 announced_dead_shells: std::collections::HashSet::new(),
                 worktrees: HashMap::new(),
                 start_failures: HashMap::new(),
+                ended: HashMap::new(),
                 env_include_cache: HashMap::new(),
                 worktree_gates: HashMap::new(),
                 starting: HashMap::new(),
@@ -480,6 +503,12 @@ impl DaemonState {
                 if let Some(title) = &live.last_title {
                     summary.title = SessionLabel::Named(title.clone());
                 }
+            } else if let Some(signal) = inner.ended.get(&summary.id) {
+                // No live entry, but this daemon watched it end (`010` BUG-018). The catalog cannot
+                // carry activity (H3/A4) and the FSM went with the live entry, so this is the only
+                // place the signal can come from — and it is only ever consulted here, where there
+                // is no live FSM to disagree with.
+                summary.activity = signal.clone();
             }
             // A start that failed for a reason worth saying (feature 026, FR-010). `attempts: 0`
             // deliberately: a missing binary is not a crash loop, and letting it climb toward
@@ -950,6 +979,8 @@ impl DaemonState {
             // recorded size goes with it (FR-020a). A mere stop/kill does *not* come through here,
             // which is what keeps the size across a restart of the same session.
             inner.sizes.remove(&id);
+            // Same reasoning for how it ended (BUG-018): an archived session has no row to badge.
+            inner.ended.remove(&id);
         }
         removed
     }
@@ -1240,7 +1271,8 @@ impl DaemonState {
         let id = pty.id();
         let mut procs = HashMap::new();
         procs.insert(SessionProcess::Primary, new_proc(Arc::clone(&pty), id));
-        self.lock().sessions.insert(
+        let mut inner = self.lock();
+        inner.sessions.insert(
             id,
             LiveSession {
                 procs,
@@ -1251,6 +1283,10 @@ impl DaemonState {
                 event_log: None,
             },
         );
+        // A fresh FSM starts at `Unknown`, so a retained `Ended` from the previous run would be
+        // shadowed anyway — but only for as long as this entry lives. Dropping it here is what
+        // stops the next stop-then-start from re-showing the *old* run's ending (BUG-018).
+        inner.ended.remove(&id);
         pty
     }
 
@@ -1401,11 +1437,13 @@ impl DaemonState {
                     Some((project, SupervisionAction::GiveUp, _, _, _)) => {
                         tracing::error!(session = %id.0, reason = "crash loop", "session gave up after repeated crashes (Failed)");
                         changed.push(project.to_path_buf());
+                        Self::note_ended(&mut inner, id, "crash loop");
                         to_drop.push(id);
                     }
                     Some((project, SupervisionAction::Stop, _, _, _)) => {
                         tracing::info!(session = %id.0, reason = "clean exit", "session stopped");
                         changed.push(project.to_path_buf());
+                        Self::note_ended(&mut inner, id, "clean exit");
                         to_drop.push(id);
                     }
                     // Session already gone from the catalog (closed concurrently) — just reap the
@@ -1458,6 +1496,28 @@ impl DaemonState {
         changed.sort();
         changed.dedup();
         changed
+    }
+
+    /// End a session's activity FSM and keep its verdict past the live entry (`010` BUG-018).
+    ///
+    /// Called from the two supervision outcomes that stop a session for good — a clean exit and a
+    /// crash-loop give-up — immediately before the live entry is dropped, and given the same one-word
+    /// `reason` the tick logs there, so the badge and the log agree about what happened. The
+    /// detailed sentence for a give-up is not duplicated here: it lives on
+    /// [`SessionLifecycle::Failed`], which the client already reads (BUG-017), and two copies of one
+    /// sentence are two things that can disagree.
+    ///
+    /// The FSM is still the producer — this applies [`ActivityEvent::Ended`] to it and keeps what
+    /// it returns, so `Ended`'s absorbing rule decides the result rather than this function.
+    fn note_ended(inner: &mut Inner, id: SessionId, reason: &str) {
+        let Some(live) = inner.sessions.get_mut(&id) else {
+            return;
+        };
+        live.activity.apply(ActivityEvent::Ended {
+            reason: reason.to_string(),
+        });
+        let signal = live.activity.signal().clone();
+        inner.ended.insert(id, signal);
     }
 
     /// Apply an activity [`ActivityEvent`] to a live session's FSM (US2, T046). Returns `true` if the
