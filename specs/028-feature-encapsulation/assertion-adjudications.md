@@ -934,3 +934,44 @@ was: assert_eq!(state.start_intent(PressTPrimary),StartIStart(AiCClaudeCode))
 was: assert_eq!(state.start_intent(PressTPrimary),StartIStart(AiCClaudeCode),"andtheprimaryhalfisunchanged—thesingle-CLIuserisunaffectedbythisfeature")
 was: assert_eq!(state.start_intent(PressTSecondary),StartIOfferChoice(vec![AiCClaudeCode,AiCCopilot]))
 was: assert_eq!(state.start_intent(target),StartINothingAvailable)
+
+## T059 — the second merge: main's two new gates arrive flat
+
+`main` moved a second time while the branch waited on review, and #228 could not land while it
+conflicted. The ten commits that arrived carry 026 BUG-001 ("an uninstalled default is *said*"),
+027 BUG-001 ("the app bar's theme reaches an open Settings draft") and 010 BUG-021/022/023 — and
+two brand-new gate files written against the flat vocabulary this feature has folded away:
+
+- `crates/micold-client/tests/unavailable_default_says_so.rs`
+- `crates/micold-client/tests/settings_draft_tracks_the_live_theme.rs`
+
+Both were rewritten here rather than kept flat, which is the same trade T058 recorded: an
+assertion whose *subject* moves is a new key even when the claim is byte-for-byte the one it was.
+Nothing is dropped and nothing is weakened. The renames are exactly three:
+
+| flat spelling (merge base) | encapsulated spelling (HEAD) | moved by |
+|---|---|---|
+| `state.session_start_menu`, `state.start_intent(..)` | `state.session.start_menu`, `state.session.start_intent(..)` | T036 |
+| `state.notify.*`, `state.theme_pref`, `state.settings_draft` | `state.notifications.queue.*`, `state.settings.theme_pref`, `state.settings.settings_draft` | T028, T032 |
+| `Message::SessionStartMenuOpened { .. }` | `Message::Session(SessionMsg::StartMenuOpened { .. })` | T014 |
+
+The 026 BUG-001 payload itself — `unavailable_default` on `StartIntent::OfferChoice` and on
+`Msg::StartMenuOpened`, and the notice `start_menu_toggled` now answers — survives unchanged; only
+the path it is spelled through moved.
+
+was: assert!(!published.iter().any(|m|matches!(m,MSessionStartMenuOpened{..})),"andnolistinthewayofit.Published:{published:?}")
+was: assert!(published.iter().any(|m|matches!(m,MSessionStartMenuOpened{location:SessionLDefault,unavailable_default:Some(AiCCopilot),})),"andthepresshasto*do*something:theavailableCLIsareofferedatthatmoment,which\isthesamelistthechevronopens—carryingwhichdefaultcouldnotberun,sothe\reducercansayso(BUG-001).Published:{published:?}")
+was: assert!(state.session_start_menu.is_none(),"thesecondpressclosedit")
+was: assert!(state.session_start_menu.is_some())
+was: assert!(state.session_start_menu.is_some(),"anditstillofferswhatisavailable;sayingsoreplacesnothing(FR-002)")
+was: assert!(state.session_start_menu.is_some(),"theliststillopens")
+was: assert!(state.settings_draft.is_none(),"trackingavalueintoaformthatisnotopenwouldopenone")
+was: assert_eq!(opened,vec![&MSessionStartMenuOpened{location:SessionLDefault,unavailable_default:Some(AiCCopilot),}],"oneopen,forthisrow'slocation—thechevron'smessage,sotherefreshthebinarydoes\onithappensforthispresstoo.Published:{published:?}")
+was: assert_eq!(state.notify.visible(),None)
+was: assert_eq!(state.start_intent(PressTPrimary),StartIOfferChoice{providers:vec![AiCClaudeCode],unavailable_default:Some(AiCCopilot),})
+was: assert_eq!(state.start_intent(PressTPrimary),StartIOfferChoice{providers:vec![AiCClaudeCode],unavailable_default:Some(AiCCopilot),},"theprimaryhalfopenedalisttheuserdidnotaskfor,andhastobeabletosaywhy")
+was: assert_eq!(state.start_intent(PressTSecondary),StartIOfferChoice{providers:vec![AiCClaudeCode,AiCCopilot],unavailable_default:None,},"andnothingtoannounce—thispressaskedforthelist(BUG-001)")
+was: assert_eq!(state.start_intent(PressTSecondary),StartIOfferChoice{providers:vec![AiCClaudeCode],unavailable_default:None,},"thechevronaskedforthelist;nothingaboutitneedsexplaining")
+was: assert_eq!(state.theme_pref,ThemePDark)
+was: assert_eq!(state.theme_pref,ThemePDark,"precondition:themenuappliesitschoiceimmediately")
+was: assert_eq!(state.theme_pref,ThemePLight,"editingtheAppearancesectionmustnotapplythethemebeforeSave,orCancelwould\havenothingtodiscard")
