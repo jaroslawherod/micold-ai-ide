@@ -1,5 +1,68 @@
 # Changelog
 
+## [0.11.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.10.0...micold-ai-ide-v0.11.0) (2026-08-27)
+
+
+### Features
+
+* **026:** a resume refuses when the CLI no longer has the conversation ([d9a807d](https://github.com/jaroslawherod/micold-ai-ide/commit/d9a807d4d048da5a6b1d7a8fb765c43612670e03))
+* **026:** a session records which AI CLI it runs, and Copilot is the second ([c5b8da4](https://github.com/jaroslawherod/micold-ai-ide/commit/c5b8da4179e1ce310e38702200f5e41ca3ba2481))
+* **026:** FR-016a re-homes onto the pinned AI tab ([5971f22](https://github.com/jaroslawherod/micold-ai-ide/commit/5971f22ea4a2652052a9d907e5f5670a16c82c11))
+* **026:** say why a start failed, in the one surface built for a sentence (T088) ([e1a11a2](https://github.com/jaroslawherod/micold-ai-ide/commit/e1a11a27cbd8736399d5fa7c985b388176c1fd99))
+* **026:** the start affordance offers the list when the default is missing (T085) ([1163d46](https://github.com/jaroslawherod/micold-ai-ide/commit/1163d4683b23e6ba6a4673439ea4bb09d217a390))
+* **027:** ask the service which AI CLIs exist, and name the missing one ([b90ed44](https://github.com/jaroslawherod/micold-ai-ide/commit/b90ed44d2cbc6ca58dd86a49572bb5682c0f8bcd))
+* **027:** give Settings a collapsible icon rail, and one home per setting ([3e03842](https://github.com/jaroslawherod/micold-ai-ide/commit/3e03842cf52b989ae92f2092b4ff06726b3d473e))
+* **027:** run the session daemon inside a container sandbox ([079e562](https://github.com/jaroslawherod/micold-ai-ide/commit/079e562d6510e3ff01de408fe24149e47c0dd09e))
+* **027:** ship the AI CLIs in the image, and give the sandbox a home ([3849224](https://github.com/jaroslawherod/micold-ai-ide/commit/38492242c747581345c23ee102fd0fed60740292))
+* **027:** the tab strip is the only way between panes ([4303e49](https://github.com/jaroslawherod/micold-ai-ide/commit/4303e49c20385a000e91cfc68d37097c80e8b2ec))
+* **showcase:** pose the banner's action on both hosts (T156) ([91a75a9](https://github.com/jaroslawherod/micold-ai-ide/commit/91a75a923faac235cc16470ea4cc69944808d2b1))
+
+
+### Bug Fixes
+
+* **007:** a transition starts at its beginning, not part-way through ([e057691](https://github.com/jaroslawherod/micold-ai-ide/commit/e0576913d05f8d3ffa4276b2cfe62dac518a4056))
+* **007:** a transition takes its stated time, not a fixed number of frames ([1eb5a6f](https://github.com/jaroslawherod/micold-ai-ide/commit/1eb5a6f349e8477edfb2f01ed88bb29a3b6ed91d))
+* **010:** carry the give-up reason and the real attempt count (BUG-017) ([e9d5e07](https://github.com/jaroslawherod/micold-ai-ide/commit/e9d5e07657444ef6fcf0c507ead7ff323601ca4b))
+* **010:** compare the journal stream instead of detecting the variable (BUG-015) ([301d678](https://github.com/jaroslawherod/micold-ai-ide/commit/301d67808f9ebce1387a4480218837eb83093142))
+* **010:** decide BUG-016 — FR-006b constrains the service, not the client ([9a2cc45](https://github.com/jaroslawherod/micold-ai-ide/commit/9a2cc45cbb8178fbc8359a660ad619ad4e2df7d9))
+* **010:** end a mutation the connection outlived (BUG-020) ([1ef6ab6](https://github.com/jaroslawherod/micold-ai-ide/commit/1ef6ab690d7248449cfef154ba6214e32fd4969b))
+* **010:** hold the second run's handle by name (clippy) ([7f3e587](https://github.com/jaroslawherod/micold-ai-ide/commit/7f3e587a5fda80514ba9f4b29ac0a5d6c38daf37))
+* **010:** let a refused respawn keep advancing to Failed (BUG-024) ([64009c6](https://github.com/jaroslawherod/micold-ai-ide/commit/64009c65e00a32ac89cd579e28469cc03c1e6d42))
+* **010:** let a session that ended say so (BUG-018) ([fe6d598](https://github.com/jaroslawherod/micold-ai-ide/commit/fe6d598502d28487be1fbe24ecad5b0186466f3a))
+* **010:** let a window recognise itself, so it stops taking its own project (BUG-022) ([08e36e7](https://github.com/jaroslawherod/micold-ai-ide/commit/08e36e78800d70315bcd446d7e33b7de3e5e315e))
+* **010:** say a project is already open, not that it was taken (BUG-023) ([574313a](https://github.com/jaroslawherod/micold-ai-ide/commit/574313a695e66a09374c7b85cc03085021a55c08))
+* **010:** show the give-up reason and the attempt count (BUG-017 step 3) ([c254caa](https://github.com/jaroslawherod/micold-ai-ide/commit/c254caa1f3eef6f437033e0397f11ba6c609324d))
+* **010:** verify the /tmp endpoint dir before repairing it (BUG-019) ([b9d50f7](https://github.com/jaroslawherod/micold-ai-ide/commit/b9d50f76d38b8e2fefd834c06544c3c1ae4f279d))
+* **021:** play the overlay exit — make the backdrop chain invariant (T084) ([324b471](https://github.com/jaroslawherod/micold-ai-ide/commit/324b471d9da671eb89891d029d7b73d6295063a2))
+* **024:** the reveal records where it sent the list (BUG-002) ([c6fff92](https://github.com/jaroslawherod/micold-ai-ide/commit/c6fff9268b3f481946b1fc678b6ee415c9e31ddb))
+* **026:** a list that opens instead of a session says why (BUG-001) ([a9aa848](https://github.com/jaroslawherod/micold-ai-ide/commit/a9aa84812ff8a0f6eec70a1abf7287582e7507e1))
+* **026:** announce a start that failed, not only one that replied (T087) ([a153d66](https://github.com/jaroslawherod/micold-ai-ide/commit/a153d66e47f449335d4c5fda7bac1bcd2c55b6e0))
+* **026:** hang the start list from the press, not the window origin (T089) ([7250097](https://github.com/jaroslawherod/micold-ai-ide/commit/725009718cff04a6f0d8bbe27afeaba2b3e82d81))
+* **026:** let the branch build on main's `text_button` and `start_new` ([e8758a9](https://github.com/jaroslawherod/micold-ai-ide/commit/e8758a9b5ff0dfd93b65dd23d51b31a7000444bf))
+* **026:** push the catalog when an event-log line moves the badge (T086) ([7df6430](https://github.com/jaroslawherod/micold-ai-ide/commit/7df6430e5403ac065d4aadf61aefe3acdd8c6f3a))
+* **027:** centre a collapsed rail's icons so they form one column ([e570616](https://github.com/jaroslawherod/micold-ai-ide/commit/e57061647b3244c3018f7b5ad133c52a8e446909))
+* **027:** derive the edge fade from the same geometry as the strip ([1b2a33d](https://github.com/jaroslawherod/micold-ai-ide/commit/1b2a33d95db5ccb0ef7642c90c3f22ec210281a1))
+* **027:** put a note in the column of the control it is about (T146) ([3a4a263](https://github.com/jaroslawherod/micold-ai-ide/commit/3a4a263ee0d29c8c8df88ffbc0cf1541660585cd))
+* **027:** spell the sandbox-home assertion with the platform's separator ([1113b0b](https://github.com/jaroslawherod/micold-ai-ide/commit/1113b0ba85907e1eb8feaf126138e2d6e87d94ec))
+* **027:** stop Save reverting a theme chosen from the app bar (BUG-001) ([261296b](https://github.com/jaroslawherod/micold-ai-ide/commit/261296bf5eac7779427e59bafbc9171bdfcb3d2a))
+* **027:** the podman failures we had transcribed are not the ones it prints ([8b0397c](https://github.com/jaroslawherod/micold-ai-ide/commit/8b0397cb48b560111e73504aa920509c8b4f54a7))
+* **027:** the real-runtime suite stopped compiling when a session gained a provider ([fdf7d4f](https://github.com/jaroslawherod/micold-ai-ide/commit/fdf7d4f02bc457d41a102be2e12f5d46ac796f05))
+* **027:** the two defects a visual pass found in the trailing group ([5035ccc](https://github.com/jaroslawherod/micold-ai-ide/commit/5035ccc7460fc64d83510c75d1e934ebd3882971))
+* **ui:** a component takes its foreground from what it stands on (T152-T155) ([8b48045](https://github.com/jaroslawherod/micold-ai-ide/commit/8b48045012e1bbdea58aa741e081696abfa58b81))
+* **ui:** measure a pair with its state layer on, and narrow the host (T160-T166, T168) ([bfeff96](https://github.com/jaroslawherod/micold-ai-ide/commit/bfeff963779b754d8b4d1ed4834e505721bd49bf))
+
+
+### Performance Improvements
+
+* **010:** size a scrollback request by the viewport, not the scroll depth (BUG-021) ([8aeb375](https://github.com/jaroslawherod/micold-ai-ide/commit/8aeb375d9f2d8d05b60c79741f2231a6107c40cf))
+* **build:** cap dev/test debuginfo at line tables ([5b484cf](https://github.com/jaroslawherod/micold-ai-ide/commit/5b484cf012c682b636355ab7ff9b025b951970cb))
+
+
+### Build & CI
+
+* **021:** run feature 021's guards on all three platforms (T079) ([ae5b793](https://github.com/jaroslawherod/micold-ai-ide/commit/ae5b793a71d40c8d6940a91d3b0a3fc3d7073daa))
+* **027:** run the half of the sandbox suite that ran nowhere (T147-T149) ([391d089](https://github.com/jaroslawherod/micold-ai-ide/commit/391d089ef898071aa577810d79f4da054e72ced9))
+
 ## [0.10.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.9.0...micold-ai-ide-v0.10.0) (2026-08-21)
 
 
