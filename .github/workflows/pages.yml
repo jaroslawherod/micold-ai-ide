@@ -1,0 +1,236 @@
+name: pages
+
+# Publish the documentation site (feature 028).
+#
+# One job, two entry points, one deploy:
+#
+#   * `workflow_call` — `release.yml` calls this after it publishes a release, with the tag it just
+#     published. That is a deliberate choice over `on: release: [published]`: the release is
+#     published by `release.yml`'s own `GITHUB_TOKEN`, and GitHub does not start a workflow run from
+#     an event raised by `GITHUB_TOKEN`. Such a trigger fires in every manual test and never on a
+#     real release — the worst possible failure mode for a publication step. Calling the reusable
+#     workflow keeps the publication inside the release run, where a failure is a failed job on the
+#     release rather than a silence somebody notices weeks later (FR-016).
+#
+#   * `workflow_dispatch` — a maintainer republishing. Its defaults are the asymmetry of FR-017: the
+#     application comes from the newest published release, because that is what readers are running,
+#     and the prose comes from the default branch, because the reason to republish is a documentation
+#     correction that landed after the release. Passing `docs_ref` explicitly overrides that.
+#
+# Contract: specs/028-docs-site-github-pages/contracts/publication-workflow.md
+#
+# Every check runs before the deploy step, so a failure leaves the previously published site
+# untouched and reachable. There is no partial-publish state (FR-018).
+#
+# This workflow is not part of the merge gate. It is triggered by a release, builds its own copy of
+# the application, and appears nowhere in `ci-complete`'s `needs:` — so a documentation-only change
+# that skipped the three-platform matrix is publishable exactly like any other (FR-020).
+
+on:
+  workflow_call:
+    inputs:
+      release_tag:
+        description: The release tag to build the application and the media from.
+        required: true
+        type: string
+      docs_ref:
+        description: The ref to take the prose from. Defaults to release_tag.
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: The release tag to build from. Defaults to the newest published release.
+        required: false
+        type: string
+      docs_ref:
+        description: The ref to take the prose from. Defaults to the default branch.
+        required: false
+        type: string
+
+# The newer release wins. Two releases in quick succession would otherwise race to deploy, and the
+# one that finished second would not necessarily be the later one (FR-019).
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+# Least privilege, as `release.yml` sets: read the repository, write a Pages deployment, and mint the
+# OIDC token `deploy-pages` exchanges for it. Third-party actions are pinned to full commit SHAs with
+# the human-readable version in a trailing comment.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # Opt out of the shared target directory `.cargo/config.toml` points at. It exists so that several
+  # local worktrees do not each keep a ~30 GB `target/`; a runner has one checkout and a disk it
+  # throws away, and `Swatinem/rust-cache` caches `./target`. `scripts/build-lock.sh` honours an
+  # explicit setting, so the capture's own build lands here too rather than beside the checkout.
+  CARGO_TARGET_DIR: target
+
+jobs:
+  publish:
+    name: publish site
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      # --- 1. the two refs ------------------------------------------------------------------------
+      #
+      # Resolved before the checkout, because the checkout needs the first of them. Inputs reach the
+      # shell through the environment rather than through `${{ }}` inside the script: an input is a
+      # string a maintainer typed, and interpolating it into a shell body is how that string becomes
+      # a command.
+      - name: Resolve the release tag and the prose ref
+        id: refs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+          INPUT_DOCS_REF: ${{ inputs.docs_ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DISPATCHED: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          set -euo pipefail
+          tag="$INPUT_RELEASE_TAG"
+          if [ -z "$tag" ]; then
+            tag="$(gh release view --json tagName --jq .tagName)"
+            echo "no release_tag given -- the newest published release is $tag"
+          fi
+
+          docs="$INPUT_DOCS_REF"
+          if [ -z "$docs" ]; then
+            if [ "$DISPATCHED" = "true" ]; then docs="$DEFAULT_BRANCH"; else docs="$tag"; fi
+          fi
+
+          # The tag is `micold-ai-ide-vX.Y.Z`; the version the pages show is `X.Y.Z`.
+          version="${tag##*-v}"
+          version="${version#v}"
+
+          {
+            echo "release_tag=$tag"
+            echo "docs_ref=$docs"
+            echo "version=$version"
+          } >>"$GITHUB_OUTPUT"
+          echo "publishing $version from $tag, with the prose from $docs"
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ steps.refs.outputs.release_tag }}
+
+      # The prose is the only thing a republish is allowed to move: the application, the theme, the
+      # scenes and the checks all come from the tag, so the pictures are of the release the pages
+      # describe. Overlaying `docs/` alone is what makes a documentation correction publishable
+      # without re-releasing (FR-017).
+      - name: Take the prose from docs_ref
+        if: ${{ steps.refs.outputs.docs_ref != steps.refs.outputs.release_tag }}
+        env:
+          DOCS_REF: ${{ steps.refs.outputs.docs_ref }}
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin "$DOCS_REF"
+          git checkout FETCH_HEAD -- docs
+          echo "docs/ is now $DOCS_REF ($(git rev-parse --short FETCH_HEAD))"
+
+      # --- 2. what the capture and the site need --------------------------------------------------
+      #
+      # The same list `site/README.md` names, and the reason publication runs on Linux only: the
+      # screenshots are of a real window on a real display, which here is Xvfb rendering through
+      # Mesa's lavapipe because a runner has no GPU.
+      - name: Install the capture and site dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb mesa-vulkan-drivers xdotool imagemagick ffmpeg \
+            libxkbcommon-dev libwayland-dev libx11-dev \
+            libxcursor-dev libxrandr-dev libxi-dev
+
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+
+      # mdBook renders the site and lychee checks its links. Both are Rust programs, so both are
+      # installed the way `site/README.md` says to install them; `rust-cache` keeps `~/.cargo/bin`
+      # between runs, which is what stops this being several minutes on every publication.
+      - name: Install mdBook and lychee
+        run: cargo install mdbook lychee --locked
+
+      # `page-checks.mjs` drives a real browser: axe-core's rules are about a rendered page --
+      # contrast as painted, focus as drawn, names as computed -- and there is nothing in the Rust
+      # toolchain that could stand in for one.
+      - name: Install the page checks' browser
+        working-directory: site/checks
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      # --- 3. the application the screenshots are of ----------------------------------------------
+      #
+      # The capture builds and pins this pair itself (`scene_pin_binaries`), copying both out of the
+      # target directory in one invocation so a client and a daemon from different builds can never
+      # be pinned together. Building here first is not a duplicate of that: it puts a compilation
+      # failure in a step named for it, before an hour of capture, rather than inside a scene's log.
+      - name: Build the client and the daemon
+        run: |
+          set -euo pipefail
+          cargo build --release -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon
+          test -x target/release/micold-ai-ide
+          test -x target/release/micold-daemon
+
+      # --- 4. the theme's contrast ----------------------------------------------------------------
+      #
+      # The site's colours are derived from the application's tokens, and a derived pair that fails
+      # WCAG contrast is a page nobody can read. `page-checks.mjs` would catch it too, an hour later,
+      # against a built site; this catches it in seconds against the tokens themselves (FR-033).
+      - name: Check the derived theme's contrast
+        run: cargo test -p micold-core site_theme_contrast
+
+      # --- 5-12. the site itself ------------------------------------------------------------------
+      #
+      # One script, because the pipeline already exists and a second copy of it written in YAML would
+      # drift from the one developers run:
+      #
+      #   5  emit `site/theme/css/tokens.css` from the design tokens
+      #   6  capture every asset `site/media.toml` declares, and fail if any was not produced
+      #   7  encode the clips and their posters
+      #   8  stage `docs/` -> `src/`, substituting the version and expanding the media directives
+      #   9  render with mdBook
+      #   10 `links.sh --built` -- every internal link and fragment resolves
+      #   11 `media-budget.sh` -- 1 MB of stills per page, 3 MB per clip
+      #   12 `page-checks.mjs` -- WCAG 2.2 AA in both schemes, the first screen, navigation depth,
+      #      search, and nothing fetched off-origin
+      #
+      # `MICOLD_SITE_STRICT=1` is what makes this a gate rather than a report: without it a check
+      # that is not present is reported and skipped, and "the check was not there" would look exactly
+      # like "the check passed".
+      #
+      # `GH_TOKEN` is for `stage.sh`, which asks the release what assets it actually carries before
+      # it will let a page link to one.
+      - name: Build and check the site
+        env:
+          MICOLD_SITE_STRICT: '1'
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.refs.outputs.release_tag }}
+          VERSION: ${{ steps.refs.outputs.version }}
+        run: site/build.sh --version "$VERSION" --tag "$RELEASE_TAG"
+
+      # --- 13. the deploy -------------------------------------------------------------------------
+      #
+      # Everything above has to have passed to get here, which is the whole of FR-018: a failed check
+      # means no deploy, and the site a reader has open stays exactly as it was.
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: site/book
+
+      - uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+        id: deploy

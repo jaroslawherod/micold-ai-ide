@@ -334,6 +334,37 @@ jobs:
           # user guide. This check runs on documentation-only changes too -- which is the point.
           test -f docs/development/ci-pipeline.md
 
+      # The pre-merge half of the documentation site's checks (feature 028). They are steps in this
+      # job and not a job of their own, deliberately: `docs` is the one job feature 023 keeps running
+      # on a documentation-only change, so it is the only place a check over documentation is
+      # guaranteed to run at all -- and adding a job would mean adding it to `ci-complete`'s `needs:`
+      # and to the required-check name the default branch's ruleset holds, which lives outside this
+      # repository.
+      #
+      # lychee arrives as its published binary rather than through `cargo install`. This job has no
+      # Rust toolchain and wants none: installing one and compiling a link checker would cost a
+      # documentation-only change several minutes, which is the cost feature 023 exists to remove.
+      # `pages.yml` installs it with cargo instead, because it already has the toolchain, the cache
+      # and mdBook to install beside it.
+      - name: Install lychee
+        env:
+          LYCHEE_TAG: lychee-v0.24.2
+          LYCHEE_ASSET: lychee-x86_64-unknown-linux-gnu.tar.gz
+        run: |
+          set -euo pipefail
+          base="https://github.com/lycheeverse/lychee/releases/download/$LYCHEE_TAG"
+          curl -fsSL -O "$base/$LYCHEE_ASSET" -O "$base/$LYCHEE_ASSET.sha256"
+          sha256sum -c "$LYCHEE_ASSET.sha256"
+          tar xzf "$LYCHEE_ASSET" lychee
+          sudo install -m 0755 lychee /usr/local/bin/lychee
+          rm -f "$LYCHEE_ASSET" "$LYCHEE_ASSET.sha256" lychee
+      - name: Every page is listed, and the theme is drawn from the tokens
+        run: site/checks/page-set.sh
+      - name: The pages, the media manifest and the scenes agree
+        run: site/checks/media-references.sh
+      - name: Every internal link in the sources resolves
+        run: site/checks/links.sh --sources
+
   # The single status check the default branch's ruleset requires (feature 023). It states the
   # outcome of the run instead of enumerating the pipeline's internals, which is what lets the jobs
   # above be skipped on a documentation-only change without making a pull request unmergeable.
