@@ -32,7 +32,7 @@ window.**
 ### Session 2026-07-20
 
 - Q: Who owns the scrollback limit, given the service must retain scrollback while detached? → A: The service owns it as a durable per-user setting; the client displays it and requests changes via the service.
-- Q: What happens to previously-running sessions when the service itself restarts (reboot, crash, contract-mismatch restart)? → A: They are preserved in a distinct "stopped — resumable" state and never auto-resumed; the user resumes each explicitly.
+- Q: What happens to previously-running sessions when the service itself restarts (reboot, crash, contract-mismatch restart)? → A: They are preserved in a distinct "stopped — resumable" state and never auto-resumed by the service; the user resumes each explicitly. *(Qualified 2026-08-27 — BUG-016: reopening a project resumes the one session it restores, which is the user resuming it explicitly by opening the project. See the 2026-08-27 session below and FR-006b.)*
 - Q: What counts as "unseen activity" on a non-viewed session? → A: Two distinct signals — a notification-grade "needs attention" (idle awaiting input, or exited/failed) and a plain "working" indicator. The activity indicator applies to every session, viewed or not, so the user can always see whether a session is busy or waiting on them.
 - Q: Should empty-session pruning run while no client is attached? → A: No — pruning runs only for a project that currently has an attached client, so cleanup always has an observer and unattended sessions are never silently removed.
 - Q: How is the headless service diagnosed when something fails while detached? → A: Emit through a logging layer whose backend is configurable. When launched by a platform service manager that captures standard streams, log there; otherwise log to a rotating per-user file. Either way the client surfaces the log location and recent service errors in the UI.
@@ -52,6 +52,22 @@ user before `/speckit-tasks`.
   bytes on macOS, which the application-support directory alone can exceed) and must assert this at
   bind time rather than surfacing an opaque `EINVAL`.
 - **FR-010 confirmed consistent** with FR-012a; no change required.
+
+### Session 2026-08-27 (BUG-016)
+
+- Q: `010` FR-006b says a service restart can never cause an agent to take action without the user
+  asking for it. `025-last-session-memory` FR-004a says restoring a session resumes it, and the client
+  restores one on every project open. Which wins? → A: **FR-004a**, and FR-006b is amended to say what
+  it always actually constrained — the service. The client resuming the session the user opened is
+  the user asking for it; what must not happen is a restart waking sessions nobody opened, and the
+  bound that guarantees it is **one** resume, in the project being opened. `025` recorded this trade
+  when it made it ("the scope, not the prohibition"); it just never reached this feature's text.
+- Q: Should a restore *after a service crash* be treated differently from a restore *at launch*? The
+  user's last intent is less certain when a daemon was killed underneath them than when they quit and
+  came back. → A: **Deferred, not declined.** It is a distinction neither feature currently makes, and
+  building it speculatively would add a client-side notion of "why am I attaching" that nothing else
+  needs. Revisit if a user reports an unwanted resume after a crash — that report is the evidence this
+  question is missing. (BUG-016 Fix option 2.)
 
 ---
 
@@ -225,9 +241,13 @@ confirm refusal plus a working restart action.
    **Then** the connection is refused with a message stating both versions and the required action.
 2. **Given** the refusal message, **When** the user chooses "restart service", **Then** the old
    service stops, a matching one starts, and the client attaches successfully.
-3. **Given** the service was restarted for a version mismatch, **When** the user opens a session that
-   was live before the restart, **Then** it is shown in the interrupted-resumable state and a single
-   explicit action continues the prior conversation; it is not silently relaunched.
+3. **Given** the service was restarted for a version mismatch, **When** the client attaches, **Then**
+   every session that was live before the restart is shown in the interrupted-resumable state, and
+   each is continued by a single explicit action rather than relaunched underneath the user. The one
+   exception is the session the reopened project restores, which resuming *is* the explicit action for
+   — opening the project is the user asking for it (FR-006b, `025` FR-004a). *(Amended 2026-08-27 —
+   BUG-016; it read "when the user opens a session that was live before the restart", which was the
+   restored session's case stated as though nothing had started it.)*
 4. **Given** a running service whose build differs from the newly-connecting client's build while
    `PROTOCOL_VERSION` and `SCHEMA_HASH` still match, **When** the client connects, **Then** the
    daemon is recognized as stale rather than silently accepted, and the client offers the same
@@ -297,7 +317,9 @@ a session survived; confirm it does not survive without the setting.
 - **Service dies while a client is attached**: every session state becomes unknown — the client shows
   a disconnected state for all sessions and offers recovery rather than showing stale content as live.
 - **Session identity exists but its process does not** (after a service restart or contract change):
-  the session is listed in the interrupted-resumable state, never lost and never auto-relaunched.
+  the session is listed in the interrupted-resumable state, never lost and never relaunched by the
+  service. A client that reopens the project resumes the single session it restores and no other
+  (FR-006b, `025` FR-004a).
 - **Externally modified stored state** *(out of scope — see Out of Scope)*: the durable catalog file
   changed on disk while the service owned it. The service is the single writer (FR-008); editing the
   file underneath it is unsupported and the outcome is undefined.
@@ -335,9 +357,26 @@ a session survived; confirm it does not survive without the setting.
   relaunch their processes. Each MUST be presented in a distinct "interrupted, resumable" state,
   visibly different from both "running" and a session the user stopped deliberately, and MUST be
   resumable by a single explicit user action that continues the prior conversation.
-- **FR-006b**: The restart supervision of FR-005 applies only to a process that exits while the
-  service is running. It MUST NOT be triggered by service startup, so a service restart can never
-  cause an agent to take action without the user asking for it.
+- **FR-006b** *(amended — BUG-016)*: The restart supervision of FR-005 applies only to a process that
+  exits while the service is running. Service startup MUST NOT trigger it: whatever ended the service
+  — a reboot, a crash, a deliberate restart — the service MUST relaunch nothing of its own accord when
+  it comes back, and every session it recovers MUST arrive in the interrupted-resumable state of
+  FR-006a.
+
+  This constrains **the service**, which is all it was ever able to constrain. It is not a prohibition
+  on the client, which resumes the single session it restores when a project is opened — feature
+  `025-last-session-memory` FR-004a, which supersedes that feature's own "restoring starts nothing"
+  for a reason recorded there: selecting a session by hand has always resumed it, so a restore that
+  did not left the user returned to a session they could not use.
+
+  What survives for the user is therefore a bound on **scope**, not a promise of silence: after a
+  service restart at most **one** session resumes — the one the reopened project displays, which is
+  the one the user asked for by opening it — and no other session changes run state, in that project
+  or any other (`025` FR-004a and SC-005a; gated from this side by
+  `a_service_restart_resumes_only_the_session_being_restored`). Until 2026-08-27 this requirement said
+  instead that "a service restart can never cause an agent to take action without the user asking for
+  it", unqualified, which had not described the build since `025`'s BUG-002 and which `010`'s own
+  tests could not catch, because the actor it named was obeying it. See `bugs/BUG-016.md`.
 - **FR-006c**: Starting a session whose working directory does not exist MUST be refused. The service
   MUST NOT substitute another directory — not the user's home directory, not the project root — and
   MUST NOT leave a process registered for a refused start. This applies to every start: a user's
@@ -769,6 +808,18 @@ justified against measured payloads, and a refused signal degrades under H1 rath
 inside the user's session) and SC-022 (an agent-sized payload is accepted, proven executably, while
 an over-bound one is still refused). Same failure shape as BUG-001 — an unverified assumption about
 Claude Code's hook interface, there the payload *shape*, here its *size*. See `bugs/BUG-010.md`.
+
+**Bugfix**: 2026-08-27 — BUG-016 Amended FR-006b, which promised that "a service restart can never
+cause an agent to take action without the user asking for it" and had not described the build since
+feature `025-last-session-memory`'s BUG-002 superseded that feature's FR-004 with FR-004a. `025` traded
+the prohibition for a scope limit deliberately and recorded the trade in its own clarifications; what
+nobody noticed was the same prohibition standing unqualified here. No code changed: the daemon obeys
+FR-006b exactly and always did, which is why `010`'s tests could not see the gap — the client is the
+actor that starts the restored session, and this requirement never named it. The amendment states what
+survives (one session resumes, the one the reopened project displays; no other session's run state
+changes), quickstart S5 asks for the count rather than for silence, and
+`a_service_restart_resumes_only_the_session_being_restored` pins it from this side. See
+`bugs/BUG-016.md`.
 
 **Bugfix**: 2026-07-28 — BUG-007 Added FR-024a (read-only state tracks current attachment ownership
 as the service reports it, so any accepted attach clears it), a fifth User-Story-5 acceptance
