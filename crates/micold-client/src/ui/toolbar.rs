@@ -1,7 +1,19 @@
 //! The Material top app bar, composed from reusable primitives (Principle VIII): the shared
 //! [`toolbar`] with the application title and, on the right, a single overflow-menu trigger
-//! (three dots). The menu's items — a cycling theme-mode toggle and "About" — float as an
-//! overlay (see [`crate::ui::material::menu_overlay`], rendered in `ui::view`).
+//! (three dots). The menu's items float as an overlay (see
+//! [`crate::ui::material::menu_overlay`], rendered in `ui::view`).
+//!
+//! # The menu offers actions, not settings (feature 027, FR-026e)
+//!
+//! It used to carry a theme-mode cycle and a "Keep sessions after logout" command, both of which
+//! Settings also offers. Two controls for one setting is not a convenience; it is two writers, and
+//! BUG-001 is what that cost — the app bar applied a theme immediately while the open Settings
+//! form held a copy taken when it opened, so Save wrote the stale one back over the choice the
+//! user had just watched take effect. That was unreachable while Settings was a modal covering the
+//! app bar, and reachable the moment FR-026 made it a full-surface view.
+//!
+//! What is left here is the three things that are not settings: opening Settings, asking for
+//! diagnostics, and About. Every one of them *does* something rather than storing a value.
 
 use crate::app::{Message, State};
 use crate::features::help::help_actions;
@@ -9,49 +21,25 @@ use crate::icons::Icon;
 use crate::ui::material::{Button, MenuItem, MenuTrigger, Toolbar};
 use iced::Element;
 use micold_core::metadata::AppMetadata;
-use micold_core::theme::{ColorScheme, ThemePreference};
+use micold_core::theme::ColorScheme;
 use micold_core::tokens;
 
-/// The icon representing the current theme mode (shown on the menu's mode toggle).
-fn mode_icon(pref: ThemePreference) -> Icon {
-    match pref {
-        ThemePreference::FollowSystem => Icon::AutoMode,
-        ThemePreference::Light => Icon::LightMode,
-        ThemePreference::Dark => Icon::DarkMode,
-    }
-}
-
-/// The overflow menu's items: a cycling theme-mode toggle (Auto → Light → Dark), then About.
-/// Rendered as a floating overlay by `ui::view` via `menu_overlay`.
-pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
-    #[allow(unused_mut)]
-    let mut items = vec![
-        MenuItem::new(
-            mode_icon(state.theme_pref),
-            state.theme_pref.label(),
-            Message::ThemeModeCycled,
-        ),
+/// The overflow menu's items — actions only (FR-026e). Rendered as a floating overlay by
+/// `ui::view` via `menu_overlay`.
+///
+/// Takes the state it no longer reads: the signature is the seam between the bar and its menu, and
+/// the next item added here will want it. `_state` rather than dropping the parameter, so that
+/// adding one is an edit to one line instead of to every call site.
+pub fn overflow_items(_state: &State) -> Vec<MenuItem<Message>> {
+    vec![
         MenuItem::new(Icon::Settings, "Settings", Message::SettingsOpened),
         MenuItem::new(
             Icon::Help,
             "Session service diagnostics",
             Message::DiagnosticsRequested,
         ),
-    ];
-    // Surviving a full logout is a Linux-only, explicitly user-enabled action (US7, FR-038) — never
-    // enabled silently, so it lives behind a deliberate menu choice, and only where it can work.
-    #[cfg(target_os = "linux")]
-    items.push(MenuItem::new(
-        Icon::AutoMode,
-        "Keep sessions after logout",
-        Message::LogoutSurvivalRequested,
-    ));
-    items.push(MenuItem::new(
-        Icon::About,
-        help_actions()[0],
-        Message::AboutOpened,
-    ));
-    items
+        MenuItem::new(Icon::About, help_actions()[0], Message::AboutOpened),
+    ]
 }
 
 /// Render the top app bar: title (left), then on the trailing edge the project switcher

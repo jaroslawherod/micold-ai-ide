@@ -163,6 +163,10 @@ const OWNERS: &[(&str, &str)] = &[
     ("theme_pref", "settings"),
     ("system_scheme", "settings"),
     ("settings_draft", "settings"),
+    // View state, not a setting (FR-026d): whether the Settings rail is showing icons alone. Owned
+    // by `settings` all the same — it is the settings surface's own layout, and nothing else reads
+    // or writes it.
+    ("settings_rail_collapsed", "settings"),
     // Both are settings the shell fills at the I/O boundary and every other feature only reads
     // (feature 026, FR-003/FR-006): the stored default, mirrored from `DaemonSettings`, and the
     // availability snapshot refreshed when the choice is offered.

@@ -39,6 +39,7 @@ use iced::Task;
 
 use micold_client::app::Message;
 use micold_core::protocol::messages::ClientMsg;
+use micold_core::sandbox::placement::Placement;
 use micold_core::settings::{Settings, SettingsStore};
 
 use micold_client::features::settings::SettingsDraft;
@@ -179,6 +180,15 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
         return Task::none();
     };
 
+    // Read before the write, because the decision below is about a *change*: see
+    // [`survival_step`]. `unwrap_or_default` treats "no settings file" as "never opted in", which
+    // is what a machine with no settings file is.
+    let survival_before = app
+        .caps
+        .settings()
+        .map(|store| store.load().settings.daemon.sandbox.survive_logout)
+        .unwrap_or_default();
+
     let valid = match draft.validate() {
         Ok(valid) => valid,
         Err(error) => {
@@ -235,7 +245,45 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);
     app.core.update(Message::SettingsSaved); // closes the view
-    Task::none()
+
+    // The one thing in this form that is not just a value written to a file: making sessions
+    // survive logout has to be *arranged*, with the platform's service manager or with the
+    // container runtime depending on where the daemon runs (FR-014d). Saved first, then applied —
+    // the file is what the next launch reads, so a failure here must not lose the user's choice.
+    match survival_step(survival_before, settings.daemon.sandbox.survive_logout) {
+        SurvivalStep::Leave => Task::none(),
+        step => crate::shell::service_control::on_survival_opt_in_changed(
+            Placement::resolve(settings.daemon.placement, &settings.daemon.sandbox),
+            step == SurvivalStep::Enable,
+        ),
+    }
+}
+
+/// What a save owes the logout-survival opt-in (feature 027, FR-014d).
+///
+/// Pure, and separate from the save, so the rule can be stated once and tested without a service
+/// manager: **act on a change, and only on a change**. Every other field in this form is idempotent
+/// to re-apply; this one is not. Enabling stops the running daemon so the socket unit can activate
+/// a fresh one under the lingering manager, so re-running it on a save that only changed the
+/// scrollback limit would drop every live session for no reason at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurvivalStep {
+    /// Nothing to do: the opt-in is where it was.
+    Leave,
+    /// Newly on — arrange it with the configured placement.
+    Enable,
+    /// Newly off — withdraw it. A checkbox that could not be unticked would be FR-014d's "silently
+    /// ineffective" in the direction nobody tests.
+    Disable,
+}
+
+/// See [`SurvivalStep`].
+pub fn survival_step(before: bool, after: bool) -> SurvivalStep {
+    match (before, after) {
+        (false, true) => SurvivalStep::Enable,
+        (true, false) => SurvivalStep::Disable,
+        _ => SurvivalStep::Leave,
+    }
 }
 
 pub fn on_theme_changed(app: &mut App, message: Message) -> Task<Message> {
@@ -247,6 +295,8 @@ pub fn on_theme_changed(app: &mut App, message: Message) -> Task<Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use micold_core::sandbox::placement::PlacementKind;
+    use micold_core::sandbox::SandboxProfile;
     use micold_core::session::{AiCli, Session, SessionLocation};
     use micold_core::settings::FakeSettingsStore;
     use micold_core::theme::ThemePreference;
@@ -520,5 +570,52 @@ mod tests {
         let mut core = State::default();
         persist_settings(None, &mut core);
         assert!(core.notify.visible().is_none());
+    }
+
+    /// The rule the whole opt-in rests on: a save acts on a *change*.
+    ///
+    /// Not a nicety. Enabling stops the running daemon so the socket unit can activate a fresh one
+    /// under the lingering manager — so a save that re-applied an unchanged opt-in would drop every
+    /// live session because the user edited the scrollback limit.
+    #[test]
+    fn only_a_change_to_the_opt_in_does_anything() {
+        assert_eq!(survival_step(false, false), SurvivalStep::Leave);
+        assert_eq!(survival_step(true, true), SurvivalStep::Leave);
+        assert_eq!(survival_step(false, true), SurvivalStep::Enable);
+        assert_eq!(survival_step(true, false), SurvivalStep::Disable);
+    }
+
+    /// FR-014d in the direction that is easy to forget: unticking has to withdraw it. The menu
+    /// command this replaced could only ever enable, so "turn it back off" was not a thing the
+    /// application could do at all.
+    #[test]
+    fn unticking_withdraws_it_rather_than_doing_nothing() {
+        assert_ne!(survival_step(true, false), SurvivalStep::Leave);
+    }
+
+    /// And the step is applied to the placement that is *configured*, not to the one this platform
+    /// happens to favour — which is the substance of FR-014d. Resolved the same way the save
+    /// resolves it, so a placement added later is dispatched here without an edit.
+    #[test]
+    fn the_step_is_applied_to_the_configured_placement() {
+        use micold_core::logout_survival::{disable_for, enable_for, SurvivalOutcome};
+
+        let endpoint = micold_core::endpoint::Endpoint {
+            socket_path: std::path::PathBuf::from("/tmp/x.sock"),
+            lock_path: std::path::PathBuf::from("/tmp/x.lock"),
+        };
+        let profile = SandboxProfile {
+            survive_logout: true,
+            ..SandboxProfile::default()
+        };
+        let sandbox = Placement::resolve(PlacementKind::LocalSandbox, &profile);
+
+        // The sandbox answers on every platform (FR-014b) and never runs `systemctl`. If the save
+        // resolved the host mechanism instead, this would be `Unsupported` off Linux.
+        assert_eq!(enable_for(&sandbox, &endpoint), SurvivalOutcome::Enabled);
+        assert_eq!(
+            disable_for(&sandbox, &endpoint),
+            SurvivalOutcome::PendingSandboxRestart
+        );
     }
 }

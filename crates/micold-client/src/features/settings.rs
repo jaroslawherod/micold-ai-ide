@@ -68,6 +68,25 @@ impl SettingsSection {
         }
     }
 
+    /// The section's icon, as the rail shows it beside — or instead of — the name (FR-026b).
+    ///
+    /// On the section rather than on the rail, for the same reason [`Self::label`] is: the rail is
+    /// one presentation of these, and a collapsed rail is a second. A glyph chosen inside a view
+    /// would be that view's, and the next surface to list sections would pick its own.
+    pub fn icon(self) -> crate::icons::Icon {
+        use crate::icons::Icon;
+        match self {
+            // The theme is the section's whole content today, and the sun is the glyph the app bar
+            // used for it before the duplicate was removed (FR-026e).
+            SettingsSection::Appearance => Icon::LightMode,
+            SettingsSection::Terminal => Icon::RegularTerminal,
+            // The environment section is where the default agent is chosen, which is the part of it
+            // a user is looking for when they come here.
+            SettingsSection::Environment => Icon::AiCli,
+            SettingsSection::Daemon => Icon::SessionService,
+        }
+    }
+
     /// Its position in the rail, which is what [`SectionList::selected`] is given.
     ///
     /// [`SectionList::selected`]: crate::ui::material::SectionList::selected
@@ -528,34 +547,26 @@ impl SettingsDraft {
 }
 
 /// The theme mode was advanced one step (feature 003, FR-005).
-///
-/// The menu stays open, so repeated clicks cycle.
-pub fn theme_mode_cycled(state: &mut State) {
-    apply_theme(state, state.theme_pref.next());
-}
-
-/// A theme preference was chosen outright.
+/// A theme preference was set from outside the Settings form, and applies immediately.
 ///
 /// Pure state change; the shell persists it at the I/O boundary (FR-009).
+///
+/// # Why this survives the control that used it (BUG-001)
+///
+/// The theme was the one setting with two writers: the app bar's cycle, which applied at once, and
+/// the Appearance section, which drafts. Harmless while Settings was a 420dp modal covering the
+/// bar — the menu could not be reached while the form was open. FR-026 made Settings a
+/// full-surface view with the bar still on screen, so both became reachable at once, and a draft
+/// seeded when the view opened still said what the theme was *then*: cycling the menu and pressing
+/// Save reverted the theme the user had just chosen and could see applied.
+///
+/// FR-026e has since removed that second control, which dissolves the condition. This stays as the
+/// rule any future one must obey: apply, and carry the newer value into an open draft — rather
+/// than the form giving up drafting, because Cancel must still discard an Appearance edit. And
+/// deliberately **not** via [`edit`]: a choice made outside the form is not the user acting on the
+/// form, so it must not clear a validation error they are being asked to fix (FR-029) — that would
+/// empty the message and leave the rejected field unexplained.
 pub fn theme_preference_changed(state: &mut State, pref: ThemePreference) {
-    apply_theme(state, pref);
-}
-
-/// Apply a theme chosen from the app bar, and carry it into an open Settings form (BUG-001).
-///
-/// The theme is the one setting with two writers: this menu, which applies immediately, and the
-/// Appearance section, which drafts. That was harmless while Settings was a 420dp modal covering
-/// the app bar — the menu could not be reached while the form was open. Feature 027 made Settings
-/// a full-surface view with the app bar still on screen (FR-026), so both are now reachable at
-/// once, and a draft seeded when the view opened still said what the theme was *then*: cycling the
-/// menu and pressing Save reverted the theme the user had just chosen and could see applied.
-///
-/// The draft takes the newer value rather than the form giving up drafting, because Cancel must
-/// still discard an Appearance edit. And deliberately **not** via [`edit`]: a choice made outside
-/// the form is not the user acting on the form, so it must not clear a validation error they are
-/// being asked to fix (FR-029) — that would empty the message and leave the rejected field
-/// unexplained.
-fn apply_theme(state: &mut State, pref: ThemePreference) {
     state.theme_pref = pref;
     if let Some(draft) = &mut state.settings_draft {
         draft.appearance.theme = pref;
@@ -572,6 +583,17 @@ pub fn system_theme_changed(
     detected: Result<micold_core::theme::SystemScheme, ()>,
 ) {
     state.system_scheme = micold_core::theme::observe_system_scheme(detected, state.system_scheme);
+}
+
+/// The Settings rail was collapsed to its icons, or reopened (feature 027, FR-026c/d).
+///
+/// Not routed through [`edit`], and not touching the draft at all: FR-026d makes this view state,
+/// so it must not mark the form edited, must not clear a validation error the user is being asked
+/// to fix, and must survive both Save and Cancel. See [`State::settings_rail_collapsed`].
+///
+/// [`State::settings_rail_collapsed`]: crate::app::State::settings_rail_collapsed
+pub fn rail_toggled(state: &mut State) {
+    state.settings_rail_collapsed = !state.settings_rail_collapsed;
 }
 
 /// Settings was opened (feature 006, FR-020; feature 027, FR-026).

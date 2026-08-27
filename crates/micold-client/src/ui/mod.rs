@@ -251,6 +251,7 @@ pub fn view<'a>(
                 env_include_outcome,
                 &state.available_providers,
                 state.focused_field,
+                state.settings_rail_collapsed,
                 scheme,
             ),
             bg,
