@@ -92,4 +92,21 @@ COPY micold-daemon /usr/local/bin/micold-daemon
 ENV MICOLD_LISTEN_ADDR=0.0.0.0:7727
 
 EXPOSE 7727
+
+# `image.source` is not decoration: GHCR uses it to attach the published package to this
+# repository, which is what puts the package's page, its README and its visibility setting beside
+# the code instead of loose under the account. Without it the release pushes an orphan package.
+#
+# The URL is this repository's actual remote, which is *not* what `[workspace.package] repository`
+# in Cargo.toml says (that still names an older home). Following the manifest here would break the
+# link silently -- GHCR simply would not associate the package -- so the two are deliberately
+# different until the manifest is corrected.
+#
+# `image.version` and `image.revision` are supplied at build time by the release workflow, which
+# knows the tag and the commit; there is nothing sensible to bake in for a local `mise run image`.
+LABEL org.opencontainers.image.source="https://github.com/jaroslawherod/micold-ai-ide"
+LABEL org.opencontainers.image.title="micold-daemon"
+LABEL org.opencontainers.image.description="Session daemon for Micold AI IDE, with the AI CLIs the application offers (feature 027)."
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
 ENTRYPOINT ["/usr/local/bin/micold-daemon"]

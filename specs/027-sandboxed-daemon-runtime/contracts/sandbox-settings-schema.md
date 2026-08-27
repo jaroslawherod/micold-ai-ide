@@ -31,7 +31,7 @@ One field on the root document:
       "runtime": "docker",               // "docker" | "podman"
       "image": {
         "kind": "registry",              // "registry" | "imported_file" | "local_build"
-        "reference": "ghcr.io/<org>/micold-daemon:<version>",
+        "reference": "ghcr.io/jaroslawherod/micold-daemon:<version>",
         "path": null                     // set only when kind = "imported_file"
       },
       "budget": {
