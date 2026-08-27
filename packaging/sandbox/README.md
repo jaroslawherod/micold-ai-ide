@@ -39,13 +39,31 @@ That was the state of things up to and including 0.11.0, when nothing published 
 Only immutable version tags are pushed. A moving tag (`:latest`) can change under a running
 sandbox, which is why the app detects one and treats it differently — see FR-024b.
 
-### The one manual step
+### Visibility needs no hand step
 
-A GHCR package is **private** when it is first created, and a private package is a `denied` on a
-user's first pull — indistinguishable, from the outside, from a package that was never pushed. The
-first release to publish the image therefore needs its visibility flipped once, by hand, at
-`github.com/users/jaroslawherod/packages/container/micold-daemon/settings` → *Change visibility* →
-Public. Later releases inherit it; there is no API that sets it at push time.
+This was written the other way round before 0.12.0 actually ran, on the widely-repeated rule that a
+GHCR package is private when first created and must have its visibility flipped by hand. That rule
+does not apply here. 0.12.0 created the package and it came out **public**, pullable with no
+credentials at all:
+
+```sh
+tok=$(curl -s 'https://ghcr.io/token?scope=repository:jaroslawherod/micold-daemon:pull&service=ghcr.io' \
+      | jq -r .token)
+curl -sI -H "Authorization: Bearer $tok" \
+     https://ghcr.io/v2/jaroslawherod/micold-daemon/manifests/0.12.0   # 200
+```
+
+The reason is that the release job pushes with `GITHUB_TOKEN` from a workflow in this repository, so
+GitHub creates the package already *linked* to the repository — and a linked package inherits the
+repository's visibility, which here is public. The `org.opencontainers.image.source` label in the
+`Containerfile` is what makes that link legible afterwards, on the package page.
+
+The check above is the one worth keeping, because it is the only one that distinguishes the two
+states a user meets: it uses an anonymous token, which is exactly what an unauthenticated
+`docker pull` does. Run it after any release that creates a *new* package name; a private package
+answers `denied`, which from outside is indistinguishable from a package that was never pushed —
+that is, from the bug FR-024 exists to prevent. **If this repository were ever made private, the
+package would follow it**, and that failure would look identical.
 
 ## Offline export and import
 

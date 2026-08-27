@@ -819,16 +819,24 @@ automatic.
       GHCR attaches the package to this repository instead of leaving it loose under the account.
       The URL is the real remote and deliberately not `[workspace.package] repository`, which still
       names an older home — following the manifest here would break the link silently.
-- [x] T155 Docs: `packaging/sandbox/README.md` (publishing is the release's job, plus the one
-      manual step below), `docs/user-guide/sandboxed-daemon.md` and the settings-schema contract
-      moved off the namespace that never existed. `evidence/image-publishing.md` records what was
-      verified before the first release runs it.
+- [x] T155 Docs: `packaging/sandbox/README.md` (publishing is the release's job),
+      `docs/user-guide/sandboxed-daemon.md` and the settings-schema contract moved off the namespace
+      that never existed. `evidence/image-publishing.md` records what was verified before the first
+      release ran it, and then what that release did.
+- [x] T156 Ran it. `micold-ai-ide-v0.12.0` (run `33081010155`) published
+      `ghcr.io/jaroslawherod/micold-daemon:0.12.0` as an index over `linux/amd64` and `linux/arm64`,
+      with the per-architecture tags beside it. The three guards passed against a real tag, and
+      the AI-CLI check passed on the arm64 runner — the one thing the host measurements could not
+      reach.
 
-**Not automatable, and stated rather than hidden**: a GHCR package is private when first created,
-and a private package is a `denied` on a user's first pull — from the outside, identical to one
-that was never pushed. The first release to run these jobs needs the package's visibility flipped
-to Public once, by hand; there is no API that does it at push time. `packaging/sandbox/README.md`
-names the exact settings page.
+**One prediction here was wrong, and is recorded rather than quietly dropped**: T155 originally
+carried a hand step, on the rule that a GHCR package is private when first created and would need
+its visibility flipped before FR-024 became observable. It did not — the package was public on
+creation, because the job pushes with `GITHUB_TOKEN` from a workflow in this repository, so the
+package arrives linked to it and inherits its visibility. An anonymous pull of `:0.12.0` answers
+200. That rule is about packages pushed with a personal access token, which arrive unlinked.
+`evidence/image-publishing.md` keeps the check that distinguishes the two states, because a private
+package's `denied` is indistinguishable from a package that was never pushed.
 
 **Requirements closed**: FR-024.
 

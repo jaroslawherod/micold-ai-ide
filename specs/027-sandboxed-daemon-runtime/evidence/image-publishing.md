@@ -69,30 +69,51 @@ Run against the real Docker daemon and the real image on this host.
 | Workspace gate — `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`, `cargo test --workspace` | 2595 passed, 0 failed |
 | Real-runtime suite, `mise run test-sandbox` (both crates, release), against the rebuilt image | 23 named `sandbox_real_*` tests, 23 passed, 0 failed |
 
-## What this does not settle
+## What the release actually did — 0.12.0, the same day
 
-- **The release path itself has not run.** Everything above tests the pieces on this host; the jobs
-  are exercised for the first time by the release after this one lands. That is unavoidable — a
-  release workflow has no dry run — and it is why the guards fail loudly and early rather than
-  producing a half-pushed image.
-- **arm64 is untested here.** This host is x86_64. The per-architecture CLI check exists precisely
-  because an npm package with native components can be present on one and absent on the other, and
-  that check runs for the first time on the arm64 runner.
-- **`docker buildx imagetools create` is unexercised.** Composing the index needs two pushed
-  per-architecture manifests, which needs the registry.
-- **Package visibility is not covered by anything.** See below.
+Everything above was measured on this host before the jobs had ever run. `micold-ai-ide-v0.12.0`
+(merge `baa50e9c`, run `33081010155`) ran them for the first time, and all four sections below were
+open questions until it did.
 
-## The one manual step
+| was open | result |
+|---|---|
+| The release path had never run | `release-please` → `deb` ×2 → `image` ×2 → `image-manifest` → `publish`, all green; release `micold-ai-ide-v0.12.0` published, not a draft, marked Latest, both `.deb` assets attached |
+| The three guards had only been run by hand | Step *Resolve the version and check the app agrees with it* passed on both architectures against the real tag |
+| arm64 was untested — an npm package with native components can be present on one architecture and absent on the other | *The AI CLIs must be present on this architecture* passed on `ubuntu-22.04-arm`: `claude` and `copilot` are both on `PATH` in the ARM image |
+| `docker buildx imagetools create` was unexercised | `ghcr.io/jaroslawherod/micold-daemon:0.12.0` is an index over `linux/amd64` (`sha256:c2c4bbf5…`) and `linux/arm64` (`sha256:edadd300…`); the tag list is `0.12.0`, `0.12.0-amd64`, `0.12.0-arm64` |
 
-A GHCR package is **private** when first created. A private package answers a user's first pull
-with `denied` — indistinguishable, from outside, from a package that was never pushed, which is to
-say indistinguishable from the bug this whole phase fixes. There is no API that sets visibility at
-push time.
+## Package visibility — the prediction above was wrong
 
-After the first release that runs these jobs, the package at
-`github.com/users/jaroslawherod/packages/container/micold-daemon/settings` must be switched to
-**Public**, once. Later releases inherit it. `packaging/sandbox/README.md` carries the same
-instruction where a maintainer will look for it.
+This document previously carried a section titled *The one manual step*, asserting that a GHCR
+package is private when first created and that 0.12.0 would therefore need its visibility flipped by
+hand before FR-024 became observable. **It did not.** The package was public the moment it existed:
 
-Until that switch is made, FR-024 is implemented but not yet observable: the image exists and the
-reference is correct, and an anonymous pull still fails.
+```sh
+tok=$(curl -s 'https://ghcr.io/token?scope=repository:jaroslawherod/micold-daemon:pull&service=ghcr.io' \
+      | jq -r .token)
+curl -sI -H "Authorization: Bearer $tok" \
+     https://ghcr.io/v2/jaroslawherod/micold-daemon/manifests/0.12.0
+# HTTP 200 — an anonymous token, which is what an unauthenticated `docker pull` uses
+```
+
+The rule the prediction came from is real but is about packages pushed with a personal access token,
+which arrive unlinked. The release job pushes with `GITHUB_TOKEN` from a workflow in this
+repository, so GitHub creates the package already linked to it, and a linked package inherits the
+repository's visibility — public. `org.opencontainers.image.source` is what makes the link legible
+on the package page afterwards; it is not what establishes it.
+
+Recording the correction rather than deleting the claim is deliberate: the mistake was to write down
+a prediction and a hand-step instruction in the same voice as the measurements around it, where a
+reader has no way to tell which had been run. The anonymous-pull check above is the part worth
+keeping — it is the only check that distinguishes the two states a first-time user can meet, and
+it should be run after any release that creates a *new* package name.
+
+## What this still does not settle
+
+- **A first run against the published image has not been performed end to end.** The manifest is
+  pullable anonymously and the daemon executes inside the image (both checked), but no client on
+  this host has resolved `DEFAULT_IMAGE` to `:0.12.0`, pulled it from GHCR and completed a session
+  against it. The real-runtime suite still builds `micold-daemon:dev` locally.
+- **The image is public only for as long as the repository is.** A linked package follows its
+  repository, so making this repository private would make a user's first pull answer `denied` —
+  the exact symptom of FR-024 being unimplemented, from a change nowhere near this code.
