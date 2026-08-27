@@ -18,6 +18,9 @@
 //   * The distance between pages (FR-023a, SC-006). The links a reader can follow are the ones the
 //     rendered page offers -- mdBook writes the sidebar from a script, so the markup on disk holds
 //     almost none of them.
+//   * Nothing moving (FR-015a, FR-028, SC-011). A clip has to hold still behind its poster until
+//     the reader presses play, and fetch no video bytes before that. The attributes say what the
+//     page intends; the requests the browser made say what it did.
 //   * Search (FR-026, SC-006). The answer is produced by the site's own index and its own ranking,
 //     in the box the reader types into, so the only way to ask what a reader would be told is to
 //     type the question and read what comes back.
@@ -191,6 +194,56 @@ const collectReferences = () => {
   return refs;
 };
 
+// --- nothing moves until the reader asks ----------------------------------------------------------
+
+// A clip on this site is a poster with a play control (FR-015a) that fetches nothing until it is
+// pressed (FR-028). Three attributes carry that, and any one of them can be dropped in an edit
+// without breaking anything a link check, a budget check or a contrast check would notice: the page
+// stays valid and starts moving at a reader who did not ask.
+//
+// Animated GIFs are refused for the same reason and one more: a GIF has no play control at all, so
+// a reader who wants it to stop has no way to say so. Clips are video here precisely because of it
+// (research §7).
+const collectMotion = () => {
+  const problems = [];
+  const name = (el) => el.getAttribute('aria-label') || el.getAttribute('poster') || el.id || '<video>';
+
+  for (const video of document.querySelectorAll('video')) {
+    const who = name(video);
+    if (video.hasAttribute('autoplay')) problems.push(`the clip "${who}" carries autoplay, so it starts without the reader`);
+    if (!video.hasAttribute('controls')) problems.push(`the clip "${who}" has no controls, so the reader cannot start or stop it`);
+    if (!video.hasAttribute('muted') && !video.muted) problems.push(`the clip "${who}" is not muted`);
+    const preload = (video.getAttribute('preload') || '').toLowerCase();
+    if (preload !== 'none') {
+      problems.push(`the clip "${who}" has preload="${preload || '(unset)'}", so its video is fetched before the reader asks -- it must be preload="none"`);
+    }
+    if (!video.hasAttribute('poster')) problems.push(`the clip "${who}" has no poster, so there is no still first frame to show`);
+  }
+
+  if (document.querySelectorAll('audio').length > 0) {
+    problems.push('the page carries an <audio> element, and the site has no sound');
+  }
+
+  for (const img of document.querySelectorAll('img[src]')) {
+    if (/\.gif(\?|$)/i.test(img.getAttribute('src') || '')) {
+      problems.push(`${img.getAttribute('src')} is an animated image with no way to pause it -- clips are video here`);
+    }
+  }
+
+  // What is actually running, rather than what is declared: a stylesheet with an endless animation
+  // moves the page whatever the markup says. Finite animations are the site's own entrance
+  // transitions and stop on their own.
+  for (const animation of document.getAnimations()) {
+    const timing = animation.effect?.getTiming?.() ?? {};
+    if (animation.playState === 'running' && timing.iterations === Infinity) {
+      const target = animation.effect?.target;
+      problems.push(`something on the page animates forever: ${target?.tagName?.toLowerCase() ?? '?'}${target?.id ? `#${target.id}` : ''}`);
+    }
+  }
+
+  return problems;
+};
+
 // --- the first screen ----------------------------------------------------------------------------
 
 // What a visitor has to be able to do without scrolling (FR-023a): name the thing, see it, and reach
@@ -338,10 +391,16 @@ try {
     for (const path of all) {
       const page = await context.newPage();
       const offOrigin = new Set();
+      const fetchedMedia = new Set();
       page.on('request', (request) => {
         const url = new URL(request.url());
         if ((url.protocol === 'http:' || url.protocol === 'https:') && url.origin !== origin) {
           offOrigin.add(url.href);
+        }
+        // Nobody has pressed anything on this page: every request here was made by loading it. A
+        // video among them is FR-028 broken in the only way that matters -- bytes on the wire.
+        if (request.resourceType() === 'media' || /\.(webm|mp4|mov)(\?|$)/i.test(url.pathname)) {
+          fetchedMedia.add(url.pathname);
         }
       });
 
@@ -363,6 +422,9 @@ try {
         }
       }
       for (const url of offOrigin) fail(where, `the page requested another host: ${url}`);
+
+      for (const problem of await page.evaluate(collectMotion)) fail(where, problem);
+      for (const path of fetchedMedia) fail(where, `the page fetched ${path} before the reader pressed anything (FR-028)`);
 
       // The link graph and the page names are the same whichever scheme the reader is in, so they
       // are read once, on the pass that is already open on every page.
@@ -487,4 +549,4 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(`  ${failure}`);
   process.exit(1);
 }
-console.log(`page-checks: ${all.length} page(s), both schemes -- WCAG 2.2 AA, the first screen, nothing off-origin, no page more than ${NAV_MAX_STEPS} links away, and search that answers with the page it was asked about`);
+console.log(`page-checks: ${all.length} page(s), both schemes -- WCAG 2.2 AA, the first screen, nothing off-origin, no page more than ${NAV_MAX_STEPS} links away, search that answers with the page it was asked about, and nothing that moves until the reader asks`);

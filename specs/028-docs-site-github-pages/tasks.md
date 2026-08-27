@@ -214,14 +214,14 @@ and no video bytes were requested until a play control was pressed.
 
 ### Implementation for User Story 3
 
-- [ ] T067 [US3] Implement `site/capture/encode.sh` — a known frame list at a fixed rate to muted H.264 MP4 and VP9 WebM plus the poster, with ffmpeg's bit-exact flags (T065 green, research §7)
+- [X] T067 [US3] Implement `site/capture/encode.sh` — a known frame list at a fixed rate to muted H.264 MP4 and VP9 WebM plus the poster, with ffmpeg's bit-exact flags (T065 green, research §7)
 - [ ] T068 [P] [US3] Write `site/capture/scenes/create-worktree.sh` — creating a worktree and a session starting in it, captured step by step
 - [ ] T069 [P] [US3] Write `site/capture/scenes/switch-session.sh` — switching between a session's terminal and a plain shell instance scoped to its worktree
 - [ ] T070 [P] [US3] Write `site/capture/scenes/theme-follow.sh` — cycling the overflow menu's theme toggle Auto → Light → Dark
 - [ ] T071 [P] [US3] Write `site/capture/scenes/open-project.sh` — the empty state to a project open in the main area
 - [ ] T072 [US3] Declare the four clips in `site/media.toml` with `kind = "clip"`, alt text and captions, and extend `site/capture/capture.sh` to route clip entries through `encode.sh` (FR-010)
 - [ ] T073 [US3] Extend `site/stage.sh` to expand a clip directive into the `<video controls loop muted playsinline preload="none" poster=…>` figure markup of [contracts/media-manifest.md](./contracts/media-manifest.md) — no `autoplay`, `preload="none"` (FR-015a, FR-015b, FR-028)
-- [ ] T074 [US3] Add the fifth assertion to `site/checks/page-checks.mjs`: no element on any page moves without the reader starting it, and no `<video>` carries `autoplay` or a preload that fetches (T066 green, SC-011)
+- [X] T074 [US3] Add the fifth assertion to `site/checks/page-checks.mjs`: no element on any page moves without the reader starting it, and no `<video>` carries `autoplay` or a preload that fetches (T066 green, SC-011)
 - [ ] T075 [US3] Add the clip directives to their pages — `docs/user-guide/worktrees-and-sessions.md`, `docs/user-guide/project-selection.md`, `docs/user-guide/appearance-theming.md` — each beside the prose it illustrates
 - [ ] T076 [US3] Write `site/capture/verify-determinism.sh` and run quickstart A6: capture twice, compare frame and clip hashes, and treat any difference as a bug in a scene (FR-011d)
 
