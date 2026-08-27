@@ -185,6 +185,22 @@ fn two_windows_of_one_build_share_a_build_string_and_differ_by_instance() {
     );
     assert_ne!(one, two, "the instance is what tells them apart");
     assert!(one.is(&one.instance) && !one.is(&two.instance));
+
+    // And the pid alone is not the instance. Pids are reused, and two clients dialling one daemon
+    // need not even share a host — so a window that compared pids could mistake a stranger for
+    // itself and silently reclaim a project it was refused, which is the *opposite* failure to the
+    // one this fix is about and a worse one.
+    let same_pid_other_window = ClientIdentity::new(
+        "micold-ai-ide/0.10.0",
+        ClientInstance {
+            pid: 11,
+            nonce: "a different process that reused the number".into(),
+        },
+    );
+    assert!(
+        !one.is(&same_pid_other_window.instance),
+        "the nonce is what makes the identity unique; the pid is only what a banner can show"
+    );
     assert_eq!(
         one.to_string(),
         "micold-ai-ide/0.10.0 (window 11)",
