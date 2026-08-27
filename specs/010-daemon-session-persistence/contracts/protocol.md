@@ -341,6 +341,17 @@ daemon ──► ScrollbackResponse { session, req, oldest_available, newest, li
   socket or approach the frame cap.
 - The daemon **SHOULD** speculatively include the cursor's line and a screenful either side of the
   requested range, which removes a round trip on scroll for a few hundred bytes.
+- **A request is sized by the viewport, never by the scroll depth** (BUG-021). The client MUST bound
+  each range to the rows the scroll reveals plus a bounded prefetch — a small constant number of
+  screenfuls — and MUST NOT ask for everything between the revealed line and the live tail. The
+  daemon serves a range faithfully and serially under the session's terminal lock, so a range whose
+  size grows with depth makes the total cost of a gesture quadratic in how far it goes.
+- **The client MUST NOT re-ask for a range still in flight.** `req` correlates the answer, so an
+  outstanding range is one the client knows is coming; without that record every wheel notch of a
+  fast gesture re-computes and re-sends the same un-cached run, because nothing it asked for has
+  arrived yet. The client releases those records when the answer arrives and when the connection
+  drops — `req`s are per-connection, and a range awaiting an answer that will never come would
+  suppress the very request that would fill those rows.
 
 ---
 

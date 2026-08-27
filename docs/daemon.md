@@ -35,6 +35,14 @@ scroll back, the app fetches history from the daemon on demand; you are never ho
 history in the window. If you scroll past the oldest retained line, the view simply stops there
 rather than inventing content.
 
+What the app asks for is **the rows a scroll reveals**, plus a screenful of margin in the direction
+you are travelling — not everything between there and the live tail. That distinction is the whole
+of how fast scrolling back feels: a request sized by how *far* you have scrolled grows as you go, so
+the deeper you went the longer the pane stayed blank, and a fast gesture left the daemon working
+long after you stopped. A request sized by the viewport costs the same at line 4,000 as at line 40.
+The app also remembers what it has already asked for, so a gesture sends one request per screenful
+of travel rather than one per wheel notch.
+
 ### Why reattach is instant
 
 When a window reattaches, the daemon sends one **snapshot** of the current screen rather than
