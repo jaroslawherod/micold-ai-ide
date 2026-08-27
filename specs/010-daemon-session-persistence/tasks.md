@@ -383,6 +383,10 @@ docs state per-platform support (quickstart S14).
   *Amended 2026-08-27*: BUG-019 is fixed too, so S11's hostile-directory block now has an
   implementation behind it — the refusal was unreachable when that run passed the block by not
   reaching it. Also not re-walked on a display.
+  *Amended 2026-08-27*: BUG-015 and BUG-018 are fixed too. S13's log now lands where the walkthrough
+  says (and the daemon states its own sink on its first line), and S3's third expectation — "the
+  stopped one reads *ended*" — has a producer for the first time; it was unreachable in that run
+  because nothing in production code ever constructed the signal. Neither was re-walked on a display.
 - [x] T085 [P] Measure retargeted `TerminalPane` repaint cost at 60 Hz on the client (Risk 2 — all
   streaming measurements were daemon-side); record whether the tick rate is the right knob.
   **Measured 2026-08-25** — the "blocked" note above was wrong on both halves: the frame profiler
