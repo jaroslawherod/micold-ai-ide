@@ -156,16 +156,20 @@ found a real defect: `overlayfs` was classified as enforcing a storage limit it 
 - [x] Keyboard navigation reaches every section and every control; focus order is sane
 - [x] Both themes; clean to 640pt wide, degrading below it — no minimum is declared anywhere
       (evidence/us3-settings-view.md)
-- [ ] Idle with the view open: no repainting (the automated counterpart is
-      `idle_requests_no_frames.rs`) — **inconclusive under lavapipe**; the view costs no more idle
-      than the main surface, but the absolute claim rests on the automated test
-- [ ] Every section in the rail carries an icon, and the icons are distinguishable from one another
+- [x] Idle with the view open: no repainting (the automated counterpart is
+      `idle_requests_no_frames.rs`) — measured by sampling the **X server's** CPU alongside the
+      client's: 6 ticks/20s with the view open, 6 with it closed, and 741 while the pointer is
+      moved. lavapipe makes a presented frame expensive, which is what makes its absence readable
+      (evidence/us3-settings-view.md)
+- [x] Every section in the rail carries an icon, and the icons are distinguishable from one another
       at the rail's own size (FR-026b)
-- [ ] Collapsed, the rail shows icons alone, still marks the current section, still navigates by
-      pointer and by keyboard, and the width it gives up goes to the section's content (FR-026c)
-- [ ] The collapsed state survives leaving and reopening Settings, and Save and Cancel both leave it
+- [x] Collapsed, the rail shows icons alone, still marks the current section, still navigates by
+      pointer and by keyboard, and the width it gives up goes to the section's content (FR-026c) —
+      this found the current row's icon 12dp off the column the other three form; fixed, and
+      `gates/rail_icons_align.rs` now asserts it
+- [x] The collapsed state survives leaving and reopening Settings, and Save and Cancel both leave it
       alone (FR-026d)
-- [ ] The overflow menu offers no control a section owns — no theme, no session survival — and
+- [x] The overflow menu offers no control a section owns — no theme, no session survival — and
       session survival still works from its section under both placements (FR-026e, FR-014d)
 
 ### B.7 — The development loop (FR-024c)
