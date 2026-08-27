@@ -4,7 +4,22 @@
 
 **Created**: 2026-08-18
 
-**Status**: Draft
+**Status**: Closed 2026-08-27 — implemented and shipped; all 125 tasks in [tasks.md](./tasks.md) are
+done. The complete quickstart §B pass ran 2026-08-26 in one sitting, against one runtime and one
+freshly built image — Docker 29.5.1, cgroup v2, `--release` throughout — and all 22 real-runtime
+tests pass: [evidence/quickstart-b-closeout.md](./evidence/quickstart-b-closeout.md), with the
+per-story captures beside it. Only the `micold-core` half runs in CI; the `micold-daemon` half is
+local-only, because the session-start timing test refuses to measure a debug build. §A is green on
+Linux, macOS and Windows with no container runtime installed (T115), which is what the fake runtime
+exists for. SC-003 and SC-004 are measured in
+[evidence/performance.md](./evidence/performance.md). One defect was found after the pass and fixed —
+[BUG-001](./bugs/BUG-001.md), Save reverting a theme chosen from the app bar while Settings was open,
+a regression from FR-026's move off a modal. Two claims are recorded as reasoned rather than run:
+survive-logout is measured on the death the policy exists for — the container's process killed on the
+host, which the runtime restarts unasked — but **no reboot was performed**, and the probe ran under
+Docker only; and §B's "idle with the view open: no repainting" is left unticked as inconclusive,
+because a software rasteriser cannot settle it and the absolute claim rests on
+`idle_requests_no_frames.rs`.
 
 **Input**: User description: "Daemon should run remotely — initially as a Docker container that mounts the local project directory but has no access to the rest of the host system, runs under limited resources (CPU, memory, disk, network), and is configured from a new Settings view. Settings gets a tabbed layout, with daemon settings moved into their own section. Container runtime is Docker first, behind an abstraction so Podman and other runtimes can be added."
 
