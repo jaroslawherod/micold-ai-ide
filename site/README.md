@@ -36,6 +36,12 @@ only:
 come from the distribution's packages. `node` is needed only for `checks/page-checks.mjs`, which
 needs a real browser engine to check WCAG 2.2 AA on a rendered page.
 
+`node` and `ffmpeg` are declared in `mise.toml`, so `mise run site-build` installs and uses its own
+copies of both — no root, and the same versions in every worktree. Neither is on the `PATH` of a
+shell that did not go through mise, so `build.sh` and `capture/encode.sh` fall back to `mise where`
+for them: running the scripts straight from a terminal works too, and uses the same copies. `mise
+x -- <command>` puts them on the `PATH` of anything else for a single command.
+
 ## Running it
 
     mise run site-build          # full: emit, capture, stage, render, check

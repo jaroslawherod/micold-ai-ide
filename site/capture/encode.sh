@@ -67,6 +67,14 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$frames" ] && [ -n "$id" ] && [ -n "$out" ] || usage
+# ffmpeg is declared in `mise.toml`, and mise installs a tool without putting it on the PATH of a
+# shell that did not go through `mise run` or `mise x`. So a `site/build.sh` run straight from a
+# terminal would die on a tool the repository has already installed for it, saying only that it is
+# not there. The same fallback `site/build.sh` uses for Node, for the same reason.
+if ! command -v ffmpeg >/dev/null 2>&1 && command -v mise >/dev/null 2>&1; then
+  ffmpeg_bin="$(mise where ffmpeg 2>/dev/null || true)/bin"
+  [ -x "$ffmpeg_bin/ffmpeg" ] && PATH="$ffmpeg_bin:$PATH" && export PATH
+fi
 command -v ffmpeg >/dev/null 2>&1 || die "ffmpeg is not installed -- see site/README.md"
 
 [ -d "$frames" ] || die "no such frame directory: $frames"
