@@ -31,6 +31,7 @@ use micold_core::session::{SessionId, SessionLocation, ShellInstanceId, Terminal
 use micold_core::theme::observe_system_scheme;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -144,6 +145,17 @@ struct App {
     /// In-flight mutating RPCs keyed by `req` (T055). Lets a reply be matched, a duplicate
     /// submission suppressed, and an in-flight op resolved as *unknown* if the connection drops.
     pending_ops: HashMap<u64, PendingOp>,
+    /// Scrollback ranges asked for and not yet answered, keyed by `req` (`010` BUG-021).
+    ///
+    /// A scroll gesture computes the same un-cached run on every wheel notch, because nothing it
+    /// asked for has arrived yet. Without this, each notch sent that run again; three seconds of
+    /// scrolling queued hundreds of overlapping ranges the daemon then ground through in silence.
+    /// A range recorded here is one [`GridCache::needed_scrollback`] treats as already on its way,
+    /// so a request covers a viewport of travel and the notches in between send nothing.
+    ///
+    /// Entries are removed by the matching `ScrollbackResponse`, and dropped wholesale on
+    /// disconnect (`req`s are per-connection) and with the session's grid.
+    scrollback_inflight: HashMap<u64, (SessionId, Range<LineId>)>,
     /// The frame-time measurement run, when one was asked for (feature 018, FR-039b — T000z/T076a).
     /// `None` for every ordinary launch, which is what keeps this out of the way of the running
     /// application: with no run configured, [`view`] does not read the clock and [`subscription`]
@@ -934,45 +946,47 @@ fn row_line_id(grid: &GridCache, offset: usize, row: u16) -> LineId {
 }
 
 /// Update the displayed session's scroll offset via `f(current, history)`, then fetch any revealed
-/// scrollback the cache doesn't yet hold from the daemon (`ScrollbackRequest`). `history` is the
-/// daemon's full retained depth (`viewport_top - oldest_available`), so the view can scroll into
-/// history; un-fetched lines render blank until the `ScrollbackResponse` fills them (FR-016/017).
+/// scrollback the cache doesn't yet hold and hasn't already asked for (`ScrollbackRequest`).
+/// `history` is the daemon's full retained depth (`viewport_top - oldest_available`), so the view
+/// can scroll into history; un-fetched lines render blank until the `ScrollbackResponse` fills them
+/// (FR-016/017).
+///
+/// **Which range to ask for is [`GridCache::needed_scrollback`]'s decision, not this function's**
+/// (`010` BUG-021). It used to be made here, from the revealed line to the live tail, and that is
+/// the range whose size grows with scroll depth. Moving it left this function with the two things
+/// that genuinely need the shell — the correlation id and the socket.
 fn scroll_view(app: &mut App, f: impl FnOnce(usize, usize) -> usize) {
     let Some(id) = app.core.active_session else {
         return;
     };
-    let (vt, new_off, need_from) = {
+    let inflight: Vec<Range<LineId>> = app
+        .scrollback_inflight
+        .values()
+        .filter(|(session, _)| *session == id)
+        .map(|(_, range)| range.clone())
+        .collect();
+    let (new_off, needed) = {
         let Some(grid) = app.grids.get(&id) else {
             return;
         };
-        let vt = grid.viewport_top().0;
-        let oldest = grid.oldest_available().0;
-        let history = (vt - oldest).max(0) as usize;
+        let history = (grid.viewport_top().0 - grid.oldest_available().0).max(0) as usize;
         let new_off = f(app.display_offset, history);
-        // The visible window's top line; find the lowest un-cached line in [top, viewport_top).
-        let top = (vt - new_off as i64).max(oldest);
-        let rows = grid.rows() as i64;
-        let mut need_from = None;
-        let mut lid = top;
-        while lid < vt && lid < top + rows {
-            if grid.line(LineId(lid)).is_none() {
-                need_from = Some(lid);
-                break;
-            }
-            lid += 1;
-        }
-        (vt, new_off, need_from)
+        (new_off, grid.needed_scrollback(new_off, &inflight))
     };
     app.display_offset = new_off;
-    if let Some(from) = need_from {
+    if let Some(range) = needed {
         let req = app.next_req;
         app.next_req += 1;
         if let Some(d) = &app.daemon {
             d.send(ClientMsg::ScrollbackRequest {
                 session: id,
                 req,
-                ranges: vec![LineId(from)..LineId(vt)],
+                ranges: vec![range.clone()],
             });
+            // Recorded only once it is actually on the wire. A range marked in flight with no
+            // request behind it is a range nothing will ever answer, and those rows would stay
+            // blank for as long as the view stayed there.
+            app.scrollback_inflight.insert(req, (id, range));
         }
     }
 }
@@ -1159,6 +1173,7 @@ pub(crate) mod tests {
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
+            scrollback_inflight: HashMap::new(),
             pending_ops: HashMap::new(),
             probe: None,
             scene_ready: false,
@@ -1207,6 +1222,7 @@ pub(crate) mod tests {
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
+            scrollback_inflight: HashMap::new(),
             pending_ops: HashMap::new(),
             probe: None,
             scene_ready: false,
@@ -1610,6 +1626,7 @@ pub(crate) mod tests {
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
+            scrollback_inflight: HashMap::new(),
             pending_ops: HashMap::new(),
             probe: None,
             scene_ready: false,
@@ -1745,6 +1762,193 @@ pub(crate) mod tests {
 
     fn feed(app: &mut App, msg: DaemonMsg) {
         let _ = update_inner(app, Message::DaemonEvent(msg));
+    }
+
+    // --- `010` BUG-021: what a scroll gesture costs -------------------------------------------
+
+    /// A grid sitting at the live tail: `rows` visible lines at `viewport_top`, no history cached.
+    fn at_the_tail(session: SessionId, viewport_top: i64, rows: u16) -> GridCache {
+        use micold_core::protocol::grid::{
+            GridFrame, WireCursor, WireCursorShape, WireLine, WireStyle,
+        };
+        let mut cache = GridCache::new();
+        cache.apply(&GridFrame {
+            session,
+            seq: 1,
+            generation: 1,
+            full: true,
+            viewport_top: LineId(viewport_top),
+            oldest_available: LineId(0),
+            cols: 80,
+            rows,
+            cursor: WireCursor {
+                line: LineId(viewport_top),
+                col: 0,
+                shape: WireCursorShape::Block,
+                visible: true,
+                blinking: false,
+            },
+            styles: vec![WireStyle {
+                fg: micold_core::protocol::grid::WireColor::Named(7),
+                bg: micold_core::protocol::grid::WireColor::Named(0),
+                flags: 0,
+                underline_color: None,
+            }],
+            hyperlinks: Vec::new(),
+            lines: (0..rows as i64)
+                .map(|i| WireLine {
+                    id: LineId(viewport_top + i),
+                    text: "x".into(),
+                    runs: vec![micold_core::protocol::grid::StyleRun { len: 1, style: 0 }],
+                    extras: Vec::new(),
+                    wrapped: false,
+                })
+                .collect(),
+            mode: 0,
+            input_serial: None,
+        });
+        cache
+    }
+
+    /// An `App` scrolled-ready: one session, its grid at the tail, and a socket to read.
+    fn app_at_the_tail() -> (
+        App,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) {
+        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = base_app();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        let id = SessionId::new();
+        app.core.active_session = Some(id);
+        app.grids.insert(id, at_the_tail(id, 4000, 69));
+        (app, rx)
+    }
+
+    fn scrollback_ranges(
+        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) -> Vec<Range<LineId>> {
+        let mut out = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            if let ClientMsg::ScrollbackRequest { ranges, .. } = msg {
+                out.extend(ranges);
+            }
+        }
+        out
+    }
+
+    /// `010` BUG-021, measured the way the report measured it: not one request, but a gesture.
+    ///
+    /// The unit gates in `grid.rs` pin the shape of a single range. This one drives 150 wheel
+    /// notches of two lines each through the real dispatcher against a real `Outbox` and reads what
+    /// went on the wire. Before the fix that was 150 requests — one per notch, because no answer
+    /// had arrived to cache — each running from the revealed line to the live tail, summing to tens
+    /// of thousands of lines for a gesture that revealed three hundred. The daemon served every one
+    /// of them serially under the session's terminal lock, which is why a three-second scroll left
+    /// it saturated for fifteen seconds afterwards and the pane blank throughout.
+    ///
+    /// Both numbers below are ceilings with slack in them, deliberately: what is load-bearing is
+    /// that the cost of a gesture tracks the lines it *reveals*, not the notches it takes or the
+    /// depth it reaches. An exact count would pin the prefetch size, which is a tuning decision.
+    #[test]
+    fn a_scroll_gesture_asks_once_per_viewport_not_once_per_notch() {
+        let (mut app, mut rx) = app_at_the_tail();
+
+        for _ in 0..150 {
+            let _ = update_inner(&mut app, Message::TerminalScrolled(2));
+        }
+
+        let asked = scrollback_ranges(&mut rx);
+        assert_eq!(app.display_offset, 300, "the gesture went 300 lines back");
+        assert!(
+            asked.len() <= 6,
+            "150 notches over 300 lines sent {} requests; one per viewport of travel is ~5",
+            asked.len()
+        );
+        let lines: i64 = asked.iter().map(|r| r.end.0 - r.start.0).sum();
+        assert!(
+            lines <= 4 * 300,
+            "a gesture revealing 300 lines asked the daemon for {lines}"
+        );
+        assert!(
+            asked.iter().all(|r| r.end.0 - r.start.0 <= 2 * 69),
+            "every request is bounded by the viewport, however deep the gesture went: {asked:?}"
+        );
+    }
+
+    /// The gap probe D found, and the reason it is worth writing down: an in-flight record is
+    /// released by its *answer*, and removing that release broke nothing.
+    ///
+    /// Every other gate here stops at the request. None of them let an answer arrive and then
+    /// scrolled again, so nothing said the record was ever cleared — and a record that is never
+    /// cleared is a range this view will never ask for twice. That is harmless while the answer
+    /// carries the lines (the cache then holds them, and `held` is true either way) and permanent
+    /// when it does not: the daemon trimmed them, or the session went away, and those rows stay
+    /// blank for as long as the window stays there. A storm traded for a hole.
+    #[test]
+    fn a_range_whose_answer_brought_nothing_is_asked_for_again() {
+        let (mut app, mut rx) = app_at_the_tail();
+        let session = app
+            .core
+            .active_session
+            .expect("the fixture views a session");
+
+        let _ = update_inner(&mut app, Message::TerminalScrolled(2));
+        let asked = scrollback_ranges(&mut rx);
+        assert_eq!(
+            asked.len(),
+            1,
+            "one notch into un-cached history, one request"
+        );
+        let req = *app
+            .scrollback_inflight
+            .keys()
+            .next()
+            .expect("and it is on the record as in flight");
+
+        feed(
+            &mut app,
+            DaemonMsg::ScrollbackResponse {
+                session,
+                req,
+                oldest_available: LineId(0),
+                newest: LineId(4068),
+                lines: Vec::new(),
+                styles: Vec::new(),
+                hyperlinks: Vec::new(),
+                more: false,
+            },
+        );
+
+        let _ = update_inner(&mut app, Message::TerminalScrolled(0));
+        assert_eq!(
+            scrollback_ranges(&mut rx),
+            asked,
+            "the answer brought none of that range, so it is not on its way and must be asked \
+             for again"
+        );
+    }
+
+    /// The in-flight record is what stops the storm, so it must never outlive its answer.
+    ///
+    /// `req`s are per-connection: a request outstanding when the socket drops will never be
+    /// answered on the next one. Keeping the record would suppress exactly the request that would
+    /// have filled those rows, and the pane would stay blank for as long as the view stayed there —
+    /// trading a storm for a permanent hole.
+    #[test]
+    fn a_disconnect_releases_the_ranges_that_will_never_be_answered() {
+        let (mut app, _rx) = app_at_the_tail();
+        let _ = update_inner(&mut app, Message::TerminalScrolled(2));
+        assert!(
+            !app.scrollback_inflight.is_empty(),
+            "the gesture must have left a request outstanding for this to be about anything"
+        );
+
+        let _ = shell::daemon_sync::on_disconnected(&mut app);
+
+        assert!(
+            app.scrollback_inflight.is_empty(),
+            "a range asked for on a dead connection is not on its way"
+        );
     }
 
     #[test]
@@ -2255,6 +2459,7 @@ pub(crate) mod tests {
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
+            scrollback_inflight: HashMap::new(),
             pending_ops: HashMap::new(),
             probe: None,
             scene_ready: false,

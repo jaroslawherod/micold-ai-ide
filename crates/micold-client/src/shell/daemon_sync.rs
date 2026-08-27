@@ -229,6 +229,10 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
     // success or failure — and reconcile against authoritative state on reconnect
     // (FR-031/035). The daemon applied its mutation atomically before replying, so the fresh
     // welcome catalog is the source of truth for whether it actually took effect.
+    // Same reasoning, no message: a scrollback fetch is advisory, and the rows it would have
+    // filled are re-requested by the next scroll. Keeping the entries would suppress exactly
+    // that request (`010` BUG-021).
+    app.scrollback_inflight.clear();
     for (_req, op) in app.pending_ops.drain() {
         app.core.notify_error(format!(
             "The session service disconnected before confirming the request to {} — \
@@ -354,11 +358,17 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // Fetched scrollback: resolve + insert into the session's grid cache (FR-016/017).
         DaemonMsg::ScrollbackResponse {
             session,
+            req,
             lines,
             styles,
             hyperlinks,
             ..
         } => {
+            // The range is no longer in flight, whatever it brought back (`010` BUG-021).
+            // Removed *before* the lines are applied, not after, so a range the daemon could
+            // not serve stops suppressing its own re-request rather than staying blank
+            // forever.
+            app.scrollback_inflight.remove(&req);
             if let Some(grid) = app.grids.get_mut(&session) {
                 grid.apply_scrollback(&lines, &styles, &hyperlinks);
             }
@@ -809,6 +819,8 @@ pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
                 .session_ids_of_project(&path)
                 .contains(id)
         });
+        app.scrollback_inflight
+            .retain(|_, (session, _)| app.grids.contains_key(session));
         let remove_path = path.clone();
         send_op(app, PendingOp::ProjectRemove, move |req| {
             ClientMsg::ProjectRemove {
@@ -1037,6 +1049,8 @@ pub fn on_session_selected(app: &mut App, id: SessionId) -> Task<Message> {
 /// archives the record in memory for instant feedback; the daemon reconciles other windows.
 pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message> {
     app.grids.remove(&id);
+    app.scrollback_inflight
+        .retain(|_, (session, _)| *session != id);
     // Release the input counter too (T114): ids are unique UUIDs so it can never be reused,
     // and a session being archived will take no more input. Never on a mere detach — the
     // counter must survive a reconnect for loss detection to hold.
@@ -1054,6 +1068,8 @@ pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message>
 pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
     if let Some(id) = app.core.session_remove_target {
         app.grids.remove(&id);
+        app.scrollback_inflight
+            .retain(|_, (session, _)| *session != id);
         app.stamper.forget(id); // T114, as in the close path above.
         send_op(app, PendingOp::DeleteSession, move |req| {
             ClientMsg::SessionDelete { req, session: id }
