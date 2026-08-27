@@ -29,4 +29,5 @@
 - [The layout snapshot](development/layout-snapshot.md)
 - [The component showcase](development/component-showcase.md)
 - [The CI pipeline](development/ci-pipeline.md)
+- [The documentation site](development/docs-site.md)
 - [Screenshots for the manual visual passes](development/screenshots.md)
