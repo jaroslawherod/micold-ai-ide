@@ -14,6 +14,7 @@
 //! just watched the bar apply (BUG-001). It is gone; this picker is the whole of the setting.
 
 use crate::app::Message;
+use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::SettingsDraft;
 use crate::ui::material::Select;
 use crate::ui::settings::{name_of, page, Named};
@@ -26,7 +27,7 @@ use micold_core::tokens::Roles;
 // Read by `tests/settings_sections.rs`, which is a separate crate and cannot be seen from here —
 // so to the compiler this is unused. Deleting it would take the gate's evidence with it.
 #[allow(dead_code)]
-pub const SETTINGS: &[(&str, &str)] = &[("theme", "SettingsThemeChanged")];
+pub const SETTINGS: &[(&str, &str)] = &[("theme", "ThemeChanged")];
 
 /// The theme options, in the order the picker lists them.
 const THEMES: &[Named<ThemePreference>] = &[
@@ -43,7 +44,7 @@ pub fn view<'a>(draft: &'a SettingsDraft, roles: Roles) -> Element<'a, Message> 
             draft.appearance.theme,
             name_of(THEMES, draft.appearance.theme),
         )),
-        |chosen: Named<ThemePreference>| Message::SettingsThemeChanged(chosen.0),
+        |chosen: Named<ThemePreference>| Message::Settings(SettingsMsg::ThemeChanged(chosen.0)),
         roles,
     )
     .label("Theme")

@@ -38,6 +38,15 @@
 //! the message the subscription emits, and `the_keyboard_subscription_names_no_surface` reads the
 //! function to confirm it still emits only that one.
 
+use micold_client::features::help;
+use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project;
+use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::session;
+use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::sidebar;
+use micold_client::features::sidebar::Msg as SidebarMsg;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{on_escape, Message, State};
@@ -70,19 +79,19 @@ fn dialogs() -> Vec<Dialog> {
     vec![
         Dialog {
             id: "about",
-            cancel: Message::AboutClosed,
-            open: |state| state.about_open = true,
+            cancel: Message::Help(HelpMsg::AboutClosed),
+            open: |state| state.help.about_open = true,
         },
         Dialog {
             id: "project_selector",
-            cancel: Message::ProjectSelectorClosed,
-            open: |state| state.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
+            cancel: Message::Project(ProjectMsg::SelectorClosed),
+            open: |state| state.project.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
         },
         Dialog {
             id: "rename_project",
-            cancel: Message::RenameCancelled,
+            cancel: Message::Project(ProjectMsg::RenameCancelled),
             open: |state| {
-                state.rename_draft = Some(RenameDraft {
+                state.project.rename_draft = Some(RenameDraft {
                     path: PathBuf::from("/tmp"),
                     text: String::new(),
                     error: None,
@@ -92,18 +101,18 @@ fn dialogs() -> Vec<Dialog> {
         Dialog {
             id: "add_worktree",
             cancel: Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
-            open: |state| state.worktree_form = Some(Default::default()),
+            open: |state| state.worktree_form.form = Some(Default::default()),
         },
         Dialog {
             id: "confirm_worktree_delete",
-            cancel: Message::WorktreeDeleteCancelled,
-            open: |state| state.worktree_delete_target = Some("wt".to_string()),
+            cancel: Message::Worktree(WorktreeMsg::DeleteCancelled),
+            open: |state| state.worktree.delete_target = Some("wt".to_string()),
         },
         Dialog {
             id: "rename_worktree",
-            cancel: Message::WorktreeRenameCancelled,
+            cancel: Message::Worktree(WorktreeMsg::RenameCancelled),
             open: |state| {
-                state.worktree_rename_draft = Some(WorktreeRenameDraft {
+                state.worktree.rename_draft = Some(WorktreeRenameDraft {
                     dir_name: "wt".to_string(),
                     text: String::new(),
                     error: None,
@@ -112,13 +121,13 @@ fn dialogs() -> Vec<Dialog> {
         },
         Dialog {
             id: "confirm_session_remove",
-            cancel: Message::SessionRemoveCancelled,
-            open: |state| state.session_remove_target = Some(SessionId::new()),
+            cancel: Message::Session(SessionMsg::RemoveCancelled),
+            open: |state| state.session.remove_target = Some(SessionId::new()),
         },
         Dialog {
             id: "confirm_forget_project",
-            cancel: Message::ProjectForgetCancelled,
-            open: |state| state.forget_target = Some(PathBuf::from("/p")),
+            cancel: Message::Project(ProjectMsg::ForgetCancelled),
+            open: |state| state.project.forget_target = Some(PathBuf::from("/p")),
         },
     ]
 }
@@ -126,7 +135,10 @@ fn dialogs() -> Vec<Dialog> {
 /// A state with `dialog` open (or nothing open, for `None`) and the filter panel as asked.
 fn state(dialog: Option<&Dialog>, filter_open: bool) -> State {
     let mut state = State {
-        sidebar_filter_open: filter_open,
+        sidebar: sidebar::State {
+            filter_open,
+            ..Default::default()
+        },
         ..Default::default()
     };
     if let Some(dialog) = dialog {
@@ -162,7 +174,7 @@ fn escape_closes_the_open_dialog_in_every_state() {
     // of.
     for (dialog, filter, state) in every_state() {
         let cancel = dialog.as_ref().map(|d| d.cancel.clone());
-        let panel = filter.then_some(Message::SidebarFilterMenuToggled);
+        let panel = filter.then_some(Message::Sidebar(SidebarMsg::FilterMenuToggled));
         // A dialog outranks the panel; with no dialog open the panel is the topmost surface.
         let want = cancel.or(panel);
         let (name, filter) = (label(&dialog), if filter { "open" } else { "closed" });
@@ -282,7 +294,7 @@ fn the_reducer_opens_a_dialog_through_that_mechanism() {
     // actually call it. Driven with real messages rather than by setting fields, so an arm that
     // forgets the call fails here — which is the failure the enum could not have.
     let openers: &[(&str, Message)] = &[
-        ("about", Message::AboutOpened),
+        ("about", Message::Help(HelpMsg::AboutOpened)),
         (
             "add_worktree",
             Message::WorktreeForm(micold_client::features::worktree_form::Msg::Opened),
@@ -317,12 +329,15 @@ fn a_modal_keeps_escape_whatever_floats_above_it() {
 
     let top = registry::topmost(&both).expect("a modal and a popover are open");
     assert_eq!(top.layer(), Layer::Dialog);
-    assert_eq!(registry::escape(&both), Some(Message::AboutClosed));
+    assert_eq!(
+        registry::escape(&both),
+        Some(Message::Help(HelpMsg::AboutClosed))
+    );
 
     let popover_alone = state(None, true);
     assert_eq!(
         registry::escape(&popover_alone),
-        Some(Message::SidebarFilterMenuToggled),
+        Some(Message::Sidebar(SidebarMsg::FilterMenuToggled)),
         "with no modal the popover is the topmost surface, and Escape is its own"
     );
 }
@@ -334,7 +349,7 @@ fn a_scroll_beneath_reaches_every_menu_and_no_dialog() {
     // not a modal is over them.
     assert_eq!(
         registry::scroll_beneath(&state(Some(&dialogs()[0]), true)),
-        vec![Message::SidebarFilterMenuToggled],
+        vec![Message::Sidebar(SidebarMsg::FilterMenuToggled)],
         "a scroll behind an open modal still invalidates the menu anchored beneath it, and does \
          not touch the modal"
     );
@@ -375,7 +390,7 @@ fn a_surface_is_registered_by_naming_it_once_and_nothing_else() {
     assert_eq!(open.layer(), Layer::Popover);
     assert_eq!(
         open.on(Trigger::Escape),
-        Some(&Message::SidebarFilterMenuToggled)
+        Some(&Message::Sidebar(SidebarMsg::FilterMenuToggled))
     );
 }
 
@@ -393,20 +408,23 @@ fn escape_now_reaches_every_popover() {
     // modal closes popovers; both still hold, and are asserted above. It does not require that a
     // surface Escape never reached keeps not being reached.
     let mut state = State {
-        help_menu_open: true,
+        help: help::State {
+            help_menu_open: true,
+            ..Default::default()
+        },
         ..Default::default()
     };
     assert_eq!(
         registry::escape(&state),
-        Some(Message::HelpMenuToggled),
+        Some(Message::Help(HelpMsg::MenuToggled)),
         "Escape closes the overflow menu, which before T031 it left open"
     );
 
     // And the priority is unchanged: a modal over it still takes Escape for itself.
-    state.about_open = true;
+    state.help.about_open = true;
     assert_eq!(
         registry::escape(&state),
-        Some(Message::AboutClosed),
+        Some(Message::Help(HelpMsg::AboutClosed)),
         "a dialog outranks a menu, whichever was opened first (contract D1)"
     );
 }
@@ -454,18 +472,21 @@ fn pressing_escape_closes_the_topmost_surface() {
         "the dialog took the Escape"
     );
     assert!(
-        both.sidebar_filter_open,
+        both.sidebar.filter_open,
         "and the popover beneath it is untouched — one Escape closes one surface"
     );
 
     // A popover alone, including one the pre-T031 keyboard path never reached.
     let mut menu = State {
-        help_menu_open: true,
+        help: help::State {
+            help_menu_open: true,
+            ..Default::default()
+        },
         ..Default::default()
     };
     menu.update(Message::EscapePressed);
     assert!(
-        !menu.help_menu_open,
+        !menu.help.help_menu_open,
         "Escape now reaches the overflow menu, which the subscription's match never named"
     );
 }
@@ -553,10 +574,25 @@ fn a_popover_is_not_drawn_from_the_registry() {
     let mut drawn = Vec::new();
     for probe in registry::probes() {
         let state = State {
-            help_menu_open: true,
-            project_switcher_open: true,
-            sidebar_filter_open: true,
-            terminal_context_menu: Some((4, 2)),
+            session: session::State {
+                terminal_context_menu: Some((4, 2)),
+                ..Default::default()
+            },
+
+            sidebar: sidebar::State {
+                filter_open: true,
+                ..Default::default()
+            },
+
+            project: project::State {
+                switcher_open: true,
+                ..Default::default()
+            },
+
+            help: help::State {
+                help_menu_open: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
         if let Some(open) = probe(&state) {
@@ -600,7 +636,7 @@ fn a_dialog_draws_from_its_own_state() {
                 availability: micold_core::project::Availability::Available,
             });
         state.workspace.active = Some(std::path::PathBuf::from("/p"));
-        state.worktrees = vec![micold_core::worktree::Worktree {
+        state.worktree.worktrees = vec![micold_core::worktree::Worktree {
             dir_name: "feat-x".to_string(),
             path: std::path::PathBuf::from("/p/.claude/worktrees/feat-x"),
             branch: Some("feat/x".to_string()),
@@ -612,9 +648,11 @@ fn a_dialog_draws_from_its_own_state() {
 
     #[allow(clippy::type_complexity)]
     let openers: &[(&str, fn(&mut State))] = &[
-        ("about", |s| s.update(Message::AboutOpened)),
+        ("about", |s| s.update(Message::Help(HelpMsg::AboutOpened))),
         ("rename_project", |s| {
-            s.update(Message::RenameStarted(std::path::PathBuf::from("/p")))
+            s.update(Message::Project(ProjectMsg::RenameStarted(
+                std::path::PathBuf::from("/p"),
+            )))
         }),
         ("add_worktree", |s| {
             s.update(Message::WorktreeForm(
@@ -622,14 +660,18 @@ fn a_dialog_draws_from_its_own_state() {
             ))
         }),
         ("confirm_worktree_delete", |s| {
-            s.update(Message::WorktreeDeleteRequested("feat-x".to_string()))
+            s.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+                "feat-x".to_string(),
+            )))
         }),
         ("rename_worktree", |s| {
-            s.update(Message::WorktreeRenameStarted("feat-x".to_string()))
+            s.update(Message::Worktree(WorktreeMsg::RenameStarted(
+                "feat-x".to_string(),
+            )))
         }),
         ("confirm_forget_project", |s| {
-            s.update(Message::ProjectForgetRequested(std::path::PathBuf::from(
-                "/p",
+            s.update(Message::Project(ProjectMsg::ForgetRequested(
+                std::path::PathBuf::from("/p"),
             )))
         }),
     ];

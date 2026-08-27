@@ -38,20 +38,19 @@ const CLI_SUPPORTING: &str = "Used for new sessions unless you choose otherwise"
 const IMAGE_SUPPORTING: &str = "A digest or an exact tag; a moving tag cannot be reported in a bug";
 
 fn settings_showing(section: SettingsSection, source: AvailabilitySource) -> State {
-    State {
-        available_providers: Some(CliAvailability {
-            // Claude Code present, Copilot missing — so there is a notice to look at, and the
-            // select still has an option, which is the ordinary case rather than an empty form.
-            available: vec![AiCli::ClaudeCode],
-            source,
-        }),
-        settings_draft: Some(SettingsDraft {
-            section,
-            ..SettingsDraft::default()
-        }),
-        window_size: (1280, 900),
-        ..State::default()
-    }
+    let mut state = State::default();
+    state.session.available_providers = Some(CliAvailability {
+        // Claude Code present, Copilot missing — so there is a notice to look at, and the
+        // select still has an option, which is the ordinary case rather than an empty form.
+        available: vec![AiCli::ClaudeCode],
+        source,
+    });
+    state.settings.settings_draft = Some(SettingsDraft {
+        section,
+        ..SettingsDraft::default()
+    });
+    state.window.window_size = (1280, 900);
+    state
 }
 
 /// Where the renderer put each painted string, by content.

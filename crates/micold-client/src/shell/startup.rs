@@ -27,6 +27,7 @@
 //! subprocess, git discovery, the OS theme — and those move in T051–T054. Until then it reaches
 //! back up to the crate root for them, which is why the imports below are `crate::`.
 
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -36,6 +37,7 @@ use std::sync::Arc;
 use iced::Task;
 use micold_client::app::{Message, State};
 use micold_client::features::sidebar::{filters_from_env_value, FILTER_ENV_VAR};
+use micold_client::features::window::Msg as WindowMsg;
 use micold_client::input::SessionInputStamper;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::settings::Settings;
@@ -136,7 +138,7 @@ fn boot() -> (App, Task<Message>) {
     let mut env_include_timeout_secs = micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS;
     if let Some(store) = caps.settings() {
         let loaded = store.load().settings;
-        core.theme_pref = loaded.theme;
+        core.settings.theme_pref = loaded.theme;
         scrollback_lines = loaded.scrollback_lines;
         env_include_enabled = loaded.env_include_enabled;
         env_include_script_path = loaded.env_include_script_path;
@@ -144,7 +146,7 @@ fn boot() -> (App, Task<Message>) {
         // The local read, superseded by `DaemonConnected`'s authoritative copy a moment later. It
         // is here so the first frame has the user's own default rather than `ClaudeCode` (feature
         // 026, FR-003).
-        core.default_ai_cli = loaded.default_ai_cli;
+        core.session.default_ai_cli = loaded.default_ai_cli;
     }
     // The availability set is *not* filled here any more (feature 027, FR-023c). It used to be,
     // from this process's own `PATH` — which is the host's, and under the sandboxed placement the
@@ -210,7 +212,8 @@ fn boot() -> (App, Task<Message>) {
     let env_include_last_outcome = boot_snapshot.outcome.clone();
     let mut env_include_cache = HashMap::new();
     env_include_cache.insert(boot_cwd, boot_snapshot);
-    core.system_scheme = observe_system_scheme(detect_system_scheme(), core.system_scheme);
+    core.settings.system_scheme =
+        observe_system_scheme(detect_system_scheme(), core.settings.system_scheme);
     // The §B5 test hook. Applied through the same message the filter popover sends, so a visual
     // pass photographs the real filter rather than a second implementation of one — and refused
     // loudly on a typo, for the reason `MICOLD_FRAME_PROBE` is: a value that was asked for and
@@ -218,7 +221,7 @@ fn boot() -> (App, Task<Message>) {
     match filters_from_env_value(std::env::var(FILTER_ENV_VAR).ok().as_deref()) {
         Ok(filters) => {
             for filter in filters {
-                core.update(Message::SidebarFilterToggled(filter));
+                core.update(Message::Sidebar(SidebarMsg::FilterToggled(filter)));
             }
         }
         Err(message) => {
@@ -288,9 +291,11 @@ fn boot() -> (App, Task<Message>) {
             // against (feature 015).
             iced::window::latest()
                 .and_then(iced::window::size)
-                .map(|size| Message::WindowResized {
-                    width: size.width.max(0.0) as u16,
-                    height: size.height.max(0.0) as u16,
+                .map(|size| {
+                    Message::Window(WindowMsg::Resized {
+                        width: size.width.max(0.0) as u16,
+                        height: size.height.max(0.0) as u16,
+                    })
                 }),
             // And, when the daemon is sandboxed, start bringing it up. Batched rather than
             // sequenced: the window has no reason to wait on a container image.

@@ -16,7 +16,11 @@
 //! diagnostics, and About. Every one of them *does* something rather than storing a value.
 
 use crate::app::{Message, State};
+use crate::features::connection::Msg as ConnectionMsg;
 use crate::features::help::help_actions;
+use crate::features::help::Msg as HelpMsg;
+use crate::features::project::Msg as ProjectMsg;
+use crate::features::settings::Msg as SettingsMsg;
 use crate::icons::Icon;
 use crate::ui::material::{Button, MenuItem, MenuTrigger, Toolbar};
 use iced::Element;
@@ -32,13 +36,21 @@ use micold_core::tokens;
 /// adding one is an edit to one line instead of to every call site.
 pub fn overflow_items(_state: &State) -> Vec<MenuItem<Message>> {
     vec![
-        MenuItem::new(Icon::Settings, "Settings", Message::SettingsOpened),
+        MenuItem::new(
+            Icon::Settings,
+            "Settings",
+            Message::Settings(SettingsMsg::Opened),
+        ),
         MenuItem::new(
             Icon::Help,
             "Session service diagnostics",
-            Message::DiagnosticsRequested,
+            Message::Connection(ConnectionMsg::DiagnosticsRequested),
         ),
-        MenuItem::new(Icon::About, help_actions()[0], Message::AboutOpened),
+        MenuItem::new(
+            Icon::About,
+            help_actions()[0],
+            Message::Help(HelpMsg::AboutOpened),
+        ),
     ]
 }
 
@@ -62,8 +74,8 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .unwrap_or_else(|| "Select project".to_string());
     let switcher = Button::text(switcher_label, r)
         .leading(Icon::OpenProject)
-        .on_press(Message::ProjectSwitcherToggled);
-    let menu = MenuTrigger::new(Icon::Menu, Message::HelpMenuToggled, r);
+        .on_press(Message::Project(ProjectMsg::SwitcherToggled));
+    let menu = MenuTrigger::new(Icon::Menu, Message::Help(HelpMsg::MenuToggled), r);
     Toolbar::new(meta.name, r)
         // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from
         // the sidebar's offset rather than stored, so nothing else can set it.

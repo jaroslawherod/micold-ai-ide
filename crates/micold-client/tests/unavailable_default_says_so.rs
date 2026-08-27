@@ -26,14 +26,13 @@ const SENTENCE: &str =
     "GitHub Copilot isn't installed. Install it, or start this session on another AI CLI.";
 
 fn state_with(default_ai_cli: AiCli, available: &[AiCli]) -> State {
-    State {
-        default_ai_cli,
-        available_providers: Some(CliAvailability {
-            available: available.to_vec(),
-            source: AvailabilitySource::ThisComputer,
-        }),
-        ..State::default()
-    }
+    let mut state = State::default();
+    state.session.default_ai_cli = default_ai_cli;
+    state.session.available_providers = Some(CliAvailability {
+        available: available.to_vec(),
+        source: AvailabilitySource::ThisComputer,
+    });
+    state
 }
 
 /// Open the list the way a press does: the reducer's answer, drained into the state.
@@ -49,7 +48,7 @@ fn the_press_carries_the_reason_the_list_is_opening() {
     let state = state_with(AiCli::Copilot, &[AiCli::ClaudeCode]);
 
     assert_eq!(
-        state.start_intent(PressTarget::Primary),
+        state.session.start_intent(PressTarget::Primary),
         StartIntent::OfferChoice {
             providers: vec![AiCli::ClaudeCode],
             unavailable_default: Some(AiCli::Copilot),
@@ -57,7 +56,7 @@ fn the_press_carries_the_reason_the_list_is_opening() {
         "the primary half opened a list the user did not ask for, and has to be able to say why"
     );
     assert_eq!(
-        state.start_intent(PressTarget::Secondary),
+        state.session.start_intent(PressTarget::Secondary),
         StartIntent::OfferChoice {
             providers: vec![AiCli::ClaudeCode],
             unavailable_default: None,
@@ -73,7 +72,8 @@ fn an_unavailable_default_is_named_when_the_list_opens_in_its_place() {
     open(&mut state, Some(AiCli::Copilot));
 
     let visible = state
-        .notify
+        .notifications
+        .queue
         .visible()
         .expect("the user pressed start and got a menu; nothing yet says why");
     assert_eq!(visible.message, SENTENCE);
@@ -84,7 +84,7 @@ fn an_unavailable_default_is_named_when_the_list_opens_in_its_place() {
          seconds that go with it"
     );
     assert!(
-        state.session_start_menu.is_some(),
+        state.session.start_menu.is_some(),
         "and it still offers what is available; saying so replaces nothing (FR-002)"
     );
 }
@@ -98,7 +98,8 @@ fn the_sentence_names_the_cli_the_way_a_menu_does() {
     open(&mut state, Some(AiCli::Copilot));
 
     let message = state
-        .notify
+        .notifications
+        .queue
         .visible()
         .expect("said something")
         .message
@@ -118,8 +119,8 @@ fn the_chevron_opens_the_same_list_and_says_nothing() {
 
     open(&mut state, None);
 
-    assert!(state.session_start_menu.is_some(), "the list still opens");
-    assert_eq!(state.notify.visible(), None);
+    assert!(state.session.start_menu.is_some(), "the list still opens");
+    assert_eq!(state.notifications.queue.visible(), None);
 }
 
 #[test]
@@ -131,8 +132,8 @@ fn a_default_that_turned_out_to_be_installed_says_nothing() {
 
     open(&mut state, Some(AiCli::Copilot));
 
-    assert!(state.session_start_menu.is_some());
-    assert_eq!(state.notify.visible(), None);
+    assert!(state.session.start_menu.is_some());
+    assert_eq!(state.notifications.queue.visible(), None);
 }
 
 #[test]
@@ -143,12 +144,12 @@ fn closing_the_list_again_says_nothing() {
     let mut state = state_with(AiCli::Copilot, &[AiCli::ClaudeCode]);
 
     open(&mut state, Some(AiCli::Copilot));
-    state.notify.dismiss();
+    state.notifications.queue.dismiss();
     open(&mut state, Some(AiCli::Copilot));
 
     assert!(
-        state.session_start_menu.is_none(),
+        state.session.start_menu.is_none(),
         "the second press closed it"
     );
-    assert_eq!(state.notify.visible(), None);
+    assert_eq!(state.notifications.queue.visible(), None);
 }

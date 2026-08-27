@@ -13,7 +13,11 @@ mod shell;
 use crate::shell::capabilities::Capabilities;
 use crate::shell::daemon_sync::PendingOp;
 use micold_client::app::{Message, State};
+use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::session::SelectKind;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::worktree_form::Msg as FormMsg;
 use micold_client::grid::GridCache;
 use micold_client::input::SessionInputStamper;
@@ -66,7 +70,7 @@ struct App {
     /// terminal/OS-theme poll subscriptions: `true` until the first `Unfocused` event,
     /// which matches iced's behavior of not emitting an initial `Focused` on launch.
     window_focused: bool,
-    /// The terminal pane's last-known `(cols, rows)`, reported by `Message::TerminalResized`.
+    /// The terminal pane's last-known `(cols, rows)`, reported by `Message::Session(SessionMsg::TerminalResized)`.
     /// Seeds newly-spawned sessions so they fill the pane immediately instead of starting at the
     /// hardcoded default and waiting for the next window resize to reconcile (bugfix: new
     /// terminal not starting fullscreen).
@@ -252,10 +256,10 @@ fn scene_facts(app: &App) -> SceneFacts {
         .map(|p| app.core.workspace.running_session_count(p))
         .unwrap_or(0);
     SceneFacts {
-        worktrees: app.core.worktrees.len(),
+        worktrees: app.core.worktree.worktrees.len(),
         running_sessions,
         dialog_open: micold_client::overlay::registry::open_dialog(&app.core).is_some(),
-        context_menu_open: app.core.terminal_context_menu.is_some(),
+        context_menu_open: app.core.session.terminal_context_menu.is_some(),
         ripple_animating: app.ripples_animating.load(Ordering::Relaxed) > 0,
     }
 }
@@ -294,18 +298,20 @@ fn compose_scene(app: &mut App) -> Task<Message> {
         // Guarded, unlike the other two: a session create is not idempotent, and an unguarded one
         // here would start a fresh session on every frame.
         if !creating && app.daemon.is_some() {
-            steps.push(Task::done(Message::SessionStartRequested {
+            steps.push(Task::done(Message::Session(SessionMsg::StartRequested {
                 location: SessionLocation::Default,
-                provider: app.core.provider_for_start(None),
-            }));
+                provider: app.core.session.provider_for_start(None),
+            })));
         }
     }
     if !facts.dialog_open {
-        steps.push(Task::done(Message::AboutOpened));
+        steps.push(Task::done(Message::Help(HelpMsg::AboutOpened)));
     }
     if !facts.context_menu_open {
         let (x, y) = SCENE_MENU_AT;
-        steps.push(Task::done(Message::TerminalContextMenuOpened { x, y }));
+        steps.push(Task::done(Message::Session(
+            SessionMsg::TerminalContextMenuOpened { x, y },
+        )));
     }
 
     Task::batch(steps)
@@ -356,7 +362,7 @@ impl Drop for App {
 impl App {
     /// The displayed session's grid cache, if any (routes through `active_session`).
     fn attached_grid(&self) -> Option<&GridCache> {
-        self.grids.get(&self.core.active_session?)
+        self.grids.get(&self.core.session.active?)
     }
 }
 
@@ -473,39 +479,39 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
 /// Once it does drain, the offset may still be `None`: the row was already fully visible, and
 /// FR-009 says a reveal that did not need to move the list must not move it.
 fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
-    if !app.core.pending_reveal_scroll
-        || app.core.sidebar_viewport_height == 0
+    if !app.core.sidebar.pending_reveal_scroll
+        || app.core.sidebar.viewport_height == 0
         || !app.core.current_session_is_listed()
     {
-        if app.core.pending_reveal_scroll && micold_client::reveal_trace::enabled() {
+        if app.core.sidebar.pending_reveal_scroll && micold_client::reveal_trace::enabled() {
             micold_client::reveal_trace::line(format_args!(
                 "armed, waiting: viewport_h={} listed={}",
-                app.core.sidebar_viewport_height,
+                app.core.sidebar.viewport_height,
                 app.core.current_session_is_listed()
             ));
         }
         return None;
     }
-    app.core.pending_reveal_scroll = false;
+    app.core.sidebar.pending_reveal_scroll = false;
     let offset = app.core.reveal_scroll_offset();
     if micold_client::reveal_trace::enabled() {
         match offset {
             Some(y) => micold_client::reveal_trace::line(format_args!(
                 "drained: viewport_h={} scroll_offset={} -> scrolling to {y}",
-                app.core.sidebar_viewport_height, app.core.sidebar_scroll_offset,
+                app.core.sidebar.viewport_height, app.core.sidebar.scroll_offset,
             )),
             None => micold_client::reveal_trace::line(format_args!(
                 "drained: viewport_h={} scroll_offset={} -> no scroll, the row is already visible \
                  (FR-009)",
-                app.core.sidebar_viewport_height, app.core.sidebar_scroll_offset,
+                app.core.sidebar.viewport_height, app.core.sidebar.scroll_offset,
             )),
         }
     }
     let offset = offset?;
     // Record where the list was sent, rather than waiting to be told (BUG-002).
     //
-    // `sidebar_scroll_offset` is a mirror of the scrollable's position whose only writer is
-    // `Message::SidebarScrolled` — and the rendering stack publishes that from `notify_viewport`,
+    // `scroll_offset` is a mirror of the scrollable's position whose only writer is
+    // `Message::Sidebar(SidebarMsg::Scrolled)` — and the rendering stack publishes that from `notify_viewport`,
     // which returns *without publishing* whenever the content fits the viewport
     // (`iced_widget/src/scrollable.rs`). A reveal in a project whose sidebar fits therefore moves
     // the list silently, and the mirror keeps the offset of the project before it. The next
@@ -516,7 +522,7 @@ fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
     // The application does not need to be told what it just did. `offset` is already clamped into
     // this list's own scrollable range by `scroll_target`, so it is the position the panel will
     // hold whether or not a notification follows.
-    app.core.sidebar_scroll_offset = offset;
+    app.core.sidebar.scroll_offset = offset;
     Some(iced::widget::operation::scroll_to(
         micold_client::ui::SIDEBAR_SCROLL_ID.clone(),
         iced::widget::scrollable::AbsoluteOffset {
@@ -536,15 +542,15 @@ fn reveal_scroll(app: &mut App) -> Option<Task<Message>> {
 /// every selection would yank them back each time, including on selections made with the mode
 /// toggle rather than with the strip.
 fn tab_reveal_scroll(app: &mut App) -> Option<Task<Message>> {
-    if !app.core.pending_tab_reveal || app.core.tab_strip_viewport_width == 0 {
+    if !app.core.session.pending_tab_reveal || app.core.session.tab_strip_viewport_width == 0 {
         return None;
     }
-    app.core.pending_tab_reveal = false;
+    app.core.session.pending_tab_reveal = false;
     let index = micold_client::ui::terminal::marked_tab_index(&app.core)?;
     let offset = micold_client::ui::terminal::scroll_into_view(
         index,
-        app.core.tab_strip_scroll_offset as f32,
-        app.core.tab_strip_viewport_width as f32,
+        app.core.session.tab_strip_scroll_offset as f32,
+        app.core.session.tab_strip_viewport_width as f32,
     )?;
     Some(iced::widget::operation::scroll_to(
         micold_client::ui::terminal::TAB_STRIP_SCROLL_ID.clone(),
@@ -555,88 +561,14 @@ fn tab_reveal_scroll(app: &mut App) -> Option<Task<Message>> {
 fn update_inner(app: &mut App, message: Message) -> Task<Message> {
     match message {
         // ---- Feature 010: daemon connection lifecycle (binary-owned runtime state) ----
-        Message::DaemonConnected {
-            outbox,
-            catalog,
-            settings,
-        } => shell::daemon_sync::on_connected(app, outbox, catalog, settings),
-        Message::DaemonEvent(event) => shell::daemon_sync::on_daemon_event(app, event),
-        Message::DaemonGridFrame(frame) => shell::daemon_sync::on_grid_frame(app, frame),
-        Message::DaemonDisconnected => shell::daemon_sync::on_disconnected(app),
-        Message::DaemonConnectFailed(reason) => shell::daemon_sync::on_connect_failed(app, reason),
-        // Feature 027. The sandbox's outcome is recorded, never acted on: a failure must not start
-        // a session somewhere else, and a success needs no prompting because the connection
-        // subscription is already retrying against the loopback port.
-        Message::SandboxStarted(started) => {
-            app.sandbox.started(*started);
-            Task::none()
-        }
-        Message::SandboxFailed(failure) => {
-            // Recorded and left standing. The banner draws it for as long as it lasts — the queue
-            // would show it once, for four seconds, while the sandbox stayed broken (FR-035b, S-3),
-            // which is exactly the edge case the spec calls out.
-            app.sandbox.failed(*failure);
-            Task::none()
-        }
-        Message::SandboxDiagnostics(lines) => {
-            match lines.last() {
-                // Phrased like the connected path's `RecentErrors` answer, because from the user's
-                // side it is the same question — only the route it took to be answered differs.
-                Some(latest) => app.core.notify_error(format!(
-                    "The session service logged {} line(s) inside the sandbox; most recent: {}",
-                    lines.len(),
-                    latest.trim()
-                )),
-                None => app.core.notify_info(
-                    "The sandbox is there, but the session service inside it has logged nothing.",
-                ),
-            }
-            Task::none()
-        }
-        Message::SandboxLost => {
-            app.sandbox.container_lost(shell::sandbox::CONTAINER_NAME);
-            Task::none()
-        }
-        // The one edge back into bring-up, and it is here because a person pressed something
-        // (R9, FR-035a). Both of these are user actions; neither is ever sent by the application
-        // to itself.
-        Message::SandboxRestartRequested => {
-            match app.sandbox_boot.clone() {
-                Some(plan)
-                    if app
-                        .sandbox
-                        .restart(micold_core::sandbox::lifecycle::RestartRequested) =>
-                {
-                    // Going back to the sandbox has to take the connection with it. If a fallback
-                    // was in force, `placement.kind` is the host process; left there, the sandbox
-                    // would come up and every session would still be running outside it — the
-                    // banner saying "sandboxed" over an unconfined shell, which is the one thing
-                    // FR-035b exists to prevent.
-                    app.placement.kind =
-                        micold_core::sandbox::placement::PlacementKind::LocalSandbox;
-                    shell::sandbox::boot(plan)
-                }
-                _ => Task::none(),
-            }
-        }
-        Message::SandboxFallbackAccepted => {
-            if let Some(offer) = app.sandbox.fallback_offer() {
-                // Consent is not the whole of it. `daemon::connection` dials from `app.placement`,
-                // and for `LocalSandbox` it deliberately never falls back to a host process
-                // (FR-035, and the comment in `daemon.rs` says so). So the *only* thing that can
-                // turn accepted consent into a working service is moving the placement here —
-                // without this the user presses "Run without it for now", the banner changes, and
-                // the client goes on dialling a port nothing is listening on, forever.
-                //
-                // In memory only: nothing writes it back to the settings store, which is what
-                // makes the choice last for this occurrence alone (FR-035a).
-                if app.sandbox.accept_fallback(offer) {
-                    app.placement.kind =
-                        micold_core::sandbox::placement::PlacementKind::HostProcess;
-                }
-            }
-            Task::none()
-        }
+        // Twelve arms until T011. All twelve were effects, so all twelve are `shell/connection.rs`
+        // now (contract M2) and the routing decision is stated once, next to them.
+        Message::Connection(msg) => shell::connection::update(app, msg),
+        // ---- Feature 027: the session service inside a container ----
+        // Six arms until T011, and the same story as the twelve above: every one of them was an
+        // effect or a write to the binary-owned `app.sandbox`, so all six are
+        // `shell/sandbox.rs` now (contract M2).
+        Message::Sandbox(msg) => shell::sandbox::update(app, msg),
         // Feature 027, FR-030. The one thing the reducer cannot do: focus belongs to the widget
         // tree, so moving it is an operation issued from here. Every input in the application
         // already implements iced's `Focusable` — what was missing was anyone asking.
@@ -652,52 +584,33 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             };
             moved.chain(micold_client::ui::scroll_focused_into_view())
         }
-        Message::ConnectionTakeoverRequested => shell::daemon_sync::on_takeover_requested(app),
-        // The daemon refused us on a contract mismatch (US6, FR-021): record it so the banner can
-        // name both versions and offer the restart action. The connection subscription keeps
-        // retrying in the background; each retry re-sets this identically until the user acts.
-        Message::DaemonVersionMismatch {
-            client,
-            daemon,
-            daemon_build,
-        } => {
-            app.version_mismatch = Some((client, daemon, daemon_build));
-            Task::none()
-        }
-        // Same contract, different package version (US6, FR-022a, BUG-002): record it so the banner
-        // can name both builds and offer the restart action, distinct from a contract mismatch.
-        Message::DaemonBuildMismatch {
-            client_build,
-            daemon_build,
-        } => {
-            app.build_mismatch = Some((client_build, daemon_build));
-            Task::none()
-        }
-        Message::ConnectionRestartServiceRequested => {
-            shell::service_control::on_restart_service_requested(app)
-        }
-        Message::LogoutSurvivalOutcome(message) => {
-            shell::service_control::on_logout_survival_outcome(app, message)
-        }
-        Message::DiagnosticsRequested => shell::daemon_sync::on_diagnostics_requested(app),
 
         // The closing dialog has finished animating out; its snapshot has served its purpose.
         Message::OverlayTransitionFinished => {
             app.dismissing = None;
             Task::none()
         }
-        Message::ProjectSelectorOpened => shell::workspace::on_project_selector_opened(app),
-        Message::SelectorNavigatedInto(_) | Message::SelectorNavigatedUp => {
-            shell::workspace::on_selector_navigated(app, message)
+        Message::Project(ProjectMsg::SelectorOpened) => {
+            shell::workspace::on_project_selector_opened(app)
         }
-        Message::FolderChosen(path) => shell::workspace::on_folder_chosen(app, path),
-        Message::KnownProjectReopened(path) => {
+        Message::Project(
+            msg @ (ProjectMsg::SelectorNavigatedInto(_) | ProjectMsg::SelectorNavigatedUp),
+        ) => shell::workspace::on_selector_navigated(app, msg),
+        Message::Project(ProjectMsg::FolderChosen(path)) => {
+            shell::workspace::on_folder_chosen(app, path)
+        }
+        Message::Project(ProjectMsg::Reopened(path)) => {
             shell::workspace::on_known_project_reopened(app, path)
         }
-        Message::RenameConfirmed => shell::daemon_sync::on_rename_confirmed(app),
-        Message::ProjectForgetConfirmed => shell::daemon_sync::on_project_forget_confirmed(app),
-        Message::WorktreeRenameConfirmed => shell::daemon_sync::on_worktree_rename_confirmed(app),
-        Message::ThemePreferenceChanged(_) => shell::persist::on_theme_changed(app, message),
+        Message::Project(ProjectMsg::RenameConfirmed) => {
+            shell::daemon_sync::on_rename_confirmed(app)
+        }
+        Message::Project(ProjectMsg::ForgetConfirmed) => {
+            shell::daemon_sync::on_project_forget_confirmed(app)
+        }
+        Message::Worktree(WorktreeMsg::RenameConfirmed) => {
+            shell::daemon_sync::on_worktree_rename_confirmed(app)
+        }
         Message::WorktreeForm(FormMsg::Submitted) => {
             shell::daemon_sync::on_add_worktree_submitted(app)
         }
@@ -710,50 +623,59 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::WorktreeForm(FormMsg::SourceChanged(source)) => {
             shell::daemon_sync::on_add_worktree_source_changed(app, source)
         }
-        Message::SessionStartRequested { location, provider } => {
+        Message::Session(SessionMsg::StartRequested { location, provider }) => {
             shell::daemon_sync::on_session_start_requested(app, location, provider)
         }
         // The override list is opening: refresh the availability set first (feature 026, T014a).
-        // This and `SettingsOpened` are the two named events research R11 means by "when the choice
-        // is offered" — the set is never re-probed per frame, which would be a `PATH` lookup per
-        // render and exactly the scheduled work SC-006 forbids.
-        Message::SessionStartMenuOpened {
+        // This and `Settings(Opened)` are the two named events research R11 means by "when the
+        // choice is offered" — the set is never re-probed per frame, which would be a `PATH`
+        // lookup per render and exactly the scheduled work SC-006 forbids.
+        Message::Session(SessionMsg::StartMenuOpened {
             location,
             unavailable_default,
-        } => {
+        }) => {
             shell::daemon_sync::ask_cli_availability(app);
-            app.core.update(Message::SessionStartMenuOpened {
-                location,
-                unavailable_default,
-            });
+            app.core
+                .update(Message::Session(SessionMsg::StartMenuOpened {
+                    location,
+                    unavailable_default,
+                }));
             Task::none()
         }
-        Message::SessionSelected(id) => shell::daemon_sync::on_session_selected(app, id),
-        Message::SessionCloseRequested(id) => {
+        Message::Session(SessionMsg::Selected(id)) => {
+            shell::daemon_sync::on_session_selected(app, id)
+        }
+        Message::Session(SessionMsg::CloseRequested(id)) => {
             shell::daemon_sync::on_session_close_requested(app, id)
         }
-        Message::SessionRemoveConfirmed => shell::daemon_sync::on_session_remove_confirmed(app),
-        Message::TerminalAiCliSelected(id) => {
+        Message::Session(SessionMsg::RemoveConfirmed) => {
+            shell::daemon_sync::on_session_remove_confirmed(app)
+        }
+        Message::Session(SessionMsg::TerminalAiCliSelected(id)) => {
             shell::daemon_sync::on_terminal_ai_cli_selected(app, id)
         }
-        Message::TerminalRestartRequested => shell::daemon_sync::on_terminal_restart_requested(app),
-        Message::ShellInstanceRestartRequested(id, shell_id) => {
+        Message::Session(SessionMsg::TerminalRestartRequested) => {
+            shell::daemon_sync::on_terminal_restart_requested(app)
+        }
+        Message::Session(SessionMsg::ShellInstanceRestartRequested(id, shell_id)) => {
             shell::daemon_sync::on_shell_instance_restart_requested(app, id, shell_id)
         }
-        Message::ShellInstanceOpenRequested => {
+        Message::Session(SessionMsg::ShellInstanceOpenRequested) => {
             shell::daemon_sync::on_shell_instance_open_requested(app)
         }
-        Message::ShellInstanceCloseRequested(id, shell_id) => {
+        Message::Session(SessionMsg::ShellInstanceCloseRequested(id, shell_id)) => {
             shell::daemon_sync::on_shell_instance_close_requested(app, id, shell_id)
         }
-        Message::ShellInstanceSelected(id, shell_id) => {
+        Message::Session(SessionMsg::ShellInstanceSelected(id, shell_id)) => {
             shell::daemon_sync::on_shell_instance_selected(app, id, shell_id)
         }
-        Message::TerminalBytes(bytes) => shell::daemon_sync::on_terminal_bytes(app, bytes),
+        Message::Session(SessionMsg::TerminalBytes(bytes)) => {
+            shell::daemon_sync::on_terminal_bytes(app, bytes)
+        }
         // Mouse text selection on the displayed session's grid, anchored to absolute `LineId`s so
         // new output can't corrupt it (FR-013/FR-018).
-        Message::TerminalSelectStart { col, line, kind } => {
-            if let Some(id) = app.core.active_session {
+        Message::Session(SessionMsg::TerminalSelectStart { col, line, kind }) => {
+            if let Some(id) = app.core.session.active {
                 if let Some(grid) = app.grids.get(&id) {
                     let anchor = Anchor::new(row_line_id(grid, app.display_offset, line), col);
                     let gran = match kind {
@@ -768,8 +690,8 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::TerminalSelectUpdate { col, line } => {
-            if let Some(id) = app.core.active_session {
+        Message::Session(SessionMsg::TerminalSelectUpdate { col, line }) => {
+            if let Some(id) = app.core.session.active {
                 if let (Some(grid), Some(sel)) = (app.grids.get(&id), app.selection.as_mut()) {
                     let anchor = Anchor::new(row_line_id(grid, app.display_offset, line), col);
                     sel.update(anchor, |id| grid.line(id).map(|l| l.text.clone()));
@@ -777,16 +699,16 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::TerminalSelectCleared => {
+        Message::Session(SessionMsg::TerminalSelectCleared) => {
             app.selection = None;
             Task::none()
         }
-        Message::TerminalResized { cols, rows } => {
+        Message::Session(SessionMsg::TerminalResized { cols, rows }) => {
             shell::daemon_sync::on_terminal_resized(app, cols, rows)
         }
         // Scroll the displayed session's scrollback view (FR-016). Offset is clamped to the cached
         // history; deeper history is fetched from the daemon on demand (see `request_scrollback`).
-        Message::TerminalScrolled(delta) => {
+        Message::Session(SessionMsg::TerminalScrolled(delta)) => {
             scroll_view(app, |off, history| {
                 (off as i32 + delta).clamp(0, history as i32) as usize
             });
@@ -794,19 +716,24 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         // Scroll to an absolute offset (scrollbar drag). Resolve against the LIVE offset at apply
         // time so a burst of batched drag messages converges (drag flicker fix, FR-016).
-        Message::TerminalScrolledTo(target) => {
+        Message::Session(SessionMsg::TerminalScrolledTo(target)) => {
             scroll_view(app, |off, history| {
                 let delta = micold_client::ui::target_offset_delta(off, target);
                 (off as i32 + delta).clamp(0, history as i32) as usize
             });
             Task::none()
         }
-        Message::TerminalCopyRequested => shell::clipboard::on_copy_requested(app),
-        Message::TerminalPasteRequested => shell::clipboard::on_paste_requested(app),
-        Message::TextCopyRequested(text) => shell::clipboard::on_text_copy_requested(app, text),
-        Message::SettingsOpened => shell::persist::on_settings_opened(app),
-        Message::SettingsSaved => shell::persist::on_settings_saved(app),
-        Message::TerminalTick => {
+        Message::Session(SessionMsg::TerminalCopyRequested) => {
+            shell::clipboard::on_copy_requested(app)
+        }
+        Message::Session(SessionMsg::TerminalPasteRequested) => {
+            shell::clipboard::on_paste_requested(app)
+        }
+        Message::Worktree(WorktreeMsg::TextCopyRequested(text)) => {
+            shell::clipboard::on_text_copy_requested(app, text)
+        }
+        Message::Settings(msg) => shell::settings::update(app, msg),
+        Message::Session(SessionMsg::TerminalTick) => {
             // Obsolete under the daemon: output arrives as streamed grid frames, titles arrive via
             // the daemon (Event::Title), and the daemon supervises/restarts processes. The emitting
             // poll subscription is gone; this no-op keeps `Message` exhaustive. TODO: drop the variant.
@@ -827,11 +754,13 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             shell::os_theme::redetect_on_focus(app, focused);
             Task::none()
         }
-        Message::WorktreeDeleteConfirmed => shell::daemon_sync::on_worktree_delete_confirmed(app),
-        Message::WorktreeIncludeRequested(path) => {
+        Message::Worktree(WorktreeMsg::DeleteConfirmed) => {
+            shell::daemon_sync::on_worktree_delete_confirmed(app)
+        }
+        Message::Worktree(WorktreeMsg::IncludeRequested(path)) => {
             shell::daemon_sync::on_worktree_include_requested(app, path)
         }
-        Message::WorktreeExcludeRequested(dir) => {
+        Message::Worktree(WorktreeMsg::ExcludeRequested(dir)) => {
             shell::daemon_sync::on_worktree_exclude_requested(app, dir)
         }
         other => {
@@ -959,7 +888,7 @@ fn row_line_id(grid: &GridCache, offset: usize, row: u16) -> LineId {
 /// the range whose size grows with scroll depth. Moving it left this function with the two things
 /// that genuinely need the shell — the correlation id and the socket.
 fn scroll_view(app: &mut App, f: impl FnOnce(usize, usize) -> usize) {
-    let Some(id) = app.core.active_session else {
+    let Some(id) = app.core.session.active else {
         return;
     };
     let inflight: Vec<Range<LineId>> = app
@@ -1029,7 +958,7 @@ fn log_line(message: &str) {
 /// logged alongside for exactly that case: if the sidebar lists sessions the resolve cannot find,
 /// the two keys are printed side by side and the mismatch is the answer.
 fn log_foreground_choice(app: &App, path: &Path) {
-    let choice = &app.core.last_foreground_choice;
+    let choice = &app.core.session.last_foreground_choice;
     let keys: Vec<String> = app
         .core
         .workspace
@@ -1040,7 +969,7 @@ fn log_foreground_choice(app: &App, path: &Path) {
     log_line(&format!(
         "switch: entered {} -> active_session={:?} choice={:?} resolve_key={} session_keys={:?}",
         path.display(),
-        app.core.active_session,
+        app.core.session.active,
         choice,
         micold_core::project::canonicalize_best_effort(path).display(),
         keys,
@@ -1077,6 +1006,9 @@ pub(crate) mod tests {
     // mostly what they were for; the stamper-seeding tests below still build a snapshot, so they
     // import them back rather than keep a second copy.
     use crate::shell::daemon_sync::tests::{snapshot_with, summary, summary_at};
+    use micold_client::features::connection::Msg as ConnectionMsg;
+    use micold_client::features::sandbox::Msg as SandboxMsg;
+    use micold_client::features::settings::Msg as SettingsMsg;
     use micold_client::features::settings::{EnvironmentDraft, SettingsDraft, TerminalDraft};
     use micold_core::session::AiCli;
     // These tests drive whole messages through `update_inner`, which is this file's dispatcher, so
@@ -1237,19 +1169,19 @@ pub(crate) mod tests {
 
         let _ = update_inner(
             &mut app,
-            Message::TerminalResized {
+            Message::Session(SessionMsg::TerminalResized {
                 cols: 220,
                 rows: 60,
-            },
+            }),
         );
         assert_eq!(app.last_grid, Some((220, 60)));
 
         let _ = update_inner(
             &mut app,
-            Message::TerminalResized {
+            Message::Session(SessionMsg::TerminalResized {
                 cols: 180,
                 rows: 45,
-            },
+            }),
         );
         assert_eq!(app.last_grid, Some((180, 45)));
     }
@@ -1272,7 +1204,7 @@ pub(crate) mod tests {
         let id = SessionId::new();
         app.last_grid = Some((220, 60));
 
-        let _ = update_inner(&mut app, Message::SessionSelected(id));
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::Selected(id)));
 
         match rx.try_recv() {
             Ok(ClientMsg::SessionResize {
@@ -1305,7 +1237,7 @@ pub(crate) mod tests {
         let id = SessionId::new();
         assert_eq!(app.last_grid, None);
 
-        let _ = update_inner(&mut app, Message::SessionSelected(id));
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::Selected(id)));
 
         assert!(
             matches!(
@@ -1349,11 +1281,11 @@ pub(crate) mod tests {
         let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
         let _ = update_inner(
             app,
-            Message::DaemonConnected {
+            Message::Connection(ConnectionMsg::Connected {
                 outbox: micold_client::daemon::Outbox::new(tx),
                 catalog,
                 settings: quiet_settings(),
-            },
+            }),
         );
         let mut sent = Vec::new();
         while let Ok(msg) = rx.try_recv() {
@@ -1372,12 +1304,17 @@ pub(crate) mod tests {
         let mut app = base_app();
         let _ = update_inner(
             &mut app,
-            Message::SandboxDiagnostics(vec![
+            Message::Sandbox(SandboxMsg::Diagnostics(vec![
                 "starting session service".into(),
                 "bind /work/demo: permission denied".into(),
-            ]),
+            ])),
         );
-        let said = app.core.notify.visible().expect("a notice was raised");
+        let said = app
+            .core
+            .notifications
+            .queue
+            .visible()
+            .expect("a notice was raised");
         assert!(
             said.message.contains("permission denied"),
             "the most recent line is the one worth showing: {}",
@@ -1385,10 +1322,14 @@ pub(crate) mod tests {
         );
 
         let mut empty = base_app();
-        let _ = update_inner(&mut empty, Message::SandboxDiagnostics(Vec::new()));
+        let _ = update_inner(
+            &mut empty,
+            Message::Sandbox(SandboxMsg::Diagnostics(Vec::new())),
+        );
         let said = empty
             .core
-            .notify
+            .notifications
+            .queue
             .visible()
             .expect("an empty log still gets an answer");
         assert!(
@@ -1410,7 +1351,7 @@ pub(crate) mod tests {
         app.core.workspace.active = Some(project.clone());
         // What `boot()`'s `restore_after_activation` leaves behind: the session is already current
         // when the connection arrives, chosen from the memory loaded off disk.
-        app.core.active_session = Some(id);
+        app.core.session.active = Some(id);
 
         let sent = connect(
             &mut app,
@@ -1462,7 +1403,7 @@ pub(crate) mod tests {
         let elsewhere = SessionId::new();
         let mut app = base_app();
         app.core.workspace.active = Some(project.clone());
-        app.core.active_session = Some(restored);
+        app.core.session.active = Some(restored);
 
         let mut catalog = snapshot_with(
             "/repo/demo",
@@ -1518,7 +1459,7 @@ pub(crate) mod tests {
         let elsewhere = SessionId::new();
         let mut app = base_app();
         app.core.workspace.active = Some(project.clone());
-        app.core.active_session = Some(restored);
+        app.core.session.active = Some(restored);
 
         // What the daemon reports after a restart: it relaunched nothing, so both of this project's
         // live-before-the-restart sessions come back interrupted-resumable (`server.rs`, the only
@@ -1577,7 +1518,7 @@ pub(crate) mod tests {
         let mut app = base_app();
         app.core.workspace.active = Some(project.clone());
         assert_eq!(
-            app.core.active_session, None,
+            app.core.session.active, None,
             "the memory resolved to nothing"
         );
 
@@ -1605,8 +1546,8 @@ pub(crate) mod tests {
     /// BUG-002 (024): a drained reveal must record where it sent the list, because the list will
     /// not always tell us.
     ///
-    /// `sidebar_scroll_offset` is a mirror of the scrollable's position, and its only writer is
-    /// `Message::SidebarScrolled` — which iced publishes from `notify_viewport`, and
+    /// `scroll_offset` is a mirror of the scrollable's position, and its only writer is
+    /// `Message::Sidebar(SidebarMsg::Scrolled)` — which iced publishes from `notify_viewport`, and
     /// `notify_viewport` returns without publishing when the content fits the viewport
     /// (`iced_widget/src/scrollable.rs`). So a reveal that runs in a project whose sidebar fits —
     /// the short project you pass through on the way somewhere — moves the list and is never told,
@@ -1632,7 +1573,7 @@ pub(crate) mod tests {
             availability: Availability::Available,
         });
         app.core.workspace.active = Some(path.clone());
-        app.core.worktrees = vec![Worktree {
+        app.core.worktree.worktrees = vec![Worktree {
             dir_name: "only".to_string(),
             path: PathBuf::from("/repo/.claude/worktrees/only"),
             branch: Some("feat/only".to_string()),
@@ -1645,13 +1586,13 @@ pub(crate) mod tests {
         );
         let id = session.id;
         app.core.workspace.sessions.insert(path, vec![session]);
-        app.core.active_session = Some(id);
+        app.core.session.active = Some(id);
         // Everything here fits: one location in a tall panel. This is the project that scrolls
         // without reporting.
-        app.core.sidebar_viewport_height = 400;
+        app.core.sidebar.viewport_height = 400;
         // Left behind by the project we just came from, whose list was long enough to scroll.
-        app.core.sidebar_scroll_offset = 734;
-        app.core.pending_reveal_scroll = true;
+        app.core.sidebar.scroll_offset = 734;
+        app.core.sidebar.pending_reveal_scroll = true;
 
         assert!(
             reveal_scroll(&mut app).is_some(),
@@ -1660,7 +1601,7 @@ pub(crate) mod tests {
         );
 
         assert_eq!(
-            app.core.sidebar_scroll_offset, 0,
+            app.core.sidebar.scroll_offset, 0,
             "the reveal knows where it sent the list, so it must not wait to be told: leaving 734 \
              here is BUG-002, and the next arrival measures its row against a position the panel \
              left long ago"
@@ -1741,7 +1682,7 @@ pub(crate) mod tests {
         // offer worked as a statement and not as a service.
         let mut app = app_with_a_failed_sandbox();
 
-        let _ = update_inner(&mut app, Message::SandboxFallbackAccepted);
+        let _ = update_inner(&mut app, Message::Sandbox(SandboxMsg::FallbackAccepted));
 
         assert!(
             app.sandbox.fallback.is_some(),
@@ -1768,7 +1709,7 @@ pub(crate) mod tests {
             ..micold_client::features::sandbox::Sandbox::default()
         };
 
-        let _ = update_inner(&mut app, Message::SandboxFallbackAccepted);
+        let _ = update_inner(&mut app, Message::Sandbox(SandboxMsg::FallbackAccepted));
 
         assert!(app.sandbox.fallback.is_none());
         assert_eq!(
@@ -1784,14 +1725,14 @@ pub(crate) mod tests {
         // session keeps running on the host process the fallback moved us to — a banner claiming
         // containment over an unconfined shell, which is precisely what FR-035b forbids.
         let mut app = app_with_a_failed_sandbox();
-        let _ = update_inner(&mut app, Message::SandboxFallbackAccepted);
+        let _ = update_inner(&mut app, Message::Sandbox(SandboxMsg::FallbackAccepted));
         assert_eq!(
             app.placement.kind,
             micold_core::sandbox::placement::PlacementKind::HostProcess,
             "precondition: the fallback moved us off the sandbox"
         );
 
-        let _ = update_inner(&mut app, Message::SandboxRestartRequested);
+        let _ = update_inner(&mut app, Message::Sandbox(SandboxMsg::RestartRequested));
 
         assert_eq!(
             app.placement.kind,
@@ -1832,7 +1773,7 @@ pub(crate) mod tests {
     }
 
     fn feed(app: &mut App, msg: DaemonMsg) {
-        let _ = update_inner(app, Message::DaemonEvent(msg));
+        let _ = update_inner(app, Message::Connection(ConnectionMsg::Event(msg)));
     }
 
     // --- `010` BUG-021: what a scroll gesture costs -------------------------------------------
@@ -1890,7 +1831,7 @@ pub(crate) mod tests {
         let mut app = base_app();
         app.daemon = Some(micold_client::daemon::Outbox::new(tx));
         let id = SessionId::new();
-        app.core.active_session = Some(id);
+        app.core.session.active = Some(id);
         app.grids.insert(id, at_the_tail(id, 4000, 69));
         (app, rx)
     }
@@ -1925,7 +1866,7 @@ pub(crate) mod tests {
         let (mut app, mut rx) = app_at_the_tail();
 
         for _ in 0..150 {
-            let _ = update_inner(&mut app, Message::TerminalScrolled(2));
+            let _ = update_inner(&mut app, Message::Session(SessionMsg::TerminalScrolled(2)));
         }
 
         let asked = scrollback_ranges(&mut rx);
@@ -1960,10 +1901,11 @@ pub(crate) mod tests {
         let (mut app, mut rx) = app_at_the_tail();
         let session = app
             .core
-            .active_session
+            .session
+            .active
             .expect("the fixture views a session");
 
-        let _ = update_inner(&mut app, Message::TerminalScrolled(2));
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::TerminalScrolled(2)));
         let asked = scrollback_ranges(&mut rx);
         assert_eq!(
             asked.len(),
@@ -1990,7 +1932,7 @@ pub(crate) mod tests {
             },
         );
 
-        let _ = update_inner(&mut app, Message::TerminalScrolled(0));
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::TerminalScrolled(0)));
         assert_eq!(
             scrollback_ranges(&mut rx),
             asked,
@@ -2008,7 +1950,7 @@ pub(crate) mod tests {
     #[test]
     fn a_disconnect_releases_the_ranges_that_will_never_be_answered() {
         let (mut app, _rx) = app_at_the_tail();
-        let _ = update_inner(&mut app, Message::TerminalScrolled(2));
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::TerminalScrolled(2)));
         assert!(
             !app.scrollback_inflight.is_empty(),
             "the gesture must have left a request outstanding for this to be about anything"
@@ -2051,11 +1993,11 @@ pub(crate) mod tests {
     fn form_status(
         app: &App,
     ) -> Option<micold_client::features::worktree_form::WorktreeFormStatus> {
-        app.core.worktree_form.as_ref().map(|f| f.status)
+        app.core.worktree_form.form.as_ref().map(|f| f.status)
     }
 
     fn form_notice(app: &App) -> Option<String> {
-        app.core.worktree_form.as_ref()?.interrupted.clone()
+        app.core.worktree_form.form.as_ref()?.interrupted.clone()
     }
 
     /// The dialog must not keep claiming an operation is running on a connection that is gone.
@@ -2146,7 +2088,7 @@ pub(crate) mod tests {
             "nothing was in flight, so there is no unknown outcome to report"
         );
         assert_eq!(
-            app.core.worktree_form.as_ref().map(|f| f.name.clone()),
+            app.core.worktree_form.form.as_ref().map(|f| f.name.clone()),
             Some("probe".to_string()),
             "a drop that interrupted nothing must not discard what the user had typed"
         );
@@ -2158,14 +2100,18 @@ pub(crate) mod tests {
     #[test]
     fn a_create_with_no_form_open_is_still_reported() {
         let (mut app, _rx) = app_creating_a_worktree();
-        app.core.worktree_form = None;
-        assert!(app.core.notify.visible().is_none(), "nothing said yet");
+        app.core.worktree_form.form = None;
+        assert!(
+            app.core.notifications.queue.visible().is_none(),
+            "nothing said yet"
+        );
 
         let _ = shell::daemon_sync::on_disconnected(&mut app);
 
         let said = app
             .core
-            .notify
+            .notifications
+            .queue
             .visible()
             .map(|n| n.message.clone())
             .unwrap_or_default();
@@ -2188,7 +2134,7 @@ pub(crate) mod tests {
             "a worktree folder named 'feat-probe-two' already exists".into(),
         )));
         assert!(
-            app.core.worktree_error.is_some(),
+            app.core.worktree_form.worktree_error.is_some(),
             "precondition: the first attempt left an error on screen"
         );
 
@@ -2203,7 +2149,7 @@ pub(crate) mod tests {
         );
 
         assert_eq!(
-            app.core.worktree_error, None,
+            app.core.worktree_form.worktree_error, None,
             "the error describes an attempt that is over; leaving it up beside the new attempt's \
              progress bar says two contradictory things about one form"
         );
@@ -2555,7 +2501,7 @@ pub(crate) mod tests {
         let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
         let mut app = base_app();
         app.daemon = Some(micold_client::daemon::Outbox::new(tx));
-        app.core.settings_draft = Some(SettingsDraft {
+        app.core.settings.settings_draft = Some(SettingsDraft {
             terminal: TerminalDraft {
                 scrollback_lines: "20000".into(),
             },
@@ -2568,7 +2514,7 @@ pub(crate) mod tests {
             ..SettingsDraft::default()
         });
 
-        let _ = update_inner(&mut app, Message::SettingsSaved);
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
 
         match rx.try_recv() {
             Ok(ClientMsg::SettingsSet {
@@ -2593,14 +2539,15 @@ pub(crate) mod tests {
     }
 
     /// The disconnected case is not an error: settings-saving already has a fully working local-only
-    /// path (the direct `settings.json` write above the daemon-send in `Message::SettingsSaved`), so
+    /// path (the direct `settings.json` write above the daemon-send in
+    /// `Message::Settings(SettingsMsg::Saved)`), so
     /// there is nothing to notify the user about — unlike every other `send_op`-routed mutation, which
     /// has no such standalone path.
     #[test]
     fn settings_saved_is_a_silent_no_op_toward_the_daemon_when_disconnected() {
         let mut app = base_app();
         assert!(app.daemon.is_none());
-        app.core.settings_draft = Some(SettingsDraft {
+        app.core.settings.settings_draft = Some(SettingsDraft {
             terminal: TerminalDraft {
                 scrollback_lines: "20000".into(),
             },
@@ -2613,7 +2560,7 @@ pub(crate) mod tests {
             ..SettingsDraft::default()
         });
 
-        let _ = update_inner(&mut app, Message::SettingsSaved);
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
 
         assert_eq!(
             app.scrollback_lines, 20_000,
@@ -2636,7 +2583,7 @@ pub(crate) mod tests {
 
         let _ = update_inner(
             &mut app,
-            Message::DaemonConnected {
+            Message::Connection(ConnectionMsg::Connected {
                 outbox: micold_client::daemon::Outbox::new(tx),
                 catalog: snapshot_with("/repo/demo", Vec::new()),
                 settings: micold_core::protocol::messages::DaemonSettings {
@@ -2646,7 +2593,7 @@ pub(crate) mod tests {
                     env_include_script_path: "/authoritative/from-daemon.sh".into(),
                     env_include_timeout_secs: 30,
                 },
-            },
+            }),
         );
 
         assert_eq!(app.scrollback_lines, 12_345);
@@ -2667,7 +2614,7 @@ pub(crate) mod tests {
 
         let _ = update_inner(
             &mut app,
-            Message::DaemonEvent(DaemonMsg::SettingsChanged {
+            Message::Connection(ConnectionMsg::Event(DaemonMsg::SettingsChanged {
                 settings: micold_core::protocol::messages::DaemonSettings {
                     default_ai_cli: AiCli::ClaudeCode,
                     scrollback_lines: 5_000,
@@ -2675,7 +2622,7 @@ pub(crate) mod tests {
                     env_include_script_path: "/tmp/after.sh".into(),
                     env_include_timeout_secs: 45,
                 },
-            }),
+            })),
         );
 
         assert_eq!(app.scrollback_lines, 5_000);

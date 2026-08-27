@@ -23,6 +23,7 @@ use micold_client::app::Message;
 use micold_core::sandbox::placement::Placement;
 
 use crate::App;
+use micold_client::features::connection::Msg as ConnectionMsg;
 
 /// "Restart service" (FR-022/022a): stop the mismatched daemon by its recorded pid.
 ///
@@ -61,9 +62,9 @@ pub(crate) fn on_restart_service_requested(app: &mut App) -> Task<Message> {
         },
         |r: Result<bool, String>| match r {
             Ok(_) => Message::NoOp,
-            Err(e) => {
-                Message::DaemonConnectFailed(format!("could not stop the mismatched service: {e}"))
-            }
+            Err(e) => Message::Connection(ConnectionMsg::ConnectFailed(format!(
+                "could not stop the mismatched service: {e}"
+            ))),
         },
     )
 }
@@ -104,7 +105,7 @@ pub(crate) fn on_survival_opt_in_changed(placement: Placement, enabling: bool) -
             micold_core::logout_survival::SurvivalOutcome,
         >| {
             let outcome = r.unwrap_or_else(|e| e);
-            Message::LogoutSurvivalOutcome(outcome.user_message())
+            Message::Connection(ConnectionMsg::LogoutSurvivalOutcome(outcome.user_message()))
         },
     )
 }
@@ -143,7 +144,8 @@ mod tests {
 
         let said = app
             .core
-            .notify
+            .notifications
+            .queue
             .visible()
             .is_some_and(|n| n.message.contains("sandbox"));
         assert!(
@@ -180,7 +182,7 @@ mod tests {
         let _ = on_restart_service_requested(&mut app);
 
         assert!(
-            app.core.notify.is_active(),
+            app.core.notifications.queue.is_active(),
             "restarting the service must tell the user what it costs"
         );
     }
@@ -192,6 +194,6 @@ mod tests {
 
         let _ = on_logout_survival_outcome(&mut app, "it worked".to_string());
 
-        assert!(app.core.notify.is_active());
+        assert!(app.core.notifications.queue.is_active());
     }
 }

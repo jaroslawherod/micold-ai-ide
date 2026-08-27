@@ -82,7 +82,7 @@ fn no_text_is_drawn_wider_than_its_clip() {
 
     for covered in covered_states() {
         let mut under = (covered.build)();
-        under.state.theme_pref = micold_core::theme::ThemePreference::Light;
+        under.state.settings.theme_pref = micold_core::theme::ThemePreference::Light;
         let _ = ColorScheme::Light;
 
         let element = micold_client::ui::view(
@@ -211,7 +211,7 @@ fn a_collapsed_panel_overlapping_the_sidebar_is_not_reported_as_an_overflow() {
 
     let mut overflows = |filter_open: bool| -> Vec<lay::Overflow> {
         let mut state = (covered_states()[0].build)().state;
-        state.sidebar_filter_open = filter_open;
+        state.sidebar.filter_open = filter_open;
         let element = micold_client::ui::view(
             &state,
             None,
@@ -280,19 +280,19 @@ fn a_narrow_session_row_shortens_the_title_and_never_the_cli_label() {
 
         let mut state = micold_client::app::State {
             workspace,
-            worktrees: vec![Worktree {
-                dir_name: "feat-short".to_string(),
-                path: PathBuf::from(PROJECT).join(".claude/worktrees/feat-short"),
-                branch: Some("feat/short".to_string()),
-                status: WorktreeStatus::Valid,
-                included: false,
-            }],
-            sidebar_width: width,
             ..micold_client::app::State::default()
         };
-        state.expanded.insert("feat-short".to_string());
-        state.theme_pref = micold_core::theme::ThemePreference::Light;
-        state.window_size = (1280, 800);
+        state.worktree.worktrees = vec![Worktree {
+            dir_name: "feat-short".to_string(),
+            path: PathBuf::from(PROJECT).join(".claude/worktrees/feat-short"),
+            branch: Some("feat/short".to_string()),
+            status: WorktreeStatus::Valid,
+            included: false,
+        }];
+        state.sidebar.width = width;
+        state.sidebar.expanded.insert("feat-short".to_string());
+        state.settings.theme_pref = micold_core::theme::ThemePreference::Light;
+        state.window.window_size = (1280, 800);
 
         let element = micold_client::ui::view(
             &state,

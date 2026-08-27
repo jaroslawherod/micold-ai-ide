@@ -1,7 +1,13 @@
 //! T011 — extended app base state: defaults + new message wiring (feature 005).
 
 use micold_client::app::{on_escape, Message, State};
+use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::settings::Msg as SettingsMsg;
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::window::FieldId;
+use micold_client::features::window::Msg as WindowMsg;
+use micold_client::features::worktree;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::ui::terminal::StripTab;
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
@@ -44,11 +50,11 @@ use std::path::PathBuf;
 #[test]
 fn defaults_are_empty() {
     let state = State::default();
-    assert!(state.worktrees.is_empty());
-    assert!(state.expanded.is_empty());
-    assert!(state.active_session.is_none());
-    assert!(state.worktree_form.is_none());
-    assert!(state.worktree_error.is_none());
+    assert!(state.worktree.worktrees.is_empty());
+    assert!(state.sidebar.expanded.is_empty());
+    assert!(state.session.active.is_none());
+    assert!(state.worktree_form.form.is_none());
+    assert!(state.worktree_form.worktree_error.is_none());
     assert_eq!(open_dialog(&state), None);
     assert!(state.active_sessions().is_empty());
 }
@@ -60,7 +66,7 @@ fn opening_the_form_sets_overlay_and_draft() {
         micold_client::features::worktree_form::Msg::Opened,
     ));
     assert_eq!(open_dialog(&state), Some("add_worktree"));
-    assert!(state.worktree_form.is_some());
+    assert!(state.worktree_form.form.is_some());
 }
 
 #[test]
@@ -79,7 +85,7 @@ fn form_edits_build_a_derived_preview() {
         micold_client::features::worktree_form::Msg::NameChanged("Login".to_string()),
     ));
 
-    let form = state.worktree_form.as_ref().unwrap();
+    let form = state.worktree_form.form.as_ref().unwrap();
     let derived = form.preview().unwrap();
     // Both carry the ticket boundary, so the branch maps back to this directory exactly (BUG-003).
     assert_eq!(derived.dir_name, "feat-abc-1_login");
@@ -96,7 +102,7 @@ fn submitting_an_invalid_form_records_the_error() {
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::Submitted,
     ));
-    assert!(state.worktree_form.as_ref().unwrap().error.is_some());
+    assert!(state.worktree_form.form.as_ref().unwrap().error.is_some());
 }
 
 #[test]
@@ -109,7 +115,7 @@ fn cancelling_the_form_clears_it() {
         micold_client::features::worktree_form::Msg::Cancelled,
     ));
     assert_eq!(open_dialog(&state), None);
-    assert!(state.worktree_form.is_none());
+    assert!(state.worktree_form.form.is_none());
 }
 
 #[test]
@@ -129,8 +135,8 @@ fn created_worktree_is_added_and_form_closed() {
         micold_client::features::worktree_form::Msg::Created(wt),
     ));
     assert_eq!(open_dialog(&state), None);
-    assert!(state.worktree_form.is_none());
-    assert_eq!(state.worktrees.len(), 1);
+    assert!(state.worktree_form.form.is_none());
+    assert_eq!(state.worktree.worktrees.len(), 1);
 }
 
 #[test]
@@ -143,7 +149,7 @@ fn create_started_marks_form_creating() {
         micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
     ));
     assert_eq!(
-        state.worktree_form.as_ref().unwrap().status,
+        state.worktree_form.form.as_ref().unwrap().status,
         WorktreeFormStatus::Creating
     );
 }
@@ -176,7 +182,7 @@ fn field_edits_are_ignored_while_creating() {
         micold_client::features::worktree_form::Msg::NameChanged("Something else".to_string()),
     ));
 
-    let form = state.worktree_form.as_ref().unwrap();
+    let form = state.worktree_form.form.as_ref().unwrap();
     assert_eq!(form.type_, Some(ConventionalType::Feat));
     assert_eq!(form.ticket, "");
     assert_eq!(form.name, "Login");
@@ -194,10 +200,13 @@ fn create_failed_keeps_form_open_and_resets_status_to_editing() {
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
     ));
-    assert_eq!(state.worktree_error.as_deref(), Some("boom"));
-    assert!(state.worktree_form.is_some(), "form stays open for retry");
+    assert_eq!(state.worktree_form.worktree_error.as_deref(), Some("boom"));
+    assert!(
+        state.worktree_form.form.is_some(),
+        "form stays open for retry"
+    );
     assert_eq!(
-        state.worktree_form.as_ref().unwrap().status,
+        state.worktree_form.form.as_ref().unwrap().status,
         WorktreeFormStatus::Editing
     );
 }
@@ -218,11 +227,11 @@ fn a_worktree_list_change_clears_a_stale_create_failure() {
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
     ));
-    assert_eq!(state.worktree_error.as_deref(), Some("boom"));
+    assert_eq!(state.worktree_form.worktree_error.as_deref(), Some("boom"));
 
-    state.update(Message::WorktreesLoaded(vec![]));
+    state.update(Message::Worktree(WorktreeMsg::Loaded(vec![])));
     assert!(
-        state.worktree_error.is_none(),
+        state.worktree_form.worktree_error.is_none(),
         "discovery answering makes a failure against the previous list stale"
     );
 }
@@ -238,15 +247,15 @@ fn an_include_clears_a_stale_create_failure_too() {
         micold_client::features::worktree_form::Msg::CreateFailed("boom".to_string()),
     ));
 
-    state.update(Message::WorktreeIncluded(Worktree {
+    state.update(Message::Worktree(WorktreeMsg::Included(Worktree {
         dir_name: "feat-x".to_string(),
         path: PathBuf::from("/p/.claude/worktrees/feat-x"),
         branch: Some("feat/x".to_string()),
         status: WorktreeStatus::Valid,
         included: true,
-    }));
-    assert!(state.worktree_error.is_none());
-    assert_eq!(state.worktrees.len(), 1, "the include still lands");
+    })));
+    assert!(state.worktree_form.worktree_error.is_none());
+    assert_eq!(state.worktree.worktrees.len(), 1, "the include still lands");
 }
 
 #[test]
@@ -272,7 +281,7 @@ fn resubmitting_while_creating_is_a_no_op() {
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::Submitted,
     ));
-    assert!(state.worktree_form.as_ref().unwrap().error.is_none());
+    assert!(state.worktree_form.form.as_ref().unwrap().error.is_none());
 }
 
 // --- Feature 013 US1: type field is a Material select (wraps iced's `pick_list`) ---
@@ -283,13 +292,13 @@ fn selecting_a_type_sets_the_form_value() {
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::Opened,
     ));
-    assert_eq!(state.worktree_form.as_ref().unwrap().type_, None);
+    assert_eq!(state.worktree_form.form.as_ref().unwrap().type_, None);
 
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
     ));
     assert_eq!(
-        state.worktree_form.as_ref().unwrap().type_,
+        state.worktree_form.form.as_ref().unwrap().type_,
         Some(ConventionalType::Feat)
     );
 }
@@ -314,7 +323,7 @@ fn type_selection_is_ignored_while_creating() {
         micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Fix),
     ));
     assert_eq!(
-        state.worktree_form.as_ref().unwrap().type_,
+        state.worktree_form.form.as_ref().unwrap().type_,
         Some(ConventionalType::Feat)
     );
 }
@@ -350,25 +359,25 @@ fn session_started_selected_and_closed() {
         AiCli::ClaudeCode,
     );
     let id = session.id;
-    state.update(Message::SessionStarted(session));
-    assert_eq!(state.active_session, Some(id));
+    state.update(Message::Session(SessionMsg::Started(session)));
+    assert_eq!(state.session.active, Some(id));
     assert_eq!(state.active_sessions().len(), 1);
-    assert!(state.expanded.contains("feat-x"));
+    assert!(state.sidebar.expanded.contains("feat-x"));
     // Feature 024: and the row reads as open, which is now a second question — open-ness is
     // derived from which session is current, and the line above is the user's own set.
     assert!(state.location_open(&SessionLocation::Worktree("feat-x".to_string())));
 
-    state.update(Message::SessionRunning(id));
+    state.update(Message::Session(SessionMsg::Running(id)));
     assert!(state.active_sessions()[0].is_active());
 
-    state.update(Message::SessionTitleUpdated {
+    state.update(Message::Session(SessionMsg::TitleUpdated {
         id,
         title: "Titled".to_string(),
-    });
+    }));
     assert_eq!(state.active_sessions()[0].label.display(), "Titled");
 
-    state.update(Message::SessionCloseRequested(id));
-    assert!(state.active_session.is_none());
+    state.update(Message::Session(SessionMsg::CloseRequested(id)));
+    assert!(state.session.active.is_none());
     // Bugfix BUG-003 (FR-015a): close archives the record (kept, not deleted) so a still-existing
     // `claude` transcript isn't reconstructed by reconciliation later — it just stops appearing
     // in the sidebar (`sidebar_entries`/`worktree_tree`, not `active_sessions()` itself).
@@ -382,7 +391,7 @@ fn session_started_selected_and_closed() {
 }
 
 // T015 (010-root-dir-session): a Default-located session enters `Workspace.sessions` exactly
-// like a worktree session. Note: `Message::SessionStartRequested` itself has no pure-reducer
+// like a worktree session. Note: `Message::Session(SessionMsg::StartRequested)` itself has no pure-reducer
 // effect for ANY location (it's an I/O trigger the binary consumes to spawn a PTY before
 // dispatching `SessionStarted` — see `src/app.rs`'s `on_escape`-adjacent no-op arm list); the
 // pure-core assertion point is `SessionStarted`, exercised identically to the existing
@@ -401,17 +410,17 @@ fn default_session_started_enters_workspace_sessions() {
 
     let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     let id = session.id;
-    state.update(Message::SessionStarted(session));
+    state.update(Message::Session(SessionMsg::Started(session)));
 
-    assert_eq!(state.active_session, Some(id));
+    assert_eq!(state.session.active, Some(id));
     assert_eq!(state.active_sessions().len(), 1);
     assert_eq!(
         state.active_sessions()[0].location,
         SessionLocation::Default
     );
     // The Default row's own expansion flag opens, not the worktree `expanded` set.
-    assert!(state.default_expanded);
-    assert!(state.expanded.is_empty());
+    assert!(state.sidebar.default_expanded);
+    assert!(state.sidebar.expanded.is_empty());
     // Feature 024: and the row reads as open, by derivation as well as by the flag.
     assert!(state.location_open(&SessionLocation::Default));
 }
@@ -428,7 +437,7 @@ fn state_with_worktree_and_session(dir: &str) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path);
-    state.worktrees.push(Worktree {
+    state.worktree.worktrees.push(Worktree {
         dir_name: dir.to_string(),
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("feat/{dir}")),
@@ -439,7 +448,7 @@ fn state_with_worktree_and_session(dir: &str) -> State {
         SessionLocation::Worktree(dir.to_string()),
         AiCli::ClaudeCode,
     );
-    state.update(Message::SessionStarted(session));
+    state.update(Message::Session(SessionMsg::Started(session)));
     state
 }
 
@@ -454,21 +463,27 @@ fn delete_requested_opens_confirm_then_confirmed_only_dismisses_the_dialog() {
     let mut state = state_with_worktree_and_session("feat-x");
     assert_eq!(state.active_sessions().len(), 1);
 
-    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
+    state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+        "feat-x".to_string(),
+    )));
     assert_eq!(open_dialog(&state), Some("confirm_worktree_delete"));
-    assert_eq!(state.worktree_delete_target.as_deref(), Some("feat-x"));
-    assert!(state.worktree_menu_open.is_none());
+    assert_eq!(state.worktree.delete_target.as_deref(), Some("feat-x"));
+    assert!(state.worktree.menu_open.is_none());
 
-    state.update(Message::WorktreeDeleteConfirmed);
+    state.update(Message::Worktree(WorktreeMsg::DeleteConfirmed));
     assert_eq!(open_dialog(&state), None);
-    assert!(state.worktree_delete_target.is_none());
+    assert!(state.worktree.delete_target.is_none());
     assert_eq!(
         state.active_sessions().len(),
         1,
         "records stand until the daemon confirms the removal"
     );
     assert!(
-        state.worktrees.iter().any(|w| w.dir_name == "feat-x"),
+        state
+            .worktree
+            .worktrees
+            .iter()
+            .any(|w| w.dir_name == "feat-x"),
         "the row stands until the daemon confirms the removal"
     );
 }
@@ -476,19 +491,30 @@ fn delete_requested_opens_confirm_then_confirmed_only_dismisses_the_dialog() {
 #[test]
 fn delete_cancelled_changes_nothing() {
     let mut state = state_with_worktree_and_session("feat-x");
-    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
-    state.update(Message::WorktreeDeleteCancelled);
+    state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+        "feat-x".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::DeleteCancelled));
     assert_eq!(open_dialog(&state), None);
-    assert!(state.worktree_delete_target.is_none());
+    assert!(state.worktree.delete_target.is_none());
     assert_eq!(state.active_sessions().len(), 1, "session untouched");
-    assert!(state.worktrees.iter().any(|w| w.dir_name == "feat-x"));
+    assert!(state
+        .worktree
+        .worktrees
+        .iter()
+        .any(|w| w.dir_name == "feat-x"));
 }
 
 #[test]
 fn escape_cancels_confirm_delete() {
     let mut state = state_with_worktree_and_session("feat-x");
-    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
-    assert_eq!(on_escape(&state), Some(Message::WorktreeDeleteCancelled));
+    state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+        "feat-x".to_string(),
+    )));
+    assert_eq!(
+        on_escape(&state),
+        Some(Message::Worktree(WorktreeMsg::DeleteCancelled))
+    );
 }
 
 // --- Feature 013 US2: delete confirmation's branch-deletion choice ---
@@ -496,27 +522,39 @@ fn escape_cancels_confirm_delete() {
 #[test]
 fn delete_requested_resets_keep_branch_even_if_previously_set() {
     let mut state = state_with_worktree_and_session("feat-x");
-    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
-    state.update(Message::WorktreeDeleteKeepBranchToggled(true));
-    assert!(state.worktree_delete_keep_branch);
+    state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+        "feat-x".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::DeleteKeepBranchToggled(
+        true,
+    )));
+    assert!(state.worktree.delete_keep_branch);
 
     // Cancel and request again on a different worktree — the choice must not carry over.
-    state.update(Message::WorktreeDeleteCancelled);
-    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
-    assert!(!state.worktree_delete_keep_branch);
+    state.update(Message::Worktree(WorktreeMsg::DeleteCancelled));
+    state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+        "feat-x".to_string(),
+    )));
+    assert!(!state.worktree.delete_keep_branch);
 }
 
 #[test]
 fn delete_keep_branch_toggled_sets_the_field() {
     let mut state = state_with_worktree_and_session("feat-x");
-    state.update(Message::WorktreeDeleteRequested("feat-x".to_string()));
-    assert!(!state.worktree_delete_keep_branch, "defaults to delete");
+    state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+        "feat-x".to_string(),
+    )));
+    assert!(!state.worktree.delete_keep_branch, "defaults to delete");
 
-    state.update(Message::WorktreeDeleteKeepBranchToggled(true));
-    assert!(state.worktree_delete_keep_branch);
+    state.update(Message::Worktree(WorktreeMsg::DeleteKeepBranchToggled(
+        true,
+    )));
+    assert!(state.worktree.delete_keep_branch);
 
-    state.update(Message::WorktreeDeleteKeepBranchToggled(false));
-    assert!(!state.worktree_delete_keep_branch);
+    state.update(Message::Worktree(WorktreeMsg::DeleteKeepBranchToggled(
+        false,
+    )));
+    assert!(!state.worktree.delete_keep_branch);
 }
 
 // --- Feature 008 US3: worktree rename changes display only ---
@@ -525,6 +563,7 @@ fn delete_keep_branch_toggled_sets_the_field() {
 fn worktree_rename_changes_display_only_not_branch_or_path() {
     let mut state = state_with_worktree_and_session("feat-x");
     let before = state
+        .worktree
         .worktrees
         .iter()
         .find(|w| w.dir_name == "feat-x")
@@ -532,12 +571,17 @@ fn worktree_rename_changes_display_only_not_branch_or_path() {
         .clone();
     let tags_before = state.worktree_tree()[0].tags.clone();
 
-    state.update(Message::WorktreeRenameStarted("feat-x".to_string()));
-    state.update(Message::WorktreeRenameTextChanged("Renamed".to_string()));
-    state.update(Message::WorktreeRenameConfirmed);
+    state.update(Message::Worktree(WorktreeMsg::RenameStarted(
+        "feat-x".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameTextChanged(
+        "Renamed".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameConfirmed));
 
     assert_eq!(state.worktree_display_name("feat-x"), "Renamed");
     let after = state
+        .worktree
         .worktrees
         .iter()
         .find(|w| w.dir_name == "feat-x")
@@ -553,8 +597,13 @@ fn worktree_rename_changes_display_only_not_branch_or_path() {
 #[test]
 fn escape_cancels_worktree_rename() {
     let mut state = state_with_worktree_and_session("feat-x");
-    state.update(Message::WorktreeRenameStarted("feat-x".to_string()));
-    assert_eq!(on_escape(&state), Some(Message::WorktreeRenameCancelled));
+    state.update(Message::Worktree(WorktreeMsg::RenameStarted(
+        "feat-x".to_string(),
+    )));
+    assert_eq!(
+        on_escape(&state),
+        Some(Message::Worktree(WorktreeMsg::RenameCancelled))
+    );
 }
 
 // --- Feature 014 US3: everything derived from the list stays consistent ---
@@ -576,7 +625,10 @@ fn hidden_worktrees_offer_no_tag_filters() {
     // leaving it in `available_tag_filters()` would conjure an `Untyped` chip that matches nothing
     // the user can see — the most confusing possible way for this to fail.
     let mut state = state_with_worktree_and_session("feat-x");
-    state.worktrees.push(agent_worktree("a885b42dc521fbda1"));
+    state
+        .worktree
+        .worktrees
+        .push(agent_worktree("a885b42dc521fbda1"));
 
     let filters = state.available_tag_filters();
     assert!(
@@ -591,7 +643,11 @@ fn empty_state_distinguishes_no_worktrees_from_none_visible() {
     // FR-003 / US1 acceptance #2: a project whose only worktrees are agent-owned must read as
     // "no worktrees yet", not "nothing matched the filter" — there is no filter to clear.
     let agent_only = State {
-        worktrees: vec![agent_worktree("a885b42dc521fbda1")],
+        worktree: worktree::State {
+            worktrees: vec![agent_worktree("a885b42dc521fbda1")],
+            ..Default::default()
+        },
+
         ..Default::default()
     };
     assert!(!agent_only.has_visible_worktrees());
@@ -610,16 +666,20 @@ fn rename_override_for_a_hidden_worktree_survives_reload() {
     let mut state = state_with_worktree_and_session("feat-x");
     let agent = agent_worktree("a885b42dc521fbda1");
     let agent_dir = agent.dir_name.clone();
-    state.worktrees.push(agent.clone());
+    state.worktree.worktrees.push(agent.clone());
 
-    state.update(Message::WorktreeRenameStarted(agent_dir.clone()));
-    state.update(Message::WorktreeRenameTextChanged("Scratch".to_string()));
-    state.update(Message::WorktreeRenameConfirmed);
+    state.update(Message::Worktree(WorktreeMsg::RenameStarted(
+        agent_dir.clone(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameTextChanged(
+        "Scratch".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameConfirmed));
     assert_eq!(state.worktree_display_name(&agent_dir), "Scratch");
 
     // Re-discovery still reports both worktrees.
-    let all = state.worktrees.clone();
-    state.update(Message::WorktreesLoaded(all));
+    let all = state.worktree.worktrees.clone();
+    state.update(Message::Worktree(WorktreeMsg::Loaded(all)));
     assert_eq!(
         state.worktree_display_name(&agent_dir),
         "Scratch",
@@ -632,7 +692,7 @@ fn rename_override_for_a_hidden_worktree_survives_reload() {
 #[test]
 fn reveal_control_is_off_by_default() {
     // FR-010a: the safe default, with no persisted field to migrate.
-    assert!(!State::default().show_agent_worktrees);
+    assert!(!State::default().sidebar.show_agent_worktrees);
 }
 
 #[test]
@@ -640,35 +700,40 @@ fn toggling_reveal_changes_only_that_field() {
     // FR-010d: the reveal control and the tag filters are independent. Clobbering the filters
     // would silently discard the user's filtering work every time they peeked at agent worktrees.
     let mut state = state_with_worktree_and_session("feat-x");
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Feat,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Feat),
     )));
-    state.update(Message::WorktreeExpansionToggled("feat-x".to_string()));
-    let filters_before = state.sidebar_filters.clone();
-    let expanded_before = state.expanded.clone();
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-x".to_string(),
+    )));
+    let filters_before = state.sidebar.filters.clone();
+    let expanded_before = state.sidebar.expanded.clone();
     let dialog_before = open_dialog(&state);
 
-    state.update(Message::ShowAgentWorktreesToggled);
+    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
 
-    assert!(state.show_agent_worktrees);
-    assert_eq!(state.sidebar_filters, filters_before);
-    assert_eq!(state.expanded, expanded_before);
+    assert!(state.sidebar.show_agent_worktrees);
+    assert_eq!(state.sidebar.filters, filters_before);
+    assert_eq!(state.sidebar.expanded, expanded_before);
     assert_eq!(open_dialog(&state), dialog_before);
 }
 
 #[test]
 fn two_toggles_restore_the_prior_list() {
     let mut state = state_with_worktree_and_session("feat-x");
-    state.worktrees.push(agent_worktree("a885b42dc521fbda1"));
+    state
+        .worktree
+        .worktrees
+        .push(agent_worktree("a885b42dc521fbda1"));
     let before: Vec<String> = state
         .worktree_tree()
         .iter()
         .map(|n| n.worktree.dir_name.clone())
         .collect();
 
-    state.update(Message::ShowAgentWorktreesToggled);
+    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
     assert_eq!(state.worktree_tree().len(), 2, "revealed");
-    state.update(Message::ShowAgentWorktreesToggled);
+    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
 
     let after: Vec<String> = state
         .worktree_tree()
@@ -692,19 +757,19 @@ fn switching_projects_resets_the_reveal_control() {
         availability: Availability::Available,
     });
 
-    state.update(Message::ShowAgentWorktreesToggled);
-    assert!(state.show_agent_worktrees);
+    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
+    assert!(state.sidebar.show_agent_worktrees);
 
     assert!(switch(&mut state, &other));
     assert!(
-        !state.show_agent_worktrees,
+        !state.sidebar.show_agent_worktrees,
         "the incoming project must be entered with agent worktrees hidden"
     );
 
     // Switching back does not restore it either — nothing is remembered per project.
     let first = PathBuf::from("/repo");
     assert!(switch(&mut state, &first));
-    assert!(!state.show_agent_worktrees);
+    assert!(!state.sidebar.show_agent_worktrees);
 }
 
 // --- Feature 027: the tab strip is the only route between a session's panes ---
@@ -728,7 +793,7 @@ fn selecting_a_terminal_tab_shows_that_terminal() {
     use micold_core::session::TerminalMode;
 
     let mut state = state_with_worktree_and_session("feat-x");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     let shell = state
         .workspace
         .find_session_mut(id)
@@ -736,10 +801,12 @@ fn selecting_a_terminal_tab_shows_that_terminal() {
         .1
         .open_shell_instance();
     // The precondition that makes this a test rather than a tautology: the AI pane is showing.
-    state.update(Message::TerminalAiCliSelected(id));
+    state.update(Message::Session(SessionMsg::TerminalAiCliSelected(id)));
     assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
 
-    state.update(Message::ShellInstanceSelected(id, shell));
+    state.update(Message::Session(SessionMsg::ShellInstanceSelected(
+        id, shell,
+    )));
 
     assert_eq!(
         state.active_sessions()[0].mode,
@@ -756,7 +823,7 @@ fn the_two_kinds_of_tab_move_the_session_between_its_panes() {
     use micold_core::session::TerminalMode;
 
     let mut state = state_with_worktree_and_session("feat-x");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     let shell = state
         .workspace
         .find_session_mut(id)
@@ -765,10 +832,12 @@ fn the_two_kinds_of_tab_move_the_session_between_its_panes() {
         .open_shell_instance();
     assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
 
-    state.update(Message::ShellInstanceSelected(id, shell));
+    state.update(Message::Session(SessionMsg::ShellInstanceSelected(
+        id, shell,
+    )));
     assert_eq!(state.active_sessions()[0].mode, TerminalMode::Regular);
 
-    state.update(Message::TerminalAiCliSelected(id));
+    state.update(Message::Session(SessionMsg::TerminalAiCliSelected(id)));
     assert_eq!(state.active_sessions()[0].mode, TerminalMode::AiCli);
 }
 
@@ -777,7 +846,7 @@ fn shell_instance_running_and_exited_update_that_instances_lifecycle() {
     use micold_core::session::ShellLifecycle;
 
     let mut state = state_with_worktree_and_session("feat-x");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     let shell_id = state
         .workspace
         .find_session_mut(id)
@@ -785,13 +854,17 @@ fn shell_instance_running_and_exited_update_that_instances_lifecycle() {
         .1
         .open_shell_instance();
 
-    state.update(Message::ShellInstanceRunning(id, shell_id));
+    state.update(Message::Session(SessionMsg::ShellInstanceRunning(
+        id, shell_id,
+    )));
     assert_eq!(
         state.active_sessions()[0].active_shell_lifecycle(),
         Some(ShellLifecycle::Running)
     );
 
-    state.update(Message::ShellInstanceExited(id, shell_id));
+    state.update(Message::Session(SessionMsg::ShellInstanceExited(
+        id, shell_id,
+    )));
     assert_eq!(
         state.active_sessions()[0].active_shell_lifecycle(),
         Some(ShellLifecycle::Exited)
@@ -807,7 +880,7 @@ fn shell_instance_running_and_exited_update_that_instances_lifecycle() {
 #[test]
 fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
     let mut state = state_with_worktree_and_session("feat-x");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     let (background, active) = {
         let session = state.workspace.find_session_mut(id).unwrap().1;
         let first = session.open_shell_instance();
@@ -818,31 +891,31 @@ fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
     // which is the case under test.
     assert_eq!(state.active_sessions()[0].active_shell, Some(active));
 
-    state.update(Message::StripTabMenuRequested(
+    state.update(Message::Session(SessionMsg::StripTabMenuRequested(
         StripTab::Instance(background),
         742,
         761,
-    ));
+    )));
     assert_eq!(
-        state.shell_instance_menu,
+        state.session.shell_instance_menu,
         Some((StripTab::Instance(background), 742, 761)),
         "the menu must record the instance whose tab was clicked, not the active one"
     );
 
     // Opening another tab's menu moves the one menu rather than stacking a second: two open menus
     // would each claim the next click, and only one of them would be the one the user is looking at.
-    state.update(Message::StripTabMenuRequested(
+    state.update(Message::Session(SessionMsg::StripTabMenuRequested(
         StripTab::Instance(active),
         880,
         761,
-    ));
+    )));
     assert_eq!(
-        state.shell_instance_menu,
+        state.session.shell_instance_menu,
         Some((StripTab::Instance(active), 880, 761))
     );
 
-    state.update(Message::ShellInstanceMenuClosed);
-    assert_eq!(state.shell_instance_menu, None);
+    state.update(Message::Session(SessionMsg::ShellInstanceMenuClosed));
+    assert_eq!(state.session.shell_instance_menu, None);
 }
 
 /// Feature 026 FR-006/FR-007/FR-011: a primary press on the AI tab shows the AI CLI and does
@@ -855,7 +928,7 @@ fn the_tab_menu_belongs_to_the_tab_it_was_opened_on() {
 #[test]
 fn pressing_the_ai_tab_shows_the_ai_cli_and_disturbs_nothing() {
     let mut state = state_with_worktree_and_session("feat-x");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     let shell = {
         let session = state.workspace.find_session_mut(id).unwrap().1;
         let opened = session.open_shell_instance();
@@ -865,7 +938,7 @@ fn pressing_the_ai_tab_shows_the_ai_cli_and_disturbs_nothing() {
     let before = state.active_sessions()[0].clone();
     assert_eq!(before.mode, TerminalMode::Regular);
 
-    state.update(Message::TerminalAiCliSelected(id));
+    state.update(Message::Session(SessionMsg::TerminalAiCliSelected(id)));
     let after = &state.active_sessions()[0];
     assert_eq!(
         after.mode,
@@ -894,7 +967,7 @@ fn pressing_the_ai_tab_shows_the_ai_cli_and_disturbs_nothing() {
 
     // FR-007: pressing it again, while it is already what the pane shows, changes nothing at all.
     let displayed = state.active_sessions()[0].clone();
-    state.update(Message::TerminalAiCliSelected(id));
+    state.update(Message::Session(SessionMsg::TerminalAiCliSelected(id)));
     let again = &state.active_sessions()[0];
     assert_eq!(again.mode, displayed.mode);
     assert_eq!(again.lifecycle, displayed.lifecycle);
@@ -910,7 +983,7 @@ fn pressing_the_ai_tab_shows_the_ai_cli_and_disturbs_nothing() {
 #[test]
 fn the_tab_menu_records_which_tab_including_the_ai_one() {
     let mut state = state_with_worktree_and_session("feat-x");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     let shell = state
         .workspace
         .find_session_mut(id)
@@ -918,27 +991,31 @@ fn the_tab_menu_records_which_tab_including_the_ai_one() {
         .1
         .open_shell_instance();
 
-    state.update(Message::StripTabMenuRequested(
+    state.update(Message::Session(SessionMsg::StripTabMenuRequested(
         StripTab::Instance(shell),
         742,
         761,
-    ));
+    )));
     assert_eq!(
-        state.shell_instance_menu,
+        state.session.shell_instance_menu,
         Some((StripTab::Instance(shell), 742, 761))
     );
 
     // Opening the AI tab's menu **replaces** the instance's rather than stacking a second: two open
     // menus would each claim the next click, and only one is the one the user is looking at.
-    state.update(Message::StripTabMenuRequested(StripTab::Ai, 880, 761));
+    state.update(Message::Session(SessionMsg::StripTabMenuRequested(
+        StripTab::Ai,
+        880,
+        761,
+    )));
     assert_eq!(
-        state.shell_instance_menu,
+        state.session.shell_instance_menu,
         Some((StripTab::Ai, 880, 761)),
         "the AI tab's menu is the same surface, moved — not a second one beside it"
     );
 
-    state.update(Message::ShellInstanceMenuClosed);
-    assert_eq!(state.shell_instance_menu, None);
+    state.update(Message::Session(SessionMsg::ShellInstanceMenuClosed));
+    assert_eq!(state.session.shell_instance_menu, None);
 }
 
 /// Opening a dialog closes the tab menu with every other popover (feature 021, T031).
@@ -949,7 +1026,7 @@ fn the_tab_menu_records_which_tab_including_the_ai_one() {
 #[test]
 fn the_tab_menu_closes_when_a_dialog_opens() {
     let mut state = state_with_worktree_and_session("feat-x");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     let shell = state
         .workspace
         .find_session_mut(id)
@@ -957,16 +1034,16 @@ fn the_tab_menu_closes_when_a_dialog_opens() {
         .1
         .open_shell_instance();
 
-    state.update(Message::StripTabMenuRequested(
+    state.update(Message::Session(SessionMsg::StripTabMenuRequested(
         StripTab::Instance(shell),
         742,
         761,
-    ));
-    assert!(state.shell_instance_menu.is_some());
+    )));
+    assert!(state.session.shell_instance_menu.is_some());
 
     state.clear_for_dialog();
     assert_eq!(
-        state.shell_instance_menu, None,
+        state.session.shell_instance_menu, None,
         "a menu that outlives the dialog opening over it claims the next click"
     );
 }
@@ -976,47 +1053,57 @@ fn the_tab_menu_closes_when_a_dialog_opens() {
 #[test]
 fn settings_env_include_enabled_toggled_updates_only_that_field() {
     let mut state = State::default();
-    state.update(Message::SettingsOpened);
-    state.update(Message::SettingsEnvIncludeEnabledToggled(false));
+    state.update(Message::Settings(SettingsMsg::Opened));
+    state.update(Message::Settings(SettingsMsg::EnvIncludeEnabledToggled(
+        false,
+    )));
 
-    let draft = state.settings_draft.as_ref().unwrap();
+    let draft = state.settings.settings_draft.as_ref().unwrap();
     assert!(!draft.environment.enabled);
 }
 
 #[test]
 fn settings_env_include_path_changed_updates_only_that_field() {
     let mut state = State::default();
-    state.update(Message::SettingsOpened);
-    state.update(Message::SettingsEnvIncludePathChanged(
+    state.update(Message::Settings(SettingsMsg::Opened));
+    state.update(Message::Settings(SettingsMsg::EnvIncludePathChanged(
         "/custom/script.sh".to_string(),
-    ));
+    )));
 
-    let draft = state.settings_draft.as_ref().unwrap();
+    let draft = state.settings.settings_draft.as_ref().unwrap();
     assert_eq!(draft.environment.script_path, "/custom/script.sh");
 }
 
 #[test]
 fn settings_env_include_timeout_changed_updates_only_that_field() {
     let mut state = State::default();
-    state.update(Message::SettingsOpened);
-    state.update(Message::SettingsEnvIncludeTimeoutChanged("30".to_string()));
+    state.update(Message::Settings(SettingsMsg::Opened));
+    state.update(Message::Settings(SettingsMsg::EnvIncludeTimeoutChanged(
+        "30".to_string(),
+    )));
 
-    let draft = state.settings_draft.as_ref().unwrap();
+    let draft = state.settings.settings_draft.as_ref().unwrap();
     assert_eq!(draft.environment.timeout_secs, "30");
 }
 
 #[test]
 fn env_include_field_changes_leave_other_draft_fields_untouched() {
     let mut state = State::default();
-    state.update(Message::SettingsOpened);
-    state.update(Message::SettingsScrollbackChanged("25000".to_string()));
-    state.update(Message::SettingsEnvIncludeEnabledToggled(false));
-    state.update(Message::SettingsEnvIncludePathChanged(
+    state.update(Message::Settings(SettingsMsg::Opened));
+    state.update(Message::Settings(SettingsMsg::ScrollbackChanged(
+        "25000".to_string(),
+    )));
+    state.update(Message::Settings(SettingsMsg::EnvIncludeEnabledToggled(
+        false,
+    )));
+    state.update(Message::Settings(SettingsMsg::EnvIncludePathChanged(
         "/custom/script.sh".to_string(),
-    ));
-    state.update(Message::SettingsEnvIncludeTimeoutChanged("30".to_string()));
+    )));
+    state.update(Message::Settings(SettingsMsg::EnvIncludeTimeoutChanged(
+        "30".to_string(),
+    )));
 
-    let draft = state.settings_draft.as_ref().unwrap();
+    let draft = state.settings.settings_draft.as_ref().unwrap();
     assert_eq!(draft.terminal.scrollback_lines, "25000");
     assert!(!draft.environment.enabled);
     assert_eq!(draft.environment.script_path, "/custom/script.sh");
@@ -1070,7 +1157,7 @@ fn form_state() -> State {
 }
 
 fn form(state: &State) -> &WorktreeForm {
-    state.worktree_form.as_ref().unwrap()
+    state.worktree_form.form.as_ref().unwrap()
 }
 
 // --- the state machine ----------------------------------------------------------------
@@ -1756,60 +1843,72 @@ fn a_new_attempt_never_inherits_the_previous_attempts_line() {
 fn a_field_that_takes_the_keyboard_is_the_one_the_view_draws_focused() {
     let mut state = State::default();
     assert_eq!(
-        state.focused_field, None,
+        state.window.focused_field, None,
         "nothing is focused to begin with"
     );
 
-    state.update(Message::FieldFocusChanged(FieldId::RenameProjectName, true));
+    state.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::RenameProjectName,
+        true,
+    )));
 
-    assert_eq!(state.focused_field, Some(FieldId::RenameProjectName));
+    assert_eq!(state.window.focused_field, Some(FieldId::RenameProjectName));
 }
 
 #[test]
 fn moving_between_two_fields_leaves_the_second_focused_whichever_order_the_reports_arrive() {
     let mut state = State::default();
-    state.update(Message::FieldFocusChanged(FieldId::AddWorktreeTicket, true));
+    state.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::AddWorktreeTicket,
+        true,
+    )));
 
     // Gaining and losing are reported by two different widgets, in whichever order the frame
     // produced them. The late blur is from the field that no longer holds focus and must be
     // ignored — believing it would leave both fields at rest, which is the bug reappearing on
     // every click from one field to the next.
-    state.update(Message::FieldFocusChanged(FieldId::AddWorktreeName, true));
-    state.update(Message::FieldFocusChanged(
+    state.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::AddWorktreeName,
+        true,
+    )));
+    state.update(Message::Window(WindowMsg::FieldFocusChanged(
         FieldId::AddWorktreeTicket,
         false,
-    ));
+    )));
 
-    assert_eq!(state.focused_field, Some(FieldId::AddWorktreeName));
+    assert_eq!(state.window.focused_field, Some(FieldId::AddWorktreeName));
 }
 
 #[test]
 fn a_field_losing_the_keyboard_leaves_nothing_focused() {
     let mut state = State::default();
-    state.update(Message::FieldFocusChanged(
+    state.update(Message::Window(WindowMsg::FieldFocusChanged(
         FieldId::SettingsScrollback,
         true,
-    ));
+    )));
 
-    state.update(Message::FieldFocusChanged(
+    state.update(Message::Window(WindowMsg::FieldFocusChanged(
         FieldId::SettingsScrollback,
         false,
-    ));
+    )));
 
-    assert_eq!(state.focused_field, None);
+    assert_eq!(state.window.focused_field, None);
 }
 
 #[test]
 fn opening_a_dialog_forgets_the_field_that_had_focus() {
     let mut state = State::default();
-    state.update(Message::FieldFocusChanged(FieldId::RenameProjectName, true));
+    state.update(Message::Window(WindowMsg::FieldFocusChanged(
+        FieldId::RenameProjectName,
+        true,
+    )));
 
     // The fields that reported focus belong to a widget tree being torn down, and will never report
     // losing it. A remembered focus would outlive them and draw the next dialog's field focused
     // over an input nobody has clicked.
-    state.update(Message::SettingsOpened);
+    state.update(Message::Settings(SettingsMsg::Opened));
 
-    assert_eq!(state.focused_field, None);
+    assert_eq!(state.window.focused_field, None);
 }
 
 // --- Feature 024: collapsing the row the app opened -------------------------------------------
@@ -1828,7 +1927,7 @@ fn state_with_current_session_in(dir: &str) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    state.worktrees = vec![Worktree {
+    state.worktree.worktrees = vec![Worktree {
         dir_name: dir.to_string(),
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
         branch: Some(format!("feat/{dir}")),
@@ -1841,7 +1940,7 @@ fn state_with_current_session_in(dir: &str) -> State {
     );
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
     state
 }
 
@@ -1854,7 +1953,9 @@ fn collapsing_the_revealed_row_closes_it_and_it_stays_closed() {
         "precondition: the row is open because it holds the current session"
     );
 
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
 
     assert!(
         !state.location_open(&location),
@@ -1862,7 +1963,7 @@ fn collapsing_the_revealed_row_closes_it_and_it_stays_closed() {
          otherwise the control does nothing on the one row the feature added (FR-005)"
     );
     assert_eq!(
-        state.reveal_suppressed_for, state.active_session,
+        state.session.reveal_suppressed_for, state.session.active,
         "and the close is remembered against the session it was made for, so a later reveal for \
          a different session is not swallowed by it (invariant I2)"
     );
@@ -1889,15 +1990,19 @@ fn re_expanding_a_suppressed_row_lifts_the_suppression() {
     let mut state = state_with_current_session_in("feat-a");
     let location = SessionLocation::Worktree("feat-a".to_string());
 
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
 
     assert!(
         state.location_open(&location),
         "the twisty is a toggle in both directions, on the revealed row as much as any other"
     );
     assert!(
-        state.reveal_suppressed_for.is_none(),
+        state.session.reveal_suppressed_for.is_none(),
         "re-opening it by hand withdraws the close, rather than leaving a suppression that only \
          a change of session can clear"
     );
@@ -1917,16 +2022,16 @@ fn the_default_rows_twisty_suppresses_the_same_way() {
     let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
     assert!(state.location_open(&SessionLocation::Default));
 
-    state.update(Message::DefaultExpansionToggled);
+    state.update(Message::Sidebar(SidebarMsg::DefaultExpansionToggled));
 
     assert!(
         !state.location_open(&SessionLocation::Default),
         "the project-root row is a location like any other — FR-005 is not worktree-only"
     );
-    assert_eq!(state.reveal_suppressed_for, state.active_session);
+    assert_eq!(state.session.reveal_suppressed_for, state.session.active);
 }
 
 // --- Feature 024: what a change of current session does to the rows ---------------------------
@@ -1948,7 +2053,7 @@ fn a_location_that_stops_holding_the_current_session_stays_open() {
          with it (FR-001c)"
     );
     assert!(
-        state.expanded.contains("feat-a"),
+        state.sidebar.expanded.contains("feat-a"),
         "and it stays open by becoming ordinary user-open state, which is the honest description \
          of what the user was looking at (invariant I3)"
     );
@@ -1958,7 +2063,9 @@ fn a_location_that_stops_holding_the_current_session_stays_open() {
 fn a_row_the_user_closed_is_not_re_opened_by_the_commit() {
     let mut state = state_with_current_session_in("feat-a");
     let location = SessionLocation::Worktree("feat-a".to_string());
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
 
     set_current(&mut state, None);
 
@@ -1972,12 +2079,12 @@ fn a_row_the_user_closed_is_not_re_opened_by_the_commit() {
 #[test]
 fn clearing_the_current_session_arms_no_scroll() {
     let mut state = state_with_current_session_in("feat-a");
-    state.pending_reveal_scroll = false;
+    state.sidebar.pending_reveal_scroll = false;
 
     set_current(&mut state, None);
 
     assert!(
-        !state.pending_reveal_scroll,
+        !state.sidebar.pending_reveal_scroll,
         "there is no row to scroll to. An armed scroll with no target stays armed — nothing drains \
          it — and then fires against whatever row appears next; FR-001a forbids scrolling at all \
          when the user closes the session they were on (invariant I5)"
@@ -1987,8 +2094,10 @@ fn clearing_the_current_session_arms_no_scroll() {
 #[test]
 fn a_change_of_current_session_lifts_a_suppression_made_against_the_old_one() {
     let mut state = state_with_current_session_in("feat-a");
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
-    assert_eq!(state.reveal_suppressed_for, state.active_session);
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
+    assert_eq!(state.session.reveal_suppressed_for, state.session.active);
 
     let next = Session::start_new(
         SessionLocation::Worktree("feat-a".to_string()),
@@ -2000,12 +2109,12 @@ fn a_change_of_current_session_lifts_a_suppression_made_against_the_old_one() {
     set_current(&mut state, Some(next_id));
 
     assert!(
-        state.reveal_suppressed_for.is_none(),
+        state.session.reveal_suppressed_for.is_none(),
         "the close was made against a session that is no longer current; keeping it would swallow \
          the next reveal for a reason the user could not see (invariant I2)"
     );
     assert!(
-        state.pending_reveal_scroll,
+        state.sidebar.pending_reveal_scroll,
         "and the new current session arms its own scroll"
     );
 }
@@ -2027,7 +2136,7 @@ fn state_with_many_worktrees(count: usize) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    state.worktrees = (0..count)
+    state.worktree.worktrees = (0..count)
         .map(|i| Worktree {
             dir_name: format!("feat-{i:02}"),
             path: PathBuf::from(format!("/repo/.claude/worktrees/feat-{i:02}")),
@@ -2042,14 +2151,14 @@ fn state_with_many_worktrees(count: usize) -> State {
     );
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
     state
 }
 
 #[test]
 fn a_row_near_the_bottom_of_a_long_list_is_scrolled_to() {
     let mut state = state_with_many_worktrees(30);
-    state.sidebar_viewport_height = 400;
+    state.sidebar.viewport_height = 400;
 
     assert!(
         state.current_session_is_listed(),
@@ -2068,7 +2177,7 @@ fn a_row_near_the_bottom_of_a_long_list_is_scrolled_to() {
 #[test]
 fn a_row_already_on_screen_is_not_scrolled_to() {
     let mut state = state_with_many_worktrees(3);
-    state.sidebar_viewport_height = 400;
+    state.sidebar.viewport_height = 400;
 
     assert_eq!(
         state.reveal_scroll_offset(),
@@ -2083,7 +2192,7 @@ fn nothing_is_scrolled_to_before_the_viewport_has_been_laid_out() {
     let state = state_with_many_worktrees(30);
 
     assert_eq!(
-        state.sidebar_viewport_height, 0,
+        state.sidebar.viewport_height, 0,
         "precondition: no layout has happened yet"
     );
     assert_eq!(
@@ -2097,7 +2206,7 @@ fn nothing_is_scrolled_to_before_the_viewport_has_been_laid_out() {
 #[test]
 fn a_reveal_waits_for_the_worktree_list_rather_than_scrolling_to_a_stale_row() {
     let mut state = state_with_many_worktrees(30);
-    state.sidebar_viewport_height = 400;
+    state.sidebar.viewport_height = 400;
     // The switch has happened but discovery has not reported yet: the panel knows of no locations.
     micold_client::app::drain(state.set_worktrees(Vec::new()), |o| {
         micold_client::app::interpret(&mut state, o)
@@ -2139,22 +2248,22 @@ fn starting_a_session_reveals_it() {
         ]),
         |o| micold_client::app::interpret(&mut state, o),
     );
-    state.pending_reveal_scroll = false;
+    state.sidebar.pending_reveal_scroll = false;
 
     let started = Session::start_new(
         SessionLocation::Worktree("feat-b".to_string()),
         AiCli::ClaudeCode,
     );
     let id = started.id;
-    state.update(Message::SessionStarted(started));
+    state.update(Message::Session(SessionMsg::Started(started)));
 
-    assert_eq!(state.active_session, Some(id));
+    assert_eq!(state.session.active, Some(id));
     assert!(
         state.location_open(&SessionLocation::Worktree("feat-b".to_string())),
         "a session you just started is one the app put in front of you, so it is revealed like any \
          other (US3 scenario 2)"
     );
-    assert!(state.pending_reveal_scroll, "and brought into view");
+    assert!(state.sidebar.pending_reveal_scroll, "and brought into view");
     assert!(
         state.location_open(&SessionLocation::Worktree("feat-a".to_string())),
         "while the row that held the outgoing current session stays open — ceasing to be current \
@@ -2172,13 +2281,13 @@ fn clicking_a_session_marks_it_and_moves_nothing() {
     let other_id = other.id;
     let path = state.workspace.active.clone().unwrap();
     state.workspace.sessions.get_mut(&path).unwrap().push(other);
-    state.pending_reveal_scroll = false;
+    state.sidebar.pending_reveal_scroll = false;
 
-    state.update(Message::SessionSelected(other_id));
+    state.update(Message::Session(SessionMsg::Selected(other_id)));
 
-    assert_eq!(state.active_session, Some(other_id), "it is now current");
+    assert_eq!(state.session.active, Some(other_id), "it is now current");
     assert!(
-        !state.pending_reveal_scroll,
+        !state.sidebar.pending_reveal_scroll,
         "but nothing is opened or scrolled on the user's behalf: they clicked a row they could \
          already see, and scrolling it would move the list they were reading (FR-006)"
     );
@@ -2198,12 +2307,12 @@ fn closing_the_current_session_promotes_nothing_in_its_place() {
         .get_mut(&path)
         .unwrap()
         .push(sibling);
-    let closing = state.active_session.unwrap();
+    let closing = state.session.active.unwrap();
 
-    state.update(Message::SessionCloseRequested(closing));
+    state.update(Message::Session(SessionMsg::CloseRequested(closing)));
 
     assert!(
-        state.active_session.is_none(),
+        state.session.active.is_none(),
         "this feature reveals where you are; it does not decide where you go next. A sibling \
          session in the same location is not promoted (FR-001a)"
     );
@@ -2212,7 +2321,7 @@ fn closing_the_current_session_promotes_nothing_in_its_place() {
         "and the row stays open, so the sibling you might want next is still on screen (FR-001c)"
     );
     assert!(
-        !state.pending_reveal_scroll,
+        !state.sidebar.pending_reveal_scroll,
         "with nothing armed to scroll to"
     );
 }
@@ -2220,18 +2329,18 @@ fn closing_the_current_session_promotes_nothing_in_its_place() {
 #[test]
 fn removing_the_current_session_behaves_the_same_way() {
     let mut state = state_with_current_session_in("feat-a");
-    let removing = state.active_session.unwrap();
-    state.update(Message::SessionRemoveRequested(removing));
+    let removing = state.session.active.unwrap();
+    state.update(Message::Session(SessionMsg::RemoveRequested(removing)));
 
-    state.update(Message::SessionRemoveConfirmed);
+    state.update(Message::Session(SessionMsg::RemoveConfirmed));
 
-    assert!(state.active_session.is_none());
+    assert!(state.session.active.is_none());
     assert!(
         state.location_open(&SessionLocation::Worktree("feat-a".to_string())),
         "remove drops the record where close archives it, but neither is the app moving you to a \
          session — so neither opens, closes or scrolls anything (FR-001a)"
     );
-    assert!(!state.pending_reveal_scroll);
+    assert!(!state.sidebar.pending_reveal_scroll);
 }
 
 // --- Feature 025: applying a project's remembered session at launch ---------------------------
@@ -2242,11 +2351,11 @@ fn removing_the_current_session_behaves_the_same_way() {
 
 fn state_with_remembered_session() -> (State, SessionId) {
     let mut state = state_with_current_session_in("feat-a");
-    let id = state.active_session.unwrap();
+    let id = state.session.active.unwrap();
     state.record_foreground();
     // The shape after a restart: the memory survived, the pointer did not.
-    state.active_session = None;
-    state.pending_reveal_scroll = false;
+    state.session.active = None;
+    state.sidebar.pending_reveal_scroll = false;
     (state, id)
 }
 
@@ -2259,7 +2368,7 @@ fn applying_the_memory_makes_that_session_current_and_reveals_it() {
     set_current(&mut state, choice.session());
 
     assert_eq!(
-        state.active_session,
+        state.session.active,
         Some(id),
         "reopening lands on the session you were last using, which is the whole feature"
     );
@@ -2296,7 +2405,7 @@ fn applying_the_memory_starts_only_the_session_it_displays() {
          lie BUG-001 fixed, arrived at from the other direction"
     );
     assert_eq!(
-        state.active_session,
+        state.session.active,
         Some(id),
         "and exactly one session is made current — the one the start will name"
     );
@@ -2349,18 +2458,18 @@ fn a_memory_whose_worktree_is_gone_is_still_restored() {
     micold_client::app::drain(state.set_worktrees(Vec::new()), |o| {
         micold_client::app::interpret(&mut state, o)
     });
-    state.expanded.insert("kept-open".to_string());
+    state.sidebar.expanded.insert("kept-open".to_string());
 
     let choice = state.explain_foreground(&path).session();
     set_current(&mut state, choice);
 
     assert_eq!(
-        state.active_session,
+        state.session.active,
         Some(id),
         "the application already lists a session whose worktree is missing and lets you select it,          so refusing to *return* you to it would be the same inconsistency BUG-001 was about.          Declining would also need the worktree list at resolve time, which a project switch does          not have yet — one rule that breaks switching to handle a case the user can see"
     );
     assert!(
-        state.expanded.contains("kept-open"),
+        state.sidebar.expanded.contains("kept-open"),
         "and the rest of the project is untouched — a memory that cannot be honoured must not cost \
          the user anything else (FR-006)"
     );
@@ -2374,18 +2483,18 @@ fn a_memory_naming_a_closed_session_restores_nothing_and_disturbs_nothing() {
     if let Some((_, session)) = state.workspace.find_session_mut(id) {
         session.archive();
     }
-    state.expanded.insert("kept-open".to_string());
+    state.sidebar.expanded.insert("kept-open".to_string());
 
     let choice = state.explain_foreground(&path).session();
     set_current(&mut state, choice);
 
     assert!(
-        state.active_session.is_none(),
+        state.session.active.is_none(),
         "a closed session is not listed at all, so restoring one would display something the panel \
          cannot show (FR-005). Nothing is chosen in its place either (FR-007)"
     );
     assert!(
-        state.expanded.contains("kept-open"),
+        state.sidebar.expanded.contains("kept-open"),
         "and the rest of the project is exactly as it was (FR-006)"
     );
 }

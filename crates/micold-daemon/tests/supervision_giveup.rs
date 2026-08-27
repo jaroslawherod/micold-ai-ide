@@ -155,7 +155,10 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
     let mut core = State::default();
     reconcile_catalog(&mut core, &state.welcome_payload().0, false);
     assert_eq!(
-        core.notify.visible().map(|n| n.message.clone()),
+        core.notifications
+            .queue
+            .visible()
+            .map(|n| n.message.clone()),
         Some(reason.clone()),
         "the give-up the daemon recorded is what the user is told"
     );

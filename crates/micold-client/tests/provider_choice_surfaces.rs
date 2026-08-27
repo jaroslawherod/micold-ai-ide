@@ -2,7 +2,7 @@
 //! FR-006).
 //!
 //! FR-006's rule is about what the user is *shown*, and both surfaces read the availability set
-//! T014a put on `State`: the Settings select takes `state.available_providers` directly, the
+//! T014a put on `State`: the Settings select takes `state.session.available_providers` directly, the
 //! session start list takes `State::offered_providers()`. The pure layer is covered in
 //! `features_session.rs`; what is covered here is that the drawn surfaces actually follow it —
 //! neither reaches for `AiCli::ALL`, which is the one-token change that would make both of them
@@ -47,12 +47,13 @@ const SETTINGS_SELECT: &[usize] = &[0, 0, 1, 0, 1, 0, 0, 1];
 fn with_project() -> State {
     let mut workspace = support::workspace_with(vec![(PROJECT, vec![])]);
     workspace.active = workspace.projects.first().map(|p| p.path.clone());
-    State {
+    let mut state = State {
         workspace,
-        sidebar_width: 300,
-        window_size: (1280, 800),
         ..State::default()
-    }
+    };
+    state.sidebar.width = 300;
+    state.window.window_size = (1280, 800);
+    state
 }
 
 /// Every string the given state paints, with the select at `press_at` opened first — or, with no
@@ -87,38 +88,36 @@ fn painted(state: &State, press_at: Option<&[usize]>) -> Vec<String> {
 /// strings without being able to tell the two apart. Keeping the draft on an installed CLI leaves
 /// the list as the only thing that can name one.
 fn settings_state(available: &[AiCli]) -> State {
-    State {
-        available_providers: Some(CliAvailability {
-            available: available.to_vec(),
-            source: AvailabilitySource::ThisComputer,
-        }),
-        settings_draft: Some(SettingsDraft {
-            // Feature 027 turned Settings into a sectioned full-surface view, and the Default AI
-            // CLI select lives in Environment — the section has to be the shown one, or the
-            // control this test presses is not on screen at all.
-            section: SettingsSection::Environment,
-            environment: EnvironmentDraft {
-                default_ai_cli: available.first().copied().unwrap_or(AiCli::ClaudeCode),
-                ..EnvironmentDraft::default()
-            },
-            ..SettingsDraft::default()
-        }),
-        ..with_project()
-    }
+    let mut state = with_project();
+    state.session.available_providers = Some(CliAvailability {
+        available: available.to_vec(),
+        source: AvailabilitySource::ThisComputer,
+    });
+    state.settings.settings_draft = Some(SettingsDraft {
+        // Feature 027 turned Settings into a sectioned full-surface view, and the Default AI
+        // CLI select lives in Environment — the section has to be the shown one, or the
+        // control this test presses is not on screen at all.
+        section: SettingsSection::Environment,
+        environment: EnvironmentDraft {
+            default_ai_cli: available.first().copied().unwrap_or(AiCli::ClaudeCode),
+            ..EnvironmentDraft::default()
+        },
+        ..SettingsDraft::default()
+    });
+    state
 }
 
 fn start_menu_state(available: &[AiCli]) -> State {
-    State {
-        available_providers: Some(CliAvailability {
-            available: available.to_vec(),
-            source: AvailabilitySource::ThisComputer,
-        }),
-        session_start_menu: Some(StartMenu {
-            location: SessionLocation::Default,
-            anchor: (400, 300),
-        }),
-        ..with_project()
-    }
+    let mut state = with_project();
+    state.session.available_providers = Some(CliAvailability {
+        available: available.to_vec(),
+        source: AvailabilitySource::ThisComputer,
+    });
+    state.session.start_menu = Some(StartMenu {
+        location: SessionLocation::Default,
+        anchor: (400, 300),
+    });
+    state
 }
 
 #[test]
@@ -134,7 +133,7 @@ fn the_settings_select_lists_only_the_installed_clis() {
     // the whole surface mentioning it is that sentence. Comparing against `missing_cli_notice`
     // itself, rather than allowing anything long enough to look like prose, keeps a stray second
     // mention (an option row, a helper line, a tooltip) failing.
-    let notice = missing_cli_notice(state.available_providers.as_ref())
+    let notice = missing_cli_notice(state.session.available_providers.as_ref())
         .expect("with one CLI uninstalled the surface owes the user a sentence about it");
     let stray: Vec<&String> = only_claude
         .iter()
@@ -187,7 +186,7 @@ fn the_session_start_list_offers_only_the_installed_clis() {
 /// The two surfaces cannot disagree about what exists (FR-006).
 ///
 /// Not a restatement of the two tests above: they each pin one surface against `AiCli::ALL`, and
-/// this pins them against *each other* — one reads `state.available_providers` and the other
+/// this pins them against *each other* — one reads `state.session.available_providers` and the other
 /// `State::offered_providers()`, so "both are filtered" and "both are filtered the same way" are
 /// different claims.
 #[test]

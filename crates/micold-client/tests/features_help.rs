@@ -32,7 +32,7 @@ fn the_menu_toggles_and_reports_only_the_opening() {
     let mut st = State::default();
 
     let opened = help::menu_toggled(&mut st);
-    assert!(st.help_menu_open);
+    assert!(st.help.help_menu_open);
     assert_eq!(
         opened.len(),
         1,
@@ -40,7 +40,7 @@ fn the_menu_toggles_and_reports_only_the_opening() {
     );
 
     let closed = help::menu_toggled(&mut st);
-    assert!(!st.help_menu_open);
+    assert!(!st.help.help_menu_open);
     assert!(
         closed.is_empty(),
         "shutting it reports nothing: it did not open, and no other surface should move"
@@ -53,21 +53,24 @@ fn opening_about_is_idempotent() {
     let mut st = State::default();
 
     help::about_opened(&mut st);
-    assert!(st.about_open);
+    assert!(st.help.about_open);
 
     help::about_opened(&mut st);
-    assert!(st.about_open, "still exactly one, not a second instance");
+    assert!(
+        st.help.about_open,
+        "still exactly one, not a second instance"
+    );
 }
 
 #[test]
 fn dismissing_about_when_nothing_is_open_changes_nothing() {
     // FR-012's edge case. A close that has already happened is not an error.
     let mut st = State::default();
-    assert!(!st.about_open);
+    assert!(!st.help.about_open);
 
     help::about_closed(&mut st);
 
-    assert!(!st.about_open);
+    assert!(!st.help.about_open);
 }
 
 #[test]
@@ -84,13 +87,13 @@ fn opening_about_closes_the_menu_it_was_chosen_from() {
     // asserts is only that the help feature goes through it.
     let mut st = State::default();
     let _ = help::menu_toggled(&mut st);
-    assert!(st.help_menu_open);
+    assert!(st.help.help_menu_open);
 
     help::about_opened(&mut st);
 
-    assert!(st.about_open);
+    assert!(st.help.about_open);
     assert!(
-        !st.help_menu_open,
+        !st.help.help_menu_open,
         "the menu the action was chosen from does not stay open behind the dialog it opened"
     );
 }

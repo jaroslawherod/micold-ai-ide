@@ -16,6 +16,14 @@
 //! Read a failure here as: the generic dispatch does not preserve an ordering rule the special-case
 //! code got right.
 
+use micold_client::features::help;
+use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project;
+use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::sidebar;
+use micold_client::features::sidebar::Msg as SidebarMsg;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{on_escape, Message, State};
@@ -31,53 +39,57 @@ use micold_core::session::SessionId;
 /// opened it; the enum is gone, so opening one means building the state it draws from.
 #[allow(clippy::type_complexity)]
 const MODALS: &[(&str, fn(&mut State), Message)] = &[
-    ("about", |s| s.about_open = true, Message::AboutClosed),
+    (
+        "about",
+        |s| s.help.about_open = true,
+        Message::Help(HelpMsg::AboutClosed),
+    ),
     (
         "project_selector",
-        |s| s.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
-        Message::ProjectSelectorClosed,
+        |s| s.project.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
+        Message::Project(ProjectMsg::SelectorClosed),
     ),
     (
         "rename_project",
         |s| {
-            s.rename_draft = Some(RenameDraft {
+            s.project.rename_draft = Some(RenameDraft {
                 path: PathBuf::from("/tmp"),
                 text: String::new(),
                 error: None,
             })
         },
-        Message::RenameCancelled,
+        Message::Project(ProjectMsg::RenameCancelled),
     ),
     (
         "add_worktree",
-        |s| s.worktree_form = Some(Default::default()),
+        |s| s.worktree_form.form = Some(Default::default()),
         Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
     ),
     (
         "confirm_worktree_delete",
-        |s| s.worktree_delete_target = Some("wt".to_string()),
-        Message::WorktreeDeleteCancelled,
+        |s| s.worktree.delete_target = Some("wt".to_string()),
+        Message::Worktree(WorktreeMsg::DeleteCancelled),
     ),
     (
         "rename_worktree",
         |s| {
-            s.worktree_rename_draft = Some(WorktreeRenameDraft {
+            s.worktree.rename_draft = Some(WorktreeRenameDraft {
                 dir_name: "wt".to_string(),
                 text: String::new(),
                 error: None,
             })
         },
-        Message::WorktreeRenameCancelled,
+        Message::Worktree(WorktreeMsg::RenameCancelled),
     ),
     (
         "confirm_session_remove",
-        |s| s.session_remove_target = Some(SessionId::new()),
-        Message::SessionRemoveCancelled,
+        |s| s.session.remove_target = Some(SessionId::new()),
+        Message::Session(SessionMsg::RemoveCancelled),
     ),
     (
         "confirm_forget_project",
-        |s| s.forget_target = Some(PathBuf::from("/p")),
-        Message::ProjectForgetCancelled,
+        |s| s.project.forget_target = Some(PathBuf::from("/p")),
+        Message::Project(ProjectMsg::ForgetCancelled),
     ),
 ];
 
@@ -94,7 +106,7 @@ fn open_dialog(state: &State) -> Option<&'static str> {
 // preserve what the code does, so these tests assert the code and the contract has been corrected
 // to match. Written out because the difference is easy to read past:
 //
-//     if state.overlay == Overlay::None && state.sidebar_filter_open { ...popover... }
+//     if state.overlay == Overlay::None && state.sidebar.filter_open { ...popover... }
 //     match state.overlay { ...modal... }
 //
 // The popover branch comes first *textually*, which is what makes it look like popover-priority.
@@ -110,7 +122,11 @@ fn open_dialog(state: &State) -> Option<&'static str> {
 /// A modal open *and* a popover open at the same time.
 fn modal_and_popover(open: fn(&mut State)) -> State {
     let mut state = State {
-        sidebar_filter_open: true,
+        sidebar: sidebar::State {
+            filter_open: true,
+            ..Default::default()
+        },
+
         ..Default::default()
     };
     open(&mut state);
@@ -120,12 +136,12 @@ fn modal_and_popover(open: fn(&mut State)) -> State {
 #[test]
 fn escape_belongs_to_the_popover_when_nothing_modal_is_open() {
     let mut state = State::default();
-    state.update(Message::SidebarFilterMenuToggled);
-    assert!(state.sidebar_filter_open, "precondition: the panel is open");
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
+    assert!(state.sidebar.filter_open, "precondition: the panel is open");
 
     assert_eq!(
         on_escape(&state),
-        Some(Message::SidebarFilterMenuToggled),
+        Some(Message::Sidebar(SidebarMsg::FilterMenuToggled)),
         "the everyday case: one lightweight surface open, and Escape closes it"
     );
 }
@@ -151,8 +167,8 @@ fn a_popover_alone_and_a_popover_over_a_modal_are_not_the_same_case() {
     // Guards against a dispatch that "simplifies" by treating any open popover as the Escape
     // target -- which would pass the everyday test above while silently changing the tie-break.
     let mut alone = State::default();
-    alone.update(Message::SidebarFilterMenuToggled);
-    let over_modal = modal_and_popover(|s| s.about_open = true);
+    alone.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
+    let over_modal = modal_and_popover(|s| s.help.about_open = true);
 
     assert_ne!(
         on_escape(&alone),
@@ -169,13 +185,24 @@ fn a_popover_alone_and_a_popover_over_a_modal_are_not_the_same_case() {
 /// A state with all four popovers that `open_overlay` is responsible for clearing.
 fn every_dismissible_popover_open() -> State {
     State {
-        help_menu_open: true,
-        project_switcher_open: true,
-        sidebar_filter_open: true,
-        project_menu_open: Some(micold_client::features::project::ProjectMenu {
-            path: std::path::PathBuf::from("/p"),
-            anchor: (10, 10),
-        }),
+        sidebar: sidebar::State {
+            filter_open: true,
+            ..Default::default()
+        },
+
+        project: project::State {
+            switcher_open: true,
+            menu_open: Some(micold_client::features::project::ProjectMenu {
+                path: std::path::PathBuf::from("/p"),
+                anchor: (10, 10),
+            }),
+            ..Default::default()
+        },
+
+        help: help::State {
+            help_menu_open: true,
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -194,19 +221,19 @@ fn opening_a_modal_closes_the_popovers_floating_above_it() {
             "precondition: the modal opened"
         );
         assert!(
-            !state.help_menu_open,
+            !state.help.help_menu_open,
             "the overflow menu survived {name} opening"
         );
         assert!(
-            !state.project_switcher_open,
+            !state.project.switcher_open,
             "the project switcher survived {name} opening"
         );
         assert!(
-            !state.sidebar_filter_open,
+            !state.sidebar.filter_open,
             "the filter panel survived {name} opening"
         );
         assert!(
-            state.project_menu_open.is_none(),
+            state.project.menu_open.is_none(),
             "the project context menu survived {name} opening"
         );
     }
@@ -217,7 +244,7 @@ fn opening_a_modal_over_nothing_is_not_a_special_case() {
     let mut state = State::default();
 
     state.clear_for_dialog();
-    state.about_open = true;
+    state.help.about_open = true;
 
     assert_eq!(
         open_dialog(&state),
@@ -236,19 +263,21 @@ fn closing_the_filter_panel_leaves_the_active_filters_alone() {
     use micold_core::naming::ConventionalType;
 
     let mut state = State::default();
-    state.update(Message::SidebarFilterMenuToggled);
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Feat,
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Feat),
     )));
-    state.update(Message::SidebarFilterToggled(TagFilter::HasIssue));
-    let chosen = state.sidebar_filters.clone();
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::HasIssue,
+    )));
+    let chosen = state.sidebar.filters.clone();
     assert_eq!(chosen.len(), 2, "precondition: two filters are active");
 
-    state.update(Message::SidebarFilterMenuToggled);
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
 
-    assert!(!state.sidebar_filter_open, "precondition: the panel closed");
+    assert!(!state.sidebar.filter_open, "precondition: the panel closed");
     assert_eq!(
-        state.sidebar_filters, chosen,
+        state.sidebar.filters, chosen,
         "closing the panel is putting the chooser away, not clearing the choice — a sidebar that \
          silently unfiltered itself every time the panel collapsed would be unusable"
     );
@@ -260,15 +289,17 @@ fn dismissing_a_modal_leaves_the_filters_it_never_owned_alone() {
 
     for (name, open, cancel) in MODALS {
         let mut state = State::default();
-        state.update(Message::SidebarFilterToggled(TagFilter::Untyped));
-        let chosen = state.sidebar_filters.clone();
+        state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+            TagFilter::Untyped,
+        )));
+        let chosen = state.sidebar.filters.clone();
 
         state.clear_for_dialog();
         open(&mut state);
         state.update(cancel.clone());
 
         assert_eq!(
-            state.sidebar_filters, chosen,
+            state.sidebar.filters, chosen,
             "cancelling {name} reached into the sidebar's filters, which it does not own"
         );
     }

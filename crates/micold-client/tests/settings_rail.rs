@@ -16,6 +16,7 @@
 use std::collections::BTreeSet;
 
 use micold_client::app::{Message, State};
+use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::settings::{SettingsDraft, SettingsSection};
 
 /// FR-026b: every section is identified by an icon, and no two sections share one.
@@ -45,38 +46,41 @@ fn every_section_has_an_icon_of_its_own() {
 /// what four unlabelled glyphs mean before they can change a setting.
 #[test]
 fn the_rail_is_expanded_until_the_user_closes_it() {
-    assert!(!State::default().settings_rail_collapsed);
+    assert!(!State::default().settings.settings_rail_collapsed);
 }
 
 /// Toggling is a toggle: the same message closes and reopens it.
 #[test]
 fn the_toggle_closes_and_reopens_the_rail() {
     let mut state = State::default();
-    state.update(Message::SettingsRailToggled);
-    assert!(state.settings_rail_collapsed);
-    state.update(Message::SettingsRailToggled);
-    assert!(!state.settings_rail_collapsed);
+    state.update(Message::Settings(SettingsMsg::RailToggled));
+    assert!(state.settings.settings_rail_collapsed);
+    state.update(Message::Settings(SettingsMsg::RailToggled));
+    assert!(!state.settings.settings_rail_collapsed);
 }
 
 /// FR-026d, the half that a drafted flag would fail. Save and Cancel both end the form; neither may
 /// take the rail's state with them, and reopening Settings must find it as the user left it.
 #[test]
 fn neither_save_nor_cancel_reopens_a_rail_the_user_closed() {
-    for ending in [Message::SettingsSaved, Message::SettingsCancelled] {
+    for ending in [
+        Message::Settings(SettingsMsg::Saved),
+        Message::Settings(SettingsMsg::Cancelled),
+    ] {
         let mut state = State::default();
-        state.update(Message::SettingsOpened);
-        state.update(Message::SettingsRailToggled);
-        assert!(state.settings_rail_collapsed, "precondition");
+        state.update(Message::Settings(SettingsMsg::Opened));
+        state.update(Message::Settings(SettingsMsg::RailToggled));
+        assert!(state.settings.settings_rail_collapsed, "precondition");
 
         state.update(ending.clone());
         assert!(
-            state.settings_rail_collapsed,
+            state.settings.settings_rail_collapsed,
             "{ending:?} reverted a view preference, which is what drafting it would do"
         );
 
-        state.update(Message::SettingsOpened);
+        state.update(Message::Settings(SettingsMsg::Opened));
         assert!(
-            state.settings_rail_collapsed,
+            state.settings.settings_rail_collapsed,
             "reopening Settings after {ending:?} lost the rail's state"
         );
     }
@@ -86,11 +90,11 @@ fn neither_save_nor_cancel_reopens_a_rail_the_user_closed() {
 #[test]
 fn closing_the_rail_is_not_an_edit_to_the_form() {
     let mut state = State::default();
-    state.update(Message::SettingsOpened);
-    let before = state.settings_draft.clone();
-    state.update(Message::SettingsRailToggled);
+    state.update(Message::Settings(SettingsMsg::Opened));
+    let before = state.settings.settings_draft.clone();
+    state.update(Message::Settings(SettingsMsg::RailToggled));
     assert_eq!(
-        state.settings_draft, before,
+        state.settings.settings_draft, before,
         "the rail's state reached the draft, so Cancel would revert it and Save would write it"
     );
 }
@@ -100,13 +104,14 @@ fn closing_the_rail_is_not_an_edit_to_the_form() {
 #[test]
 fn every_section_is_still_selectable_while_the_rail_is_collapsed() {
     let mut state = State::default();
-    state.update(Message::SettingsOpened);
-    state.update(Message::SettingsRailToggled);
+    state.update(Message::Settings(SettingsMsg::Opened));
+    state.update(Message::Settings(SettingsMsg::RailToggled));
 
     for section in SettingsSection::ALL {
-        state.update(Message::SettingsSectionShown(*section));
+        state.update(Message::Settings(SettingsMsg::SectionShown(*section)));
         assert_eq!(
             state
+                .settings
                 .settings_draft
                 .as_ref()
                 .map(|d: &SettingsDraft| d.section),

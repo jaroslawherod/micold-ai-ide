@@ -25,6 +25,7 @@
 //! integration), and the day someone does, this is what tells them the draft has to follow.
 
 use micold_client::app::{Message, State};
+use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::settings::SettingsDraft;
 use micold_core::theme::ThemePreference;
 
@@ -34,16 +35,16 @@ fn open_on(theme: ThemePreference) -> State {
     draft.appearance.theme = theme;
     draft.terminal.scrollback_lines = "5000".into();
     draft.environment.timeout_secs = "5".into();
-    State {
-        theme_pref: theme,
-        settings_draft: Some(draft),
-        ..State::default()
-    }
+    let mut state = State::default();
+    state.settings.theme_pref = theme;
+    state.settings.settings_draft = Some(draft);
+    state
 }
 
 /// What Save would write, which is the only thing that decides whether the theme reverts.
 fn theme_on_save(state: &State) -> ThemePreference {
     state
+        .settings
         .settings_draft
         .as_ref()
         .expect("the form is open")
@@ -56,10 +57,12 @@ fn theme_on_save(state: &State) -> ThemePreference {
 fn a_live_theme_change_is_what_save_then_writes() {
     let mut state = open_on(ThemePreference::Light);
 
-    state.update(Message::ThemePreferenceChanged(ThemePreference::Dark));
+    state.update(Message::Settings(SettingsMsg::ThemePreferenceChanged(
+        ThemePreference::Dark,
+    )));
 
     assert_eq!(
-        state.theme_pref,
+        state.settings.theme_pref,
         ThemePreference::Dark,
         "precondition: a change from outside the form applies immediately"
     );
@@ -79,10 +82,12 @@ fn a_live_theme_change_is_what_save_then_writes() {
 fn an_appearance_edit_is_still_only_a_draft_until_save() {
     let mut state = open_on(ThemePreference::Light);
 
-    state.update(Message::SettingsThemeChanged(ThemePreference::Dark));
+    state.update(Message::Settings(SettingsMsg::ThemeChanged(
+        ThemePreference::Dark,
+    )));
 
     assert_eq!(
-        state.theme_pref,
+        state.settings.theme_pref,
         ThemePreference::Light,
         "editing the Appearance section must not apply the theme before Save, or Cancel would \
          have nothing to discard"
@@ -93,16 +98,16 @@ fn an_appearance_edit_is_still_only_a_draft_until_save() {
 /// And with no form open there is nothing to track, which must not panic or resurrect a draft.
 #[test]
 fn a_live_change_with_settings_closed_opens_no_form() {
-    let mut state = State {
-        theme_pref: ThemePreference::Light,
-        ..State::default()
-    };
+    let mut state = State::default();
+    state.settings.theme_pref = ThemePreference::Light;
 
-    state.update(Message::ThemePreferenceChanged(ThemePreference::Dark));
+    state.update(Message::Settings(SettingsMsg::ThemePreferenceChanged(
+        ThemePreference::Dark,
+    )));
 
-    assert_eq!(state.theme_pref, ThemePreference::Dark);
+    assert_eq!(state.settings.theme_pref, ThemePreference::Dark);
     assert!(
-        state.settings_draft.is_none(),
+        state.settings.settings_draft.is_none(),
         "tracking a value into a form that is not open would open one"
     );
 }

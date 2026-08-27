@@ -16,6 +16,45 @@ use micold_core::sandbox::placement::{ConsentedFallback, PlacementKind};
 use micold_core::sandbox::runtime::{RuntimeCapabilities, UnsatisfiableLimit};
 use micold_core::sandbox::{Bytes, ResourceBudget};
 
+/// Everything the sandbox reports or is asked to do (feature 028, FR-001).
+///
+/// # The variants kept their meaning and lost their prefix
+///
+/// All six began with `Sandbox` and none does now — the type says which feature (contract M1), so
+/// `SandboxRestartRequested` is `Msg::RestartRequested`.
+///
+/// # This module declares no `update`
+///
+/// Shape **B** with no pure half, exactly like [`crate::features::connection`]: bringing a
+/// container up is runtime, not a decision, and all six arms must return a `Task`. So the reducer
+/// entry is `shell/sandbox.rs`'s `update` and `app::State::update` declines the whole vocabulary
+/// in one arm, as it declined each of the six before.
+///
+/// The state the six arms write is [`Sandbox`] below, which lives on the binary's `App` rather
+/// than on `app::State` for the same reason the connection's does — see contract S2's record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Msg {
+    /// The bring-up finished and the service is reachable inside the container (FR-032).
+    ///
+    /// Boxed because `Started` carries the whole spec that produced it, and an unboxed variant
+    /// would set the size of every `Message` in the application by this one.
+    Started(Box<Started>),
+    /// The container is there but the service inside it logged something worth showing (FR-036).
+    Diagnostics(Vec<String>),
+    /// The container that was running is gone (FR-034).
+    Lost,
+    /// The user asked for the bring-up to be tried again (FR-035a). Never sent by the application
+    /// to itself.
+    RestartRequested,
+    /// The user chose to run without the sandbox for this occurrence (FR-035a). Also never sent by
+    /// the application to itself.
+    FallbackAccepted,
+    /// The bring-up failed, and the failure is recorded rather than acted on (FR-035b).
+    ///
+    /// Boxed for the same reason as [`Msg::Started`].
+    Failed(Box<Failure>),
+}
+
 /// A limit that can stop a session, and the control that governs it (US4 scenario 3).
 ///
 /// The processor limit is deliberately absent. A CPU share *throttles* — a session under it runs

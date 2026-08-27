@@ -10,6 +10,7 @@
 //! ordered inbound stream, and one place a disconnect is observed — the single-source-of-truth rule
 //! the whole re-architecture rests on.
 
+use crate::features::connection::Msg as ConnectionMsg;
 use std::time::Instant;
 
 use iced::futures::channel::mpsc;
@@ -156,7 +157,9 @@ fn actor(placement: Placement) -> impl Stream<Item = Message> {
                 Ok(e) => e,
                 Err(err) => {
                     let _ = output
-                        .send(Message::DaemonConnectFailed(err.to_string()))
+                        .send(Message::Connection(ConnectionMsg::ConnectFailed(
+                            err.to_string(),
+                        )))
                         .await;
                     return;
                 }
@@ -169,7 +172,11 @@ fn actor(placement: Placement) -> impl Stream<Item = Message> {
                 match connect_and_pump(&placement, &endpoint, &mut output).await {
                     PumpEnd::AppGone => return,
                     PumpEnd::Disconnected => {
-                        if output.send(Message::DaemonDisconnected).await.is_err() {
+                        if output
+                            .send(Message::Connection(ConnectionMsg::Disconnected))
+                            .await
+                            .is_err()
+                        {
                             return;
                         }
                         tokio::time::sleep(RECONNECT_BACKOFF).await;
@@ -228,11 +235,11 @@ async fn connect_and_pump(
             ..
         }) => {
             let sent = output
-                .send(Message::DaemonVersionMismatch {
+                .send(Message::Connection(ConnectionMsg::VersionMismatch {
                     client,
                     daemon,
                     daemon_build,
-                })
+                }))
                 .await
                 .is_ok();
             return if sent {
@@ -250,10 +257,10 @@ async fn connect_and_pump(
             daemon_build,
         }) => {
             let sent = output
-                .send(Message::DaemonBuildMismatch {
+                .send(Message::Connection(ConnectionMsg::BuildMismatch {
                     client_build,
                     daemon_build,
-                })
+                }))
                 .await
                 .is_ok();
             return if sent {
@@ -291,11 +298,11 @@ async fn connect_and_pump(
     let (mut sink, incoming) = conn.split();
     let (tx, rx) = mpsc::unbounded::<ClientMsg>();
     if output
-        .send(Message::DaemonConnected {
+        .send(Message::Connection(ConnectionMsg::Connected {
             outbox: Outbox::new(tx),
             catalog: welcome.catalog,
             settings: welcome.settings,
-        })
+        }))
         .await
         .is_err()
     {
@@ -324,8 +331,8 @@ async fn connect_and_pump(
             Io::Incoming(Ok(frame)) => {
                 keepalive.on_daemon_frame(Instant::now());
                 let msg = match frame {
-                    Frame::Control(dm) => Message::DaemonEvent(dm),
-                    Frame::Grid(frame) => Message::DaemonGridFrame(frame),
+                    Frame::Control(dm) => Message::Connection(ConnectionMsg::Event(dm)),
+                    Frame::Grid(frame) => Message::Connection(ConnectionMsg::GridFrame(frame)),
                 };
                 if output.send(msg).await.is_err() {
                     return PumpEnd::AppGone;
@@ -373,7 +380,7 @@ fn stale_dev_image_advice(
 /// app is gone, that surfaces as `AppGone` instead.
 async fn report_connect_failure(output: &mut mpsc::Sender<Message>, reason: String) -> PumpEnd {
     if output
-        .send(Message::DaemonConnectFailed(reason))
+        .send(Message::Connection(ConnectionMsg::ConnectFailed(reason)))
         .await
         .is_err()
     {

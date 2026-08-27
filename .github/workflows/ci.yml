@@ -164,6 +164,13 @@ jobs:
       - name: Test (component library, showcase, and architecture gates, all platforms)
         # Windows defaults to `pwsh`, which does not treat `\` as a line continuation; pin bash so the
         # one readable multi-line invocation below parses identically on all three runners.
+        #
+        # Feature 028 adds three (T052 — FR-018): `root_vocabulary_is_cross_cutting`,
+        # `root_state_is_shared` and `logical_state_ownership`. They belong here rather than only in
+        # the Linux full-workspace run for the same reason the 021 block does — each reports its
+        # findings *by path* (`features/sidebar.rs`, `ui/mod.rs`, `state.sidebar.expanded`), and a
+        # `\` vs `/` difference in how a path is built goes unnoticed on a Linux-only run and then
+        # fails, or worse silently passes, on a contributor's Windows checkout.
         shell: bash
         run: |
           cargo test -p micold-client \
@@ -180,6 +187,9 @@ jobs:
             --test animated_layout_relayouts \
             --test feature_write_isolation \
             --test root_is_routing_only \
+            --test root_vocabulary_is_cross_cutting \
+            --test root_state_is_shared \
+            --test logical_state_ownership \
             --test features_are_render_free \
             --test no_concrete_implementations \
             --test overlay_registration \

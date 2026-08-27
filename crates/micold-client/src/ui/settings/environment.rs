@@ -9,6 +9,7 @@
 
 use crate::app::Message;
 use crate::features::session::CliAvailability;
+use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::{missing_cli_notice, SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
@@ -24,13 +25,10 @@ use micold_core::tokens::Roles;
 // so to the compiler this is unused. Deleting it would take the gate's evidence with it.
 #[allow(dead_code)]
 pub const SETTINGS: &[(&str, &str)] = &[
-    ("env_include_enabled", "SettingsEnvIncludeEnabledToggled"),
-    ("env_include_script_path", "SettingsEnvIncludePathChanged"),
-    (
-        "env_include_timeout_secs",
-        "SettingsEnvIncludeTimeoutChanged",
-    ),
-    ("default_ai_cli", "SettingsDefaultAiCliChanged"),
+    ("env_include_enabled", "EnvIncludeEnabledToggled"),
+    ("env_include_script_path", "EnvIncludePathChanged"),
+    ("env_include_timeout_secs", "EnvIncludeTimeoutChanged"),
+    ("default_ai_cli", "DefaultAiCliChanged"),
 ];
 
 /// The failure category and its diagnostic for the most recent resolution attempt, or `None` when
@@ -60,7 +58,7 @@ pub fn view<'a>(
         roles,
     )
     .track_focus(FieldId::SettingsEnvIncludeEnabled, focused)
-    .on_toggle(Message::SettingsEnvIncludeEnabledToggled);
+    .on_toggle(|v| Message::Settings(SettingsMsg::EnvIncludeEnabledToggled(v)));
 
     let path = TextField::new("", &draft.environment.script_path, roles)
         .label("Script path")
@@ -71,8 +69,8 @@ pub fn view<'a>(
             FieldId::SettingsEnvIncludePath,
         ))
         .track_focus(FieldId::SettingsEnvIncludePath, focused)
-        .on_input(Message::SettingsEnvIncludePathChanged)
-        .on_submit(Message::SettingsSaved);
+        .on_input(|v| Message::Settings(SettingsMsg::EnvIncludePathChanged(v)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
 
     let timeout = TextField::new("", &draft.environment.timeout_secs, roles)
         .label("Timeout")
@@ -83,8 +81,8 @@ pub fn view<'a>(
             FieldId::SettingsEnvIncludeTimeout,
         ))
         .track_focus(FieldId::SettingsEnvIncludeTimeout, focused)
-        .on_input(Message::SettingsEnvIncludeTimeoutChanged)
-        .on_submit(Message::SettingsSaved);
+        .on_input(|v| Message::Settings(SettingsMsg::EnvIncludeTimeoutChanged(v)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
 
     // The Default AI CLI (feature 026, FR-003/FR-006). The shared `Select` component, not a
     // bespoke control (Principle VIII) -- and the options are what the *service* reported, so a CLI
@@ -108,7 +106,7 @@ pub fn view<'a>(
     let default_ai_cli = Select::new(
         options,
         Some(draft.environment.default_ai_cli),
-        Message::SettingsDefaultAiCliChanged,
+        |v| Message::Settings(SettingsMsg::DefaultAiCliChanged(v)),
         roles,
     )
     .label("Default AI CLI")

@@ -10,6 +10,34 @@
 //! So [`ConnectionStatus`] moves here whole, and [`connection_status`] takes the four facts it
 //! needs rather than the shell's `App`. What is left in `main.rs` is the lookup that turns the
 //! active project into a displacement, which is plumbing.
+//!
+//! # The vocabulary this feature declares
+//!
+//! Eleven transitions in [`Msg`]: the lifecycle (`Connected`, `Event`, `GridFrame`, `Disconnected`,
+//! `ConnectFailed`), the two mismatches a daemon can report (`VersionMismatch`, `BuildMismatch`), and
+//! the four things the user can ask of it (`TakeoverRequested`, `RestartServiceRequested`,
+//! `DiagnosticsRequested`, `LogoutSurvivalOutcome`).
+//!
+//! **This module declares no `update`.** The entry shape is **B** and only B (data-model.md §1.1):
+//! every one of the eleven is a socket, a process, or a version handshake, so all of them are routed
+//! by `shell/connection.rs` and the root's arm is a deliberate no-op alongside `NoOp`. What lives
+//! here is the decision the feature does have — [`connection_status`] — which is why the module
+//! exists at all, per the paragraph above.
+//!
+//! # The state this feature remembers: none (feature 028, contract S1)
+//!
+//! **This module declares no `State` either**, and it is the only feature module that does not.
+//! Feature 028 gave each feature a struct of its own for what it remembers; this feature remembers
+//! nothing to put in one. It owns none of the forty-three fields data-model.md §3 attributes, and
+//! it is the one feature absent from `OWNERS` in `tests/feature_write_isolation.rs` — the daemon
+//! connection *is* binary-owned runtime state, per the header above, so what it would remember is
+//! held by the shell and recomputed into [`ConnectionStatus`] on every view.
+//!
+//! An empty `pub struct State;` would be a place for a reader to look and find nothing, plus a
+//! field on `app::State` that no reducer writes and no view reads. That is the same no-ceremony
+//! reasoning research.md §R3 applies to this feature's *vocabulary*, where the absent `update` is
+//! recorded in the paragraph above rather than shipped as an empty function. Nine feature structs
+//! and one shared member is the whole of `app::State` (T037, T038).
 
 /// Why the service says this window may not write to a project, and who it named as the holder
 /// (`010` BUG-023).
@@ -157,4 +185,77 @@ pub fn connection_status(
     } else {
         ConnectionStatus::Connected
     }
+}
+
+/// Everything the daemon connection reports or is asked to do (feature 028, FR-001).
+///
+/// # The variants kept their meaning and lost their prefix
+///
+/// Seven began with `Daemon` and two with `Connection`; neither prefix survives, because the type
+/// now says which connection (contract M1). The result reads the way [`ConnectionStatus`] beside it
+/// already did — `Connected`, `Disconnected`, `VersionMismatch` — which is the same vocabulary
+/// about the same thing, and the duplication of names between the two is the point: a status is
+/// what a message leaves behind. `DiagnosticsRequested` and the two `LogoutSurvival` variants
+/// carried no prefix to drop.
+///
+/// # Every arm of this one is an effect
+///
+/// This is the feature data-model §1.1 calls shape B: the reducer entry is
+/// `shell/connection.rs`'s `update`, and there is no pure half. The connection is binary-owned
+/// runtime — an outbox handle, a socket that dropped, a service to restart — so `State::update`
+/// has never done anything with these but decline them, and it still declines them, now in one arm
+/// instead of eleven.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Msg {
+    /// The daemon connection is up: the binary stores the `Outbox` to drive sessions and adopts
+    /// the welcome catalog/settings.
+    Connected {
+        /// Handle for sending `ClientMsg`s to the daemon.
+        outbox: crate::daemon::Outbox,
+        /// The catalog as of the handshake.
+        catalog: micold_core::protocol::messages::CatalogSnapshot,
+        /// The service-owned settings.
+        settings: micold_core::protocol::messages::DaemonSettings,
+    },
+    /// A control message pushed by the daemon (catalog/settings changes, operation results, …).
+    Event(micold_core::protocol::messages::DaemonMsg),
+    /// A grid frame for the viewed session (full snapshot or delta), applied into the per-session
+    /// grid cache.
+    GridFrame(micold_core::protocol::grid::GridFrame),
+    /// The daemon connection dropped; the binary clears its outbox until it reconnects.
+    Disconnected,
+    /// Connecting to (or spawning) the daemon failed, with a human-facing reason.
+    ConnectFailed(String),
+    /// The user asked to take the active project back after being displaced (US5, FR-024):
+    /// re-attach with `force`.
+    TakeoverRequested,
+    /// The daemon refused the handshake on a contract mismatch (US6, FR-021): carries both protocol
+    /// versions and the daemon build so the client can render an actionable diagnostic.
+    VersionMismatch {
+        /// This client's protocol version.
+        client: u32,
+        /// The running daemon's protocol version.
+        daemon: u32,
+        /// The running daemon's human-facing build string.
+        daemon_build: String,
+    },
+    /// The daemon refused the handshake on a same-contract package-version difference (US6,
+    /// FR-022a, BUG-002): the wire contract matches, but a `.deb` upgrade installed a newer build
+    /// than the one still running. Carries both build strings so the client can render a distinct,
+    /// lower-severity diagnostic than [`Msg::VersionMismatch`].
+    BuildMismatch {
+        /// This client's human-facing build string.
+        client_build: String,
+        /// The running daemon's human-facing build string.
+        daemon_build: String,
+    },
+    /// The user chose "restart service" after a version or build mismatch (US6, FR-022/022a): stop
+    /// the mismatched daemon so the auto-reconnect spawns a matching one.
+    RestartServiceRequested,
+    /// The user asked to see where the session service logs and its recent errors (Phase 10,
+    /// FR-046): the binary requests both from the daemon and shows the answers as notices.
+    DiagnosticsRequested,
+    /// The logout-survival opt-in finished being applied; carries a ready-to-show message (info or
+    /// error).
+    LogoutSurvivalOutcome(String),
 }

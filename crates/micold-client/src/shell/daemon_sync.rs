@@ -40,6 +40,9 @@
 //! way for the same reason — `App` is the binary's type. Each fixture sits with what it is *of*,
 //! not with who happens to call it.
 
+use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::{Path, PathBuf};
 
 use iced::Task;
@@ -178,7 +181,7 @@ pub fn switch_daemon_attachment(app: &mut App, old: Option<PathBuf>, new: &Path)
     //
     // `&mut App` for `crate::view_and_start`, which resets the selection and scroll offset. A switch
     // wants both reset anyway — they belong to the session being left, not the one being shown.
-    match app.core.active_session {
+    match app.core.session.active {
         Some(session) => view_and_start(app, session),
         None => daemon.send(ClientMsg::SetViewedSession {
             project: new.to_path_buf(),
@@ -211,7 +214,7 @@ pub fn on_grid_frame(
     // `line_at_row = viewport_top - display_offset + row` would slide the shown lines toward
     // the live bottom on every output tick (FR-016). Only the displayed session, only while
     // scrolled up; clamp to the retained history.
-    if app.core.active_session == Some(session) && app.display_offset > 0 && new_top > old_top {
+    if app.core.session.active == Some(session) && app.display_offset > 0 && new_top > old_top {
         let advanced = (new_top - old_top) as usize;
         let history = (new_top - oldest).max(0) as usize;
         app.display_offset = (app.display_offset + advanced).min(history);
@@ -248,7 +251,7 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
             // resolve the *indicator*, not only announce the outcome, and it has to do it where
             // the user is actually looking. With no form on screen there is no scrim and the
             // notification is the right place, which is what the guard distinguishes.
-            PendingOp::WorktreeCreate(_) if app.core.worktree_form.is_some() => {
+            PendingOp::WorktreeCreate(_) if app.core.worktree_form.form.is_some() => {
                 app.core
                     .update(Message::WorktreeForm(FormMsg::CreateInterrupted(text)));
             }
@@ -287,7 +290,7 @@ pub fn on_takeover_requested(app: &mut App) -> Task<Message> {
         });
         d.send(ClientMsg::SetViewedSession {
             project,
-            session: app.core.active_session,
+            session: app.core.session.active,
         });
     }
     Task::none()
@@ -406,7 +409,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // Service-owned, so the daemon's echo is what applies it — here and in
             // `Welcome` below (feature 026, FR-003). The client's own write is a courtesy
             // to the next boot; this is the value in force.
-            app.core.default_ai_cli = settings.default_ai_cli;
+            app.core.session.default_ai_cli = settings.default_ai_cli;
             app.env_include_cache.clear();
             let cwd = default_resolution_cwd(&app.core);
             refresh_env_include(app, &cwd);
@@ -436,7 +439,8 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         DaemonMsg::OperationOk { req, result } => match app.pending_ops.remove(&req) {
             Some(PendingOp::CreateSession) => {
                 if let OperationResult::SessionCreated { session } = result {
-                    app.core.update(Message::SessionSelected(session));
+                    app.core
+                        .update(Message::Session(SessionMsg::Selected(session)));
                     view_and_start(app, session);
                     // No follow-up focus message: `SessionSelected` focuses the terminal in
                     // the reducer and nothing releases it on the same click any more
@@ -483,6 +487,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                     let form_open = app
                         .core
                         .worktree_form
+                        .form
                         .as_ref()
                         .is_some_and(|f| f.status == WorktreeFormStatus::Editing);
                     if let Some(project) = app
@@ -524,19 +529,21 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // next catalog push — which also arrives, and agrees.
             Some(PendingOp::WorktreeInclude(_)) => {
                 if let OperationResult::WorktreeIncluded { worktree } = result {
-                    app.core
-                        .update(Message::WorktreeIncluded(micold_core::worktree::Worktree {
+                    app.core.update(Message::Worktree(WorktreeMsg::Included(
+                        micold_core::worktree::Worktree {
                             dir_name: worktree.dir_name,
                             path: worktree.path,
                             branch: worktree.branch,
                             status: wire_to_worktree_status(worktree.status),
                             included: worktree.included,
-                        }));
+                        },
+                    )));
                 }
             }
             Some(PendingOp::WorktreeExclude(_)) => {
                 if let OperationResult::WorktreeExcluded { path } = result {
-                    app.core.update(Message::WorktreeExcluded(path));
+                    app.core
+                        .update(Message::Worktree(WorktreeMsg::Excluded(path)));
                 }
             }
             // Same staleness guard: a listing for a project that is no longer the active
@@ -632,11 +639,12 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 // surface the modal's scrim covers — invisible — and for the listing the
                 // empty picker would then wrongly claim the repository has no branches.
                 Some(PendingOp::BranchPreflight { .. }) => {
-                    app.core.worktree_error =
+                    app.core.worktree_form.worktree_error =
                         Some(format!("Could not check the branch: {message}"));
                 }
                 Some(PendingOp::BranchList { .. }) => {
-                    app.core.worktree_error = Some(format!("Could not list branches: {message}"));
+                    app.core.worktree_form.worktree_error =
+                        Some(format!("Could not list branches: {message}"));
                 }
                 Some(op) => app
                     .core
@@ -650,7 +658,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // answer arrives — the user is not necessarily looking at a picker.
         DaemonMsg::AiCliAvailability { available, .. } => {
             let source = availability_source(app);
-            app.core.available_providers = Some(CliAvailability { available, source });
+            app.core.session.available_providers = Some(CliAvailability { available, source });
         }
         // Diagnostics replies (Phase 10, FR-046): surface as notices.
         DaemonMsg::LogLocation { path, sink, .. } => {
@@ -774,7 +782,7 @@ pub fn on_connected(
     app.env_include_enabled = settings.env_include_enabled;
     app.env_include_script_path = settings.env_include_script_path;
     app.env_include_timeout_secs = settings.env_include_timeout_secs;
-    app.core.default_ai_cli = settings.default_ai_cli;
+    app.core.session.default_ai_cli = settings.default_ai_cli;
     // ...and ask the same authority which CLIs it can actually run (feature 027, FR-023c). Here
     // rather than only on the named events below, because a reconnect is the one moment the answer
     // can have changed without the user doing anything: a restarted sandbox may be a *different*
@@ -822,7 +830,7 @@ pub fn on_connected(
             project: project.clone(),
             force: false,
         });
-        match app.core.active_session {
+        match app.core.session.active {
             // Feature 025 restored a session at boot. Displaying it means *starting* it,
             // exactly as selecting it by hand does (FR-004a, contract §3.3a) — BUG-002.
             //
@@ -855,12 +863,14 @@ pub fn on_connected(
 pub fn on_rename_confirmed(app: &mut App) -> Task<Message> {
     let draft = app
         .core
+        .project
         .rename_draft
         .as_ref()
         .map(|d| (d.path.clone(), d.text.trim().to_string()));
-    app.core.update(Message::RenameConfirmed);
+    app.core
+        .update(Message::Project(ProjectMsg::RenameConfirmed));
     // Only send if the pure update accepted it (a rejected name leaves the draft in place).
-    if app.core.rename_draft.is_none() {
+    if app.core.project.rename_draft.is_none() {
         if let Some((path, display_name)) = draft {
             if !display_name.is_empty() {
                 send_op(app, PendingOp::ProjectRename, move |req| {
@@ -881,7 +891,7 @@ pub fn on_rename_confirmed(app: &mut App) -> Task<Message> {
 /// then broadcasts the pruned catalog (T055). The pure reducer drops the record + clears the
 /// active pointer in memory for instant feedback; nothing inside the project folder is touched.
 pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
-    if let Some(path) = app.core.forget_target.clone() {
+    if let Some(path) = app.core.project.forget_target.clone() {
         app.grids.retain(|id, _| {
             !app.core
                 .workspace
@@ -902,7 +912,8 @@ pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
             d.send(ClientMsg::Detach { project: path });
         }
     }
-    app.core.update(Message::ProjectForgetConfirmed);
+    app.core
+        .update(Message::Project(ProjectMsg::ForgetConfirmed));
     Task::none()
 }
 
@@ -914,13 +925,15 @@ pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
 pub fn on_worktree_rename_confirmed(app: &mut App) -> Task<Message> {
     let draft = app
         .core
-        .worktree_rename_draft
+        .worktree
+        .rename_draft
         .as_ref()
         .map(|d| (d.dir_name.clone(), d.text.trim().to_string()));
     let project = app.core.workspace.active.clone();
-    app.core.update(Message::WorktreeRenameConfirmed);
+    app.core
+        .update(Message::Worktree(WorktreeMsg::RenameConfirmed));
     // Only send if the pure update accepted it (a rejected name leaves the draft in place).
-    if app.core.worktree_rename_draft.is_none() {
+    if app.core.worktree.rename_draft.is_none() {
         if let (Some((dir_name, display_name)), Some(project)) = (draft, project) {
             if !display_name.is_empty() {
                 send_op(
@@ -948,7 +961,7 @@ pub fn on_worktree_rename_confirmed(app: &mut App) -> Task<Message> {
 /// rather than the dead-end "a branch with that name already exists" error.
 pub fn on_add_worktree_submitted(app: &mut App) -> Task<Message> {
     app.core.update(Message::WorktreeForm(FormMsg::Submitted));
-    let Some(form) = app.core.worktree_form.clone() else {
+    let Some(form) = app.core.worktree_form.form.clone() else {
         return Task::none();
     };
     if form.status != WorktreeFormStatus::Editing || form.resolution.is_prompting() {
@@ -1009,7 +1022,7 @@ pub fn on_add_worktree_submitted(app: &mut App) -> Task<Message> {
 /// create the reducer just declined to acknowledge — an `Overwrite` that never passed the
 /// destructive confirmation, in the worst case.
 pub fn on_add_worktree_resolution_chosen(app: &mut App, mode: CreateMode) -> Task<Message> {
-    let answering = app.core.worktree_form.as_ref().is_some_and(|f| {
+    let answering = app.core.worktree_form.form.as_ref().is_some_and(|f| {
         matches!(f.resolution, ResolutionState::Choosing { .. })
             && !matches!(mode, CreateMode::Overwrite)
     });
@@ -1027,6 +1040,7 @@ pub fn on_add_worktree_overwrite_confirmed(app: &mut App) -> Task<Message> {
     let confirmed = app
         .core
         .worktree_form
+        .form
         .as_ref()
         .is_some_and(|f| matches!(f.resolution, ResolutionState::ConfirmingOverwrite { .. }));
     app.core
@@ -1067,7 +1081,7 @@ pub fn on_session_start_requested(
     provider: micold_core::session::AiCli,
 ) -> Task<Message> {
     // Chosen from the override list, or pressed directly — either way the list is done.
-    app.core.session_start_menu = None;
+    app.core.session.start_menu = None;
     // Correlated create: the daemon owns the id + catalog. The new session arrives via the
     // `CatalogChanged` push (reconciled into the core) and is selected + focused when the
     // `OperationOk { SessionCreated }` reply names its id.
@@ -1096,7 +1110,7 @@ pub fn on_session_start_requested(
 /// (FR-005, FR-011) — an Idle AI CLI session resumes via `claude --resume` (FR-023a); a
 /// session last left in Regular mode gets a fresh shell instead.
 pub fn on_session_selected(app: &mut App, id: SessionId) -> Task<Message> {
-    app.core.update(Message::SessionSelected(id));
+    app.core.update(Message::Session(SessionMsg::Selected(id)));
     // View the selected session (the daemon streams its grid), resuming it if idle — the
     // same sequence `view_and_start` performs for every other path that displays a session,
     // called rather than repeated so the pane size that now precedes the start (BUG-003,
@@ -1127,7 +1141,8 @@ pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message>
     send_op(app, PendingOp::DeleteSession, move |req| {
         ClientMsg::SessionDelete { req, session: id }
     });
-    app.core.update(Message::SessionCloseRequested(id));
+    app.core
+        .update(Message::Session(SessionMsg::CloseRequested(id)));
     Task::none()
 }
 
@@ -1135,7 +1150,7 @@ pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message>
 /// the daemon has no hard-delete, so a remove is an archive with a durable tombstone, which
 /// also suppresses any future reconciliation (FR-020c). The pure core drops the record.
 pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
-    if let Some(id) = app.core.session_remove_target {
+    if let Some(id) = app.core.session.remove_target {
         app.grids.remove(&id);
         app.scrollback_inflight
             .retain(|_, (session, _)| *session != id);
@@ -1144,7 +1159,8 @@ pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
             ClientMsg::SessionDelete { req, session: id }
         });
     }
-    app.core.update(Message::SessionRemoveConfirmed);
+    app.core
+        .update(Message::Session(SessionMsg::RemoveConfirmed));
     Task::none()
 }
 
@@ -1153,7 +1169,7 @@ pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
 ///
 /// # Why this arm has to exist
 ///
-/// It is the deleted mode toggle's other half. `Message::TerminalAiCliSelected`'s reducer sets the
+/// It is the deleted mode toggle's other half. `Message::Session(SessionMsg::TerminalAiCliSelected)`'s reducer sets the
 /// mode and nothing more (feature 026 FR-006), and until feature 027 the message had **no arm in
 /// `main.rs` at all** — it fell through to the catch-all, which runs the reducer and stops. So the
 /// AI tab moved the mark while the daemon went on streaming and driving whichever shell instance
@@ -1166,7 +1182,8 @@ pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
 /// CLI process and it is not created here. Neither process is killed as a side effect (010 FR-006)
 /// — the previously-attached one stops being displayed and keeps running (research R6).
 pub fn on_terminal_ai_cli_selected(app: &mut App, id: SessionId) -> Task<Message> {
-    app.core.update(Message::TerminalAiCliSelected(id));
+    app.core
+        .update(Message::Session(SessionMsg::TerminalAiCliSelected(id)));
     attach_current_process(app, id);
     Task::none()
 }
@@ -1179,10 +1196,10 @@ pub fn on_terminal_ai_cli_selected(app: &mut App, id: SessionId) -> Task<Message
 /// the Settings-save refresh trigger. Unlike the passive reattach callers below, this is
 /// also a direct user restart request, so it must cover a Regular Terminal instance that
 /// has already `Exited` — `explicit_restart = true` lets `ensure_attached_process`'s
-/// `Regular` branch spawn it, the same case `Message::ShellInstanceRestartRequested`
+/// `Regular` branch spawn it, the same case `Message::Session(SessionMsg::ShellInstanceRestartRequested)`
 /// handles for a background instance.
 pub fn on_terminal_restart_requested(app: &mut App) -> Task<Message> {
-    if let Some(id) = app.core.active_session {
+    if let Some(id) = app.core.session.active {
         // Re-source fresh for this session's own directory only (BUG-002) — other
         // cached directories are untouched, since only this one needs a new attempt.
         if let Some((cwd, _, _)) = session_cwd_mode_and_active_shell(&app.core, id) {
@@ -1197,7 +1214,7 @@ pub fn on_terminal_restart_requested(app: &mut App) -> Task<Message> {
 /// independent of `active_shell`, so a background instance can be restarted without first
 /// switching to it. A no-op if that instance's process is already running (idempotent,
 /// mirrors `ensure_attached_process`'s reattach-for-free check). Addressed by the
-/// originating `SessionId` (not `app.core.active_session`) so this can't misapply to a
+/// originating `SessionId` (not `app.core.session.active`) so this can't misapply to a
 /// same-numbered instance of a different session if the active session changed in the
 /// same message batch.
 pub fn on_shell_instance_restart_requested(
@@ -1212,7 +1229,9 @@ pub fn on_shell_instance_restart_requested(
         });
     }
     app.core
-        .update(Message::ShellInstanceRestartRequested(id, shell_id));
+        .update(Message::Session(SessionMsg::ShellInstanceRestartRequested(
+            id, shell_id,
+        )));
     Task::none()
 }
 
@@ -1223,7 +1242,7 @@ pub fn on_shell_instance_restart_requested(
 /// `ensure_attached_process` (spawn-if-absent/reattach), this always opens a brand-new
 /// instance, even if one is already running.
 pub fn on_shell_instance_open_requested(app: &mut App) -> Task<Message> {
-    if let Some(id) = app.core.active_session {
+    if let Some(id) = app.core.session.active {
         let shell_id = {
             let Some((_, session)) = app.core.workspace.find_session_mut(id) else {
                 return Task::none();
@@ -1249,7 +1268,8 @@ pub fn on_shell_instance_open_requested(app: &mut App) -> Task<Message> {
         // from here: `update_inner` routes the message to this handler *instead of* the core, so
         // nothing ran it. Harmless while the "+" could not change which pane was displayed; not
         // harmless now that it can.
-        app.core.update(Message::ShellInstanceOpenRequested);
+        app.core
+            .update(Message::Session(SessionMsg::ShellInstanceOpenRequested));
     }
     Task::none()
 }
@@ -1260,7 +1280,7 @@ pub fn on_shell_instance_open_requested(app: &mut App) -> Task<Message> {
 /// last instance, the pure reducer flips `mode` back to `AiCli` (FR-013); reattach the AI
 /// CLI process via the same shared path the primary toggle already uses (a no-op if it's
 /// already attached). Addressed by the originating `SessionId` (not
-/// `app.core.active_session`) — see `Message::ShellInstanceSelected`'s doc comment.
+/// `app.core.session.active`) — see `Message::Session(SessionMsg::ShellInstanceSelected)`'s doc comment.
 pub fn on_shell_instance_close_requested(
     app: &mut App,
     id: SessionId,
@@ -1274,7 +1294,9 @@ pub fn on_shell_instance_close_requested(
     }
     // Core close reassigns active_shell / reverts mode to AiCli when the last one closes.
     app.core
-        .update(Message::ShellInstanceCloseRequested(id, shell_id));
+        .update(Message::Session(SessionMsg::ShellInstanceCloseRequested(
+            id, shell_id,
+        )));
     // Re-attach whatever process the session now shows (a sibling instance, or the primary).
     attach_current_process(app, id);
     Task::none()
@@ -1288,7 +1310,9 @@ pub fn on_shell_instance_selected(
     shell_id: ShellInstanceId,
 ) -> Task<Message> {
     app.core
-        .update(Message::ShellInstanceSelected(id, shell_id));
+        .update(Message::Session(SessionMsg::ShellInstanceSelected(
+            id, shell_id,
+        )));
     attach_current_process(app, id);
     Task::none()
 }
@@ -1304,7 +1328,7 @@ pub fn on_terminal_bytes(app: &mut App, bytes: Vec<u8>) -> Task<Message> {
     if active_project_displaced(app) {
         return Task::none();
     }
-    if let Some(id) = app.core.active_session {
+    if let Some(id) = app.core.session.active {
         // The daemon owns process liveness: it routes input to the session's attached
         // process and drops it harmlessly if that process isn't running. Gating on a
         // client-side lifecycle field is wrong now (the client no longer tracks process
@@ -1324,7 +1348,7 @@ pub fn on_terminal_bytes(app: &mut App, bytes: Vec<u8>) -> Task<Message> {
 pub fn on_terminal_resized(app: &mut App, cols: u16, rows: u16) -> Task<Message> {
     // Remember the pane's live size so the next started session starts at it too.
     app.last_grid = Some((cols, rows));
-    if let (Some(id), Some(d)) = (app.core.active_session, &app.daemon) {
+    if let (Some(id), Some(d)) = (app.core.session.active, &app.daemon) {
         d.send(ClientMsg::SessionResize {
             session: id,
             cols,
@@ -1366,6 +1390,7 @@ pub fn on_worktree_include_requested(app: &mut App, path: PathBuf) -> Task<Messa
 pub fn on_worktree_exclude_requested(app: &mut App, dir: String) -> Task<Message> {
     let path = app
         .core
+        .worktree
         .worktrees
         .iter()
         .find(|w| w.dir_name == dir && w.included)
@@ -1380,12 +1405,13 @@ pub fn on_worktree_exclude_requested(app: &mut App, dir: String) -> Task<Message
             }
         });
     }
-    app.core.update(Message::WorktreeExcludeRequested(dir));
+    app.core
+        .update(Message::Worktree(WorktreeMsg::ExcludeRequested(dir)));
     Task::none()
 }
 
 pub fn on_worktree_delete_confirmed(app: &mut App) -> Task<Message> {
-    let target = app.core.worktree_delete_target.clone();
+    let target = app.core.worktree.delete_target.clone();
     if let (Some(dir), Some(project)) = (target, app.core.workspace.active.clone()) {
         // Drop this path's cached env-include snapshot (BUG-002): a worktree recreated for
         // the same branch reuses the exact path, and a stale snapshot would linger forever.
@@ -1393,9 +1419,9 @@ pub fn on_worktree_delete_confirmed(app: &mut App) -> Task<Message> {
         app.env_include_cache.remove(&cwd);
         let (p, d) = (project, dir.clone());
         // Feature 013 (FR-011/FR-012): the user's explicit keep/delete choice from the
-        // confirm dialog, defaulting to "delete the branch" (`worktree_delete_keep_branch`
+        // confirm dialog, defaulting to "delete the branch" (`delete_keep_branch`
         // defaults to `false`).
-        let delete_branch = !app.core.worktree_delete_keep_branch;
+        let delete_branch = !app.core.worktree.delete_keep_branch;
         send_op(app, PendingOp::WorktreeDelete(dir), move |req| {
             ClientMsg::WorktreeDelete {
                 req,
@@ -1408,7 +1434,8 @@ pub fn on_worktree_delete_confirmed(app: &mut App) -> Task<Message> {
     }
     // Optimistically drop the records + dismiss the dialog; the daemon's `CatalogChanged`
     // reconciles the truth (re-adding the worktree on a failed delete).
-    app.core.update(Message::WorktreeDeleteConfirmed);
+    app.core
+        .update(Message::Worktree(WorktreeMsg::DeleteConfirmed));
     Task::none()
 }
 
@@ -1436,7 +1463,7 @@ pub fn view_and_start(app: &mut App, id: SessionId) {
 
 /// Tell the daemon what size to start `id` at, **before** its `SessionStart` (BUG-003, FR-014a).
 ///
-/// The pane widget only publishes `Message::TerminalResized` when its own size *changes*, so a
+/// The pane widget only publishes `Message::Session(SessionMsg::TerminalResized)` when its own size *changes*, so a
 /// session started into a window the user is not resizing is never told anything — it used to come
 /// up at the daemon's 100×30 spawn seed and stay there until the next window resize. `App::last_grid`
 /// is the last size the pane published; stating it here is what makes it a size the *next* session
@@ -1520,7 +1547,7 @@ pub fn attach_current_process(app: &mut App, id: SessionId) {
 /// anything (FR-009), so a branch that changed while the prompt was open fails cleanly rather than
 /// acting on a stale answer.
 pub fn start_resolved_create(app: &mut App, mode: CreateMode) -> Task<Message> {
-    let Some(form) = app.core.worktree_form.clone() else {
+    let Some(form) = app.core.worktree_form.form.clone() else {
         return Task::none();
     };
     // Same double-submit guard `AddWorktreeSubmitted` applies: the answer buttons stop being
@@ -1690,7 +1717,7 @@ pub(crate) mod tests {
         // `restore_after_activation` has already run: the target is active and its remembered
         // session is current.
         app.core.workspace.active = Some(new.clone());
-        app.core.active_session = Some(id);
+        app.core.session.active = Some(id);
 
         switch_daemon_attachment(&mut app, Some(old.clone()), &new);
 
@@ -1722,7 +1749,7 @@ pub(crate) mod tests {
         let new = PathBuf::from("/repo/new");
         let (mut app, mut rx) = connected_app();
         app.core.workspace.active = Some(new.clone());
-        assert_eq!(app.core.active_session, None);
+        assert_eq!(app.core.session.active, None);
 
         switch_daemon_attachment(&mut app, None, &new);
 
@@ -1765,7 +1792,8 @@ pub(crate) mod tests {
 
         let notice = app
             .core
-            .notify
+            .notifications
+            .queue
             .visible()
             .expect("a dropped op must be reported");
         assert!(
@@ -1831,7 +1859,7 @@ pub(crate) mod tests {
     fn switching_projects_releases_the_old_attachment_before_taking_the_new() {
         let (mut app, mut rx) = connected_app();
         let viewed = SessionId::new();
-        app.core.active_session = Some(viewed);
+        app.core.session.active = Some(viewed);
         // The production precondition, now load-bearing (BUG-002): both callers activate the target
         // before calling this, and the start goes through `view_and_start`, which reads the project
         // from `workspace.active` rather than from `new`. Without it the switch would send nothing
@@ -1899,7 +1927,7 @@ pub(crate) mod tests {
 
         switch_daemon_attachment(&mut app, Some(PathBuf::from("/a")), Path::new("/b"));
         assert!(
-            app.core.notify.visible().is_none(),
+            app.core.notifications.queue.visible().is_none(),
             "an ordinary project switch must not report the connection"
         );
 
@@ -1912,7 +1940,7 @@ pub(crate) mod tests {
             }
         });
         assert!(
-            app.core.notify.visible().is_some(),
+            app.core.notifications.queue.visible().is_some(),
             "a dropped op is still reported"
         );
     }
@@ -2038,7 +2066,7 @@ pub(crate) mod tests {
     }
 
     /// `012` BUG-003 / FR-008. Before this, `mark_shell_running` and `mark_shell_exited` were
-    /// reachable only from `Message::ShellInstanceRunning`/`ShellInstanceExited`, which nothing in
+    /// reachable only from `Message::Session(SessionMsg::ShellInstanceRunning)`/`ShellInstanceExited`, which nothing in
     /// the client emits, so every instance sat at `Starting` for its whole life and the bar read
     /// `starting…` beside a shell the user was typing into.
     ///
@@ -2191,7 +2219,7 @@ pub(crate) mod tests {
 
         // Third snapshot: only B remains (A archived/removed on the daemon) — A is dropped, and a
         // dangling active pointer to A is cleared.
-        core.active_session = Some(a);
+        core.session.active = Some(a);
         reconcile_catalog(
             &mut core,
             &snapshot_with(path, vec![summary(b, "B", WireLifecycle::Running)]),
@@ -2200,7 +2228,7 @@ pub(crate) mod tests {
         let list = core.workspace.sessions.get(&PathBuf::from(path)).unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].id, b);
-        assert_eq!(core.active_session, None, "dangling active pointer cleared");
+        assert_eq!(core.session.active, None, "dangling active pointer cleared");
     }
 
     // Convergence fix (retrofit session, 2026-07-27): a session transitioning to `Restarting` in
@@ -2220,7 +2248,7 @@ pub(crate) mod tests {
             &snapshot_with("/a", vec![summary(a, "A", WireLifecycle::Running)]),
             false,
         );
-        assert!(core.restarted_while_inactive.is_empty());
+        assert!(core.session.restarted_while_inactive.is_empty());
 
         // /a's session crashes and the daemon starts restarting it, while /a is still inactive.
         reconcile_catalog(
@@ -2232,7 +2260,7 @@ pub(crate) mod tests {
             false,
         );
         assert!(
-            core.restarted_while_inactive.contains(&a),
+            core.session.restarted_while_inactive.contains(&a),
             "a background session's transition into Restarting must be detected and marked"
         );
 
@@ -2245,7 +2273,7 @@ pub(crate) mod tests {
             ),
             false,
         );
-        assert_eq!(core.restarted_while_inactive.len(), 1);
+        assert_eq!(core.session.restarted_while_inactive.len(), 1);
 
         // Returning to /a fires the return notice (mirrors `background_restart.rs`).
         core.record_foreground();
@@ -2256,7 +2284,8 @@ pub(crate) mod tests {
             .expect("the switch happened");
         micold_client::app::drain(arrival, |o| micold_client::app::interpret(&mut core, o));
         let visible = core
-            .notify
+            .notifications
+            .queue
             .visible()
             .expect("the return notice reached the queue");
         assert_eq!(visible.level, micold_core::notify::Level::Info);
@@ -2288,7 +2317,7 @@ pub(crate) mod tests {
             .sessions
             .insert(project.clone(), vec![session]);
         app.core.workspace.active = Some(project);
-        app.core.active_session = Some(id);
+        app.core.session.active = Some(id);
         (app, rx, id)
     }
 
@@ -2305,7 +2334,7 @@ pub(crate) mod tests {
     ///
     /// # The defect this exists for, which is live on `main`
     ///
-    /// `Message::TerminalAiCliSelected` had **no arm in `main.rs`** — it fell through to the
+    /// `Message::Session(SessionMsg::TerminalAiCliSelected)` had **no arm in `main.rs`** — it fell through to the
     /// catch-all, which runs the pure reducer and nothing else. So the AI tab moved the mark and
     /// the mode while the daemon went on streaming and driving whichever shell instance was
     /// attached: the user pressed the AI tab, the strip said AI, and the keys went to bash.
@@ -2360,7 +2389,7 @@ pub(crate) mod tests {
             .sessions
             .insert(project.clone(), vec![session]);
         app.core.workspace.active = Some(project);
-        app.core.active_session = Some(id);
+        app.core.session.active = Some(id);
         let _ = wire(&mut rx);
 
         let _ = on_shell_instance_open_requested(&mut app);

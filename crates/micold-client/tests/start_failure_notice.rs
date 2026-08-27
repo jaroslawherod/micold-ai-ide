@@ -67,7 +67,10 @@ fn an_unchanged_failure_is_said_once_however_many_snapshots_carry_it() {
 
     reconcile_catalog(&mut core, &snapshot(failed()), false);
     assert_eq!(
-        core.notify.visible().map(|n| n.message.clone()),
+        core.notifications
+            .queue
+            .visible()
+            .map(|n| n.message.clone()),
         Some(REASON.to_string()),
         "the first report of a failure is news"
     );
@@ -75,12 +78,12 @@ fn an_unchanged_failure_is_said_once_however_many_snapshots_carry_it() {
     // Dismissed the way a user dismisses it — otherwise the queue's own duplicate suppression
     // (`Queue::push` drops a notification equal to the visible one) would carry this assertion,
     // and the record under test would never be exercised.
-    core.notify.dismiss();
+    core.notifications.queue.dismiss();
     for _ in 0..5 {
         reconcile_catalog(&mut core, &snapshot(failed()), false);
     }
     assert_eq!(
-        core.notify.visible(),
+        core.notifications.queue.visible(),
         None,
         "and every snapshot after it is the same fact, not a new one — a badge moving publishes a \
          catalog (T086), so a banner per snapshot would be one every few seconds for as long as \
@@ -93,19 +96,19 @@ fn a_failure_after_the_session_has_been_something_else_is_said_again() {
     let mut core = State::default();
 
     reconcile_catalog(&mut core, &snapshot(failed()), false);
-    core.notify.dismiss();
+    core.notifications.queue.dismiss();
 
     // The user installs the CLI and the session comes up.
     reconcile_catalog(&mut core, &snapshot(WireLifecycle::Running), false);
     assert!(
-        !core.announced_start_failures.contains_key(&id()),
+        !core.session.announced_start_failures.contains_key(&id()),
         "a session that is no longer failed has no failure outstanding to have been reported"
     );
 
     // …and later it fails again, for the same reason.
     reconcile_catalog(&mut core, &snapshot(failed()), false);
     assert_eq!(
-        core.notify.visible().map(|n| n.message.clone()),
+        core.notifications.queue.visible().map(|n| n.message.clone()),
         Some(REASON.to_string()),
         "this is a second failure and the user has not been told about it — suppressing it because \
          the sentence matches the last one would silence a real report"
@@ -117,7 +120,7 @@ fn a_different_reason_for_the_same_session_is_news() {
     let mut core = State::default();
 
     reconcile_catalog(&mut core, &snapshot(failed()), false);
-    core.notify.dismiss();
+    core.notifications.queue.dismiss();
 
     let gone =
         "GitHub Copilot no longer has this conversation. Close this session, or start a new one.";
@@ -130,7 +133,7 @@ fn a_different_reason_for_the_same_session_is_news() {
         false,
     );
     assert_eq!(
-        core.notify.visible().map(|n| n.message.clone()),
+        core.notifications.queue.visible().map(|n| n.message.clone()),
         Some(gone.to_string()),
         "the CLI going missing and the conversation going missing are two different things to fix, \
          and the second must not be swallowed because the first was already said"
@@ -152,5 +155,5 @@ fn a_failure_with_nothing_to_say_says_nothing() {
         }),
         false,
     );
-    assert_eq!(core.notify.visible(), None);
+    assert_eq!(core.notifications.queue.visible(), None);
 }

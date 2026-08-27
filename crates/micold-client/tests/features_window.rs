@@ -23,7 +23,7 @@ fn focus_moves_to_whichever_field_reports_gaining_it() {
 
     window::field_focus_changed(&mut st, FieldId::RenameProjectName, true);
 
-    assert_eq!(st.focused_field, Some(FieldId::RenameProjectName));
+    assert_eq!(st.window.focused_field, Some(FieldId::RenameProjectName));
 }
 
 #[test]
@@ -39,14 +39,14 @@ fn a_blur_is_believed_only_from_the_field_that_holds_focus() {
     window::field_focus_changed(&mut st, FieldId::AddWorktreeName, false);
 
     assert_eq!(
-        st.focused_field,
+        st.window.focused_field,
         Some(FieldId::AddWorktreeTicket),
         "the field that already lost focus cannot take it away from the one that has it"
     );
 
     window::field_focus_changed(&mut st, FieldId::AddWorktreeTicket, false);
     assert_eq!(
-        st.focused_field, None,
+        st.window.focused_field, None,
         "the field that does hold it is believed"
     );
 }
@@ -62,11 +62,11 @@ fn clearing_focus_is_unconditional_where_a_blur_is_not() {
 
     window::field_focus_cleared(&mut st);
 
-    assert_eq!(st.focused_field, None);
+    assert_eq!(st.window.focused_field, None);
 
     // And it is safe to call when nothing holds the keyboard at all.
     window::field_focus_cleared(&mut st);
-    assert_eq!(st.focused_field, None);
+    assert_eq!(st.window.focused_field, None);
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn at_most_one_field_can_hold_the_keyboard() {
     window::field_focus_changed(&mut st, FieldId::SettingsEnvIncludeTimeout, true);
 
     assert_eq!(
-        st.focused_field,
+        st.window.focused_field,
         Some(FieldId::SettingsEnvIncludeTimeout),
         "the later claim replaces the earlier one — there is one slot"
     );
@@ -95,9 +95,13 @@ fn the_window_size_is_recorded_as_reported() {
     // position tracked separately and read later — which is a better answer than the one this
     // feature was defending, and leaves `window` owning two fields rather than three.
     let mut st = State::default();
-    assert_eq!(st.window_size, (0, 0), "unknown until the window says");
+    assert_eq!(
+        st.window.window_size,
+        (0, 0),
+        "unknown until the window says"
+    );
 
     window::resized(&mut st, 1280, 720);
 
-    assert_eq!(st.window_size, (1280, 720));
+    assert_eq!(st.window.window_size, (1280, 720));
 }

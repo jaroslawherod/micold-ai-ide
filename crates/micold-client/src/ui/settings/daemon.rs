@@ -21,6 +21,7 @@
 use crate::app::Message;
 use crate::features::sandbox::SandboxLimit;
 use crate::features::session::CliAvailability;
+use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::{missing_cli_notice, SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
@@ -42,18 +43,15 @@ use micold_core::tokens::Roles;
 // so to the compiler this is unused. Deleting it would take the gate's evidence with it.
 #[allow(dead_code)]
 pub const SETTINGS: &[(&str, &str)] = &[
-    ("daemon.placement", "SettingsPlacementChanged"),
-    ("daemon.sandbox.runtime", "SettingsRuntimeChanged"),
-    ("daemon.sandbox.image", "SettingsImageKindChanged"),
-    ("daemon.sandbox.credentials", "SettingsCredentialToggled"),
-    (
-        "daemon.sandbox.survive_logout",
-        "SettingsSurviveLogoutToggled",
-    ),
+    ("daemon.placement", "PlacementChanged"),
+    ("daemon.sandbox.runtime", "RuntimeChanged"),
+    ("daemon.sandbox.image", "ImageKindChanged"),
+    ("daemon.sandbox.credentials", "CredentialToggled"),
+    ("daemon.sandbox.survive_logout", "SurviveLogoutToggled"),
     // One persisted field with four controls, declared once against the first of them — the same
     // shape as `daemon.sandbox.image` above.
-    ("daemon.sandbox.budget", "SettingsCpuLimitChanged"),
-    ("daemon.sandbox.network", "SettingsNetworkChanged"),
+    ("daemon.sandbox.budget", "CpuLimitChanged"),
+    ("daemon.sandbox.network", "NetworkChanged"),
 ];
 
 const PLACEMENTS: &[Named<PlacementKind>] = &[
@@ -178,7 +176,7 @@ pub fn limits(draft: &SettingsDraft) -> [LimitControl<'_>; 4] {
             &d.cpus,
             "Cores, e.g. 2 or 1.5. Empty leaves the runtime's own default.",
             caps.map(|c| &c.cpus),
-            Message::SettingsCpuLimitChanged,
+            |v| Message::Settings(SettingsMsg::CpuLimitChanged(v)),
         ),
         limit(
             FieldId::SettingsMemoryLimit,
@@ -186,7 +184,7 @@ pub fn limits(draft: &SettingsDraft) -> [LimitControl<'_>; 4] {
             &d.memory_mib,
             "Mebibytes. Empty leaves the runtime's own default.",
             caps.map(|c| &c.memory),
-            Message::SettingsMemoryLimitChanged,
+            |v| Message::Settings(SettingsMsg::MemoryLimitChanged(v)),
         ),
         limit(
             FieldId::SettingsPidLimit,
@@ -194,7 +192,7 @@ pub fn limits(draft: &SettingsDraft) -> [LimitControl<'_>; 4] {
             &d.pids,
             "Processes the sandbox may run at once. Empty leaves the runtime's own default.",
             caps.map(|c| &c.pids),
-            Message::SettingsPidLimitChanged,
+            |v| Message::Settings(SettingsMsg::PidLimitChanged(v)),
         ),
         limit(
             FieldId::SettingsStorageLimit,
@@ -202,7 +200,7 @@ pub fn limits(draft: &SettingsDraft) -> [LimitControl<'_>; 4] {
             &d.storage_mib,
             "Mebibytes the sandbox may write. Not enforceable on every storage driver.",
             caps.map(|c| &c.storage),
-            Message::SettingsStorageLimitChanged,
+            |v| Message::Settings(SettingsMsg::StorageLimitChanged(v)),
         ),
     ]
 }
@@ -246,7 +244,7 @@ pub fn view<'a>(
             draft.daemon.placement,
             name_of(PLACEMENTS, draft.daemon.placement),
         )),
-        |chosen: Named<PlacementKind>| Message::SettingsPlacementChanged(chosen.0),
+        |chosen: Named<PlacementKind>| Message::Settings(SettingsMsg::PlacementChanged(chosen.0)),
         roles,
     )
     .label("Where sessions run")
@@ -258,7 +256,7 @@ pub fn view<'a>(
             draft.daemon.profile.runtime,
             name_of(RUNTIMES, draft.daemon.profile.runtime),
         )),
-        |chosen: Named<RuntimeKind>| Message::SettingsRuntimeChanged(chosen.0),
+        |chosen: Named<RuntimeKind>| Message::Settings(SettingsMsg::RuntimeChanged(chosen.0)),
         roles,
     )
     .label("Container runtime");
@@ -269,7 +267,7 @@ pub fn view<'a>(
             draft.daemon.profile.image.kind,
             name_of(IMAGE_SOURCES, draft.daemon.profile.image.kind),
         )),
-        |chosen: Named<ImageSourceKind>| Message::SettingsImageKindChanged(chosen.0),
+        |chosen: Named<ImageSourceKind>| Message::Settings(SettingsMsg::ImageKindChanged(chosen.0)),
         roles,
     )
     .label("Image source")
@@ -288,8 +286,8 @@ pub fn view<'a>(
             FieldId::SettingsImageReference,
         ))
         .track_focus(FieldId::SettingsImageReference, focused)
-        .on_input(Message::SettingsImageReferenceChanged)
-        .on_submit(Message::SettingsSaved);
+        .on_input(|v| Message::Settings(SettingsMsg::ImageReferenceChanged(v)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
 
     let archive = TextField::new("", &draft.daemon.image_path, roles)
         .label("Image file")
@@ -300,8 +298,8 @@ pub fn view<'a>(
             FieldId::SettingsImagePath,
         ))
         .track_focus(FieldId::SettingsImagePath, focused)
-        .on_input(Message::SettingsImagePathChanged)
-        .on_submit(Message::SettingsSaved);
+        .on_input(|v| Message::Settings(SettingsMsg::ImagePathChanged(v)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
 
     let survive = Checkbox::new(
         "Keep sessions running after I sign out",
@@ -309,7 +307,7 @@ pub fn view<'a>(
         roles,
     )
     .track_focus(FieldId::SettingsSurviveLogout, focused)
-    .on_toggle(Message::SettingsSurviveLogoutToggled);
+    .on_toggle(|v| Message::Settings(SettingsMsg::SurviveLogoutToggled(v)));
 
     let mut controls: Vec<Element<'a, Message>> = vec![
         placement.into(),
@@ -357,7 +355,9 @@ pub fn view<'a>(
         controls.push(
             Checkbox::new(share.label(), on, roles)
                 .track_focus(FieldId::SettingsCredential(share), focused)
-                .on_toggle(move |checked| Message::SettingsCredentialToggled(share, checked))
+                .on_toggle(move |checked| {
+                    Message::Settings(SettingsMsg::CredentialToggled(share, checked))
+                })
                 .into(),
         );
     }
@@ -372,7 +372,7 @@ pub fn view<'a>(
             draft.daemon.profile.network,
             name_of(NETWORKS, draft.daemon.profile.network),
         )),
-        |chosen: Named<NetworkPosture>| Message::SettingsNetworkChanged(chosen.0),
+        |chosen: Named<NetworkPosture>| Message::Settings(SettingsMsg::NetworkChanged(chosen.0)),
         roles,
     )
     .label("Network");
@@ -401,7 +401,9 @@ pub fn view<'a>(
             .error(super::error_for(draft, SettingsSection::Daemon, l.field))
             .track_focus(l.field, focused);
         if let Some(on_input) = l.on_input {
-            input = input.on_input(on_input).on_submit(Message::SettingsSaved);
+            input = input
+                .on_input(on_input)
+                .on_submit(Message::Settings(SettingsMsg::Saved));
         }
         controls.push(input.into());
     }

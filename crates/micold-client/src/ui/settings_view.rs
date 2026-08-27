@@ -21,6 +21,7 @@
 
 use crate::app::Message;
 use crate::features::session::CliAvailability;
+use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::{SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::material::{self, Button, Scrollable, Section, SectionList, SurfaceKind};
@@ -51,7 +52,10 @@ pub fn view<'a>(
     let sections: Vec<Section<Message>> = SettingsSection::ALL
         .iter()
         .map(|section| {
-            let mut row = Section::new(section.label(), Message::SettingsSectionShown(*section));
+            let mut row = Section::new(
+                section.label(),
+                Message::Settings(SettingsMsg::SectionShown(*section)),
+            );
             row.icon = Some(section.icon());
             if *section == SettingsSection::Daemon && draft.shares_credentials() {
                 row.badge = Some(SHARING.to_string());
@@ -74,7 +78,7 @@ pub fn view<'a>(
             .selected(draft.section.index())
             .badge_accent(r.error, r.on_error)
             .collapsed(rail_collapsed)
-            .toggle(Message::SettingsRailToggled),
+            .toggle(Message::Settings(SettingsMsg::RailToggled)),
         Space::new().width(Length::Fixed(0.0)).height(Length::Fill),
     )
     .open(true)
@@ -102,8 +106,8 @@ pub fn view<'a>(
     // of a form whose fields are right-aligned to nothing.
     let actions = row![
         Space::new().width(Length::Fill),
-        Button::outlined("Cancel", r).on_press(Message::SettingsCancelled),
-        Button::filled("Save", r).on_press(Message::SettingsSaved),
+        Button::outlined("Cancel", r).on_press(Message::Settings(SettingsMsg::Cancelled)),
+        Button::filled("Save", r).on_press(Message::Settings(SettingsMsg::Saved)),
     ]
     .spacing(spacing::SM)
     .width(Length::Fill);
