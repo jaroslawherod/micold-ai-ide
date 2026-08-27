@@ -110,6 +110,16 @@ pub fn modal<'a>(
         fields = fields.push(Text::new(message, TypeRole::Caption, r).tint(r.error));
     }
 
+    // The unknown outcome of a create the connection dropped mid-flight (`010` BUG-020). Its own
+    // line, and muted rather than tinted `error`: the operation may well have succeeded — in the
+    // reported case it had — so colouring it as a failure would state something the client does not
+    // know. It sits below the error line because the two can legitimately co-exist: a create that
+    // failed, then a retry whose connection dropped.
+    if let Some(notice) = &form.interrupted {
+        fields =
+            fields.push(Text::new(notice.clone(), TypeRole::Caption, r).tint(r.on_surface_variant));
+    }
+
     // In-progress state while the daemon runs the create (T055). The daemon reports the stage, and
     // — for a stage long enough to have live output, i.e. a submodule fetch — its latest line at a
     // rate-limited cadence (BUG-009, T123), so a multi-minute fetch reads as moving rather than
