@@ -83,8 +83,14 @@ software rasteriser; not attempted.
 overflow — cannot be reached by keyboard. FR-030 is about the settings surface, and every control
 on it is reachable; the app bar is not, and no task covers it.
 
-## Observation
+## Observation, since filed and fixed
 
 Toggling the theme from the overflow menu **while the Settings view is open** and then pressing Save
 reverts the theme: the draft the view is holding still says what it said when the view opened, and
-Save writes the draft. Reproduced twice. Not in scope for any FR here, and not filed.
+Save writes the draft. Reproduced twice.
+
+Recorded here as out of scope for any FR, which was the wrong call: it *is* a regression from this
+feature. The two writers were harmless while Settings was a modal covering the app bar, and FR-026
+is what put them both on screen at once. Filed 2026-08-27 as `bugs/BUG-001.md` and fixed there —
+`features/settings.rs::apply_theme` carries an app-bar choice into an open draft, gated by
+`crates/micold-client/tests/settings_draft_tracks_the_live_theme.rs`.
