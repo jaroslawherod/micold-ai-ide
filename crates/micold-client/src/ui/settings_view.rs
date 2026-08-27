@@ -20,6 +20,7 @@
 //! the crate.
 
 use crate::app::Message;
+use crate::features::session::CliAvailability;
 use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::{SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
@@ -28,7 +29,6 @@ use crate::ui::settings::{appearance, daemon, environment, terminal};
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
-use micold_core::session::AiCli;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
 
@@ -42,8 +42,9 @@ const SHARING: &str = "Sharing";
 pub fn view<'a>(
     draft: &'a SettingsDraft,
     env_include_outcome: &'a EnvIncludeOutcome,
-    available_providers: &'a [AiCli],
+    availability: Option<&'a CliAvailability>,
     focused: Option<FieldId>,
+    rail_collapsed: bool,
     scheme: ColorScheme,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
@@ -55,6 +56,7 @@ pub fn view<'a>(
                 section.label(),
                 Message::Settings(SettingsMsg::SectionShown(*section)),
             );
+            row.icon = Some(section.icon());
             if *section == SettingsSection::Daemon && draft.shares_credentials() {
                 row.badge = Some(SHARING.to_string());
             }
@@ -64,12 +66,19 @@ pub fn view<'a>(
 
     // The drawer, not a bare column: the rail slides in with the view rather than appearing whole,
     // which is the same transition the sidebar makes and the reason it is worth reaching for a
-    // component that owns both children. It is never closed here — Settings without its rail would
-    // be a page with no way off it — so the collapsed child is empty.
+    // component that owns both children.
+    //
+    // The drawer is never *closed* here, and collapsing the rail (FR-026c) is not the same thing:
+    // the drawer's closed child is empty, and an empty rail is a page with no way off it. What
+    // collapsing does is narrow the rail while keeping every destination pressable, which is the
+    // list's own question — so it is answered by `SectionList`, and the drawer stays open in both
+    // states.
     let rail: Element<'a, Message> = material::NavigationDrawer::new(
         SectionList::new(sections, r)
             .selected(draft.section.index())
-            .badge_accent(r.error, r.on_error),
+            .badge_accent(r.error, r.on_error)
+            .collapsed(rail_collapsed)
+            .toggle(Message::Settings(SettingsMsg::RailToggled)),
         Space::new().width(Length::Fixed(0.0)).height(Length::Fill),
     )
     .open(true)
@@ -79,9 +88,9 @@ pub fn view<'a>(
         SettingsSection::Appearance => appearance::view(draft, r),
         SettingsSection::Terminal => terminal::view(draft, focused, r),
         SettingsSection::Environment => {
-            environment::view(draft, env_include_outcome, available_providers, focused, r)
+            environment::view(draft, env_include_outcome, availability, focused, r)
         }
-        SettingsSection::Daemon => daemon::view(draft, focused, r),
+        SettingsSection::Daemon => daemon::view(draft, availability, focused, r),
     };
 
     // Scrolled, and only the page is: the rail and the actions stay where the user left them while

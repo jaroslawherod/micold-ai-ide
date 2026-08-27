@@ -20,6 +20,7 @@
 use iced::Task;
 
 use micold_client::app::Message;
+use micold_core::sandbox::placement::Placement;
 
 use crate::App;
 use micold_client::features::connection::Msg as ConnectionMsg;
@@ -68,16 +69,29 @@ pub(crate) fn on_restart_service_requested(app: &mut App) -> Task<Message> {
     )
 }
 
-/// Make sessions survive logout (US7, FR-038; Linux only). Runs off-thread — it spawns
-/// `loginctl`/`systemctl` — and reports the outcome as a toast. Never enabled by install.
-pub(crate) fn on_logout_survival_requested() -> Task<Message> {
+/// Apply the logout-survival opt-in for the configured placement (feature 027, FR-014a/b/d).
+///
+/// One entry point for both directions and all three placements, because there is one control: the
+/// Settings checkbox. It used to be a menu command that only ever *enabled*, and only ever through
+/// the Linux service manager — so a sandboxed user's menu item silently configured the wrong
+/// mechanism, and nobody could turn it off at all.
+///
+/// Runs off-thread: under host-process placement it spawns `loginctl`/`systemctl`. Under the
+/// sandbox it is pure and answers immediately, which costs one task and keeps one shape.
+///
+/// Never enabled by install (FR-038) — this runs only from a save that changed the value.
+pub(crate) fn on_survival_opt_in_changed(placement: Placement, enabling: bool) -> Task<Message> {
     Task::perform(
-        async {
-            tokio::task::spawn_blocking(|| {
+        async move {
+            tokio::task::spawn_blocking(move || {
                 let endpoint = micold_core::endpoint::resolve().map_err(|e| {
                     micold_core::logout_survival::SurvivalOutcome::Failed(e.to_string())
                 })?;
-                Ok(micold_core::logout_survival::enable(&endpoint))
+                Ok(if enabling {
+                    micold_core::logout_survival::enable_for(&placement, &endpoint)
+                } else {
+                    micold_core::logout_survival::disable_for(&placement, &endpoint)
+                })
             })
             .await
             .unwrap_or_else(|e| {

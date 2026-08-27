@@ -51,6 +51,7 @@ use micold_client::app::Message;
 // Moved to the library (see `micold_client::catalog_sync` for why): the fold has to be reachable
 // from `tests/`, and a binary-crate function is not.
 use micold_client::catalog_sync::{attach_log_line, reconcile_catalog, wire_to_worktree_status};
+use micold_client::features::session::{AvailabilitySource, CliAvailability};
 use micold_client::features::worktree_form::{
     BranchSource, Msg as FormMsg, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
@@ -237,11 +238,25 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
     // that request (`010` BUG-021).
     app.scrollback_inflight.clear();
     for (_req, op) in app.pending_ops.drain() {
-        app.core.notify_error(format!(
+        let text = format!(
             "The session service disconnected before confirming the request to {} — \
              it may or may not have taken effect; reconnecting will show the current state.",
             op.describe()
-        ));
+        );
+        match op {
+            // A create's pending state lives on the add-worktree form, and the form is a modal:
+            // the notification below is raised into the surface its scrim covers, and the
+            // indeterminate bar it leaves running has no target to arrive at, so it claims the
+            // operation is still in flight for ever (`010` BUG-020). Resolving the op has to
+            // resolve the *indicator*, not only announce the outcome, and it has to do it where
+            // the user is actually looking. With no form on screen there is no scrim and the
+            // notification is the right place, which is what the guard distinguishes.
+            PendingOp::WorktreeCreate(_) if app.core.worktree_form.form.is_some() => {
+                app.core
+                    .update(Message::WorktreeForm(FormMsg::CreateInterrupted(text)));
+            }
+            _ => app.core.notify_error(text),
+        }
     }
     // The connection went away. That is *usually* the daemon restarting and the subscription
     // reconnecting on its own — but it is also what a container stopped from outside looks like
@@ -279,6 +294,47 @@ pub fn on_takeover_requested(app: &mut App) -> Task<Message> {
         });
     }
     Task::none()
+}
+
+/// Ask the service which AI CLIs it can run, and record what its answer will be *about*
+/// (feature 027, FR-023c).
+///
+/// The client used to answer this itself, by walking its own `PATH`. That was right while the
+/// service was always a host process of this very session and wrong the moment 027 let it be a
+/// container: the client is on the host, the sessions are not, and the host's answer is plausible
+/// enough to look right while describing a different machine. So the question goes where sessions
+/// run and the answer comes back over the wire.
+///
+/// Uncorrelated, like the diagnostics requests above: only the latest answer matters, and a reply
+/// that overtakes its predecessor is a newer truth rather than a lost one. `req` is still issued
+/// and echoed — the daemon's replies are matched by it in tests, and a request-shaped message with
+/// no id would be the odd one out on this protocol.
+///
+/// A no-op while disconnected, deliberately: there is nobody who could answer, and the field stays
+/// `None` — "not said yet" — rather than being cleared to an empty set that reads as "none exist".
+pub fn ask_cli_availability(app: &mut App) {
+    let Some(d) = app.daemon.clone() else {
+        return;
+    };
+    let req = app.next_req;
+    app.next_req += 1;
+    d.send(ClientMsg::AiCliAvailabilityRequest { req });
+}
+
+/// What the service's answer describes, from what this client knows about the service it started.
+///
+/// Two facts, one place. The service reports only the *set*; the client is what knows whether it
+/// launched a container and from which image, so the pairing is made here, once, at the moment the
+/// answer lands. Nothing downstream can then hold a set and a subject that disagree.
+///
+/// The predicate is the sandbox's own state and not the configured placement, because those come
+/// apart in exactly the case that matters: after FR-035a's "run without it for now" the placement
+/// still says the user wanted a container and the thing answering is a host process.
+fn availability_source(app: &App) -> AvailabilitySource {
+    match (app.sandbox.state.accepts_sessions(), &app.sandbox_boot) {
+        (true, Some(plan)) => AvailabilitySource::Image(plan.profile.image.reference.clone()),
+        _ => AvailabilitySource::ThisComputer,
+    }
 }
 
 /// Ask the daemon where it logs and for its recent errors (Phase 10, FR-046). The replies
@@ -596,6 +652,14 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 None => {}
             }
         }
+        // Which AI CLIs exist where sessions run (feature 027, FR-023c). Stored, not shown: the
+        // sentence FR-023b asks for is composed in the settings view from this and from what the
+        // client knows about the service it started, and there is nothing to say at the moment the
+        // answer arrives — the user is not necessarily looking at a picker.
+        DaemonMsg::AiCliAvailability { available, .. } => {
+            let source = availability_source(app);
+            app.core.session.available_providers = Some(CliAvailability { available, source });
+        }
         // Diagnostics replies (Phase 10, FR-046): surface as notices.
         DaemonMsg::LogLocation { path, sink, .. } => {
             let where_ = match path {
@@ -719,6 +783,11 @@ pub fn on_connected(
     app.env_include_script_path = settings.env_include_script_path;
     app.env_include_timeout_secs = settings.env_include_timeout_secs;
     app.core.session.default_ai_cli = settings.default_ai_cli;
+    // ...and ask the same authority which CLIs it can actually run (feature 027, FR-023c). Here
+    // rather than only on the named events below, because a reconnect is the one moment the answer
+    // can have changed without the user doing anything: a restarted sandbox may be a *different*
+    // image, and the set the previous connection reported describes a container that is gone.
+    ask_cli_availability(app);
     app.env_include_cache.clear();
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);

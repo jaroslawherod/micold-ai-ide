@@ -58,7 +58,6 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             Task::none()
         }
         Msg::RestartServiceRequested => service_control::on_restart_service_requested(app),
-        Msg::LogoutSurvivalRequested => service_control::on_logout_survival_requested(),
         Msg::LogoutSurvivalOutcome(message) => {
             service_control::on_logout_survival_outcome(app, message)
         }

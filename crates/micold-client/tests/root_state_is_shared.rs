@@ -39,7 +39,7 @@
 //! (feature 017), which exists to assert that these facts outlive the widget that shows them, and
 //! by the overlay suite, which asks the whole window which surface is open. FR-021 forbids
 //! relaxing those tests to let a path move, so the allowlist is the honest record — the rule is
-//! live, it has twelve hits, and all twelve are answered.
+//! live, it has thirteen hits, and all thirteen are answered.
 //!
 //! # Neither list may outlive its reason
 //!
@@ -92,13 +92,13 @@ const SHARED: &[(&str, &str)] = &[(
 /// assertion to make room for a move. The list is measured, not chosen: it is exactly what
 /// [`component_local_candidates`] returns, and every candidate had a pinning assertion already.
 ///
-/// Nine of the twelve are *which surface is open* — a dialog, a menu, a switcher, a panel. That is
+/// Nine of the thirteen are *which surface is open* — a dialog, a menu, a switcher, a panel. That is
 /// not a coincidence: modality is the one thing a component cannot own, because deciding what
 /// Escape does and what a scroll dismisses is a question about the whole window. The overlay suite
 /// (`overlay_dismissal_delta.rs`, `overlay_dispatch_ordering.rs`) asks it of `app::State` for every
-/// surface at once, so each of those flags is pinned by construction. The other three are what the
-/// sidebar remembers across a re-discovery, the tag filter that decides which rows exist, and how
-/// large the window is.
+/// surface at once, so each of those flags is pinned by construction. The other four are what the
+/// sidebar remembers across a re-discovery, the tag filter that decides which rows exist, how large
+/// the window is, and whether the Settings rail is collapsed to its icons.
 const COMPONENT_LOCAL: &[(&str, &str)] = &[
     (
         "help.about_open",
@@ -135,6 +135,12 @@ const COMPONENT_LOCAL: &[(&str, &str)] = &[
         "tests/session_start_press.rs::the_list_the_primary_half_opens_hangs_from_the_press — the \
          point is recorded on the press and read back on the release, a message later, so it \
          outlives the button that reported it (018 BUG-008)",
+    ),
+    (
+        "settings.settings_rail_collapsed",
+        "tests/settings_rail.rs::neither_save_nor_cancel_reopens_a_rail_the_user_closed — Save and \
+         Cancel both end the form the rail is drawn in, and the flag has to be found as the user \
+         left it when Settings is opened again (feature 027, FR-026d)",
     ),
     (
         "sidebar.default_expanded",

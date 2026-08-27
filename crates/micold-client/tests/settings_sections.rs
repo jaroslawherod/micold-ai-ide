@@ -456,3 +456,128 @@ fn the_scan_reaches_every_pickers_selected_value() {
          view, so a lower count means the scan stopped seeing them"
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// FR-026e: one setting, one control — and the app bar is not a second place to put one
+// ---------------------------------------------------------------------------------------------
+
+/// What the app bar's overflow menu may emit. **Actions, not settings.**
+///
+/// Named rather than derived, because "is this message a setting?" has no answer in the source: the
+/// theme cycle emitted `ThemeModeCycled` and the survival opt-in emitted `LogoutSurvivalRequested`,
+/// neither of which looks like the `Settings…` variant the form uses for the same value. What can
+/// be checked is the converse — that the menu offers only these three, each of which *opens* or
+/// *reports* something rather than writing a value the form owns.
+///
+/// Spelled `Feature::Variant` since feature 028 folded the flat variants behind a per-feature
+/// `Msg`: the same three messages, named the way the root now names them.
+const MENU_MESSAGES: &[&str] = &[
+    "Settings::Opened",
+    "Connection::DiagnosticsRequested",
+    "Help::AboutOpened",
+];
+
+/// Every `Message::…` variant `overflow_items` constructs, as `Feature::Variant`.
+///
+/// The root's vocabulary is two levels deep (feature 028): the wrapper names the feature and the
+/// variant inside names the message. Reading only the wrapper would collapse all three of these to
+/// three different features and tell us nothing about what they do.
+fn menu_messages() -> BTreeSet<String> {
+    let src = read(&client_dir().join("src/ui/toolbar.rs"));
+    let start = src
+        .find("pub fn overflow_items")
+        .expect("`overflow_items` not found — has the menu been renamed?");
+    let end = src[start..]
+        .find("\n}")
+        .map(|e| start + e)
+        .expect("unterminated `overflow_items`");
+    src[start..end]
+        .match_indices("Message::")
+        .map(|(i, _)| {
+            let tail = &src[start + i + "Message::".len()..];
+            let feature: String = tail
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            let inner = tail[feature.len()..]
+                .strip_prefix('(')
+                .and_then(|rest| rest.split_once("::"))
+                .map(|(_, variant)| {
+                    variant
+                        .chars()
+                        .take_while(|c| c.is_alphanumeric() || *c == '_')
+                        .collect::<String>()
+                })
+                .unwrap_or_default();
+            if inner.is_empty() {
+                feature
+            } else {
+                format!("{feature}::{inner}")
+            }
+        })
+        .collect()
+}
+
+/// FR-026e. The menu offers nothing the form owns.
+///
+/// This is the rule BUG-001 was the cost of not having. While Settings was a 420dp modal the menu
+/// was behind a scrim and unreachable, so two controls for the theme were harmless; the full-surface
+/// view leaves the app bar on screen, and the two became live simultaneous writers of one value. The
+/// menu wrote the theme immediately, the open draft still held what it was when the view opened, and
+/// Save reverted a choice the user had made two seconds earlier and watched take effect.
+#[test]
+fn the_overflow_menu_offers_no_setting() {
+    let allowed: BTreeSet<String> = MENU_MESSAGES.iter().map(|s| s.to_string()).collect();
+    let offered = menu_messages();
+    assert!(
+        !offered.is_empty(),
+        "the scan found no messages in `overflow_items` — it has been restructured and this gate \
+         is now checking nothing"
+    );
+    let extra: Vec<_> = offered.difference(&allowed).collect();
+    assert!(
+        extra.is_empty(),
+        "the app bar's overflow menu emits {extra:?}, which is not one of the actions a menu may \
+         offer.\n\
+         If it writes a setting, it belongs in the section that owns that setting and nowhere \
+         else (FR-026e). If it is genuinely an action, add it to MENU_MESSAGES with the reason."
+    );
+}
+
+/// And the capability a removed duplicate provided is still reachable (SC-014).
+///
+/// "Keep sessions after logout" was not merely duplicated: the menu ran the Linux service-manager
+/// flow, which is the *host-process* half of FR-014a's single opt-in, while the form set the
+/// container's restart policy, which is the sandboxed half. Deleting the menu item alone would have
+/// deleted the host-process capability with it. `logout_survival::enable_for` dispatches on the
+/// resolved placement and is what makes one control cover both — so it has to have a caller.
+#[test]
+fn session_survival_still_reaches_both_placements() {
+    let client = client_dir().join("src");
+    let mut callers = Vec::new();
+    for dir in ["features", "shell"] {
+        let root = client.join(dir);
+        let mut stack = vec![root];
+        while let Some(path) = stack.pop() {
+            let Ok(entries) = fs::read_dir(&path) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else if p.extension().and_then(|e| e.to_str()) == Some("rs")
+                    && read(&p).contains("enable_for(")
+                {
+                    callers.push(p.display().to_string());
+                }
+            }
+        }
+    }
+    assert!(
+        !callers.is_empty(),
+        "nothing in the client calls `logout_survival::enable_for`, so the survival opt-in acts \
+         on at most one placement — and the app-bar item that covered the other one is gone \
+         (FR-014d, SC-014)"
+    );
+}

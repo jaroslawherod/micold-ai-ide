@@ -133,7 +133,9 @@ fn tag_filters_are_application_owned() {
 fn theme_preference_is_application_owned() {
     let mut state = State::default();
     let before = state.settings.theme_pref;
-    state.update(Message::Settings(SettingsMsg::ThemeModeCycled));
+    state.update(Message::Settings(SettingsMsg::ThemePreferenceChanged(
+        before.next(),
+    )));
     assert_ne!(state.settings.theme_pref, before);
     assert!(matches!(
         state.settings.theme_pref,

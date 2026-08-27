@@ -270,8 +270,9 @@ pub fn view<'a>(
             settings_view::view(
                 draft,
                 env_include_outcome,
-                &state.session.available_providers,
+                state.session.available_providers.as_ref(),
                 state.window.focused_field,
+                state.settings.settings_rail_collapsed,
                 scheme,
             ),
             bg,

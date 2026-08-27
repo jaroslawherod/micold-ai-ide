@@ -2,9 +2,11 @@
 
 **Feature**: [../spec.md](../spec.md) | **Affects**: `crates/micold-core/src/protocol/`
 
-Two additions, both forced by decisions in [research.md](../research.md): an **authentication step**
-(R1) and a **build fingerprint** (R8). No message payload changes, so `SCHEMA_HASH` moves only
-because the handshake struct does.
+Three additions. Two are forced by decisions in [research.md](../research.md) — an **authentication
+step** (R1) and a **build fingerprint** (R8) — and neither changes a message payload, so
+`SCHEMA_HASH` moves only because the handshake struct does. The third, an **AI CLI availability
+question** (FR-023c), is a new request/reply pair and does change the message set; it is §5 below
+and it arrived after the version had already moved to 6, so it costs no second bump.
 
 ## Why the bump
 
@@ -80,6 +82,37 @@ handshake's current strict-exact-match design. Both binaries ship together in a 
 `StaleDevImage` reason exists precisely because the development loop is the one place they can
 diverge.
 
+## 5. Which AI CLIs exist, asked of the service (FR-023c)
+
+**Addition.** One request and one reply:
+
+| Direction | Message | Payload |
+|---|---|---|
+| client → daemon | `AiCliAvailabilityRequest` | `req: u64` |
+| daemon → client | `AiCliAvailability` | `req: u64`, `available: Vec<AiCli>` |
+
+**Why it is on the protocol at all.** The client used to answer this itself, by resolving each
+provider's command on its own `PATH`. That was correct while the session service was always a child
+of the client's process. FR-021 ended it: under the sandboxed placement the client is on the host,
+the sessions are in a container, and the host's answer describes a different machine — plausibly
+enough to look right on every machine a developer would test it on. FR-023c states the rule the
+transport now enforces: the process that will spawn the CLI is the process that says whether it is
+there.
+
+**What the reply deliberately does not carry.** Not the image, and not whether the service is
+containerised at all. The client started the service and holds both facts already; a second copy of
+a fact one side owns is a second thing that can disagree, and the disagreement would surface as a
+sentence naming the wrong image. What the client composes from the two is FR-023b's notice.
+
+**Correlation without bookkeeping.** `req` is issued and echoed, like every request on this
+protocol, but no pending-operation entry is kept: only the latest answer matters, and a reply that
+overtakes its predecessor is a newer truth rather than a lost one. The same arrangement the
+diagnostics requests use.
+
+**Empty is an answer.** `available: []` means the service can run no AI CLI — which is exactly
+FR-023b's scenario, a substituted image that ships none — and is distinguishable on the client from
+*not having asked*, which is `Option::None` on the state field rather than an empty vector.
+
 ## Test obligations
 
 | # | Check |
@@ -90,3 +123,5 @@ diverge.
 | P-4 | fingerprint mismatch + `LocalBuild` → `StaleDevImage`; + `Registry` → accepted |
 | P-5 | each refusal reason renders a distinct remedy string |
 | P-6 | `PROTOCOL_VERSION` is 6 and the daemon rejects a v5 handshake before authenticating |
+| P-7 | `AiCliAvailabilityRequest` is answered from the **service's own** environment — a stubbed CLI on its `PATH` comes back, an environment with none comes back empty rather than failing |
+| P-8 | no client source resolves a CLI on its own `PATH`; the shell is seen asking and recording instead |

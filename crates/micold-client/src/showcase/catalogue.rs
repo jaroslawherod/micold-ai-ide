@@ -454,7 +454,10 @@ pub const COMPONENTS: &[Entry] = &[
         // record the caller fills in, not a component. It is on the page all the same — a rail is
         // nothing but the sections it was given.
         posed: &["with a badge on the last row"],
-        live: &["press a row to make it current"],
+        live: &[
+            "press a row to make it current",
+            "collapse it to its icons, and back",
+        ],
         interactive: true,
         section: Section::Components,
         layout: Layout::Inline,

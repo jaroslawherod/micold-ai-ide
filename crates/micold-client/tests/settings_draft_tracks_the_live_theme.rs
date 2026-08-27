@@ -3,18 +3,26 @@
 //! # Why one setting needs this and the others do not
 //!
 //! Every field in Settings is drafted: typed into a copy, applied on Save, discarded on Cancel.
-//! That works because the form is the only thing that writes those values. The theme is the one
-//! exception — the app bar's overflow menu cycles it too, and applies it immediately.
+//! That works because the form is the only thing that writes those values. The theme was the one
+//! exception — the app bar's overflow menu cycled it too, and applied it immediately.
 //!
 //! Two writers were harmless while Settings was a 420dp modal, because the modal covered the app
 //! bar and the menu could not be reached. Feature 027 made Settings a full-surface view with the
-//! app bar still on screen (FR-026), so both writers are now reachable at once — and the draft,
+//! app bar still on screen (FR-026), so both writers became reachable at once — and the draft,
 //! seeded when the view opened, still said what the theme was *then*. Cycling the menu and
 //! pressing Save reverted the theme to that stale value: the user's most recent choice, made two
 //! seconds earlier and visibly applied, was undone by a button labelled Save.
 //!
 //! The fix is not to stop drafting the theme — Cancel must still discard an Appearance edit. It
 //! is that a live change from outside the form is *newer than the draft*, so the draft takes it.
+//!
+//! # This outlived the control that caused it, deliberately
+//!
+//! FR-026e has since removed the app bar's cycle, so nothing writes the theme from outside the
+//! form today and the two-writer condition is gone. What is asserted here is the *rule*, driven
+//! through `Message::ThemePreferenceChanged` — the reducer's contract for a live theme change. A
+//! second writer is a plausible thing to add back (a keyboard shortcut, a tray item, a system
+//! integration), and the day someone does, this is what tells them the draft has to follow.
 
 use micold_client::app::{Message, State};
 use micold_client::features::settings::Msg as SettingsMsg;
@@ -46,15 +54,17 @@ fn theme_on_save(state: &State) -> ThemePreference {
 }
 
 #[test]
-fn cycling_the_theme_from_the_app_bar_is_what_save_then_writes() {
+fn a_live_theme_change_is_what_save_then_writes() {
     let mut state = open_on(ThemePreference::Light);
 
-    state.update(Message::Settings(SettingsMsg::ThemeModeCycled));
+    state.update(Message::Settings(SettingsMsg::ThemePreferenceChanged(
+        ThemePreference::Dark,
+    )));
 
     assert_eq!(
         state.settings.theme_pref,
         ThemePreference::Dark,
-        "precondition: the menu applies its choice immediately"
+        "precondition: a change from outside the form applies immediately"
     );
     assert_eq!(
         theme_on_save(&state),
@@ -64,23 +74,6 @@ fn cycling_the_theme_from_the_app_bar_is_what_save_then_writes() {
          recent visible choice is the worst shape this can take: it is silent, and the control \
          that caused it is not on the section they were looking at.",
         theme_on_save(&state)
-    );
-}
-
-#[test]
-fn choosing_a_theme_outright_is_what_save_then_writes() {
-    let mut state = open_on(ThemePreference::FollowSystem);
-
-    state.update(Message::Settings(SettingsMsg::ThemePreferenceChanged(
-        ThemePreference::Dark,
-    )));
-
-    assert_eq!(state.settings.theme_pref, ThemePreference::Dark);
-    assert_eq!(
-        theme_on_save(&state),
-        ThemePreference::Dark,
-        "the menu's outright picks need the same tracking as its cycle — they are two ways to \
-         reach one setting, and a fix that covered only the cycle would leave the bug reachable"
     );
 }
 
@@ -104,11 +97,13 @@ fn an_appearance_edit_is_still_only_a_draft_until_save() {
 
 /// And with no form open there is nothing to track, which must not panic or resurrect a draft.
 #[test]
-fn the_menu_still_works_with_settings_closed() {
+fn a_live_change_with_settings_closed_opens_no_form() {
     let mut state = State::default();
     state.settings.theme_pref = ThemePreference::Light;
 
-    state.update(Message::Settings(SettingsMsg::ThemeModeCycled));
+    state.update(Message::Settings(SettingsMsg::ThemePreferenceChanged(
+        ThemePreference::Dark,
+    )));
 
     assert_eq!(state.settings.theme_pref, ThemePreference::Dark);
     assert!(

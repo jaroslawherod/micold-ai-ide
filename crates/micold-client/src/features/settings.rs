@@ -20,15 +20,15 @@
 //!
 //! # The vocabulary this feature declares
 //!
-//! Twenty-five transitions in [`Msg`]: the theme's three that apply immediately
-//! (`ThemePreferenceChanged`, `ThemeModeCycled`, `SystemThemeChanged`), the view's navigation
-//! (`Opened`, `SectionShown`), the four sections' nineteen field edits, and the two ways out
-//! (`Saved`, `Cancelled`).
+//! Twenty-five transitions in [`Msg`]: the theme's two that apply outside the draft
+//! (`ThemePreferenceChanged`, `SystemThemeChanged`), the view's navigation
+//! (`Opened`, `SectionShown`, `RailToggled`), the four sections' nineteen field edits, and the two
+//! ways out (`Saved`, `Cancelled`).
 //!
 //! [`update`] routes all of them and is pure (data-model.md §1.1 shape A), but the feature's entry
 //! shape is **B**: `main.rs` has one `Message::Settings` arm and it goes to `shell/settings.rs`,
 //! because four of them additionally need `settings.json` written or read back
-//! (`Opened`, `Saved`, `ThemePreferenceChanged`, `ThemeModeCycled`). The rest reach [`update`]
+//! (`Opened`, `Saved`, `ThemePreferenceChanged`). The rest reach [`update`]
 //! from there through the same wrapper variant they arrived under, so the pure path is identical
 //! whether or not the shell was in the way. One routing table, one place to look.
 //!
@@ -50,6 +50,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
+use crate::features::session::{AvailabilitySource, CliAvailability};
 use crate::features::window::FieldId;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::RuntimeCapabilities;
@@ -68,6 +69,14 @@ use micold_core::theme::{SystemScheme, ThemePreference};
 pub struct State {
     /// In-progress Settings edit, present only while the Settings view is shown (feature 006).
     pub settings_draft: Option<SettingsDraft>,
+    /// Whether the Settings rail is showing icons alone (feature 027, FR-026c).
+    ///
+    /// Here rather than on [`SettingsDraft`], and that placement is the requirement: FR-026d calls
+    /// this view state, not a setting. On the draft it would be reverted by Cancel — so closing the
+    /// rail to read a page and then abandoning an edit would reopen it — written to disk on Save,
+    /// and subject to FR-029's save-together rule, which would make "the rail is closed" something
+    /// the user could fail to save. It outlives the draft and dies with the process.
+    pub settings_rail_collapsed: bool,
     /// The last light/dark scheme reported by the OS poll (transient, not persisted).
     pub system_scheme: SystemScheme,
     /// How the app chooses its theme (persisted); defaults to following the OS (FR-005).
@@ -107,6 +116,25 @@ impl SettingsSection {
             SettingsSection::Terminal => "Terminal",
             SettingsSection::Environment => "Environment",
             SettingsSection::Daemon => "Session service",
+        }
+    }
+
+    /// The section's icon, as the rail shows it beside — or instead of — the name (FR-026b).
+    ///
+    /// On the section rather than on the rail, for the same reason [`Self::label`] is: the rail is
+    /// one presentation of these, and a collapsed rail is a second. A glyph chosen inside a view
+    /// would be that view's, and the next surface to list sections would pick its own.
+    pub fn icon(self) -> crate::icons::Icon {
+        use crate::icons::Icon;
+        match self {
+            // The theme is the section's whole content today, and the sun is the glyph the app bar
+            // used for it before the duplicate was removed (FR-026e).
+            SettingsSection::Appearance => Icon::LightMode,
+            SettingsSection::Terminal => Icon::RegularTerminal,
+            // The environment section is where the default agent is chosen, which is the part of it
+            // a user is looking for when they come here.
+            SettingsSection::Environment => Icon::AiCli,
+            SettingsSection::Daemon => Icon::SessionService,
         }
     }
 
@@ -581,12 +609,15 @@ impl SettingsDraft {
 /// same reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
-    /// The user selected a theme preference (Follow system / Light / Dark) (FR-007, FR-008).
-    /// The shell persists the updated preference afterward.
+    /// The theme preference was set from outside the Settings form (FR-007, FR-008). The shell
+    /// persists the updated preference afterward.
+    ///
+    /// No control emits it since feature 027 removed the app bar's theme cycle (FR-026e), and it is
+    /// kept deliberately: it is the *contract* for a live theme change — apply it, and carry it into
+    /// an open draft rather than letting Save write the draft's stale copy back (BUG-001). Deleting
+    /// it would delete that rule along with it, and the rule is what a second writer would need to
+    /// obey the day one is added again.
     ThemePreferenceChanged(ThemePreference),
-    /// Cycle the theme mode to the next one (Auto → Light → Dark → Auto) from the toolbar
-    /// menu's mode toggle. The shell persists the updated preference; the menu stays open.
-    ThemeModeCycled,
     /// The OS light/dark preference poll observed a (changed) scheme (FR-006). Transient;
     /// never persisted. Carries the raw detection outcome — `Err(())` for a transient failure
     /// (e.g. `dark_light::detect()` timing out under CPU load) — rather than an
@@ -602,10 +633,15 @@ pub enum Msg {
     Opened,
     /// The Settings view moved to another section (feature 027, FR-026).
     SectionShown(SettingsSection),
+    /// Collapse the Settings rail to its icons, or reopen it (feature 027, FR-026c/d).
+    ///
+    /// Deliberately not a `SettingsDraft` field: it is view state, so Cancel must not revert it and
+    /// Save must not write it to disk. See [`State::settings_rail_collapsed`].
+    RailToggled,
     /// The Settings theme picker changed (feature 027, FR-027).
     ///
     /// Distinct from [`Msg::ThemePreferenceChanged`], which the app bar's cycle button emits and
-    /// which applies immediately. This one edits the draft and takes effect on save, like every
+    /// which applies immediately from outside the form. This one edits the draft and takes effect on save, like every
     /// other control on the form.
     ThemeChanged(ThemePreference),
     /// The Settings scrollback field changed.
@@ -663,10 +699,10 @@ pub enum Msg {
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::ThemePreferenceChanged(pref) => theme_preference_changed(state, pref),
-        Msg::ThemeModeCycled => theme_mode_cycled(state),
         Msg::SystemThemeChanged(detected) => system_theme_changed(state, detected),
         Msg::Opened => opened(state),
         Msg::SectionShown(section) => section_shown(state, section),
+        Msg::RailToggled => rail_toggled(state),
         Msg::ThemeChanged(theme) => theme_changed(state, theme),
         Msg::ScrollbackChanged(text) => scrollback_changed(state, text),
         Msg::EnvIncludeEnabledToggled(enabled) => env_include_enabled_toggled(state, enabled),
@@ -692,34 +728,26 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
 }
 
 /// The theme mode was advanced one step (feature 003, FR-005).
-///
-/// The menu stays open, so repeated clicks cycle.
-pub fn theme_mode_cycled(state: &mut crate::app::State) {
-    apply_theme(state, state.settings.theme_pref.next());
-}
-
-/// A theme preference was chosen outright.
+/// A theme preference was set from outside the Settings form, and applies immediately.
 ///
 /// Pure state change; the shell persists it at the I/O boundary (FR-009).
+///
+/// # Why this survives the control that used it (BUG-001)
+///
+/// The theme was the one setting with two writers: the app bar's cycle, which applied at once, and
+/// the Appearance section, which drafts. Harmless while Settings was a 420dp modal covering the
+/// bar — the menu could not be reached while the form was open. FR-026 made Settings a
+/// full-surface view with the bar still on screen, so both became reachable at once, and a draft
+/// seeded when the view opened still said what the theme was *then*: cycling the menu and pressing
+/// Save reverted the theme the user had just chosen and could see applied.
+///
+/// FR-026e has since removed that second control, which dissolves the condition. This stays as the
+/// rule any future one must obey: apply, and carry the newer value into an open draft — rather
+/// than the form giving up drafting, because Cancel must still discard an Appearance edit. And
+/// deliberately **not** via [`edit`]: a choice made outside the form is not the user acting on the
+/// form, so it must not clear a validation error they are being asked to fix (FR-029) — that would
+/// empty the message and leave the rejected field unexplained.
 pub fn theme_preference_changed(state: &mut crate::app::State, pref: ThemePreference) {
-    apply_theme(state, pref);
-}
-
-/// Apply a theme chosen from the app bar, and carry it into an open Settings form (BUG-001).
-///
-/// The theme is the one setting with two writers: this menu, which applies immediately, and the
-/// Appearance section, which drafts. That was harmless while Settings was a 420dp modal covering
-/// the app bar — the menu could not be reached while the form was open. Feature 027 made Settings
-/// a full-surface view with the app bar still on screen (FR-026), so both are now reachable at
-/// once, and a draft seeded when the view opened still said what the theme was *then*: cycling the
-/// menu and pressing Save reverted the theme the user had just chosen and could see applied.
-///
-/// The draft takes the newer value rather than the form giving up drafting, because Cancel must
-/// still discard an Appearance edit. And deliberately **not** via [`edit`]: a choice made outside
-/// the form is not the user acting on the form, so it must not clear a validation error they are
-/// being asked to fix (FR-029) — that would empty the message and leave the rejected field
-/// unexplained.
-fn apply_theme(state: &mut crate::app::State, pref: ThemePreference) {
     state.settings.theme_pref = pref;
     if let Some(draft) = &mut state.settings.settings_draft {
         draft.appearance.theme = pref;
@@ -737,6 +765,16 @@ pub fn system_theme_changed(
 ) {
     state.settings.system_scheme =
         micold_core::theme::observe_system_scheme(detected, state.settings.system_scheme);
+}
+
+/// The Settings rail was collapsed to its icons, or reopened (feature 027, FR-026c/d).
+///
+/// Not routed through [`edit`], and not touching the draft at all: FR-026d makes this view state,
+/// so it must not mark the form edited, must not clear a validation error the user is being asked
+/// to fix, and must survive both Save and Cancel. See [`State::settings_rail_collapsed`].
+///
+pub fn rail_toggled(state: &mut crate::app::State) {
+    state.settings.settings_rail_collapsed = !state.settings.settings_rail_collapsed;
 }
 
 /// Settings was opened (feature 006, FR-020; feature 027, FR-026).
@@ -896,4 +934,56 @@ pub fn saved(state: &mut crate::app::State) {
 /// The form was dismissed without saving.
 pub fn cancelled(state: &mut crate::app::State) {
     state.settings.settings_draft = None;
+}
+
+// --- Where a CLI is missing, and what to say about it (feature 027, FR-023b) ---
+
+/// The sentence shown where an image is chosen and where a CLI is chosen, when the place sessions
+/// run is missing one (FR-023b). `None` when there is nothing to say.
+///
+/// Two of the three `None` cases are the interesting ones:
+///
+/// - **the service has not answered yet.** Not "nothing is available" — the app has not asked, or
+///   the reply is in flight. Saying anything here would be a guess, and a guess that names a
+///   *specific* CLI as missing is worse than silence.
+/// - **everything is present.** The absence of a notice is the whole of "this is fine"; a green
+///   "all CLIs present" line is a second thing to read on every visit to a form that is not about
+///   AI CLIs.
+///
+/// The sentence never presents this as the application failing. It is a fact about the machine
+/// sessions run on, phrased as what that machine would have to provide, because that is where the
+/// user can act. FR-023b is explicit that it belongs *here*, at the two points of choice, and not
+/// at session start — by then the user has committed to something the app already knew would not
+/// work.
+pub fn missing_cli_notice(availability: Option<&CliAvailability>) -> Option<String> {
+    let availability = availability?;
+    let missing = availability.missing();
+    let names = name_list(&missing)?;
+    let verb = if missing.len() == 1 {
+        "isn't"
+    } else {
+        "aren't"
+    };
+    Some(match &availability.source {
+        AvailabilitySource::Image(reference) => format!(
+            "{names} {verb} in {reference}. Sessions run in that image, so it has to provide any \
+             AI CLI you want to use."
+        ),
+        AvailabilitySource::ThisComputer => {
+            format!("{names} {verb} installed on this computer, which is where sessions run.")
+        }
+    })
+}
+
+/// "Claude Code", "Claude Code and GitHub Copilot", "a, b and c" — `None` for an empty list.
+///
+/// Written out rather than `join(", ")` because this goes in a sentence, and a comma-separated
+/// list reads as a field value rather than as prose.
+fn name_list(clis: &[AiCli]) -> Option<String> {
+    let (last, rest) = clis.split_last()?;
+    if rest.is_empty() {
+        return Some(last.to_string());
+    }
+    let leading: Vec<String> = rest.iter().map(ToString::to_string).collect();
+    Some(format!("{} and {last}", leading.join(", ")))
 }

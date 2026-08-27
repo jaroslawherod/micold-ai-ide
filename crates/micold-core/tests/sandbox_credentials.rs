@@ -6,6 +6,7 @@
 //! sandbox that quietly mounts one extra directory still starts, still runs sessions, and still
 //! looks exactly like a working sandbox.
 
+use micold_core::sandbox::pathmap;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -30,6 +31,7 @@ fn build(profile: &SandboxProfile) -> MountSet {
         profile,
         &layout(),
         std::path::PathBuf::from("/home/u/.local/share/micold-ai-ide"),
+        Path::new("/home/u"),
         secret(),
     )
 }
@@ -42,17 +44,43 @@ fn the_default_profile_mounts_no_credentials() {
     assert!(mounts.credentials.is_empty());
 
     // And the host paths it *can* reach are exactly the project, the daemon's own state
-    // directory, and the token. Three, and no fourth: the count is the assertion, because a
-    // convenience mount added later would pass every other check in this file.
+    // directory, the sandbox's own home under it, and the token. Four, and no fifth: the count is
+    // the assertion, because a convenience mount added later would pass every other check here.
+    //
+    // The home is the application's own directory (FR-004d), which is why it appears in a test
+    // about sharing *nothing*: it is reachable from the sandbox but is not the user's, and the
+    // assertion below that it lives under the state directory is what keeps those apart.
     let paths: Vec<String> = mounts
         .host_paths()
         .iter()
         .map(|p| p.display().to_string())
         .collect();
-    assert_eq!(paths.len(), 3, "reachable host paths: {paths:?}");
+    assert_eq!(paths.len(), 4, "reachable host paths: {paths:?}");
     assert!(paths.iter().any(|p| p.ends_with("projects/micold")));
     assert!(paths.iter().any(|p| p.ends_with("micold-ai-ide")));
     assert!(paths.iter().any(|p| p.ends_with("sandbox.token")));
+    // Spelled with the platform's own separator, so this reads the same on Windows, where the
+    // host half of a mount keeps its native spelling (`pathmap` maps only the container half).
+    let home_under_state = Path::new("micold-ai-ide")
+        .join("sandbox-home")
+        .display()
+        .to_string();
+    assert!(
+        paths.iter().any(|p| p.ends_with(&home_under_state)),
+        "reachable host paths: {paths:?}"
+    );
+
+    // The one thing this mount must never become: the user's home shared back in. It is mounted
+    // *at* the home path, so only the host half distinguishes the two.
+    assert_eq!(
+        mounts.home.container,
+        pathmap::map_for(Path::new("/home/u"), cfg!(windows)),
+        "the sandbox's home belongs at the user's home path, under this platform's mapping"
+    );
+    assert!(
+        !paths.iter().any(|p| p == "/home/u"),
+        "the sandbox's home must shadow the user's, never share it: {paths:?}"
+    );
 }
 
 /// FR-004b: each opt-in adds exactly its own mount and no other. Checked one at a time, because an
@@ -112,6 +140,7 @@ fn an_opt_in_with_no_known_path_is_skipped_rather_than_substituted() {
         // No agent socket: the user has one enabled, and there is nothing to enable it with.
         &CredentialLayout::conventional(Path::new("/home/u"), None),
         std::path::PathBuf::from("/home/u/.local/share/micold-ai-ide"),
+        Path::new("/home/u"),
         secret(),
     );
     assert!(mounts.credentials.is_empty());
@@ -129,6 +158,7 @@ fn only_registered_projects_are_mounted() {
         &profile,
         &layout(),
         std::path::PathBuf::from("/home/u/.local/share/micold-ai-ide"),
+        Path::new("/home/u"),
         secret(),
     );
     assert_eq!(mounts.projects.len(), 2);

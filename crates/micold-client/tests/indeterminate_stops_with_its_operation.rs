@@ -171,6 +171,46 @@ fn an_idle_form_asks_for_no_frames() {
     );
 }
 
+/// A create that ends by the connection going away must stop the indicator too.
+///
+/// The reported case, and the one this file's premise did not cover: FR-039d's settle condition is
+/// external, so the bar stops when *the operation ends* — and until `010` BUG-020 the client had no
+/// way to end one whose answer would never come. The dialog was still animating at +90 s over a
+/// sidebar that had already reconciled correctly, which is the permanent 60fps wakeup the module
+/// docs above call a defect, reached by the one route nothing closed.
+#[test]
+fn a_create_whose_connection_dropped_stops_its_indicator() {
+    let mut state = form_open();
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateStarted(Default::default()),
+    ));
+    assert_eq!(
+        frames_until_rest(&state, 600),
+        None,
+        "precondition: the create is running and its indicator is animating"
+    );
+
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::CreateInterrupted(
+            "The session service disconnected before confirming the request to create the \
+             worktree \"feat-probe-two\"."
+                .into(),
+        ),
+    ));
+
+    assert_eq!(
+        state.worktree_form.form.as_ref().map(|f| f.status),
+        Some(WorktreeFormStatus::Editing),
+        "an operation nothing will ever answer is not in flight"
+    );
+    assert!(
+        frames_until_rest(&state, 600).is_some(),
+        "the create can never be answered on that connection and the indicator is still asking \
+         for frames — the application never returns to rest, and the dialog goes on claiming an \
+         operation is running over a list that already shows what happened (`010` BUG-020)"
+    );
+}
+
 /// While a create *is* running, the indicator animates.
 ///
 /// The other half, and the one that keeps the test above from passing for the wrong reason. An

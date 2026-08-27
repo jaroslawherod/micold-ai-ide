@@ -90,6 +90,9 @@ pub const READERS: &[&str] = &[
     "is_some",
     "iter",
     "keys",
+    // `session.known_available` takes `&self` and hands back a slice of the availability set it
+    // already holds — a read of two fields, not a write to either.
+    "known_available",
     "last",
     "len",
     "map",

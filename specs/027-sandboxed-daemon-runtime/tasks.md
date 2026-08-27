@@ -497,6 +497,238 @@ shippable before US3 lands, and T070 retires it.
 **Cross-story ordering that is not a dependency.** US5's podman dialect is written against the same
 conformance suite as Docker's, so it can begin as soon as T037 exists, not when Phase 3 ends.
 
+## Phase 11: FR-023a and FR-004d — the image ships the AI CLIs, and `~` is writable
+
+**Goal**: Make "a sandboxed session can run the AI CLI the user picked" true rather than assumed.
+FR-023 has always said the image carries "the tooling a session needs"; the published image carried
+none of the AI CLIs, and the 22 green real-runtime probes could not see it because every one of them
+drives a shell. Shipping them then exposed a second defect underneath: `HOME` pointed at a path that
+does not exist inside the container, so the first thing an AI CLI does — write to `~` — failed.
+
+**Why the two are one phase.** Neither is shippable alone. The image without the home fix ships a
+`copilot` that dies on `EACCES: mkdir '/home/<user>'` at startup; the home fix without the image
+fixes a home nothing was using.
+
+### Tests (MANDATORY — Constitution Principle I) ⚠️
+
+- [x] T123 [US1] `crates/micold-daemon/tests/sandbox_real_ai_cli.rs`: for every `AiCli::ALL`
+      variant, its command is on `PATH` inside a real sandbox **and runs** (`--version` exits 0).
+      Driven from `AiCli::ALL` rather than a written-out list, so a third provider added to the
+      application fails this until the image ships it. Confirmed red twice: first with both CLIs
+      missing, then — after the image shipped them — with `[("copilot", "rc=1")]`, which is the
+      defect T125 fixes. Locating a binary is not enough here: `claude` tolerated the broken home
+      and `copilot` did not, so a `command -v` check would have passed while a session failed.
+- [x] T124 [US1] `crates/micold-daemon/tests/sandbox_real_boundary.rs`: `~` is writable, what lands
+      there appears in the application's own directory, and it does **not** appear in the user's
+      home. The file's existing probes all pass with *no* home at all — a `HOME` pointing nowhere
+      lists nothing either — so the write is what distinguishes a shadowed home from a missing one.
+
+### Implementation
+
+- [x] T125 [US1] `sandbox/mod.rs`: `HomeMount`, a fifth member of `MountSet`, mounting
+      `<state>/sandbox-home` at the host home path; `argv::mount_args` emits it first, since a
+      project under the user's home has to land on top of it. Declared in the set rather than
+      emitted by `argv` because obligation C-3 is that `argv` invents no mount — an implicit home
+      mount is exactly the convenience C-3 forbids, and an explicit one keeps the rule literally
+      true. `shell/sandbox.rs` creates the directory before `create`: a bind source the runtime has
+      to create, it creates as root.
+- [x] T126 [US1] `packaging/sandbox/Containerfile`: base `node:22-trixie-slim` and pinned
+      `@anthropic-ai/claude-code` and `@github/copilot`. Both constraints on that tag are load
+      bearing and recorded in the file — trixie for glibc, 22 because claude-code declares
+      `engines: node >=22.0.0` and trixie ships Node 20.
+- [x] T127 [US1] `sandbox_argv.rs`, `sandbox_credentials.rs`, `argv.rs`'s K-4 check: the mount-count
+      assertions move by one, and the home is excluded from `mapped_volumes` — it is a
+      *substitution*, not a mapping, so its two halves are supposed to differ on every platform.
+      The credentials test gains the assertion that keeps the two apart: the container half is the
+      user's home path and the host half is never it.
+
+**Not in this phase**: FR-023b and FR-023c. Reporting a missing CLI where the image is chosen, and
+answering availability from inside the sandbox instead of from the client's own `PATH`
+(`provider.rs::resolves_on_path`), are a settings-surface change with their own tests.
+
+**Requirement added**: FR-004d, and FR-023 split into FR-023a/b/c with SC-012. FR-023 said the image
+carries what a session needs without saying who owns that when the user substitutes an image, and
+nothing said the sandbox has a home of its own — which is why an image that satisfied FR-023 on
+paper still could not run the CLI it shipped.
+
+## Phase 12: FR-026b–e and FR-014d — the rail becomes a navigation rail, and the menu stops duplicating it
+
+**Goal**: every section identified by an icon as well as a name; the rail collapsible to those icons
+and still fully navigable; and no setting offered by two controls, with nothing lost when the
+duplicates go.
+
+**Why now**: FR-026 made Settings a full surface that no longer covers the app bar, which turned two
+long-harmless duplicates into two live writers of one value — that is BUG-001's whole mechanism. The
+rail's fixed width is the other half of the same surface: it was introduced to make Settings roomy
+and is the one part of it that cannot be given back.
+
+### Tests first
+
+- [x] T128 [US3] *(test)* every `SettingsSection` carries an icon, and no two share one (FR-026b).
+      Written against `SettingsSection::icon` rather than against the rendered rail, because the rail
+      is one presentation of the section and a second one must not be able to invent its own icons.
+      **Landed in `tests/settings_rail.rs`, not `settings_sections.rs`**: the icons and the collapse
+      are one claim — icons exist *so that* collapsing keeps the sections distinguishable — and
+      `settings_sections.rs` is a source-scanning gate about which section owns which setting.
+- [x] T129 [US3] *(test)* `ui/material/section_list.rs` unit tests: the collapsed rail's width is
+      the Material navigation-rail width and is stable across which section is current and whether a
+      badge is shown — the same claims the expanded gates already make, now made per state (FR-026c).
+      "One pressable node per section and no label text" is asserted through `row_parts`, a pure
+      description of what a row is built from, rather than by walking the widget tree: the tree can
+      only be asked where things are, and what had to be shown is that collapsing costs no
+      *information* — the glyph stays, the badge stays in the one form there is room for, and only
+      the name goes.
+- [x] T130 [US3] *(test)* `crates/micold-client/tests/settings_rail.rs`: reaching every section
+      while collapsed; the toggle flips the flag; the flag survives closing and reopening Settings
+      within the session; Cancel does not revert it, Save does not write it, and closing the rail is
+      not an edit to the form (FR-026c, FR-026d). One file with T128 — see there.
+- [x] T131 [US3] *(test)* `crates/micold-client/tests/settings_sections.rs`: no message the app
+      bar's overflow menu emits is one a settings section owns (FR-026e, SC-014), plus a gate that
+      `logout_survival::enable_for` still has a caller, so removing the menu item cannot quietly
+      remove the host-process capability. A **source scan** of `overflow_items` rather than a call
+      to it: `ui/mod.rs` declares `mod toolbar;` privately, and widening the crate's public API to
+      let a test look at a menu would be a worse trade than reading the file the gate is about — the
+      same trade `settings_sections.rs` already makes for the sections themselves.
+- [x] T132 [US3] *(test)* saving resolves the survival opt-in through the *configured* placement —
+      the service-manager flow under host-process, the restart policy under sandboxed — and says so
+      where the placement cannot offer it (FR-014d, SC-014). **Not in `features_settings.rs`**: the
+      save path is `shell/persist.rs`, which lives in the GUI binary and no integration test can
+      reach, so the gates are inline `#[cfg(test)]` modules beside the code they are about —
+      `survival_step` in `persist.rs` (act on a change, and only on a change, in both directions),
+      `survival_support` in `ui/settings/daemon.rs` (every placement says what it will do), and
+      `enable_for`/`disable_for` in `micold-core` (the dispatch itself).
+
+### Implementation
+
+- [x] T133 [US3] `features/settings.rs`: `SettingsSection::icon`, beside `label` and `index`;
+      `ui/material/section_list.rs`'s `Section` gains an icon and renders it in the leading slot
+      `Button` already has. Icons from the existing `Icon` set — Principle VIII, and FR-026b says so
+      explicitly because a settings-only icon set is the obvious shortcut here.
+- [x] T134 [US3] `ui/material/section_list.rs`: the collapsed rendering, plus the affordance that
+      toggles it. In the shared component rather than in the view, because FR-026a forbids a private
+      rail and a collapsed rail built in `settings_view.rs` would be exactly that. The control is
+      drawn *below* the destinations: it is not one of the places the user navigates to, and putting
+      it first would make the top-left glyph — where the eye starts — the one that goes nowhere.
+      Landed with the showcase entry made live in both widths (`showcase/sections/surfaces.rs`,
+      `showcase/state.rs`): Principle VIII wants the state on the page, and a second *posed* rail
+      would show a picture of a collapsed rail without showing the one claim it makes — that every
+      destination is still pressable once the labels are gone.
+- [x] T135 [US3] `app.rs`/`ui/settings_view.rs`: `settings_rail_collapsed` on `State` beside
+      `settings_section`, a message that toggles it, and the rail rendered in the state it names.
+      Not in `SettingsDraft` and not in `settings.json`: FR-026d makes it view state, which is what
+      keeps it out of the save-together rule and off the schema.
+- [x] T136 [US3] `ui/toolbar.rs`: drop the theme cycle and "Keep sessions after logout"; keep open
+      Settings, diagnostics and About. `Message::ThemeModeCycled` and `mode_icon` went with the
+      first, `Message::LogoutSurvivalRequested` with the second, and `ui/settings/appearance.rs`'s
+      note and module doc — which argued for keeping the toolbar shortcut — are rewritten to say why
+      it went. The BUG-001 fix stays. `Message::ThemePreferenceChanged` is **kept without a
+      producer**, deliberately: it is the reducer's contract for a live theme change, and it is that
+      rule — apply it, and carry it into an open draft — that a second writer would have to obey the
+      day one is added again. Deleting it would delete the rule with it. The BUG-001 gate now drives
+      that message.
+- [x] T137 [US3] `shell/persist.rs`/`shell/service_control.rs`: saving the form applies the
+      survival opt-in through `logout_survival::enable_for` with the resolved placement — the caller
+      that function was written for and had never had. This is what makes removing the menu item
+      safe: without it, dropping the item drops the host-process capability with it.
+
+      Two things the plan did not name, both required by FR-014d's "rather than being absent or
+      silently ineffective". **`disable_for`**, new in `micold-core`: the menu command could only
+      ever enable, so until now unticking the box wrote `false` to a file and left the socket unit
+      enabled — the sessions went on surviving. It disables and stops the unit, and deliberately
+      does **not** run `loginctl disable-linger`, which is a per-user switch other services may rely
+      on and which this application did not create exclusively. And **`survival_support`** in the
+      section: the checkbox now says what the configured placement will actually do with it, and
+      warns where the host-process mechanism is unavailable instead of sitting there inert.
+
+**Not in this phase**: FR-023b and FR-023c, still. They are a settings-surface change and this phase
+is a settings-surface phase, but they are about *the image* and are gated on asking the container
+what it has rather than asking the client's `PATH` — a protocol question, not a layout one. Phase 13
+is that question.
+
+**Requirements added**: FR-026b, FR-026c, FR-026d, FR-026e, FR-014d, SC-013, SC-014.
+
+## Phase 13: FR-023b and FR-023c — the answer comes from where sessions run, and the missing one is named
+
+**Goal**: stop the client answering "which AI CLIs exist" from its own `PATH`, and say — at the two
+points of choice, and only there — which CLI the running sandbox does not provide.
+
+**Why now**: Phase 11 made the published image ship every AI CLI (FR-023a). That is the whole of the
+guarantee for a user on the default image, and it is worth nothing to a user who substituted one —
+FR-025 says they may, FR-023b says the obligation goes with the image, and nothing in this
+application can make a stranger's image keep it. What is left to do is the only honest thing: find
+out, and say so.
+
+**The defect underneath, which is not a UI defect.** `Capabilities::available_providers()` walked
+*this process's* `PATH`. That was correct while the session service was always a child of this
+process, and FR-021 ended that: the client is on the host, the sessions are in a container, and the
+same four lines went on answering confidently about the wrong machine. It does not crash, and it
+does not look wrong on any machine a developer would test it on — a workstation has both CLIs
+installed, so the host's answer and the container's agree everywhere except on the user's machine.
+That is why the fix is a protocol pair and a gate, not a better probe.
+
+### Tests first
+
+- [x] T138 [US3] *(test)* `crates/micold-core/tests/available_here.rs`: the probe over a scratch
+      `PATH` — nothing installed offers nothing, one installed offers exactly that one, uninstalling
+      shrinks the offer, and the order is `AiCli::ALL`'s rather than `PATH`'s. **Moved, not
+      written**: this suite was `shell/capabilities.rs`'s inline module and its assertions are
+      unchanged, because what they assert never depended on who was asking. FR-023c moved the
+      question into `micold-core`, so its test came with it.
+- [x] T139 [US3] *(test)* `crates/micold-daemon/tests/ai_cli_availability.rs`: over a real duplex
+      connection, `AiCliAvailabilityRequest` is answered from the **service's own** environment —
+      a stubbed `claude` on a scratch `PATH` comes back as exactly `[ClaudeCode]`, and an
+      environment with no CLI at all comes back as an empty set rather than as a failure. The two
+      together are what pin the answer to the process that ran it: either alone is satisfied by a
+      constant.
+- [x] T140 [US3] *(test)* `crates/micold-client/tests/cli_availability_comes_from_the_service.rs`:
+      no client source calls `available_here` or `provider().is_available()`, **and** the shell is
+      still seen issuing the request, handling the reply, and writing the field. Both halves,
+      because a scan for an absence passes trivially once the feature is deleted rather than moved.
+      Seen to fail: reintroducing a one-line probe into `features/session.rs` reports
+      "``features/session.rs`` calls ``provider().is_available()…)``".
+- [x] T141 [US3] *(test)*
+      `crates/micold-client/tests/missing_cli_is_reported_where_it_is_chosen.rs`: the notice names
+      the CLI, the image, and the obligation; says nothing before the service has answered; says
+      nothing when everything is present; names every CLI when the image provides none; and under
+      the host placement names no image at all. Asserted by parts rather than verbatim — the parts
+      are exactly what FR-023b enumerates, so an assertion that loses one is a requirement that
+      stopped being met.
+
+### Implementation
+
+- [x] T142 [US3] `micold-core`: `provider::available_here()`, and the `AiCliAvailabilityRequest` /
+      `AiCliAvailability` pair in `protocol/messages.rs`. The reply carries the set and **only** the
+      set — not the image, not whether it is containerised at all. The client started the service
+      and holds both already, and a second copy of a fact one side owns is a second thing that can
+      disagree.
+- [x] T143 [US3] `micold-daemon/src/server.rs`: answer the request from `available_here()`. Four
+      lines, and the whole of FR-023c: the process that will spawn the CLI is the process that says
+      whether it is there.
+- [x] T144 [US3] `micold-client`: delete `Capabilities::available_providers()`; change
+      `State::available_providers` to `Option<CliAvailability>`; ask on connect and on the two named
+      events research R11 already required (Settings opening, the override menu opening); fill the
+      field from the reply, **stamping it** with what it describes as it arrives. The stamp is read
+      from the sandbox's own state rather than the configured placement, because those come apart in
+      the one case that matters — after FR-035a's "run without it for now" the placement still says
+      the user wanted a container and the thing answering is a host process.
+- [x] T145 [US3] `features/settings.rs::missing_cli_notice`, rendered in `ui/settings/environment.rs`
+      under the CLI picker and in `ui/settings/daemon.rs` under the image reference — FR-023b's two
+      points of choice, and not session start. It names the image the service was **started from**,
+      never the one in the draft field: the field may say something the running container has never
+      heard of, and naming it would describe a machine that does not exist yet. Muted, not a
+      caution: an image with one AI CLI may be exactly what its author intended, and a red warning
+      on every visit is a nag rather than an answer.
+
+- [x] T146 [US3] quickstart §B.6, last box: look at the notice in place. The wording is already
+      gated on painted strings; what a test cannot settle is whether a muted line under a select
+      reads as an answer about the image or as something gone wrong, in both schemes. Record it in
+      `evidence/us3-settings-view.md` with the rest of the §B.6 pass. It found one: the notice sat
+      in the column of the control *below* it. Fixed with a shared `field_note`, gated by
+      `a_field_note_shares_its_fields_column.rs`, which fails on the old geometry.
+
+**Requirements closed**: FR-023b, FR-023c. With them the feature has no unimplemented requirement
+left. T146 closed the last §B box with it.
+
 ## Parallel Opportunities
 
 **Phase 1**: T002, T003, T005, T006 in parallel after T001.
@@ -519,6 +751,10 @@ clearest parallel block in the feature; T074 parallel throughout.
 **Phase 8**: T099–T103 parallel; T111 alongside.
 
 **Phase 9**: T114–T117 and T119 all parallel.
+
+**Phase 13**: T138, T139 and T141 are three independent test files. T140 is the only one that has to
+follow its implementation, because what it asserts is an absence that does not exist yet. T146 is a
+manual pass and follows everything.
 
 ## Implementation Strategy
 

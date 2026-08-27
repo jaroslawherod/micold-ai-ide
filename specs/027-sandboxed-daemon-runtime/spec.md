@@ -111,6 +111,39 @@ runtime must be a replaceable part from the beginning rather than a refactor pro
   application re-resolves rather than pinning forever. A developer rebuilding the service many times
   a day must be able to run their own build sandboxed without publishing anything.
 
+### Session 2026-08-27
+
+- Q: Who is responsible for the AI CLI being present in the sandbox — the image we publish, or the
+  user? → A: **Both, at their own layer.** The image this project publishes ships every AI CLI the
+  application offers, so the default path needs nothing from the user. A user who substitutes their
+  own image takes on that obligation with it: the CLI must be in *their* image, because nothing is
+  injected into a substituted image at run time. What the application owes them in return is to say
+  so where they choose the image and where they choose the CLI — not to accept the image, accept the
+  choice, and fail when a session is started.
+- Q: Where is "is the AI CLI available?" answered from? → A: Wherever sessions actually run. Under
+  sandboxed placement that is inside the container, not on the client's host. Asking the host is not
+  a smaller version of the right check — it is a different machine's answer, wrong in both
+  directions: it hides a CLI the sandbox has, and it offers one the sandbox does not.
+- Q: The settings navigation rail lists its sections by name and is always at full width. On a
+  narrow window that spends a fixed strip of the surface the rail was introduced to make roomy. Can
+  it be given back? → A: The rail becomes a **navigation rail** in the Material sense rather than a
+  list of names: every section carries an icon as well as a label, and the rail collapses to those
+  icons alone. Collapsed, it still navigates — the icons *are* the control, not decoration beside
+  one. Expanded is the default, and the choice is remembered for as long as the application is open.
+- Q: The app bar's overflow menu offers the theme mode and "keep sessions after logout", and the
+  settings surface offers both as well. Which one owns them? → A: **Settings owns every setting.**
+  The menu keeps only what is not one. Two controls for one setting is two states to keep in step,
+  two places to look when it is wrong, and — for the theme — a bug already found and patched around
+  (BUG-001): the menu wrote the live theme while the open form still held the value it had on
+  opening, so Save reverted a choice the user had just made and seen applied. The menu's remaining
+  entries — open Settings, session-service diagnostics, About — are actions, not settings.
+- Q: "Keep sessions after logout" is two different mechanisms — the Linux service manager for a host
+  process, a container restart policy for a sandbox — reached today by two different controls. If
+  the menu control goes, does the host-process capability go with it? → A: No: FR-014a already says
+  there is **one** opt-in, so the surviving control acts on whichever placement is configured. The
+  settings checkbox becomes that one control, and applying it runs the service-manager flow under
+  host-process placement and sets the restart policy under sandboxed placement.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The agent can only touch the project (Priority: P1)
@@ -208,8 +241,10 @@ reorganised dialog does.
 
 **Independent Test**: Open Settings, visit each section from the navigation rail, and confirm that
 every setting available before this feature is present, editable, saved, and reachable in no more
-than one section change; navigate the sections by keyboard alone; confirm the layout in both light
-and dark themes and at the application's supported window sizes.
+than one section change; collapse the rail and navigate every section again from the icons alone;
+navigate the sections by keyboard alone in both states; confirm the layout in both light and dark
+themes and at the application's supported window sizes; open the app bar's overflow menu and
+confirm it offers no control that a section already owns.
 
 **Acceptance Scenarios**:
 
@@ -225,6 +260,15 @@ and dark themes and at the application's supported window sizes.
    every section and every control within it is reachable and the focused element is visible.
 5. **Given** any setting that existed before this feature, **When** the user looks for it, **Then**
    it is present in exactly one section and its behaviour is unchanged.
+6. **Given** the Settings surface, **When** the user looks at the rail, **Then** every section is
+   identified by an icon as well as by its name, and the icons differ from one another.
+7. **Given** the Settings surface, **When** the user collapses the rail, **Then** the rail shows the
+   icons alone, every section remains selectable from it, the current one remains marked, and the
+   content area gains the width the labels gave up; expanding it restores the names without
+   changing which section is shown.
+8. **Given** any setting the surface owns, **When** the user looks for it anywhere else in the
+   application — the app bar, the overflow menu — **Then** it is not offered there a second time,
+   and the capability it governs is still reachable from its section.
 
 ---
 
@@ -394,6 +438,13 @@ without the user having chosen that for the occasion.
 - **FR-004c**: The settings view MUST show, at a glance, whether any credential opt-in is currently
   active, so the user can tell a fully-isolated sandbox from a partially-shared one without
   inspecting each control.
+- **FR-004d**: The sandbox MUST provide a writable home directory of its own at the path its `HOME`
+  names, owned by the identity sessions run as, and containing nothing of the host user's. A tool
+  that writes to `~` — which most AI CLIs do on first run, before any prompt — MUST succeed without
+  that write reaching the host home or requiring a credential opt-in. This directory is a mount like
+  any other and MUST be declared as one: a home the sandbox merely inherits from the image, or an
+  unwritable one, are both failures of this requirement rather than of the image.
+
 - **FR-005**: The sandbox MUST NOT be granted access to the container runtime's own control
   interface, nor any capability that lets a session escape the sandbox or act on the host.
 - **FR-006**: Files a session creates under a shared project directory MUST appear on the host owned
@@ -430,6 +481,11 @@ without the user having chosen that for the occasion.
   NOT inherit that limitation.
 - **FR-014c**: Turning the opt-in off MUST stop the sandbox being restarted by the host, leaving
   nothing behind that survives a reboot.
+- **FR-014d**: That one opt-in MUST be offered by exactly one control, in the settings surface, and
+  applying it MUST act on the placement that is configured — the platform's service manager under
+  host-process placement, the container's restart policy under sandboxed placement. Where the
+  configured placement cannot provide it, the control MUST say so rather than being absent or
+  silently ineffective.
 
 #### Resource and network limits
 
@@ -464,6 +520,19 @@ without the user having chosen that for the occasion.
   requires — a shell, git, and the AI CLI — and the application MUST refuse to attach to an image
   whose service is not compatible with the running client, offering the same restart affordance the
   application already offers for a version mismatch.
+- **FR-023a**: The image this project publishes MUST ship every AI CLI the application offers, at a
+  version each one supports, together with whatever runtime those CLIs need. A user on the default
+  image MUST NOT have to install anything into the sandbox to start a session with any offered CLI.
+  Credentials are excluded from this: FR-004 governs those, and shipping a CLI is not shipping an
+  authenticated one.
+- **FR-023b**: A user who substitutes their own image (FR-025) takes on FR-023a's obligation for
+  that image — nothing is injected into a substituted image at run time. The application MUST NOT
+  present this as its own failure, and MUST NOT discover it at session start: a CLI missing from the
+  running sandbox MUST be reported where the user selects an image and where they select a CLI,
+  naming the CLI, the image, and that the image must provide it.
+- **FR-023c**: Whether an AI CLI is available MUST be determined where sessions run — inside the
+  sandbox under sandboxed placement, on the host under host placement. The application MUST NOT
+  answer it from the client's own environment when those differ.
 - **FR-024**: The default image MUST be published and versioned with the application release and
   acquired automatically, so a first run requires no manual image preparation.
 - **FR-024a**: The application MUST support acquiring the image without reaching the publishing
@@ -492,6 +561,22 @@ without the user having chosen that for the occasion.
   marked and every section selectable from it. One section's content is shown at a time.
 - **FR-026a**: The navigation rail MUST be built from, or promoted into, the shared component
   library rather than embedded privately in the settings surface.
+- **FR-026b**: Every section in the rail MUST carry an icon identifying it as well as its name, and
+  no two sections may share an icon. The icon MUST come from the application's existing icon set
+  rather than from a set introduced for this surface alone.
+- **FR-026c**: The rail MUST be collapsible to its icons alone and MUST remain fully navigable in
+  that state: each icon selects its section, the current section stays marked, and no section
+  becomes unreachable. Both states MUST satisfy FR-030 and FR-031 — reachable by keyboard alone,
+  with the focused element visible, in both themes and on all three platforms. Collapsing MUST give
+  the width the labels occupied to the section's content rather than leaving it blank.
+- **FR-026d**: Whether the rail is collapsed is **view state, not a setting**: it MUST persist for
+  as long as the application is open, MUST NOT appear as a control in any section, and MUST NOT be
+  subject to FR-029's save-together rule. The rail MUST be expanded when the application starts.
+- **FR-026e**: No setting may be offered in more than one place. A control that a settings section
+  owns MUST NOT be duplicated in the app bar or its overflow menu; the menu MAY offer *actions* —
+  opening Settings, requesting diagnostics, About — and MUST NOT offer settings. Removing such a
+  duplicate MUST NOT remove the capability: everything the duplicate could do MUST remain reachable
+  from the section that owns the setting.
 - **FR-027**: Every setting that exists before this feature MUST remain present, editable, and
   saved, in exactly one section, with unchanged behaviour.
 - **FR-028**: All settings governing the session service — those that exist today as well as
@@ -591,6 +676,16 @@ without the user having chosen that for the occasion.
   nothing the application created survives a reboot once session survival is opted out of.
 - **SC-011**: The session-survival opt-in produces the same observable outcome after a host reboot
   on all three supported platforms when the service is sandboxed.
+- **SC-012**: On the published image, every AI CLI the application offers starts a session in the
+  sandbox with no user-performed installation step. On an image missing one, the user is told which
+  CLI is missing and that their image must supply it — before they start a session, not by a session
+  failing.
+- **SC-013**: Every section is reachable from the rail in both its states, and collapsing the rail
+  costs no capability: the same set of sections can be selected with the labels hidden as with them
+  shown, by pointer and by keyboard alike.
+- **SC-014**: No setting is offered by two controls. For every setting the surface owns, exactly one
+  control in the application writes it, and every capability that a removed duplicate provided is
+  still reachable — including making sessions survive logout under host-process placement.
 
 ## Out of Scope
 

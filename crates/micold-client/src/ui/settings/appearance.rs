@@ -1,18 +1,23 @@
 //! The Appearance section — how the application looks (feature 027, FR-027).
 //!
-//! The theme was never in the Settings dialog: it was, and remains, a cycle button in the app bar.
-//! FR-027 asks that every setting be present in the sectioned view, and a setting reachable only
-//! by pressing an unlabelled toolbar icon until it lands on the right one is not present in any
-//! useful sense — a user looking for "dark mode" looks in Settings.
+//! The theme was never in the Settings dialog: it was a cycle button in the app bar. FR-027 asks
+//! that every setting be present in the sectioned view, and a setting reachable only by pressing
+//! an unlabelled toolbar icon until it lands on the right one is not present in any useful sense —
+//! a user looking for "dark mode" looks in Settings.
 //!
-//! The toolbar control stays. It is a shortcut for the setting, not a second setting: both write
-//! the same field, and the quick toggle is the one people actually use.
+//! # This is now the only place the theme is set (FR-026e)
+//!
+//! The cycle button stayed at first, described as a shortcut rather than a second setting. It was
+//! a second *writer*, which is a different thing: it applied immediately while this section
+//! drafts, and once FR-026 put Settings on the full surface with the app bar still visible, both
+//! were reachable at once. Save then wrote the draft's stale copy back over the theme the user had
+//! just watched the bar apply (BUG-001). It is gone; this picker is the whole of the setting.
 
 use crate::app::Message;
 use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::SettingsDraft;
 use crate::ui::material::Select;
-use crate::ui::settings::{name_of, note, page, Named};
+use crate::ui::settings::{name_of, page, Named};
 use iced::Element;
 use micold_core::theme::ThemePreference;
 use micold_core::tokens::Roles;
@@ -48,14 +53,7 @@ pub fn view<'a>(draft: &'a SettingsDraft, roles: Roles) -> Element<'a, Message> 
     page(
         "Appearance",
         "How the application looks.",
-        vec![
-            theme.into(),
-            note(
-                "The app bar's mode button cycles the same setting, for when you want it in one \
-                 press.",
-                roles,
-            ),
-        ],
+        vec![theme.into()],
         roles,
     )
 }

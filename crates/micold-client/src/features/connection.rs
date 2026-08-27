@@ -13,13 +13,13 @@
 //!
 //! # The vocabulary this feature declares
 //!
-//! Twelve transitions in [`Msg`]: the lifecycle (`Connected`, `Event`, `GridFrame`, `Disconnected`,
+//! Eleven transitions in [`Msg`]: the lifecycle (`Connected`, `Event`, `GridFrame`, `Disconnected`,
 //! `ConnectFailed`), the two mismatches a daemon can report (`VersionMismatch`, `BuildMismatch`), and
-//! the five things the user can ask of it (`TakeoverRequested`, `RestartServiceRequested`,
-//! `DiagnosticsRequested`, `LogoutSurvivalRequested`, `LogoutSurvivalOutcome`).
+//! the four things the user can ask of it (`TakeoverRequested`, `RestartServiceRequested`,
+//! `DiagnosticsRequested`, `LogoutSurvivalOutcome`).
 //!
 //! **This module declares no `update`.** The entry shape is **B** and only B (data-model.md §1.1):
-//! every one of the twelve is a socket, a process, or a version handshake, so all of them are routed
+//! every one of the eleven is a socket, a process, or a version handshake, so all of them are routed
 //! by `shell/connection.rs` and the root's arm is a deliberate no-op alongside `NoOp`. What lives
 //! here is the decision the feature does have — [`connection_status`] — which is why the module
 //! exists at all, per the paragraph above.
@@ -204,7 +204,7 @@ pub fn connection_status(
 /// `shell/connection.rs`'s `update`, and there is no pure half. The connection is binary-owned
 /// runtime — an outbox handle, a socket that dropped, a service to restart — so `State::update`
 /// has never done anything with these but decline them, and it still declines them, now in one arm
-/// instead of twelve.
+/// instead of eleven.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
     /// The daemon connection is up: the binary stores the `Outbox` to drive sessions and adopts
@@ -255,9 +255,7 @@ pub enum Msg {
     /// The user asked to see where the session service logs and its recent errors (Phase 10,
     /// FR-046): the binary requests both from the daemon and shows the answers as notices.
     DiagnosticsRequested,
-    /// The user asked to make sessions survive logout (US7, FR-038; Linux only). The binary runs
-    /// the enable flow off-thread. Never triggered by install — a deliberate choice.
-    LogoutSurvivalRequested,
-    /// The logout-survival enable flow finished; carries a ready-to-show message (info or error).
+    /// The logout-survival opt-in finished being applied; carries a ready-to-show message (info or
+    /// error).
     LogoutSurvivalOutcome(String),
 }

@@ -642,6 +642,54 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
+        // The same surface with the rail collapsed to its icons (feature 027, FR-026c/d).
+        //
+        // A second state rather than a variation of the one above, because the two differ in the
+        // one thing a fixture is for: the rail's width, and therefore where the section beside it
+        // starts. FR-026c says the width the labels give up goes to the content, and until this
+        // was recorded nothing anywhere held that to a number.
+        //
+        // The `Appearance` section, not `Terminal`: it is the shortest page here, so what the
+        // fixture records of it is the rail and the boundary rather than a form that would move
+        // whenever a field's copy changed.
+        CoveredState {
+            name: "settings-view-rail-collapsed",
+            build: || {
+                let mut state = with_project();
+                let mut draft = SettingsDraft {
+                    section: SettingsSection::Appearance,
+                    appearance: AppearanceDraft {
+                        theme: micold_core::theme::ThemePreference::Dark,
+                    },
+                    terminal: TerminalDraft {
+                        scrollback_lines: "12000".to_string(),
+                    },
+                    environment: EnvironmentDraft {
+                        enabled: true,
+                        script_path: "~/.config/micold/session-env.sh".to_string(),
+                        timeout_secs: "5".to_string(),
+                        default_ai_cli: micold_core::session::AiCli::ClaudeCode,
+                    },
+                    daemon: DaemonDraft::default(),
+                    error: None,
+                };
+                // The badge again, for the reason the state above states it: collapsed, a badge
+                // has nowhere to be a chip and becomes a tint on the glyph, so a rail without one
+                // would record a row shape the application does not always produce.
+                draft
+                    .daemon
+                    .profile
+                    .credentials
+                    .insert(micold_core::sandbox::CredentialShare::GitConfig);
+                state.settings.settings_draft = Some(draft);
+                state.settings.settings_rail_collapsed = true;
+                StateUnderTest::new(state)
+            },
+            anchors: &[Anchor {
+                name: "settings.rail",
+                path: &[0, 0, 1, 0, 0, 0],
+            }],
+        },
         // --- Added by BUG-002 -------------------------------------------------------------------
         //
         // The terminal's bottom status bar had **no geometry coverage at all**, and BUG-002 broke

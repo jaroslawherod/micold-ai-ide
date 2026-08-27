@@ -20,7 +20,9 @@
 
 use micold_client::app::State;
 use micold_client::features::session::Msg as SessionMsg;
-use micold_client::features::session::{ForegroundChoice, SelectKind};
+use micold_client::features::session::{
+    AvailabilitySource, CliAvailability, ForegroundChoice, SelectKind,
+};
 use micold_core::project::{Availability, Project};
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
 use std::path::{Path, PathBuf};
@@ -479,7 +481,10 @@ use micold_client::features::session::{PressTarget, StartIntent};
 fn state_with(default_ai_cli: AiCli, available: &[AiCli]) -> State {
     let mut state = State::default();
     state.session.default_ai_cli = default_ai_cli;
-    state.session.available_providers = available.to_vec();
+    state.session.available_providers = Some(CliAvailability {
+        available: available.to_vec(),
+        source: AvailabilitySource::ThisComputer,
+    });
     state
 }
 

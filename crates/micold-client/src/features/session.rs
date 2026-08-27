@@ -135,20 +135,33 @@ pub struct State {
     ///
     /// Transient: where a row was a moment ago is worth nothing after a restart.
     pub start_press: Option<(u16, u16)>,
-    /// Which AI CLIs are installed, in `AiCli::ALL`'s order (feature 026, FR-006, T014a).
+    /// Which AI CLIs exist **where sessions run**, in `AiCli::ALL`'s order (feature 026 FR-006 and
+    /// T014a; re-sourced by feature 027 FR-023c).
     ///
-    /// Filled at the I/O boundary from `Capabilities::available_providers()`, the way
-    /// `worktree.worktrees` is filled from git — and refreshed on a **named event**, when the
-    /// choice is offered (the Settings view opening, the override menu opening), never per frame.
-    /// A `PATH` probe per render is exactly the scheduled work SC-006 forbids.
+    /// `None` means the service has not said yet — a state that is neither "none available" nor a
+    /// guess, and the reason this is an `Option` rather than an empty `Vec`. An empty *answer* is a
+    /// real answer (an image that ships no AI CLI is FR-023b's whole scenario) and has to be
+    /// distinguishable from not having asked.
     ///
-    /// It is here rather than reached for because there is no route to it otherwise: `features/`
-    /// imports nothing from `shell::` and `Capabilities` is a shell type.
+    /// **The client no longer probes its own `PATH` for this.** It used to, through
+    /// `Capabilities::available_providers()`, and that was wrong the moment 027 let the service run
+    /// in a container: the client is on the host, the sessions are not, and the host's answer is
+    /// plausible enough to look right while describing a different machine. FR-023c says the
+    /// question is settled where sessions run, so it is now filled from
+    /// `DaemonMsg::AiCliAvailability` — asked on connect and on the same **named events** as
+    /// before (the Settings view opening, the override menu opening), never per frame. The answer
+    /// is stamped with what it describes as it arrives, so FR-023b's sentence can name it; see
+    /// [`CliAvailability`].
+    ///
+    /// It is here rather than reached for because there is no route to it otherwise, and the three
+    /// consumers each lack a different one: `features/` imports nothing from `shell::`;
+    /// `ui/settings_view.rs` sees a draft and nothing else; and the sidebar's
+    /// `row_actions_cluster` takes narrow arguments rather than the whole state.
     ///
     /// Holding it in memory is not a violation of research R11's rule, which is "never
     /// *persisted*" — an in-memory snapshot refreshed when the choice is offered cannot go stale
     /// in a file.
-    pub available_providers: Vec<AiCli>,
+    pub available_providers: Option<CliAvailability>,
     /// The default AI CLI a new session runs when nothing is chosen for it (feature 026, FR-003).
     ///
     /// Service-owned: this mirrors what the daemon reported in `DaemonSettings`, and is written
@@ -209,6 +222,50 @@ pub struct State {
     /// `release_terminal`; `tests/terminal_bar_stability.rs` fails if that stops being
     /// true.
     pub terminal_released: bool,
+}
+
+/// What the service answered about AI CLIs, and what that answer describes (FR-023b, FR-023c).
+///
+/// The two travel together on purpose. FR-023c settles availability **where sessions run**, and
+/// FR-023b then has to name the thing that is missing the CLI — "not in this image" and "not
+/// installed on this computer" are different sentences with different remedies, and picking the
+/// wrong one sends the user to fix the wrong machine.
+///
+/// The service does not report which image it is running; the client started it and holds that
+/// fact already, and a second copy of it is a second thing that can disagree. So the answer is
+/// **stamped where it is received**, from the boot plan that is in hand at that moment. What
+/// arrives here is therefore self-consistent: the set and its subject cannot drift apart later,
+/// however the settings form is edited in the meantime.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CliAvailability {
+    /// Present where sessions run, in `AiCli::ALL`'s order. Empty is a real answer.
+    pub available: Vec<AiCli>,
+    /// What the set is an answer *about*.
+    pub source: AvailabilitySource,
+}
+
+/// Where the answer in [`CliAvailability`] was settled.
+///
+/// A closed enum rather than an `Option<String>` (Principle V): the host case is not "an image
+/// whose name we happen not to know", it is a different situation with a different remedy, and the
+/// type says so.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AvailabilitySource {
+    /// The service runs on this computer, so the answer is this computer's own `PATH`.
+    ThisComputer,
+    /// The service runs in a container built from this image reference.
+    Image(String),
+}
+
+impl CliAvailability {
+    /// Which CLIs the app knows about that the answer does **not** include, in `AiCli::ALL`'s
+    /// order. Empty when everything the app can run is present.
+    pub fn missing(&self) -> Vec<AiCli> {
+        AiCli::ALL
+            .into_iter()
+            .filter(|which| !self.available.contains(which))
+            .collect()
+    }
 }
 
 /// Why entering a project landed on the session it did — or on none (feature 008 FR-003).
@@ -1454,13 +1511,27 @@ impl State {
         chosen.unwrap_or(self.default_ai_cli)
     }
 
+    /// The availability set as far as anything is known, treating "not asked yet" as "nothing".
+    ///
+    /// Every consumer below wants a slice, and every one of them is a decision about what to
+    /// *offer* — where an unanswered service and a service that answered "none" mean the same
+    /// thing: there is no CLI to offer. The distinction the `Option` preserves matters exactly
+    /// once, in the Settings sentence that has to say "the image provides none" rather than
+    /// "nothing is known yet" (FR-023b), and that call site reads the field directly.
+    fn known_available(&self) -> &[AiCli] {
+        self.available_providers
+            .as_ref()
+            .map(|a| a.available.as_slice())
+            .unwrap_or(&[])
+    }
+
     /// Whether the stored default is currently installed (FR-002).
     ///
     /// A `false` here is **not** a reason to rewrite the preference. The stored value stays as the
     /// user left it and is shown marked, so a temporary `PATH` problem cannot silently discard a
     /// choice (research R11).
     pub fn default_ai_cli_is_available(&self) -> bool {
-        self.available_providers.contains(&self.default_ai_cli)
+        self.known_available().contains(&self.default_ai_cli)
     }
 
     /// The CLIs to offer in a menu — the Settings select and the override list (FR-006, T075).
@@ -1468,7 +1539,7 @@ impl State {
     /// A pure function over `State`, deliberately: `features/` cannot see `Capabilities` and must
     /// not learn to, so the availability set arrives as state (T014a) and this reads it.
     pub fn offered_providers(&self) -> Vec<AiCli> {
-        self.available_providers.clone()
+        self.known_available().to_vec()
     }
 
     /// Whether the split affordance's secondary half exists at all (FR-006, SC-001).
@@ -1476,7 +1547,7 @@ impl State {
     /// Absent when fewer than two CLIs are available: a "choose which one" control that opens a
     /// list of one is a worse single-CLI experience than the plain button it replaced.
     pub fn start_affordance_offers_a_choice(&self) -> bool {
-        self.available_providers.len() >= 2
+        self.known_available().len() >= 2
     }
 
     /// Resolve a press into what should happen (T032a).
@@ -1486,7 +1557,7 @@ impl State {
     /// substituting silently, and starting a missing binary is FR-010's failure, not FR-004's
     /// answer) nor does nothing.
     pub fn start_intent(&self, target: PressTarget) -> StartIntent {
-        if self.available_providers.is_empty() {
+        if self.known_available().is_empty() {
             return StartIntent::NothingAvailable;
         }
         match target {
@@ -1561,7 +1632,7 @@ pub fn start_menu_toggled(
         return Vec::new();
     }
     unavailable_default
-        .filter(|cli| !state.session.available_providers.contains(cli))
+        .filter(|cli| !state.session.known_available().contains(cli))
         .map(|cli| {
             vec![crate::features::notifications::error(format!(
                 "{} isn't installed. Install it, or start this session on another AI CLI.",

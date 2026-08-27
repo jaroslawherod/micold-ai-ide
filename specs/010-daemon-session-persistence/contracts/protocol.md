@@ -39,6 +39,15 @@ is predictable:
 
 Any failure **MUST bail loudly**. Wrong ownership means an active attack, not a mess to tidy.
 
+**Verification MUST precede any repair**, and a pre-existing directory MUST NOT be repaired at all
+(BUG-019). Creating the directory `0700` and *then* verifying it is not this rule: `mkdir -p`
+succeeds on an existing directory and a following `chmod` overwrites whatever mode it had, so the
+three checks above can never fail and the refusal is unreachable. A hostile directory is then
+silently tightened and bound into — and whatever an attacker placed inside it while it was
+world-writable outlives the `chmod`. The implementation MUST therefore distinguish "created it" from
+"found it" atomically (`mkdir` without `-p` semantics; `AlreadyExists` is the second case) and run
+the verifier on the directory as found.
+
 **Windows DACL** is required even though the SID appears in the pipe name — the name buys collision
 avoidance, not security, and the default descriptor grants read access to Everyone and the anonymous
 account:

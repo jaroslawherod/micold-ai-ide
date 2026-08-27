@@ -88,6 +88,12 @@ pub enum Message {
     /// posing the *idea* of a navigation rail rather than being one, and "which row is current"
     /// is the only thing it has to say.
     SectionShown(usize),
+    /// The section rail was collapsed to its icons, or opened back up (feature 027, FR-026d).
+    ///
+    /// Live for the same reason the destination is: a rail that shows one width is showing half the
+    /// component. The claim the collapsed state makes — that every destination stays reachable when
+    /// the labels go — can only be read off a rail you can actually collapse and then press.
+    SectionRailToggled,
 }
 
 /// The showcase's whole state.
@@ -126,6 +132,9 @@ pub struct Showcase {
     select_choice: Option<String>,
     /// The section rail's current destination.
     section_shown: usize,
+    /// Whether that rail is collapsed to its icons. Expanded at rest, like the application's own
+    /// (FR-026d), so the page looks the same on every launch (FR-022).
+    section_rail_collapsed: bool,
     /// The type-ahead example's own search text (feature 021, FR-020). Empty at rest, so the page
     /// looks the same on every launch (FR-022).
     typeahead_query: String,
@@ -166,6 +175,7 @@ impl Showcase {
             grid: super::samples::grid(),
             select_choice: None,
             section_shown: 0,
+            section_rail_collapsed: false,
             typeahead_query: String::new(),
             typeahead_highlight: None,
             typeahead_selected: None,
@@ -214,6 +224,11 @@ impl Showcase {
     /// The section rail's current destination.
     pub fn section_shown(&self) -> usize {
         self.section_shown
+    }
+
+    /// Whether that rail is currently collapsed to its icons.
+    pub fn section_rail_collapsed(&self) -> bool {
+        self.section_rail_collapsed
     }
 
     pub fn typeahead_query(&self) -> &str {
@@ -353,6 +368,11 @@ impl Showcase {
             // `open` flag would be a second answer to a question the widget has already answered.
             Message::SelectChosen(choice) => self.select_choice = Some(choice),
             Message::SectionShown(index) => self.section_shown = index,
+            // Collapsing does not disturb the destination — that is the point of it, and the
+            // showcase would hide the claim if it reset the marker here.
+            Message::SectionRailToggled => {
+                self.section_rail_collapsed = !self.section_rail_collapsed;
+            }
             Message::TypeaheadFocused => self.typeahead_open = true,
             Message::TypeaheadDismissed => self.typeahead_open = false,
         }

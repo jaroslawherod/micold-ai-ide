@@ -155,6 +155,19 @@ pub struct WorktreeForm {
     /// T123). Only long stages produce these — a submodule fetch, in practice — so it stays `None`
     /// for the fast ones, and is cleared on every stage change and new attempt.
     pub stage_detail: Option<String>,
+    /// What to say about a create whose connection dropped before the daemon answered (feature
+    /// 010, BUG-020). Set by [`create_interrupted`]; cleared when a new attempt starts, and with
+    /// the form when it closes.
+    ///
+    /// # Why this is not `State::worktree_error`
+    ///
+    /// The error line is cleared whenever the worktree list is replaced, on the grounds that a
+    /// create failure shown against the old list is stale (T067a-4). That is right for a failure
+    /// and exactly wrong for this: the whole content of this message is *the list is the authority
+    /// now*, and the list arriving is what makes it true. Reconnection follows the drop within a
+    /// second or two and `State::set_worktrees` reports its outcome unconditionally, so a notice
+    /// living on the error line is one the user gets no chance to read.
+    pub interrupted: Option<String>,
 }
 
 impl WorktreeForm {
@@ -546,11 +559,16 @@ pub fn resolution_cancelled(state: &mut crate::app::State) {
 ///
 /// A new attempt never inherits the previous one's stage.
 pub fn create_started(state: &mut crate::app::State, mode: CreateMode) {
+    // A new attempt never inherits the previous one's message either. The stale error line used to
+    // stand through the whole of the next attempt's pending state — an error and a progress bar on
+    // screen together, describing different attempts (BUG-020).
+    state.worktree_form.worktree_error = None;
     with_form(state, |form| {
         form.status = WorktreeFormStatus::Creating;
         form.mode = mode;
         form.stage = None;
         form.stage_detail = None;
+        form.interrupted = None;
     });
 }
 
@@ -600,6 +618,22 @@ pub fn create_failed(state: &mut crate::app::State, message: String) {
     state.worktree_form.worktree_error = Some(message);
     with_form(state, |form| {
         form.status = WorktreeFormStatus::Editing;
+    });
+}
+
+/// A create's connection dropped before the daemon answered it (feature 010, BUG-020).
+///
+/// Not a failure: the daemon applies its mutation before replying, so the request may well have
+/// taken effect — the worktree in the report's reproduction really was created. What is knowable is
+/// that nothing on this connection will ever say which, so the form stops claiming the operation is
+/// running and says so instead. The inputs stay exactly as they were, because the user may want to
+/// retry and because a drop is not a reason to discard what they typed (FR-007).
+pub fn create_interrupted(state: &mut crate::app::State, message: String) {
+    with_form(state, |form| {
+        form.status = WorktreeFormStatus::Editing;
+        form.stage = None;
+        form.stage_detail = None;
+        form.interrupted = Some(message);
     });
 }
 
@@ -684,6 +718,9 @@ pub enum Msg {
     Created(Worktree),
     /// The daemon reported a worktree create failure (FR-017); show it, keep the form open.
     CreateFailed(String),
+    /// The connection carrying an in-flight create dropped, so its outcome is unknown (BUG-020);
+    /// stop showing it as running and say so, keeping the form and its inputs.
+    CreateInterrupted(String),
 }
 
 /// The form's own reducer: one entry point, twenty-two answers (FR-004a).
@@ -715,6 +752,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::CreateStageChanged(stage, detail) => create_stage_changed(state, stage, detail),
         Msg::Created(worktree) => return created(state, worktree),
         Msg::CreateFailed(message) => create_failed(state, message),
+        Msg::CreateInterrupted(message) => create_interrupted(state, message),
     }
     Vec::new()
 }

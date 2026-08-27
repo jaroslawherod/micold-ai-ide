@@ -13,7 +13,9 @@
 //! pressed, never what is true now.
 
 use micold_client::app::{drain, interpret, State};
-use micold_client::features::session::{start_menu_toggled, PressTarget, StartIntent};
+use micold_client::features::session::{
+    start_menu_toggled, AvailabilitySource, CliAvailability, PressTarget, StartIntent,
+};
 use micold_core::notify::Level;
 use micold_core::session::{AiCli, SessionLocation};
 
@@ -26,7 +28,10 @@ const SENTENCE: &str =
 fn state_with(default_ai_cli: AiCli, available: &[AiCli]) -> State {
     let mut state = State::default();
     state.session.default_ai_cli = default_ai_cli;
-    state.session.available_providers = available.to_vec();
+    state.session.available_providers = Some(CliAvailability {
+        available: available.to_vec(),
+        source: AvailabilitySource::ThisComputer,
+    });
     state
 }
 
