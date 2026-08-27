@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-16
 
-**Status**: Draft
+**Status**: Closed (implemented and shipped; every task including T042 is done). The manual quickstart pass is **fully run** — [evidence](./evidence/gui-pass-2026-08-25.md), 2026-08-25, superseding the [partial pass](./evidence/partial-gui-pass.md) of 2026-08-20. Most steps pass. Three clauses do not, and are open bugs rather than open tasks: the focused terminal has no visual indication ([BUG-005](./bugs/BUG-005.md), FR-010), paste is not bracketed so a multi-line paste auto-submits ([BUG-006](./bugs/BUG-006.md), FR-013), and a copy chord with an empty selection wipes the clipboard ([BUG-004](./bugs/BUG-004.md), FR-013). The pass also surfaced [010 BUG-014](../010-daemon-session-persistence/bugs/BUG-014.md). Four claims remain out of reach of a headless pass and are recorded as unrun, not passed: SC-008's perceived latency on a software rasteriser, sub-line touchpad flicks, interrupting a running `claude` turn, and SC-006's non-Linux platforms (carried by T041's CI matrix).
 
 **Input**: User description: "Improve the terminal behavior. It should act as a real terminal and support colors, same as a regular terminal. Propagate the shortcut key events, only when focused on the terminal. Should generally allow for regular work with the claude CLI and ensure that it is displayed in a proper way."
 

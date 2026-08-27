@@ -21,6 +21,14 @@
 //! reached before T031. T031 registered the other six, and that *did* change what Escape does —
 //! recorded below in `escape_now_reaches_every_popover`, not hidden inside the table.
 //!
+//! ## Nine dialogs, then eight (feature 027)
+//!
+//! The counts above are the ones this file was written with. Settings left the list in feature
+//! 027 — it is a view now, not a floating surface (FR-026), so it has no cancellation to declare
+//! and no place in a registry of things Escape closes. `every_dialog_is_in_the_list` carries the
+//! current arithmetic; the narrative above is kept as written because it is about why the file
+//! has the shape it has, not about how many rows are in it today.
+//!
 //! ## The keyboard path (T034)
 //!
 //! Up to T034 all of that was about what dispatch *would* answer; the live Escape key still went
@@ -36,7 +44,6 @@ use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session;
 use micold_client::features::session::Msg as SessionMsg;
-use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
@@ -95,11 +102,6 @@ fn dialogs() -> Vec<Dialog> {
             id: "add_worktree",
             cancel: Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
             open: |state| state.worktree_form.form = Some(Default::default()),
-        },
-        Dialog {
-            id: "settings",
-            cancel: Message::Settings(SettingsMsg::Cancelled),
-            open: |state| state.settings.settings_draft = Some(Default::default()),
         },
         Dialog {
             id: "confirm_worktree_delete",
@@ -220,18 +222,22 @@ fn every_dialog_is_in_the_list() {
     // The compile-time half of this went with the enum: an exhaustive `match` used to make a
     // dialog added without an expectation a build error. Nothing about a registration line is
     // exhaustive, so the hold is now arithmetic — this list against the registry's own count of
-    // dialogs. A tenth dialog registered without a row here fails on the second assertion, and
-    // the twenty states this file covers stay twenty.
+    // dialogs. A ninth dialog registered without a row here fails on the second assertion, and
+    // the eighteen states this file covers stay eighteen.
+    //
+    // Nine until feature 027. Settings was the largest of them and is no longer a dialog at all —
+    // it is a view (FR-026), so it neither floats nor takes Escape, and the count going *down* is
+    // this file noticing that rather than a row being lost.
     assert_eq!(
         dialogs().len(),
-        9,
-        "the dialog list has drifted. Add the new dialog here, or the twenty states this file is \
-         meant to cover are no longer twenty"
+        8,
+        "the dialog list has drifted. Add the new dialog here, or the eighteen states this file is \
+         meant to cover are no longer eighteen"
     );
     assert_eq!(
         every_state().len(),
-        20,
-        "nine dialogs plus nothing open, each with the filter panel open and closed"
+        18,
+        "eight dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()
@@ -294,7 +300,6 @@ fn the_reducer_opens_a_dialog_through_that_mechanism() {
             "add_worktree",
             Message::WorktreeForm(micold_client::features::worktree_form::Msg::Opened),
         ),
-        ("settings", Message::Settings(SettingsMsg::Opened)),
     ];
 
     for (name, opening) in openers {
@@ -509,31 +514,37 @@ fn the_keyboard_subscription_names_no_surface() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui/mod.rs");
     let src =
         std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    // Everything from the subscription to the end of the module: feature 027 split the mapping
+    // out of the closure (`escape_message`), so reading only the `subscription` body would find
+    // no message at all and quietly stop guarding anything.
     let at = src
         .find("pub fn subscription(")
         .expect("`ui::subscription` has moved; point this guard at it");
-    let rest = &src[at..];
-    let end = rest.find("\n}").expect("unterminated function");
-    let body = &rest[..end];
+    let body = &src[at..];
 
     assert!(
         body.contains("Message::EscapePressed"),
-        "the guard is looking at the wrong text: the subscription's body should emit \
+        "the guard is looking at the wrong text: the keyboard subscription should emit \
          `Message::EscapePressed`"
     );
     assert!(
         !body.contains("Overlay::"),
         "`ui::subscription` matches on an overlay variant again:\n{body}"
     );
+    // `Message::FocusMoved` is exempt on the same grounds Escape is, and for the same reason: it
+    // names *what the key was*, not what surface it reaches. Focus traversal has no table to
+    // drift from — the rendering stack owns the order.
     let named: Vec<&str> = body
         .match_indices("Message::")
         .map(|(at, _)| body[at..].split_whitespace().next().unwrap_or_default())
-        .filter(|m| !m.starts_with("Message::EscapePressed"))
+        .filter(|m| {
+            !m.starts_with("Message::EscapePressed") && !m.starts_with("Message::FocusMoved")
+        })
         .collect();
     assert!(
         named.is_empty(),
         "`ui::subscription` names per-surface messages again: {named:?} — it is supposed to \
-         report that Escape happened and let the registry decide what that closes"
+         report that a key happened and let the registry decide what that reaches"
     );
 }
 
@@ -648,9 +659,6 @@ fn a_dialog_draws_from_its_own_state() {
             s.update(Message::WorktreeForm(
                 micold_client::features::worktree_form::Msg::Opened,
             ))
-        }),
-        ("settings", |s| {
-            s.update(Message::Settings(SettingsMsg::Opened))
         }),
         ("confirm_worktree_delete", |s| {
             s.update(Message::Worktree(WorktreeMsg::DeleteRequested(

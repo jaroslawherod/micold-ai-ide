@@ -10,8 +10,8 @@ and it keeps running in the background afterward.
 
 ## What survives, and what doesn't (User Story 1)
 
-A session is a running process (your `claude` session or a shell) plus the interpreted screen it has
-produced. Both live in the daemon, so:
+A session is a running process (your AI CLI — `claude` or `copilot` — or a shell) plus the
+interpreted screen it has produced. Both live in the daemon, so:
 
 | You do this | What happens to your sessions |
 |---|---|
@@ -21,7 +21,7 @@ produced. Both live in the daemon, so:
 | **Reopen a session after any of the above** | You get the **current** screen immediately (a snapshot, not a replay), with scrollback covering the whole time you were away. |
 | **Log out / end your login session** (Linux) | This is the one thing that can stop the daemon; see [Surviving logout](#surviving-logout) (User Story 7). |
 
-Concretely, if you start a long-running build or a `claude` session that is working through a task,
+Concretely, if you start a long-running build or an AI CLI session that is working through a task,
 close the window, and come back ten minutes later, the session is still `Running`, the screen shows
 the latest output, and scrolling back shows what happened while you were gone — with no gaps and no
 duplicated lines.
@@ -70,13 +70,13 @@ glance what each one is doing without opening it:
 | _(no dot)_ | **Unknown** — the daemon has no signal yet (see below). This is deliberate, not a bug. |
 | **Hollow** | **Ended** — the session's process has finished. |
 
-The important, and unusual, one is **Unknown shows nothing**. The daemon derives activity from
-`claude`'s own lifecycle hooks — the authoritative "I started a turn / I finished a turn" signals —
-not from guessing based on how quiet the terminal is (which was measured and does not work: a session
-can sit silent for half a minute mid-task). So if those hooks aren't reaching the daemon — you ran a
-bare CLI, or hooks are misconfigured — the daemon reports **Unknown** rather than inventing an
-"idle" or "needs you" cue it can't stand behind. **A blank dot means "I don't know", never "nothing
-is happening."**
+The important, and unusual, one is **Unknown shows nothing**. The daemon derives activity from what
+the AI CLI itself reports at each turn boundary — the authoritative "I started a turn / I finished a
+turn" signal — not from guessing based on how quiet the terminal is (which was measured and does not
+work: a session can sit silent for half a minute mid-task). So if that signal isn't reaching the
+daemon — you ran a bare CLI outside the app, or the CLI is configured not to emit it — the daemon
+reports **Unknown** rather than inventing an "idle" or "needs you" cue it can't stand behind. **A
+blank dot means "I don't know", never "nothing is happening."**
 
 "Awaiting input" is a *strong hint*, not a guarantee: a turn can end and then continue on its own
 (auto-continuation, or a hook that resumes it), so treat the attention dot as "probably your turn,"
@@ -84,19 +84,31 @@ not a hard stop.
 
 ### How the daemon knows (and what it never sees)
 
-The daemon points each `claude` session at a small **loopback-only** listener — bound to
-`127.0.0.1` on a random port, reachable only from your own machine — and `claude` posts a one-line
-notice to it at each turn boundary. Each session gets its own unguessable token; a request without it
-is refused. The listener does exactly one thing — report a session's activity — and can touch nothing
-else: not your projects, not session input, not the catalog. It is wired up through a per-session
-settings file the daemon writes, so **your own `claude` configuration is never modified**. The
-notices are never written to a log (they can carry file paths and prompt metadata).
+Each CLI reports differently, and the daemon takes each one's own mechanism rather than a common
+guess:
 
-The session **title** shown in the sidebar comes from the same terminal stream: `claude` continuously
-sets the terminal title to the session's generated name, and the daemon reads it directly and pushes
-it to every window — replacing an older approach that repeatedly re-scanned a transcript file. A
-leading status glyph (the little spinner) is stripped before display; the title text itself is
-treated as untrusted and length-bounded.
+- **Claude Code posts to a loopback listener.** The daemon points each `claude` session at a small
+  **loopback-only** listener — bound to `127.0.0.1` on a random port, reachable only from your own
+  machine — and `claude` posts a one-line notice to it at each turn boundary. Each session gets its
+  own unguessable token; a request without it is refused. It is wired up through a per-session
+  settings file the daemon writes, so **your own `claude` configuration is never modified**.
+- **GitHub Copilot writes an event log.** `copilot` appends a line to its own session event file as
+  it works, and the daemon reads the bytes appended since it last looked, woken by the operating
+  system's file-change notification. Nothing is polled on a timer, and no work at all is scheduled
+  for an idle session.
+
+Either way the listener or the reader does exactly one thing — report a session's activity — and can
+touch nothing else: not your projects, not session input, not the catalog. The notices are never
+written to a log (they can carry file paths and prompt metadata). A session the app merely
+*discovered* on disk is never watched at all; its dot stays blank until you start it.
+
+The session **title** shown in the sidebar comes from the same terminal stream: the AI CLI
+continuously sets the terminal title to the session's generated name, and the daemon reads it
+directly and pushes it to every window — replacing an older approach that repeatedly re-scanned a
+transcript file. A leading status glyph (the little spinner) is stripped before display; the title
+text itself is treated as untrusted and length-bounded. For a session found on disk rather than
+started here, there is no live terminal to read, so the title comes from the CLI's own record of the
+conversation — `claude`'s transcript or `copilot`'s session state — if it has written one yet.
 
 ## Project and worktree operations run through the daemon (User Story 3)
 
@@ -140,17 +152,23 @@ is attached — and it does. The behaviour is **identical** attended and unatten
 never changes how a session's exit is handled.
 
 - **A crash restarts automatically.** If a session's process exits unexpectedly (a nonzero exit or a
-  signal — a crash, an out-of-memory kill), the daemon relaunches it. For a `claude` session that
-  means resuming the same conversation, so a crash mid-task is recovered on its own.
+  signal — a crash, an out-of-memory kill), the daemon relaunches it. For an AI CLI session that
+  means resuming the same conversation — the app asks that CLI to resume the session id it owns —
+  so a crash mid-task is recovered on its own.
 
-- **A normal exit just stops it.** If the process ends cleanly — you quit `claude`, or a shell
+- **A normal exit just stops it.** If the process ends cleanly — you quit the AI CLI, or a shell
   `exit` — the session is left **stopped**, not restarted. Reopening it starts it again on demand.
 
 - **A crash *loop* gives up, loudly.** If a session keeps crashing, the daemon retries a bounded
   number of times (three consecutive restarts) and then settles it in a **Failed** state instead of
-  restarting forever. Failed is durable: it shows up in the session list the next time a window
-  attaches — with the attempt count — and you can restart it manually once you've addressed the
-  cause. This is the same limit whether or not a window was open while it was crashing.
+  restarting forever. Failed carries a sentence saying how many attempts were spent and what the
+  last exit was — `Gave up after 3 restart attempts — last exit: exit status 1.` The terminal pane
+  shows that sentence in place of the output it has none of, beside the `restart` control that
+  resolves it, and the status bar under it reads `failed after 3 attempts`. A window that attaches
+  after the loop ended is shown both, so a loop that ran while nobody was watching is not reduced to
+  the word `failed`. It survives until the daemon itself stops (the state is held in memory, not
+  written to disk), and you can restart the session manually once you've addressed the cause. This
+  is the same limit whether or not a window was open while it was crashing.
 
 - **Teardown reaps the whole process tree.** Closing or deleting a session terminates not just its
   top-level process but any helpers it spawned, so nothing is orphaned in the background.
@@ -273,8 +291,13 @@ login session ends, the daemon included. Making sessions survive a logout is:
 
 - **Supported on Linux**, via one explicit, user-enabled setting (below). It is **never turned on for
   you** — not by installation, not silently.
-- **Not supported on macOS or Windows.** There is no unprivileged equivalent, so the app does not
-  pretend to offer one. On those platforms sessions survive closing the window but not logging out.
+- **Not supported on macOS or Windows** *for a service running directly on your computer*. There is
+  no unprivileged equivalent, so the app does not pretend to offer one. On those platforms sessions
+  survive closing the window but not logging out.
+- **Supported everywhere when the service runs in a container** — see
+  [Where the service runs](#where-the-service-runs-feature-027) below. Not a second mechanism
+  bolted on: it is the container runtime's own restart policy, and the runtime is a service the
+  platform already keeps running across logout and reboot.
 
 ### Enabling it (Linux)
 
@@ -304,6 +327,76 @@ enable them** — installation touches no per-user manager. The service is the s
 whether the user manager socket-activates it or a window spawns it directly, so nothing behaves
 differently based on how it started.
 
+## Where the service runs (feature 027)
+
+The daemon has a **placement**: where it runs. Until this feature there was only one, and it was
+assumed rather than described.
+
+This section is the *model*. For turning the container placement on, what it can and cannot see,
+which runtimes work, and what to do when it will not start, see
+[Running the session service in a container](user-guide/sandboxed-daemon.md); the switch itself
+lives in Settings → Session service, described in
+[Settings](user-guide/settings.md#session-service).
+
+| Placement | What it is | Reached over |
+|---|---|---|
+| **On this computer** (default) | A detached host process, spawned by the app on a cold start | A Unix socket or named pipe in a `0700` directory |
+| **In a container** | A container on this machine, seeing only your registered projects | Loopback TCP, authenticated by a shared secret |
+| *Remote* | Reserved. Not selectable in this release | — |
+
+The third row is why the model exists as a model. Adding the variant now costs one `match` arm per
+site and forces every placement-dependent decision to be *stated*; adding it later would mean finding
+every place the host process was assumed by omission.
+
+### Why the container is not reached over a socket
+
+A bind-mounted Unix socket does not survive Docker Desktop's file sharing on macOS or Windows — that
+layer passes file *contents*, not socket semantics. Socket-only would therefore mean Linux-only. So
+the sandbox listens on loopback TCP, which every platform forwards the same way.
+
+That transport carries none of the protection a `0700` directory gives: any local process can connect
+to a loopback port. What replaces it is a shared secret, generated per sandbox start, written `0600`
+and bind-mounted read-only into the container. The guarantee moves from "you cannot reach it" to "you
+cannot answer for it", and the filesystem permission is still what enforces it. This is why the wire
+protocol grew an authenticated handshake — version 6 when the sandbox landed, and version 7 today,
+after the repository-root query the container placement also needed (below).
+
+### The lifecycle
+
+Enabling the sandbox does not start it on the spot; the next launch does. From then on each start
+runs: **probe** the runtime → **acquire** the image → **adopt or create** the container → **start**
+it → connect.
+
+The adopt step matters more than it looks. A sandbox outlives the app by design, so on almost every
+start there is already a container with our name. It is reused if it is ours, started if it is ours
+and stopped, and **replaced** if it was built from a different image or a different source tree —
+replaced rather than accumulated beside, because a second container would leave the first holding the
+control port and the state directory.
+
+### What it does not do
+
+It never falls back. A sandbox that will not start is an error with a cause and a remedy, and running
+without it is a choice the user makes for that occurrence — never a substitution the app performs
+because the alternative was easier. If the app ever silently connected to a host process after a
+sandbox failed, the feature would be gone and nothing would report it.
+
+### Who answers "is this a git repository?"
+
+With the service in a container, the app can no longer answer that question for itself: the folder
+you picked is a host path, and the app's own `git` sees a machine the sessions do not run on. So the
+question goes to whoever can see the folder the way the sessions will — the service — over the wire
+(`RepoRootQuery`/`RepoRoot`, the addition that moved the protocol to version 7). On the default
+placement nothing changes: the app still answers locally, because there it *is* the machine that
+runs the sessions.
+
+### State
+
+The service's data directory — `projects.json`, per-project state, logs — is mounted from your own
+data directory rather than kept inside a runtime-managed volume. Two reasons: the app has to read the
+registered project list *before* the sandbox exists in order to know what to mount, and your data
+stays somewhere you can see and back up.
+
 ---
 
-*This document covers the daemon feature end to end (User Stories 1–7).*
+*This document covers the daemon feature end to end (User Stories 1–7), plus feature 027's placement
+model.*

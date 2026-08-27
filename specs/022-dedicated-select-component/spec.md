@@ -4,7 +4,27 @@
 
 **Created**: 2026-08-07
 
-**Status**: Draft
+**Status**: Complete 2026-08-25 — all 65 tasks run, including the four that sat blocked on "eyes at a
+display". `gst-launch-1.0 ximagesrc` records the X server at a sustained 60 fps, which turns a
+transition into a frame count and settles §B2 without a person watching: both pickers **grow in**
+and settle (select 14 frames, type-ahead ~5), and a reversal resumes rather than snapping. The one
+failure is not this feature's — neither list **fades out** (3 rendered frames, ~1% and ~7% of range,
+then cut), and the gallery's bare `Fade` and `Scale` demos do the same with no picker involved, so
+it is filed against feature 007 as [BUG-001](../007-motion-overlay-fade/bugs/BUG-001.md). Evidence:
+[B-gallery-pass.md](./evidence/B-gallery-pass.md), [B-client-pass.md](./evidence/B-client-pass.md),
+[B2-press-during-exit.md](./evidence/B2-press-during-exit.md),
+[B2-the-transition.md](./evidence/B2-the-transition.md).
+
+**Corrected reading, 2026-08-26**: the lists were never cut. Both faded the whole way out and
+reached their targets — in about a third of the stated duration, because `Progress` stepped a fixed
+fraction per frame while this window renders uncapped, so at 60 fps only the flat head of the
+back-loaded `accelerate` curve was captured. That is the "~1% and ~7%" above. BUG-001 is fixed and
+this feature's §B2 clause now holds by the durations the components state; the corrected numbers are
+in [007's re-measurement](../007-motion-overlay-fade/evidence/BUG-001-exits-after-the-fix.md).
+Nothing in 022 changed, and the reversal-resumes result above was right at the time and still is.
+
+Stated gaps: §B2 was measured in the light
+scheme only, §B4's Tab-in/Tab-out was not exercised, and §B5's right-edge placement is unposable.
 
 **Input**: User description: "Make select an dedicated compoenent that will fully support the material design 3 look and feel similar to type a head. Both should share same common base." Follow-up: "the drop down option list should be animated same as angular material"
 

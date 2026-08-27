@@ -14,7 +14,7 @@ pub mod layout;
 use micold_core::fs_scan::FakeFolderScanner;
 use micold_core::project::canonicalize_best_effort;
 use micold_core::session::{
-    RestartDecision, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+    AiCli, RestartDecision, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
 use micold_core::workspace::Workspace;
 use std::path::{Path, PathBuf};
@@ -31,14 +31,17 @@ pub fn fake_scanner() -> FakeFolderScanner {
 
 /// A session that is currently `Running`.
 pub fn running_session(worktree_dir: &str) -> Session {
-    let mut s = Session::start_new(SessionLocation::Worktree(worktree_dir.to_string()));
+    let mut s = Session::start_new(
+        SessionLocation::Worktree(worktree_dir.to_string()),
+        AiCli::ClaudeCode,
+    );
     s.mark_running();
     s
 }
 
 /// A `SessionLocation::Default` session that is currently `Running` (feature 010).
 pub fn running_default_session() -> Session {
-    let mut s = Session::start_new(SessionLocation::Default);
+    let mut s = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     s.mark_running();
     s
 }
@@ -50,15 +53,19 @@ pub fn idle_session(worktree_dir: &str) -> Session {
         SessionLocation::Worktree(worktree_dir.to_string()),
         SessionLabel::Pending,
         TerminalMode::AiCli,
+        AiCli::ClaudeCode,
     )
 }
 
 /// A session driven to `Failed` via repeated unexpected exits (crash-loop guard).
 pub fn failed_session(worktree_dir: &str) -> Session {
-    let mut s = Session::start_new(SessionLocation::Worktree(worktree_dir.to_string()));
+    let mut s = Session::start_new(
+        SessionLocation::Worktree(worktree_dir.to_string()),
+        AiCli::ClaudeCode,
+    );
     s.mark_running();
     loop {
-        if s.on_unexpected_exit() == RestartDecision::GiveUp {
+        if s.on_unexpected_exit("exit status 1") == RestartDecision::GiveUp {
             break;
         }
     }

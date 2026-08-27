@@ -4,7 +4,13 @@
 
 **Created**: 2026-08-21
 
-**Status**: Draft
+**Status**: Closed (implemented and shipped; every task in [tasks.md](./tasks.md) is done. T024's
+manual GUI check ran 2026-08-21 headlessly on Xvfb + lavapipe — [visual-pass.md](./visual-pass.md).
+The arrangement passes at zero, one, three and six instances in both schemes; the pass found three
+defects the green gates could not see — an edge fade drawn on a bar that does not overflow, tabs
+riding 4dp above the controls beside them, and a newly created tab left behind the fade — all three
+fixed as T025–T027 and re-tested at T028, 2047 tests across 210 binaries, 0 failed. No open defects.
+macOS/Windows parity is unrun.)
 
 **Input**: User description: "the ai tab session don't look as I was thinking about it. I wanted to
 remove this toggle button and have just a tabs. starting from right AI tab, Terminal tabs, Plus

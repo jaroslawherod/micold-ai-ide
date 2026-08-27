@@ -19,11 +19,17 @@ use std::path::PathBuf;
 use micold_client::app::State;
 use micold_client::features::connection::ConnectionStatus;
 use micold_client::features::session::SessionMenu;
-use micold_client::features::settings::SettingsDraft;
+use micold_client::features::settings::{
+    AppearanceDraft, DaemonDraft, EnvironmentDraft, FieldError, SettingsDraft, SettingsSection,
+    TerminalDraft,
+};
+use micold_client::features::window::FieldId;
 use micold_client::features::worktree::WorktreeMenu;
 use micold_client::features::worktree_form::{BranchSource, WorktreeForm};
 use micold_core::project::Availability;
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::typeahead::{rank, Query};
 use micold_core::worktree::{BranchCandidate, BranchOrigin, Worktree, WorktreeStatus};
 
@@ -111,7 +117,7 @@ const TERMINAL_ADD_INSTANCE: &[usize] = &[0, 0, 1, 1, 1, 0, 3];
 const TERMINAL_RESTARTABLE_ADD_INSTANCE: &[usize] = &[0, 0, 1, 1, 1, 0, 4];
 const TERMINAL_RESTARTABLE_TAB_AI_PINNED: &[usize] = &[0, 0, 1, 1, 1, 0, 5];
 
-const TAB_STRIP_VIEWPORT: u32 = 703;
+const TAB_STRIP_VIEWPORT: u32 = 668;
 
 const TERMINAL_TAB_STRIP: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0];
 const TERMINAL_TAB_LEADING: &[usize] = &[0, 0, 1, 1, 1, 0, 2, 0, 0, 0, 0, 0, 0];
@@ -400,6 +406,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     SessionLocation::Worktree("feat-short".to_string()),
                     SessionLabel::Named("feat/short".to_string()),
                     TerminalMode::Regular,
+                    AiCli::ClaudeCode,
                 );
                 let id = session.id;
                 let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
@@ -573,38 +580,65 @@ pub fn covered_states() -> &'static [CoveredState] {
             ],
         },
         // --- Added to exercise FR-016 end-to-end (T032) ------------------------------------------
-        // The Settings dialog: the tallest form the application shows, and the only covered state
-        // with a checkbox, a text field carrying a validation error, and a control row that has to
-        // fit four labelled inputs into a modal. Nothing about registering it needed a change
-        // outside this file, which is the point of adding it.
+        // The Settings view: the tallest form the application shows, and the only covered state
+        // with a navigation rail, a checkbox, a text field carrying a validation error, and a
+        // control row that has to fit two actions below a scrolling page. Nothing about
+        // registering it needed a change outside this file, which is the point of adding it.
+        //
+        // Feature 027 turned it from a 420dp modal into a full-surface view, so what this records
+        // is a *content* layout rather than a dialog's — the rail beside the page, and the actions
+        // under it, both of which are new geometry that nothing else here covers.
         //
         // Every value is invented and fixed (FR-007) rather than taken from `SettingsDraft::
         // default()`, whose fields track the shipped defaults and would silently re-record the
-        // fixture the day one of them changes.
+        // fixture the day one of them changes. The daemon half is the exception the same rule
+        // asks for: the Terminal section is the one on screen, so none of it is laid out — but the
+        // shared credential is, as the rail's badge, so that is stated.
         CoveredState {
-            name: "settings-dialog-with-validation-error",
+            name: "settings-view-with-validation-error",
             build: || {
                 let mut state = with_project();
-                state.settings.settings_draft = Some(SettingsDraft {
-                    scrollback_lines: "12000".to_string(),
-                    env_include_enabled: true,
-                    env_include_script_path: "~/.config/micold/session-env.sh".to_string(),
-                    env_include_timeout: "5".to_string(),
-                    error: Some("the scrollback limit must be between 100 and 100000".to_string()),
+                let mut draft = SettingsDraft {
+                    section: SettingsSection::Terminal,
+                    appearance: AppearanceDraft {
+                        theme: micold_core::theme::ThemePreference::Dark,
+                    },
+                    terminal: TerminalDraft {
+                        scrollback_lines: "12000".to_string(),
+                    },
+                    environment: EnvironmentDraft {
+                        enabled: true,
+                        script_path: "~/.config/micold/session-env.sh".to_string(),
+                        timeout_secs: "5".to_string(),
+                        default_ai_cli: micold_core::session::AiCli::ClaudeCode,
+                    },
+                    daemon: DaemonDraft::default(),
+                    error: None,
+                };
+                draft
+                    .daemon
+                    .profile
+                    .credentials
+                    .insert(micold_core::sandbox::CredentialShare::GitConfig);
+                // Through `report`, not by setting the field: the section a rejection shows is the
+                // rejection's own business (FR-029), and a fixture that set both by hand could
+                // record a pairing the application cannot produce.
+                draft.report(FieldError {
+                    field: FieldId::SettingsScrollback,
+                    section: SettingsSection::Terminal,
+                    message: "Enter a number between 100 and 1000000.".to_string(),
                 });
+                state.settings.settings_draft = Some(draft);
                 StateUnderTest::new(state)
             },
             anchors: &[
                 Anchor {
-                    name: "dialog.root",
-                    path: &[],
+                    name: "settings.rail",
+                    path: &[0, 0, 1, 0, 0, 0],
                 },
-                // The tallest form, so the furthest-down action row: seven children above it.
-                // Was eight until §7.7 moved the scrollback field's free-standing label inside the
-                // field's own container.
                 Anchor {
                     name: "dialog.actions",
-                    path: &[6, 0, 0, 1],
+                    path: &[0, 0, 1, 0, 1, 1],
                 },
             ],
         },
@@ -630,6 +664,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     SessionLocation::Worktree("feat-short".to_string()),
                     SessionLabel::Named("feat/short".to_string()),
                     TerminalMode::Regular,
+                    AiCli::ClaudeCode,
                 );
                 let active = session.id;
                 let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
@@ -720,6 +755,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     SessionLocation::Worktree("feat-short".to_string()),
                     SessionLabel::Named("feat/short".to_string()),
                     TerminalMode::Regular,
+                    AiCli::ClaudeCode,
                 );
                 let leading = session.open_shell_instance();
                 let active_shell = session.open_shell_instance();
@@ -822,6 +858,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     SessionLocation::Worktree("feat-short".to_string()),
                     SessionLabel::Named("feat/short".to_string()),
                     TerminalMode::Regular,
+                    AiCli::ClaudeCode,
                 );
                 let mut opened = Vec::new();
                 for _ in 0..6 {
@@ -899,6 +936,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                     SessionLocation::Worktree("feat-short".to_string()),
                     SessionLabel::Named("feat/short".to_string()),
                     TerminalMode::Regular,
+                    AiCli::ClaudeCode,
                 );
                 let mut workspace = super::workspace_with(vec![(PROJECT, vec![session])]);
                 workspace.active = workspace.projects.first().map(|p| p.path.clone());

@@ -56,19 +56,20 @@ use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::overlay::Layer;
 use micold_core::project::canonicalize_best_effort;
-use micold_core::session::{Session, SessionId, SessionLocation, ShellInstanceId};
+use micold_core::session::{AiCli, Session, SessionId, SessionLocation, ShellInstanceId};
 use std::collections::BTreeSet;
 use std::path::Path;
 
 /// What this feature remembers (feature 028, contract S1).
 ///
-/// Nine of the twelve keep the names they had as flat members of `app::State`. Three do not: the
-/// qualifier already says `session`, so `session.active_session`, `session.session_menu_open` and
-/// `session.session_remove_target` would say it twice, and they are `active`, `menu_open` and
-/// `remove_target` here. That is the same trim `worktree.menu_open` and `worktree.delete_target`
+/// Twelve of the seventeen keep the names they had as flat members of `app::State`. Five do not:
+/// the qualifier already says `session`, so `session.active_session`, `session.session_menu_open`,
+/// `session.session_remove_target`, `session.session_start_menu` and `session.session_start_press`
+/// would say it twice, and they are `active`, `menu_open`, `remove_target`, `start_menu` and
+/// `start_press` here. That is the same trim `worktree.menu_open` and `worktree.delete_target`
 /// took, and the two menus they name are still the mirror of each other they were.
 ///
-/// The other nine name a sub-surface inside a session rather than the feature — `terminal_`,
+/// The other twelve name a sub-surface inside a session rather than the feature — `terminal_`,
 /// `shell_instance_`, `tab_strip_` — or name no feature at all, so there is nothing for the
 /// qualifier to absorb and they are unchanged.
 ///
@@ -117,6 +118,61 @@ pub struct State {
     /// FR-015c). Its presence *is* the confirm dialog being shown (T037). Mirrors
     /// `worktree.delete_target`.
     pub remove_target: Option<SessionId>,
+    /// Which location's "start a session on…" list is open, if any, and where it hangs from
+    /// (feature 026, FR-004).
+    ///
+    /// The location rather than a boolean: the list's items have to name where the session will
+    /// start, and every sidebar row can open its own.
+    pub start_menu: Option<StartMenu>,
+    /// Where the last press on a start affordance landed, in window pixels (feature 026, T089,
+    /// FR-029d).
+    ///
+    /// The point and the decision arrive in separate messages and, unavoidably, in separate event
+    /// phases: `ContextArea` reports the point on `ButtonPressed`, while the `IconButton` it wraps
+    /// publishes its own message on the *release*. So the point is known first and has to outlive
+    /// the message that carried it — [`start_menu_toggled`] reads it when it opens the list.
+    /// `None` before the first press; a list is only ever opened by one.
+    ///
+    /// Transient: where a row was a moment ago is worth nothing after a restart.
+    pub start_press: Option<(u16, u16)>,
+    /// Which AI CLIs are installed, in `AiCli::ALL`'s order (feature 026, FR-006, T014a).
+    ///
+    /// Filled at the I/O boundary from `Capabilities::available_providers()`, the way
+    /// `worktree.worktrees` is filled from git — and refreshed on a **named event**, when the
+    /// choice is offered (the Settings view opening, the override menu opening), never per frame.
+    /// A `PATH` probe per render is exactly the scheduled work SC-006 forbids.
+    ///
+    /// It is here rather than reached for because there is no route to it otherwise: `features/`
+    /// imports nothing from `shell::` and `Capabilities` is a shell type.
+    ///
+    /// Holding it in memory is not a violation of research R11's rule, which is "never
+    /// *persisted*" — an in-memory snapshot refreshed when the choice is offered cannot go stale
+    /// in a file.
+    pub available_providers: Vec<AiCli>,
+    /// The default AI CLI a new session runs when nothing is chosen for it (feature 026, FR-003).
+    ///
+    /// Service-owned: this mirrors what the daemon reported in `DaemonSettings`, and is written
+    /// only from a `SettingsChanged` or the boot-time settings load.
+    pub default_ai_cli: AiCli,
+    /// The start failure already reported to the user for each session, by the sentence reported
+    /// (feature 026, FR-010, T088).
+    ///
+    /// This is a *said-it* record, not a copy of the failure — the failure itself lives in the
+    /// daemon's snapshot, where `WireLifecycle::Failed { reason, .. }` carries it, and the sidebar
+    /// tint and bar text are already derived from that. What the client lacks without this is any
+    /// memory of having spoken, and the notification is a one-shot: `reconcile_catalog` runs on
+    /// every `CatalogChanged`, an activity badge moving is one of those (T086), and a failure
+    /// re-announced on each of them would be a banner every few seconds for as long as the session
+    /// stays failed.
+    ///
+    /// Keyed by session and holding the sentence, so a *different* reason for the same session —
+    /// a missing CLI after a conversation that had gone missing, say — is news and is said. The
+    /// entry is dropped as soon as the daemon reports that session as anything but failed, which
+    /// is what makes the next failure speak again.
+    ///
+    /// Transient, and deliberately not persisted: it records what this window has said, and a
+    /// window that has said nothing yet should say it.
+    pub announced_start_failures: std::collections::BTreeMap<SessionId, String>,
     /// The open terminal-tab context menu — which instance it belongs to, and where it was opened
     /// in window pixels — or `None` when no menu is showing (feature 012, BUG-005, FR-010b).
     ///
@@ -1070,8 +1126,27 @@ pub enum Msg {
     /// to fade its edge.
     TabStripViewportResized { width: u32 },
     /// Start a new session at the given location — a worktree or, as of feature 010, the
-    /// project root ("Default", FR-001) — (FR-010). The binary spawns `claude`.
-    StartRequested { location: SessionLocation },
+    /// project root ("Default", FR-001) — (FR-010). The binary spawns the named AI CLI.
+    StartRequested {
+        /// Where the session runs.
+        location: SessionLocation,
+        /// Which AI CLI to run (feature 026, FR-004). Already resolved — [`State::provider_for_start`]
+        /// applied the override or the default before this message was built, so the binary's
+        /// handler copies the answer onto the wire and decides nothing.
+        provider: AiCli,
+    },
+    /// Open the "start a session on…" list for a location (feature 026, FR-004). The binary
+    /// refreshes the availability set first — this is one of the two named events research R11
+    /// means by "when the choice is offered".
+    StartMenuOpened(SessionLocation),
+    /// Where a press on the start affordance landed, in window pixels (018 BUG-008, FR-029d).
+    /// Arrives from the same click as [`Msg::StartMenuOpened`] and **before** it — this one is
+    /// published on `ButtonPressed`, that one on the release, because it comes from the wrapped
+    /// button's own `on_press`. So this says where the click was, and the open that follows it is
+    /// what hangs the list there (feature 026, T089).
+    StartMenuAnchored((u16, u16)),
+    /// Dismiss the "start a session on…" list without choosing.
+    StartMenuDismissed,
     /// A session was started/added for the active project (FR-011).
     Started(Session),
     /// Select a session to display its terminal (FR-015); other sessions keep running.
@@ -1219,7 +1294,7 @@ pub enum Msg {
 
 /// The pure half of this feature's reducer surface: shape A (contract M2).
 ///
-/// All thirty-seven arms are here. Fifteen of them additionally need an effect — spawning a
+/// All forty arms are here. Fifteen of them additionally need an effect — spawning a
 /// process, writing to a PTY, scrolling or resizing it, and the clipboard — and those fifteen are
 /// matched a second time in `main.rs`, which runs the effect and lets the message reach here.
 /// The split is by *effect*, not by variant, as `worktree_form` established and M2 names as the
@@ -1288,6 +1363,9 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         // Performed by the binary at the I/O boundary: PTY spawning, and — for feature 006's
         // terminal gestures — writing to the live PTY, scrolling or resizing it, and the
         // clipboard. No pure reducer effect.
+        Msg::StartMenuOpened(location) => start_menu_toggled(state, location),
+        Msg::StartMenuAnchored(anchor) => start_menu_anchored(state, anchor),
+        Msg::StartMenuDismissed => start_menu_dismissed(state),
         Msg::StartRequested { .. }
         | Msg::TerminalBytes(_)
         | Msg::TerminalSelectStart { .. }
@@ -1300,4 +1378,184 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         | Msg::TerminalPasteRequested => {}
     }
     Vec::new()
+}
+
+// ---------------------------------------------------------------------------------------
+// Which AI CLI a new session runs (feature 026, T030/T032a/T075 — FR-002, FR-004, FR-006)
+// ---------------------------------------------------------------------------------------
+
+/// Which half of the split start affordance the user pressed (feature 026, FR-004).
+///
+/// The affordance is one control with two press targets: the primary half starts the default in a
+/// single interaction exactly as the plain button did, and the secondary half opens the list. The
+/// *view* reports which half was hit; everything that follows from that is decided here, because
+/// Principle I's GUI exception covers drawing and does not cover branching.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PressTarget {
+    /// The main button — "start a session".
+    Primary,
+    /// The adjacent control — "start a session on…".
+    Secondary,
+}
+
+/// What a press should actually do (feature 026, T032a).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StartIntent {
+    /// Start immediately, on this CLI.
+    Start(AiCli),
+    /// Do not start anything; offer these CLIs to choose from.
+    ///
+    /// Two different presses land here and they are the same answer: the secondary half, which
+    /// asks for the list; and the primary half when the stored default is not installed, where
+    /// FR-004 says to *tell* the user and offer what is available rather than silently substituting
+    /// or silently doing nothing.
+    OfferChoice(Vec<AiCli>),
+    /// No AI CLI is installed, so there is nothing to start and nothing to offer (FR-006).
+    NothingAvailable,
+}
+
+impl State {
+    /// The CLI a new session should run: the per-session override if one was chosen, otherwise the
+    /// stored default (FR-004).
+    ///
+    /// Choosing an override does **not** touch the default — that is FR-004's other half, and it is
+    /// true here by shape: this function reads `default_ai_cli` and writes nothing.
+    pub fn provider_for_start(&self, chosen: Option<AiCli>) -> AiCli {
+        chosen.unwrap_or(self.default_ai_cli)
+    }
+
+    /// Whether the stored default is currently installed (FR-002).
+    ///
+    /// A `false` here is **not** a reason to rewrite the preference. The stored value stays as the
+    /// user left it and is shown marked, so a temporary `PATH` problem cannot silently discard a
+    /// choice (research R11).
+    pub fn default_ai_cli_is_available(&self) -> bool {
+        self.available_providers.contains(&self.default_ai_cli)
+    }
+
+    /// The CLIs to offer in a menu — the Settings select and the override list (FR-006, T075).
+    ///
+    /// A pure function over `State`, deliberately: `features/` cannot see `Capabilities` and must
+    /// not learn to, so the availability set arrives as state (T014a) and this reads it.
+    pub fn offered_providers(&self) -> Vec<AiCli> {
+        self.available_providers.clone()
+    }
+
+    /// Whether the split affordance's secondary half exists at all (FR-006, SC-001).
+    ///
+    /// Absent when fewer than two CLIs are available: a "choose which one" control that opens a
+    /// list of one is a worse single-CLI experience than the plain button it replaced.
+    pub fn start_affordance_offers_a_choice(&self) -> bool {
+        self.available_providers.len() >= 2
+    }
+
+    /// Resolve a press into what should happen (T032a).
+    ///
+    /// The whole branch lives here so `ui/sidebar.rs` only dispatches. The interesting case is the
+    /// primary half with an unavailable default: it neither starts the default (FR-002 forbids
+    /// substituting silently, and starting a missing binary is FR-010's failure, not FR-004's
+    /// answer) nor does nothing.
+    pub fn start_intent(&self, target: PressTarget) -> StartIntent {
+        if self.available_providers.is_empty() {
+            return StartIntent::NothingAvailable;
+        }
+        match target {
+            PressTarget::Primary if self.default_ai_cli_is_available() => {
+                StartIntent::Start(self.default_ai_cli)
+            }
+            // The default names a CLI that is not installed: say so and offer what is.
+            PressTarget::Primary => StartIntent::OfferChoice(self.offered_providers()),
+            PressTarget::Secondary => StartIntent::OfferChoice(self.offered_providers()),
+        }
+    }
+}
+
+/// The "start a session on…" list, and where it hangs from (feature 026, FR-004).
+///
+/// Mirrors [`SessionMenu`]: what the surface acts on, plus the press point it was opened at. The
+/// point arrives a message *earlier* than the location and is held on [`State`] until the open
+/// reads it — see [`start_menu_anchored`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StartMenu {
+    /// Where a session started from this list would run.
+    pub location: SessionLocation,
+    /// The menu panel's top-left corner, in window pixels (the press point). Clamped at render
+    /// time, not here.
+    pub anchor: (u16, u16),
+}
+
+/// The "start a session on…" list was asked for at a location (feature 026, FR-004).
+///
+/// A second press on the same row's chevron closes it, like every other menu here — the same
+/// replace-or-close rule `menu_toggled` applies to the session context menu.
+///
+/// It opens at the point [`start_menu_anchored`] recorded, which the *same click* published first:
+/// the anchor comes from `ContextArea` on `ButtonPressed`, this one from the button it wraps on the
+/// release. Writing a constant here and letting the anchor correct it afterwards is what feature
+/// 026 shipped — the correction never ran, because there was nothing open when the point arrived
+/// and by the time there was, the point had been dropped, so both halves of the split opened the
+/// list over the sidebar header (T089).
+pub fn start_menu_toggled(state: &mut crate::app::State, location: SessionLocation) {
+    state.session.start_menu = if state
+        .session
+        .start_menu
+        .as_ref()
+        .is_some_and(|open| open.location == location)
+    {
+        None
+    } else {
+        Some(StartMenu {
+            location,
+            anchor: state.session.start_press.unwrap_or_default(),
+        })
+    };
+}
+
+/// Where a press on the start affordance landed (018 BUG-008, FR-029d).
+///
+/// It records the point and nothing else. The list is not open yet when this runs — the press is
+/// this, the open is the release — so there is nothing here to move; [`start_menu_toggled`] is
+/// what reads the point back. Every primary press reports one, including the ones that start a
+/// session outright and the one that *closes* an open list, which is why this decides nothing: what
+/// a press meant is the toggle's answer, and a recorded point that is never read costs nothing.
+///
+/// It deliberately does not also move an already-open list. Pressing another row's chevron while
+/// one is open would then slide the open panel to the new row for the frame between the press and
+/// the release, before the toggle replaced it — a visible twitch for no gain.
+pub fn start_menu_anchored(state: &mut crate::app::State, anchor: (u16, u16)) {
+    state.session.start_press = Some(anchor);
+}
+
+/// The "start a session on…" list was dismissed without choosing.
+pub fn start_menu_dismissed(state: &mut crate::app::State) {
+    state.session.start_menu = None;
+}
+
+/// The "start a session on…" list, as a floating surface (feature 026, T033).
+///
+/// A menu, not a dialog: it is summoned from a row's chevron, it is anchored to the sidebar like
+/// the worktree and session context menus, and clicking away is how it goes. It registers here for
+/// the same reason they do — what closes a surface is one rule, stated once (FR-009).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionStartMenu;
+
+impl FloatingSurface for SessionStartMenu {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("session_start_menu")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::ContextMenu
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::ContextMenu)
+            .cancelled_by(Message::Session(Msg::StartMenuDismissed))
+    }
+}
+
+impl Registered for SessionStartMenu {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state.session.start_menu.as_ref().map(|_| SessionStartMenu)
+    }
 }

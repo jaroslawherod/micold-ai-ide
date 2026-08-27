@@ -21,8 +21,9 @@ use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, DaemonSettings, ProjectSnapshot, SessionSummary,
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
-use micold_core::provider::{AiCliProvider, ClaudeProvider};
-use micold_core::session::{Session, SessionId, SessionLifecycle, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLifecycle, SessionLocation, TerminalMode,
+};
 
 use crate::supervision::{supervise_exit, ExitOutcome, SupervisionAction};
 use micold_core::settings::{
@@ -34,12 +35,16 @@ use micold_core::worktree::worktrees_root;
 
 /// Record the durable, provider-side suppression marker for `session` (bugfix BUG-003, FR-020c)
 /// so reconciliation (FR-020b) never reconstructs it again, even if the catalog's own `archived`
-/// flag/persisted copy is later lost. Best-effort: mirrors [`AiCliProvider::mark_archived`]'s own
+/// flag/persisted copy is later lost. Best-effort: mirrors `AiCliProvider::mark_archived`'s own
 /// non-fatal posture — a failure here is logged, never propagated, since the in-catalog
 /// `archived` flag was already set by the caller. A free function (not a `Catalog` method) so it
 /// can be called while a session list borrowed from `self.workspace` is still mutably held.
 fn mark_archived_durable(project: &Path, session: &Session) {
-    let provider = ClaudeProvider;
+    // Feature 026: the provider comes from the session's own record. A per-session path where the
+    // record is already in hand, so this is the one genuinely mechanical substitution in the
+    // daemon — and it has to happen, because a Copilot session's marker belongs in Copilot's store,
+    // not in a `claude` transcript directory that has never heard of it.
+    let provider = session.provider.provider();
     let Some(config_dir) = provider.config_dir() else {
         tracing::warn!(
             session = %session.id.0,
@@ -53,7 +58,8 @@ fn mark_archived_durable(project: &Path, session: &Session) {
     }
 }
 
-/// The durable aggregate the daemon owns. The single writer of `projects.json` + `settings.json`.
+/// The durable aggregate the daemon owns. The single writer of `projects.json`, and one of two
+/// writers of `settings.json` — see [`Catalog::persist_service_settings`] for what that costs.
 pub struct Catalog {
     workspace: Workspace,
     settings: Settings,
@@ -115,6 +121,7 @@ impl Catalog {
             env_include_enabled: self.settings.env_include_enabled,
             env_include_script_path: self.settings.env_include_script_path.clone(),
             env_include_timeout_secs: self.settings.env_include_timeout_secs,
+            default_ai_cli: self.settings.default_ai_cli,
         }
     }
 
@@ -205,10 +212,43 @@ impl Catalog {
     pub fn set_scrollback(&mut self, lines: usize) -> io::Result<usize> {
         let clamped = clamp_scrollback(lines);
         self.settings.scrollback_lines = clamped;
-        if let Some(store) = &self.settings_store {
-            store.save(&self.settings)?;
-        }
+        self.persist_service_settings()?;
         Ok(clamped)
+    }
+
+    /// Write the five service-owned fields into `settings.json`, leaving every other field as the
+    /// file has it.
+    ///
+    /// # Why this cannot write `self.settings` whole
+    ///
+    /// The client writes that file too, and it owns strictly more of it than this process does:
+    /// the theme, where the service is placed, and the whole sandbox profile — runtime, image,
+    /// resource budget, network posture, and the credential opt-ins. `self.settings` is whatever
+    /// *this daemon* read at its own boot, which for every field outside `settings_wire` is a
+    /// snapshot that only gets staler. `default_ai_cli` is on the service's side of that line
+    /// (feature 026, FR-003), which is why it is copied across here rather than left to the file.
+    ///
+    /// The two calls that reach here both arrive from `SettingsSet`, which the client sends
+    /// **immediately after** writing the file — so saving the whole struct reverts the save that
+    /// just happened, every time, and reliably enough that a save changing nothing at all still
+    /// wiped the theme and every credential the user had shared. That was invisible until feature
+    /// 027: before it, the Settings form held only the four fields this daemon carries, so writing
+    /// the struct whole wrote back the values it had just been sent.
+    ///
+    /// Re-reading is the fix rather than widening `SettingsSet`, because the extra fields are not
+    /// the service's to know. A theme is not a session-service setting, and a protocol that
+    /// carried one would make this daemon the authority on a question it has no opinion about.
+    fn persist_service_settings(&self) -> io::Result<()> {
+        if let Some(store) = &self.settings_store {
+            let mut on_disk = store.load().settings;
+            on_disk.scrollback_lines = self.settings.scrollback_lines;
+            on_disk.env_include_enabled = self.settings.env_include_enabled;
+            on_disk.env_include_script_path = self.settings.env_include_script_path.clone();
+            on_disk.env_include_timeout_secs = self.settings.env_include_timeout_secs;
+            on_disk.default_ai_cli = self.settings.default_ai_cli;
+            store.save(&on_disk)?;
+        }
+        Ok(())
     }
 
     /// Set any of the three service-owned environment-include settings (leaving a field unchanged
@@ -229,22 +269,46 @@ impl Catalog {
         if let Some(timeout_secs) = timeout_secs {
             self.settings.env_include_timeout_secs = clamp_env_include_timeout(timeout_secs);
         }
-        if let Some(store) = &self.settings_store {
-            store.save(&self.settings)?;
-        }
+        self.persist_service_settings()?;
         Ok(())
+    }
+
+    /// Set the default AI CLI for new sessions, persisting atomically (feature 026, FR-003).
+    ///
+    /// Service-owned for the reason the whole settings file is split by field: a preference the
+    /// client wrote directly would be reverted by the next unrelated settings change, because this
+    /// catalog's `Settings` is the copy it read at its own boot.
+    ///
+    /// It persists through [`Self::persist_service_settings`] like the other four. It did not on
+    /// feature 026's branch — it wrote `self.settings` whole, which was harmless while the four
+    /// service fields and the theme were nearly the whole file, and is not once feature 027 gives
+    /// the client a placement and an entire sandbox profile to own. Writing the struct whole here
+    /// would revert every one of them on a change of AI CLI.
+    ///
+    /// Deliberately **not** validated against availability: keeping a default that names an
+    /// uninstalled CLI is the requirement, not an oversight (FR-004, research R11).
+    pub fn set_default_ai_cli(&mut self, which: AiCli) -> io::Result<()> {
+        self.settings.default_ai_cli = which;
+        self.persist_service_settings()
     }
 
     /// Create a new session in `project` at `worktree_dir` (empty = the project root / `Default`
     /// location), persist the catalog, and return the daemon-assigned id (FR-009). The daemon owns
     /// the id and the durable record; the client learns it via `OperationOk`/`CatalogChanged`.
-    pub fn create_session(&mut self, project: &Path, worktree_dir: &str) -> io::Result<SessionId> {
+    pub fn create_session(
+        &mut self,
+        project: &Path,
+        worktree_dir: &str,
+        provider: AiCli,
+    ) -> io::Result<SessionId> {
         let location = if worktree_dir.is_empty() {
             SessionLocation::Default
         } else {
             SessionLocation::Worktree(worktree_dir.to_string())
         };
-        let session = Session::start_new(location);
+        // The client already resolved default-or-override and put the answer on the wire (T030),
+        // so nothing here re-decides it.
+        let session = Session::start_new(location, provider);
         let id = session.id;
         self.workspace
             .sessions
@@ -466,14 +530,17 @@ impl Catalog {
     /// pruning (T056). Already-archived sessions are skipped (never revived or re-counted — the
     /// anti-resurrection invariant, main `93a0a08`). The caller checks each cwd for a recorded AI-CLI
     /// conversation off the state lock, then archives the ones with none via `archive_session_ids`.
-    pub fn prunable_session_cwds(&self, project: &Path) -> Vec<(SessionId, PathBuf)> {
+    pub fn prunable_session_cwds(&self, project: &Path) -> Vec<(SessionId, PathBuf, AiCli)> {
         self.workspace
             .sessions
             .get(project)
             .map(|list| {
                 list.iter()
                     .filter(|s| !s.archived)
-                    .map(|s| (s.id, s.location.cwd(project)))
+                    // Each candidate carries its own provider (feature 026): the caller decides
+                    // whether to *archive* it, and one hoisted provider judging a mixed set is how
+                    // every session of the other CLI comes to look empty.
+                    .map(|s| (s.id, s.location.cwd(project), s.provider))
                     .collect()
             })
             .unwrap_or_default()
@@ -508,12 +575,16 @@ impl Catalog {
         &mut self,
         id: SessionId,
         outcome: ExitOutcome,
-    ) -> Option<(PathBuf, SupervisionAction, PathBuf, TerminalMode)> {
+    ) -> Option<(PathBuf, SupervisionAction, PathBuf, TerminalMode, AiCli)> {
         let (project, session) = self.workspace.find_session_mut(id)?;
         let cwd = session.location.cwd(&project);
         let mode = session.mode;
+        // The respawn happens off the lock, so the provider travels out with the rest of the plan
+        // rather than being looked up again there — re-deriving it would be the one place a
+        // restart could quietly change which CLI a session runs (feature 026, FR-001).
+        let provider = session.provider;
         let action = supervise_exit(session, outcome);
-        Some((project, action, cwd, mode))
+        Some((project, action, cwd, mode, provider))
     }
 
     /// Mark a session `Running` **iff** it is currently `Restarting` — a respawned process that has
@@ -559,7 +630,9 @@ impl Catalog {
     /// the "was running when the service last stopped, resumable, never auto-relaunched" state. A
     /// session with no conversation (created but never started) stays `Idle`, which is what makes the
     /// two visibly distinct (FR-006a). `is_resumable` is injected so the daemon can back it with the
-    /// real provider while tests drive it deterministically. Lifecycle is not persisted (S3), so this
+    /// real provider while tests drive it deterministically — and it is told *which* provider to
+    /// ask (feature 026), because a set-wide answer from one CLI reports every session of the other
+    /// as having no conversation, so none of them is ever offered as resumable. Lifecycle is not persisted (S3), so this
     /// mutates in memory only — no write. Regular (shell) sessions have no conversation to resume, so
     /// they are never marked. Returns the count marked (diagnostics).
     ///
@@ -575,7 +648,7 @@ impl Catalog {
     /// session for a damaged one.
     pub fn present_interrupted_resumable(
         &mut self,
-        is_resumable: impl Fn(SessionId, &Path, TerminalMode) -> bool,
+        is_resumable: impl Fn(SessionId, &Path, TerminalMode, AiCli) -> bool,
     ) -> usize {
         let mut marked = 0;
         for (project, sessions) in self.workspace.sessions.iter_mut() {
@@ -588,7 +661,7 @@ impl Catalog {
                 // session?", which is what decides *both* the lifecycle and the mode repair below.
                 // Passing the record's own (possibly damaged) mode would let the damage suppress its
                 // own detection.
-                if !is_resumable(session.id, &cwd, TerminalMode::AiCli) {
+                if !is_resumable(session.id, &cwd, TerminalMode::AiCli, session.provider) {
                     continue;
                 }
                 if session.mode != TerminalMode::AiCli {
@@ -604,6 +677,56 @@ impl Catalog {
             }
         }
         marked
+    }
+
+    /// The ids this catalog already has a record of at `project`, archived ones included.
+    ///
+    /// Archived ones **included** deliberately: discovery must not resurrect a session the user
+    /// closed, and the durable provider-side marker is the belt to this braces. Subtracting them
+    /// here is also what keeps the archived *check* off the hot path (see
+    /// [`Catalog::adopt_discovered_sessions`]).
+    pub fn known_session_ids(&self, project: &Path) -> std::collections::HashSet<uuid::Uuid> {
+        self.workspace
+            .sessions
+            .get(project)
+            .map(|list| list.iter().map(|s| s.id.0).collect())
+            .unwrap_or_default()
+    }
+
+    /// Add sessions found in a provider's own store that this catalog has no record of (FR-014),
+    /// persisting once if anything was added. Returns how many were adopted.
+    ///
+    /// Every one arrives with the provider whose store it came from and with **the CLI's own
+    /// conversation uuid as its `SessionId`** — which is what makes a reopen a no-op rather than a
+    /// duplicate, since the next pass finds the id already known.
+    ///
+    /// A session already present is skipped rather than updated: a known session's provider is
+    /// never re-derived from disk (data-model invariant 3), so an id that happens to exist in both
+    /// CLIs' stores cannot change which CLI a live session runs.
+    pub fn adopt_discovered_sessions(&mut self, project: &Path, found: Vec<Session>) -> usize {
+        if found.is_empty() {
+            return 0;
+        }
+        let known = self.known_session_ids(project);
+        let fresh: Vec<Session> = found
+            .into_iter()
+            .filter(|session| !known.contains(&session.id.0))
+            .collect();
+        if fresh.is_empty() {
+            return 0;
+        }
+        let adopted = fresh.len();
+        self.workspace
+            .sessions
+            .entry(project.to_path_buf())
+            .or_default()
+            .extend(fresh);
+        if let Err(err) = self.persist() {
+            // Best-effort, like every other write in this file: the sessions are in memory and the
+            // client will see them; the next pass re-derives them from the provider's store.
+            tracing::warn!(%err, "could not persist discovered sessions");
+        }
+        adopted
     }
 
     /// Persist the project catalog atomically (temp + rename). A no-op for an ephemeral catalog.
@@ -637,7 +760,11 @@ fn session_summary(session: &Session) -> SessionSummary {
             SessionLocation::Default => None,
         },
         title: session.label.clone(),
-        lifecycle: wire_lifecycle(session.lifecycle),
+        // Straight from the record (feature 026, FR-016). Never re-derived from disk: an id that
+        // happens to collide across two providers' stores must not be able to change which CLI a
+        // known session runs (data-model invariant 3).
+        provider: session.provider,
+        lifecycle: wire_lifecycle(session.lifecycle.clone()),
         activity: ActivitySignal::Unknown,
         input_serial: 0,
         live_shells: Vec::new(),
@@ -645,17 +772,15 @@ fn session_summary(session: &Session) -> SessionSummary {
 }
 
 /// Map the in-process lifecycle to its wire form. The wire `Failed { reason, attempts }` carries a
-/// reason the in-process enum does not yet track; a plain `Failed` maps with an empty reason here.
+/// reason the in-process enum did not track until `010` BUG-017; both fields now map straight
+/// through, and nothing here synthesises either.
 fn wire_lifecycle(lifecycle: SessionLifecycle) -> WireLifecycle {
     match lifecycle {
         SessionLifecycle::Idle => WireLifecycle::Idle,
         SessionLifecycle::Starting => WireLifecycle::Starting,
         SessionLifecycle::Running => WireLifecycle::Running,
         SessionLifecycle::Restarting { attempts } => WireLifecycle::Restarting { attempts },
-        SessionLifecycle::Failed => WireLifecycle::Failed {
-            reason: String::new(),
-            attempts: micold_core::session::MAX_RESTART_ATTEMPTS,
-        },
+        SessionLifecycle::Failed { reason, attempts } => WireLifecycle::Failed { reason, attempts },
         SessionLifecycle::InterruptedResumable => WireLifecycle::InterruptedResumable,
     }
 }

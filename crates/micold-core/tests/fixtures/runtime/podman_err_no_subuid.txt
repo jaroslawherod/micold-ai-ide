@@ -1,0 +1,12 @@
+time="2026-08-26T20:05:31Z" level=error msg="cannot find UID/GID for user nosub: no subuid ranges found for user \"nosub\" in /etc/subuid - check rootless mode in man pages."
+time="2026-08-26T20:05:31Z" level=warning msg="Using rootless single mapping into the namespace. This might break some images. Check /etc/subuid and /etc/subgid for adding sub*ids if not using a network user"
+Getting image source signatures
+Copying blob sha256:1bb5bb21ee3d1be40dc4a6eb0bacf7559d857333ce3b14acd522ea30ac0b10f3
+Copying blob sha256:af2d55c0fbe29d7057f640f5f65e678d0154b1d634e259aee0b98f3a079ce6ab
+Copying blob sha256:6f94328331290cbd81edab450664d42da7b64c191416c9346cd5d28c84f76035
+Copying blob sha256:d0844f39be2763d433a9b86f4e0247b397073e904543db5b6eb3c57541e9f44d
+Error: payload does not match any of the supported image formats:
+ * oci: open /tmp/img.tar/index.json: not a directory
+ * oci-archive: loading index: open /var/tmp/container_images_oci3903173185/index.json: no such file or directory
+ * docker-archive: unable to copy from source docker-archive:/tmp/img.tar:docker.io/library/micold-daemon:dev: writing blob: adding layer with blob "sha256:6f94328331290cbd81edab450664d42da7b64c191416c9346cd5d28c84f76035"/""/"sha256:6f94328331290cbd81edab450664d42da7b64c191416c9346cd5d28c84f76035": unpacking failed (error: exit status 1; output: potentially insufficient UIDs or GIDs available in user namespace (requested 0:42 for /etc/gshadow): Check /etc/subuid and /etc/subgid if configured locally and run "podman system migrate": lchown /etc/gshadow: invalid argument)
+ * dir: open /tmp/img.tar/manifest.json: not a directory

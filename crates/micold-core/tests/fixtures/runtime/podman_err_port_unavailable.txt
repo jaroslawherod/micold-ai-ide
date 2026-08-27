@@ -1,0 +1,4 @@
+Error: pasta failed with exit code 1:
+Listen failed for HOST TCP port 127.0.0.1/7727: Address already in use
+Couldn't listen on requested ports
+

@@ -54,11 +54,6 @@ pub enum Message {
     /// behind this one; see [`crate::features::sidebar::Msg`].
     Sidebar(crate::features::sidebar::Msg),
 
-    /// Content scrolled underneath an open floating surface (feature 017, FR-009). The third of
-    /// the three dismissal triggers, and the one no widget used to report — see
-    /// [`micold_core::overlay::Trigger::ScrollBeneath`]. Emitted unconditionally by the scrollable
-    /// that moved; deciding whether anything closes is the reducer's job, via the shared rule.
-    ScrolledBeneathOverlay,
     /// Escape was pressed with the terminal unfocused (feature 021, T034). The first of the three
     /// dismissal triggers to be reported the same way the third already was: as *what happened*,
     /// not as what should close.
@@ -104,6 +99,35 @@ pub enum Message {
     /// All twelve are effects, so this is the one feature whose reducer entry is only in the shell
     /// (data-model §1.1, shape B). `State::update` declines it, as it declined each of the twelve.
     Connection(crate::features::connection::Msg),
+
+    // ---- Feature 027: the session service inside a container ----
+    /// Everything the sandbox reports or is asked to do (feature 027; wrapped by 028's FR-001).
+    /// Six variants moved behind this one; see [`crate::features::sandbox::Msg`].
+    ///
+    /// Shape B, like [`Message::Connection`] beside it and for the same reason: the sandbox's
+    /// state lives on the binary's `App`, because bringing a container up is runtime and not a
+    /// decision. `State::update` declines all six.
+    Sandbox(crate::features::sandbox::Msg),
+
+    /// Tab (or Shift+Tab) asked for the keyboard's focus to move (feature 027, FR-030).
+    ///
+    /// Runtime, not state: the focused widget is the rendering stack's, and moving it is a widget
+    /// *operation* the binary issues — this reducer has nowhere to put it. What lives here is the
+    /// message, so the subscription that hears the key and the shell that acts on it agree about
+    /// what was asked for.
+    ///
+    /// The application had no traversal at all until 027's T075 visual pass pressed Tab: every
+    /// input implemented iced's `Focusable`, focus order was whatever the view's order was, and
+    /// nothing ever issued the operation. The keyboard reached exactly the one control a pointer
+    /// had last clicked.
+    ///
+    /// It stays at the root rather than joining a feature's vocabulary because it belongs to no
+    /// feature: what Tab reaches is whatever the view laid out, which is every feature at once
+    /// (contract M1's cross-cutting test).
+    FocusMoved {
+        /// Forwards for Tab, backwards for Shift+Tab.
+        forward: bool,
+    },
 
     /// A completed side-effecting task that carries nothing to apply (e.g. the daemon-stop task).
     NoOp,
@@ -283,6 +307,10 @@ impl State {
             && !self.session.terminal_released
             && self.window.focused_field.is_none()
             && !self.any_surface_takes_keyboard()
+            // Settings is not a floating surface any more, so the registry cannot answer for it
+            // (feature 027, FR-026). Without this the terminal it replaced on screen would still
+            // be taking every key the user typed into a form.
+            && self.settings.settings_draft.is_none()
     }
 
     /// Any floating surface that takes the keyboard while it is open (FR-004, FR-017).
@@ -316,7 +344,9 @@ impl State {
             // matched exhaustively, and a thirteenth connection message is a compile error in
             // `shell/connection.rs` — which is the file that would have to decide what to do with
             // it — rather than here, where the answer is and always was "nothing".
-            Message::Connection(_) | Message::NoOp => {}
+            // The sandbox's state lives on the binary's `App` beside the daemon connection, for
+            // the same reason: it is runtime, not pure state.
+            Message::Connection(_) | Message::Sandbox(_) | Message::NoOp => {}
             Message::Help(msg) => {
                 let outcomes = crate::features::help::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
@@ -347,7 +377,6 @@ impl State {
                 let outcomes = crate::features::session::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::ScrolledBeneathOverlay => self.dismiss_on_scroll_beneath(),
             Message::EscapePressed => self.dismiss_topmost(),
             Message::WorktreeForm(msg) => {
                 let outcomes = crate::features::worktree_form::update(self, msg);
@@ -362,7 +391,10 @@ impl State {
             // so releasing it is the binary's business; the pure core never knew about it.
             Message::OverlayTransitionFinished
             // Focus state is tracked by the binary (gui runtime), not the pure core.
-            | Message::WindowFocusChanged(_) => {}
+            | Message::WindowFocusChanged(_)
+            // Focus is the rendering stack's, and moving it is a widget operation — see
+            // [`Message::FocusMoved`].
+            | Message::FocusMoved { .. } => {}
         }
     }
 
@@ -611,7 +643,15 @@ where
 /// The function itself survives only as the name the scrim and the tests already call; T034
 /// collapses the keyboard subscription onto the same call and this goes with it.
 pub fn on_escape(state: &State) -> Option<Message> {
-    crate::overlay::registry::escape(state)
+    // The registry first: a dialog opened *over* the Settings view is the thing Escape is about,
+    // and Settings is no longer in that list to answer for itself (feature 027, FR-026).
+    crate::overlay::registry::escape(state).or_else(|| {
+        state
+            .settings
+            .settings_draft
+            .is_some()
+            .then_some(Message::Settings(crate::features::settings::Msg::Cancelled))
+    })
 }
 
 /// Where a decoded key press should go (feature 006, FR-009/FR-011). Pure; see

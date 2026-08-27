@@ -3,7 +3,9 @@
 //! session/worktree-name data into the new per-project state file on next save.
 
 use micold_core::project::{Availability, Project};
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
 use std::path::{Path, PathBuf};
@@ -33,6 +35,7 @@ fn corrupt_one_project_state_file_does_not_affect_others() {
             SessionLocation::Default,
             SessionLabel::Named("A session".to_string()),
             TerminalMode::AiCli,
+            AiCli::ClaudeCode,
         )],
     );
     ws.sessions.insert(
@@ -42,6 +45,7 @@ fn corrupt_one_project_state_file_does_not_affect_others() {
             SessionLocation::Default,
             SessionLabel::Named("B session".to_string()),
             TerminalMode::AiCli,
+            AiCli::ClaudeCode,
         )],
     );
     store.save(&ws).unwrap();
@@ -95,6 +99,7 @@ fn removed_project_state_file_degrades_only_that_project() {
             SessionLocation::Default,
             SessionLabel::Named("B session".to_string()),
             TerminalMode::AiCli,
+            AiCli::ClaudeCode,
         )],
     );
     store.save(&ws).unwrap();
@@ -245,7 +250,7 @@ fn a_corrupt_project_state_file_leaves_that_project_with_no_memory() {
 
     let mut ws = Workspace::empty();
     ws.projects.push(project("/a/one", "one", true));
-    let session = Session::start_new(SessionLocation::Default);
+    let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     let id = session.id;
     ws.sessions.insert(PathBuf::from("/a/one"), vec![session]);
     ws.foreground_by_project.insert(PathBuf::from("/a/one"), id);

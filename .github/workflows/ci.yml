@@ -145,21 +145,32 @@ jobs:
       # Ensure the full workspace (client GUI binary + daemon) compiles on every platform.
       - name: Build (workspace)
         run: cargo build --workspace
-      # Feature 020's gates, the 017 gates it widened, and BUG-001's. These read source text, one
-      # `const` slice and a reducer — they open no window — so they run wherever the crate compiles,
-      # and this step is the authoritative list of them. Path handling (`\` vs `/` in the scanners'
-      # display keys) is exactly the kind of difference a Linux-only run would miss: several of these
-      # walk the source tree from `CARGO_MANIFEST_DIR` and report findings by path.
-      - name: Test (component library + showcase gates, all platforms)
+      # Feature 020's gates, the 017 gates it widened, BUG-001's, feature 021's architecture guards,
+      # and feature 027's two client-side §A gates. These read source text, one `const` slice and a
+      # reducer — they open no window — so they run wherever the crate compiles, and this step is the authoritative list of them. Path
+      # handling (`\` vs `/` in the scanners' display keys) is exactly the kind of difference a
+      # Linux-only run would miss: several of these walk the source tree from `CARGO_MANIFEST_DIR`
+      # and report findings by path.
+      #
+      # The feature-021 block was added at T079, and the reason it is here rather than in the
+      # Linux-only step below is SC-006: "the complete pre-existing test suite passes on all three
+      # supported platforms" is not met by a matrix that builds everywhere and runs a feature's own
+      # guards in one place. Verified display-free before being widened — all 20 targets pass with
+      # `DISPLAY` and `WAYLAND_DISPLAY` unset — and none constructs an iced runtime or a window.
+      #
+      # This list is enumerated, so it drifts silently: a §A gate added to the quickstart's table and
+      # not added here still runs — on Linux, in the job below — and the three-platform claim quietly
+      # stops being true. `micold-core/tests/quickstart_a_runs_everywhere.rs` compares the two.
+      - name: Test (component library, showcase, and architecture gates, all platforms)
         # Windows defaults to `pwsh`, which does not treat `\` as a line continuation; pin bash so the
         # one readable multi-line invocation below parses identically on all three runners.
         #
-        # The last six carry seven architecture guards (feature 028, T052 — FR-018), and they are
-        # here rather than only in the Linux full-workspace run because every one of them reports
-        # its findings *by path*: `features/sidebar.rs`, `ui/mod.rs`, `state.sidebar.expanded`. A
+        # Feature 028 adds three (T052 — FR-018): `root_vocabulary_is_cross_cutting`,
+        # `root_state_is_shared` and `logical_state_ownership`. They belong here rather than only in
+        # the Linux full-workspace run for the same reason the 021 block does — each reports its
+        # findings *by path* (`features/sidebar.rs`, `ui/mod.rs`, `state.sidebar.expanded`), and a
         # `\` vs `/` difference in how a path is built goes unnoticed on a Linux-only run and then
-        # fails, or worse silently passes, on a contributor's Windows checkout. Feature 021 recorded
-        # this omission twice (T058, T077) without closing it.
+        # fails, or worse silently passes, on a contributor's Windows checkout.
         shell: bash
         run: |
           cargo test -p micold-client \
@@ -174,16 +185,94 @@ jobs:
             --test material_builder_api \
             --test idle_requests_no_frames \
             --test animated_layout_relayouts \
-            --test root_vocabulary_is_cross_cutting \
-            --test root_state_is_shared \
-            --test feature_registration_cost \
             --test feature_write_isolation \
             --test root_is_routing_only \
-            --test logical_state_ownership
+            --test root_vocabulary_is_cross_cutting \
+            --test root_state_is_shared \
+            --test logical_state_ownership \
+            --test features_are_render_free \
+            --test no_concrete_implementations \
+            --test overlay_registration \
+            --test feature_registration_cost \
+            --test surface_registration_cost \
+            --test service_capability_fakes \
+            --test outcome_termination \
+            --test popover_displacement \
+            --test features_connection \
+            --test features_help \
+            --test features_notifications \
+            --test features_project \
+            --test features_session \
+            --test features_settings \
+            --test features_sidebar \
+            --test features_window \
+            --test features_worktree \
+            --test features_worktree_form \
+            --test anatomy_call_sites
       # Run the client + daemon test suites where the iced system deps are present.
       - name: Test (full workspace)
         if: runner.os == 'Linux'
         run: cargo test --workspace
+
+  # Feature 027. The sandbox adapter layer is tested on all three platforms by the `test` job
+  # above, against an injected fake runner with nothing installed -- that is what keeps Principle
+  # VI's coverage of it honest. This job covers the part a fake cannot: that the argv we construct
+  # is accepted by a real container runtime, and that the isolation it produces is real.
+  #
+  # Linux-only on purpose. Docker Desktop is not available on GitHub's macOS and Windows runners,
+  # so the alternative to a Linux-only job is no real-runtime job at all. The asymmetry is in test
+  # *depth*, not in behaviour: nothing in the sandbox layer branches on the host platform except
+  # `pathmap`, which the cross-platform job covers directly.
+  sandbox-runtime:
+    name: sandbox against a real runtime (linux)
+    needs: classify
+    if: needs.classify.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Runtime version
+        run: docker version --format '{{.Server.Version}}' && docker info --format '{{.Driver}}'
+      # Every test behind `sandbox-real-runtime` starts from `micold-daemon:dev`, the image a
+      # developer builds with `mise run image`. A runner has no such image, and the failure is not
+      # a helpful one: the first test to want it dies on `No such image: micold-daemon:dev` and
+      # cargo stops there, so the tests after it never run at all and the summary shows one failure
+      # rather than the six targets that were skipped behind it.
+      #
+      # This is `mise run image` with its two host-specific parts removed. It does not go through
+      # `scripts/build-lock.sh` -- the lock exists to stop several worktrees on one workstation from
+      # compiling into one target directory, and a runner has neither -- and it does not
+      # cross-compile, because `x86_64-unknown-linux-gnu` is already this runner's own triple. What
+      # it keeps is the part that matters: the daemon binary staged beside the Containerfile, and
+      # `-f`, without which docker looks for a `Dockerfile` and fails.
+      - name: Build the :dev sandbox image
+        run: |
+          set -e
+          cargo build --release -p micold-daemon
+          cp target/release/micold-daemon packaging/sandbox/micold-daemon
+          docker build -f packaging/sandbox/Containerfile -t micold-daemon:dev packaging/sandbox
+          rm -f packaging/sandbox/micold-daemon
+          # The image can build and still not run: `docker build` only proves the file was copied,
+          # and whether it executes depends on the base's glibc being no older than the toolchain's.
+          # That mismatch surfaces as `version GLIBC_x.yy not found` on first start, which is a
+          # terrible place to find out -- so find out here. The daemon exits for its own reasons
+          # (no token, no endpoint) and those are correct; only loader failures are fatal.
+          smoke="$(docker run --rm --entrypoint /usr/local/bin/micold-daemon micold-daemon:dev 2>&1 | head -5 || true)"
+          case "$smoke" in
+            *GLIBC*|*"cannot execute"*|*"exec format error"*)
+              echo "the daemon cannot execute inside micold-daemon:dev:" >&2
+              echo "$smoke" >&2
+              exit 1
+              ;;
+          esac
+      # `sandbox_real_` is a *test-name* filter, not a file filter: cargo matches it against the
+      # test function's path, and an integration target's name is not part of that path. So a test
+      # in `tests/sandbox_real_*.rs` whose function is not also named `sandbox_real_*` runs locally
+      # and is silently skipped here — no failure, just a smaller number in the summary. Every
+      # real-runtime test therefore carries the prefix in its own name.
+      - name: Test (real runtime)
+        run: cargo test -p micold-core --features sandbox-real-runtime sandbox_real_ -- --test-threads=1
 
   # Constitution Principle VII: documentation ships and is verified in CI.
   # Feature 021 (FR-027): the restructuring treats the existing suite as its behavior
@@ -202,6 +291,7 @@ jobs:
   # against the current tree on every run: an adjudication whose assertion is no longer missing
   # fails just as loudly. Scope still applies -- out of scope this reports in full and exits 0, so
   # a concurrent feature is told what it did to the suite without being blocked.
+
   assertions:
     name: assertion freeze
     needs: classify
@@ -240,6 +330,7 @@ jobs:
           test -f docs/user-guide/project-selection.md
           test -f docs/user-guide/appearance-theming.md
           test -f docs/user-guide/settings.md
+          test -f docs/user-guide/sandboxed-daemon.md
           test -f docs/user-guide/worktrees-and-sessions.md
           test -f docs/user-guide/icons.md
       # Principle VII for a developer-facing capability: feature 020's showcase is documented for
@@ -264,7 +355,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, test, assertions, docs]
+    needs: [classify, lint, test, sandbox-runtime, assertions, docs]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -277,6 +368,7 @@ jobs:
           CLASSIFY: ${{ needs.classify.result }}
           LINT: ${{ needs.lint.result }}
           TEST: ${{ needs.test.result }}
+          SANDBOX: ${{ needs.sandbox-runtime.result }}
           DOCS: ${{ needs.docs.result }}
           ASSERTIONS: ${{ needs.assertions.result }}
         run: |
@@ -292,6 +384,7 @@ jobs:
           check classify "$CLASSIFY"
           check lint "$LINT"
           check test "$TEST"
+          check sandbox "$SANDBOX"
           check docs "$DOCS"
           check assertions "$ASSERTIONS"
           {
@@ -302,6 +395,7 @@ jobs:
             echo "| classify | \`$CLASSIFY\` | yes |"
             echo "| lint | \`$LINT\` | yes |"
             echo "| test | \`$TEST\` | yes |"
+            echo "| sandbox-runtime | \`$SANDBOX\` | yes |"
             echo "| docs | \`$DOCS\` | yes |"
             echo "| assertions | \`$ASSERTIONS\` | yes |"
           } >> "$GITHUB_STEP_SUMMARY"

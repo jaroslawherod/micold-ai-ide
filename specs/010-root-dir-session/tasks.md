@@ -246,12 +246,14 @@ independently usable, and closing one does not affect the other.
 
 ### Implementation for User Story 3
 
-- [ ] T024 [US3] Manual validation per `quickstart.md` step 6: in `cargo run`, start two Default
-      sessions and confirm both remain open and independently closable. **Not performed by the
-      implementing agent** — this environment has no GUI-automation tooling, and launching the
-      app would open a real window on the operator's live desktop session unprompted. Deferred
-      to the user; T023's automated regression lock covers the same guarantee at the pure-core
-      level.
+- [X] T024 [US3] Manual validation per `quickstart.md` step 6: in `cargo run`, start two Default
+      sessions and confirm both remain open and independently closable. Run **2026-08-21**,
+      headlessly (Xvfb + lavapipe, per the repo's `visual-pass` skill) rather than on the
+      operator's desktop — evidence: `evidence/T029-manual-validation.md`. Two Default sessions
+      listed simultaneously, each backed by its own `claude` process in the project root, each
+      independently usable (one answered `echo` in a shell with its own scrollback while the other
+      showed a live AI CLI), and closing a third session left both untouched. T023's automated
+      regression lock covers the same guarantee at the pure-core level.
 
 **Checkpoint**: All three user stories are independently functional.
 
@@ -267,22 +269,32 @@ independently usable, and closing one does not affect the other.
       as it was before this feature (plain string `worktree_dir` values only) and assert it
       loads with zero `SessionLocation::Default` sessions inferred (`contracts/storage-schema.md`
       backward-compatibility guarantee).
-- [~] T027 [P] Add a manual `quickstart.md` step (and exercise it here) covering the edge case
+- [X] T027 [P] Add a manual `quickstart.md` step (and exercise it here) covering the edge case
       "project root directory becomes unavailable while a Default session is running": make the
       project root inaccessible (e.g. rename/unmount it) while a Default session is open, and
       confirm the session surfaces a failure/disconnected state consistent with a worktree
       session's behavior in the same situation (spec.md Edge Cases) — this was previously
-      undocumented and unvalidated. The quickstart.md step was added (step 11); actually
-      exercising it requires the GUI (see T024's note) — not performed by the implementing agent.
+      undocumented and unvalidated. The quickstart.md step was added (step 11) at implementation
+      time; **exercised 2026-08-21** (headless GUI run, `evidence/T029-manual-validation.md`).
+      The step **fails**: renaming the project root away and then starting a Default session
+      leaves it at `starting…` indefinitely, with no process spawned and no error surfaced. A
+      worktree session with a missing directory behaves identically, so the "consistent with a
+      worktree session" clause holds while the "not a silently-stuck session" clause does not.
+      One open defect: `bugs/BUG-001.md`, root-caused to `spawn_session_start`
+      (`crates/micold-daemon/src/server.rs:1487`) discarding the start error and replying
+      `OperationOk` regardless. The task itself — write the step and run it — is done.
 - [X] T028 Run the full `cargo test` suite (default `gui` feature and `--no-default-features`)
       and confirm no platform-specific code was introduced anywhere in this feature
       (Constitution Principle VI). 48/48 test binaries pass (0 failures); `git diff` confirms
       the only pre-existing `cfg(target_os = "linux")` in `src/main.rs` is untouched and no new
       one was added.
-- [ ] T029 Run the full `quickstart.md` manual validation end-to-end via `cargo run` (all 11 GUI
+- [X] T029 Run the full `quickstart.md` manual validation end-to-end via `cargo run` (all 11 GUI
       steps — including T027's new step — the visual/asset check, and the documentation check).
-      **Not performed by the implementing agent** — no GUI-automation tooling in this
-      environment (see T024's note); deferred to the user.
+      Run **2026-08-21** on Linux, headlessly (Xvfb + lavapipe) against a fresh no-worktree
+      fixture — evidence: `evidence/T029-manual-validation.md`. **Steps 1–10 pass**, as do the
+      visual/asset check (the house icon renders in both themes, no tofu) and the documentation
+      check (`docs/user-guide/worktrees-and-sessions.md` §"The \"Default\" entry"). **Step 11
+      fails** → `bugs/BUG-001.md`; see T027. macOS/Windows parity is unrun.
 - [X] T030 [P] Review `README.md`'s one-line feature summary ("Open a git project and manage its
       worktrees...") and update it if it now reads as incomplete without mentioning the
       Default/root session option (per the constitution v1.3.0 amendment note, deliberately

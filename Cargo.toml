@@ -52,6 +52,9 @@ tokio-util = { version = "0.7.19", features = ["codec"] }
 interprocess = { version = "2.4.2", features = ["tokio"] }
 bytes = "1"
 listenfd = "1.0.2"
+# Cross-platform filesystem change notification, for tailing a Copilot session's `events.jsonl`
+# (feature 026, FR-019). Vetted in `specs/026-multi-provider-sessions/research.md` R14.
+notify = "8.2.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 file-rotate = "0.8.0"
@@ -76,3 +79,19 @@ micold-core = { path = "crates/micold-core" }
 
 [workspace.lints.clippy]
 all = "warn"
+
+# Debug builds default to `debug = 2` (full DWARF), which is the bulk of the bytes
+# cargo writes: a `cargo test --workspace` link phase measured 260 MB/s sustained --
+# enough to fill the kernel's dirty page pool and stall every other process on the
+# machine, and enough to grow target-shared/debug to 84 GB. "line-tables-only" keeps
+# backtraces with function names and line numbers -- what a panic or a failing test
+# actually needs -- and drops the variable and type DWARF that only a debugger reads.
+# Recover it ad hoc with `CARGO_PROFILE_DEV_DEBUG=2`.
+[profile.dev]
+debug = "line-tables-only"
+
+# `cargo test` compiles test targets under [profile.test]; their dependencies build
+# under [profile.dev] above. Both need the setting for the reduction to apply to a
+# whole `cargo test --workspace` run.
+[profile.test]
+debug = "line-tables-only"

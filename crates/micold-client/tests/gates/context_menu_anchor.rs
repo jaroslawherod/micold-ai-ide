@@ -46,7 +46,9 @@ use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
 use micold_client::features::sidebar;
 use micold_client::features::window;
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::theme::{ColorScheme, ThemePreference};
 use micold_core::tokens::{anatomy, density};
 use micold_core::worktree::{Worktree, WorktreeStatus};
@@ -139,6 +141,7 @@ fn records(state: &State) -> Vec<LayoutRecord> {
         None,
         &micold_core::env_include::EnvIncludeOutcome::Disabled,
         &ConnectionStatus::Connected,
+        &micold_client::features::sandbox::Sandbox::default(),
     );
     lay::resolve(element, &renderer)
 }
@@ -161,6 +164,7 @@ fn right_press_at(state: &mut State, point: (f32, f32)) -> usize {
         None,
         &micold_core::env_include::EnvIncludeOutcome::Disabled,
         &ConnectionStatus::Connected,
+        &micold_client::features::sandbox::Sandbox::default(),
     );
     let mut tree = Tree::new(element.as_widget());
     let limits = layout::Limits::new(Size::ZERO, lay::WINDOW);
@@ -458,6 +462,7 @@ fn the_session_menu_opens_at_the_row_it_was_opened_from() {
         SessionLocation::Worktree("feat-00".to_string()),
         SessionLabel::Named("feat/00".to_string()),
         TerminalMode::AiCli,
+        AiCli::ClaudeCode,
     );
     let mut state = with_project(vec![session]);
     state.sidebar.expanded.insert("feat-00".to_string());

@@ -41,7 +41,9 @@ use micold_client::features::sidebar::TagFilter;
 use micold_client::features::worktree_form::WorktreeFormStatus;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
-use micold_core::session::{Session, SessionId, SessionLifecycle, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLifecycle, SessionLocation, TerminalMode,
+};
 use micold_core::worktree::{CreateStage, Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
@@ -352,7 +354,10 @@ fn session_started_selected_and_closed() {
         |o| micold_client::app::interpret(&mut state, o),
     );
 
-    let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     state.update(Message::Session(SessionMsg::Started(session)));
     assert_eq!(state.session.active, Some(id));
@@ -403,7 +408,7 @@ fn default_session_started_enters_workspace_sessions() {
     });
     state.workspace.active = Some(path);
 
-    let session = Session::start_new(SessionLocation::Default);
+    let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     let id = session.id;
     state.update(Message::Session(SessionMsg::Started(session)));
 
@@ -439,7 +444,10 @@ fn state_with_worktree_and_session(dir: &str) -> State {
         status: WorktreeStatus::Valid,
         included: false,
     });
-    let session = Session::start_new(SessionLocation::Worktree(dir.to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree(dir.to_string()),
+        AiCli::ClaudeCode,
+    );
     state.update(Message::Session(SessionMsg::Started(session)));
     state
 }
@@ -1051,7 +1059,7 @@ fn settings_env_include_enabled_toggled_updates_only_that_field() {
     )));
 
     let draft = state.settings.settings_draft.as_ref().unwrap();
-    assert!(!draft.env_include_enabled);
+    assert!(!draft.environment.enabled);
 }
 
 #[test]
@@ -1063,7 +1071,7 @@ fn settings_env_include_path_changed_updates_only_that_field() {
     )));
 
     let draft = state.settings.settings_draft.as_ref().unwrap();
-    assert_eq!(draft.env_include_script_path, "/custom/script.sh");
+    assert_eq!(draft.environment.script_path, "/custom/script.sh");
 }
 
 #[test]
@@ -1075,7 +1083,7 @@ fn settings_env_include_timeout_changed_updates_only_that_field() {
     )));
 
     let draft = state.settings.settings_draft.as_ref().unwrap();
-    assert_eq!(draft.env_include_timeout, "30");
+    assert_eq!(draft.environment.timeout_secs, "30");
 }
 
 #[test]
@@ -1096,10 +1104,10 @@ fn env_include_field_changes_leave_other_draft_fields_untouched() {
     )));
 
     let draft = state.settings.settings_draft.as_ref().unwrap();
-    assert_eq!(draft.scrollback_lines, "25000");
-    assert!(!draft.env_include_enabled);
-    assert_eq!(draft.env_include_script_path, "/custom/script.sh");
-    assert_eq!(draft.env_include_timeout, "30");
+    assert_eq!(draft.terminal.scrollback_lines, "25000");
+    assert!(!draft.environment.enabled);
+    assert_eq!(draft.environment.script_path, "/custom/script.sh");
+    assert_eq!(draft.environment.timeout_secs, "30");
 }
 
 // =======================================================================================
@@ -1926,7 +1934,10 @@ fn state_with_current_session_in(dir: &str) -> State {
         status: WorktreeStatus::Valid,
         included: false,
     }];
-    let session = Session::start_new(SessionLocation::Worktree(dir.to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree(dir.to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
     state.session.active = Some(id);
@@ -2008,7 +2019,7 @@ fn the_default_rows_twisty_suppresses_the_same_way() {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    let session = Session::start_new(SessionLocation::Default);
+    let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
     state.session.active = Some(id);
@@ -2088,7 +2099,10 @@ fn a_change_of_current_session_lifts_a_suppression_made_against_the_old_one() {
     )));
     assert_eq!(state.session.reveal_suppressed_for, state.session.active);
 
-    let next = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let next = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let next_id = next.id;
     let path = state.workspace.active.clone().unwrap();
     state.workspace.sessions.get_mut(&path).unwrap().push(next);
@@ -2131,7 +2145,10 @@ fn state_with_many_worktrees(count: usize) -> State {
             included: false,
         })
         .collect();
-    let session = Session::start_new(SessionLocation::Worktree(format!("feat-{:02}", count - 1)));
+    let session = Session::start_new(
+        SessionLocation::Worktree(format!("feat-{:02}", count - 1)),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
     state.session.active = Some(id);
@@ -2233,7 +2250,10 @@ fn starting_a_session_reveals_it() {
     );
     state.sidebar.pending_reveal_scroll = false;
 
-    let started = Session::start_new(SessionLocation::Worktree("feat-b".to_string()));
+    let started = Session::start_new(
+        SessionLocation::Worktree("feat-b".to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = started.id;
     state.update(Message::Session(SessionMsg::Started(started)));
 
@@ -2254,7 +2274,10 @@ fn starting_a_session_reveals_it() {
 #[test]
 fn clicking_a_session_marks_it_and_moves_nothing() {
     let mut state = state_with_current_session_in("feat-a");
-    let other = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let other = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let other_id = other.id;
     let path = state.workspace.active.clone().unwrap();
     state.workspace.sessions.get_mut(&path).unwrap().push(other);
@@ -2273,7 +2296,10 @@ fn clicking_a_session_marks_it_and_moves_nothing() {
 #[test]
 fn closing_the_current_session_promotes_nothing_in_its_place() {
     let mut state = state_with_current_session_in("feat-a");
-    let sibling = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let sibling = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let path = state.workspace.active.clone().unwrap();
     state
         .workspace
@@ -2360,7 +2386,7 @@ fn applying_the_memory_starts_only_the_session_it_displays() {
     let before: Vec<_> = state
         .active_sessions()
         .iter()
-        .map(|s| (s.id, s.lifecycle))
+        .map(|s| (s.id, s.lifecycle.clone()))
         .collect();
 
     let choice = state.explain_foreground(&path).session();
@@ -2369,7 +2395,7 @@ fn applying_the_memory_starts_only_the_session_it_displays() {
     let after: Vec<_> = state
         .active_sessions()
         .iter()
-        .map(|s| (s.id, s.lifecycle))
+        .map(|s| (s.id, s.lifecycle.clone()))
         .collect();
     assert_eq!(
         before, after,
@@ -2396,7 +2422,10 @@ fn applying_one_projects_memory_leaves_every_other_project_alone() {
     let other_session = SessionId::new();
     state.workspace.sessions.insert(
         elsewhere.clone(),
-        vec![Session::start_new(SessionLocation::Default)],
+        vec![Session::start_new(
+            SessionLocation::Default,
+            micold_core::session::AiCli::ClaudeCode,
+        )],
     );
     state
         .workspace

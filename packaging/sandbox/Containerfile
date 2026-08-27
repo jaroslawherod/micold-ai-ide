@@ -1,0 +1,64 @@
+# The sandbox image: the session daemon plus what a session needs to be useful (feature 027).
+#
+# Built for `podman build` as readily as `docker build` — nothing here is Docker-specific, which is
+# the same reason the runtime abstraction exists at all (FR-020).
+#
+# What is deliberately NOT here: any credential, any host path, and any means of reaching the
+# runtime that started this container. The image is the same for every user; identity is applied at
+# run time (`--user <uid>:<gid>`, or podman's `--userns=keep-id`), so nothing about the host is
+# baked in. See specs/027-sandboxed-daemon-runtime/contracts/container-runtime.md, obligation C-4.
+
+# Trixie, not bookworm. The daemon is built on the host and copied in, so the base's glibc has to be
+# no older than the one the host toolchain linked against — bookworm ships 2.36, and a binary built
+# on a current distribution needs 2.39. That mismatch does not fail the build; it fails the first
+# time the daemon is executed, with `version GLIBC_2.39 not found`, which is a terrible place to
+# find out. `mise run image` now runs the binary inside the image so it cannot ship silently again.
+#
+# The durable fix is a static musl build, which removes the dependency entirely. It needs a musl
+# target and linker that are not assumed present here, so it is left for when publishing is set up —
+# at which point the base image stops mattering rather than merely being newer.
+FROM docker.io/library/debian:trixie-slim AS runtime-base
+
+# Session tooling. `git` is not optional: the daemon runs it for worktree management, and feature
+# 027's whole path-identity decision (research R2) exists because it does.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      git \
+      openssh-client \
+      procps \
+      less \
+      bash \
+ && rm -rf /var/lib/apt/lists/*
+
+# The daemon's state directory, bind-mounted from the host at run time so it survives container
+# recreation and stays readable outside (FR-011).
+#
+# `XDG_DATA_HOME=/var/lib` rather than a variable of our own, because the daemon resolves its state
+# directory through the platform's data-directory convention — it will look in
+# `$XDG_DATA_HOME/micold-ai-ide` without being told. Setting the convention is what makes the
+# container and the host agree on one `projects.json`; a bespoke variable would have to be read
+# somewhere, and the place it was not read would be the bug.
+RUN mkdir -p /var/lib/micold-ai-ide && chmod 0777 /var/lib/micold-ai-ide
+ENV XDG_DATA_HOME=/var/lib
+
+# Where the client's authentication token is mounted, read-only (research R1). The daemon reads it
+# at startup. It is a mount point, never a file baked into the image.
+#
+# `docker build` warns SecretsUsedInArgOrEnv here. It is a false positive: this is the *path* the
+# secret will be mounted at, and the secret itself never enters the image — that is the whole point
+# of delivering it through a bind mount rather than through the build or the command line.
+ENV MICOLD_TOKEN_PATH=/run/micold/token
+
+COPY micold-daemon /usr/local/bin/micold-daemon
+
+# No USER directive: the uid is supplied at run time so the image works for every user. A uid baked
+# in here would be correct only for whoever happened to match it.
+# Where the daemon listens *inside* the container. `0.0.0.0` here, not `127.0.0.1`: the runtime
+# forwards the published host port to the container's bridge address, so a container-loopback bind
+# would leave the published port unreachable. What guards the listener is the mounted secret, which
+# on this transport is the only thing that does.
+ENV MICOLD_LISTEN_ADDR=0.0.0.0:7727
+
+EXPOSE 7727
+ENTRYPOINT ["/usr/local/bin/micold-daemon"]

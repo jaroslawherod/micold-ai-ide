@@ -6,7 +6,7 @@ use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::project::{Availability, Project};
-use micold_core::session::{Session, SessionLocation};
+use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
@@ -37,9 +37,10 @@ fn state_with_active_project() -> State {
     // A session on feat-a.
     state.workspace.sessions.insert(
         path,
-        vec![Session::start_new(SessionLocation::Worktree(
-            "feat-a".to_string(),
-        ))],
+        vec![Session::start_new(
+            SessionLocation::Worktree("feat-a".to_string()),
+            AiCli::ClaudeCode,
+        )],
     );
     state
 }
@@ -407,7 +408,10 @@ fn default_sessions_are_attached_to_the_default_entry_only() {
         .sessions
         .get_mut(&path)
         .unwrap()
-        .push(Session::start_new(SessionLocation::Default));
+        .push(Session::start_new(
+            SessionLocation::Default,
+            AiCli::ClaudeCode,
+        ));
 
     let entries = state.sidebar_entries();
     let SidebarEntry::Default(default_node) = &entries[0] else {
@@ -610,9 +614,10 @@ fn a_session_in_a_hidden_worktree_renders_nowhere_but_is_not_pruned() {
     let path = state.workspace.active.clone().unwrap();
     state.workspace.sessions.insert(
         path,
-        vec![Session::start_new(SessionLocation::Worktree(
-            agent_dir.clone(),
-        ))],
+        vec![Session::start_new(
+            SessionLocation::Worktree(agent_dir.clone()),
+            AiCli::ClaudeCode,
+        )],
     );
 
     // Rendered nowhere: no row carries it.
@@ -775,7 +780,7 @@ fn a_current_session_whose_worktree_is_gone_opens_nothing() {
 fn a_current_session_in_the_project_root_opens_the_default_row() {
     let mut state = state_with_active_project();
     let path = state.workspace.active.clone().unwrap();
-    let default_session = Session::start_new(SessionLocation::Default);
+    let default_session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     let id = default_session.id;
     state
         .workspace
@@ -835,7 +840,10 @@ fn state_with_filterable_worktrees(dir: &str) -> State {
         // agent-owned and so hidden by default (feature 014).
         agent_worktree("00112233445566aa", WorktreeStatus::Valid),
     ];
-    let session = Session::start_new(SessionLocation::Worktree(dir.to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree(dir.to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
     state.session.active = Some(id);
@@ -975,7 +983,10 @@ fn the_exemption_ends_when_the_location_stops_holding_the_current_session() {
         .insert(TagFilter::Type(ConventionalType::Feat));
     assert!(listed(&state).contains(&"fix-b".to_string()));
 
-    let moved = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let moved = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let moved_id = moved.id;
     let path = state.workspace.active.clone().unwrap();
     state.workspace.sessions.get_mut(&path).unwrap().push(moved);
@@ -1008,7 +1019,10 @@ fn an_exempt_row_conjures_no_filter_chip() {
 fn exactly_one_session_row_carries_the_mark_when_a_location_holds_several() {
     let mut state = state_with_active_project();
     let path = state.workspace.active.clone().unwrap();
-    let sibling = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let sibling = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let sibling_id = sibling.id;
     state
         .workspace

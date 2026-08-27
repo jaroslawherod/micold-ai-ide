@@ -13,24 +13,44 @@
 use micold_core::session::{RestartDecision, Session};
 
 /// How a supervised child ended.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// A crash carries a short account of *how* it ended, because the daemon is the only layer that has
+/// the exit status in hand and the give-up reason has to be assembled from it (010 BUG-017). That
+/// account is the reason this is not `Copy`.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExitOutcome {
     /// Exited successfully (status 0) — a normal end: the user quit `claude`, a shell `exit`.
     Clean,
     /// Exited nonzero, or was terminated by a signal — an unexpected end that the crash-loop guard
     /// governs (FR-005).
-    Crashed,
+    Crashed {
+        /// A short phrase naming the exit, for the give-up reason: `exit status 1`, `killed by
+        /// Terminated` (the signal's description, which is what `portable_pty` reports). Never a
+        /// sentence and never punctuated — [`Session::on_unexpected_exit`] puts it inside one.
+        how: String,
+    },
 }
 
 impl ExitOutcome {
-    /// Classify from an OS exit's success bit: success is [`Clean`](Self::Clean); a nonzero code or
-    /// a signal is [`Crashed`](Self::Crashed).
-    pub fn from_success(success: bool) -> Self {
-        if success {
-            ExitOutcome::Clean
-        } else {
-            ExitOutcome::Crashed
+    /// Classify an exit, keeping how it happened.
+    ///
+    /// A signal is named rather than reduced to a code: `portable_pty` reports a signalled child as
+    /// code 1, which is indistinguishable from an ordinary failure and is the more useful half of
+    /// the two to see.
+    pub fn from_status(status: &portable_pty::ExitStatus) -> Self {
+        if status.success() {
+            return ExitOutcome::Clean;
         }
+        match status.signal() {
+            Some(signal) => ExitOutcome::crashed(format!("killed by {signal}")),
+            None => ExitOutcome::crashed(format!("exit status {}", status.exit_code())),
+        }
+    }
+
+    /// A crash whose account is given directly — for the cases with no `ExitStatus` to read, where
+    /// saying so is better than inventing a status.
+    pub fn crashed(how: impl Into<String>) -> Self {
+        ExitOutcome::Crashed { how: how.into() }
     }
 }
 
@@ -59,7 +79,7 @@ pub fn supervise_exit(session: &mut Session, outcome: ExitOutcome) -> Supervisio
             session.record_clean_exit();
             SupervisionAction::Stop
         }
-        ExitOutcome::Crashed => match session.on_unexpected_exit() {
+        ExitOutcome::Crashed { how } => match session.on_unexpected_exit(&how) {
             RestartDecision::Resume => SupervisionAction::Restart,
             RestartDecision::GiveUp => SupervisionAction::GiveUp,
         },
@@ -69,10 +89,12 @@ pub fn supervise_exit(session: &mut Session, outcome: ExitOutcome) -> Supervisio
 #[cfg(test)]
 mod tests {
     use super::*;
-    use micold_core::session::{Session, SessionLifecycle, SessionLocation, MAX_RESTART_ATTEMPTS};
+    use micold_core::session::{
+        AiCli, Session, SessionLifecycle, SessionLocation, MAX_RESTART_ATTEMPTS,
+    };
 
     fn running_session() -> Session {
-        let mut s = Session::start_new(SessionLocation::Default);
+        let mut s = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
         s.mark_running();
         s
     }
@@ -91,7 +113,7 @@ mod tests {
     fn a_crash_under_budget_asks_for_a_restart() {
         let mut s = running_session();
         assert_eq!(
-            supervise_exit(&mut s, ExitOutcome::Crashed),
+            supervise_exit(&mut s, ExitOutcome::crashed("exit status 1")),
             SupervisionAction::Restart
         );
         assert_eq!(s.lifecycle, SessionLifecycle::Restarting { attempts: 1 });
@@ -103,7 +125,7 @@ mod tests {
         // The first MAX-1 crashes each ask for a restart, bumping the attempt counter.
         for attempt in 1..MAX_RESTART_ATTEMPTS {
             assert_eq!(
-                supervise_exit(&mut s, ExitOutcome::Crashed),
+                supervise_exit(&mut s, ExitOutcome::crashed("exit status 1")),
                 SupervisionAction::Restart,
                 "crash #{attempt} should still restart"
             );
@@ -115,10 +137,10 @@ mod tests {
         // The crash that reaches the budget gives up and settles Failed (durable, surfaced on
         // next attach — FR-005).
         assert_eq!(
-            supervise_exit(&mut s, ExitOutcome::Crashed),
+            supervise_exit(&mut s, ExitOutcome::crashed("exit status 1")),
             SupervisionAction::GiveUp
         );
-        assert_eq!(s.lifecycle, SessionLifecycle::Failed);
+        assert!(matches!(s.lifecycle, SessionLifecycle::Failed { .. }));
     }
 
     #[test]
@@ -128,7 +150,7 @@ mod tests {
         // run).
         let mut s = running_session();
         assert_eq!(
-            supervise_exit(&mut s, ExitOutcome::Crashed),
+            supervise_exit(&mut s, ExitOutcome::crashed("exit status 1")),
             SupervisionAction::Restart
         );
         assert_eq!(
@@ -139,7 +161,7 @@ mod tests {
 
         s.mark_running();
         assert_eq!(
-            supervise_exit(&mut s, ExitOutcome::Crashed),
+            supervise_exit(&mut s, ExitOutcome::crashed("exit status 1")),
             SupervisionAction::Restart
         );
         assert_eq!(s.lifecycle, SessionLifecycle::Restarting { attempts: 1 });
@@ -147,7 +169,23 @@ mod tests {
 
     #[test]
     fn exit_outcome_classifies_success_and_failure() {
-        assert_eq!(ExitOutcome::from_success(true), ExitOutcome::Clean);
-        assert_eq!(ExitOutcome::from_success(false), ExitOutcome::Crashed);
+        use portable_pty::ExitStatus;
+        assert_eq!(
+            ExitOutcome::from_status(&ExitStatus::with_exit_code(0)),
+            ExitOutcome::Clean
+        );
+        // A crash keeps the status, because the give-up reason is built from it (BUG-017).
+        assert_eq!(
+            ExitOutcome::from_status(&ExitStatus::with_exit_code(3)),
+            ExitOutcome::crashed("exit status 3")
+        );
+        // A signalled child is named by its signal. `portable_pty` reports one as code 1, which is
+        // indistinguishable from an ordinary failure — the signal is the half worth keeping. The
+        // name is whatever it hands over: a real `kill -TERM` arrives as `Terminated`, not
+        // `SIGTERM` (see `supervisor`'s test, which reaps one), so this passes the string through.
+        assert_eq!(
+            ExitOutcome::from_status(&ExitStatus::with_signal("SIGSEGV")),
+            ExitOutcome::crashed("killed by SIGSEGV")
+        );
     }
 }

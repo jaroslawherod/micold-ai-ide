@@ -22,7 +22,7 @@ use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::window::Msg as WindowMsg;
 use micold_client::keymap::KeyOutput;
-use micold_core::session::SessionLocation;
+use micold_core::session::{AiCli, SessionLocation};
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
 /// Asked of the registry, which reads each dialog's own state, so this is the same question about
@@ -83,8 +83,10 @@ fn new_terminal_instance_chord_never_yields_pty_bytes() {
     }
 }
 
+/// Settings stopped being a floating surface with feature 027 (FR-026), so the registry no longer
+/// answers for it — Escape has to leave the view by a route of its own, and this is that route.
 #[test]
-fn escape_closes_the_settings_overlay() {
+fn escape_leaves_the_settings_view() {
     use micold_client::app::{on_escape, Message};
     let s = State {
         settings: settings::State {
@@ -108,6 +110,7 @@ fn focus_toggles_via_messages() {
     let mut s = State::default();
     s.update(Message::Session(SessionMsg::Started(Session::start_new(
         SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
     ))));
     s.update(Message::Session(SessionMsg::TerminalFocused));
     assert!(s.terminal_focused());
@@ -147,7 +150,11 @@ fn selecting_a_session_focuses_its_terminal() {
     use micold_core::session::Session;
     let mut s = State::default();
     assert!(!s.terminal_focused(), "precondition: starts unfocused");
-    let id = Session::start_new(SessionLocation::Worktree("feat-x".to_string())).id;
+    let id = Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
+    )
+    .id;
     s.update(Message::Session(SessionMsg::Selected(id)));
     assert!(
         s.terminal_focused(),
@@ -163,6 +170,7 @@ fn starting_a_session_focuses_its_terminal() {
     let mut s = State::default();
     s.update(Message::Session(SessionMsg::Started(Session::start_new(
         SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
     ))));
     assert!(
         s.terminal_focused(),
@@ -176,7 +184,11 @@ fn releasing_focus_after_auto_focus_still_works() {
     use micold_core::session::Session;
     let mut s = State::default();
     s.update(Message::Session(SessionMsg::Selected(
-        Session::start_new(SessionLocation::Worktree("feat-x".to_string())).id,
+        Session::start_new(
+            SessionLocation::Worktree("feat-x".to_string()),
+            AiCli::ClaudeCode,
+        )
+        .id,
     )));
     assert!(s.terminal_focused());
     s.update(Message::Session(SessionMsg::TerminalFocusReleased));
@@ -191,7 +203,10 @@ fn closing_the_displayed_session_clears_focus() {
     use micold_client::app::Message;
     use micold_core::session::Session;
     let mut s = State::default();
-    let session = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     s.update(Message::Session(SessionMsg::Started(session)));
     assert!(s.terminal_focused());
@@ -231,7 +246,10 @@ fn state_with_current_session() -> State {
         status: WorktreeStatus::Valid,
         included: false,
     }];
-    let session = Session::start_new(SessionLocation::Worktree("feat-a".to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
     state.session.active = Some(id);
@@ -287,7 +305,7 @@ fn a_stopped_or_failed_session_that_is_current_is_still_marked() {
                 .unwrap();
             session.mark_running();
             for _ in 0..drive {
-                if session.on_unexpected_exit() == RestartDecision::GiveUp {
+                if session.on_unexpected_exit("exit status 1") == RestartDecision::GiveUp {
                     break;
                 }
             }
@@ -323,6 +341,7 @@ fn showing_a_terminal() -> State {
     let mut s = State::default();
     s.update(Message::Session(SessionMsg::Started(Session::start_new(
         SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
     ))));
     s
 }
@@ -381,8 +400,14 @@ fn only_the_displayed_sessions_terminal_is_eligible() {
     // Two sessions exist; neither is displayed. FR-020 is structural — `active_session` is the
     // only session the predicate names — and this is what would notice a second one creeping in.
     let mut s = State::default();
-    let first = Session::start_new(SessionLocation::Worktree("feat-x".to_string()));
-    let second = Session::start_new(SessionLocation::Worktree("feat-y".to_string()));
+    let first = Session::start_new(
+        SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
+    );
+    let second = Session::start_new(
+        SessionLocation::Worktree("feat-y".to_string()),
+        AiCli::ClaudeCode,
+    );
     s.update(Message::Session(SessionMsg::Started(first)));
     s.update(Message::Session(SessionMsg::Started(second)));
     assert!(
@@ -526,6 +551,7 @@ fn every_navigation_to_a_terminal_clears_a_release() {
             Box::new(|_: &State| {
                 Message::Session(SessionMsg::Started(Session::start_new(
                     SessionLocation::Worktree("feat-y".to_string()),
+                    AiCli::ClaudeCode,
                 )))
             }),
         ),
@@ -597,7 +623,10 @@ fn a_restored_session_holds_the_keyboard_at_launch() {
         "the application starts with the terminal not released, so a restored session is focused"
     );
     let mut s = State::default();
-    let session = Session::start_new(SessionLocation::Worktree("restored".to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree("restored".to_string()),
+        AiCli::ClaudeCode,
+    );
     let id = session.id;
     s.workspace
         .sessions
@@ -708,7 +737,10 @@ fn output_and_lifecycle_never_change_the_holder() {
     )));
     let before = s.terminal_focused();
 
-    let other = Session::start_new(SessionLocation::Worktree("noisy".to_string()));
+    let other = Session::start_new(
+        SessionLocation::Worktree("noisy".to_string()),
+        AiCli::ClaudeCode,
+    );
     let other_id = other.id;
     s.update(Message::Session(SessionMsg::Started(other)));
     s.update(Message::Window(WindowMsg::FieldFocusChanged(

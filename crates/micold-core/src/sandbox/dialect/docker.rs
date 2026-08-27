@@ -1,0 +1,49 @@
+//! Docker's argument dialect and capability baseline (FR-021).
+
+use super::Dialect;
+use crate::sandbox::runtime::{IdentityMapping, RuntimeKind};
+
+/// Docker's dialect.
+pub fn dialect() -> Dialect {
+    Dialect {
+        kind: RuntimeKind::Docker,
+        program: "docker",
+        identity: IdentityMapping::ExplicitUidGid,
+        no_masquerade_opt: "com.docker.network.bridge.enable_ip_masquerade=false",
+        // 20.10 is where `--pids-limit` and the network driver options this feature relies on are
+        // uniformly available. Measured against 29.5.1 (research R4, R5).
+        minimum_version: "20.10",
+        not_running_phrases: &[
+            "cannot connect to the docker daemon",
+            "is the docker daemon running",
+            "the docker daemon is not running",
+            "docker desktop is not running",
+        ],
+        not_permitted_phrases: &["permission denied"],
+        // Docker describes a refused bind as a problem with the *mount configuration*, and puts the
+        // path inside that sentence. "read-only file system" is here because a bind onto a
+        // read-only mount is the same failure with a different cause, and the user needs the path
+        // either way.
+        mount_rejected_phrases: &[
+            "mount source path",
+            "invalid mount",
+            "read-only file system",
+        ],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_masquerade_option_is_the_one_measured_to_work() {
+        // Research R4: this exact option is what keeps a published port working while blocking
+        // outbound connections. The obvious alternative (`--internal`) leaves the container
+        // unreachable from the host, which severs the control channel.
+        assert_eq!(
+            dialect().no_masquerade_opt,
+            "com.docker.network.bridge.enable_ip_masquerade=false"
+        );
+    }
+}

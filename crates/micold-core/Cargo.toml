@@ -14,6 +14,13 @@ path = "src/lib.rs"
 # FR-040 enforcement: this crate declares ONLY render-free dependencies. It has no line
 # for `iced`, `dark-light`, `portable-pty`, or `alacritty_terminal` — so a render or PTY
 # type cannot be named here without a compile error, not merely a convention.
+[features]
+# Feature 027. Opts in to the tests that drive a **real** container runtime rather than the
+# injected fake. Off by default so `cargo test --workspace` needs nothing installed on any
+# platform, which is the property that keeps the adapter layer's cross-platform coverage honest
+# (Principle VI). The `sandbox-runtime` CI job turns it on, on Linux only.
+sandbox-real-runtime = []
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }

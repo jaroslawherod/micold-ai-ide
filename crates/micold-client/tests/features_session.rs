@@ -22,7 +22,7 @@ use micold_client::app::State;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::session::{ForegroundChoice, SelectKind};
 use micold_core::project::{Availability, Project};
-use micold_core::session::{Session, SessionId, SessionLocation};
+use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
 use std::path::{Path, PathBuf};
 
 fn project(path: &str) -> Project {
@@ -42,10 +42,10 @@ fn two_projects(a: usize, b: usize) -> (State, Vec<SessionId>, Vec<SessionId>) {
     st.workspace.projects.push(project("/b"));
 
     let sessions_a: Vec<Session> = (0..a)
-        .map(|_| Session::start_new(SessionLocation::Default))
+        .map(|_| Session::start_new(SessionLocation::Default, AiCli::ClaudeCode))
         .collect();
     let sessions_b: Vec<Session> = (0..b)
-        .map(|_| Session::start_new(SessionLocation::Default))
+        .map(|_| Session::start_new(SessionLocation::Default, AiCli::ClaudeCode))
         .collect();
     let ids_a = sessions_a.iter().map(|s| s.id).collect();
     let ids_b = sessions_b.iter().map(|s| s.id).collect();
@@ -172,7 +172,10 @@ fn sessions_are_located_by_worktree_regardless_of_whether_they_are_visible() {
     st.workspace.projects.push(project("/a"));
     st.workspace.active = Some(PathBuf::from("/a"));
 
-    let mut archived = Session::start_new(SessionLocation::Worktree("feat-a".into()));
+    let mut archived = Session::start_new(
+        SessionLocation::Worktree("feat-a".into()),
+        AiCli::ClaudeCode,
+    );
     archived.archived = true;
     let id = archived.id;
     st.workspace
@@ -461,4 +464,145 @@ fn the_connect_path_re_resolves_the_foreground_after_folding_the_catalog() {
         "the re-resolve must sit between folding the catalog and reading `active_session` \
          (fold={fold}, resolve={resolve}, read={reads_active})"
     );
+}
+// ---------------------------------------------------------------------------------------
+// Which AI CLI a new session runs (feature 026, T022 — FR-001, FR-004, FR-005, FR-006, SC-001)
+// ---------------------------------------------------------------------------------------
+//
+// This file owns every render-free session decision in US1. The branching lives here rather than in
+// the implementation tasks because Principle I's GUI exception covers *drawing* and does not cover
+// *branching* — `ui/sidebar.rs` only dispatches what these functions decide.
+
+use micold_client::features::session::{PressTarget, StartIntent};
+
+/// A state with a chosen default and a chosen availability set.
+fn state_with(default_ai_cli: AiCli, available: &[AiCli]) -> State {
+    let mut state = State::default();
+    state.session.default_ai_cli = default_ai_cli;
+    state.session.available_providers = available.to_vec();
+    state
+}
+
+#[test]
+fn a_start_with_no_override_uses_the_stored_default() {
+    let state = state_with(AiCli::Copilot, &[AiCli::ClaudeCode, AiCli::Copilot]);
+    assert_eq!(state.session.provider_for_start(None), AiCli::Copilot);
+}
+
+#[test]
+fn an_override_wins_and_leaves_the_setting_untouched() {
+    // FR-004's two halves in one assertion. The second is true by shape — `provider_for_start`
+    // reads the default and writes nothing — and asserting it anyway is what would catch an
+    // implementation that "remembered" the last override as the new default.
+    let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode, AiCli::Copilot]);
+
+    assert_eq!(
+        state.session.provider_for_start(Some(AiCli::Copilot)),
+        AiCli::Copilot
+    );
+    assert_eq!(
+        state.session.default_ai_cli,
+        AiCli::ClaudeCode,
+        "choosing an override for one session must not change what the next one defaults to"
+    );
+}
+
+#[test]
+fn changing_the_default_changes_no_existing_sessions_provider() {
+    // FR-005, and it is true *by shape*: `Session::provider` is a constructor argument with no
+    // setter, so there is no message that could change it. What this test can hold is that the
+    // shape has not quietly acquired one — a `pub` field assigned somewhere would compile.
+    let mut state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode, AiCli::Copilot]);
+    let existing = Session::start_new(SessionLocation::Default, AiCli::Copilot);
+    state
+        .workspace
+        .sessions
+        .insert(PathBuf::from("/repo"), vec![existing.clone()]);
+
+    state.session.default_ai_cli = AiCli::ClaudeCode;
+
+    assert_eq!(
+        state.workspace.sessions[Path::new("/repo")][0].provider,
+        AiCli::Copilot,
+        "the open session still runs the CLI it was started on"
+    );
+    assert_eq!(
+        state.session.provider_for_start(None),
+        AiCli::ClaudeCode,
+        "and the next new one takes the new default"
+    );
+}
+
+#[test]
+fn the_primary_half_starts_the_default_in_one_press() {
+    // SC-001: the one-interaction start survives the affordance gaining a second half.
+    let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode, AiCli::Copilot]);
+    assert_eq!(
+        state.session.start_intent(PressTarget::Primary),
+        StartIntent::Start(AiCli::ClaudeCode)
+    );
+}
+
+#[test]
+fn the_secondary_half_offers_the_installed_clis_and_starts_nothing() {
+    let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode, AiCli::Copilot]);
+    assert_eq!(
+        state.session.start_intent(PressTarget::Secondary),
+        StartIntent::OfferChoice(vec![AiCli::ClaudeCode, AiCli::Copilot])
+    );
+}
+
+#[test]
+fn a_single_installed_cli_has_no_secondary_half_at_all() {
+    // FR-006. A "choose which one" control that opens a list of one is a worse single-CLI
+    // experience than the plain button it replaced, so the half is absent rather than disabled.
+    let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode]);
+
+    assert!(!state.session.start_affordance_offers_a_choice());
+    assert_eq!(
+        state.session.start_intent(PressTarget::Primary),
+        StartIntent::Start(AiCli::ClaudeCode),
+        "and the primary half is unchanged — the single-CLI user is unaffected by this feature"
+    );
+}
+
+#[test]
+fn an_unavailable_default_offers_the_choice_rather_than_starting_or_substituting() {
+    // FR-002 and FR-004 scenario 4, and the case with three wrong answers, all plausible:
+    // silently start the other CLI (FR-002 forbids substituting), silently do nothing (the user
+    // pressed a button), or start the missing one and let the spawn fail (that is FR-010's story,
+    // not this one — the application knows *now* that it cannot).
+    let state = state_with(AiCli::Copilot, &[AiCli::ClaudeCode]);
+
+    assert!(!state.session.default_ai_cli_is_available());
+    assert_eq!(
+        state.session.start_intent(PressTarget::Primary),
+        StartIntent::OfferChoice(vec![AiCli::ClaudeCode])
+    );
+    assert_eq!(
+        state.session.default_ai_cli,
+        AiCli::Copilot,
+        "and the stored default is not rewritten on the way past (research R11)"
+    );
+}
+
+#[test]
+fn no_installed_cli_means_nothing_to_offer() {
+    let state = state_with(AiCli::ClaudeCode, &[]);
+    for target in [PressTarget::Primary, PressTarget::Secondary] {
+        assert_eq!(
+            state.session.start_intent(target),
+            StartIntent::NothingAvailable
+        );
+    }
+    assert!(!state.session.start_affordance_offers_a_choice());
+}
+
+#[test]
+fn only_installed_clis_are_ever_offered() {
+    // FR-006 for the menus — the Settings select and the override list read this one function, so
+    // an unavailable CLI cannot appear in one and not the other.
+    let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode]);
+    assert_eq!(state.session.offered_providers(), vec![AiCli::ClaudeCode]);
+    assert!(!state.session.offered_providers().contains(&AiCli::Copilot));
 }

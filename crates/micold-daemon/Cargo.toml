@@ -15,6 +15,14 @@ path = "src/lib.rs"
 name = "micold-daemon"
 path = "src/main.rs"
 
+# Mirrors `micold-core`'s gate (Principle VI): the default suite must need no container runtime
+# installed on any platform, or the adapter layer's cross-platform coverage stops meaning anything.
+# The one target behind this feature measures the two placements against each other, which needs
+# both the real daemon binary Cargo builds and a real Docker daemon.
+[features]
+default = []
+sandbox-real-runtime = []
+
 [dependencies]
 micold-core = { workspace = true }
 # Transport + runtime (plan W1, tasks T015-T020).
@@ -32,6 +40,10 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 file-rotate = { workspace = true }
 directories = { workspace = true }
+# Filesystem change notification for `ActivitySource::EventLog` sessions (feature 026, FR-019):
+# a Copilot session's busy/idle signal is the tail of its own `events.jsonl`, and FR-019 forbids a
+# polling timer of ours. One vetted abstraction instead of three platform backends (research R14).
+notify = { workspace = true }
 # PTY/VT stack (plan W3, tasks T030/T031): the daemon now owns every `Term` and PTY child so
 # sessions outlive the UI. `alacritty_terminal` interprets VT/ANSI into a grid; `portable-pty`
 # hosts the child process. Stable `LineId` diffing (T006/T032) rides on top via a trait, so the

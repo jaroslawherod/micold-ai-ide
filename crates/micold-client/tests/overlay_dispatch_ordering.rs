@@ -21,7 +21,6 @@ use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
-use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
@@ -65,11 +64,6 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
         "add_worktree",
         |s| s.worktree_form.form = Some(Default::default()),
         Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
-    ),
-    (
-        "settings",
-        |s| s.settings.settings_draft = Some(Default::default()),
-        Message::Settings(SettingsMsg::Cancelled),
     ),
     (
         "confirm_worktree_delete",

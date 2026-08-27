@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-15
 
-**Status**: Draft
+**Status**: Closed (implemented and shipped; every task in tasks.md is done. The manual quickstart walkthrough ran 2026-08-21 on Linux — evidence: `evidence/T015-T033-manual-walkthrough.md`. §1, §5 and §6 pass; §3 passes but for FR-016; §2 and §4 are partial. One open defect: BUG-002 — a narrow window drops the project name and clips the actions in the known-projects list, failing FR-016 and the spec's own small-window edge case. macOS/Windows parity and a live OS theme change (SC-003) are unrun.)
 
 **Bugfix**: 2026-07-21 — BUG-001 Clarified FR-018/Edge Cases to distinguish a transient OS-theme-detection failure from a genuine, sustained "no preference" reading; added FR-021.
 

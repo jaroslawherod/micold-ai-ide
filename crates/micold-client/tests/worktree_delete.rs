@@ -11,7 +11,7 @@ use micold_client::features::worktree;
 use micold_core::git::{FakeGit, Git, GitCli};
 use micold_core::project::{Availability, Project};
 use micold_core::provider::{AiCliProvider, ClaudeProvider};
-use micold_core::session::{Session, SessionLocation};
+use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::terminal::{FakeHandle, TerminalHandle};
 use micold_core::worktree::{
     remove_worktree, remove_worktree_dir, Leftover, Worktree, WorktreeStatus,
@@ -51,9 +51,14 @@ fn confirm_removes_worktree_branch_and_kills_only_matching_sessions() {
     });
     state.workspace.active = Some(repo.clone());
     state.worktree.worktrees = vec![wt("feat-abc-123-x", &repo), wt("other", &repo)];
-    let target_session =
-        Session::start_new(SessionLocation::Worktree("feat-abc-123-x".to_string()));
-    let other_session = Session::start_new(SessionLocation::Worktree("other".to_string()));
+    let target_session = Session::start_new(
+        SessionLocation::Worktree("feat-abc-123-x".to_string()),
+        AiCli::ClaudeCode,
+    );
+    let other_session = Session::start_new(
+        SessionLocation::Worktree("other".to_string()),
+        AiCli::ClaudeCode,
+    );
     let (target_id, other_id) = (target_session.id, other_session.id);
     state.update(Message::Session(SessionMsg::Started(target_session)));
     state.update(Message::Session(SessionMsg::Started(other_session)));
@@ -115,9 +120,14 @@ fn confirmed_delete_marks_the_worktrees_sessions_archived_but_not_others() {
     });
     state.workspace.active = Some(repo.clone());
     state.worktree.worktrees = vec![wt("feat-abc-123-x", &repo), wt("other", &repo)];
-    let target_session =
-        Session::start_new(SessionLocation::Worktree("feat-abc-123-x".to_string()));
-    let other_session = Session::start_new(SessionLocation::Worktree("other".to_string()));
+    let target_session = Session::start_new(
+        SessionLocation::Worktree("feat-abc-123-x".to_string()),
+        AiCli::ClaudeCode,
+    );
+    let other_session = Session::start_new(
+        SessionLocation::Worktree("other".to_string()),
+        AiCli::ClaudeCode,
+    );
     let (target_id, other_id) = (target_session.id, other_session.id);
     state.update(Message::Session(SessionMsg::Started(target_session)));
     state.update(Message::Session(SessionMsg::Started(other_session)));
@@ -224,7 +234,10 @@ fn fr_023_failed_delete_leaves_its_sessions_running_and_unarchived() {
     });
     state.workspace.active = Some(repo.clone());
     state.worktree.worktrees = vec![wt("feat-locked", &repo)];
-    let session = Session::start_new(SessionLocation::Worktree("feat-locked".to_string()));
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-locked".to_string()),
+        AiCli::ClaudeCode,
+    );
     let session_id = session.id;
     state.update(Message::Session(SessionMsg::Started(session)));
 

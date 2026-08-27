@@ -12,7 +12,9 @@ use std::sync::{Arc, Mutex};
 use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::ClientMsg;
-use micold_core::protocol::version::{PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH};
+use micold_core::protocol::version::{
+    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
+};
 use micold_core::session::SessionId;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
@@ -66,6 +68,12 @@ async fn no_log_line_contains_terminal_content_or_input() {
             schema_hash: SCHEMA_HASH,
             client_build: "test".into(),
             client_package_version: PACKAGE_VERSION.into(),
+            // Feature 027: the host-process placement presents no token, and a fingerprint
+            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
+            // against the same core as the daemon they drive.
+            auth_token: None,
+            client_fingerprint: BUILD_FINGERPRINT.into(),
+            require_fingerprint_match: false,
         }))
         .await
         .unwrap();

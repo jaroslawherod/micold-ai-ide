@@ -16,7 +16,7 @@ use micold_client::app::{Message, State};
 use micold_client::features::session::Msg as SessionMsg;
 use micold_core::git::FakeGit;
 use micold_core::project::{Availability, Project};
-use micold_core::session::{Session, SessionLocation};
+use micold_core::session::{AiCli, Session, SessionLocation};
 use std::path::PathBuf;
 
 #[test]
@@ -33,7 +33,7 @@ fn starting_a_default_session_leaves_worktrees_untouched() {
     state.worktree.worktrees = vec![]; // no worktrees exist yet — this is the interesting case (US1 AS1)
 
     let before = state.worktree.worktrees.clone();
-    let session = Session::start_new(SessionLocation::Default);
+    let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     state.update(Message::Session(SessionMsg::Started(session)));
 
     assert_eq!(
@@ -54,7 +54,7 @@ fn fake_git_boundary_records_no_worktree_or_branch_mutation() {
     assert!(git.branches(repo).is_empty());
 
     // The only operation "starting a Default session" performs, at the domain-model level.
-    let session = Session::start_new(SessionLocation::Default);
+    let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     assert_eq!(session.location, SessionLocation::Default);
 
     // FakeGit was never passed anywhere in the above — its state is provably unchanged.

@@ -6,7 +6,7 @@ use micold_client::app::State;
 use micold_client::features::sidebar::SidebarEntry;
 use micold_core::project::{Availability, Project};
 use micold_core::session::{
-    Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, TerminalMode,
+    AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, TerminalMode,
 };
 use micold_core::workspace::Workspace;
 use std::path::PathBuf;
@@ -29,7 +29,7 @@ fn state_with(project: &str, sessions: Vec<Session>) -> State {
 
 #[test]
 fn archive_stops_the_process_and_keeps_the_record() {
-    let mut session = Session::start_new(SessionLocation::Default);
+    let mut session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     session.mark_running();
 
     session.archive();
@@ -48,9 +48,10 @@ fn archived_sessions_are_hidden_from_the_sidebar() {
         SessionLocation::Default,
         SessionLabel::Pending,
         TerminalMode::AiCli,
+        AiCli::ClaudeCode,
     );
     archived.archive();
-    let visible = Session::start_new(SessionLocation::Default);
+    let visible = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     let visible_id = visible.id;
 
     let state = state_with("/repo", vec![archived, visible]);

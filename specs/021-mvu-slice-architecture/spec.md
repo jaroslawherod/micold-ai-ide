@@ -4,9 +4,12 @@
 
 **Created**: 2026-07-28
 
-**Status**: Merged (PR #47) and since amended — five inconsistencies found by the planning phase's
-cross-artifact analysis are corrected in place, adding FR-015a and a daemon-connection feature. See
-the checklist's iteration-5 findings for what changed and why.
+**Status**: Complete. The bulk merged as PR #47 and was then amended in place — five
+inconsistencies found by the planning phase's cross-artifact analysis, adding FR-015a and a
+daemon-connection feature; see the checklist's iteration-5 findings for what changed and why. A
+convergence phase (Phase 8, T079–T084) appended afterwards closed the gaps an assessment of the
+resulting tree found, including the FR-011 overlay exit transition that never played, and merged as
+PR #227 on 2026-08-25. All 86 tasks are complete and no bugs are open against this feature.
 
 **Input**: User description: "Refactor the application's internal architecture from a monolithic MVU core into a distributed, component-based MVU with an explicit service layer, without changing any user-visible behavior."
 

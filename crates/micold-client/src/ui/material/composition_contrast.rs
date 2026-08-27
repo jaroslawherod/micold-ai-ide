@@ -17,15 +17,14 @@
 //! its original. The two enums are walked in full (`NoticeLevel::ALL`, `Variant::ALL`), so a level
 //! or a variant added later is covered without anyone remembering to add it here.
 //!
-//! **Scope: hosts that impose.** FR-004a is a rule about an *accent* fill — a container filled with
-//! a colour §1.3 never enumerated for `primary`. The neutral hosts are walked to find which ones
-//! those are and then skipped, because on them §1.3 already speaks and this file would be
-//! second-guessing it. That skip is not free of findings: running the walk unscoped reports nine
-//! near-misses on the `Info` banner's `surface_variant` — labels at 4.40–4.49:1 under the hover and
-//! pressed state layers, and an `outline` border at 2.42–2.96:1 in the dark scheme, all against
-//! thresholds of 4.5 and 3. Those are properties of §7.3's neutral table itself, present before this
-//! feature and unchanged by it; they are recorded as BUG-010 rather than absorbed here, since
-//! widening this gate to cover them would make it fail for a reason BUG-009 did not cause.
+//! **Scope: every host, accent or neutral (SC-008h).** It was narrower once. FR-004a is a rule about
+//! an *accent* fill, so the walk skipped the neutral hosts and said so in this comment, naming the
+//! nine violations the skip was hiding and the bug they were filed as. That note was accurate,
+//! prominent, and useless: an excluded class stays excluded until somebody chooses to go back for
+//! it, while a green gate reads to everyone — including its own author three commits later — as
+//! "compositions are covered". It is worse than an untested area, because an untested area does not
+//! report success. The filter is gone; a neutral fill outside §1.3's enumeration is caught here now,
+//! which is how the `Info` banner's host came to move (BUG-010).
 //!
 //! Inside the crate for the reason `style_snapshot` states — the style layer is `pub(crate)` by
 //! design (017 FR-002), so `tests/` cannot reach it.
@@ -73,7 +72,7 @@ fn behind(host_fill: Rgb, s: &button::Style) -> Rgb {
 }
 
 #[test]
-fn a_component_on_an_accent_fill_is_legible_against_it() {
+fn a_component_is_legible_against_the_container_it_is_drawn_in() {
     // Every violation, not the first: a foreground that is wrong on one host is usually wrong on
     // several, in both schemes and at every state, and a gate that stops at the first one turns a
     // single cause into a queue of reruns.
@@ -84,12 +83,6 @@ fn a_component_on_an_accent_fill_is_legible_against_it() {
         let theme = style::theme(scheme);
         for level in NoticeLevel::ALL {
             let host = style::notification_host(r, level);
-            // Read from `imposed`, not from a list of levels: whether a host obliges its children is
-            // the host's own answer, so a level added later is classified by the same code that
-            // colours it. `the_walk_covers_an_accent_host` guards the case where nothing qualifies.
-            if host.imposed().is_none() {
-                continue;
-            }
             for variant in Variant::ALL {
                 let style_fn = variant.style(r, Some(host));
                 for (state_name, status) in STATES {
@@ -122,17 +115,21 @@ fn a_component_on_an_accent_fill_is_legible_against_it() {
          placed on an accent-filled container draws its foreground from that container's paired \
          `on_*` role, not from the role §7.3 gives it on a neutral surface — and its border from \
          the same role, since `outline` is a neutral-variant tone (FR-004a, FR-027b, contract §7.3 \
-         'Host surface'). The background each ratio is measured against is the host's fill with the \
-         button's own state layer composited over it, which is what is actually behind the label.",
+         'Host surface'). A **neutral** fill fails this for the other reason: §1.3 enumerates the \
+         four surfaces `primary` may be drawn on, and a container filled with a neutral role outside \
+         that set is not a host — it takes a permitted fill instead (FR-004b). The background each \
+         ratio is measured against is the host's fill with the button's own state layer composited \
+         over it, which is what is actually behind the label.",
         violations.join("\n  ")
     );
 }
 
-/// The walk has to actually cover an accent host. If every level were neutral — or if `imposed`
-/// stopped imposing — the assertions above would pass over nothing at all, which is the failure
-/// mode a green gate cannot report about itself.
+/// The walk has to cover **both** kinds of host. If every level were accent the neutral rule would
+/// go unexercised, and if every level were neutral the imposition would — either way the assertions
+/// above pass over a case nobody is checking, which is the failure mode a green gate cannot report
+/// about itself.
 #[test]
-fn the_walk_covers_an_accent_host() {
+fn the_walk_covers_a_host_of_each_kind() {
     let r = tokens::roles(ColorScheme::Light);
     let accents = NoticeLevel::ALL
         .into_iter()
@@ -140,8 +137,15 @@ fn the_walk_covers_an_accent_host() {
         .count();
     assert!(
         accents >= 1,
-        "no notification level presents an accent fill, so the composition assertions covered \
+        "no notification level presents an accent fill, so the imposition rule was asserted over \
          nothing. §1.3 enumerates the neutral surfaces `primary` may be drawn on; a fill outside \
          that set is what obliges a child to take the host's own foreground (FR-004a)."
+    );
+    assert!(
+        NoticeLevel::ALL.len() - accents >= 1,
+        "no notification level presents a neutral fill, so removing this walk's host filter proved \
+         nothing. The filter came out because an excluded class stays excluded and a green gate \
+         still reads as coverage (SC-008h, BUG-010); a walk with no neutral host left in it is that \
+         exclusion again, written differently."
     );
 }

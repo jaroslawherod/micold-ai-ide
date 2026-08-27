@@ -85,7 +85,19 @@ step — a partial migration would leave a broken dual-system intermediate state
 - [X] T021 [P] [US1] Refactor `settings_form::modal` in `src/ui/settings_form.rs` the same way (accept `progress`).
 - [X] T022 [US1] Wire overlay rendering in `src/ui/mod.rs` (and `view()` in `src/main.rs` to pass the `dismissing` snapshot): when an overlay is open render it live with `progress = motion.get(Overlay)`; else if `dismissing` is set render the snapshot via the same modal fns with the same progress; else render `base` (FR-001/FR-002/FR-012).
 - [X] T023 [US1] Add a "Motion & animations" note to `docs/user-guide/appearance-theming.md` describing overlay fade in/out (Constitution Principle VII).
-- [ ] T024 [US1] Validate US1 per quickstart §3 & §5: fade in/out for all five overlays across Cancel/Esc/submit, invalid-submit stays open, reveal-beneath, reopen-during-exit, rapid-toggle, quit-mid-animation.
+- [X] T024 [US1] Validate US1 per quickstart §3 & §5: fade in/out for all five overlays across Cancel/Esc/submit, invalid-submit stays open, reveal-beneath, reopen-during-exit, rapid-toggle, quit-mid-animation.
+      (2026-08-25 — **ran, and it failed**. Recorded at 60 fps against the shipped binaries;
+      evidence: `evidence/T024-quickstart-pass.md`. Overlays **enter** with a visible transition
+      (About grows 530×256 → 560×278 over ~16 rendered steps, scrim dimming with it) and **exit in
+      a single frame** — About and Settings, via Cancel, via Esc and via a successful submit, four
+      for four. Filed as `bugs/BUG-001.md`; FR-002/FR-003 are not met. Passing here: invalid-submit
+      keeps the overlay open with its error, rapid-toggling never wedges one part-way, and
+      reopening straight after a dismissal renders correctly. Reveal-beneath and reopen-during-exit
+      are unanswerable while BUG-001 stands — the interval they describe does not exist.
+      Quit-mid-animation is unreachable on a WM-less Xvfb: `xdotool windowclose` panics inside
+      `Surface::configure` under lavapipe **at rest as well**, so it is a harness artefact and the
+      control run says so. The task is ticked as *run*, with the failure carried by the bug rather
+      than by leaving the pass permanently open — the 005 T058 / 001 T033 precedent.)
 
 **Checkpoint**: Overlays fade in and out; MVP is shippable.
 
@@ -100,7 +112,13 @@ step — a partial migration would leave a broken dual-system intermediate state
 - [X] T025 [P] [US2] Add an explicit extractability regression test in `src/motion.rs` asserting the core has no app/iced dependency (compiles + passes under `--no-default-features`), formalizing contract C7 / SC-008.
 - [X] T026 [US2] Write module-level rustdoc in `src/motion.rs` documenting the public API for external consumers, with a self-contained usage example independent of this app (FR-017).
 - [X] T027 [US2] Confirm single-site registration (FR-008/SC-004): verify no residual `*_anim` fields or per-animation `approach` calls remain in `src/main.rs`, and record (module docs/comment) the one-place recipe for adding an animated element.
-- [ ] T028 [US2] Regression-verify the four migrated animations (overflow menu, sidebar, main view, resize-handle hover) behave identically to before, per quickstart §4 (SC-005).
+- [X] T028 [US2] Regression-verify the four migrated animations (overflow menu, sidebar, main view, resize-handle hover) behave identically to before, per quickstart §4 (SC-005).
+      (2026-08-25 — measured at 60 fps, evidence as T024. Sidebar collapse 25 frames / expand 26
+      frames, a new value every frame; resize-handle hover ramps over ≥34 frames; the button ripple
+      runs 8 frames. Those three are intact. The overflow menu **opens** in 3 frames but **closes in
+      one**, and the main-view switch is a single frame — both are the same
+      leaving-does-not-animate defect as T024, and are covered by `bugs/BUG-001.md` rather than by a
+      second report.)
 
 **Checkpoint**: Reusable/extractable core proven; existing animations preserved.
 
@@ -113,7 +131,13 @@ step — a partial migration would leave a broken dual-system intermediate state
 **Independent Test**: Each overlay open (~300ms) and close (~240ms) is plainly visible (not a flash); durations are expressed as time units in one place (quickstart §3 timing check).
 
 - [X] T029 [US3] Confirm overlay timing is `OVERLAY_ENTER`=300ms / `OVERLAY_EXIT`=240ms and that all timings are expressed as legible `Duration` constants (not opaque per-frame steps) in `src/main.rs` (FR-005/FR-013).
-- [ ] T030 [US3] Validate perceptibility per quickstart §3 (each transition within the 0.15–0.5s band, clearly visible); tune the duration constants if needed (FR-004/SC-002/SC-003).
+- [X] T030 [US3] Validate perceptibility per quickstart §3 (each transition within the 0.15–0.5s band, clearly visible); tune the duration constants if needed (FR-004/SC-002/SC-003).
+      (2026-08-25 — the **enter** is clearly perceptible and in band; no tuning needed. The exit's
+      nominal 200 ms is in band too and is simply never drawn (`bugs/BUG-001.md`), so SC-002 is
+      vacuously failed on the way out and no constant would fix it. Note also that T029's wording is
+      stale: `OVERLAY_ENTER`/`OVERLAY_EXIT` moved out of `main.rs` into `ui/material/modal.rs` with
+      017 and now read `duration::MEDIUM_2` (300 ms) and `duration::SHORT_4` (200 ms) — still legible
+      named `Duration`s in one place, but the exit is 200 ms, not the 240 ms recorded there.)
 
 **Checkpoint**: Motion is clearly perceptible and tunable.
 
@@ -122,9 +146,18 @@ step — a partial migration would leave a broken dual-system intermediate state
 ## Phase 6: Polish & Cross-Cutting Concerns
 
 - [X] T031 [P] Cross-cutting docs review: ensure the appearance-theming note is linked from the user-guide index in `docs/`.
-- [ ] T032 Run the full `quickstart.md` end-to-end (all sections).
+- [X] T032 Run the full `quickstart.md` end-to-end (all sections).
+      (2026-08-25 — `evidence/T024-quickstart-pass.md` covers §3, §4, §5 and §6. §6's idle-cost
+      claim reads 28.9–31.0% CPU here, but the thread breakdown puts 29.3% of that in the llvmpipe
+      software-rasteriser workers against 1.0% on the app's own main thread, so the application is
+      idle and the figure is the rasteriser; it is not filed as a defect, and the
+      renderer-independent form of the claim is already held by the green `idle_requests_no_frames.rs`
+      and `idle_subscriptions.rs`. Not covered, and stated as such in the evidence: the rename,
+      add-worktree and project-switcher overlays individually — About and Settings were exercised on
+      all three dismissal paths and all five share `material::Modal`, so they should be re-checked
+      when BUG-001 is fixed.)
 - [X] T033 Verify `cargo fmt --check`, `cargo clippy` (no warnings), `cargo test`, and `cargo test --no-default-features` all pass.
-- [ ] T034 Confirm the change builds and tests on Linux, macOS, and Windows in CI (Constitution Principle VI).
+- [X] T034 Confirm the change builds and tests on Linux, macOS, and Windows in CI (Constitution Principle VI). *(2026-08-20: satisfied by the three-OS CI matrix added in `10a1fe7` (2026-07-20) — `.github/workflows/ci.yml` builds the whole workspace and runs the render-free core suite plus the component gates on ubuntu/macos/windows for every code-affecting change, and has been green on all three since. Latest run: [32302430171](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/32302430171). The full GUI suite and clippy stay Linux-only by design — that is the only runner with the iced system deps.)*
 
 ---
 

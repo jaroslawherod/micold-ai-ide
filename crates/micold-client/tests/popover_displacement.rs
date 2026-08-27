@@ -12,7 +12,7 @@
 //! So the mechanism is a declaration — `FloatingSurface::displaces`, applied by
 //! `overlay::registry::displace` — and this file is the independent statement of what it should
 //! say. [`DISPLACES`] is written from the behaviour, not read out of the registry, and
-//! [`the_whole_displacement_relation`] drives all fifty-six ordered pairs through `State::update`.
+//! [`the_whole_displacement_relation`] drives all seventy-two ordered pairs through `State::update`.
 //! A table read back out of the code under test would only ever catch the two halves disagreeing,
 //! never both being wrong.
 //!
@@ -20,9 +20,9 @@
 //!
 //! `switcher_forget_menu.rs` pins the switcher exception and the four openers that close the
 //! project menu; `keyboard.rs` and `overlay_registry.rs` cover Escape and scroll. That is five of
-//! the fifty-six pairs. None of them says what happens to the other fifty-one, and a displacement
-//! quietly widened — every panel popover suddenly closing the session menu, say — would have
-//! passed all of them.
+//! the seventy-two pairs. None of them says what happens to the other sixty-seven, and a
+//! displacement quietly widened — every panel popover suddenly closing the session menu, say —
+//! would have passed all of them.
 
 use micold_client::app::{Message, State};
 use micold_client::features::help::Msg as HelpMsg;
@@ -31,7 +31,7 @@ use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::ui::terminal::StripTab;
-use micold_core::session::{SessionId, ShellInstanceId};
+use micold_core::session::{SessionId, SessionLocation, ShellInstanceId};
 use std::path::PathBuf;
 
 /// Which surfaces each popover closes by opening.
@@ -70,6 +70,11 @@ const DISPLACES: &[(&str, &[&str])] = &[
     // second right-click and touches nothing else — including the pane's own context menu, which is
     // a different surface on the same pane.
     ("shell_instance_menu", &[]),
+    // Feature 026's "start a session on…" list, opened by pressing a sidebar row's chevron. It
+    // closes nothing either, and unlike the three above that is a *primary* press making that
+    // claim: the surface it hangs from is a button, so anything already open has had a click-away
+    // through its own backdrop before this list is ever asked for.
+    ("session_start_menu", &[]),
 ];
 
 /// The message that opens each popover, by the id it registers under.
@@ -89,6 +94,9 @@ fn opener(id: &str) -> Message {
             30,
             40,
         )),
+        "session_start_menu" => {
+            Message::Session(SessionMsg::StartMenuOpened(SessionLocation::Default))
+        }
         other => panic!("no opener for `{other}`"),
     }
 }
@@ -138,13 +146,15 @@ fn the_whole_displacement_relation() {
 #[test]
 fn every_popover_is_in_the_table() {
     // The relation is only as complete as the list of surfaces it ranges over: a popover
-    // registered later would be silently exempt from all forty-two pairs above, and nothing else
+    // registered later would be silently exempt from all seventy-two pairs above, and nothing else
     // in this file could notice. Counted against the registry rather than driven, because the
     // popovers displace each other and no state has them all open at once.
     //
-    // Nine of the sixteen registrations are dialogs; `overlay_registry.rs::every_dialog_is_in_the_list`
-    // is what holds that half.
-    const DIALOGS: usize = 9;
+    // Eight of the seventeen registrations are dialogs;
+    // `overlay_registry.rs::every_dialog_is_in_the_list` is what holds that half. It was nine until
+    // feature 027 made Settings a full-surface view rather than a floating one (FR-026), which took
+    // its registration with it.
+    const DIALOGS: usize = 8;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

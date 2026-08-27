@@ -41,7 +41,6 @@ mod inventory;
 use micold_client::features::help;
 use micold_client::features::project;
 use micold_client::features::session;
-use micold_client::features::settings;
 use micold_client::features::sidebar;
 use micold_client::features::worktree;
 use micold_client::features::worktree_form;
@@ -148,10 +147,13 @@ fn the_registration_list_is_actually_being_read() {
         registry::probes().len(),
         surfaces
     );
+    // Sixteen when Tier 2 registered them. Fifteen since feature 027: Settings stopped being a
+    // floating surface and became a view (FR-026), so it has nothing to register — lowered
+    // deliberately, which is what the message below asks for.
     assert!(
-        surfaces.len() >= 16,
-        "fewer surfaces than the sixteen Tier 2 registered. If one was genuinely removed, lower \
-         this number deliberately; it is here so an empty or half-read parse cannot look healthy"
+        surfaces.len() >= 15,
+        "fewer surfaces than the fifteen registered. If one was genuinely removed, lower this \
+         number deliberately; it is here so an empty or half-read parse cannot look healthy"
     );
 
     let unique: BTreeSet<&Surface> = surfaces.iter().collect();
@@ -378,11 +380,6 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
             }),
             selector: Some(Selector::open_at(PathBuf::from("/tmp"))),
             forget_target: Some(PathBuf::from("/p")),
-            ..Default::default()
-        },
-
-        settings: settings::State {
-            settings_draft: Some(Default::default()),
             ..Default::default()
         },
 

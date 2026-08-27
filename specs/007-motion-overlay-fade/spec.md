@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-17
 
-**Status**: Draft
+**Status**: Closed 2026-08-26 — implemented, shipped, and both halves verified against pixels. The manual quickstart pass (unrun until 2026-08-25) reopened this on a reading of the exits that turned out to be wrong: they were never truncated, they ran at about a third of their stated duration because `Progress` stepped a fixed fraction per frame while this window renders uncapped. Fixed in two parts — an elapsed-time clock, and then the first frame of a transition, which was stepping by the gap since a frame that was not part of it — see [BUG-001](bugs/BUG-001.md). Re-measured on 2026-08-26: the About dialog's 200 ms exit renders 8–9 monotone intermediate frames over 163–186 ms, the application behind it reappears progressively across all of them (reveal-beneath), and an exit interrupted 230 ms in resumes from the value it had reached rather than snapping (reopen-during-exit) — [evidence/BUG-001-exits-after-the-fix.md](evidence/BUG-001-exits-after-the-fix.md). One limitation is recorded rather than fixed there: `Fade`'s veil is a quad in its content's own layer, so used outside an overlay it dims a panel's fill and not its labels.
 
 **Input**: User description: "Generic, reusable UI animation library plus fade in/out for modal overlays. Overlays currently appear/disappear instantly; existing animations are bespoke and duplicated. Want one reusable animation mechanism any widget can use (not a static per-animation list), overlay fade in AND out (revealing the app beneath), and clearly perceptible timing (~300ms in / ~240ms out) — the current ~90ms is too fast to notice."
 

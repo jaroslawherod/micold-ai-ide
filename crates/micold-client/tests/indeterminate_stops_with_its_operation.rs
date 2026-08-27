@@ -58,10 +58,28 @@ fn frames_until_rest(state: &State, budget: usize) -> Option<usize> {
     let limits = layout::Limits::new(Size::ZERO, VIEWPORT);
     let start = Instant::now();
 
-    let mut tree = Tree::new(ui::view(state, None, None, 0, None, &outcome, &connection));
+    let mut tree = Tree::new(ui::view(
+        state,
+        None,
+        None,
+        0,
+        None,
+        &outcome,
+        &connection,
+        &micold_client::features::sandbox::Sandbox::default(),
+    ));
 
     for frame in 0..budget {
-        let mut element = ui::view(state, None, None, 0, None, &outcome, &connection);
+        let mut element = ui::view(
+            state,
+            None,
+            None,
+            0,
+            None,
+            &outcome,
+            &connection,
+            &micold_client::features::sandbox::Sandbox::default(),
+        );
         tree.diff(&element);
         let node = element
             .as_widget_mut()

@@ -72,7 +72,7 @@ pub fn subscription(app: &App) -> Subscription<Message> {
         micold_client::ui::subscription(&app.core),
         window_focus_events(),
         // The daemon connection: one long-lived socket to the session host (feature 010, T041).
-        micold_client::daemon::connection(),
+        micold_client::daemon::connection(app.placement.clone()),
         iced::window::resize_events().map(|(_id, size)| {
             Message::Window(WindowMsg::Resized {
                 width: size.width.max(0.0) as u16,

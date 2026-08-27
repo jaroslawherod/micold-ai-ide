@@ -51,7 +51,7 @@
 //!
 //! A decision hidden behind a root helper that is *not* defined in `app.rs`. Helper calls on
 //! `self` are followed transitively while their bodies are in `app.rs` — which is how
-//! `ScrolledBeneathOverlay` and `EscapePressed` resolve to the registry at all — and stop there.
+//! `EscapePressed` resolves to the registry at all — and stop there.
 //! `tests/root_is_routing_only.rs` is what watches whether those helpers should exist.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -65,15 +65,14 @@ use std::path::{Path, PathBuf};
 const ALLOWED: &[(&str, &str)] = &[];
 
 /// Variants nothing in `src/` emits — variant, reason (FR-013).
-const NO_OWNER: &[(&str, &str)] = &[(
-    "ScrolledBeneathOverlay",
-    "Declared and matched, exercised by four assertions in `tests/overlay_dismissal_delta.rs`, and \
-     emitted by nothing: no scrollable reports a scroll beneath an open surface. Its behaviour is \
-     specified by tests but unreachable in the running application (feature 028 T025, FR-020). \
-     Recorded rather than deleted because the rule it routes to — `close_on_scroll_beneath` — is \
-     the shared one `EscapePressed` also uses, and the missing half is the emitter, not the \
-     decision.",
-)];
+///
+/// Empty since feature 021 T081 deleted `ScrolledBeneathOverlay`, the one entry it ever held.
+/// T025 recorded it here rather than deleting it, on the grounds that the missing half was the
+/// emitter and not the decision; T081 established on a running build that the live doors —
+/// `SidebarScrolled` and `TabStripScrolled` — route to the same `close_on_scroll_beneath`, and
+/// asked `tests/overlay_dismissal_delta.rs` through those instead. With the assertions moved onto
+/// a message the user can actually send, the unreachable variant had nothing left to record.
+const NO_OWNER: &[(&str, &str)] = &[];
 
 // ---- Reading the source ------------------------------------------------------------------------
 
@@ -542,7 +541,9 @@ fn variants_with_no_producer_are_reported_not_failed() {
     );
     assert_eq!(
         orphans, recorded,
-        "the reported no-owner set is `ScrolledBeneathOverlay` and nothing else (T025)"
+        "the reported no-owner set and NO_OWNER disagree. Both are empty since feature 021 T081 \
+         deleted `ScrolledBeneathOverlay`, the only entry this list ever held (T025); a variant \
+         appearing on either side is a new fact about the root, not a leftover"
     );
 }
 
@@ -616,19 +617,24 @@ fn the_scan_finds_the_vocabulary_it_is_meant_to_read() {
     let scan = scan();
     assert_eq!(
         scan.variants.len(),
-        15,
-        "the root vocabulary is 10 feature wrappers and 5 cross-cutting variants (SC-002); the \
+        16,
+        "the root vocabulary is 11 feature wrappers and 5 cross-cutting variants (SC-002); the \
          scan found {:?}",
         scan.variants.iter().map(|v| &v.name).collect::<Vec<_>>()
     );
     assert!(
-        scan.features.len() >= 10,
-        "found {} feature modules; there are at least 10",
+        scan.features.len() >= 11,
+        "found {} feature modules; there are at least 11",
         scan.features.len()
     );
     // Cross-cutting by the registry rather than by a feature, which is the verdict that would
     // disappear first if helper following broke.
-    for expected in ["EscapePressed", "ScrolledBeneathOverlay"] {
+    //
+    // One name, not two. `ScrolledBeneathOverlay` was the other, and feature 021 T081 deleted it:
+    // the live scroll doors (`SidebarScrolled`, `TabStripScrolled`) route to the same
+    // `close_on_scroll_beneath`, but they are feature vocabulary and reach it from inside their
+    // own modules, so the root has exactly one arm left that resolves through a registry helper.
+    for expected in ["EscapePressed"] {
         assert!(
             scan.owners
                 .get(expected)

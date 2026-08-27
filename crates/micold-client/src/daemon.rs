@@ -17,16 +17,51 @@ use iced::futures::channel::mpsc;
 use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::Subscription;
 
-use micold_core::connect::{connect_or_spawn, Connected, SPAWN_TIMEOUT};
-use micold_core::endpoint;
+use micold_core::connect::{connect_at, connect_or_spawn, Connected, Credentials, SPAWN_TIMEOUT};
+use micold_core::endpoint::{self, DialAddress};
 use micold_core::protocol::codec::{CodecError, Frame};
 use micold_core::protocol::keepalive::{self, Keepalive, KeepaliveAction};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
+use micold_core::sandbox::placement::PlacementKind;
 
 use crate::app::Message;
 
 /// The build string this client announces in the handshake (diagnostics only).
 const CLIENT_BUILD: &str = concat!("micold-ai-ide/", env!("CARGO_PKG_VERSION"));
+
+/// Where the daemon runs, and what to present to it (feature 027).
+///
+/// Handed in rather than read here. The shell is the single place that chooses a real settings
+/// store (FR-017/FR-018), and this subscription is not the shell — so it takes the *answer*, not
+/// the means of finding it. That constraint is checked by
+/// `tests/no_concrete_implementations.rs`, and it caught the first version of this file.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct Placement {
+    /// Which placement the user selected.
+    pub kind: PlacementKind,
+    /// The state directory the sandbox token lives in.
+    pub state_dir: std::path::PathBuf,
+    /// Whether a build-fingerprint mismatch refuses the connection — true only for a locally built
+    /// image, whose daemon came from this same working tree (research R8).
+    pub strict_fingerprint: bool,
+}
+
+/// What the client presents to a sandboxed daemon.
+///
+/// The token is **read from the file** the client wrote and the runtime mounted, rather than
+/// remembered in memory, so a sandbox started by a previous run of this client is still reachable
+/// by this one. A missing token file is not fixed up here: the handshake refuses, which is the
+/// honest outcome, and the remedy is to restart the sandbox so a new token is issued.
+fn sandbox_credentials(placement: &Placement) -> Credentials {
+    let token = micold_core::protocol::auth::Token::read_from(
+        &micold_core::protocol::auth::host_token_path(&placement.state_dir),
+    )
+    .ok();
+    Credentials {
+        auth_token: token.map(|t| micold_core::protocol::messages::PresentedToken::new(t.as_str())),
+        require_fingerprint_match: placement.strict_fingerprint,
+    }
+}
 
 /// How many messages may queue in each direction before backpressure. Input is small and rare
 /// relative to grid frames; a few hundred slots is ample without unbounded growth.
@@ -74,10 +109,15 @@ impl PartialEq for Outbox {
 impl Eq for Outbox {}
 
 /// The connection subscription. Add it to the app's subscription set; iced keeps one instance alive
-/// for the app's lifetime (the builder is a plain `fn`, so its identity is stable — a capturing
-/// closure would make iced restart it every frame).
-pub fn connection() -> Subscription<Message> {
-    Subscription::run(actor)
+/// for the app's lifetime.
+///
+/// `run_with` rather than `run`: feature 027 gave this subscription a parameter, and the builder
+/// still has to be a plain `fn` for its identity to be stable — a capturing closure would make iced
+/// restart it every frame. `run_with` identifies the subscription by the *data* plus the function
+/// pointer, which is exactly right here: the placement is read once at boot and does not change
+/// while the app runs, so the identity is as stable as it was before.
+pub fn connection(placement: Placement) -> Subscription<Message> {
+    Subscription::run_with(placement, |p| actor(p.clone()))
 }
 
 /// How long to wait after a lost connection before trying to re-establish it. Short enough that a
@@ -106,7 +146,7 @@ enum PumpEnd {
     AppGone,
 }
 
-fn actor() -> impl Stream<Item = Message> {
+fn actor(placement: Placement) -> impl Stream<Item = Message> {
     // iced 0.14 takes an `AsyncFnOnce` here (0.13 took an `FnOnce` returning a future), so the
     // sender's type no longer falls out of inference and has to be named.
     iced::stream::channel(
@@ -129,7 +169,7 @@ fn actor() -> impl Stream<Item = Message> {
             // half-open connection is caught by the keepalive inside `pump`, so the client never sits
             // forever presenting stale content as live (FR-026/027).
             loop {
-                match connect_and_pump(&endpoint, &mut output).await {
+                match connect_and_pump(&placement, &endpoint, &mut output).await {
                     PumpEnd::AppGone => return,
                     PumpEnd::Disconnected => {
                         if output
@@ -151,10 +191,34 @@ fn actor() -> impl Stream<Item = Message> {
 /// directions with a keepalive until the connection ends. A connect failure is surfaced as
 /// `DaemonConnectFailed` and reported as a disconnect so the outer loop retries.
 async fn connect_and_pump(
+    placement: &Placement,
     endpoint: &endpoint::Endpoint,
     output: &mut mpsc::Sender<Message>,
 ) -> PumpEnd {
-    let connected = match connect_or_spawn(endpoint, CLIENT_BUILD, SPAWN_TIMEOUT).await {
+    let attempt = match placement.kind {
+        // Unchanged: auto-spawn a detached host process and poll until it accepts.
+        PlacementKind::HostProcess => connect_or_spawn(endpoint, CLIENT_BUILD, SPAWN_TIMEOUT).await,
+        // The sandbox is brought up by `shell::sandbox`, which the app drives so the user can watch
+        // the image being acquired. All this loop does is dial it — and if nothing is listening,
+        // say so. It does **not** fall back to a host process: that is FR-035, and this is the one
+        // place it would be easiest to lose.
+        PlacementKind::LocalSandbox => {
+            let address = DialAddress::Loopback {
+                port: micold_core::endpoint::DEFAULT_SANDBOX_PORT,
+            };
+            let credentials = sandbox_credentials(placement);
+            match connect_at(&address, CLIENT_BUILD, &credentials).await {
+                Ok(Some(c)) => Ok(c),
+                Ok(None) => Err(std::io::Error::new(
+                    std::io::ErrorKind::NotConnected,
+                    format!("no sandboxed daemon is listening on {}", address.describe()),
+                )),
+                Err(e) => Err(e),
+            }
+        }
+    };
+
+    let connected = match attempt {
         Ok(c) => c,
         Err(err) => {
             return report_connect_failure(output, err.to_string()).await;
@@ -204,6 +268,22 @@ async fn connect_and_pump(
             } else {
                 PumpEnd::AppGone
             };
+        }
+        // The one refusal that exists purely for the development loop (FR-024d, R8). It reached the
+        // user as `StaleDevImage { client_fingerprint: "…", … }` through the catch-all below, which
+        // names the tag only as debug noise and the remedy not at all — and the person seeing it is
+        // by definition mid-rebuild, with a daemon that will now misbehave in ways that look like
+        // bugs in the code they just wrote. Reason *and* remedy, in the words the fix is spelled in.
+        Connected::Refused(micold_core::protocol::messages::RefusalReason::StaleDevImage {
+            client_fingerprint,
+            daemon_fingerprint,
+            image,
+        }) => {
+            return report_connect_failure(
+                output,
+                stale_dev_image_advice(&image, &daemon_fingerprint, &client_fingerprint),
+            )
+            .await;
         }
         Connected::Refused(reason) => {
             return report_connect_failure(
@@ -280,6 +360,22 @@ async fn connect_and_pump(
     PumpEnd::Disconnected
 }
 
+/// What to tell someone whose `:dev` image is behind their working tree (FR-024d, research R8).
+///
+/// Separated from the pump so the thing FR-024d actually requires — that the tag and the rebuild
+/// command both appear — is checkable without a live connection.
+fn stale_dev_image_advice(
+    image: &str,
+    daemon_fingerprint: &str,
+    client_fingerprint: &str,
+) -> String {
+    format!(
+        "the sandbox is running `{image}`, built from a different working tree than this client \
+         (image {daemon_fingerprint}, client {client_fingerprint}). Rebuild it with \
+         `mise run image`, then restart the sandbox."
+    )
+}
+
 /// Report a connect failure to the app and map it to a disconnect (so the outer loop retries). If the
 /// app is gone, that surfaces as `AppGone` instead.
 async fn report_connect_failure(output: &mut mpsc::Sender<Message>, reason: String) -> PumpEnd {
@@ -291,5 +387,26 @@ async fn report_connect_failure(output: &mut mpsc::Sender<Message>, reason: Stri
         PumpEnd::AppGone
     } else {
         PumpEnd::Disconnected
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::stale_dev_image_advice;
+
+    /// FR-024d asks for the tag **and** the rebuild command. Before this, the refusal reached the
+    /// user as a `{:?}` dump of `StaleDevImage`, which carried the tag as debug noise and no remedy
+    /// at all — and its whole audience is someone mid-rebuild, about to read a stale daemon's
+    /// behaviour as a bug in the code they just wrote.
+    #[test]
+    fn the_stale_image_advice_names_the_tag_and_the_rebuild_command() {
+        let advice = stale_dev_image_advice("micold-daemon:dev", "aaaa1111", "bbbb2222");
+        assert!(advice.contains("micold-daemon:dev"), "{advice}");
+        assert!(advice.contains("mise run image"), "{advice}");
+        // Both fingerprints, so "which side is stale" is answerable from the message alone.
+        assert!(
+            advice.contains("aaaa1111") && advice.contains("bbbb2222"),
+            "{advice}"
+        );
     }
 }

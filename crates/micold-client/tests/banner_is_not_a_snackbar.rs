@@ -106,3 +106,103 @@ fn an_ordinary_notification_still_reaches_the_queue() {
         "one message should not queue behind itself"
     );
 }
+
+// -------------------------------------------------------------------------------------------
+// T102 — the sandbox's standing conditions belong to the banner too (feature 027, FR-035b, S-3)
+// -------------------------------------------------------------------------------------------
+
+use micold_client::features::sandbox::Sandbox;
+use micold_core::sandbox::lifecycle::{Failure, Stage};
+use micold_core::sandbox::placement::{ConsentedFallback, PlacementKind};
+use micold_core::sandbox::runtime::{RuntimeError, RuntimeKind};
+
+fn failed_sandbox() -> Sandbox {
+    let mut s = Sandbox::for_placement(PlacementKind::LocalSandbox);
+    s.failed(Failure {
+        stage: Stage::Probing,
+        error: RuntimeError::NotInstalled {
+            kind: RuntimeKind::Docker,
+        },
+    });
+    s
+}
+
+/// A broken sandbox and a session running outside one are conditions, not events.
+///
+/// The spec's own edge case is a user who takes the one-occurrence fallback on every launch and
+/// never notices sandboxing has been off for weeks. A four-second toast is how that happens: it is
+/// shown once, while the condition it describes lasts indefinitely.
+#[test]
+fn the_failed_and_unsandboxed_states_are_standing_conditions() {
+    let failed = failed_sandbox();
+    assert!(failed.state.is_persistent());
+    assert!(failed.persistent_notice().is_some());
+
+    let mut unsandboxed = failed_sandbox();
+    unsandboxed.accept_fallback(ConsentedFallback {
+        because: "Docker is not installed.".into(),
+    });
+    assert!(
+        unsandboxed.persistent_notice().is_some(),
+        "the fallback is where FR-035b bites hardest — the sandbox is no longer failing, it is \
+         simply not there, and nothing else on screen says so"
+    );
+}
+
+/// And they are drawn by the banner rather than pushed through the queue.
+///
+/// A source check for the same reason the connection one above is: the sandbox lives on the
+/// binary's `App` beside the daemon connection, so there is no reducer path to drive from a test.
+/// What can be asserted is the shape the mistake would take.
+#[test]
+fn the_sandbox_banner_is_drawn_from_the_sandbox_and_not_from_the_queue() {
+    let ui = source("ui/mod.rs");
+    let start = ui
+        .find("fn sandbox_banner")
+        .expect("`sandbox_banner` is gone — a failed sandbox has nowhere persistent to be shown");
+    let end = ui[start..]
+        .find("\n}\n")
+        .map(|o| start + o)
+        .unwrap_or(ui.len());
+    let body = &ui[start..end];
+
+    assert!(
+        body.contains("persistent_notice"),
+        "the banner no longer reads the notice it exists to show"
+    );
+    assert!(
+        !body.contains("notify") && !body.contains("Snackbar"),
+        "the sandbox banner is reaching into the notification queue, which times out and is \
+         dismissible (FR-035b)"
+    );
+}
+
+/// The failure must not *also* be announced as a toast.
+///
+/// It was, and the comment beside it said the opposite — which is the failure mode this file
+/// exists for: the queue is right there, `notify_error` is one line, and the result tells the user
+/// once about a condition that outlives the telling.
+#[test]
+fn a_failed_sandbox_is_not_announced_through_the_notification_queue() {
+    // Feature 028 folded the six flat `Message::Sandbox*` arms behind one wrapper and moved the
+    // reducer to the shell half, so the arm this reads is `Msg::Failed` in `shell/sandbox.rs`
+    // rather than `Message::SandboxFailed` in `main.rs`. Same arm, same claim about it.
+    let main = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/shell/sandbox.rs"),
+    )
+    .expect("read shell/sandbox.rs");
+
+    let start = main
+        .find("Msg::Failed(failure) =>")
+        .expect("the failure is no longer handled at all");
+    let end = main[start..]
+        .find("Task::none()")
+        .map(|o| start + o)
+        .unwrap_or(main.len());
+
+    assert!(
+        !main[start..end].contains("notify"),
+        "a failed sandbox is being queued as a notification. It would time out and be dismissible \
+         while the sandbox is still broken (FR-035b, S-3)"
+    );
+}

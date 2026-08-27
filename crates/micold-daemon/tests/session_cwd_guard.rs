@@ -40,6 +40,7 @@ fn catalog_with_session_at(
         location,
         SessionLabel::Named("Shell".into()),
         TerminalMode::Regular,
+        micold_core::session::AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project_dir.to_path_buf(), vec![session]);

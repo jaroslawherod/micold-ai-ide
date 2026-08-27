@@ -64,9 +64,6 @@ const DIALOGS: &[(&str, fn(&mut State))] = &[
     ("add_worktree", |state| {
         state.worktree_form.form = Some(Default::default())
     }),
-    ("settings", |state| {
-        state.settings.settings_draft = Some(Default::default())
-    }),
     ("confirm_worktree_delete", |state| {
         state.worktree.delete_target = Some("wt".to_string())
     }),
@@ -154,14 +151,17 @@ fn no_two_snapshots_share_an_identity() {
     }
 }
 
-/// The list above covers every dialog. Without this, adding a tenth and forgetting to list it would
+/// The list above covers every dialog. Without this, adding a ninth and forgetting to list it would
 /// leave all three tests above passing on a stale set.
+///
+/// Nine until feature 027 turned Settings into a view (FR-026): a surface that does not float has
+/// no exit transition to remember, so it leaves `DIALOGS` and the count comes down with it.
 #[test]
 fn every_variant_is_covered() {
     // Bump deliberately: a new dialog needs a row in `DIALOGS`.
     assert_eq!(
         every_snapshot().len(),
-        9,
+        8,
         "a dialog was added or removed — update DIALOGS"
     );
 }

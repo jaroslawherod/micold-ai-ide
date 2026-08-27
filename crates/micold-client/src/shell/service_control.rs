@@ -34,6 +34,17 @@ use micold_client::features::connection::Msg as ConnectionMsg;
 pub(crate) fn on_restart_service_requested(app: &mut App) -> Task<Message> {
     app.version_mismatch = None;
     app.build_mismatch = None;
+    // When the service lives in a container, stopping it over its endpoint would leave the
+    // container up with a dead process inside — the orphan US6 scenario 4 is about. Stop the
+    // container itself; the banner that results carries the action that brings a fresh one up
+    // (FR-036, T110).
+    if let Some(plan) = app.sandbox_boot.clone() {
+        app.core.notify_info(
+            "Stopping the sandbox — running processes are stopped, but your sessions are \
+             preserved and can be resumed.",
+        );
+        return crate::shell::sandbox::stop(&plan);
+    }
     app.core.notify_info(
         "Restarting the session service — running processes are stopped, but your \
          sessions are preserved and can be resumed.",
@@ -99,6 +110,36 @@ pub(crate) fn on_logout_survival_outcome(app: &mut App, message: String) -> Task
 mod tests {
     use super::*;
     use crate::tests::base_app;
+
+    /// A sandboxed service is stopped by stopping its container, not by talking to it (T110).
+    ///
+    /// The endpoint path stops the *process*. Inside a container that leaves the container running
+    /// with nothing in it — an orphan the next start then finds, has to recognise, and has to
+    /// replace. US6 scenario 4 asks for exactly the opposite: "the sandbox is stopped and not left
+    /// orphaned."
+    #[test]
+    fn stopping_a_sandboxed_service_stops_the_container_rather_than_the_process() {
+        let mut app = base_app();
+        app.sandbox_boot = Some(crate::shell::sandbox::BootPlan {
+            profile: micold_core::sandbox::SandboxProfile::default(),
+            state_dir: std::path::PathBuf::from("/tmp/micold-test"),
+            projects: Vec::new(),
+        });
+
+        let _ = on_restart_service_requested(&mut app);
+
+        let said = app
+            .core
+            .notifications
+            .queue
+            .visible()
+            .is_some_and(|n| n.message.contains("sandbox"));
+        assert!(
+            said,
+            "the user was told the *process* was being restarted, but what is actually being \
+             stopped is the container it lives in"
+        );
+    }
 
     /// Asking for a restart clears the banner that offered it.
     ///

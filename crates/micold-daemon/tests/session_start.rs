@@ -9,13 +9,16 @@
 
 use std::collections::BTreeMap;
 use std::io::Write;
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::WireLifecycle;
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode, MAX_RESTART_ATTEMPTS,
+};
 use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -62,6 +65,7 @@ fn catalog_with_shell_session(
         SessionLocation::Default,
         SessionLabel::Named("Shell".into()),
         TerminalMode::Regular,
+        AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project_dir.to_path_buf(), vec![session]);
@@ -275,7 +279,7 @@ fn create_session_adds_a_daemon_owned_session_to_the_catalog() {
 
     // The daemon assigns the id and records the session at the project root (empty worktree_dir).
     let id = state
-        .create_session(&project, "")
+        .create_session(&project, "", AiCli::ClaudeCode)
         .expect("create must succeed");
 
     let snapshot = state.welcome_payload().0;
@@ -458,6 +462,7 @@ fn a_resumed_session_leaves_the_interrupted_resumable_state() {
         SessionLocation::Default,
         SessionLabel::Named("Agent".into()),
         TerminalMode::AiCli,
+        micold_core::session::AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project.path().to_path_buf(), vec![session]);
@@ -484,7 +489,7 @@ fn a_resumed_session_leaves_the_interrupted_resumable_state() {
     );
 
     // As the daemon does at startup for a session with a recorded conversation.
-    assert_eq!(catalog.present_interrupted_resumable(|_, _, _| true), 1);
+    assert_eq!(catalog.present_interrupted_resumable(|_, _, _, _| true), 1);
     let lifecycle_of = |catalog: &Catalog| {
         catalog
             .workspace()
@@ -494,6 +499,7 @@ fn a_resumed_session_leaves_the_interrupted_resumable_state() {
             .find(|s| s.id == id)
             .expect("session")
             .lifecycle
+            .clone()
     };
     assert_eq!(
         lifecycle_of(&catalog),
@@ -515,4 +521,753 @@ fn a_resumed_session_leaves_the_interrupted_resumable_state() {
 
     // An unknown id is not a panic.
     assert_eq!(catalog.mark_session_running(SessionId::new()), None);
+}
+// Feature 026 (T024) — a created session runs the CLI the client asked for
+// ---------------------------------------------------------------------------------------
+
+/// What this can and cannot assert, stated plainly.
+///
+/// It cannot spawn either CLI. This file's own module doc says why it uses a Regular shell session:
+/// CI runners have no `claude`, and adding `copilot` to that list would make the whole suite
+/// dependent on two vendors' installers. The property "spawning uses `spec.provider`" is held
+/// structurally instead — `PtySession::spawn_ai_cli` builds its `CommandBuilder` from
+/// `spec.provider.provider().command()` and its arguments from `terminal::launch_args(spec)`, and
+/// `micold-core/tests/terminal_backend.rs` pins what those produce for each provider.
+///
+/// What it *can* assert is the half that only exists here: the provider the client sent survives
+/// the three hops from the wire to the durable record, and comes back out on the snapshot the
+/// sidebar reads. That is where a `SessionCreate` carrying `Copilot` would have quietly become a
+/// Claude session — the daemon's `create_session` used to name no provider at all.
+#[test]
+fn a_created_session_records_the_cli_the_client_chose() {
+    let store = tempfile::tempdir().unwrap();
+    let project = std::path::PathBuf::from("/repo/alpha");
+    let workspace = Workspace {
+        projects: vec![Project::new(project.clone(), true, Availability::Available)],
+        active: Some(project.clone()),
+        sessions: BTreeMap::new(),
+        worktree_names: BTreeMap::new(),
+        ..Default::default()
+    };
+    let projects_path = store.path().join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&workspace)
+        .unwrap();
+    let state = DaemonState::new(Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
+    ));
+
+    let claude = state
+        .create_session(&project, "", AiCli::ClaudeCode)
+        .expect("create must succeed");
+    let copilot = state
+        .create_session(&project, "feat-x", AiCli::Copilot)
+        .expect("create must succeed");
+
+    let summaries = state.sessions_for(&project);
+    let provider_of = |id: SessionId| {
+        summaries
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.provider)
+            .expect("session in the snapshot")
+    };
+    assert_eq!(provider_of(claude), AiCli::ClaudeCode);
+    assert_eq!(
+        provider_of(copilot),
+        AiCli::Copilot,
+        "the daemon recorded what the client resolved, and did not re-decide it"
+    );
+
+    // And the argv each record implies is that CLI's, through the same function the spawn uses.
+    let argv = |id: SessionId, provider: AiCli| {
+        micold_core::terminal::launch_args(&micold_core::terminal::LaunchSpec {
+            cwd: project.clone(),
+            session_id: id.0,
+            provider,
+            mode: micold_core::terminal::LaunchMode::Fresh,
+            env: Vec::new(),
+        })
+    };
+    assert_eq!(
+        argv(claude, provider_of(claude)),
+        vec!["--session-id".to_string(), claude.0.to_string()]
+    );
+    assert_eq!(
+        argv(copilot, provider_of(copilot)),
+        vec![
+            "--session-id".to_string(),
+            copilot.0.to_string(),
+            "--no-remote".to_string()
+        ],
+        "the Copilot session would be spawned with Copilot's argv, `--no-remote` included"
+    );
+}
+
+// ---------------------------------------------------------------------------------------
+// T046 [US2] — resuming a conversation the CLI no longer has (Clarifications 2026-08-16)
+// ---------------------------------------------------------------------------------------
+
+/// Serialises the tests that reach for `PATH` and `COPILOT_HOME`.
+///
+/// Both are process-global and this binary runs its tests on threads, so two of them installing
+/// stubs at once would restore each other's `PATH` on drop and leave the survivor looking at a
+/// directory that no longer exists. Held for the lifetime of a [`StubOnPath`], which is also the
+/// lifetime of the `COPILOT_HOME` each of these tests sets.
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// A scratch `PATH` with the real one still behind it, plus a stub for one command.
+///
+/// The stub is there first of all so `AiCliProvider::is_available` says yes — `start_session`
+/// checks that before anything else (FR-010), and on a runner with no `copilot` these tests would
+/// be asserting the missing-CLI message instead of their own. It also **records the argv it was
+/// given**, so a test can say what the daemon ran, how it ran it, and how many times. The real
+/// `PATH` stays appended so the shell-session tests running beside these still find `sh`.
+struct StubOnPath {
+    _dir: tempfile::TempDir,
+    previous: Option<std::ffi::OsString>,
+    log: std::path::PathBuf,
+    /// Dropped last (declaration order), after `Drop for StubOnPath` has put `PATH` back.
+    _guard: std::sync::MutexGuard<'static, ()>,
+}
+
+impl StubOnPath {
+    /// A stub that succeeds — for tests where what matters is that it was (or was not) run.
+    fn new(command: &str) -> Self {
+        Self::with_body(command, "exit 0")
+    }
+
+    /// A stub whose body is `body`, so a test can make the CLI refuse the way a real one would.
+    fn with_body(command: &str, body: &str) -> Self {
+        let guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("argv.log");
+        let stub = dir.path().join(command);
+        // One line per invocation, so "was it run twice?" is a question the test can ask.
+        std::fs::write(
+            &stub,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\n{body}\n",
+                log.display()
+            ),
+        )
+        .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let previous = std::env::var_os("PATH");
+        let joined = match &previous {
+            Some(existing) => format!("{}:{}", dir.path().display(), existing.to_string_lossy()),
+            None => dir.path().display().to_string(),
+        };
+        std::env::set_var("PATH", joined);
+        Self {
+            _dir: dir,
+            previous,
+            log,
+            _guard: guard,
+        }
+    }
+
+    /// One line per invocation, in order. Empty if the stub was never run.
+    fn invocations(&self) -> Vec<String> {
+        match std::fs::read_to_string(&self.log) {
+            Ok(text) => text.lines().map(str::to_string).collect(),
+            Err(_) => Vec::new(),
+        }
+    }
+}
+
+impl Drop for StubOnPath {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            Some(value) => std::env::set_var("PATH", value),
+            None => std::env::remove_var("PATH"),
+        }
+    }
+}
+
+/// Resuming a Copilot session whose conversation is gone reports it and starts **nothing**.
+///
+/// The clarification chose this over the alternative it was specified against: "a clearly-reported
+/// failure *or* a fresh session". A fresh session is what `--session-id` would give — a brand-new,
+/// empty conversation running under the old session's identity, behind a row whose recorded title
+/// still describes the conversation that is not there. That is worse than an error, because nothing
+/// about the row says what happened.
+///
+/// Reported through the path a missing CLI already takes (FR-010): a reason on the session's
+/// summary, `attempts: 0`, and no spawn. The reason names the CLI in its **display** register —
+/// this is a sentence a user reads, and "copilot no longer has…" reads as a shell error rather than
+/// as something that happened to their conversation.
+#[test]
+fn resuming_a_conversation_the_cli_no_longer_has_reports_it_and_starts_nothing() {
+    let _stub = StubOnPath::new("copilot");
+
+    let home = tempfile::tempdir().unwrap();
+    std::env::set_var("COPILOT_HOME", home.path());
+
+    let store = tempfile::tempdir().unwrap();
+    let project = std::path::PathBuf::from("/repo/alpha");
+    let id = SessionId::from_uuid(Uuid::from_u128(0xC0FFEE));
+    let mut sessions = BTreeMap::new();
+    sessions.insert(
+        project.clone(),
+        vec![Session::restored(
+            id,
+            SessionLocation::Default,
+            SessionLabel::Named("Refactor the parser".into()),
+            TerminalMode::AiCli,
+            AiCli::Copilot,
+        )],
+    );
+    let projects_path = store.path().join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&Workspace {
+            projects: vec![Project::new(project.clone(), true, Availability::Available)],
+            active: Some(project.clone()),
+            sessions,
+            worktree_names: BTreeMap::new(),
+            ..Default::default()
+        })
+        .unwrap();
+    let state = DaemonState::new(Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
+    ));
+
+    // The conversation exists first, and the application learns of it the way it really does — the
+    // startup pass, asking Copilot. The order is the point: the edge case is a store entry that was
+    // **removed**, and the refusal below applies only to a session the daemon has already judged
+    // resumable. A session the daemon never saw a conversation for keeps FR-008's ordinary
+    // behaviour — attempt the resume, and report whatever the CLI says (T046a).
+    let session_dir = home.path().join("session-state").join(id.0.to_string());
+    std::fs::create_dir_all(&session_dir).unwrap();
+    std::fs::write(session_dir.join("events.jsonl"), "{}\n").unwrap();
+    assert_eq!(
+        state.present_interrupted_resumable_at_startup(),
+        1,
+        "the session is offered for resume — the state a user clicks Start from"
+    );
+
+    // …and then it is gone: `copilot` dropping the conversation, or a user clearing out their
+    // Copilot home. Nothing tells the application; the row still reads "Refactor the parser".
+    std::fs::remove_dir_all(&session_dir).unwrap();
+
+    let result = state.start_session(id, micold_core::terminal::LaunchMode::Resume);
+
+    assert!(
+        result.is_err(),
+        "the start has to fail: a caller that got `Ok` would tell the client the session is coming \
+         up, and nothing is"
+    );
+    assert!(
+        state.live_session(id).is_none(),
+        "and nothing was spawned — not an empty terminal, and not a fresh conversation"
+    );
+
+    // Read from the snapshot a client actually receives, not from `sessions_for` — the reason is
+    // runtime state, overlaid onto the durable record on the way out (FR-010's path).
+    let summary = state
+        .catalog_snapshot()
+        .projects
+        .into_iter()
+        .find(|p| p.path == project)
+        .expect("the project is still there")
+        .sessions
+        .into_iter()
+        .find(|s| s.id == id)
+        .expect("the session is still in the catalog — reporting is not closing it");
+    let WireLifecycle::Failed { reason, attempts } = summary.lifecycle else {
+        panic!("expected a reported failure, got {:?}", summary.lifecycle);
+    };
+    assert!(
+        reason.contains("GitHub Copilot"),
+        "the reason names the CLI in the register a sentence wants, got {reason:?}"
+    );
+    assert!(
+        reason.to_lowercase().contains("conversation"),
+        "and says what is missing, so the row explains itself rather than just going red: {reason:?}"
+    );
+    assert_eq!(
+        attempts, 0,
+        "a conversation that is gone is not a crash loop — retrying it three times would spend the \
+         budget on something that cannot change and make the message arrive late (FR-010's rule)"
+    );
+
+    // The negative that matters most: no conversation was begun under this id.
+    assert!(
+        !session_dir.exists(),
+        "resuming a conversation that is gone must not create one"
+    );
+}
+
+/// The other half of the same rule: a session that never had a conversation is **not** told one is
+/// gone.
+///
+/// The refusal above is gated on the record having been marked resumable — a conversation was found
+/// for it at startup. Ungated, it would fire for every durable session a resume is asked of,
+/// including one created and never used: no `events.jsonl` exists for that either, and the row
+/// would report "GitHub Copilot no longer has this conversation" about a conversation that never
+/// existed. A message that is false is worse than the CLI's own error, which at least describes
+/// what actually happened.
+///
+/// So the gate is behaviour, not an optimisation, and this test is what says so — dropping
+/// `plan.resumable` from the condition passes every other test in the workspace.
+#[test]
+fn a_session_that_never_recorded_a_conversation_is_not_told_its_conversation_is_gone() {
+    let _stub = StubOnPath::new("copilot");
+
+    // Empty, and it stays empty: this session was created and never used, which is exactly what
+    // "no recorded conversation" looks like for a session that had nothing to lose.
+    let home = tempfile::tempdir().unwrap();
+    std::env::set_var("COPILOT_HOME", home.path());
+
+    let store = tempfile::tempdir().unwrap();
+    // A directory that exists, unlike the test above — this session gets as far as a real spawn.
+    let project_dir = tempfile::tempdir().unwrap();
+    let project = project_dir.path().to_path_buf();
+    let id = SessionId::from_uuid(Uuid::from_u128(0xDECAF));
+    let mut sessions = BTreeMap::new();
+    sessions.insert(
+        project.clone(),
+        vec![Session::restored(
+            id,
+            SessionLocation::Default,
+            SessionLabel::Pending,
+            TerminalMode::AiCli,
+            AiCli::Copilot,
+        )],
+    );
+    let projects_path = store.path().join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&Workspace {
+            projects: vec![Project::new(project.clone(), true, Availability::Available)],
+            active: Some(project.clone()),
+            sessions,
+            worktree_names: BTreeMap::new(),
+            ..Default::default()
+        })
+        .unwrap();
+    let state = DaemonState::new(Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
+    ));
+
+    // The startup pass finds nothing to offer — the record stays `Idle`, which is the state this
+    // test is about.
+    assert_eq!(
+        state.present_interrupted_resumable_at_startup(),
+        0,
+        "there is no conversation to offer"
+    );
+
+    let result = state.start_session(id, micold_core::terminal::LaunchMode::Resume);
+
+    assert!(
+        result.is_ok(),
+        "the spawn is attempted: whether `copilot` can resume this id is the CLI's answer to give, \
+         not ours to pre-empt — got {result:?}"
+    );
+    let live = state.live_session(id).expect("the process was started");
+    let summary = state
+        .catalog_snapshot()
+        .projects
+        .into_iter()
+        .find(|p| p.path == project)
+        .expect("the project is still there")
+        .sessions
+        .into_iter()
+        .find(|s| s.id == id)
+        .expect("the session is still in the catalog");
+    assert!(
+        !matches!(summary.lifecycle, WireLifecycle::Failed { .. }),
+        "nothing was reported about a conversation this session never had, got {:?}",
+        summary.lifecycle
+    );
+
+    let _ = live.kill();
+}
+
+// ---------------------------------------------------------------------------------------
+// T046a [US2] — a conversation another process may already hold (FR-008, amended 2026-08-18)
+// ---------------------------------------------------------------------------------------
+
+/// A Copilot session with a recorded conversation, in a real directory, already offered for resume.
+///
+/// The same shape as a session discovered under FR-014: the conversation is on disk, the record is
+/// `InterruptedResumable`, and **nothing distinguishes it from one a `copilot` is attached to in
+/// another terminal** — which is the whole difficulty the tests below are about.
+fn offered_copilot_session(
+    home: &Path,
+    project: &Path,
+    store: &Path,
+    id: SessionId,
+) -> DaemonState {
+    let session_dir = home.join("session-state").join(id.0.to_string());
+    std::fs::create_dir_all(&session_dir).unwrap();
+    std::fs::write(session_dir.join("events.jsonl"), "{}\n").unwrap();
+
+    let mut sessions = BTreeMap::new();
+    sessions.insert(
+        project.to_path_buf(),
+        vec![Session::restored(
+            id,
+            SessionLocation::Default,
+            SessionLabel::Named("Refactor the parser".into()),
+            TerminalMode::AiCli,
+            AiCli::Copilot,
+        )],
+    );
+    let projects_path = store.join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&Workspace {
+            projects: vec![Project::new(
+                project.to_path_buf(),
+                true,
+                Availability::Available,
+            )],
+            active: Some(project.to_path_buf()),
+            sessions,
+            worktree_names: BTreeMap::new(),
+            ..Default::default()
+        })
+        .unwrap();
+    let state = DaemonState::new(Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(store.join("settings.json"))),
+    ));
+    assert_eq!(
+        state.present_interrupted_resumable_at_startup(),
+        1,
+        "the conversation is there, so the session is offered"
+    );
+    state
+}
+
+/// Every path under `root`, so a test can say "nothing was written here" rather than "the one path
+/// I thought to check is absent".
+fn tree(root: &Path) -> std::collections::BTreeSet<std::path::PathBuf> {
+    let mut out = std::collections::BTreeSet::new();
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            out.extend(tree(&path));
+        }
+        out.insert(path);
+    }
+    out
+}
+
+/// Resuming a conversation another terminal may already hold is attempted like any other resume.
+///
+/// The clarification (2026-08-18) settled this against the tempting alternative: check first, and
+/// refuse if the conversation looks busy. Research found neither CLI writes a lock or a liveness
+/// marker, so such a check could only be a guess — and a guess that says "in use" when it is not
+/// blocks a resume the user is entitled to, with no way for them to override it.
+///
+/// So the assertions here are mostly negative, and they are the point of the test: the daemon runs
+/// the CLI **once**, with the ordinary resume argv, and writes nothing of its own into the
+/// provider's store on the way. No lock file, no sentinel, no second invocation to ask whether the
+/// conversation is free.
+#[test]
+fn resuming_a_conversation_another_terminal_may_hold_is_attempted_like_any_other() {
+    let stub = StubOnPath::new("copilot");
+
+    let home = tempfile::tempdir().unwrap();
+    std::env::set_var("COPILOT_HOME", home.path());
+    let store = tempfile::tempdir().unwrap();
+    let project_dir = tempfile::tempdir().unwrap();
+    let project = project_dir.path().to_path_buf();
+    let id = SessionId::from_uuid(Uuid::from_u128(0xB0A7));
+    let state = offered_copilot_session(home.path(), &project, store.path(), id);
+
+    let before = tree(home.path());
+    state
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
+        .expect("the resume is attempted — whether the conversation is free is the CLI's answer");
+    assert!(
+        state.live_session(id).is_some(),
+        "the process was started; nothing pre-empted it"
+    );
+
+    assert!(
+        wait_until(Duration::from_secs(5), || !stub.invocations().is_empty()),
+        "the CLI must actually run for the rest of this test to be testing anything"
+    );
+    assert_eq!(
+        stub.invocations(),
+        vec![format!("--resume={} --no-remote", id.0)],
+        "run once, with the resume every Copilot session gets — not a probe run first, and not a \
+         different command because the conversation might be busy"
+    );
+    assert_eq!(
+        tree(home.path()),
+        before,
+        "and the daemon wrote nothing of its own into Copilot's store: no lock, no in-use marker, \
+         nothing a second application would have to learn to respect"
+    );
+}
+
+/// …and when the CLI refuses, that is reported and nothing is left running.
+///
+/// The other half of the same clarification. `copilot` here exits immediately with a message, which
+/// is what a CLI that will not attach twice to one conversation does — the daemon cannot tell that
+/// apart from any other immediate exit, and does not try to. It supervises the process it started
+/// like any other, and the crash-loop policy settles `Failed` with the session's process dropped.
+///
+/// `Failed`'s `reason` is empty on this route, deliberately unasserted: the domain lifecycle is a
+/// unit variant, and the message a user reads for an exiting process is the terminal's own output,
+/// not a string the daemon invents. T046's route — a refusal the daemon itself decides — is the one
+/// that carries a reason.
+#[test]
+fn a_cli_that_refuses_the_resume_is_reported_and_leaves_nothing_running() {
+    let stub = StubOnPath::with_body("copilot", "echo 'session is in use' >&2\nexit 1");
+
+    let home = tempfile::tempdir().unwrap();
+    std::env::set_var("COPILOT_HOME", home.path());
+    let store = tempfile::tempdir().unwrap();
+    let project_dir = tempfile::tempdir().unwrap();
+    let project = project_dir.path().to_path_buf();
+    let id = SessionId::from_uuid(Uuid::from_u128(0xB0A8));
+    let state = offered_copilot_session(home.path(), &project, store.path(), id);
+
+    state
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
+        .expect(
+            "the attempt is made: the refusal is the CLI's to give, and it gives it by exiting",
+        );
+
+    let lifecycle = || {
+        state
+            .sessions_for(&project)
+            .into_iter()
+            .find(|s| s.id == id)
+            .map(|s| s.lifecycle)
+    };
+    let settled = wait_until(Duration::from_secs(20), || {
+        state.supervise_exited_sessions();
+        matches!(lifecycle(), Some(WireLifecycle::Failed { .. }))
+    });
+    assert!(
+        settled,
+        "a CLI that exits every time must end reported, not retried forever: {:?}",
+        lifecycle()
+    );
+    assert!(
+        state.live_session(id).is_none(),
+        "and nothing is left running — a dead process kept in the registry would read as alive"
+    );
+    assert!(
+        stub.invocations().len() > 1,
+        "the refusal was taken as a crash and retried within the budget, which is exactly the \
+         missing-detection posture: the daemon has no way to know this exit means `in use`"
+    );
+}
+
+// ---------------------------------------------------------------------------------------
+// T072 [US4] — starting a session whose AI CLI is not installed (FR-010)
+// ---------------------------------------------------------------------------------------
+
+/// A `PATH` with no AI CLI on it, whatever the machine running the tests has installed.
+///
+/// The inverse of [`StubOnPath`], and it takes the same lock for the same reason: `PATH` is
+/// process-global, and a stub installed by another test on another thread would make the CLI
+/// available again halfway through this one.
+///
+/// It removes the directories that hold an AI CLI rather than emptying `PATH`, because the
+/// shell-session tests beside these spawn a real interactive shell and inherit whatever `PATH` is
+/// set when they do. Narrowing it is enough to make `is_available` say no, and the constructor
+/// checks that it did — a guard that quietly failed to hide anything would leave the tests below
+/// asserting nothing on a developer machine with `claude` installed.
+struct NoCliOnPath {
+    previous: Option<std::ffi::OsString>,
+    _guard: std::sync::MutexGuard<'static, ()>,
+}
+
+impl NoCliOnPath {
+    fn new() -> Self {
+        let guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let previous = std::env::var_os("PATH");
+        let commands: Vec<&str> = AiCli::ALL
+            .iter()
+            .map(|cli| cli.provider().command())
+            .collect();
+        let kept: Vec<std::path::PathBuf> = previous
+            .iter()
+            .flat_map(std::env::split_paths)
+            .filter(|dir| !commands.iter().any(|command| dir.join(command).is_file()))
+            .collect();
+        std::env::set_var("PATH", std::env::join_paths(kept).unwrap());
+        let hidden = Self {
+            previous,
+            _guard: guard,
+        };
+        for cli in AiCli::ALL {
+            assert!(
+                !cli.provider().is_available(),
+                "the guard has to actually hide {}, or the tests holding it prove nothing",
+                cli.provider().command()
+            );
+        }
+        hidden
+    }
+}
+
+impl Drop for NoCliOnPath {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            Some(value) => std::env::set_var("PATH", value),
+            None => std::env::remove_var("PATH"),
+        }
+    }
+}
+
+/// A catalog holding one AI-CLI session on `provider`, at the root of a real project directory.
+fn catalog_with_ai_cli_session(
+    provider: AiCli,
+    project_dir: &Path,
+    store_dir: &Path,
+    id: SessionId,
+) -> Catalog {
+    let mut sessions = BTreeMap::new();
+    sessions.insert(
+        project_dir.to_path_buf(),
+        vec![Session::restored(
+            id,
+            SessionLocation::Default,
+            SessionLabel::Named("Refactor the parser".into()),
+            TerminalMode::AiCli,
+            provider,
+        )],
+    );
+    let projects_path = store_dir.join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&Workspace {
+            projects: vec![Project::new(
+                project_dir.to_path_buf(),
+                true,
+                Availability::Available,
+            )],
+            active: Some(project_dir.to_path_buf()),
+            sessions,
+            worktree_names: BTreeMap::new(),
+            ..Default::default()
+        })
+        .unwrap();
+    Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(store_dir.join("settings.json"))),
+    )
+}
+
+/// Starting a session whose CLI is not installed says so, and starts nothing (FR-010).
+///
+/// Run for every CLI in `AiCli::ALL`, because the message is the provider's own and a check written
+/// against one of them would pass this test on the other by accident.
+///
+/// Two things this holds apart, which are easy to conflate because they end up in the same variant.
+/// The **reason** for *this* failure lives in the daemon's `start_failures` overlay rather than in
+/// the session record — a start that never reached a first process is not the crash-loop give-up
+/// `SessionLifecycle::Failed` means, even though both arrive as `WireLifecycle::Failed { reason,
+/// attempts }`. So it is the wire form — what a client receives — that this reads. And the
+/// **attempts** are zero: a binary that is not on `PATH` is not a crash loop, and
+/// letting it climb toward `MAX_RESTART_ATTEMPTS` would spend three spawns on a problem no retry
+/// can change, with the one sentence that would explain it arriving last instead of first.
+#[test]
+fn starting_a_session_whose_cli_is_absent_reports_it_and_spends_no_restart_budget() {
+    let _path = NoCliOnPath::new();
+
+    for (index, cli) in AiCli::ALL.into_iter().enumerate() {
+        let provider = cli.provider();
+        let store = tempfile::tempdir().unwrap();
+        let project_dir = tempfile::tempdir().unwrap();
+        let id = SessionId::from_uuid(Uuid::from_u128(0x0FF0 + index as u128));
+        let state = DaemonState::new(catalog_with_ai_cli_session(
+            cli,
+            project_dir.path(),
+            store.path(),
+            id,
+        ));
+
+        let result = state.start_session(id, micold_core::terminal::LaunchMode::Fresh);
+
+        assert!(
+            result.is_err(),
+            "{}: a caller that got `Ok` would tell the client the session is coming up, and \
+             nothing is",
+            provider.command()
+        );
+        assert!(
+            state.live_session(id).is_none(),
+            "{}: and nothing was spawned — not the missing binary, and not an empty terminal \
+             standing in for it",
+            provider.command()
+        );
+
+        let WireLifecycle::Failed { reason, attempts } = reported_lifecycle(&state, id) else {
+            panic!(
+                "{}: expected a reported failure, got {:?}",
+                provider.command(),
+                reported_lifecycle(&state, id)
+            );
+        };
+        assert!(
+            reason.contains(provider.display_name()),
+            "the reason names the CLI in the register a sentence wants, got {reason:?}"
+        );
+        assert!(
+            !reason.contains(provider.command()),
+            "and not the executable register: {:?} reads as a shell error rather than as \
+             something the user can go and install",
+            provider.command()
+        );
+        assert_eq!(
+            attempts,
+            0,
+            "{}: a missing binary is not a crash loop",
+            provider.command()
+        );
+        assert!(
+            attempts < MAX_RESTART_ATTEMPTS,
+            "{}: and it must not be climbing toward the give-up budget either — three retries of \
+             a `PATH` problem is noise, and it makes the reason arrive late",
+            provider.command()
+        );
+    }
+}
+
+/// …and the refusal is scoped to sessions that need an AI CLI at all.
+///
+/// The check sits in `start_session`, in front of every launch; what keeps it off a Regular session
+/// is one `mode == TerminalMode::AiCli` guard. Dropping that guard passes the test above and breaks
+/// every shell session on a machine with no `claude` installed — a terminal that needs nothing but
+/// `/bin/sh`, refused for the absence of something it never runs.
+#[test]
+fn a_shell_session_starts_with_no_ai_cli_installed_at_all() {
+    let _path = NoCliOnPath::new();
+
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(0x5E55));
+    let state = DaemonState::new(catalog_with_shell_session(project.path(), store.path()));
+
+    state
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
+        .expect("a Regular session runs the platform shell — no AI CLI is involved");
+    let live = state.live_session(id).expect("registered");
+    assert!(
+        wait_until(Duration::from_secs(5), || live.is_alive()),
+        "and it is really running, not merely registered"
+    );
+
+    live.kill().expect("kill");
 }

@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-23
 
-**Status**: Draft
+**Status**: Closed (cross-platform CI verified)
 
 **Input**: User description: "allow to do right click on project switcher and delete/forgot the project"
 

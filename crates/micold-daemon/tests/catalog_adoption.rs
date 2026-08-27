@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::WireLifecycle;
-use micold_core::session::{Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore, MIN_SCROLLBACK_LINES};
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -19,6 +21,7 @@ fn seeded_workspace(project_path: &Path) -> Workspace {
         SessionLocation::Worktree("feat-login".into()),
         SessionLabel::Named("Fix login".into()),
         TerminalMode::AiCli,
+        AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project_path.to_path_buf(), vec![session]);
@@ -99,12 +102,14 @@ fn archived_sessions_are_excluded_from_the_snapshot() {
         SessionLocation::Worktree("feat-live".into()),
         SessionLabel::Named("Live".into()),
         TerminalMode::AiCli,
+        AiCli::ClaudeCode,
     );
     let mut archived = Session::restored(
         SessionId::from_uuid(Uuid::from_u128(0x2)),
         SessionLocation::Worktree("feat-gone".into()),
         SessionLabel::Named("Gone".into()),
         TerminalMode::AiCli,
+        AiCli::ClaudeCode,
     );
     archived.archive();
 
@@ -249,7 +254,7 @@ fn catalog_with_one_session() -> (tempfile::TempDir, Catalog, PathBuf, SessionId
         is_git_repo: true,
         availability: Availability::Available,
     });
-    let session = Session::start_new(SessionLocation::Default);
+    let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     let id = session.id;
     ws.sessions.insert(project_path.clone(), vec![session]);
     JsonFileStore::at(projects_path.clone()).save(&ws).unwrap();
@@ -333,4 +338,197 @@ fn nothing_in_the_catalog_erases_a_projects_memory() {
          the session it names leaves it in place — restoring already declines a closed session, so \
          a stale memory costs nothing, where an erased one costs the user their place (FR-005a)"
     );
+}
+
+/// The regression that a visual pass found and every automated test missed (feature 027, T075).
+///
+/// `settings.json` has two writers, not one: the client owns the theme, the placement and the whole
+/// sandbox profile, and this daemon owns the four fields `settings_wire` projects. A `SettingsSet`
+/// arrives right after the client has written the file, so a daemon that saves its whole in-memory
+/// `Settings` reverts everything it does not own to whatever it read at its own boot.
+///
+/// It was silent for as long as the Settings form held only the fields the daemon carries. Feature
+/// 027 put the theme and the credential opt-ins in the same save, and a save that changed nothing
+/// at all then cleared both — measured, on a running client, before this test existed.
+#[test]
+fn a_service_settings_write_leaves_the_clients_own_fields_alone() {
+    use micold_core::sandbox::placement::PlacementKind;
+    use micold_core::sandbox::CredentialShare;
+    use micold_core::settings::Settings;
+    use micold_core::theme::ThemePreference;
+
+    let dir = tempfile::tempdir().unwrap();
+    let settings_path = dir.path().join("settings.json");
+
+    // The daemon boots and reads the file as it stands: defaults for everything.
+    let mut catalog = Catalog::load(
+        Box::new(JsonFileStore::at(dir.path().join("projects.json"))),
+        Box::new(JsonFileSettingsStore::at(settings_path.clone())),
+    );
+
+    // Then the user saves Settings. The client writes the whole document first — a theme and a
+    // shared credential the daemon has never heard of — and only then sends `SettingsSet`.
+    let store = JsonFileSettingsStore::at(settings_path.clone());
+    let mut written = store.load().settings;
+    written.theme = ThemePreference::Dark;
+    written.daemon.placement = PlacementKind::LocalSandbox;
+    written
+        .daemon
+        .sandbox
+        .credentials
+        .insert(CredentialShare::SshAgent);
+    store.save(&written).unwrap();
+
+    catalog.set_scrollback(20_000).unwrap();
+    catalog
+        .set_env_include(Some(false), None, Some(30))
+        .unwrap();
+
+    let after: Settings = store.load().settings;
+    assert_eq!(
+        after.theme,
+        ThemePreference::Dark,
+        "the daemon reverted the theme the client had just saved"
+    );
+    assert_eq!(
+        after.daemon.placement,
+        PlacementKind::LocalSandbox,
+        "the daemon reverted where the client had asked the service to run"
+    );
+    assert!(
+        after
+            .daemon
+            .sandbox
+            .credentials
+            .contains(&CredentialShare::SshAgent),
+        "the daemon cleared a credential the user had explicitly shared"
+    );
+
+    // And it did write its own fields, or the merge above would be preserving by doing nothing.
+    assert_eq!(after.scrollback_lines, 20_000);
+    assert!(!after.env_include_enabled);
+    assert_eq!(after.env_include_timeout_secs, 30);
+}
+
+// ---------------------------------------------------------------------------------------
+// Feature 026 (T045/T045a) — a session comes back on its own CLI, and resumes its own conversation
+// ---------------------------------------------------------------------------------------
+
+/// A restored session resumes rather than starting fresh (FR-008), on **its own** provider.
+///
+/// The catalog's own leg of it: `present_interrupted_resumable` is what decides that a durable
+/// session has a conversation worth coming back to, and it is asked with the session's provider.
+/// The launch that follows is `LaunchMode::Resume`, and `micold-core/tests/terminal_backend.rs`
+/// pins what that produces for each CLI — `--resume=<uuid>` for Copilot, `--resume <uuid>` for
+/// Claude Code. The two halves together are FR-008.
+///
+/// What this catches that neither half alone would: a catalog that asked one provider about every
+/// session would report the Copilot session as having no conversation, so it would never be offered
+/// as resumable and its next start would be a **fresh** `--session-id` — silently beginning a new
+/// conversation under the old session's identity.
+#[test]
+fn a_restored_session_resumes_on_the_cli_it_was_started_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let project_path = PathBuf::from("/repo/alpha");
+
+    let claude = Session::restored(
+        SessionId::from_uuid(Uuid::from_u128(0xC1)),
+        SessionLocation::Default,
+        SessionLabel::Pending,
+        TerminalMode::AiCli,
+        AiCli::ClaudeCode,
+    );
+    let copilot = Session::restored(
+        SessionId::from_uuid(Uuid::from_u128(0xC0)),
+        SessionLocation::Worktree("feat-x".into()),
+        SessionLabel::Pending,
+        TerminalMode::AiCli,
+        AiCli::Copilot,
+    );
+
+    let mut sessions = BTreeMap::new();
+    sessions.insert(project_path.clone(), vec![claude.clone(), copilot.clone()]);
+    let workspace = Workspace {
+        projects: vec![Project::new(
+            project_path.clone(),
+            true,
+            Availability::Available,
+        )],
+        active: Some(project_path.clone()),
+        sessions,
+        worktree_names: BTreeMap::new(),
+        ..Default::default()
+    };
+    let projects_path = dir.path().join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&workspace)
+        .unwrap();
+    let mut catalog = Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(dir.path().join("settings.json"))),
+    );
+
+    // Both were reloaded on the CLI they were started on — the store round-trip, seen from the
+    // daemon's side (T045a's persistence leg).
+    let provider_of = |catalog: &Catalog, id: SessionId| {
+        catalog
+            .workspace()
+            .sessions
+            .values()
+            .flatten()
+            .find(|s| s.id == id)
+            .map(|s| s.provider)
+            .expect("session reloaded")
+    };
+    assert_eq!(provider_of(&catalog, claude.id), AiCli::ClaudeCode);
+    assert_eq!(
+        provider_of(&catalog, copilot.id),
+        AiCli::Copilot,
+        "a daemon restart does not change which CLI a session runs"
+    );
+
+    // Only Copilot has a conversation recorded. The callback is what the real daemon backs with the
+    // provider seam; here it stands in for it so the *question asked* is observable.
+    let asked = std::cell::RefCell::new(Vec::new());
+    let marked = catalog.present_interrupted_resumable(|id, _cwd, _mode, provider| {
+        asked.borrow_mut().push((id, provider));
+        provider == AiCli::Copilot
+    });
+
+    assert_eq!(marked, 1);
+    let asked = asked.into_inner();
+    assert!(
+        asked.contains(&(claude.id, AiCli::ClaudeCode))
+            && asked.contains(&(copilot.id, AiCli::Copilot)),
+        "each session was asked about with its own provider, got {asked:?}"
+    );
+
+    let resumable: Vec<SessionId> = catalog
+        .workspace()
+        .sessions
+        .values()
+        .flatten()
+        .filter(|s| {
+            matches!(
+                s.lifecycle,
+                micold_core::session::SessionLifecycle::InterruptedResumable
+            )
+        })
+        .map(|s| s.id)
+        .collect();
+    assert_eq!(
+        resumable,
+        vec![copilot.id],
+        "the Copilot session is offered for resume; the Claude one, with no conversation, stays \
+         `Idle` and is visibly a session that was created and never used"
+    );
+
+    // And the wire form says so, which is what the sidebar renders.
+    let summary = catalog
+        .sessions_for(&project_path)
+        .into_iter()
+        .find(|s| s.id == copilot.id)
+        .expect("in the snapshot");
+    assert_eq!(summary.lifecycle, WireLifecycle::InterruptedResumable);
+    assert_eq!(summary.provider, AiCli::Copilot);
 }

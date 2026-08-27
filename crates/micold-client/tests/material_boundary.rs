@@ -30,6 +30,12 @@ fn ui_dir() -> PathBuf {
 /// rules below.
 const LIBRARY: &[&str] = &["material", "cdk"];
 
+/// Feature modules that outgrew a single file and became a directory (feature 027: Settings is a
+/// sectioned view, one module per section). They are **not** a library layer — naming them here
+/// keeps them bound by every rule below, where adding them to [`LIBRARY`] would exempt them, which
+/// is exactly what the directory assertion's message warns against.
+const FEATURE_DIRS: &[&str] = &["settings"];
+
 /// The styling module itself, which *is* the layer the rules point at.
 const STYLE_MODULE: &str = "style.rs";
 
@@ -57,10 +63,15 @@ fn feature_modules() -> BTreeMap<String, String> {
             .unwrap_or_default()
             .to_string();
         if path.is_dir() {
+            if FEATURE_DIRS.contains(&name.as_str()) {
+                collect_tree(&path, &mut out);
+                continue;
+            }
             assert!(
                 LIBRARY.contains(&name.as_str()),
                 "unexpected directory `ui/{name}/` — is it a new library layer? Add it to LIBRARY, \
-                 or it will be silently exempt from the boundary rules"
+                 a feature module that grew into a directory? Add it to FEATURE_DIRS. Left out of \
+                 both it is silently exempt from the boundary rules"
             );
             continue;
         }
@@ -69,17 +80,19 @@ fn feature_modules() -> BTreeMap<String, String> {
         }
         out.insert(name, fs::read_to_string(&path).expect("read source"));
     }
-    collect_showcase(&showcase_dir(), &mut out);
+    collect_tree(&showcase_dir(), &mut out);
     out
 }
 
-/// Every `.rs` file under `src/showcase/`, recursively, keyed as `showcase/<relative path>`.
-fn collect_showcase(dir: &Path, out: &mut BTreeMap<String, String>) {
+/// Every `.rs` file under `dir`, recursively, keyed by its path relative to `src/` — so
+/// `showcase/gallery.rs` and `ui/settings/daemon.rs`. The key says which side of the crate a
+/// failure came from, which a bare file name would not.
+fn collect_tree(dir: &Path, out: &mut BTreeMap<String, String>) {
     let entries = fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
     for entry in entries {
         let path = entry.expect("dir entry").path();
         if path.is_dir() {
-            collect_showcase(&path, out);
+            collect_tree(&path, out);
         } else if path.extension().is_some_and(|e| e == "rs") {
             let key = path
                 .strip_prefix(Path::new(env!("CARGO_MANIFEST_DIR")).join("src"))
@@ -153,7 +166,16 @@ const WRAPPED_WIDGETS: &[&str] = &[
 /// Matched at a word boundary, so a *method* whose name ends in a widget's — `row_tooltip(`,
 /// `menu_panel(` — is not mistaken for constructing one. Without that the count can never reach
 /// zero, because the offending name belongs to a builder step the library itself provides.
+///
+/// A **declaration** is not a call either. `fn scrollable(...)` in an `impl Operation` is iced's
+/// own callback name — the module is being *told* about a scrollable someone else built, which is
+/// the opposite of building one. Nothing here can rename it.
 fn widget_calls(code: &str) -> usize {
+    fn declares(line: &str) -> bool {
+        let line = line.trim_start();
+        line.starts_with("fn ") || line.starts_with("pub fn ") || line.starts_with("pub(crate) fn ")
+    }
+
     fn names_widget(line: &str, widget: &str) -> bool {
         let needle = format!("{widget}(");
         let mut from = 0;
@@ -172,7 +194,7 @@ fn widget_calls(code: &str) -> usize {
         false
     }
     code.lines()
-        .filter(|line| WRAPPED_WIDGETS.iter().any(|w| names_widget(line, w)))
+        .filter(|line| !declares(line) && WRAPPED_WIDGETS.iter().any(|w| names_widget(line, w)))
         .count()
 }
 
@@ -312,6 +334,17 @@ fn the_scan_actually_finds_the_feature_modules() {
     // styled copy would do the most damage — a developer comparing the showcase's button to the
     // application's would be comparing two different buttons. A directory this scan cannot see is
     // exempt in fact, whatever the spec says.
+    // Feature 027: Settings became a directory of sections. A feature module that grows into one
+    // is the case this scan's flat `read_dir` could not see, and the sections are where the
+    // sandbox's controls live — the newest hand-styling temptation in the crate.
+    for expected in ["ui/settings/daemon.rs", "ui/settings/terminal.rs"] {
+        assert!(
+            modules.contains_key(expected),
+            "the settings sections are not being scanned — a feature module that became a \
+             directory is bound by the same boundary as one that stayed a file. Found: {:?}",
+            modules.keys().collect::<Vec<_>>()
+        );
+    }
     for expected in ["showcase/gallery.rs", "showcase/catalogue.rs"] {
         assert!(
             modules.contains_key(expected),

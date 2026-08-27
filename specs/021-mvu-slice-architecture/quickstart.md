@@ -94,13 +94,19 @@ thin glue with no decision logic of its own — and are recorded here as that ex
 
 ### M1 — Persisted state loads identically (SC-008, FR-026)
 
-1. Check out `main` at `44b9fd1` (pre-change) and `mise run run`.
-2. Open a project, create a worktree, start two sessions, set a non-default theme and scrollback,
-   apply a sidebar filter. Quit.
+1. Check out this feature's **merge base**, `e02f971`, and `mise run run`. Not "the commit before
+   021 started" — 021 is long-lived and merges to main incrementally, so `44b9fd1`, which this step
+   named until T083, carries four other features' work (016, 022, 025, 026) and attributes it here.
+   The result below measures both: **0 pixels** from the merge base, **3,755 pixels** from
+   `44b9fd1`, all of the latter a type-scale change this feature did not make.
+2. Open a project, create a worktree, start two sessions, set a non-default theme and scrollback.
+   Quit.
 3. Back up the state directory.
 4. Check out the post-change branch and `mise run run`.
-5. **Expect**: the same project, worktrees, sessions, theme, scrollback and filters, with no
-   migration prompt, no warning, and no rewrite of the state files.
+5. **Expect**: the same project, worktrees, sessions, theme and scrollback, with no migration
+   prompt, no warning, and no rewrite of the state files. **Not filters** — `sidebar_filters` is
+   in-memory view state that no build has ever persisted, so a filter surviving a restart would be
+   a new feature, not this one holding. This step expected them until T083.
 6. Quit, and diff the state directory against the backup. **Expect**: no structural change.
 
 #### Result — 2026-08-20, T072
@@ -143,6 +149,10 @@ pixels** — a global type-scale change — and none of it is attributable to th
 A long-lived feature that merges to main incrementally cannot use "the commit before it started" as
 a control, and M1 should say so rather than let the next reader attribute four features' work to
 this one.
+
+**Done at T083.** Step 1 now names the merge base and step 5 no longer expects filters. The
+procedure above and the result here agree; before T083 they contradicted each other, and a reader
+following the steps would have failed a passing feature twice over.
 
 ### M2 — Overlay behavior is unchanged (FR-011, FR-012, FR-013)
 
@@ -204,6 +214,174 @@ gained scroll dismissal" is asserted exclusively through an entry point the runn
 uses. The behaviours are equivalent *provided the live message is ever sent*, which is exactly what
 step 6 could not confirm. Both belong to feature 017's overlay primitive and are out of scope for
 this feature; recorded here rather than fixed.
+
+#### Result — steps 1 and 2 re-run, 2026-08-25, at T082
+
+T040 declined to claim these: a 200 ms exit and a capture loop that caught no intermediate frame
+cannot distinguish "the software rasteriser is not playing the transition" from "it finishes far
+faster than its token". **A 20× probe build separates them**, and the answer is neither.
+
+Method. `ENTER` and `EXIT` in `ui/material/modal.rs` were multiplied by 20 — a 6,000 ms entrance and
+a 4,000 ms exit — in a throwaway build pinned to `~/vp91/bin/micold-ai-ide-slow`; the edit was
+reverted in the same script that made it, so no slowed constant ever reached the tree. Same rig as
+step 6 above: Xvfb `:91`, Mesa lavapipe, `xdotool`, `import`, one 600×320 crop over the dialog, mean
+luminance per frame at ~117 ms per capture.
+
+**The rasteriser plays transitions. The entrance is resolved in detail.** Forty consecutive frames
+climb monotonically, 0.15296 → 0.16039, and the dialog is visibly mid-scale and mid-fade in the
+early ones — smaller, with a pale Close button — against 0.16175 settled and 0.07974 with nothing
+open. So a screenshot pipeline is not the limitation T040 suspected it might be.
+
+**The exit is not played at all — and that is a defect, not a timing artefact.** Sixty consecutive
+frames across an Escape, with the wheel of the same 4,000 ms token running: nine frames at 0.161745,
+then frames 10 through 60 at 0.079739. **Not one intermediate value.** A 4,000 ms exit sampled every
+117 ms would show about thirty-four.
+
+![entrance resolves; exit has no intermediate frame](evidence/m2-step1-enter-vs-exit.png)
+
+| Frame | 1–9 | 10 | 11–60 |
+|---|---|---|---|
+| Dialog-region mean | 0.161745 | 0.079739 | 0.079739 |
+| | fully open | fully gone | fully gone |
+
+**Root cause, traced rather than guessed.** An instrumented build printing the snapshot lifecycle
+shows the application wiring is correct and the transition is abandoned after a single frame:
+
+```
+PROBE snapshot: before=Some(SurfaceId("about")) after=None dismissing_set=true
+PROBE view:     open=None dismissing=true closing=true      <- the snapshot is built, once
+PROBE transition_finished                                    <- and released immediately
+```
+
+`Modal`'s scrim carries `on_hidden`, and `animation.rs` publishes it when a track sits at zero with
+zero as its target. A track is created at zero whenever `animate_in()` is set, so the exit works
+only while the widget *keeps the state it entered with*. It does not: `cdk::overlay::backdrop()`
+builds the scrim as `opaque(mouse_area(container(scrim)).on_press(..))` while the surface has a
+dismisser and as `opaque(container(scrim))` when it has none — and the snapshot deliberately has
+none, because "a snapshot is a dialog on its way out … has nothing left to cancel"
+(`ui/mod.rs`). Dropping `mouse_area` from the chain changes the widget tree, iced rebuilds the
+subtree's state, the fresh track reads as already hidden, and `on_hidden` fires on the first frame.
+`positioned()` has the same conditional shape around the panel, so the dialog body's fade and scale
+tracks are reset by the same flip.
+
+**It predates this feature.** `git show e02f971:crates/micold-client/src/ui/mod.rs` — 021's merge
+base — carries the same `if let Some(cancel) = on_escape(state)` construction, and `overlay.rs` at
+that commit carries the same `match dismisser`; the file was introduced whole by feature 017's
+consolidation (`4b54f41`). So this is 017's overlay primitive, recorded here because FR-011 is 021's
+requirement and this is where the verification gap sat. **T084 fixes it.**
+
+**Step 2 is vacuous while step 1 fails, and stays recorded as unclaimed.** "Does reopening mid-exit
+reverse smoothly?" presupposes an exit with a middle. What T040 established survives unchanged and
+is the part that matters if the transition ever misbehaves: reopening immediately after Escape gives
+a single dialog byte-identical to a clean open — no duplicate, no ghost, no stuck scrim. Ask step 2
+again after T084.
+
+**Still not covered.** Frame pacing. lavapipe is a software rasteriser, so nothing here says how the
+transition *feels* on the user's GPU; that remains out of reach of this method and is not claimed.
+
+#### Result — step 1 re-run after the fix, 2026-08-25, at T084
+
+**The exit plays.** Same rig, same 20× probe build, same crop and the same Escape: ninety frames, of
+which **fifty-eight carry an intermediate value** where the unfixed build carried none.
+
+| Frame | 1–10 | 11–68 | 69–90 |
+|---|---|---|---|
+| Dialog-region mean | 0.161745 | 0.16174 → 0.151954, ~55 distinct values | 0.079739 |
+| | fully open | fading and shrinking | fully gone |
+
+![the exit animating after the fix](evidence/m2-t084-exit-animates.png)
+
+**The fix is the one T084 called for — the chain, not the snapshot.** `cdk::overlay::backdrop()` now
+wraps its catcher in `mouse_area` unconditionally and attaches `on_press` only when there is a
+dismisser, and the "nothing to catch" early return that produced a bare `Space` is gone with it. Both
+were branches on the dismisser, which is exactly the thing that changes at the instant an exit
+begins. A `mouse_area` with no handler set publishes nothing and captures nothing
+(`iced_widget-0.14.2/src/mouse_area.rs`), so the inert case behaves as the bare `Space` did.
+
+**`positioned()` was not part of the fault, and is unchanged.** T084's text named it as having the
+same conditional shape, and it does — but `iced::widget::opaque` delegates `tag`, `state`,
+`children` and `diff` straight to its content (`iced_widget-0.14.2/src/helpers.rs:600-614`), so
+wrapping in it adds no tree node and discards no state. Only `mouse_area` is a real node. Reading the
+widget rather than reasoning from the symmetry narrowed a two-site change to a one-site change.
+
+**One committed fixture moved, deliberately.** `layout_snapshot.txt` gained forty lines and lost
+none: two closed overlay layers per covered state each gained one child at the same full-window
+rectangle, the inert `mouse_area`'s container. Every recorded rectangle is unchanged — in the failure
+report each observed row carried the preceding recorded row's geometry exactly, which is the
+signature of an insertion rather than a move. Regenerated with `UPDATE_LAYOUT_SNAPSHOT=1`.
+
+**Why the ramp is slower than its 4,000 ms token, and why that is not a finding.** A track "advances
+by a fixed amount per redraw rather than by elapsed wall-clock time, so a transition's real duration
+is only nominal: on a slower display it takes proportionally longer" (`ui/cdk/motion.rs:26`). The
+token buys ~250 redraws at the nominal 60 fps; lavapipe delivers far fewer per second, so the same
+250 redraws take much longer than four seconds of wall clock. Nothing about the timing measured here
+transfers to the user's GPU, in either direction.
+
+**Still not covered — and one new gap.** Frame pacing, as before. And the tail: frame 68 still shows
+a visible faded panel and frame 69 shows none, so the last ~88% of the luminance range collapses
+inside one ~110 ms capture interval. That is what an *emphasized-accelerate* exit curve is supposed
+to do — the travel is concentrated at the end — but this pipeline cannot resolve it, so whether that
+final step reads as a pop on real hardware stays unclaimed rather than passed.
+
+**Step 2 is now answerable and was not asked.** T082 recorded it as vacuous while step 1 failed; step
+1 now passes, so "does reopening mid-exit reverse smoothly?" has a middle to reverse from. It is left
+open rather than quietly claimed — catching a chosen frame of a reversal is the one thing the
+`visual-pass` skill states this method cannot do reliably.
+
+#### Result — step 6 re-run, 2026-08-25, at T080
+
+Step 6 was recorded **Blocked** above, with the block attributed to feature 017's overlay primitive
+capturing wheel events. **That attribution was wrong.** Re-run against `HEAD` of `work-021`, again
+**not on a real display**: Xvfb `:91` at 1600×1400 with Mesa lavapipe (software Vulkan),
+`WGPU_BACKEND=vulkan`, driven by `xdotool`, captured with `import`, compared with
+`compare -metric AE`. Client and daemon were built in one invocation and pinned to `~/vp91/bin/`;
+the pair was confirmed to handshake (`client attached to daemon`) before anything was measured.
+State was isolated to a scratch `XDG_DATA_HOME` with `XDG_RUNTIME_DIR=/tmp/vp91`, against a
+throwaway one-project fixture with 20 worktrees. The developer's own app and daemon were untouched.
+
+**Step 6 passes. FR-012's scroll dismissal survives in the built application.** Two different
+lightweight surfaces were exercised — the header's ⋮ overflow menu (`Layer::Popover`,
+`Anchor::TopEnd`, which does not overlap the sidebar) and a worktree row's right-click context menu
+(`Layer::ContextMenu`, `Anchor::Point`, which does) — and both dismissed when the sidebar was
+scrolled beneath them.
+
+| Gesture | Sidebar region | Surface region |
+|---|---|---|
+| Three wheel notches over the sidebar, **no** surface open | 46,257 px changed | — |
+| Same gesture, ⋮ overflow menu open | **46,257 px** — identical | 65,277 px (96.6%), menu gone |
+| Same gesture, context menu open | scrolled | 41,623 px (80.0%), menu gone |
+| Three wheel notches **over the open panel itself** | **0 px** | 10,961 px — hover highlight only, menu stays |
+
+The last row is what T040 measured. Pointing the wheel at the panel scrolls nothing beneath it and
+dismisses nothing, which is the correct behaviour for a surface that is itself the pointer's target;
+pointing it at the content *beneath* the surface produces a scroll byte-identical to the
+no-surface baseline **and** takes the surface with it. That last row is also the only way this build produces
+"0 pixels", and it is reachable by aiming a wheel at a coordinate an open surface now covers —
+exactly the hazard the `visual-pass` skill warns about under "An open overlay changes what a
+coordinate means". T040 did not record where it pointed, so this is the likeliest reading of its
+number rather than a certainty; what *is* certain is that the behaviour it inferred from that number
+does not exist in this build.
+
+![step 6: dismissal on scroll beneath vs. scroll on the panel](evidence/m2-step6-scroll-dismissal.png)
+
+Two history checks rule out "it was broken then and was fixed since", since that would leave the
+defect real and merely relocated. Neither half of the wiring has changed since `cacd9ab`, the commit
+T040 ran against: `git log cacd9ab..HEAD -- crates/micold-client/src/ui/cdk/overlay.rs` yields one
+commit, `bd67826`, whose diff to that file adds nothing but the `Anchor::BottomStart` variant; and
+`.on_scroll_offset(Message::SidebarScrolled)` was already present in `src/ui/sidebar.rs` at
+`cacd9ab` (line 154 there, line 173 now). The static reading agrees: `mouse_area` captures
+`WheelScrolled` only when `on_scroll` is set, which the overlay primitive never sets; `opaque`
+captures presses only; and `modal.rs:143` is the sole `.scrim(...)` call site, so no non-modal
+surface gets an opaque backdrop at all. There was never a wheel-capturing path to fix.
+
+**Not covered.** Whether the *dismissal* animates out over its 200 ms, as opposed to disappearing —
+that is steps 1 and 2's unanswered question, still unanswered, and T082's subject. This step
+establishes only that the surface is gone and the content moved.
+
+The related observation above — `Message::ScrolledBeneathOverlay` having no producer in `src/` — is
+unaffected by this result, and T081 resolved it the way this result points: the variant is deleted
+and `tests/overlay_dismissal_delta.rs` now asks through `SidebarScrolled`, the message the worktree
+list it describes actually sends.
 
 ## Documentation deliverable (Principle VII)
 

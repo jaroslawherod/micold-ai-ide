@@ -11,10 +11,12 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use micold_client::app::State;
+use micold_client::catalog_sync::reconcile_catalog;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::WireLifecycle;
 use micold_core::session::{
-    Session, SessionId, SessionLocation, TerminalMode, MAX_RESTART_ATTEMPTS,
+    AiCli, Session, SessionId, SessionLocation, TerminalMode, MAX_RESTART_ATTEMPTS,
 };
 use micold_core::settings::FakeSettingsStore;
 use micold_core::store::FakeProjectStore;
@@ -32,7 +34,7 @@ fn sh(script: &str) -> CommandBuilder {
 }
 
 fn state_with_regular_session(project: &Path) -> (Arc<DaemonState>, SessionId) {
-    let mut session = Session::start_new(SessionLocation::Default);
+    let mut session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
     session.set_mode(TerminalMode::Regular);
     let id = session.id;
     let workspace = Workspace {
@@ -85,11 +87,12 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
     // Drive supervision cycles until it gives up; each cycle detects the dead child, advances the
     // counter, and respawns another crashing shell (which we let exit before the next cycle).
     let deadline = Instant::now() + Duration::from_secs(20);
-    let attempts = loop {
+    let (reason, attempts) = loop {
         state.supervise_exited_sessions();
-        if let Some(WireLifecycle::Failed { attempts, .. }) = lifecycle(&state, project.path(), id)
+        if let Some(WireLifecycle::Failed { reason, attempts }) =
+            lifecycle(&state, project.path(), id)
         {
-            break attempts;
+            break (reason, attempts);
         }
         assert!(
             Instant::now() < deadline,
@@ -104,9 +107,42 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
         attempts, MAX_RESTART_ATTEMPTS,
         "give-up records the full retry budget"
     );
+    // The give-up has to say *why*, and the reason is the only place it can (010 BUG-017). This is
+    // not decoration: the client announces a failure exactly when the wire reason is non-empty
+    // (`catalog_sync::announce_start_failures`, feature 026 T088), so an empty one here means a
+    // crash loop that happened while nobody was watching is never announced at all — it settles
+    // into a `failed` word in the status bar and nothing else.
+    assert!(
+        !reason.trim().is_empty(),
+        "a give-up with no reason tells the user only that it failed"
+    );
+    // And it has to name the exit it gave up on. `/bin/false` exits 1, so a reason that does not
+    // mention that status is a sentence about the budget with the diagnosis left out.
+    assert!(
+        reason.contains('1'),
+        "the reason should name the exit the session kept dying on; got {reason:?}"
+    );
+    assert!(
+        reason.contains(&MAX_RESTART_ATTEMPTS.to_string()),
+        "and how many times it tried; got {reason:?}"
+    );
     assert!(
         state.live_session(id).is_none(),
         "a session that gave up has its process dropped (no restart pending)"
+    );
+
+    // And the join: the snapshot the daemon would really publish, fed to the real client. This is
+    // the half neither side can fail on its own — `announce_start_failures` reads the wire reason,
+    // so a give-up the daemon words correctly and the wire flattens reaches the user as nothing.
+    let mut core = State::default();
+    reconcile_catalog(&mut core, &state.welcome_payload().0, false);
+    assert_eq!(
+        core.notifications
+            .queue
+            .visible()
+            .map(|n| n.message.clone()),
+        Some(reason.clone()),
+        "the give-up the daemon recorded is what the user is told"
     );
 
     std::env::remove_var("SHELL");

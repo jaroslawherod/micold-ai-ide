@@ -19,6 +19,7 @@ use std::marker::PhantomData;
 pub struct Tag<'a, M> {
     label: String,
     accent: Rgb,
+    on_accent: Option<Rgb>,
     role: TypeRole,
     _marker: PhantomData<&'a M>,
 }
@@ -29,9 +30,21 @@ impl<'a, M: 'a> Tag<'a, M> {
         Self {
             label: label.into(),
             accent,
+            on_accent: None,
             role: TypeRole::SidebarTag,
             _marker: PhantomData,
         }
+    }
+
+    /// Draw the accent as an opaque fill with `on_accent` as the label, instead of the default
+    /// tint.
+    ///
+    /// For a tag whose background is not the caller's to know — one that can land on a plain
+    /// surface or on a filled container depending on state. The tint reads as an accent only over
+    /// the former; see [`style::chip_solid`].
+    pub fn solid(mut self, on_accent: Rgb) -> Self {
+        self.on_accent = Some(on_accent);
+        self
     }
 
     /// Override the label's type role.
@@ -49,7 +62,7 @@ impl<'a, M: 'a> From<Tag<'a, M>> for Element<'a, M> {
         // Taken apart rather than built with `Text`, because a tag carries an accent colour instead
         // of a `Roles` set and `Text` needs one. Still a role, so the weight and line height come
         // from the scale rather than from the renderer's defaults.
-        container(
+        let chip = container(
             text(t.label)
                 .size(t.role.size())
                 .font(t.role.font())
@@ -60,8 +73,12 @@ impl<'a, M: 'a> From<Tag<'a, M>> for Element<'a, M> {
             bottom: 0.0,
             left: spacing::XS,
             right: spacing::XS,
-        })
-        .style(style::chip(t.accent))
-        .into()
+        });
+        // Styled in each arm rather than boxing one closure: the two style functions have different
+        // types, and a `Box<dyn Fn>` here buys nothing the match does not.
+        match t.on_accent {
+            Some(on_accent) => chip.style(style::chip_solid(t.accent, on_accent)).into(),
+            None => chip.style(style::chip(t.accent)).into(),
+        }
     }
 }

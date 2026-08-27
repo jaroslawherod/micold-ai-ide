@@ -26,6 +26,12 @@
 //! added fields away and diffing against the previous fixture, which left **zero** substantive
 //! differences. Fields were added, none altered or removed. Had any value moved, that would have
 //! been an appearance change to explain rather than a fixture to refresh.
+//!
+//! **Regenerated a second time, for feature 027 (T086).** Two lines moved, both
+//! `text_input[disabled]`: its `placeholder` and `value` now carry `DISABLED_OPACITY`. This is an
+//! appearance change and is the point of the change — a disabled field was previously drawn
+//! identically to an editable one, so a resource limit the container runtime cannot enforce looked
+//! like one you could type into. Nothing else in the fixture differs.
 
 use std::fmt::Write as _;
 

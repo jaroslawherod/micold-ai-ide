@@ -310,3 +310,40 @@ fn the_bars_restart_control_asks_which_process_it_is_restarting() {
          is still running, so the request is a no-op and the control does nothing"
     );
 }
+
+/// Feature 026-multi-provider-sessions FR-016a (T058a): the bar's pinned AI tab names the session's
+/// CLI by its **command** name, and the label follows the session rather than a constant.
+///
+/// `ui/terminal.rs`'s own unit test proves `session_provider` answers with the session's CLI. What
+/// it cannot see is whether the tab still *asks* — a label rewritten to `display_name()`, or to a
+/// literal `"claude"`, leaves that test green and puts "GitHub Copilot" (or the wrong CLI outright)
+/// on a Copilot session's bar. That is the same silent shape as the restart control above, so it is
+/// read out of the source in the same way.
+///
+/// The register matters as much as the source. FR-016's clarification splits the two deliberately:
+/// rows and the bar are labels in a width budget and take `command()`, while menus and failure
+/// messages are sentences and take `display_name()`. `tests/features_sidebar.rs` and
+/// `features_settings.rs` hold the ends of that split; this holds the terminal bar's.
+#[test]
+fn the_pinned_ai_tab_names_the_sessions_cli() {
+    let src = fs::read_to_string(src_dir().join("ui").join("terminal.rs")).expect("terminal.rs");
+    let code = code_only(&src);
+    let tab = code
+        .split_once("fn pinned_ai_tab")
+        .expect(
+            "ui/terminal.rs no longer builds a pinned AI tab — FR-016a hangs the CLI's name \
+                 on it, so it cannot simply be gone",
+        )
+        .1;
+
+    assert!(
+        tab.contains("session_provider(state, id).provider().command()"),
+        "the pinned AI tab must label itself from the *session's* provider, by `command()` — a \
+         constant or a call that drops the session names one CLI on every session's bar (FR-016a)"
+    );
+    assert!(
+        !tab.contains("display_name()"),
+        "`display_name()` is the menus-and-sentences register (\"GitHub Copilot\"); a tab in a \
+         width budget takes `command()`. The two must not converge — see FR-016's clarification"
+    );
+}

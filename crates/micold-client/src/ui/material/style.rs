@@ -78,11 +78,17 @@ pub fn state_fill(content: Color, opacity: f32) -> Color {
 /// For the one place a state layer cannot be a separate quad: `checkbox::Style` exposes a single
 /// opaque `background`, so its hover layer has to be blended into the fill rather than drawn on
 /// top of it. Everywhere else the layer is its own quad and this is not needed.
+///
+/// The arithmetic is [`tokens::blend_channel`] rather than written out here. `micold-core` needs the
+/// same blend to measure a composited pair (FR-004b), and it has no `Color`, so the choice was one
+/// function used from both crates or two copies of `l*a + b*(1-a)` — and a drifted copy of a blend
+/// does not fail, it measures a colour nothing draws (FR-029a; BUG-010 T160).
 pub fn over(layer: Color, base: Color) -> Color {
+    let ch = |l: f32, b: f32| tokens::blend_channel(l as f64, b as f64, layer.a as f64) as f32;
     Color {
-        r: layer.r * layer.a + base.r * (1.0 - layer.a),
-        g: layer.g * layer.a + base.g * (1.0 - layer.a),
-        b: layer.b * layer.a + base.b * (1.0 - layer.a),
+        r: ch(layer.r, base.r),
+        g: ch(layer.g, base.g),
+        b: ch(layer.b, base.b),
         a: 1.0,
     }
 }
@@ -347,6 +353,22 @@ pub fn chip(accent: Rgb) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
+/// A chip on an opaque fill — the accent as the *background*, with its own on-colour for the label.
+///
+/// [`chip`] above draws the accent at 20% over whatever is behind it, which reads as an accent only
+/// while "whatever is behind it" is a plain surface. Over a filled container — a current navigation
+/// row, drawn in `primary` — a 20% tint of `error` is neither the accent nor the surface, and the
+/// label sitting on it is close to unreadable. A chip that has to survive an unknown background
+/// brings its own (feature 027, T075).
+pub fn chip_solid(fill: Rgb, on_fill: Rgb) -> impl Fn(&Theme) -> container::Style {
+    move |_theme| container::Style {
+        background: Some(Background::Color(color(fill))),
+        text_color: Some(color(on_fill)),
+        border: radius(shape::FULL),
+        ..container::Style::default()
+    }
+}
+
 /// A result row inside a type-ahead menu (feature 021, contracts/typeahead-component.md §4.7).
 ///
 /// Three things can be true of one row at the same time, so each gets its own channel and none can
@@ -441,12 +463,22 @@ pub struct Host {
     pub on_fill: Rgb,
     /// Whether `fill` is an **accent** role rather than a neutral surface.
     ///
-    /// Only an accent fill obliges a child to abandon the colours its own variant gives it. §1.3
-    /// enumerates the backgrounds `primary` may be drawn on and they are all neutral surfaces —
-    /// `surface_variant` among them — so a button on the `Info` banner keeps §7.3's table, while
-    /// one on `error` cannot: both roles read their ramps at the tone their scheme assigns, which
-    /// puts `primary` and `error` on the same tone in each scheme, and two roles at the same tone
-    /// have the same luminance by construction (1.00:1 light, 1.01:1 dark — BUG-009).
+    /// Only an accent fill obliges a child to abandon the colours its own variant gives it. A button
+    /// on a fill §1.3 enumerates for `primary` keeps §7.3's table, while one on `error` cannot: both
+    /// roles read their ramps at the tone their scheme assigns, which puts `primary` and `error` on
+    /// the same tone in each scheme, and two roles at the same tone have the same luminance by
+    /// construction (1.00:1 light, 1.01:1 dark — BUG-009).
+    ///
+    /// **Neutral is not the test; enumerated is** (BUG-010). This comment used to say §1.3's
+    /// backgrounds for `primary` "are all neutral surfaces — `surface_variant` among them", and the
+    /// second half was never true: the row lists four `surface`/`surface_container_*` levels and
+    /// `surface_variant` is not one of them. The `Info` banner was built on that sentence, so its
+    /// action drew `primary` on a host the contract does not permit — 4.40:1 pressed in the light
+    /// scheme, with an `outline` border at 2.96:1 in the dark before any state layer at all. A
+    /// neutral fill outside the enumeration is still not a host, and [`imposed`] cannot say so on
+    /// its own: it answers "does this fill oblige a substitution", not "is this fill permitted".
+    ///
+    /// [`imposed`]: Host::imposed
     accent: bool,
 }
 
@@ -492,7 +524,11 @@ impl Host {
 pub fn notification_host(r: Roles, level: NoticeLevel) -> Host {
     match level {
         NoticeLevel::Error => Host::accent(r.error, r.on_error),
-        NoticeLevel::Info => Host::neutral(r.surface_variant, r.on_surface),
+        // `surface_container_high`, not `surface_variant`: §1.3 enumerates `primary` on the
+        // `surface_container_*` levels and never on `surface_variant`, and the banner's action is a
+        // text button in `primary`. The fill moves rather than the action's role, which is FR-004b's
+        // remedy — narrow the host, leave the ramp alone (BUG-010).
+        NoticeLevel::Info => Host::neutral(r.surface_container_high, r.on_surface),
     }
 }
 
@@ -814,7 +850,12 @@ pub fn field_support(r: Roles, error: bool) -> Rgb {
 /// Leaving its old box in place would put a 1dp outline inside the filled container — the exact
 /// duplication the wrapper exists to remove.
 pub fn field_input(r: Roles) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
-    move |_theme, _status| text_input::Style {
+    // The status *is* read, and only for the disabled case. A field is disabled by having no
+    // `on_input` (see `TextField`), which is how a limit the runtime cannot enforce is rendered —
+    // and until this arm existed that field was pixel-identical to an editable one. The user
+    // clicked it, typed, saw nothing happen and had no way to tell a disabled control from a
+    // broken application (FR-015, SC-009).
+    move |_theme, status| text_input::Style {
         background: Background::Color(Color::TRANSPARENT),
         border: Border {
             color: Color::TRANSPARENT,
@@ -822,8 +863,14 @@ pub fn field_input(r: Roles) -> impl Fn(&Theme, text_input::Status) -> text_inpu
             radius: 0.0.into(),
         },
         icon: color(r.on_surface_variant),
-        placeholder: color(r.on_surface_variant),
-        value: color(r.on_surface),
+        placeholder: match status {
+            text_input::Status::Disabled => disabled_color(r.on_surface_variant),
+            _ => color(r.on_surface_variant),
+        },
+        value: match status {
+            text_input::Status::Disabled => disabled_color(r.on_surface),
+            _ => color(r.on_surface),
+        },
         selection: alpha(color(r.primary), 0.3),
     }
 }
@@ -843,6 +890,25 @@ mod tests {
         let r = tokens::roles(ColorScheme::Dark);
         let style = text_button(r, None)(&iced::Theme::Dark, Status::Disabled);
         assert_eq!(disabled_color(r.primary), style.text_color);
+    }
+
+    /// A disabled field has to *look* disabled.
+    ///
+    /// `TextField` expresses unavailability by omitting `on_input`, which is what the sandbox's
+    /// unenforceable limits do. This style function ignored its status until T086, so those fields
+    /// rendered identically to editable ones — the setting said "you cannot change this" in its
+    /// supporting line while looking exactly like one you could.
+    #[test]
+    fn a_disabled_field_greys_its_value() {
+        let r = tokens::roles(ColorScheme::Dark);
+        let disabled = field_input(r)(
+            &iced::Theme::Dark,
+            iced::widget::text_input::Status::Disabled,
+        );
+        let active = field_input(r)(&iced::Theme::Dark, iced::widget::text_input::Status::Active);
+        assert_eq!(disabled.value, disabled_color(r.on_surface));
+        assert_eq!(active.value, color(r.on_surface));
+        assert_ne!(disabled.value, active.value);
     }
 
     /// The enabled path must stay fully opaque — greying is the disabled state alone.

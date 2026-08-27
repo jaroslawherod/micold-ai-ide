@@ -66,6 +66,19 @@ pub struct TreeItem<'a, M> {
     /// A small pre-built badge shown between the leading icon and the label (feature 010 US2 —
     /// the per-session activity dot). Carries its own lifetime `'a`.
     pub badge: Option<Element<'a, M>>,
+    /// A short muted label rendered **on the same line**, after the name and before any trailing
+    /// action (feature 026, FR-016 — the session row's AI CLI name).
+    ///
+    /// Not [`Self::tags`], and the difference is the whole reason this exists: tags open a *second
+    /// line*, and a session row is always one line — `features/sidebar.rs::row_heights` says so and
+    /// the scroll arithmetic believes it, silently. This changes the row's content and never its
+    /// height.
+    ///
+    /// It is fixed-width by consequence rather than by declaration: it is short, and the name
+    /// beside it is [`Ellipsized`](super::Ellipsized), so a narrow row shortens the *name*. That
+    /// ordering is deliberate — the annotation is the identification, and it must not be what a
+    /// narrow row drops.
+    pub annotation: Option<(String, Rgb)>,
     /// Lifetime marker so borrowed data can be captured by callers if needed.
     pub _marker: std::marker::PhantomData<&'a ()>,
 }
@@ -91,6 +104,7 @@ impl<'a, M> TreeItem<'a, M> {
             trailing_custom: None,
             row_tooltip: None,
             badge: None,
+            annotation: None,
             _marker: std::marker::PhantomData,
         }
     }
@@ -98,6 +112,13 @@ impl<'a, M> TreeItem<'a, M> {
     /// Set a small badge shown between the leading icon and the label (e.g. the activity dot).
     pub fn badge(mut self, element: impl Into<Element<'a, M>>) -> Self {
         self.badge = Some(element.into());
+        self
+    }
+
+    /// A short muted label on the same line, after the name (feature 026, FR-016). See
+    /// [`TreeItem::annotation`] for why this is not a tag chip.
+    pub fn annotation(mut self, text: impl Into<String>, tint: Rgb) -> Self {
+        self.annotation = Some((text.into(), tint));
         self
     }
 
@@ -341,6 +362,13 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 row_label_role,
                 item.tint,
             ));
+
+            // The row's own short annotation (feature 026): after the name, before the actions, on
+            // the same line. It takes its natural width and the name takes the remainder, which is
+            // what makes the *name* what a narrow row shortens.
+            if let Some((text, tint)) = item.annotation {
+                line = line.push(super::Text::new(text, TypeRole::Caption, r).tint(tint));
+            }
 
             if let Some(custom) = item.trailing_custom {
                 line = line.push(custom);

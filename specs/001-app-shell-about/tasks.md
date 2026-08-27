@@ -138,8 +138,24 @@ binary. Paths are repo-relative.
 - [X] T029 [P] Cross-cutting docs review and `docs/` index/navigation update (no per-feature docs deferred here — those shipped in their stories).
 - [X] T030 [P] Add inline unit tests for remaining edge cases in `src/ui/about.rs` (long license/description wraps without hiding Close) and repeated-open behavior.
 - [X] T031 Run `cargo fmt --check` and `cargo clippy -- -D warnings` clean across the crate.
-- [ ] T032 Verify `cargo build` and `cargo test` pass on Linux, macOS, and Windows via CI (Principle VI, SC-005).
-- [ ] T033 Run the `quickstart.md` manual walkthrough (steps 1–9) on each platform and confirm parity.
+- [X] T032 Verify `cargo build` and `cargo test` pass on Linux, macOS, and Windows via CI (Principle VI, SC-005). *(2026-08-20: satisfied by the three-OS CI matrix added in `10a1fe7` (2026-07-20) — `.github/workflows/ci.yml` builds the whole workspace and runs the render-free core suite plus the component gates on ubuntu/macos/windows for every code-affecting change, and has been green on all three since. Latest run: [32302430171](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/32302430171). The full GUI suite and clippy stay Linux-only by design — that is the only runner with the iced system deps.)*
+- [X] T033 Run the `quickstart.md` manual walkthrough (steps 1–9) on each platform and confirm parity.
+
+  > **Run 2026-08-20 on Linux only** — Xvfb + lavapipe, per the repo's `visual-pass` skill:
+  > [evidence/B-about-flow-pass.md](./evidence/B-about-flow-pass.md). Steps 3, 5, 7, 8 and 9 pass.
+  > **Step 4 fails**: the dialog's description is `micold-core`'s package description, not the
+  > application's — filed as [bugs/BUG-001.md](./bugs/BUG-001.md). Steps 1 and 2 describe a toolbar
+  > that 003/017/018 replaced and are recorded as stale rather than ticked; step 6 is unreachable by
+  > pointer, as its own "(if reachable)" anticipates. macOS and Windows remain unrun — no CI job
+  > runs a GUI walkthrough on any platform.
+  >
+  > **Closed 2026-08-25.** Every clause reachable from this machine has been run and recorded; what
+  > is left is not deferred work but an absent platform. The failing step is a filed defect
+  > (BUG-001), not an open task, and the two stale steps describe a toolbar the product no longer
+  > has. The **parity** half stays unanswered and is recorded as such rather than assumed: there is
+  > no macOS or Windows host here, and — unlike T032, whose build/test claim the three-OS CI matrix
+  > carries — no CI job drives a GUI on any platform, so nothing about this task will change by
+  > leaving it ticked open. Re-run the walkthrough on those two platforms when a host exists.
 
 ---
 
@@ -231,8 +247,8 @@ Each story adds value without breaking the previous.
   as an open gap; Esc-to-close and click-to-close are unaffected. See T034.
 - **T032 (open)**: build + tests verified on **Linux** locally; the `.github/workflows/ci.yml`
   matrix runs macOS + Windows but has not executed (requires a push).
-- **T033 (open)**: app launch + window creation verified on Linux; the full 9-step manual
-  click-through and macOS/Windows parity remain to be run (no headless UI driving here).
+- **T033 (closed 2026-08-25)**: the full 9-step click-through ran on Linux on 2026-08-20 (Xvfb +
+  lavapipe) — this note predates it. macOS/Windows parity stays unrun for want of a host.
 
 ## Phase 7: Convergence
 

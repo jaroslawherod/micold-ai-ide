@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-04
 
-**Status**: Draft
+**Status**: Closed (implemented and shipped; every task in [tasks.md](./tasks.md) is done, including §B8's manual pass, run 2026-08-21 — [evidence](./evidence/B8-open-close-rule.md). One open defect remains against the feature and it is a test defect, not a product one: [BUG-003](./bugs/BUG-003.md) measures a debug build against the release frame budget, which leaves SC-002 unmeasured for the build users actually run.)
 
 **Input**: User description: "the branch selector should allow type a head search. Should show branches that contain a given text or a close to it. For development we should create a type a head component found text should be highlighted in found items"
 

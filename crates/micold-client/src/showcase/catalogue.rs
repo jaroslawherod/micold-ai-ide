@@ -260,6 +260,35 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::controls::icon_button,
     },
     Entry {
+        module: "material/split_action.rs",
+        component: "SplitAction",
+        variants: &[],
+        density: &[],
+        posed: &[
+            "with a choice",
+            "nothing to choose between",
+            "compact, in a dense row",
+            "disabled",
+        ],
+        live: &["hover", "pressed", "focus"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::controls::split_action,
+    },
+    Entry {
+        module: "material/labelled_toggle.rs",
+        component: "LabelledToggle",
+        variants: &[],
+        density: &[],
+        posed: &["default", "a longer word", "tinted", "disabled"],
+        live: &["hover", "pressed", "focus"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::controls::labelled_toggle,
+    },
+    Entry {
         module: "material/checkbox.rs",
         component: "Checkbox",
         variants: &[],
@@ -415,6 +444,21 @@ pub const COMPONENTS: &[Entry] = &[
         section: Section::Components,
         layout: Layout::Inline,
         render: sections::surfaces::scrollable,
+    },
+    Entry {
+        module: "material/section_list.rs",
+        component: "SectionList",
+        variants: &[],
+        density: &[],
+        // `Section` is deliberately absent, for the reason `MenuItem` and `TreeItem` are: it is a
+        // record the caller fills in, not a component. It is on the page all the same — a rail is
+        // nothing but the sections it was given.
+        posed: &["with a badge on the last row"],
+        live: &["press a row to make it current"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::surfaces::section_list,
     },
     Entry {
         module: "material/accordion.rs",

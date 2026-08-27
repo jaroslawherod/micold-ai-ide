@@ -65,6 +65,7 @@ fn catalog_with_session(
         SessionLocation::Default,
         SessionLabel::Named("S".into()),
         TerminalMode::AiCli,
+        micold_core::session::AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project.to_path_buf(), vec![session]);
@@ -97,6 +98,7 @@ fn catalog_with_shell_session(project: &std::path::Path, store: &std::path::Path
         SessionLocation::Default,
         SessionLabel::Named("Shell".into()),
         TerminalMode::Regular,
+        micold_core::session::AiCli::ClaudeCode,
     );
     let mut sessions = BTreeMap::new();
     sessions.insert(project.to_path_buf(), vec![session]);
@@ -239,6 +241,7 @@ fn a_session_the_daemon_starts_reaches_the_clients_state_as_running() {
             .find(|s| s.id == sid)
             .expect("session")
             .lifecycle
+            .clone()
     };
 
     let mut core = State::default();
@@ -266,4 +269,168 @@ fn a_session_the_daemon_starts_reaches_the_clients_state_as_running() {
     );
 
     live.kill().expect("kill");
+}
+
+/// Hide every AI CLI from `PATH` for as long as this is alive, so a start fails for the one reason
+/// under test. Restored on drop.
+struct NoCliOnPath {
+    previous: Option<std::ffi::OsString>,
+}
+
+impl NoCliOnPath {
+    fn new() -> Self {
+        let previous = std::env::var_os("PATH");
+        let commands: Vec<&str> = micold_core::session::AiCli::ALL
+            .iter()
+            .map(|cli| cli.provider().command())
+            .collect();
+        let kept: Vec<std::path::PathBuf> = previous
+            .iter()
+            .flat_map(std::env::split_paths)
+            .filter(|dir| !commands.iter().any(|command| dir.join(command).is_file()))
+            .collect();
+        std::env::set_var("PATH", std::env::join_paths(kept).unwrap());
+        Self { previous }
+    }
+}
+
+impl Drop for NoCliOnPath {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            Some(value) => std::env::set_var("PATH", value),
+            None => std::env::remove_var("PATH"),
+        }
+    }
+}
+
+/// Feature 026, T088 (FR-010): the reason a start failed reaches somewhere the user can read it.
+///
+/// The daemon has computed this sentence since T076 and `session_start.rs` has gated its wording
+/// since then. What §B's manual pass found was that it stops at the wire: the bar reads `failed`,
+/// and the sentence naming the CLI is in the row, the terminal and the hover state exactly nowhere.
+/// `wire_to_lifecycle` mapped `Failed { reason, .. }` onto a then-unit `SessionLifecycle::Failed`,
+/// so the text was dropped at the boundary and every per-side test stayed green — the shape this
+/// file exists for. (`010` BUG-017 later gave the domain variant the fields, so the text now
+/// survives the crossing; the notification below is still what a user can actually read.)
+///
+/// So the assertion is on what a user can read, not on the lifecycle: the client's notification
+/// queue, whose visible message must be the daemon's own sentence, naming the CLI in the
+/// human-readable form FR-010 requires ("GitHub Copilot", not `copilot`).
+#[test]
+fn the_reason_a_start_failed_reaches_the_client_as_something_to_read() {
+    let _path = NoCliOnPath::new();
+    let cli = micold_core::session::AiCli::Copilot;
+    let provider = cli.provider();
+    assert!(
+        !provider.is_available(),
+        "the guard has to actually hide {}, or this test proves nothing",
+        provider.command()
+    );
+
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(0x0FF0));
+    let state = DaemonState::new(catalog_with_ai_cli_session(
+        cli,
+        project.path(),
+        store.path(),
+        id,
+    ));
+    let mut core = State::default();
+
+    // Nothing said yet — otherwise the assertion below could be satisfied by a banner that was
+    // already there.
+    reconcile_catalog(&mut core, &state.welcome_payload().0, false);
+    assert_eq!(
+        core.notifications.queue.visible(),
+        None,
+        "a session that has not been started has nothing to report"
+    );
+
+    state
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
+        .expect_err("the CLI is not installed, so the start must refuse");
+    reconcile_catalog(&mut core, &state.welcome_payload().0, false);
+
+    let shown = core
+        .notifications
+        .queue
+        .visible()
+        .expect(
+            "a start that failed must say why somewhere the user can read it — the bar's `failed` \
+             names no CLI, and FR-010 asks for the name in the register a sentence wants",
+        )
+        .clone();
+    assert_eq!(
+        shown.level,
+        micold_core::notify::Level::Error,
+        "an action the user asked for could not be completed"
+    );
+    assert!(
+        shown.message.contains(provider.display_name()),
+        "and the sentence must name the CLI as a person would (FR-010), got {:?}",
+        shown.message
+    );
+    assert!(
+        !shown.message.contains(provider.command()),
+        "in the human-readable form and not the executable one — {:?} reads as a shell error \
+         rather than as something to go and install; got {:?}",
+        provider.command(),
+        shown.message
+    );
+
+    // Said once. `reconcile_catalog` runs on every `CatalogChanged`, and since T086 an activity
+    // badge moving is one — a level-triggered banner would be a new one every few seconds for as
+    // long as the session stays failed.
+    core.notifications.queue.dismiss();
+    reconcile_catalog(&mut core, &state.welcome_payload().0, false);
+    reconcile_catalog(&mut core, &state.welcome_payload().0, false);
+    assert_eq!(
+        core.notifications.queue.visible(),
+        None,
+        "an unchanged failure is not news on every snapshot that carries it"
+    );
+
+    assert!(
+        state.live_session(id).is_none(),
+        "and nothing was started behind the message"
+    );
+}
+
+/// A catalog holding one AI-CLI session on `provider`, at the root of a real project directory.
+fn catalog_with_ai_cli_session(
+    provider: micold_core::session::AiCli,
+    project_dir: &std::path::Path,
+    store_dir: &std::path::Path,
+    id: SessionId,
+) -> Catalog {
+    let mut sessions = BTreeMap::new();
+    sessions.insert(
+        project_dir.to_path_buf(),
+        vec![Session::restored(
+            id,
+            SessionLocation::Default,
+            SessionLabel::Named("Refactor the parser".into()),
+            TerminalMode::AiCli,
+            provider,
+        )],
+    );
+    let projects_path = store_dir.join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&Workspace {
+            projects: vec![Project::new(
+                project_dir.to_path_buf(),
+                true,
+                Availability::Available,
+            )],
+            active: Some(project_dir.to_path_buf()),
+            sessions,
+            worktree_names: BTreeMap::new(),
+            ..Default::default()
+        })
+        .unwrap();
+    Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(store_dir.join("settings.json"))),
+    )
 }

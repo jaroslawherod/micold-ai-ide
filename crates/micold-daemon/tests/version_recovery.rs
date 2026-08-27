@@ -12,7 +12,7 @@ use std::path::Path;
 
 use micold_core::project::{Availability, Project};
 use micold_core::session::{
-    Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, TerminalMode,
+    AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, TerminalMode,
 };
 use micold_core::settings::FakeSettingsStore;
 use micold_core::store::FakeProjectStore;
@@ -21,7 +21,13 @@ use micold_daemon::catalog::Catalog;
 
 /// A restored (loaded-from-disk) session — `Idle`, as every durable record loads.
 fn restored(id: SessionId, mode: TerminalMode) -> Session {
-    Session::restored(id, SessionLocation::Default, SessionLabel::Pending, mode)
+    Session::restored(
+        id,
+        SessionLocation::Default,
+        SessionLabel::Pending,
+        mode,
+        AiCli::ClaudeCode,
+    )
 }
 
 /// A catalog freshly loaded from `sessions` under `project` — the just-restarted service's state.
@@ -63,6 +69,7 @@ fn lifecycle_of(catalog: &Catalog, id: SessionId) -> SessionLifecycle {
         .find(|s| s.id == id)
         .expect("session present")
         .lifecycle
+        .clone()
 }
 
 #[test]
@@ -90,8 +97,9 @@ fn restart_presents_previously_running_sessions_as_interrupted_resumable() {
     // The service startup step: only sessions the provider has a recorded conversation for are
     // resumable. We inject that decision deterministically.
     let with_conversation: BTreeSet<SessionId> = [was_running].into_iter().collect();
-    let marked =
-        catalog.present_interrupted_resumable(|id, _cwd, _mode| with_conversation.contains(&id));
+    let marked = catalog.present_interrupted_resumable(|id, _cwd, _mode, _provider| {
+        with_conversation.contains(&id)
+    });
 
     assert_eq!(marked, 1, "only the session with a conversation is marked");
     assert_eq!(
@@ -131,15 +139,21 @@ fn present_interrupted_resumable_never_overrides_a_running_or_failed_session() {
     let mut sessions = vec![restored(failed, TerminalMode::AiCli)];
     // Force it Failed via the crash path (three unexpected exits).
     for _ in 0..3 {
-        sessions[0].on_unexpected_exit();
+        sessions[0].on_unexpected_exit("exit status 1");
     }
-    assert_eq!(sessions[0].lifecycle, SessionLifecycle::Failed);
+    assert!(matches!(
+        sessions[0].lifecycle,
+        SessionLifecycle::Failed { .. }
+    ));
 
     let mut catalog = loaded_catalog(project.path(), sessions);
-    let marked = catalog.present_interrupted_resumable(|_id, _cwd, _mode| true);
+    let marked = catalog.present_interrupted_resumable(|_id, _cwd, _mode, _provider| true);
 
     assert_eq!(marked, 0);
-    assert_eq!(lifecycle_of(&catalog, failed), SessionLifecycle::Failed);
+    assert!(matches!(
+        lifecycle_of(&catalog, failed),
+        SessionLifecycle::Failed { .. }
+    ));
 }
 
 #[test]
@@ -189,8 +203,9 @@ fn a_session_with_a_conversation_is_restored_to_the_ai_cli_despite_a_regular_mod
 
     // Only the damaged one has an AI-CLI conversation on disk.
     let with_conversation: BTreeSet<SessionId> = [damaged].into_iter().collect();
-    let marked =
-        catalog.present_interrupted_resumable(|id, _cwd, _mode| with_conversation.contains(&id));
+    let marked = catalog.present_interrupted_resumable(|id, _cwd, _mode, _provider| {
+        with_conversation.contains(&id)
+    });
 
     assert_eq!(marked, 1, "only the session with a conversation is marked");
     assert_eq!(

@@ -334,14 +334,17 @@ fn the_arm_scan_finds_the_reducer_it_is_meant_to_read() {
     // has stopped parsing reports.
     //
     // Lowering a floor weakens it, so the named check below is what takes over the work. It does
-    // not decay: `ScrolledBeneathOverlay` and `EscapePressed` are cross-cutting, which is exactly
-    // why 028 leaves them at the root, and a scan that has gone quiet cannot produce either name.
+    // not decay: `EscapePressed` and `OverlayTransitionFinished` are cross-cutting, which is
+    // exactly why 028 leaves them at the root, and a scan that has gone quiet cannot produce
+    // either name. It named `ScrolledBeneathOverlay` as the first of the pair until feature 021
+    // T081 deleted that variant; `OverlayTransitionFinished` replaces it and is cross-cutting for
+    // the same reason — a transition ends for whichever surface was animating, not for a feature.
     assert!(
         total >= 12,
         "the scan found only {total} arms in the root reducer — the root ends feature 028 with \
          15, and a scan that has gone quiet reports the root as routing only"
     );
-    for expected in ["ScrolledBeneathOverlay", "EscapePressed"] {
+    for expected in ["OverlayTransitionFinished", "EscapePressed"] {
         assert!(
             routing.iter().chain(&deciding).any(|arm| arm == expected),
             "the scan did not find the root's `{expected}` arm, so it is not reading the reducer \

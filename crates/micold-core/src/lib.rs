@@ -27,6 +27,7 @@ pub mod overlay;
 pub mod project;
 pub mod protocol;
 pub mod provider;
+pub mod sandbox;
 pub mod selector;
 pub mod session;
 pub mod settings;

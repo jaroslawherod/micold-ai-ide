@@ -20,6 +20,18 @@
 //! one. Nine rows replace nine variants. No property changed, nothing was weakened, and the
 //! assertion-freeze check flags the file with this paragraph as its explanation.
 
+//! ## Restated again at feature 021 T081, and why (FR-027)
+//!
+//! The scroll-dismissal tests below sent `Message::ScrolledBeneathOverlay`, a variant no widget
+//! ever emitted: the running application reports a sidebar scroll as `SidebarScrolled(offset)` and
+//! a tab-strip scroll as `TabStripScrolled`, and both arms call the same
+//! `dismiss_on_scroll_beneath()`. So change 2 below — "non-modal surfaces gained scroll dismissal"
+//! — was asserted exclusively through a door the user cannot open, and would have kept passing if
+//! the live doors had been unwired. T080 established on a running build that they are wired; T081
+//! deletes the unreachable variant and asks these tests through `SidebarScrolled`, the message the
+//! worktree list they describe actually sends. Every assertion is unchanged; only the stimulus is,
+//! and it is now the real one.
+
 use micold_client::features::help;
 use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project;
@@ -27,6 +39,7 @@ use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::sidebar;
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::PathBuf;
 
@@ -36,6 +49,10 @@ use micold_client::features::worktree::WorktreeRenameDraft;
 use micold_core::overlay::{dismisses, Surface, Trigger};
 use micold_core::selector::Selector;
 use micold_core::session::SessionId;
+
+/// A sidebar scroll offset, in whole pixels. Any non-zero value works — the dismissal rule reads
+/// *that* a scroll happened, never how far.
+const SCROLLED: u32 = 120;
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
 fn open_dialog(state: &State) -> Option<&'static str> {
@@ -93,7 +110,7 @@ fn a_dialog_still_survives_scrolling_behind_it() {
     assert!(!dismisses(Surface::Dialog, Trigger::ScrollBeneath));
 
     let mut state = with_about();
-    state.update(Message::ScrolledBeneathOverlay);
+    state.update(Message::Sidebar(SidebarMsg::Scrolled(SCROLLED)));
     assert_eq!(
         open_dialog(&state),
         Some("about"),
@@ -113,7 +130,7 @@ fn a_menu_now_closes_when_the_list_beneath_it_scrolls() {
     assert!(dismisses(Surface::NonModal, Trigger::ScrollBeneath));
 
     let mut state = with_help_menu();
-    state.update(Message::ScrolledBeneathOverlay);
+    state.update(Message::Sidebar(SidebarMsg::Scrolled(SCROLLED)));
     assert!(
         !state.help.help_menu_open,
         "the overflow menu must close when content scrolls beneath it"
@@ -142,7 +159,7 @@ fn every_non_modal_surface_closes_on_a_scroll_beneath() {
         ..State::default()
     };
 
-    state.update(Message::ScrolledBeneathOverlay);
+    state.update(Message::Sidebar(SidebarMsg::Scrolled(SCROLLED)));
 
     assert!(!state.help.help_menu_open, "overflow menu");
     assert!(!state.project.switcher_open, "project switcher");
@@ -200,11 +217,6 @@ fn escape_still_reaches_exactly_what_it_used_to() {
             Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
         ),
         (
-            "settings",
-            |s| s.settings.settings_draft = Some(Default::default()),
-            Message::Settings(SettingsMsg::Cancelled),
-        ),
-        (
             "confirm_worktree_delete",
             |s| s.worktree.delete_target = Some("wt".to_string()),
             Message::Worktree(WorktreeMsg::DeleteCancelled),
@@ -243,13 +255,17 @@ fn escape_still_reaches_exactly_what_it_used_to() {
     }
 }
 
-/// Scrolling with nothing open must do nothing at all. The scrollable reports every scroll
-/// unconditionally, so the reducer sees this message constantly; it must be inert.
+/// Scrolling with nothing open must touch no surface. The scrollable reports every scroll
+/// unconditionally, so the reducer sees this message constantly; its dismissal half must be inert.
+///
+/// "Inert" is scoped to the overlay, not to the whole state: since T081 this asks through
+/// `SidebarScrolled`, whose arm also records the offset the app bar's elevation derives from
+/// (FR-025a). That is the message's other job and not this file's subject.
 #[test]
 fn scrolling_with_nothing_open_changes_nothing() {
     let mut state = State::default();
     let before = state.clone();
-    state.update(Message::ScrolledBeneathOverlay);
+    state.update(Message::Sidebar(SidebarMsg::Scrolled(SCROLLED)));
     assert_eq!(
         open_dialog(&state),
         open_dialog(&before),

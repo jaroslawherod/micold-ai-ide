@@ -25,13 +25,14 @@
 
 use micold_client::app::{Message, State};
 use micold_client::features::session::Msg as SessionMsg;
-use micold_core::session::{Session, SessionLocation};
+use micold_core::session::{AiCli, Session, SessionLocation};
 
 /// One session, displayed, with a terminal in front of the user.
 fn showing_a_terminal() -> State {
     let mut s = State::default();
     s.update(Message::Session(SessionMsg::Started(Session::start_new(
         SessionLocation::Worktree("feat-x".to_string()),
+        AiCli::ClaudeCode,
     ))));
     s
 }

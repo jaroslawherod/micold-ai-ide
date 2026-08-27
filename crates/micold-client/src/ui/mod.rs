@@ -18,11 +18,25 @@ pub(crate) mod material;
 /// Named individually rather than by opening the module, which stays `pub(crate)`. The binary
 /// composes the `full` measurement scene and a ripple only starts from a press, so it needs the one
 /// traversal that can reach a ripple's per-instance state — and nothing else from the library.
+pub use focus::{into_view as focus_into_view, scroll_focused_into_view};
 pub use material::ripple_pulse;
 pub use material::target_offset_delta;
+/// The bring-up indicator, and the wording it shows. Named individually — like the ripple
+/// below — because `tests/sandbox_progress.rs` checks both halves and the module itself has
+/// no reason to be public.
+pub use sandbox_status::{stage_line, view as sandbox_indicator, StageLine};
 pub(crate) mod project_selector;
 pub(crate) mod rename;
-pub(crate) mod settings_form;
+mod sandbox_status;
+/// The Settings sections — one module per page of the full-surface view (feature 027, FR-026).
+pub(crate) mod settings;
+// The limits' *decision* — which appear, which are editable, what a disabled one says — re-exported
+// like `stage_line` above, because `tests/sandbox_limits.rs` checks it and a view function is the
+// one thing in this crate a test cannot look inside.
+pub use settings::daemon::{
+    limits as sandbox_limits, network_warning, LimitControl, NO_OUTBOUND_WARNING,
+};
+pub(crate) mod settings_view;
 mod shell;
 mod sidebar;
 // The sidebar list's scroll viewport, by name — the binary addresses `scroll_to` to it when a
@@ -43,6 +57,7 @@ use crate::features::connection::Msg as ConnectionMsg;
 use crate::features::help::Msg as HelpMsg;
 use crate::features::notifications::Msg as NotificationsMsg;
 use crate::features::project::Msg as ProjectMsg;
+use crate::features::sandbox::Msg as SandboxMsg;
 use crate::features::session::Msg as SessionMsg;
 use crate::features::sidebar::Msg as SidebarMsg;
 use crate::features::worktree::Msg as WorktreeMsg;
@@ -146,6 +161,58 @@ fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a,
         .into()
 }
 
+/// The sandbox's standing conditions, in the same slot and for the same reason (FR-035b, S-3).
+///
+/// A failed sandbox and a session running outside one are *conditions*: they are true until
+/// somebody makes them false. The notification queue is the wrong home for both — it times out and
+/// it is dismissible, so it tells the user once about something that outlives the telling. The
+/// spec's own edge case is a user who takes the one-occurrence fallback on every launch and never
+/// notices sandboxing has been off for weeks; a toast is how that happens.
+///
+/// Zero-height when there is nothing standing, so a working sandbox costs no space.
+fn sandbox_banner<'a>(
+    sandbox: &crate::features::sandbox::Sandbox,
+    roles: Roles,
+) -> Element<'a, Message> {
+    use micold_core::sandbox::lifecycle::SandboxState;
+
+    let Some(notice) = sandbox.persistent_notice() else {
+        return Space::new()
+            .width(Length::Fixed(0.0))
+            .height(Length::Fixed(0.0))
+            .into();
+    };
+
+    // Each condition gets the action that ends it, because a banner that only states a problem is
+    // a banner the user learns to ignore.
+    let banner = if sandbox.fallback.is_some() {
+        material::ConnectionBanner::new("Running without the sandbox", notice, roles).action(
+            "Try the sandbox again",
+            Message::Sandbox(SandboxMsg::RestartRequested),
+        )
+    } else {
+        match &sandbox.state {
+            SandboxState::Stale(_) => {
+                material::ConnectionBanner::new("The sandbox is out of date", notice, roles).action(
+                    "Restart the sandbox",
+                    Message::Sandbox(SandboxMsg::RestartRequested),
+                )
+            }
+            _ => material::ConnectionBanner::new("The sandbox did not start", notice, roles)
+                // Offered, never taken on our behalf (FR-035a). The button *is* the consent.
+                .action(
+                    "Run without it for now",
+                    Message::Sandbox(SandboxMsg::FallbackAccepted),
+                ),
+        }
+    };
+
+    container(banner)
+        .padding([spacing::SM, spacing::MD])
+        .width(Length::Fill)
+        .into()
+}
+
 /// Render the main window: the top app bar over the shell body (active project / empty state),
 /// with any floating surface stacked on top. Every surface is styled from the active color
 /// scheme's design tokens.
@@ -164,6 +231,7 @@ pub fn view<'a>(
     dismissing: Option<&'a crate::overlay::registry::Closing>,
     env_include_outcome: &'a micold_core::env_include::EnvIncludeOutcome,
     connection: &ConnectionStatus,
+    sandbox: &crate::features::sandbox::Sandbox,
 ) -> Element<'a, Message> {
     let scheme = state.color_scheme();
     let roles = tokens::roles(scheme);
@@ -172,7 +240,24 @@ pub fn view<'a>(
     // With a project open, show the worktree sidebar beside the main area; the main area is
     // the embedded terminal when a session is active (FR-012), else the project surface. The
     // sidebar slides in/out and is resizable; the main content fades when it changes.
-    let body: Element<'a, Message> = if state.workspace.active_project().is_some() {
+    // Settings takes the whole content area rather than floating over it (feature 027, FR-026).
+    // Checked before the project branch, and returning early from the same `body` binding, so that
+    // the app bar and the connection banner below still frame it — a full-surface view is not a
+    // separate window, and the way out of it has to stay visible.
+    let body: Element<'a, Message> = if let Some(draft) = state.settings.settings_draft.as_ref() {
+        material::ViewFade::new(
+            settings_view::view(
+                draft,
+                env_include_outcome,
+                &state.session.available_providers,
+                state.window.focused_field,
+                scheme,
+            ),
+            bg,
+        )
+        .showing(main_content_key(state))
+        .into()
+    } else if state.workspace.active_project().is_some() {
         let main_inner: Element<'a, Message> = if state.session.active.is_some() {
             terminal::pane(state, grid, selection, display_offset, scheme)
         } else {
@@ -210,6 +295,11 @@ pub fn view<'a>(
         column![
             toolbar::view(state, scheme),
             connection_banner(connection, roles),
+            sandbox_banner(sandbox, roles),
+            // Same reasoning as the banners above it, and the same slot: a bring-up in flight is a
+            // condition of the whole window, not of whichever body branch happens to be taken
+            // (T043, SC-004).
+            sandbox_status::view(&sandbox.state, roles),
             body
         ],
         material::SurfaceKind::Window,
@@ -395,6 +485,26 @@ pub fn view<'a>(
             )
         });
 
+    // The "start a session on…" list (feature 026, FR-004). Anchored at the chevron that opened it
+    // and clamped like every other menu here; its items are the *available* CLIs, named the
+    // human-readable way, because a menu entry is a sentence and not a label in a width budget.
+    let session_start_menu: Option<cdk::overlay::Surface<'a, Message>> =
+        state.session.start_menu.as_ref().map(|menu| {
+            let items = session_start_menu_items(state, &menu.location);
+            let (x, y) = crate::features::project::clamp_menu_anchor(
+                menu.anchor,
+                material::menu_panel_size(items.len()),
+                state.window.window_size,
+            );
+            material::MenuOverlay::new(
+                items,
+                Message::Session(SessionMsg::StartMenuDismissed),
+                roles,
+            )
+            .anchor(iced::Point::new(x as f32, y as f32))
+            .into()
+        });
+
     // The dialog body for whatever is open — or, if one has just closed, the snapshot it left
     // behind (captured before the core cleared its live state) so the exit has something to draw
     // (FR-002). Each of these builds only the dialog; the transition around it belongs to `Modal`,
@@ -471,6 +581,7 @@ pub fn view<'a>(
         .push_maybe(worktree_menu)
         .push_maybe(session_menu)
         .push_maybe(shell_instance_menu)
+        .push_maybe(session_start_menu)
         .push_maybe(modal)
         .push_maybe(snackbar)
         .into()
@@ -593,6 +704,32 @@ pub(crate) fn strip_tab_menu_labels(
 /// The items in a session's right-click context menu (bugfix BUG-003): "Close" archives (kept,
 /// hidden, never resurrected by reconciliation — FR-015a/FR-020c); "Remove" permanently deletes,
 /// behind a confirm dialog (FR-015c).
+/// The AI CLIs a session can be started on, for one location (feature 026, T033).
+///
+/// Named by `display_name()` — through `Display`, which is a menu's register — and **only** the
+/// available ones: an uninstalled CLI is never offered (FR-006). The list is
+/// `State::offered_providers`, the same function the Settings select reads, so the two surfaces
+/// cannot disagree about what exists.
+fn session_start_menu_items(
+    state: &State,
+    location: &micold_core::session::SessionLocation,
+) -> Vec<material::MenuItem<Message>> {
+    state
+        .session
+        .offered_providers()
+        .into_iter()
+        .map(|provider| {
+            material::MenuItem::labeled(
+                provider.to_string(),
+                Message::Session(SessionMsg::StartRequested {
+                    location: location.clone(),
+                    provider,
+                }),
+            )
+        })
+        .collect()
+}
+
 fn session_menu_items(id: SessionId) -> Vec<material::MenuItem<Message>> {
     vec![
         material::MenuItem::new(
@@ -612,6 +749,13 @@ fn session_menu_items(id: SessionId) -> Vec<material::MenuItem<Message>> {
 /// on every re-render — the same question the old `MotionKey::Main` reset answered, now asked of
 /// the component that owns the track.
 fn main_content_key(state: &State) -> u64 {
+    // Settings is a content state like any other, so switching into and out of it crossfades the
+    // way opening a project does. A sentinel rather than the next small integer: the session arm
+    // below mixes a real id into the low bits, and a key that a session could collide with would
+    // suppress the fade on exactly the transition it is for.
+    if state.settings.settings_draft.is_some() {
+        return u64::MAX;
+    }
     match (state.workspace.active_project(), state.session.active) {
         (None, _) => 0,
         (Some(_), None) => 1,
@@ -663,19 +807,71 @@ fn surface_key(id: crate::overlay::SurfaceId) -> u64 {
 /// What is left here is the one thing that genuinely belongs to the view layer: whether to hold a
 /// keyboard listener open at all. It is held only while Escape has something to close, so pressing
 /// it with nothing open stays as inert as it was.
+///
+/// # Tab belongs here for the same reason (feature 027, FR-030)
+///
+/// Moving the keyboard's focus is the other thing that is about *whether a listener is open at
+/// all* rather than about any one surface, and it is subject to the same terminal rule: inside a
+/// session Tab is a tab character the shell wants, not a request to leave the field.
+///
+/// It is a second subscription rather than a second arm of the same closure because of the
+/// `TypeId` rule above — one closure, one identity, and this one has to stay open in states where
+/// Escape's does not (nothing floating, but there is still a form to tab through).
 pub fn subscription(state: &State) -> Subscription<Message> {
-    if state.terminal_focused() || crate::app::on_escape(state).is_none() {
+    // Feature 006 (FR-009): the focused terminal owns every key, Tab and Escape included.
+    if state.terminal_focused() {
         return Subscription::none();
     }
-    iced::keyboard::listen().filter_map(|event| {
-        use iced::keyboard::{key::Named, Event, Key};
-        matches!(
-            event,
-            Event::KeyPressed {
-                key: Key::Named(Named::Escape),
-                ..
-            }
-        )
-        .then_some(Message::EscapePressed)
-    })
+    let mut subs = vec![focus_traversal()];
+    // Held only while Escape has something to close, so pressing it with nothing open stays as
+    // inert as it was.
+    if crate::app::on_escape(state).is_some() {
+        subs.push(escape_dismissal());
+    }
+    Subscription::batch(subs)
+}
+
+/// Escape, reported as having happened; the reducer asks the registry what it reaches.
+fn escape_dismissal() -> Subscription<Message> {
+    iced::keyboard::listen().filter_map(escape_message)
+}
+
+/// Tab and Shift+Tab, as a request to move the keyboard's focus.
+fn focus_traversal() -> Subscription<Message> {
+    iced::keyboard::listen().filter_map(focus_move_message)
+}
+
+/// [`Message::EscapePressed`] for a press of Escape, and nothing for anything else.
+///
+/// A free function, not a closure written inline: `Subscription::filter_map` takes its identity
+/// from the mapper's `TypeId`, so each of the two listeners needs a distinct named one.
+fn escape_message(event: iced::keyboard::Event) -> Option<Message> {
+    use iced::keyboard::{key::Named, Event, Key};
+    matches!(
+        event,
+        Event::KeyPressed {
+            key: Key::Named(Named::Escape),
+            ..
+        }
+    )
+    .then_some(Message::EscapePressed)
+}
+
+/// Which way Tab moves the focus, if this event is a Tab at all.
+///
+/// Public to the crate so `tests/` can state the mapping without a runtime: the defect this
+/// answers (T075) was that *nothing* was listening, which no assertion about focus order could
+/// have caught — the order was fine, the key never arrived.
+pub fn focus_move_message(event: iced::keyboard::Event) -> Option<Message> {
+    use iced::keyboard::{key::Named, Event, Key};
+    match event {
+        Event::KeyPressed {
+            key: Key::Named(Named::Tab),
+            modifiers,
+            ..
+        } => Some(Message::FocusMoved {
+            forward: !modifiers.shift(),
+        }),
+        _ => None,
+    }
 }

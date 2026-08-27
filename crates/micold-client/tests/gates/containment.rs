@@ -409,6 +409,7 @@ fn the_recorded_scroll_overflow_is_the_sidebar_list() {
             None,
             &micold_core::env_include::EnvIncludeOutcome::Disabled,
             &micold_client::features::connection::ConnectionStatus::Connected,
+            &micold_client::features::sandbox::Sandbox::default(),
         );
 
         let renderer = lay::renderer();
@@ -662,6 +663,7 @@ fn the_recorded_escapes_are_the_accordion_reveal() {
             None,
             &micold_core::env_include::EnvIncludeOutcome::Disabled,
             &micold_client::features::connection::ConnectionStatus::Connected,
+            &micold_client::features::sandbox::Sandbox::default(),
         );
 
         let renderer = lay::renderer();

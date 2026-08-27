@@ -14,13 +14,14 @@
 //! Both binaries compile against this one definition; the `SCHEMA_HASH` guard (protocol.md §4) makes
 //! any wire-visible edit here refuse a mismatched peer.
 
+use std::fmt;
 use std::ops::Range;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
-use crate::session::{SessionId, SessionLabel, ShellInstanceId};
+use crate::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use crate::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
 
 // ---------------------------------------------------------------------------------------------
@@ -36,6 +37,44 @@ pub enum SessionProcess {
     Primary,
     /// An additional shell instance, by id.
     Shell(ShellInstanceId),
+}
+
+/// The handshake secret as it travels on the wire, in a wrapper that will not print it.
+///
+/// This field used to be a bare `String`, and [`ClientMsg`] derives `Debug` — so one
+/// `tracing::debug!(?msg)` anywhere on the receive path would have written the token into the
+/// daemon's log verbatim, and a `{err:?}` on a decode failure could have carried it into a bug
+/// report. [`crate::protocol::auth::Token`] has had an opaque `Debug` since it was introduced, for
+/// exactly that reason; the protection was being dropped at the moment the value crossed onto the
+/// wire, which is the moment it reaches the most code (feature 027, T118 / rule P-3).
+///
+/// `#[serde(transparent)]`: the encoding is byte-for-byte what a `String` produced, in JSON and in
+/// postcard alike. This is a `Debug` fix, not a wire change.
+///
+/// Declared here rather than beside `Token` deliberately. `SCHEMA_HASH` is computed over the text
+/// of this file; a wire-visible type defined elsewhere could change its serde representation
+/// without moving the hash, and two builds that disagree would then shake hands.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PresentedToken(String);
+
+impl PresentedToken {
+    /// Wrap a token for presentation.
+    pub fn new(token: impl Into<String>) -> Self {
+        Self(token.into())
+    }
+
+    /// The secret itself. Every caller of this is a place to check when auditing P-3.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for PresentedToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Not even a prefix: a partial leak is still a leak when it shrinks the search space.
+        f.write_str("PresentedToken(<redacted>)")
+    }
 }
 
 /// A message from a client to the daemon.
@@ -54,6 +93,20 @@ pub enum ClientMsg {
         /// release, wire-visible or not, so a same-contract `.deb` upgrade over an already-running
         /// daemon is still detected (FR-022a, BUG-002).
         client_package_version: String,
+        /// The shared secret, when the daemon is expected to require one (feature 027, R1).
+        ///
+        /// `None` for the host-process placement, whose `0700`-guarded socket authenticates by
+        /// filesystem permission already. `Some` for the sandbox, whose loopback TCP transport
+        /// authenticates nobody — which is why this field and the version bump arrive together.
+        auth_token: Option<PresentedToken>,
+        /// The client's compiled [`crate::protocol::version::BUILD_FINGERPRINT`] (feature 027, R8).
+        client_fingerprint: String,
+        /// Whether a fingerprint mismatch is a refusal.
+        ///
+        /// Set by the **client**, because the client is what knows where the daemon's image came
+        /// from: a locally built one shares this client's working tree and has no business
+        /// disagreeing, while a released one was built separately and legitimately differs.
+        require_fingerprint_match: bool,
     },
     /// Attach to a project. `force = true` is a confirmed takeover, only sent after explicit user
     /// confirmation (FR-023).
@@ -214,6 +267,22 @@ pub enum ClientMsg {
         /// Worktree directory name that would be created, for the directory-clash check.
         dir_name: String,
     },
+    /// Ask whether `path` is the ROOT of a git repository — the open-project gate (FR-001a) —
+    /// answered by the daemon's git rather than the client's (feature 027, research R2 part 2).
+    ///
+    /// Read-only: the daemon runs `git rev-parse --show-toplevel` and mutates nothing.
+    ///
+    /// The client asks this only when it has no git view of the daemon's filesystem: a Windows
+    /// host cannot mount `C:\Users\u\p` at that path inside a Linux container, so the two sides
+    /// see different absolute paths and git's worktree metadata — which stores absolute paths —
+    /// would disagree. A remote daemon has no shared filesystem at all. On Linux and macOS the
+    /// mount is the identity and the client answers this itself, without a round trip.
+    RepoRootQuery {
+        /// Correlation id.
+        req: u64,
+        /// The directory the user chose, **as the daemon will see it**.
+        path: PathBuf,
+    },
     /// List every local and remote-tracking branch, annotated with why each is unavailable, for
     /// the existing-branch picker (feature 016, FR-011). Reads local ref storage only — the daemon
     /// never contacts a remote for this (FR-020).
@@ -278,6 +347,11 @@ pub enum ClientMsg {
         project: PathBuf,
         /// Worktree directory name.
         worktree_dir: String,
+        /// Which AI CLI to run (feature 026, FR-004). The **client** resolves default-or-override
+        /// and sends the answer, so no launch depends on the two processes agreeing about a file.
+        /// The daemon does read `settings.json` — `Catalog::new` loads it at boot — it is simply
+        /// not asked to make this choice.
+        provider: AiCli,
     },
     /// Delete a session record.
     SessionDelete {
@@ -300,6 +374,8 @@ pub enum ClientMsg {
         env_include_script_path: Option<String>,
         /// New environment-include timeout in seconds, or `None` to leave unchanged.
         env_include_timeout_secs: Option<u64>,
+        /// New default AI CLI, or `None` to leave unchanged (feature 026, FR-003).
+        default_ai_cli: Option<AiCli>,
     },
 
     // --- Diagnostics ---
@@ -548,6 +624,25 @@ pub enum RefusalReason {
         /// The detail.
         detail: String,
     },
+    /// The handshake presented no token, or the wrong one (feature 027, R1).
+    ///
+    /// Carries nothing about *how* wrong the token was — no length, no prefix, no distinction
+    /// between absent and incorrect. A refusal that described the difference would be an oracle for
+    /// recovering the token one guess at a time.
+    AuthRejected,
+    /// The daemon was built from a different working tree than the client, and the client said that
+    /// was a refusal because the image is a local build (feature 027, FR-024d, research R8).
+    ///
+    /// Names the image so the remedy can point at something the user can act on: the three
+    /// constants the handshake already compares all match here, which is exactly why this exists.
+    StaleDevImage {
+        /// The client's fingerprint.
+        client_fingerprint: String,
+        /// The daemon's fingerprint.
+        daemon_fingerprint: String,
+        /// The image reference the daemon is running from, when the client knows it.
+        image: String,
+    },
 }
 
 /// The projected summary of a single session, sent for **every** session so the client can render
@@ -566,6 +661,13 @@ pub struct SessionSummary {
     pub lifecycle: WireLifecycle,
     /// Derived activity signal.
     pub activity: ActivitySignal,
+    /// Which AI CLI this session runs (feature 026, FR-016), carried outward the way
+    /// `worktree_dir` and `title` already are so the client can label rows without a second
+    /// request.
+    ///
+    /// **Not** the way `mode` does — `mode` does not travel at all, and citing it as the precedent
+    /// sends a reader looking for a field that is not there.
+    pub provider: AiCli,
     /// The input serial the service expects next for this session — its
     /// [`InputReceiver`](crate::input::InputReceiver) high-water mark (FR-028a, BUG-006).
     ///
@@ -709,6 +811,14 @@ pub struct DaemonSettings {
     pub env_include_script_path: String,
     /// The environment-include sourcing timeout, in seconds.
     pub env_include_timeout_secs: u64,
+    /// Which AI CLI a new session runs when nothing is chosen for it (feature 026, FR-003).
+    ///
+    /// Service-owned, alongside the scrollback limit rather than beside `theme`. `settings.json`
+    /// has two writers and the split is by field: the daemon's `set_scrollback` and
+    /// `set_env_include` each persist their whole `Settings` struct from the copy loaded at boot,
+    /// so a client-written field is reverted by the next unrelated settings change. That is
+    /// already true of `theme`; this preference must not inherit it.
+    pub default_ai_cli: AiCli,
 }
 
 /// The result payload of a successful mutating request.
@@ -758,6 +868,16 @@ pub enum OperationResult {
     WorktreeExcluded {
         /// The path that is no longer shown.
         path: PathBuf,
+    },
+    /// The answer to [`ClientMsg::RepoRootQuery`] (feature 027, research R2 part 2).
+    ///
+    /// Carries the path back so a client that has moved on since asking — the user cancelled, or
+    /// chose a different folder — can tell that this answer is about something else.
+    RepoRoot {
+        /// The directory that was asked about.
+        path: PathBuf,
+        /// Whether the daemon's git calls it a repository root.
+        is_repo_root: bool,
     },
 }
 

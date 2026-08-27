@@ -83,7 +83,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use iced::advanced::layout::{self, Layout};
-use iced::advanced::widget::{tree, Operation, Tree};
+use iced::advanced::widget::{operation, tree, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::widget::{container, row, Space};
 use iced::{alignment, keyboard, Element, Event, Length, Rectangle, Size, Vector};
@@ -213,6 +213,13 @@ enum Acted {
 struct SelectState {
     open: bool,
     highlight: Option<usize>,
+    /// Whether this control holds the keyboard (feature 027, FR-030).
+    ///
+    /// A third private fact rather than a supplied flag, for the reason `Select::active` is gone:
+    /// what the trigger draws is resolved inside [`Widget::layout`], where nothing a caller passed
+    /// can still be changed. It is also the honest owner — the traversal lands *here*, not on
+    /// anything the application can see.
+    focused: bool,
     /// The channel described in the module docs. Shared with the [`ListWatch`] built into the
     /// list, which is rebuilt every layout — so the cell lives here, where it survives.
     acted: Rc<Cell<Acted>>,
@@ -223,9 +230,46 @@ impl Default for SelectState {
         Self {
             open: false,
             highlight: None,
+            focused: false,
             acted: Rc::new(Cell::new(Acted::Nothing)),
         }
     }
+}
+
+/// The select joins the focus traversal as itself, rather than through a wrapper.
+///
+/// [`TakesTheKeyboard`](super::keyboard_focus::TakesTheKeyboard) is what a control gets wrapped in
+/// when it cannot hold focus; this one already owns widget state, already answers keys, and already
+/// decides its own appearance from that state — so wrapping it would add a second place the same
+/// fact lives.
+impl operation::Focusable for SelectState {
+    fn is_focused(&self) -> bool {
+        self.focused
+    }
+
+    fn focus(&mut self) {
+        self.focused = true;
+    }
+
+    fn unfocus(&mut self) {
+        self.focused = false;
+        // A list left hanging over the surface after the keyboard has moved on is a list nothing
+        // can dismiss: Escape reaches whatever has the focus now, and this control is no longer it.
+        self.open = false;
+        self.highlight = None;
+    }
+}
+
+/// The state layer the trigger carries.
+///
+/// A free function so the ordering can be asserted without a renderer. An open list reads at the
+/// pressed opacity (§7.7) and a select that merely holds the keyboard reads at the focus opacity;
+/// which of the two wins when both are true is [`Layer`](super::style::Layer)'s to say, exactly as
+/// it is for the checkbox — one control shows **one** layer.
+fn trigger_layer(open: bool, focused: bool) -> super::form_field::Layer {
+    use super::form_field::Layer;
+    let open = if open { Layer::Pressed } else { Layer::None };
+    open.max(if focused { Layer::Focused } else { Layer::None })
 }
 
 impl SelectState {
@@ -249,6 +293,7 @@ impl SelectState {
 struct View {
     open: bool,
     highlight: Option<usize>,
+    focused: bool,
     acted: Rc<Cell<Acted>>,
 }
 
@@ -294,15 +339,15 @@ where
 
     let mut field = super::FormField::new(trigger, r)
         // The indicator, answering for itself. Nothing supplies this and nothing can (FR-013).
-        .active(view.open)
+        //
+        // Thickened by the keyboard as well as by the list (FR-030). It is the same mark a focused
+        // text field carries, which is the point: a settings surface tabbed through must show the
+        // focus in one language, not one per control.
+        .active(view.open || view.focused)
         // An open list reads at the pressed opacity — §7.7 asks the select's open state to be
         // carried by the layer, and the component is what knows it. Hover is not passed: the
         // container sees the cursor for itself.
-        .layer(if view.open {
-            super::form_field::Layer::Pressed
-        } else {
-            super::form_field::Layer::None
-        })
+        .layer(trigger_layer(view.open, view.focused))
         // Every pressable surface ripples (feature 019, FR-024c) and this is one.
         .pressable(true)
         // A selection counts as content; an unset select rests its label like an empty input.
@@ -401,6 +446,7 @@ where
             View {
                 open: state.open,
                 highlight: state.highlight,
+                focused: state.focused,
                 acted: state.acted.clone(),
             }
         };
@@ -459,6 +505,10 @@ where
                 let over = cursor.is_over(trigger);
                 let chosen = self.chosen();
                 let state = tree.state.downcast_mut::<SelectState>();
+                // A press takes the keyboard and a press anywhere else gives it up, the same
+                // rule the text field beside it follows — so a form holding both behaves as one
+                // thing rather than as two controls with different ideas about what a click means.
+                state.focused = over;
                 if over {
                     // A press on the trigger toggles, whichever way round it is (contract §2).
                     state.open = !state.open;
@@ -532,6 +582,16 @@ where
         renderer: &iced::Renderer,
         operation: &mut dyn Operation,
     ) {
+        // Offered to the traversal only while there is something to choose from. A select with no
+        // options is a tab stop that opens an empty list, which is a dead end with a focus ring on
+        // it.
+        if !self.options.is_empty() {
+            operation.focusable(
+                None,
+                layout.bounds(),
+                tree.state.downcast_mut::<SelectState>() as &mut dyn operation::Focusable,
+            );
+        }
         if let (Some(content), Some(state)) = (self.content.as_mut(), tree.children.first_mut()) {
             content
                 .as_widget_mut()
@@ -568,9 +628,26 @@ where
     /// is its caller's, so the base publishes a message; this one's is its own, so it acts.
     fn keyboard(&self, tree: &mut Tree, key: &keyboard::Key, shell: &mut Shell<'_, M>) -> bool {
         let rows = self.options.len();
+        let chosen = self.chosen();
         let state = tree.state.downcast_mut::<SelectState>();
         if !state.open {
-            return false;
+            // Closed, but holding the keyboard: Enter and Space open the list, which is the only
+            // way a select reached by the traversal can be operated at all (FR-030). Both keys,
+            // because both are what a picker answers everywhere it exists — and neither is taken
+            // from anything else, since only one control holds the keyboard at a time.
+            let opens = matches!(
+                key,
+                keyboard::Key::Named(keyboard::key::Named::Enter | keyboard::key::Named::Space)
+            );
+            if !(state.focused && opens) {
+                return false;
+            }
+            state.open = true;
+            // Opening seeds the keyboard on the current choice, exactly as a press does.
+            state.highlight = chosen;
+            shell.invalidate_layout();
+            shell.invalidate_widgets();
+            return true;
         }
         // Every option a select offers can be chosen: `disabled_options` is deliberately not built
         // (data-model §2.1), so the highlighted row is always takeable.
@@ -761,5 +838,27 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for ListWatch<'_, M> {
             viewport,
             translation,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::form_field::Layer;
+    use super::*;
+
+    /// One control shows one layer, and which one is the enum's to say. A select that is both open
+    /// and focused must not blend two opacities into a tone no token names — the same rule
+    /// `style::checkbox` settles with the same `max`.
+    #[test]
+    fn the_trigger_shows_one_layer_and_open_outranks_focused() {
+        assert_eq!(trigger_layer(false, false), Layer::None);
+        assert_eq!(trigger_layer(false, true), Layer::Focused);
+        assert_eq!(trigger_layer(true, false), Layer::Pressed);
+        assert_eq!(
+            trigger_layer(true, true),
+            Layer::Pressed,
+            "an open select is already reading at the pressed opacity; adding the focus layer to \
+             it would say the same state twice",
+        );
     }
 }

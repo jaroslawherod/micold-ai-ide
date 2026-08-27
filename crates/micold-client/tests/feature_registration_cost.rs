@@ -71,15 +71,26 @@ use std::path::{Path, PathBuf};
 /// not a write and not a violation of FR-020 — FR-003a permits reads outright — but it is the
 /// coupling SC-002 is about: it is how "adding a feature" starts to mean "and edit that one too".
 ///
-/// One entry today, and it is a read of a pure helper: the sidebar renders a worktree's tags, and
-/// what a worktree's tags *are* is the worktree feature's to say. The alternative — the sidebar
-/// deriving tags itself — would be a second answer to the same question, which is worse.
-const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[(
-    "sidebar",
-    "worktree",
-    "worktree_tags — the sidebar renders a worktree row's tags and does not get to decide what \
-     they are (feature 021, T007)",
-)];
+/// Both entries today are reads of a pure type. The sidebar renders a worktree's tags, and what a
+/// worktree's tags *are* is the worktree feature's to say; settings names the field a rejected save
+/// is about, and which fields can hold the keyboard is the window's. In each case the alternative —
+/// the naming feature deriving it itself — would be a second answer to the same question, which is
+/// worse.
+const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
+    (
+        "sidebar",
+        "worktree",
+        "worktree_tags — the sidebar renders a worktree row's tags and does not get to decide what \
+         they are (feature 021, T007)",
+    ),
+    (
+        "settings",
+        "window",
+        "FieldId — a rejected save names the field it is about so the form can send the user to \
+         it (feature 027, FR-029), and which fields the window can focus is the window's to say. \
+         A second enum owned by settings would be the same list written twice (feature 027, T075)",
+    ),
+];
 
 /// The shared vocabulary any feature may name, because it belongs to no feature.
 ///
@@ -204,20 +215,26 @@ fn every_feature_module_is_registered_exactly_once() {
          and a declaration with no module does not compile."
     );
 
-    // ...and nowhere else declares one, which is what makes it *the* registration point.
+    // ...and nothing else under `features/` declares one, which is what makes it *the*
+    // registration point.
     //
-    // **`shell/mod.rs` declaring the same *name* is not a second registration** (feature 028,
-    // FR-020). A feature that must return an `iced::Task` puts that half in `src/shell/<n>.rs`
-    // and the pure half in `src/features/<n>.rs` — two different modules, in two different trees,
-    // that happen to share a name because they are two halves of one feature. `settings` is the
-    // first; `connection` is the second. The check below is textual, so without this it reads
-    // `pub mod settings;` in `shell/mod.rs` as a duplicate of `features/mod.rs`'s, which it is
-    // not. The exception is deliberately narrow: only `shell/mod.rs`, and only when the file it
-    // is declaring is really there, so a stray declaration naming no module still fails.
+    // Scoped to `features/`, plus any file anywhere that reaches in with `#[path]`. A module of the
+    // same name in **another** namespace is a different module, not a second registration (feature
+    // 028, FR-020). A feature that must return an `iced::Task` puts that half in `src/shell/<n>.rs`
+    // and the pure half in `src/features/<n>.rs` — two modules, in two trees, sharing a name
+    // because they are two halves of one feature: `settings`, `connection`, and feature 027's
+    // `sandbox`, which is `features::sandbox` (what the app knows about the container) beside
+    // `shell::sandbox` (the impure bring-up that drives the runtime). The check below is textual,
+    // so without the exception it reads `pub mod settings;` in `shell/mod.rs` as a duplicate of
+    // `features/mod.rs`'s, which it is not. The exception is deliberately narrow: only
+    // `shell/mod.rs`, and only when the file it is declaring is really there, so a stray
+    // declaration naming no module still fails.
     let shell_half = |m: &str| src_dir().join("shell").join(format!("{m}.rs")).is_file();
     let elsewhere: Vec<String> = sources()
         .iter()
-        .filter(|(path, _)| *path != "features/mod.rs")
+        .filter(|(path, code)| {
+            (path.starts_with("features/") || code.contains("#[path")) && *path != "features/mod.rs"
+        })
         .flat_map(|(path, code)| {
             modules
                 .iter()

@@ -39,6 +39,77 @@ pub fn daemon_build() -> String {
     format!("micold-daemon {}", env!("CARGO_PKG_VERSION"))
 }
 
+/// The environment variable naming the address a containerised daemon listens on (feature 027).
+///
+/// Set by the image, not by the client: the *container* is what knows it is a container. A daemon
+/// started on the host never sees it and takes the socket path it always did.
+pub const LISTEN_ADDR_ENV: &str = "MICOLD_LISTEN_ADDR";
+
+/// The address to listen on, when this daemon is containerised.
+fn tcp_listen_addr() -> Option<String> {
+    std::env::var(LISTEN_ADDR_ENV)
+        .ok()
+        .filter(|v| !v.is_empty())
+}
+
+/// Serve over loopback TCP (feature 027).
+///
+/// Binds `0.0.0.0` **inside the container**, which sounds alarming and is not: the container's
+/// network is a user-defined bridge, and the only way in from outside is the port the runtime
+/// publishes to `127.0.0.1` on the host. Binding the container's loopback instead would make the
+/// published port unreachable, because the runtime forwards to the container's bridge address.
+///
+/// What actually guards this listener is the shared secret — see `protocol::auth`. That is not a
+/// second line of defence; on this transport it is the only one.
+async fn serve_tcp(state: Arc<DaemonState>, addr: &str) -> io::Result<()> {
+    let listener = tokio::net::TcpListener::bind(addr).await.inspect_err(|e| {
+        tracing::error!(addr = %addr, error = %e, "failed to bind the sandbox listener");
+    })?;
+    tracing::info!(addr = %addr, "listening (sandboxed)");
+
+    loop {
+        let (conn, _peer) = listener.accept().await?;
+        // Terminal traffic is small and latency-sensitive; Nagle would coalesce a keystroke with
+        // whatever came next and show up to the user as input lag.
+        let _ = conn.set_nodelay(true);
+        let state = Arc::clone(&state);
+        tokio::spawn(async move {
+            if let Err(e) = serve_connection(state, conn).await {
+                tracing::warn!(error = %e, "connection ended with an error");
+            }
+        });
+    }
+}
+
+/// Adopt the authentication token, if this daemon was started with one (feature 027, research R1).
+///
+/// The path comes from the environment because the container is what supplies it: the runtime
+/// bind-mounts the host's `0600` token file at `MICOLD_TOKEN_PATH`, and the image sets that
+/// variable. A daemon started without it is the host-process placement, which authenticates by the
+/// `0700` directory guarding its socket and needs no token.
+///
+/// A token path that is set but unreadable is **fatal**. Falling back to accepting everyone would
+/// turn a misconfigured mount into an open port, silently, inside the feature whose purpose is
+/// containment.
+fn adopt_auth_token(state: &DaemonState) -> io::Result<()> {
+    let Some(path) = std::env::var_os(micold_core::protocol::auth::TOKEN_PATH_ENV) else {
+        return Ok(());
+    };
+    let path = std::path::PathBuf::from(path);
+    state.set_auth_token(&path).map_err(|e| {
+        io::Error::new(
+            e.kind(),
+            format!(
+                "{} names {} but it could not be read: {e}",
+                micold_core::protocol::auth::TOKEN_PATH_ENV,
+                path.display()
+            ),
+        )
+    })?;
+    tracing::info!("handshake authentication is enabled");
+    Ok(())
+}
+
 /// Run the daemon: adopt a systemd socket if present, else acquire the endpoint, then accept.
 pub async fn run() -> io::Result<()> {
     // Diagnostics first, so even a failed bind is recorded (FR-045).
@@ -57,6 +128,10 @@ pub async fn run() -> io::Result<()> {
     // Hand the diagnostics handle to the shared state so the `LogLocation`/`RecentErrors`/
     // `SetLogLevel` RPCs can serve it (FR-043–046).
     state.set_diagnostics(logging);
+
+    // Feature 027: a sandboxed daemon requires the token its runtime mounted. Fatal if named and
+    // unreadable — see `adopt_auth_token`.
+    adopt_auth_token(&state)?;
 
     // FR-006a/b: sessions that were running when the service last stopped come back as
     // `InterruptedResumable` — never auto-relaunched, resumable by one explicit user action. This is
@@ -93,6 +168,15 @@ pub async fn run() -> io::Result<()> {
         Err(e) => {
             tracing::warn!(error = %e, "could not bind the activity-hook receiver; activity will be Unknown");
         }
+    }
+
+    // Feature 027: inside a container there is no socket to bind and no host to share one with —
+    // the client reaches us over loopback TCP, published from the container (research R1). Checked
+    // before socket activation and before the endpoint, because in this placement neither exists:
+    // `endpoint::resolve()` would try to create a directory under a home the container has no
+    // business having, and fail with a permission error that says nothing about the real cause.
+    if let Some(addr) = tcp_listen_addr() {
+        return serve_tcp(state, &addr).await;
     }
 
     // systemd socket activation (Linux, opportunistic — MUST NOT be required; protocol.md §2).
@@ -221,36 +305,38 @@ where
     let mut framed = Framed::new(stream, DaemonCodec::new());
 
     // --- Handshake: the first frame must be a Hello, and it must match exactly. ---
-    let (client_version, client_hash, client_build, client_package_version) =
-        match framed.next().await {
-            Some(Ok(Frame::Control(ClientMsg::Hello {
-                protocol_version,
-                schema_hash,
-                client_build,
-                client_package_version,
-            }))) => (
-                protocol_version,
-                schema_hash,
-                client_build,
-                client_package_version,
-            ),
-            Some(Ok(_)) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "expected Hello as the first frame",
-                ))
-            }
-            Some(Err(e)) => return Err(io::Error::other(e)),
-            None => return Ok(()), // hung up before saying hello
-        };
+    let intro = match framed.next().await {
+        Some(Ok(Frame::Control(ClientMsg::Hello {
+            protocol_version,
+            schema_hash,
+            client_build,
+            client_package_version,
+            auth_token,
+            client_fingerprint,
+            require_fingerprint_match,
+        }))) => handshake::Introduction {
+            protocol_version,
+            schema_hash,
+            package_version: client_package_version,
+            build: client_build,
+            auth_token,
+            fingerprint: client_fingerprint,
+            require_fingerprint_match,
+        },
+        Some(Ok(_)) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "expected Hello as the first frame",
+            ))
+        }
+        Some(Err(e)) => return Err(io::Error::other(e)),
+        None => return Ok(()), // hung up before saying hello
+    };
+    let client_build = intro.build.clone();
+    let client_version = intro.protocol_version;
+    let client_package_version = intro.package_version.clone();
 
-    if let Err(reason) = handshake::evaluate(
-        client_version,
-        client_hash,
-        &client_package_version,
-        client_build.clone(),
-        daemon_build(),
-    ) {
+    if let Err(reason) = handshake::evaluate_introduction(&intro, &state.expectation()) {
         // Identity + versions only — never any session content (FR-047).
         tracing::warn!(
             client_build = %client_build,
@@ -390,9 +476,15 @@ where
                             },
                         );
                         // Discover this project's worktrees from git now that a client is looking at
-                        // it, and send the refreshed catalog to *this* client only (FR-018, T053).
-                        // Attach is per-client and exclusive, so a broadcast would be both wrong
-                        // (others aren't in this project) and disruptive to their message stream.
+                        // it, then the sessions its CLIs recorded there that we have no record of
+                        // (feature 026, FR-014 — research R15), and send the refreshed catalog to
+                        // *this* client only (FR-018, T053). Attach is per-client and exclusive, so
+                        // a broadcast would be both wrong (others aren't in this project) and
+                        // disruptive to their message stream.
+                        //
+                        // The order is load-bearing: discovery reads the worktree cache the refresh
+                        // just filled, and both must land before the snapshot is built or a
+                        // discovered session appears only on the *next* open.
                         refresh_worktrees_and_send(state, id, project).await;
                     }
                     Err(reason) => {
@@ -515,11 +607,12 @@ where
                 req,
                 project,
                 worktree_dir,
+                provider,
             } => {
                 // The catalog write stays on the loop: it is a small atomic file write, and it is
                 // what mints the id every later message refers to. Only the spawn — the slow half
                 // — is deferred (BUG-009, T125).
-                match state.create_session(&project, &worktree_dir) {
+                match state.create_session(&project, &worktree_dir, provider) {
                     Ok(session) => {
                         // A brand-new session starts fresh (`claude --session-id`), never `--resume`
                         // against a conversation that does not exist yet.
@@ -659,6 +752,7 @@ where
                 env_include_enabled,
                 env_include_script_path,
                 env_include_timeout_secs,
+                default_ai_cli,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),
@@ -677,6 +771,10 @@ where
                             env_include_timeout_secs,
                         )
                     }
+                })
+                .and_then(|()| match default_ai_cli {
+                    Some(which) => state.set_default_ai_cli(which),
+                    None => Ok(()),
                 });
                 match result {
                     Ok(()) => state.send(
@@ -876,6 +974,36 @@ where
                             req,
                             kind: ErrorKind::Internal,
                             message: "could not check the branch".into(),
+                            detail: Some(e.to_string()),
+                        },
+                    ),
+                }
+            }
+            // Feature 027 (research R2 part 2): the open-project gate, answered here because on
+            // Windows — and for any remote daemon — the client's filesystem is not this one. It is
+            // deliberately the *same* question `GitCli::is_repo_root` answers, on the same binary,
+            // rather than a cheaper `.git` stat: a client that asks this and a client that answers
+            // it locally must not disagree about what counts as a repository.
+            ClientMsg::RepoRootQuery { req, path } => {
+                let probed = path.clone();
+                // `git rev-parse` on a cold or network-mounted directory is not instant, and this
+                // task drives every other client's frames.
+                let is_repo_root =
+                    tokio::task::spawn_blocking(move || GitCli::new().is_repo_root(&probed)).await;
+                match is_repo_root {
+                    Ok(is_repo_root) => state.send(
+                        id,
+                        DaemonMsg::OperationOk {
+                            req,
+                            result: OperationResult::RepoRoot { path, is_repo_root },
+                        },
+                    ),
+                    Err(e) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::Internal,
+                            message: "could not check whether that folder is a repository".into(),
                             detail: Some(e.to_string()),
                         },
                     ),
@@ -1352,11 +1480,29 @@ async fn refresh_worktrees_and_send(
     );
 }
 
-/// Run the (blocking) git worktree discovery off the async runtime, updating the cache.
+/// Run the (blocking) git worktree discovery off the async runtime, updating the cache — and, in
+/// the same hop, the FR-014 pass that finds sessions started outside this application.
+///
+/// One `spawn_blocking` rather than two: the second step reads the worktree cache the first just
+/// filled, so they are one unit of blocking work and splitting them would add a runtime round trip
+/// for nothing (research R15).
 async fn refresh_worktrees_off_runtime(state: &Arc<DaemonState>, project: &std::path::Path) {
     let st = Arc::clone(state);
     let proj = project.to_path_buf();
-    let _ = tokio::task::spawn_blocking(move || st.refresh_worktrees(&proj)).await;
+    let discovered = tokio::task::spawn_blocking(move || {
+        st.refresh_worktrees(&proj);
+        st.discover_external_sessions(&proj)
+    })
+    .await;
+    if let Ok(count) = discovered {
+        if count > 0 {
+            tracing::info!(
+                project = %project.display(),
+                count,
+                "adopted sessions started outside this application"
+            );
+        }
+    }
 }
 
 /// Run empty-session pruning (which stats the provider's conversation store) off the async runtime.
@@ -1484,6 +1630,10 @@ fn rename_error_message(err: micold_core::project::RenameError) -> &'static str 
 ///   (protocol.md §7).
 /// - **Reply ordering**: `reply` (Some for `SessionCreate`, None for `SessionStart`) is sent after
 ///   the start concludes, exactly where it was sent before.
+///
+/// A *failure*, by contrast, is announced regardless of `reply` (T087). The absent reply is
+/// deliberate for the success case — a resume has no `SessionCreated` to send — but the reason a
+/// start failed belongs to every client whatever asked for it, and the catalog is where it lives.
 fn spawn_session_start(
     state: &Arc<DaemonState>,
     session: micold_core::session::SessionId,
@@ -1496,15 +1646,33 @@ fn spawn_session_start(
         let gate = task_state.session_gate(session);
         let _serialized = gate.lock().await;
         let worker = Arc::clone(&task_state);
-        let outcome =
-            tokio::task::spawn_blocking(move || worker.start_session(session, launch)).await;
+        let outcome = tokio::task::spawn_blocking(move || {
+            worker.start_session(session, launch)?;
+            // Watch this session's own event log, for a provider that reports one (feature 026,
+            // T064). In the same blocking hop as the spawn, and **only** for a session the daemon
+            // has just started — that is what keeps a merely discovered session unwatched.
+            worker.open_event_log_tail(session);
+            Ok::<(), std::io::Error>(())
+        })
+        .await;
         match outcome {
             Ok(Ok(())) => {}
+            // A failed start moves the catalog and, unlike a successful one, nothing else says so
+            // (feature 026, T087, FR-010). `start_session` records the reason — it is what fills
+            // the wire's `Failed { reason, attempts: 0 }` — and broadcasts only *after* it has
+            // marked the session running, which it returned before doing. Announced here rather
+            // than beside the reply below, because a resume has no reply to carry it:
+            // `ClientMsg::SessionStart` carries no `req`, so there is no `OperationError` to
+            // address to it, and pressing restart on a session whose CLI is gone did nothing
+            // visible at all. The catalog is the surface both launch modes share, and the one the
+            // `SessionCreate` path already relies on for exactly this.
             Ok(Err(err)) => {
                 tracing::warn!(session = %session.0, %err, "session start failed");
+                task_state.broadcast_catalog();
             }
             Err(join) => {
                 tracing::warn!(session = %session.0, error = %join, "session start task failed");
+                task_state.broadcast_catalog();
             }
         }
         // Before the reply, so a client that acts on `SessionCreated` immediately finds the session

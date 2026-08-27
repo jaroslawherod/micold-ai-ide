@@ -123,8 +123,8 @@ fn terminate_daemon(_pid: u32) -> io::Result<()> {
 #[cfg(unix)]
 fn configure_detached(command: &mut Command) {
     use std::os::unix::process::CommandExt;
-    // SAFETY: `setsid` is async-signal-safe and is exactly what `pre_exec` is for. It runs in the
-    // forked child before `exec`, detaching it from our session and controlling terminal.
+    // SAFETY: `setsid` and `close` are async-signal-safe and this is exactly what `pre_exec` is
+    // for. It runs in the forked child before `exec`.
     unsafe {
         command.pre_exec(|| {
             if libc::setsid() == -1 {
@@ -134,8 +134,60 @@ fn configure_detached(command: &mut Command) {
                     return Err(err);
                 }
             }
+            close_inherited_descriptors();
             Ok(())
         });
+    }
+}
+
+/// Shut every descriptor above stderr before `exec`, so the daemon starts owning nothing but its
+/// own three standard streams.
+///
+/// # Why a detached process has to do this and an ordinary child does not
+///
+/// Rust opens its own descriptors `CLOEXEC`, so a child normally inherits only what it was given.
+/// Descriptors this process inherited from *its* parent carry no such promise, and a daemon that
+/// outlives everyone (FR-003) holds them for as long as it runs.
+///
+/// That is not theoretical. `scripts/build-lock.sh` takes the repository's build lock with a bash
+/// `exec 9>`, which is not `CLOEXEC`; running the suite under it therefore handed fd 9 down through
+/// cargo, the test binary and into the daemon `tests/autospawn.rs` deliberately leaves running —
+/// which then held the lock of every worktree on the machine until it was killed by hand. The same
+/// mechanism pins a client's open files and sockets after the client is gone.
+///
+/// # Safety
+///
+/// Called from `pre_exec`, between `fork` and `exec`, where only async-signal-safe calls are
+/// allowed. `close_range` and `close` are; allocating or locking would not be, which is why this
+/// counts rather than enumerating `/proc/self/fd`.
+#[cfg(unix)]
+unsafe fn close_inherited_descriptors() {
+    /// The three the child is entitled to, already redirected to `/dev/null` by the caller.
+    const FIRST: libc::c_int = 3;
+
+    // Linux 5.9+ and the modern BSDs close the whole range in one call, without a bound to guess.
+    #[cfg(target_os = "linux")]
+    {
+        if libc::syscall(
+            libc::SYS_close_range,
+            FIRST as libc::c_uint,
+            libc::c_uint::MAX,
+            0,
+        ) == 0
+        {
+            return;
+        }
+    }
+
+    // Otherwise walk to the soft limit. `_SC_OPEN_MAX` is the number of descriptors this process
+    // may hold, so nothing above it can be open; a negative answer means the limit is unknown and
+    // 1024 is the POSIX minimum, which is the most that can be closed honestly.
+    let limit = match libc::sysconf(libc::_SC_OPEN_MAX) {
+        n if n > 0 => n as libc::c_int,
+        _ => 1024,
+    };
+    for fd in FIRST..limit {
+        libc::close(fd);
     }
 }
 
