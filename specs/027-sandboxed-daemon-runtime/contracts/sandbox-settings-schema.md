@@ -82,6 +82,16 @@ supported range and report the clamp, following `clamp_scrollback` and `clamp_en
 (RB-1). A hand-edited file with `"pids": 1` opens the app with a corrected value and a note, not an
 error dialog.
 
+**S-10 — A stored value that only ever came from a retired default is repaired on read.** A
+`registry` image reference naming `ghcr.io/micold/micold-daemon` is replaced by `DEFAULT_IMAGE` when
+the file is loaded. Nothing was ever published to that namespace, so the value cannot be a choice —
+it is a default the app wrote before FR-024 corrected the constant, and a serde default cannot reach
+a field that is present. This is S-7's rule ("repair what the user did not choose") applied to a
+string rather than a number, and it is deliberately narrow: it names one dead repository, applies
+only to `registry` sources, and replaces the whole reference because the stored tag names a version
+the live namespace does not carry either. An `imported_file` or `local_build` source keeps its name —
+that names an image already on the machine.
+
 **S-8 — Writes stay atomic.** Temp file plus rename, as `JsonFileSettingsStore` already does. A
 crash mid-save cannot leave a half-written sandbox profile.
 
@@ -110,6 +120,7 @@ Probed `RuntimeCapabilities` are also not stored here — they are a cache keyed
 | T-6 | out-of-range budget values clamp and report | S-7 |
 | T-7 | the full v4 document round-trips byte-stably | — |
 | T-8 | no serialised form of the token appears anywhere in the written file | Not stored |
+| T-9 | a stored `registry` reference in the retired namespace loads as `DEFAULT_IMAGE`; a chosen reference and a `local_build` in that namespace both survive | S-10 |
 
 ## Casing, corrected during implementation
 

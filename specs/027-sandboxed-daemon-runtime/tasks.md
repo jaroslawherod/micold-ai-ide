@@ -828,6 +828,19 @@ automatic.
       with the per-architecture tags beside it. The three guards passed against a real tag, and
       the AI-CLI check passed on the arm64 runner — the one thing the host measurements could not
       reach.
+- [x] T157 The first run, end to end, against the published image — a real client on Xvfb resolving
+      `DEFAULT_IMAGE` from a settings file that does not name an image, pulling `:0.12.0` from GHCR,
+      starting the sandbox and running `claude` inside the container. This is the only check in the
+      feature that exercises the default rather than a reference a test supplied, which is precisely
+      the gap the wrong namespace slipped through. `evidence/first-run-end-to-end.md`.
+- [x] T158 Repair a persisted reference into the retired `ghcr.io/micold` namespace on read
+      (`ImageSource::repair_retired_namespace`, called from `StoredSettings::into_settings` beside
+      the budget clamp). T155 corrected the constant, which reaches every user with no `sandbox`
+      block on disk — and nobody who had ever opened the sandbox section, whose file holds the dead
+      namespace as a *value* that no serde default can displace. Found on this developer's own
+      machine while setting T157 up: `"reference": "ghcr.io/micold/micold-daemon:0.10.0"`. Scoped to
+      registry sources, so an archive or local build named after that namespace keeps its name.
+      Tests: four in `sandbox/image.rs`, three in `tests/settings_retired_image_namespace.rs`.
 
 **One prediction here was wrong, and is recorded rather than quietly dropped**: T155 originally
 carried a hand step, on the rule that a GHCR package is private when first created and would need
@@ -837,6 +850,13 @@ package arrives linked to it and inherits its visibility. An anonymous pull of `
 200. That rule is about packages pushed with a personal access token, which arrive unlinked.
 `evidence/image-publishing.md` keeps the check that distinguishes the two states, because a private
 package's `denied` is indistinguishable from a package that was never pushed.
+
+**T157 also found a defect outside this feature, and did not fix it here**: the session supervisor
+restarted `claude` 24 times in 13 minutes without ever reaching `MAX_RESTART_ATTEMPTS`, because the
+survivor reset in `state.rs` clears the counter for any process still alive one ~250 ms tick after
+its respawn. Feature 010's FR-022a guard therefore only fires against a process that dies inside a
+quarter of a second, not against the start-run-die shape every configuration failure actually takes.
+Recorded in `evidence/first-run-end-to-end.md`; it belongs to 010.
 
 **Requirements closed**: FR-024.
 
