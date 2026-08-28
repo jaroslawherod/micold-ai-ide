@@ -31,6 +31,15 @@ pub const DEFAULT_IMAGE: &str = concat!(
     env!("CARGO_PKG_VERSION")
 );
 
+/// The namespace `DEFAULT_IMAGE` used to name, and which nothing was ever published into.
+///
+/// Correcting the constant (FR-024) fixed the default. It did not fix the *files* — settings are
+/// stored as values, not as "whatever the app defaults to today", so every user who had opened the
+/// sandbox section before 0.12.0 has this namespace written to disk and would keep asking a
+/// registry for an image that has never existed there. [`ImageSource::repair_retired_namespace`]
+/// is what reaches them.
+const RETIRED_IMAGE_REPOSITORY: &str = "ghcr.io/micold/micold-daemon";
+
 /// The tag `mise run image` produces, and the one a stale-image refusal names (FR-024c).
 pub const DEV_IMAGE_TAG: &str = "micold-daemon:dev";
 
@@ -98,6 +107,32 @@ impl ImageSource {
     /// stale by definition, because both came from the same working tree.
     pub fn refuses_fingerprint_mismatch(&self) -> bool {
         self.kind == ImageSourceKind::LocalBuild
+    }
+
+    /// Replace a reference into the retired namespace with today's default.
+    ///
+    /// Applied on read, alongside the budget clamp, for the reason rule S-7 gives: a value the user
+    /// did not choose and cannot act on is repaired when the file is opened rather than reported.
+    /// And they did not choose it — nothing was ever pushed to `ghcr.io/micold`, so any registry
+    /// reference naming it is a default the app wrote there itself, tag included. Replacing the
+    /// whole reference rather than rewriting the namespace is deliberate: the persisted tag is the
+    /// version that wrote the file, and the new namespace has no such tag either.
+    ///
+    /// Scoped to [`ImageSourceKind::Registry`]: an imported archive or a local build named after
+    /// that namespace is a name for something the user has on disk, and renaming it would break a
+    /// working setup to fix a reference nothing pulls.
+    pub fn repair_retired_namespace(&mut self) {
+        if self.kind != ImageSourceKind::Registry {
+            return;
+        }
+        let repository = self
+            .reference
+            .rsplit_once(':')
+            .map(|(repo, _)| repo)
+            .unwrap_or(&self.reference);
+        if repository == RETIRED_IMAGE_REPOSITORY {
+            self.reference = DEFAULT_IMAGE.to_string();
+        }
     }
 
     /// Everything wrong with this source, as values rather than prose.
@@ -295,6 +330,58 @@ impl ImageRef {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_persisted_reference_into_the_retired_namespace_is_replaced_by_the_default() {
+        // The exact value found on this developer's own machine on 2026-08-27: written by the app
+        // itself, at a version whose default named a namespace nothing was ever pushed to.
+        let mut src = ImageSource {
+            kind: ImageSourceKind::Registry,
+            reference: "ghcr.io/micold/micold-daemon:0.10.0".into(),
+            path: None,
+        };
+        src.repair_retired_namespace();
+        assert_eq!(src.reference, DEFAULT_IMAGE);
+    }
+
+    #[test]
+    fn a_reference_the_user_chose_is_left_alone() {
+        for reference in [
+            "ghcr.io/jaroslawherod/micold-daemon:0.11.0",
+            "registry.example.com/micold/micold-daemon:1.0.0",
+            "ghcr.io/micold/something-else:0.10.0",
+        ] {
+            let mut src = ImageSource {
+                kind: ImageSourceKind::Registry,
+                reference: reference.into(),
+                path: None,
+            };
+            src.repair_retired_namespace();
+            assert_eq!(src.reference, reference, "{reference} should be untouched");
+        }
+    }
+
+    #[test]
+    fn the_retired_namespace_is_not_the_one_being_published_to() {
+        // If these ever agreed, the repair above would rewrite every correct reference to itself
+        // forever, and a real regression of the namespace would be indistinguishable from a fix.
+        assert_ne!(DEFAULT_IMAGE_REPOSITORY, RETIRED_IMAGE_REPOSITORY);
+    }
+
+    #[test]
+    fn an_archive_or_local_build_named_after_the_retired_namespace_is_left_alone() {
+        // These name something on disk, not something to pull. Rewriting them would break a setup
+        // that works in order to fix a reference nothing resolves.
+        for kind in [ImageSourceKind::ImportedFile, ImageSourceKind::LocalBuild] {
+            let mut src = ImageSource {
+                kind,
+                reference: "ghcr.io/micold/micold-daemon:0.10.0".into(),
+                path: Some(PathBuf::from("/tmp/img.tar")),
+            };
+            src.repair_retired_namespace();
+            assert_eq!(src.reference, "ghcr.io/micold/micold-daemon:0.10.0");
+        }
+    }
 
     #[test]
     fn a_registry_reference_round_trips() {

@@ -110,10 +110,14 @@ it should be run after any release that creates a *new* package name.
 
 ## What this still does not settle
 
-- **A first run against the published image has not been performed end to end.** The manifest is
-  pullable anonymously and the daemon executes inside the image (both checked), but no client on
-  this host has resolved `DEFAULT_IMAGE` to `:0.12.0`, pulled it from GHCR and completed a session
-  against it. The real-runtime suite still builds `micold-daemon:dev` locally.
+- ~~**A first run against the published image has not been performed end to end.**~~ It has, on the
+  same day — see `evidence/first-run-end-to-end.md`. A client built from `7b9c0fa8` resolved
+  `DEFAULT_IMAGE` to `:0.12.0`, pulled it, started the sandbox, attached, and ran `claude` inside the
+  container. The real-runtime suite still builds `micold-daemon:dev` locally, so the *suite* remains
+  incapable of catching a namespace error; that run is what covers it.
+- **A working AI session over the network is still unproven.** The end-to-end run used the default
+  `no_outbound` posture, so the CLI started and then could not reach Anthropic. That is US1 working,
+  but it means no run here has exercised `network: outbound` end to end.
 - **The image is public only for as long as the repository is.** A linked package follows its
   repository, so making this repository private would make a user's first pull answer `denied` —
   the exact symptom of FR-024 being unimplemented, from a change nowhere near this code.
