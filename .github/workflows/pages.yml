@@ -111,23 +111,38 @@ jobs:
           version="${tag##*-v}"
           version="${version#v}"
 
+          # Where the site's own machinery comes from -- `site/`, the scenes, the checks, and the
+          # token-to-CSS emitter the theme step compiles. Normally the release tag, so the pictures
+          # are of the release the pages describe.
+          #
+          # A release published before this feature existed has none of it, and there is exactly one
+          # such publication: the first. The condition can never be true again, because every tag
+          # cut from here on contains `site/` -- which is why this is a branch in the resolve step
+          # and not an input somebody has to remember to pass.
+          source="$tag"
+          if ! gh api "repos/$GH_REPO/contents/site?ref=$tag" --silent 2>/dev/null; then
+            source="$docs"
+            echo "::notice::$tag has no site/ -- bootstrapping the publication from $docs instead."
+          fi
+
           {
             echo "release_tag=$tag"
             echo "docs_ref=$docs"
+            echo "source_ref=$source"
             echo "version=$version"
           } >>"$GITHUB_OUTPUT"
-          echo "publishing $version from $tag, with the prose from $docs"
+          echo "publishing $version from $tag, with the prose from $docs, built from $source"
 
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: ${{ steps.refs.outputs.release_tag }}
+          ref: ${{ steps.refs.outputs.source_ref }}
 
       # The prose is the only thing a republish is allowed to move: the application, the theme, the
       # scenes and the checks all come from the tag, so the pictures are of the release the pages
       # describe. Overlaying `docs/` alone is what makes a documentation correction publishable
       # without re-releasing (FR-017).
       - name: Take the prose from docs_ref
-        if: ${{ steps.refs.outputs.docs_ref != steps.refs.outputs.release_tag }}
+        if: ${{ steps.refs.outputs.docs_ref != steps.refs.outputs.source_ref }}
         env:
           DOCS_REF: ${{ steps.refs.outputs.docs_ref }}
         run: |
@@ -244,9 +259,22 @@ jobs:
       #
       # Everything above has to have passed to get here, which is the whole of FR-018: a failed check
       # means no deploy, and the site a reader has open stays exactly as it was.
+      #
+      # Uploaded unconditionally, deployed conditionally (below). A dispatch from a branch is how a
+      # change to the pipeline gets tried before it is merged, and the artifact is the whole built
+      # site: download it, unpack it, serve it, and the review is of the real thing rather than of a
+      # diff. That is the only way to see a publication before it is one -- the capture needs a
+      # display, ffmpeg and a release build, so nothing short of a run produces it.
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: site/book
 
+      # The live site is published from the default branch and from a release, and from nowhere
+      # else. Without this, dispatching the workflow on a branch to try a change to it would put
+      # that branch's site in front of every reader -- the failure mode is silent and the recovery
+      # is another full publication, so the guard is here rather than in a reviewer's memory.
       - uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
         id: deploy
+        if: >-
+          ${{ github.event_name == 'workflow_call'
+              || github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}

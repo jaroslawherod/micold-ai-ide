@@ -65,7 +65,7 @@ Third-party actions are pinned to full commit SHAs with the version in a trailin
 
 | # | Step | Fails the publication when |
 |---|---|---|
-| 1 | Check out `release_tag` (build source) and `docs_ref` (prose) | either ref is missing |
+| 1 | Check out the source ref (build source) and `docs_ref` (prose) | either ref is missing |
 | 2 | Install capture and site dependencies: `xvfb`, `mesa-vulkan-drivers`, `xdotool`, `imagemagick`, `ffmpeg`, the X11/Wayland dev libraries, mdBook, lychee, Node 20 | any install fails |
 | 3 | `cargo build --release -p micold-client -p micold-daemon`, both binaries in one invocation, copied out of the target directory | the build fails, or either binary is absent from the copy |
 | 4 | `cargo test -p micold-core site_theme_contrast` | a derived pair fails contrast (FR-033) |
@@ -77,10 +77,26 @@ Third-party actions are pinned to full commit SHAs with the version in a trailin
 | 10 | `links.sh` over the built HTML | any internal link is broken (FR-005, SC-003) |
 | 11 | `media-budget.sh` | a page exceeds 1 MB of stills, or a clip exceeds 3 MB (FR-015c) |
 | 12 | `page-checks.mjs` — WCAG 2.2 AA both schemes, the SC-001/SC-006 structural proxies, off-origin request scan | any violation (FR-027a, FR-023a, SC-015) |
-| 13 | `upload-pages-artifact` + `deploy-pages` | — |
+| 13 | `upload-pages-artifact`, then `deploy-pages` — the deploy only from the default branch or a `workflow_call` | — |
 
 Every check precedes the deploy. A failure at any step means no deploy, so the previously published
 site stands untouched and reachable (FR-018). There is no partial-publish state.
+
+The deploy is also the one step a dispatch from a branch does not reach. Everything above it runs —
+which is how a change to this pipeline is tried before it is merged — and the built site leaves the
+run as the uploaded artifact, to be downloaded and served for review. Without the guard, dispatching
+the workflow on a branch would put that branch's site in front of every reader, silently.
+
+## The source ref
+
+The site's own machinery — `site/`, the scenes, the checks, and the token-to-CSS emitter step 5
+compiles — normally comes from `release_tag`, so the pictures are of the release the pages describe.
+`docs_ref` overlays `docs/` alone on top of it, and that asymmetry is FR-017.
+
+A release published before this feature existed carries none of that machinery, so the source ref
+falls back to `docs_ref` and the run says so. There is exactly one such publication, the first: every
+tag cut from here on contains `site/`, so the condition cannot be true again. It is a branch in the
+resolve step rather than an input precisely because nobody should have to remember it.
 
 ## Independence from the merge pipeline
 
