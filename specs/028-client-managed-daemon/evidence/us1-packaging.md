@@ -110,6 +110,26 @@ US1 reads, writes or relocates the catalog, sessions, settings or logs.
 
 ---
 
+## What the merge with `main` found: a surviving promise in the UI
+
+Merging `origin/main` (which landed feature 027 FR-014d — the survive-logout opt-in moved from a
+menu command to a Settings checkbox) brought back a §4.11 violation the guard test could not see.
+`ui/settings/daemon.rs::survival_support` had a Linux-only arm telling the user:
+
+> Your systemd user manager keeps the service running after you sign out.
+
+That is exactly the promise FR-005 removes, stated in prose rather than in any of the names
+`tests/no_host_logout_survival.rs` forbids — so the guard passed while the app lied. Fixed by
+collapsing both host arms into one un-`cfg`-ed answer that warns on every platform, and the unit
+test's `assert_eq!(cannot, !cfg!(target_os = "linux"))` became a plain `assert!(cannot)` plus an
+assertion that the text does not name `systemd`.
+
+The lesson for the remaining stories: **a name guard bounds the mechanism, not the claim.** The
+user-facing copy needs its own assertion, which is why the replacement test checks the string, and
+why `docs/user-guide/settings.md` and `docs/daemon.md` were corrected in the same pass (§4.12).
+
+---
+
 ## What still needs a VM
 
 Carry these into the B-part run; none is blocked by anything in the implementation.

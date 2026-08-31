@@ -251,9 +251,10 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
     app.core.update(Message::Settings(SettingsMsg::Saved)); // closes the view
 
     // The one thing in this form that is not just a value written to a file: making sessions
-    // survive logout has to be *arranged*, with the platform's service manager or with the
-    // container runtime depending on where the daemon runs (FR-014d). Saved first, then applied —
-    // the file is what the next launch reads, so a failure here must not lose the user's choice.
+    // survive logout has to be *arranged*, and since feature 028 removed the host-process
+    // mechanism (FR-005) the container runtime is the only thing that can arrange it — so the
+    // other placements owe the user an explanation instead (FR-014d). Saved first, then reported —
+    // the file is what the next launch reads, so this must not lose the user's choice.
     match survival_step(survival_before, settings.daemon.sandbox.survive_logout) {
         SurvivalStep::Leave => Task::none(),
         step => crate::shell::service_control::on_survival_opt_in_changed(
@@ -265,11 +266,12 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
 
 /// What a save owes the logout-survival opt-in (feature 027, FR-014d).
 ///
-/// Pure, and separate from the save, so the rule can be stated once and tested without a service
-/// manager: **act on a change, and only on a change**. Every other field in this form is idempotent
-/// to re-apply; this one is not. Enabling stops the running daemon so the socket unit can activate
-/// a fresh one under the lingering manager, so re-running it on a save that only changed the
-/// scrollback limit would drop every live session for no reason at all.
+/// Pure, and separate from the save, so the rule can be stated once and tested on its own: **act on
+/// a change, and only on a change**. Every other field in this form is idempotent to re-apply; this
+/// one is not. It once stopped the running daemon so the socket unit could activate a fresh one
+/// under the lingering manager — feature 028 removed that, so nothing is torn down now, but the
+/// rule stays: what a change produces is a notification, and a save that only moved the scrollback
+/// limit would announce a sandbox restart the user never asked for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SurvivalStep {
     /// Nothing to do: the opt-in is where it was.

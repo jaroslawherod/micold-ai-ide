@@ -309,8 +309,9 @@ not lost; they come back as **interrupted-resumable** the next time you open the
 after any other service restart (see [Interrupted-resumable sessions](#interrupted-resumable-sessions-after-any-service-restart)).
 
 **A service running directly on your computer does not survive logout, on any platform.** The app
-does not offer to make it — there is no setting for this, and there never was one on macOS or
-Windows.
+does not offer to make it. Settings → Session service still has a *Keep sessions running after I
+sign out* checkbox, but it is the **container's** setting: with the direct placement selected the
+control says plainly that it cannot be honoured there, rather than quietly doing nothing.
 
 ### What to do instead
 

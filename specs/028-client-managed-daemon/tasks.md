@@ -103,6 +103,26 @@ old opt-in enabled, it is empty after opening the app once. (quickstart B7, B8)
 - [X] T027 [P] [US1] Rewrite `docs/daemon.md` — the "Surviving logout" section (lines 286–330), the lifetime-table row at line 22, and the "logs to the systemd journal" note at line 276 — to state that a directly-hosted service does not survive logout and to name the sandboxed placement as the supported way to get that (FR-005c, packaging contract §4.12)
 - [X] T028 [P] [US1] Record quickstart B8 (clean install registers nothing) and B7 (upgrade migration) in `specs/028-client-managed-daemon/evidence/us1-packaging.md`
 
+- [X] T028a [US1] *(added during the `main` merge)* Correct the survive-logout copy the merge
+  re-introduced: `ui/settings/daemon.rs::survival_support` had a Linux arm promising "Your systemd
+  user manager keeps the service running after you sign out", plus the matching sentences in
+  `docs/user-guide/settings.md`. Recorded in `evidence/us1-packaging.md`.
+
+**Two deviations from the task text as written, both forced by `main` landing feature 027's
+FR-014d** (the opt-in became a Settings checkbox with a `disable_for` mirroring `enable_for`)
+between the writing of these tasks and this merge:
+
+1. **T016 no longer forbids `LogoutSurvivalOutcome`**, and **T023 keeps it**. It reported the removed
+   host attempt when the tasks were written; it now carries the sandbox checkbox's answer, which
+   packaging contract §4.13 keeps. Forbidding the name would have deleted a working control to
+   satisfy a guard. `LogoutSurvivalRequested` is gone as specified.
+2. **T016's string check now runs with line comments stripped.** `ui/toolbar.rs` records in its
+   module doc which two commands the menu lost, and that sentence is the record of the removal, not
+   a way back to it.
+
+T028a is the cost of (1) stated plainly: **a name guard bounds the mechanism, not the claim.** The
+guard passed while the Settings page still promised the removed behaviour in prose.
+
 **Checkpoint**: US1 is independently shippable — the service is no longer a system service, whether
 or not anything else in this feature lands.
 

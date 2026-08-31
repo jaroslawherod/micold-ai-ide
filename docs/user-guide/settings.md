@@ -151,6 +151,10 @@ something is being shared.
 
 ### Sessions
 
-- **Keep sessions running after I sign out** — sessions outlive your sign-out. In a container this
-  is honoured on Linux, macOS and Windows alike; the host-process placement manages it only on
-  Linux.
+- **Keep sessions running after I sign out** — sessions outlive your sign-out. This is the
+  container's doing: it is created with a restart policy the container runtime honours on Linux,
+  macOS and Windows alike, which is why the setting takes effect the next time the sandbox starts.
+  A service running **directly on this computer** cannot do it on any platform — the app is the
+  only thing that starts one, and nothing it starts outlives the session it was started from. Your
+  sessions are still kept and come back resumable after a sign-out; only the running processes
+  inside them stop. See [the daemon's lifetime](../daemon.md#surviving-logout-run-the-service-in-a-container).

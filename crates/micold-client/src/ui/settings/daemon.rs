@@ -435,10 +435,10 @@ pub fn view<'a>(
 /// — and a rule stated over a set is only checkable if it can be enumerated. In the view it could
 /// only be read.
 ///
-/// `cfg!` rather than a parameter: which platform this is running on is not a thing the user picks,
-/// and threading it through would invite a call site that passes the wrong one. The consequence is
-/// that this test only ever exercises its own platform's branch, which is the same bargain every
-/// `#[cfg]` in this crate makes.
+/// No `cfg!` since feature 028. There used to be a Linux branch here promising that the systemd
+/// user manager kept the service alive after sign-out; that promise rested on the units and the
+/// per-user enablement this feature removes (FR-005, packaging contract §4.11), so it is now the
+/// same answer on all three platforms — and one answer is one thing to keep true.
 fn survival_support(placement: PlacementKind) -> (&'static str, bool) {
     match placement {
         // The container runtime's restart policy is run by a service the platform keeps alive
@@ -449,13 +449,14 @@ fn survival_support(placement: PlacementKind) -> (&'static str, bool) {
              the sandbox starts.",
             false,
         ),
-        PlacementKind::HostProcess if cfg!(target_os = "linux") => (
-            "Your systemd user manager keeps the service running after you sign out.",
-            false,
-        ),
+        // Feature 028: the application is the only thing that starts a session service (lifecycle
+        // contract §1.1), and nothing it starts outlives the session it was started from. Sessions
+        // are still safe — they come back resumable — which is why this says what is lost rather
+        // than only that something is.
         PlacementKind::HostProcess => (
-            "A service running directly on this platform can't outlive signing out — that's \
-             Linux-only. Run it in a container to get this here.",
+            "A service running directly on this computer can't outlive signing out. Your sessions \
+             are kept and come back resumable; run the service in a container to keep them \
+             running through a sign-out.",
             true,
         ),
     }
@@ -476,11 +477,17 @@ mod tests {
                 // The sandbox can always do it — that is FR-014b's whole point — so a caution here
                 // would be telling the user the opposite of the truth.
                 PlacementKind::LocalSandbox => assert!(!cannot, "{label} warned when it can do it"),
+                // Feature 028, FR-005, deliberately un-`cfg`-ed. This assertion used to read
+                // `!cfg!(target_os = "linux")`, and a platform-gated replacement would let the
+                // removed promise creep back on the one platform that ever made it.
                 PlacementKind::HostProcess => {
-                    assert_eq!(
+                    assert!(
                         cannot,
-                        !cfg!(target_os = "linux"),
-                        "{label} must warn exactly where the host mechanism is unavailable"
+                        "{label} must warn: nothing it starts outlives sign-out"
+                    );
+                    assert!(
+                        !support.contains("systemd"),
+                        "the host mechanism is gone; the control must not name it: {support}"
                     );
                 }
             }
@@ -492,8 +499,9 @@ mod tests {
     #[test]
     fn the_warning_names_the_placement_that_does_support_it() {
         let (support, cannot) = survival_support(PlacementKind::HostProcess);
-        if cannot {
-            assert!(support.contains("container"));
-        }
+        assert!(cannot);
+        assert!(support.contains("container"));
+        // And what is *not* lost, or the warning reads as "your work goes away" (FR-005).
+        assert!(support.contains("resumable"));
     }
 }
