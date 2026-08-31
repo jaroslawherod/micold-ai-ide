@@ -367,6 +367,11 @@ impl App {
 }
 
 pub fn main() -> iced::Result {
+    // Before anything connects or spawns (packaging contract §2.7). An upgrade from a release that
+    // shipped the units leaves a per-user enablement behind that dpkg cannot reach, and a stale
+    // enablement plus a unit file the upgrade deleted is a socket activation that starts nothing.
+    // Silent, and free when there is nothing to clear — see `shell::legacy_units`.
+    shell::legacy_units::disable_legacy_units();
     shell::startup::run()
 }
 

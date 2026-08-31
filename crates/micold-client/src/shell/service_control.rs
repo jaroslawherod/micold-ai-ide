@@ -3,19 +3,21 @@
 //!
 //! **Not the same external system as `shell/daemon_sync.rs`, and the distinction is the reason
 //! this file exists.** That module is the conversation with a daemon that is running and speaking
-//! our protocol. This one is what you do when it is not: terminate a mismatched build by pid,
-//! and ask the platform's service manager to keep sessions alive across logout. Neither can be
-//! expressed as a `ClientMsg` — the first is used precisely when the protocol is unusable
-//! (FR-022), and the second is `loginctl`/`systemctl`, which the daemon does not speak at all.
+//! our protocol. This one is what you do when it is not: terminate a mismatched build by pid, and
+//! report what the configured placement does about surviving a logout. Neither can be expressed as
+//! a `ClientMsg` — the first is used precisely when the protocol is unusable (FR-022), and the
+//! second is a fact about where the service runs rather than anything the service could answer.
 //!
 //! It is the same argument T054 made for splitting the OS-theme probe from the clock that drives
 //! it: two systems that meet at one message are still two systems.
 //!
-//! # Both of these run off the update thread
+//! # One of these runs off the update thread, and it is no longer the survival one
 //!
-//! Each spawns a process and waits for it. On the update thread that is a frozen window for as
-//! long as `systemctl` takes to answer, so both are `Task::perform` over `spawn_blocking`, and
-//! both report their outcome as an ordinary message rather than a return value.
+//! Stopping a mismatched build spawns a process and waits for it, so it is a `Task::perform` over
+//! `spawn_blocking` that reports its outcome as an ordinary message. The survival opt-in used to
+//! need the same treatment because the host-process arm spawned `loginctl`/`systemctl`; feature 028
+//! removed that arm (FR-005, packaging contract §4.11), so every placement now answers from memory
+//! and the task is only there to keep one message shape.
 
 use iced::Task;
 
@@ -76,38 +78,21 @@ pub(crate) fn on_restart_service_requested(app: &mut App) -> Task<Message> {
 /// the Linux service manager — so a sandboxed user's menu item silently configured the wrong
 /// mechanism, and nobody could turn it off at all.
 ///
-/// Runs off-thread: under host-process placement it spawns `loginctl`/`systemctl`. Under the
-/// sandbox it is pure and answers immediately, which costs one task and keeps one shape.
+/// Answers immediately on every placement since feature 028 took the host-process mechanism away
+/// (FR-005): the sandbox's policy is a property of a container that already exists, and the other
+/// two placements have nothing to arrange. It still returns a `Task`, because the outcome still
+/// reaches the user as an ordinary message and the caller should not have to care which.
 ///
 /// Never enabled by install (FR-038) — this runs only from a save that changed the value.
 pub(crate) fn on_survival_opt_in_changed(placement: Placement, enabling: bool) -> Task<Message> {
-    Task::perform(
-        async move {
-            tokio::task::spawn_blocking(move || {
-                let endpoint = micold_core::endpoint::resolve().map_err(|e| {
-                    micold_core::logout_survival::SurvivalOutcome::Failed(e.to_string())
-                })?;
-                Ok(if enabling {
-                    micold_core::logout_survival::enable_for(&placement, &endpoint)
-                } else {
-                    micold_core::logout_survival::disable_for(&placement, &endpoint)
-                })
-            })
-            .await
-            .unwrap_or_else(|e| {
-                Err(micold_core::logout_survival::SurvivalOutcome::Failed(
-                    e.to_string(),
-                ))
-            })
-        },
-        |r: Result<
-            micold_core::logout_survival::SurvivalOutcome,
-            micold_core::logout_survival::SurvivalOutcome,
-        >| {
-            let outcome = r.unwrap_or_else(|e| e);
-            Message::Connection(ConnectionMsg::LogoutSurvivalOutcome(outcome.user_message()))
-        },
-    )
+    let outcome = if enabling {
+        micold_core::logout_survival::enable_for(&placement)
+    } else {
+        micold_core::logout_survival::disable_for(&placement)
+    };
+    Task::done(Message::Connection(ConnectionMsg::LogoutSurvivalOutcome(
+        outcome.user_message(),
+    )))
 }
 
 /// Both halves of the survival attempt come back here.
