@@ -19,7 +19,7 @@ interpreted screen it has produced. Both live in the daemon, so:
 | **The app window crashes** | Same — the sessions are in a different process, untouched. |
 | **Rebuild / reinstall the app and relaunch** | The new window reconnects to the *same* daemon and finds every session where it left off. |
 | **Reopen a session after any of the above** | You get the **current** screen immediately (a snapshot, not a replay), with scrollback covering the whole time you were away. |
-| **Log out / end your login session** (Linux) | This is the one thing that can stop the daemon; see [Surviving logout](#surviving-logout) (User Story 7). |
+| **Log out / end your login session** | This stops a daemon running directly on your computer, and its sessions become interrupted-resumable. To keep sessions across a logout, run the service [in a container](#surviving-logout-run-the-service-in-a-container). |
 
 Concretely, if you start a long-running build or an AI CLI session that is working through a task,
 close the window, and come back ten minutes later, the session is still `Running`, the screen shows
@@ -273,9 +273,9 @@ agent to do anything without you asking.**
 When something misbehaves, the overflow menu's **"Session service diagnostics"** asks the service two
 things and shows the answers:
 
-- **Where it logs.** Depending on how it was started, the service logs to the systemd journal, to your
-  terminal, or to a size-capped rotating file under your user data directory — the diagnostic tells
-  you which, and the file path when it's a file.
+- **Where it logs.** Depending on how it was started, the service logs to your terminal or to a
+  size-capped rotating file under your user data directory — the diagnostic tells you which, and the
+  file path when it's a file.
 - **Its recent errors.** A short list of the most recent warnings and errors the service recorded, so
   you can see what went wrong without hunting through a log file.
 
@@ -283,49 +283,46 @@ Logs never contain terminal output or anything you typed — sessions are refere
 state only, so credentials and code in a session are never written to a log. Total log size is
 hard-capped, so the log can't grow without bound even if the service runs for weeks.
 
-## Surviving logout (User Story 7)
+## Surviving logout: run the service in a container
 
-Closing the window always leaves your sessions running (that is the whole point of the daemon). But a
-full **logout** is different: by default the system tears down everything you were running when your
-login session ends, the daemon included. Making sessions survive a logout is:
+Closing the window always leaves your sessions running — that is the whole point of the daemon. A
+full **logout** is different: when your login session ends, the system tears down what you were
+running, and a session service running *directly on your computer* goes with it. Its sessions are
+not lost; they come back as **interrupted-resumable** the next time you open the app, exactly as
+after any other service restart (see [Interrupted-resumable sessions](#interrupted-resumable-sessions-after-any-service-restart)).
 
-- **Supported on Linux**, via one explicit, user-enabled setting (below). It is **never turned on for
-  you** — not by installation, not silently.
-- **Not supported on macOS or Windows** *for a service running directly on your computer*. There is
-  no unprivileged equivalent, so the app does not pretend to offer one. On those platforms sessions
-  survive closing the window but not logging out.
-- **Supported everywhere when the service runs in a container** — see
-  [Where the service runs](#where-the-service-runs-feature-027) below. Not a second mechanism
-  bolted on: it is the container runtime's own restart policy, and the runtime is a service the
-  platform already keeps running across logout and reboot.
+**A service running directly on your computer does not survive logout, on any platform.** The app
+does not offer to make it — there is no setting for this, and there never was one on macOS or
+Windows.
 
-### Enabling it (Linux)
+### What to do instead
 
-The app does it for you: open the overflow menu and choose **"Keep sessions after logout."** That
-runs, in your own session, the two steps that matter:
+Run the session service **in a container**. A container runtime is a service the platform already
+keeps running across logout and reboot, so a sandbox with its keep-running setting on comes back on
+its own — on Linux, macOS and Windows alike. Turn it on in Settings → Session service; see
+[Running the session service in a container](user-guide/sandboxed-daemon.md) for what it can and
+cannot see, which runtimes work, and what to do when it will not start.
 
-1. `loginctl enable-linger` — lets your user manager (and anything it runs) keep going after you log
-   out.
-2. `systemctl --user enable --now micold-daemon.socket` — moves the session service under that
-   lingering user manager, so it is no longer tied to your login session.
+That is the supported way to keep sessions across a logout, and the only one.
 
-If you prefer to do it by hand, run those two commands yourself, in that order.
+### Why the direct placement no longer offers it
 
-> **Order matters — it is not retroactive.** Enabling linger does **not** rescue a service that is
-> *already* running inside your login session; that process stays put and still dies at logout. You
-> must enable linger **first**, then (re)start the service under the user manager. The menu action
-> does exactly this — it enables linger, stops the session-bound service, and restarts it under the
-> lingering manager — which is why using it is simpler than hand-rolling the commands.
+An earlier release did offer it on Linux, through a menu item that registered the service with your
+own `systemd --user` manager (`loginctl enable-linger`, then a socket unit). That registration made
+the *service manager* a second thing that could start the daemon — which is exactly what this
+release removes: the app is now the only thing that ever starts a session service. A promise that
+depended on the registration could not outlive it.
 
-If enabling linger is refused (some hardened systems restrict it via policy), the app tells you rather
-than silently pretending it worked; ask your administrator to enable lingering for your account.
+If you enabled that option on a previous release, there is nothing to undo by hand. The upgrade
+removes the unit files, and the app clears the leftover per-user enablement the first time you open
+it, without asking.
 
 ### How it is packaged
 
-The systemd **user** units ship with the app (in `/usr/lib/systemd/user/`) but are **inert until you
-enable them** — installation touches no per-user manager. The service is the same single binary
-whether the user manager socket-activates it or a window spawns it directly, so nothing behaves
-differently based on how it started.
+Installing the app leaves **no** service-manager artefact behind: no systemd unit, no launch agent,
+no login item, no scheduled task. It installs two executables, the desktop entry, the icons and the
+documentation, and starts nothing. The list of registered user services on your machine is the same
+after installing as it was before.
 
 ## Where the service runs (feature 027)
 

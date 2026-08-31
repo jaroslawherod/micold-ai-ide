@@ -1,6 +1,7 @@
 //! Daemon startup + accept loop + per-connection routing (protocol.md §2/§4, plan W2, T020/T022).
 //!
-//! Resolves the endpoint, runs the single-instance sequence (or adopts a systemd socket), then serves
+//! Resolves the endpoint and runs the single-instance sequence — the only way a listener is ever
+//! bound, since feature 028 removed socket activation (lifecycle contract §1.3) — then serves
 //! each accepted connection through the shared [`DaemonState`]: strict handshake, then attach/detach,
 //! viewed-session, keepalive, and settings routing, with catalog/settings changes pushed to every
 //! connected client. Grid streaming and the mutating RPCs layer on in Phase 3 / T053.
@@ -110,7 +111,11 @@ fn adopt_auth_token(state: &DaemonState) -> io::Result<()> {
     Ok(())
 }
 
-/// Run the daemon: adopt a systemd socket if present, else acquire the endpoint, then accept.
+/// Run the daemon: resolve the endpoint, acquire it as the single instance, then accept.
+///
+/// One bind path, deliberately. Feature 028 removed the socket-activation branch that used to come
+/// first (lifecycle contract §1.3): the application is the only thing that starts a service, so a
+/// listener handed to us on fd 3 by a service manager has no defined behaviour and no way in.
 pub async fn run() -> io::Result<()> {
     // Diagnostics first, so even a failed bind is recorded (FR-045).
     let logging = logging::init()?;
@@ -179,13 +184,6 @@ pub async fn run() -> io::Result<()> {
         return serve_tcp(state, &addr).await;
     }
 
-    // systemd socket activation (Linux, opportunistic — MUST NOT be required; protocol.md §2).
-    #[cfg(target_os = "linux")]
-    if let Some(listener) = systemd_listener()? {
-        tracing::info!("adopted systemd-activated socket");
-        return serve_unix(state, listener).await;
-    }
-
     let endpoint = endpoint::resolve().inspect_err(|e| {
         tracing::error!(error = %e, "could not resolve the endpoint to bind");
     })?;
@@ -248,21 +246,6 @@ fn spawn_supervisor(state: Arc<DaemonState>) {
     });
 }
 
-/// Adopt an `LISTEN_FDS`-provided Unix socket, if this process is the intended recipient.
-/// `set_nonblocking(true)` is mandatory — systemd does not guarantee it (protocol.md §2).
-#[cfg(target_os = "linux")]
-fn systemd_listener() -> io::Result<Option<tokio::net::UnixListener>> {
-    let mut fds = listenfd::ListenFd::from_env();
-    match fds.take_unix_listener(0) {
-        Ok(Some(std_listener)) => {
-            std_listener.set_nonblocking(true)?;
-            Ok(Some(tokio::net::UnixListener::from_std(std_listener)?))
-        }
-        Ok(None) => Ok(None),
-        Err(e) => Err(io::Error::other(e)),
-    }
-}
-
 /// Accept loop over the single-instance interprocess listener.
 async fn serve_interprocess(
     state: Arc<DaemonState>,
@@ -280,23 +263,9 @@ async fn serve_interprocess(
     }
 }
 
-/// Accept loop over a systemd-activated Unix listener.
-#[cfg(target_os = "linux")]
-async fn serve_unix(state: Arc<DaemonState>, listener: tokio::net::UnixListener) -> io::Result<()> {
-    loop {
-        let (conn, _addr) = listener.accept().await?;
-        let state = Arc::clone(&state);
-        tokio::spawn(async move {
-            if let Err(e) = serve_connection(state, conn).await {
-                tracing::warn!(error = %e, "connection ended with an error");
-            }
-        });
-    }
-}
-
 /// Serve one connection: handshake, register, then route messages until the client hangs up.
 ///
-/// Generic over the stream so the interprocess path, the systemd path, and tests share one
+/// Generic over the stream so the interprocess path, the loopback TCP path and tests share one
 /// implementation.
 pub async fn serve_connection<S>(state: Arc<DaemonState>, stream: S) -> io::Result<()>
 where

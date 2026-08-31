@@ -605,11 +605,6 @@ pub enum Message {
     /// The user asked to see where the session service logs and its recent errors (Phase 10, FR-046).
     /// Handled by the binary: it requests both from the daemon and shows the answers as notices.
     DiagnosticsRequested,
-    /// The user asked to make sessions survive logout (US7, FR-038; Linux only). Handled by the
-    /// binary, which runs the enable flow off-thread. Never triggered by install — a deliberate choice.
-    LogoutSurvivalRequested,
-    /// The logout-survival enable flow finished; carries a ready-to-show message (info or error).
-    LogoutSurvivalOutcome(String),
 }
 
 /// Root application state for the single main window.
@@ -1062,9 +1057,7 @@ impl State {
             // Focus is the rendering stack's, and moving it is a widget operation — see
             // [`Message::FocusMoved`].
             | Message::FocusMoved { .. }
-            | Message::DiagnosticsRequested
-            | Message::LogoutSurvivalRequested
-            | Message::LogoutSurvivalOutcome(_) => {}
+            | Message::DiagnosticsRequested => {}
             Message::HelpMenuToggled => {
                 let outcomes = crate::features::help::menu_toggled(self);
                 drain(outcomes, |outcome| interpret(self, outcome));

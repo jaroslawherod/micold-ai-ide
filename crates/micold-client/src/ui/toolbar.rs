@@ -24,8 +24,7 @@ fn mode_icon(pref: ThemePreference) -> Icon {
 /// The overflow menu's items: a cycling theme-mode toggle (Auto → Light → Dark), then About.
 /// Rendered as a floating overlay by `ui::view` via `menu_overlay`.
 pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
-    #[allow(unused_mut)]
-    let mut items = vec![
+    vec![
         MenuItem::new(
             mode_icon(state.theme_pref),
             state.theme_pref.label(),
@@ -37,21 +36,8 @@ pub fn overflow_items(state: &State) -> Vec<MenuItem<Message>> {
             "Session service diagnostics",
             Message::DiagnosticsRequested,
         ),
-    ];
-    // Surviving a full logout is a Linux-only, explicitly user-enabled action (US7, FR-038) — never
-    // enabled silently, so it lives behind a deliberate menu choice, and only where it can work.
-    #[cfg(target_os = "linux")]
-    items.push(MenuItem::new(
-        Icon::AutoMode,
-        "Keep sessions after logout",
-        Message::LogoutSurvivalRequested,
-    ));
-    items.push(MenuItem::new(
-        Icon::About,
-        help_actions()[0],
-        Message::AboutOpened,
-    ));
-    items
+        MenuItem::new(Icon::About, help_actions()[0], Message::AboutOpened),
+    ]
 }
 
 /// Render the top app bar: title (left), then on the trailing edge the project switcher

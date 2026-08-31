@@ -1,21 +1,28 @@
-//! Starting, stopping and outliving the session service *as an OS process* (feature 021, T055 —
-//! FR-019a).
+//! Stopping the session service *as an OS process* (feature 021, T055 — FR-019a).
 //!
 //! **Not the same external system as `shell/daemon_sync.rs`, and the distinction is the reason
 //! this file exists.** That module is the conversation with a daemon that is running and speaking
-//! our protocol. This one is what you do when it is not: terminate a mismatched build by pid,
-//! and ask the platform's service manager to keep sessions alive across logout. Neither can be
-//! expressed as a `ClientMsg` — the first is used precisely when the protocol is unusable
-//! (FR-022), and the second is `loginctl`/`systemctl`, which the daemon does not speak at all.
+//! our protocol. This one is what you do when it is not: terminate a mismatched build by pid.
+//! That cannot be expressed as a `ClientMsg`, because it is used precisely when the protocol is
+//! unusable (FR-022).
 //!
 //! It is the same argument T054 made for splitting the OS-theme probe from the clock that drives
 //! it: two systems that meet at one message are still two systems.
 //!
-//! # Both of these run off the update thread
+//! # This runs off the update thread
 //!
-//! Each spawns a process and waits for it. On the update thread that is a frozen window for as
-//! long as `systemctl` takes to answer, so both are `Task::perform` over `spawn_blocking`, and
-//! both report their outcome as an ordinary message rather than a return value.
+//! It spawns a process and waits for it. On the update thread that is a frozen window for as long
+//! as the stop takes, so it is a `Task::perform` over `spawn_blocking` that reports its outcome as
+//! an ordinary message rather than a return value.
+//!
+//! # What feature 028 removed
+//!
+//! There used to be a second job here: asking `loginctl`/`systemctl` to keep sessions alive across
+//! a logout. Feature 028 removed the mechanism itself (FR-005, packaging contract §4.11) — a
+//! service running directly on the computer no longer claims to survive logout on any platform —
+//! so the request, its outcome toast and the menu item that raised it went with it. The sandboxed
+//! placement still offers survival, and gets it from the container runtime rather than from
+//! anything this module could run.
 
 use iced::Task;
 
@@ -65,44 +72,6 @@ pub(crate) fn on_restart_service_requested(app: &mut App) -> Task<Message> {
             }
         },
     )
-}
-
-/// Make sessions survive logout (US7, FR-038; Linux only). Runs off-thread — it spawns
-/// `loginctl`/`systemctl` — and reports the outcome as a toast. Never enabled by install.
-pub(crate) fn on_logout_survival_requested() -> Task<Message> {
-    Task::perform(
-        async {
-            tokio::task::spawn_blocking(|| {
-                let endpoint = micold_core::endpoint::resolve().map_err(|e| {
-                    micold_core::logout_survival::SurvivalOutcome::Failed(e.to_string())
-                })?;
-                Ok(micold_core::logout_survival::enable(&endpoint))
-            })
-            .await
-            .unwrap_or_else(|e| {
-                Err(micold_core::logout_survival::SurvivalOutcome::Failed(
-                    e.to_string(),
-                ))
-            })
-        },
-        |r: Result<
-            micold_core::logout_survival::SurvivalOutcome,
-            micold_core::logout_survival::SurvivalOutcome,
-        >| {
-            let outcome = r.unwrap_or_else(|e| e);
-            Message::LogoutSurvivalOutcome(outcome.user_message())
-        },
-    )
-}
-
-/// Both halves of the survival attempt come back here.
-///
-/// `notify_info`, not `notify_error`, whichever way it went: `SurvivalOutcome::user_message`
-/// already phrases a failure as a failure, and raising it as an error would style a "this
-/// platform does not support it" as something broken.
-pub(crate) fn on_logout_survival_outcome(app: &mut App, message: String) -> Task<Message> {
-    app.core.notify_info(message);
-    Task::none()
 }
 
 #[cfg(test)]
@@ -169,15 +138,5 @@ mod tests {
             app.core.notify.is_active(),
             "restarting the service must tell the user what it costs"
         );
-    }
-
-    /// The survival outcome reaches the user whichever way it went.
-    #[test]
-    fn the_survival_outcome_is_reported() {
-        let mut app = base_app();
-
-        let _ = on_logout_survival_outcome(&mut app, "it worked".to_string());
-
-        assert!(app.core.notify.is_active());
     }
 }

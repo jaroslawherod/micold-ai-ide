@@ -37,9 +37,9 @@ bare `cargo` (see `CLAUDE.md`).
 **Purpose**: Capture the before-state and put the two new module files in place, so every later task
 touches exactly one file.
 
-- [ ] T001 Record the pre-change baseline — `mise run test` green, and the current `systemctl --user list-unit-files | grep micold` output — in `specs/028-client-managed-daemon/evidence/baseline.md`
-- [ ] T002 [P] Create `crates/micold-core/src/clock.rs` and declare `pub mod clock;` in `crates/micold-core/src/lib.rs`
-- [ ] T003 [P] Create `crates/micold-daemon/src/idle.rs` and declare `pub mod idle;` in `crates/micold-daemon/src/lib.rs`
+- [X] T001 Record the pre-change baseline — `mise run test` green, and the current `systemctl --user list-unit-files | grep micold` output — in `specs/028-client-managed-daemon/evidence/baseline.md`
+- [X] T002 [P] Create `crates/micold-core/src/clock.rs` and declare `pub mod clock;` in `crates/micold-core/src/lib.rs`
+- [X] T003 [P] Create `crates/micold-daemon/src/idle.rs` and declare `pub mod idle;` in `crates/micold-daemon/src/lib.rs`
 
 ---
 
@@ -83,25 +83,25 @@ old opt-in enabled, it is empty after opening the app once. (quickstart B7, B8)
 
 ### Tests (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T013 [P] [US1] Write failing guard test `crates/micold-daemon/tests/no_socket_activation.rs` — no `listenfd` or `LISTEN_FDS` reference remains under `crates/micold-daemon/src/`, and `crates/micold-daemon/Cargo.toml` declares no `listenfd` dependency (lifecycle contract §1.3; source-guard style follows `crates/micold-core/tests/documentation_is_not_read.rs`)
-- [ ] T014 [P] [US1] Write failing test `crates/micold-client/tests/deb_ships_no_service_units.rs` — parse `[package.metadata.deb].assets` in `crates/micold-client/Cargo.toml` and assert no destination under `usr/lib/systemd` and no source under `packaging/micold-daemon.` (packaging contract §1.1–1.2)
-- [ ] T015 [P] [US1] Write failing unit tests in `crates/micold-client/src/shell/legacy_units.rs` (`#[cfg(test)]`): the un-enable is attempted when a unit is enabled, skipped when nothing is, every failure is swallowed, and it does not repeat once nothing is enabled (packaging contract §2.6–2.7)
-- [ ] T016 [P] [US1] Write failing guard test `crates/micold-client/tests/no_host_logout_survival.rs` — no `logout_survival::enable`, `LogoutSurvivalRequested`, `LogoutSurvivalOutcome`, or "Keep sessions after logout" string remains in `crates/micold-client/src/` or `crates/micold-core/src/` (FR-005, packaging contract §4.11)
+- [X] T013 [P] [US1] Write failing guard test `crates/micold-daemon/tests/no_socket_activation.rs` — no `listenfd` or `LISTEN_FDS` reference remains under `crates/micold-daemon/src/`, and `crates/micold-daemon/Cargo.toml` declares no `listenfd` dependency (lifecycle contract §1.3; source-guard style follows `crates/micold-core/tests/documentation_is_not_read.rs`)
+- [X] T014 [P] [US1] Write failing test `crates/micold-client/tests/deb_ships_no_service_units.rs` — parse `[package.metadata.deb].assets` in `crates/micold-client/Cargo.toml` and assert no destination under `usr/lib/systemd` and no source under `packaging/micold-daemon.` (packaging contract §1.1–1.2)
+- [X] T015 [P] [US1] Write failing unit tests in `crates/micold-client/src/shell/legacy_units.rs` (`#[cfg(test)]`): the un-enable is attempted when a unit is enabled, skipped when nothing is, every failure is swallowed, and it does not repeat once nothing is enabled (packaging contract §2.6–2.7)
+- [X] T016 [P] [US1] Write failing guard test `crates/micold-client/tests/no_host_logout_survival.rs` — no `logout_survival::enable`, `LogoutSurvivalRequested`, `LogoutSurvivalOutcome`, or "Keep sessions after logout" string remains in `crates/micold-client/src/` or `crates/micold-core/src/` (FR-005, packaging contract §4.11)
 
 ### Implementation
 
-- [ ] T017 [US1] Delete `systemd_listener()` (`crates/micold-daemon/src/server.rs:251-265`), `serve_unix()` (`:283-296`) and the adoption branch in `run()` (`:182-188`), leaving `singleton::acquire` as the only bind path (lifecycle contract §1.3); `crates/micold-daemon/tests/daemon_singleton.rs` and `exclusivity.rs` MUST still pass unchanged — that is FR-004's regression evidence for the removed bind paths
-- [ ] T018 [US1] Remove `listenfd` from `crates/micold-daemon/Cargo.toml:33` and from `[workspace.dependencies]` in the root `Cargo.toml` if no other crate uses it
-- [ ] T019 [P] [US1] Delete `packaging/micold-daemon.service` and `packaging/micold-daemon.socket`
-- [ ] T020 [US1] Remove the two `usr/lib/systemd/user/…` asset lines and their comment block from `[package.metadata.deb].assets` in `crates/micold-client/Cargo.toml:72-80` (packaging contract §2.5 — dpkg then removes them on upgrade with no maintainer script)
-- [ ] T021 [P] [US1] Trim `crates/micold-core/src/logout_survival.rs` to what the sandbox still needs — research R8 keeps the module, so: delete both `cfg` arms of `enable()` (lines 72-106) and the `run()` helper they orphan (line 134, or T060's `clippy -D warnings` fails on dead code), and make `enable_for`'s `Placement::HostProcess` arm return `SurvivalOutcome::Unsupported`; the sandbox arm and `PendingSandboxRestart` stay
-- [ ] T022 [US1] Delete `on_logout_survival_requested` and `on_logout_survival_outcome` and their test from `crates/micold-client/src/shell/service_control.rs:72-110,179`
-- [ ] T023 [US1] Delete `Message::LogoutSurvivalRequested` and `Message::LogoutSurvivalOutcome` from `crates/micold-client/src/app.rs:612,1067` and their dispatch arms in `crates/micold-client/src/main.rs:662-665`
-- [ ] T024 [US1] Remove the "Keep sessions after logout" overflow-menu item from `crates/micold-client/src/ui/toolbar.rs:41-46`
-- [ ] T025 [US1] Implement the one-shot migration in `crates/micold-client/src/shell/legacy_units.rs` — `systemctl --user disable --now micold-daemon.socket micold-daemon.service`, decision logic render-free and tested, all failures swallowed (research R7, packaging contract §2.6)
-- [ ] T026 [US1] Invoke the migration in `crates/micold-client/src/main.rs` **before** the client connects or auto-spawns a daemon — research R7's ordering hazard: run it after connecting and socket activation starts a daemon from a unit file that no longer exists
-- [ ] T027 [P] [US1] Rewrite `docs/daemon.md` — the "Surviving logout" section (lines 286–330), the lifetime-table row at line 22, and the "logs to the systemd journal" note at line 276 — to state that a directly-hosted service does not survive logout and to name the sandboxed placement as the supported way to get that (FR-005c, packaging contract §4.12)
-- [ ] T028 [P] [US1] Record quickstart B8 (clean install registers nothing) and B7 (upgrade migration) in `specs/028-client-managed-daemon/evidence/us1-packaging.md`
+- [X] T017 [US1] Delete `systemd_listener()` (`crates/micold-daemon/src/server.rs:251-265`), `serve_unix()` (`:283-296`) and the adoption branch in `run()` (`:182-188`), leaving `singleton::acquire` as the only bind path (lifecycle contract §1.3); `crates/micold-daemon/tests/daemon_singleton.rs` and `exclusivity.rs` MUST still pass unchanged — that is FR-004's regression evidence for the removed bind paths
+- [X] T018 [US1] Remove `listenfd` from `crates/micold-daemon/Cargo.toml:33` and from `[workspace.dependencies]` in the root `Cargo.toml` if no other crate uses it
+- [X] T019 [P] [US1] Delete `packaging/micold-daemon.service` and `packaging/micold-daemon.socket`
+- [X] T020 [US1] Remove the two `usr/lib/systemd/user/…` asset lines and their comment block from `[package.metadata.deb].assets` in `crates/micold-client/Cargo.toml:72-80` (packaging contract §2.5 — dpkg then removes them on upgrade with no maintainer script)
+- [X] T021 [P] [US1] Trim `crates/micold-core/src/logout_survival.rs` to what the sandbox still needs — research R8 keeps the module, so: delete both `cfg` arms of `enable()` (lines 72-106) and the `run()` helper they orphan (line 134, or T060's `clippy -D warnings` fails on dead code), and make `enable_for`'s `Placement::HostProcess` arm return `SurvivalOutcome::Unsupported`; the sandbox arm and `PendingSandboxRestart` stay
+- [X] T022 [US1] Delete `on_logout_survival_requested` and `on_logout_survival_outcome` and their test from `crates/micold-client/src/shell/service_control.rs:72-110,179`
+- [X] T023 [US1] Delete `Message::LogoutSurvivalRequested` and `Message::LogoutSurvivalOutcome` from `crates/micold-client/src/app.rs:612,1067` and their dispatch arms in `crates/micold-client/src/main.rs:662-665`
+- [X] T024 [US1] Remove the "Keep sessions after logout" overflow-menu item from `crates/micold-client/src/ui/toolbar.rs:41-46`
+- [X] T025 [US1] Implement the one-shot migration in `crates/micold-client/src/shell/legacy_units.rs` — `systemctl --user disable --now micold-daemon.socket micold-daemon.service`, decision logic render-free and tested, all failures swallowed (research R7, packaging contract §2.6)
+- [X] T026 [US1] Invoke the migration in `crates/micold-client/src/main.rs` **before** the client connects or auto-spawns a daemon — research R7's ordering hazard: run it after connecting and socket activation starts a daemon from a unit file that no longer exists
+- [X] T027 [P] [US1] Rewrite `docs/daemon.md` — the "Surviving logout" section (lines 286–330), the lifetime-table row at line 22, and the "logs to the systemd journal" note at line 276 — to state that a directly-hosted service does not survive logout and to name the sandboxed placement as the supported way to get that (FR-005c, packaging contract §4.12)
+- [X] T028 [P] [US1] Record quickstart B8 (clean install registers nothing) and B7 (upgrade migration) in `specs/028-client-managed-daemon/evidence/us1-packaging.md`
 
 **Checkpoint**: US1 is independently shippable — the service is no longer a system service, whether
 or not anything else in this feature lands.

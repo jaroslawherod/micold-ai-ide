@@ -20,6 +20,7 @@ pub mod capabilities;
 pub mod clipboard;
 pub mod daemon_sync;
 pub mod env_include;
+pub mod legacy_units;
 pub mod os_theme;
 pub mod persist;
 pub mod sandbox;

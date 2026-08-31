@@ -344,6 +344,11 @@ impl App {
 }
 
 pub fn main() -> iced::Result {
+    // Before anything connects or spawns (packaging contract §2.7). An upgrade from a release that
+    // shipped the units leaves a per-user enablement behind that dpkg cannot reach, and a stale
+    // enablement plus a unit file the upgrade deleted is a socket activation that starts nothing.
+    // Silent, and free when there is nothing to clear — see `shell::legacy_units`.
+    shell::legacy_units::disable_legacy_units();
     shell::startup::run()
 }
 
@@ -658,10 +663,6 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::ConnectionRestartServiceRequested => {
             shell::service_control::on_restart_service_requested(app)
-        }
-        Message::LogoutSurvivalRequested => shell::service_control::on_logout_survival_requested(),
-        Message::LogoutSurvivalOutcome(message) => {
-            shell::service_control::on_logout_survival_outcome(app, message)
         }
         Message::DiagnosticsRequested => shell::daemon_sync::on_diagnostics_requested(app),
 

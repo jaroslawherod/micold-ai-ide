@@ -64,7 +64,7 @@ verified in CI.
   survive closing (or crashing) the window: what survives and what doesn't, instant reattach and
   bounded scrollback, project/worktree operations running through the service, unattended crash
   supervision, one-window-per-project with deliberate takeover and half-open-connection detection,
-  what a version mismatch looks like and how restart-and-resume behaves, surviving logout on Linux,
-  where the service logs, and **where the service runs** — the placement model (on this computer, in
+  what a version mismatch looks like and how restart-and-resume behaves, why a service running
+  directly on this computer does not survive a logout and what does, where the service logs, and **where the service runs** — the placement model (on this computer, in
   a container, or reserved for remote), why the container is reached over authenticated loopback TCP
   rather than a socket, and who answers "is this a git repository?" once it is.
