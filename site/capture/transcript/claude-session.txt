@@ -1,0 +1,67 @@
+# The session every clip and every terminal screenshot shows (feature 028, T020).
+#
+# Lines starting with `#` in column one are comments and are never printed. `### step` separates the
+# blocks: `stub-cli.sh` prints one block, then waits for the scene to press Enter before printing
+# the next. Nothing here is timed, and nothing here is generated -- that is the whole point. A real
+# provider answers differently every run, needs a credential and needs a network; the published
+# clips have to be the same on every publication, or every release ships a set of images whose diff
+# means nothing.
+#
+# Keep it free of clocks, durations and counters, for the same reason. The harness test greps for
+# them.
+#
+# `{checkout}` and `{branch}` are replaced by the directory the provider was started in and the
+# branch checked out there. They are the only substitutions, and they exist so that a screenshot
+# taken with a side branch's worktree selected does not have a terminal pane insisting it is on
+# `main`.
+Welcome to Claude Code. Working in {checkout} on branch {branch}.
+
+> 
+### step
+> Why does stale() sort vehicles that never reported before the ones that went quiet?
+
+I read src/telemetry.rs. It is deliberate, and docs/operations.md says so:
+
+  A vehicle that was never heard from is a worse problem than one that went quiet
+  an hour ago.
+
+`last_seen` is `Option<u64>`, and `sort_by_key` puts `None` before every `Some`, so the
+ordering falls out of the type rather than out of a comparison written by hand.
+
+> 
+### step
+> The fix branch changes > to >=. Is that right?
+
+Yes, and it is the smaller of the two defensible answers.
+
+  fix/telemetry-drift  src/telemetry.rs
+
+  - .filter(|v| v.last_seen.is_none_or(|seen| now.saturating_sub(seen) > window))
+  + .filter(|v| v.last_seen.is_none_or(|seen| now.saturating_sub(seen) >= window))
+
+A vehicle exactly at the window edge was reported as healthy, so a fleet polled on the
+same period as the window never went stale at all. The alternative -- widening the
+window -- hides the same bug behind a number.
+
+> 
+### step
+> Add a test for the boundary and run the suite.
+
+I added one case to tests/routes.rs:
+
+  #[test]
+  fn a_vehicle_exactly_at_the_window_is_stale() {
+      let fleet = Fleet::with(&[("v-17", Some(100))]);
+      assert_eq!(fleet.stale(160, 60).len(), 1);
+  }
+
+  running 2 tests
+  test an_empty_fleet_is_not_planned_for ... ok
+  test a_vehicle_exactly_at_the_window_is_stale ... ok
+
+  test result: ok. 2 passed; 0 failed
+
+The case fails on main and passes on this branch, which is the shape a regression test
+should have.
+
+> 

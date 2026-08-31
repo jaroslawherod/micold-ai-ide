@@ -1,8 +1,16 @@
-# Micold AI IDE — Documentation
+# Micold AI IDE
 
-User-facing documentation for Micold AI IDE. Per the project constitution
-(Principle VII), documentation ships in the same change as the code it describes and is
-verified in CI.
+Run AI coding sessions on several branches at once. Micold AI IDE opens a git project, gives each
+piece of work its own worktree, and runs an AI CLI session in a terminal beside the code — in a
+background service that keeps every session alive when you close the window.
+
+[**Install**](install.md) · [**Read the user guide**](user-guide/help-about.md) ·
+[Source on GitHub](https://github.com/Cumulocity-IoT/micold-ai-ide)
+
+<!-- media: main-window-light -->
+
+Documentation ships in the same change as the code it describes and is verified in CI, so what
+follows describes the version you are reading it from (constitution, Principle VII).
 
 ## User Guide
 
@@ -33,6 +41,11 @@ verified in CI.
   cannot see, credentials, limits, network posture, working offline, what happens across restarts
   and reboots, and what to do when it will not start.
 
+## Installing
+
+- [Installing Micold AI IDE](install.md) — the packaged Linux download for the current release, and
+  building from source on macOS and Windows.
+
 ## Development
 
 - [Client architecture](development/architecture.md) — where a feature lives and why one module
@@ -57,6 +70,10 @@ verified in CI.
   specs skips the build entirely, where the documentation set is declared, the single status check
   the default branch requires and the two properties that keep it honest, how to force a full run,
   and what to do when the pipeline surprises you.
+- [The documentation site](development/docs-site.md) — how a publication works: the five steps a
+  build runs in, what each pre-merge and pre-deploy check catches, what triggers a publication and
+  how to republish without cutting a release, what a failed publication leaves behind, and why the
+  fonts ship whole.
 
 ## The session service (daemon)
 

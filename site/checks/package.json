@@ -1,0 +1,13 @@
+{
+  "name": "micold-site-checks",
+  "private": true,
+  "description": "The documentation site's rendered-page checks (feature 028). Not published, not part of the Rust workspace.",
+  "type": "module",
+  "scripts": {
+    "check": "node page-checks.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.1",
+    "playwright": "^1.50.1"
+  }
+}

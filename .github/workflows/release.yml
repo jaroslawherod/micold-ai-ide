@@ -306,3 +306,23 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
         run: gh release edit "$TAG_NAME" --draft=false --latest
+
+  # The documentation site (feature 028). It is a call rather than a trigger on purpose: the job
+  # above publishes the release with this workflow's own GITHUB_TOKEN, and GitHub does not start a
+  # run from an event raised by GITHUB_TOKEN -- so `on: release: [published]` would fire in every
+  # manual test and never on a real release. Calling the reusable workflow keeps the publication in
+  # this run, where its failure is a failed job on the release itself.
+  #
+  # It runs after `publish` because the pages link to the release's assets and `site/stage.sh` asks
+  # the release what it actually carries; a draft release answers that question differently.
+  pages:
+    name: publish site
+    needs: [release-please, publish]
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    uses: ./.github/workflows/pages.yml
+    with:
+      release_tag: ${{ needs.release-please.outputs.tag_name }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

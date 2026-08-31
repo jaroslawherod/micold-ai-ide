@@ -24,6 +24,8 @@ choose a folder.
   shows its name in the error color with a **missing** or **invalid** status tag — you cannot
   start new sessions on it until it is resolved.
 
+<!-- media: worktree-sidebar-light -->
+
 ### Reading a worktree: name & tags
 
 Each worktree is shown as a clean, human-friendly **name** on the first line, with small
@@ -177,6 +179,8 @@ worktree at `.claude/worktrees/feat-abc-123_login-page`. With no ticket, `chore`
 `chore/cleanup` — no `_` anywhere. Illegal characters in the ticket or name are automatically
 simplified (slugified), so `#123` is a perfectly good ticket; it shows up as a `#123` tag in the
 sidebar.
+
+<!-- media: create-worktree-light -->
 
 The `_` separates the ticket from the description, and it is on the branch as well as the folder.
 That is what lets the app read the ticket back later: delete a worktree and re-create it from the
@@ -551,6 +555,8 @@ commands, scripts, or anything else scoped to that session's worktree without le
   crash-auto-restart if it happens to exit while you're looking at the shell, and switching back
   reattaches to that same conversation with nothing lost.
 
+<!-- media: switch-session-light -->
+
 ### Running more than one Regular Terminal instance
 
 A session isn't limited to a single Regular Terminal — you can open as many independent shell
@@ -677,6 +683,8 @@ The embedded terminal renders the AI CLI's output like a real terminal, not as f
   programs redraw cleanly, with the cursor shown at its current position.
 - **Focus** — the terminal you are looking at is where the keyboard goes, unless you have handed
   it away or something that types has taken it (a colored border marks the focused terminal).
+
+<!-- media: session-terminal-light -->
 
 ## Interacting with the terminal
 
