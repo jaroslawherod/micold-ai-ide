@@ -28,9 +28,13 @@ fail() {
   failures=$((failures + 1))
 }
 
+# Skipped rather than failed on a machine with no lychee, and said out loud so the run's log shows
+# which it was -- the same bargain `capture-harness.test.sh` makes for a machine with no X server.
+# The runs where skipping would matter are the two that install it: `ci.yml`'s docs job and
+# `pages.yml`.
 if ! command -v lychee >/dev/null 2>&1 && [ ! -x "$HOME/.cargo/bin/lychee" ]; then
-  printf 'links: lychee is not installed -- run `cargo install lychee` (the check cannot be run without it)\n' >&2
-  exit 1
+  printf 'skip  the link checks (lychee is not installed)\n'
+  exit 0
 fi
 
 work="$(mktemp -d)"

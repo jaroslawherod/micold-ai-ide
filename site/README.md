@@ -42,6 +42,12 @@ shell that did not go through mise, so `build.sh` and `capture/encode.sh` fall b
 for them: running the scripts straight from a terminal works too, and uses the same copies. `mise
 x -- <command>` puts them on the `PATH` of anything else for a single command.
 
+The checks' own suites live in `scripts/tests/` beside every other one. Three of them —
+`clip-encode`, `links` and `page-checks` — print a `skip` line and stop when the tool they drive is
+absent, rather than failing: a machine without ffmpeg or lychee or a browser is one where they did
+not run, not one where they failed, and the two must not look alike. `pages.yml` installs all of
+them and runs the whole set before it captures anything, so nothing is skipped where it counts.
+
 ## Running it
 
     mise run site-build          # full: emit, capture, stage, render, check

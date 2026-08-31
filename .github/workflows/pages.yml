@@ -186,6 +186,22 @@ jobs:
           test -x target/release/micold-ai-ide
           test -x target/release/micold-daemon
 
+      # --- 3b. the checks' own cases --------------------------------------------------------------
+      #
+      # This is where the shell suites are actually run, not `ci.yml`'s lint job. Three of them --
+      # the clip encoder, the link checks and the rendered-page checks -- need ffmpeg, ImageMagick,
+      # lychee or a browser, and a lint job that installed all four to run them would spend minutes
+      # on every pull request that touches a line of Rust. Here every one of those is already
+      # installed for the publication itself, so the suites run in full, and they run *before* the
+      # capture rather than after it: a broken encoder found in step 7 has already cost an hour.
+      - name: Test (shell suites)
+        run: |
+          set -euo pipefail
+          for t in scripts/tests/*.test.sh; do
+            echo "== $t"
+            "$t"
+          done
+
       # --- 4. the theme's contrast ----------------------------------------------------------------
       #
       # The site's colours are derived from the application's tokens, and a derived pair that fails
