@@ -1,6 +1,9 @@
 # Contract: the publication workflow
 
-`.github/workflows/pages.yml`. One job definition, two entry points, one deploy.
+`.github/workflows/pages.yml`. Two jobs — `build` and `deploy` — two entry points, one deploy.
+They are separate because the `github-pages` environment carries the rule that only the default
+branch may deploy, and an environment is declared on a job: one job carrying it is rejected
+outright when the workflow is dispatched on a branch, before a step of it runs.
 
 ## Interface
 

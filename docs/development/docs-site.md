@@ -92,6 +92,21 @@ gh workflow run pages.yml -f docs_ref=main                           # newest re
   — so a typo corrected after a release can be published without cutting a new one. On the automatic
   run it defaults to the release tag, so a publication is reproducible from the tag alone.
 
+## Trying a change to the pipeline before it publishes
+
+Dispatch the workflow on the branch:
+
+```bash
+gh workflow run pages.yml --ref my-branch
+gh run download <run-id> -n github-pages   # the built site, as it would have been published
+```
+
+The run does everything a publication does — builds the application, captures the media, renders and
+runs every check — and then stops. Only the default branch and a `workflow_call` reach the deploy, so
+a branch's site can be downloaded and served for review without ever going in front of a reader.
+That is the only way to see a publication before it is one: the capture needs a display, ffmpeg and a
+release build, so nothing short of a run produces the pages.
+
 Runs are serialised with `concurrency: {group: pages, cancel-in-progress: true}`: two releases in
 quick succession cannot interleave, and the newer one wins.
 
