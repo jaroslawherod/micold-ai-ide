@@ -30,7 +30,7 @@ The same list `.github/workflows/pages.yml` installs, and the reason publication
 only:
 
     xvfb  mesa-vulkan-drivers  xdotool  imagemagick  ffmpeg
-    mdbook  lychee  node (20)
+    libxkbcommon-x11  mdbook  lychee  node (20)
 
 `mdbook` and `lychee` are Rust and install with `cargo install mdbook lychee --locked`; the rest
 come from the distribution's packages. `node` is needed only for `checks/page-checks.mjs`, which

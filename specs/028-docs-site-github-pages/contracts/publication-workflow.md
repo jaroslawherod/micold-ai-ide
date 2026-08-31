@@ -69,7 +69,7 @@ Third-party actions are pinned to full commit SHAs with the version in a trailin
 | # | Step | Fails the publication when |
 |---|---|---|
 | 1 | Check out the source ref (build source) and `docs_ref` (prose) | either ref is missing |
-| 2 | Install capture and site dependencies: `xvfb`, `mesa-vulkan-drivers`, `xdotool`, `imagemagick`, `ffmpeg`, the X11/Wayland dev libraries, mdBook, lychee, Node 20 | any install fails |
+| 2 | Install capture and site dependencies: `xvfb`, `mesa-vulkan-drivers`, `xdotool`, `imagemagick`, `ffmpeg`, the X11/Wayland dev libraries, and `libxkbcommon-x11-0` (dlopened at startup rather than linked: without it the client panics before it opens a window and every scene fails), mdBook, lychee, Node 20 | any install fails |
 | 3 | `cargo build --release -p micold-client -p micold-daemon`, both binaries in one invocation, copied out of the target directory | the build fails, or either binary is absent from the copy |
 | 4 | `cargo test -p micold-core site_theme_contrast` | a derived pair fails contrast (FR-033) |
 | 5 | Emit `site/theme/css/tokens.css` via `micold-tokens-css` | the emitter fails |

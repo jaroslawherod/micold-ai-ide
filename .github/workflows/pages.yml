@@ -158,13 +158,18 @@ jobs:
       # The same list `site/README.md` names, and the reason publication runs on Linux only: the
       # screenshots are of a real window on a real display, which here is Xvfb rendering through
       # Mesa's lavapipe because a runner has no GPU.
+      #
+      # `libxkbcommon-x11-0` is the odd one out: every other X11 entry here is a link-time dependency
+      # of the build, but this one is dlopened by name at startup. Without it the client panics
+      # before it opens a window, so all twelve scenes fail and the run reports twelve declared
+      # assets that were never produced -- a failure that names the pictures, not the library.
       - name: Install the capture and site dependencies
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y \
             xvfb mesa-vulkan-drivers xdotool imagemagick ffmpeg \
-            libxkbcommon-dev libwayland-dev libx11-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev \
             libxcursor-dev libxrandr-dev libxi-dev
 
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
