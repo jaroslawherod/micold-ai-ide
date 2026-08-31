@@ -1,7 +1,9 @@
 //! T017 — sidebar tree building + expand/collapse (FR-002/003).
 
 use micold_client::app::{Message, State};
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::project::{Availability, Project};
 use micold_core::session::{AiCli, Session, SessionLocation};
@@ -28,7 +30,7 @@ fn state_with_active_project() -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    state.worktrees = vec![
+    state.worktree.worktrees = vec![
         worktree("feat-a", WorktreeStatus::Valid),
         worktree("feat-b", WorktreeStatus::Valid),
     ];
@@ -78,7 +80,9 @@ fn sessions_are_joined_to_their_worktree_by_dir_name() {
 #[test]
 fn toggling_expands_then_collapses() {
     let mut state = state_with_active_project();
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
     let expanded = state
         .worktree_tree()
         .into_iter()
@@ -87,7 +91,9 @@ fn toggling_expands_then_collapses() {
         .expanded;
     assert!(expanded);
 
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
     let collapsed = !state
         .worktree_tree()
         .into_iter()
@@ -100,13 +106,15 @@ fn toggling_expands_then_collapses() {
 #[test]
 fn reloading_worktrees_drops_stale_expansion_state() {
     let mut state = state_with_active_project();
-    state.update(Message::WorktreeExpansionToggled("feat-a".to_string()));
+    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
+        "feat-a".to_string(),
+    )));
     // Reload without feat-a.
-    state.update(Message::WorktreesLoaded(vec![worktree(
+    state.update(Message::Worktree(WorktreeMsg::Loaded(vec![worktree(
         "feat-b",
         WorktreeStatus::Valid,
-    )]));
-    assert!(!state.expanded.contains("feat-a"));
+    )])));
+    assert!(!state.sidebar.expanded.contains("feat-a"));
 }
 
 // --- Feature 008 US1: display name + tags per worktree ---
@@ -121,7 +129,7 @@ fn state_with_named_worktrees(dirs: &[(&str, WorktreeStatus)]) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path);
-    state.worktrees = dirs.iter().map(|(d, s)| worktree(d, *s)).collect();
+    state.worktree.worktrees = dirs.iter().map(|(d, s)| worktree(d, *s)).collect();
     state
 }
 
@@ -243,8 +251,8 @@ fn empty_filter_shows_all() {
 #[test]
 fn type_filter_selects_only_that_type() {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Fix,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Fix),
     )));
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
@@ -257,24 +265,26 @@ fn filtered_tree_is_unaffected_by_the_filter_panels_open_state() {
     // Feature 009 FR-007/FR-008: showing/hiding the filter panel is purely a display change and
     // must never affect which worktrees are considered filtered.
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Fix,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Fix),
     )));
     let expected = dirs(&state.filtered_worktree_tree());
 
-    state.update(Message::SidebarFilterMenuToggled); // open
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled)); // open
     assert_eq!(dirs(&state.filtered_worktree_tree()), expected);
-    state.update(Message::SidebarFilterMenuToggled); // close
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled)); // close
     assert_eq!(dirs(&state.filtered_worktree_tree()), expected);
 }
 
 #[test]
 fn filters_combine_with_or() {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Feat,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Feat),
     )));
-    state.update(Message::SidebarFilterToggled(TagFilter::Untyped));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Untyped,
+    )));
     // feat + untyped ⇒ the feat worktree and the non-conforming one.
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
@@ -285,7 +295,9 @@ fn filters_combine_with_or() {
 #[test]
 fn has_issue_filter_selects_issue_bearing() {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::HasIssue));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::HasIssue,
+    )));
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
         vec!["feat-abc-123_login", "fix-def-9_thing"]
@@ -295,7 +307,9 @@ fn has_issue_filter_selects_issue_bearing() {
 #[test]
 fn untyped_filter_selects_non_conforming() {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Untyped));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Untyped,
+    )));
     assert_eq!(dirs(&state.filtered_worktree_tree()), vec!["my-experiment"]);
 }
 
@@ -313,15 +327,18 @@ fn available_filters_reflect_present_tags() {
 #[test]
 fn filter_recomputes_after_delete(/* FR-028 / C1 */) {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Fix,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Fix),
     )));
     assert_eq!(state.filtered_worktree_tree().len(), 2);
     // Delete one fix worktree. Confirming only dismisses the dialog — the daemon performs the
     // removal and pushes git's refreshed truth, which the client adopts via `set_worktrees`.
-    state.update(Message::WorktreeDeleteRequested("fix-crash".to_string()));
-    state.update(Message::WorktreeDeleteConfirmed);
+    state.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+        "fix-crash".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::DeleteConfirmed));
     let surviving: Vec<_> = state
+        .worktree
         .worktrees
         .iter()
         .filter(|w| w.dir_name != "fix-crash")
@@ -354,7 +371,7 @@ fn default_entry_present_and_first_even_with_no_worktrees() {
     });
     state.workspace.active = Some(path);
     // No worktrees at all.
-    state.worktrees = vec![];
+    state.worktree.worktrees = vec![];
 
     let entries = state.sidebar_entries();
     assert_eq!(entries.len(), 1, "Default entry alone, no worktrees yet");
@@ -432,7 +449,7 @@ fn state_with(worktrees: Vec<Worktree>) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path);
-    state.worktrees = worktrees;
+    state.worktree.worktrees = worktrees;
     state
 }
 
@@ -501,13 +518,18 @@ fn hidden_worktrees_are_not_reachable_as_action_targets() {
 fn revealing_adds_agent_rows_in_unchanged_order() {
     // US4 acceptance #1: the user's own rows are unaffected and unmoved; the agent rows join them.
     let mut state = mixed_state();
-    state.update(Message::ShowAgentWorktreesToggled);
+    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
     let listed = dirs(&state.worktree_tree());
     assert_eq!(listed.len(), 6);
     // Revealing must not reorder: the tree preserves `State::worktrees` order (which `reconcile()`
     // has already sorted by dir_name in production), so with the toggle on it equals that list
     // exactly.
-    let all: Vec<String> = state.worktrees.iter().map(|w| w.dir_name.clone()).collect();
+    let all: Vec<String> = state
+        .worktree
+        .worktrees
+        .iter()
+        .map(|w| w.dir_name.clone())
+        .collect();
     assert_eq!(listed, all);
     for hex in AGENT_HEXES {
         assert!(listed.contains(&format!("agent-{hex}")));
@@ -519,7 +541,7 @@ fn revealed_rows_carry_the_agent_badge() {
     // FR-010b: every revealed row is badged, unconditionally — not depending on its health, name,
     // or session count — so it can never be mistaken for the user's own work.
     let mut state = mixed_state();
-    state.update(Message::ShowAgentWorktreesToggled);
+    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
     let tree = state.worktree_tree();
     for hex in AGENT_HEXES {
         let n = node(&tree, &format!("agent-{hex}"));
@@ -538,20 +560,22 @@ fn tag_filters_apply_to_revealed_rows_the_same_way() {
     // FR-010d: revealed entries flow through the same `matches_filters()` call as everyone else.
     // An agent worktree carries no conventional type, so `Untyped` matches it and `feat` does not.
     let mut state = mixed_state();
-    state.update(Message::ShowAgentWorktreesToggled);
+    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
 
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Feat,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Feat),
     )));
     assert_eq!(
         dirs(&state.filtered_worktree_tree()),
         vec!["feat-a", "feat-b"]
     );
 
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Feat,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Feat),
     ))); // clear it
-    state.update(Message::SidebarFilterToggled(TagFilter::Untyped));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Untyped,
+    )));
     let untyped = dirs(&state.filtered_worktree_tree());
     for hex in AGENT_HEXES {
         assert!(untyped.contains(&format!("agent-{hex}")));
@@ -639,19 +663,23 @@ fn user_worktrees_sharing_the_reserved_prefix_stay_listed() {
 fn hiding_does_not_disturb_the_underlying_worktree_list() {
     // FR-008: hiding is presentation-only — `State::worktrees` still holds everything discovered.
     let state = mixed_state();
-    assert_eq!(state.worktrees.len(), 6);
+    assert_eq!(state.worktree.worktrees.len(), 6);
 }
 
 #[test]
 fn filter_recomputes_after_rename(/* FR-028 / C1 */) {
     let mut state = filtered_state();
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Fix,
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(ConventionalType::Fix),
     )));
     // Renaming changes only the display name; tags (and thus the filter result) are unchanged.
-    state.update(Message::WorktreeRenameStarted("fix-crash".to_string()));
-    state.update(Message::WorktreeRenameTextChanged("Hotfix".to_string()));
-    state.update(Message::WorktreeRenameConfirmed);
+    state.update(Message::Worktree(WorktreeMsg::RenameStarted(
+        "fix-crash".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameTextChanged(
+        "Hotfix".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameConfirmed));
     assert_eq!(state.filtered_worktree_tree().len(), 2);
     let renamed = node(&state.filtered_worktree_tree(), "fix-crash")
         .display_name
@@ -667,7 +695,7 @@ fn filter_recomputes_after_rename(/* FR-028 / C1 */) {
 /// The state above, with its one session made current.
 fn state_with_current_session() -> State {
     let mut state = state_with_active_project();
-    state.active_session = Some(state.active_sessions()[0].id);
+    state.session.active = Some(state.active_sessions()[0].id);
     state
 }
 
@@ -686,7 +714,7 @@ fn the_current_sessions_location_is_open_though_nobody_expanded_it() {
          was not (FR-001)"
     );
     assert!(
-        state.expanded.is_empty(),
+        state.sidebar.expanded.is_empty(),
         "and it is open without anything being written to the user's own expansion set: \
          open-ness is derived, so a worktree-list replacement has nothing to lose (FR-001b)"
     );
@@ -760,7 +788,7 @@ fn a_current_session_in_the_project_root_opens_the_default_row() {
         .get_mut(&path)
         .unwrap()
         .push(default_session);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
 
     let default_open = state
         .sidebar_entries()
@@ -793,7 +821,7 @@ fn state_with_filterable_worktrees(dir: &str) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    state.worktrees = vec![
+    state.worktree.worktrees = vec![
         Worktree {
             dir_name: "feat-a".to_string(),
             path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
@@ -818,7 +846,7 @@ fn state_with_filterable_worktrees(dir: &str) -> State {
     );
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
     state
 }
 
@@ -834,7 +862,8 @@ fn listed(state: &State) -> Vec<String> {
 fn a_filter_that_would_hide_the_current_session_does_not_hide_it() {
     let mut state = state_with_filterable_worktrees("fix-b");
     state
-        .sidebar_filters
+        .sidebar
+        .filters
         .insert(TagFilter::Type(ConventionalType::Feat));
 
     assert_eq!(
@@ -850,7 +879,8 @@ fn a_filter_that_would_hide_the_current_session_does_not_hide_it() {
 fn the_exempt_row_sits_where_it_would_sit_unfiltered() {
     let mut state = state_with_filterable_worktrees("feat-a");
     state
-        .sidebar_filters
+        .sidebar
+        .filters
         .insert(TagFilter::Type(ConventionalType::Fix));
 
     assert_eq!(
@@ -864,9 +894,10 @@ fn the_exempt_row_sits_where_it_would_sit_unfiltered() {
 #[test]
 fn only_the_current_sessions_location_escapes_the_filter() {
     let mut state = state_with_filterable_worktrees("fix-b");
-    state.show_agent_worktrees = true;
+    state.sidebar.show_agent_worktrees = true;
     state
-        .sidebar_filters
+        .sidebar
+        .filters
         .insert(TagFilter::Type(ConventionalType::Feat));
 
     let listed = listed(&state);
@@ -897,7 +928,8 @@ fn a_hidden_agent_worktree_holding_the_current_session_is_shown() {
 fn the_exempt_row_says_why_it_is_there_and_others_do_not() {
     let mut state = state_with_filterable_worktrees("fix-b");
     state
-        .sidebar_filters
+        .sidebar
+        .filters
         .insert(TagFilter::Type(ConventionalType::Feat));
 
     let tree = state.filtered_worktree_tree();
@@ -925,7 +957,8 @@ fn the_exempt_row_says_why_it_is_there_and_others_do_not() {
 fn a_row_the_filters_allow_is_not_marked_as_exempt_merely_for_being_current() {
     let mut state = state_with_filterable_worktrees("feat-a");
     state
-        .sidebar_filters
+        .sidebar
+        .filters
         .insert(TagFilter::Type(ConventionalType::Feat));
 
     let tree = state.filtered_worktree_tree();
@@ -945,7 +978,8 @@ fn a_row_the_filters_allow_is_not_marked_as_exempt_merely_for_being_current() {
 fn the_exemption_ends_when_the_location_stops_holding_the_current_session() {
     let mut state = state_with_filterable_worktrees("fix-b");
     state
-        .sidebar_filters
+        .sidebar
+        .filters
         .insert(TagFilter::Type(ConventionalType::Feat));
     assert!(listed(&state).contains(&"fix-b".to_string()));
 
@@ -964,7 +998,7 @@ fn the_exemption_ends_when_the_location_stops_holding_the_current_session() {
          was exempt has gone (FR-012, US4 scenario 4)"
     );
     assert!(
-        state.expanded.contains("fix-b"),
+        state.sidebar.expanded.contains("fix-b"),
         "its *open* state survives the commit, though — only its presence goes (contract §5.3)"
     );
 }
@@ -997,7 +1031,7 @@ fn exactly_one_session_row_carries_the_mark_when_a_location_holds_several() {
         .unwrap()
         .push(sibling);
     let current = state.active_sessions()[0].id;
-    state.active_session = Some(current);
+    state.session.active = Some(current);
 
     let node = state
         .worktree_tree()
@@ -1009,7 +1043,7 @@ fn exactly_one_session_row_carries_the_mark_when_a_location_holds_several() {
     let marked: Vec<_> = node
         .sessions
         .iter()
-        .filter(|s| state.active_session == Some(s.id))
+        .filter(|s| state.session.active == Some(s.id))
         .map(|s| s.id)
         .collect();
     assert_eq!(
@@ -1034,7 +1068,7 @@ fn nothing_is_marked_when_no_session_is_current() {
     assert!(
         node.sessions
             .iter()
-            .all(|s| state.active_session != Some(s.id)),
+            .all(|s| state.session.active != Some(s.id)),
         "and none carries it when there is no current session — the panel must not claim \
          otherwise (FR-002, FR-013)"
     );

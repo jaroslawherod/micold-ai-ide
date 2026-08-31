@@ -77,6 +77,7 @@ async fn a_flood_is_coalesced_to_at_most_one_frame_per_frame_interval() {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
+            client_instance: micold_core::protocol::messages::ClientInstance::current(),
             client_package_version: PACKAGE_VERSION.into(),
             // Feature 027: the host-process placement presents no token, and a fingerprint
             // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile

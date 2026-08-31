@@ -26,6 +26,9 @@ right `cargo` invocation each time:
 - `mise run test-core` — test only the render-free core (`cargo test -p micold-core
   --all-targets`); no GUI, no iced, so it is much faster for logic-only changes.
 - `mise run build` — build the release GUI binary (`cargo build --release -p micold-client`).
+- `mise run image` — build the `:dev` sandbox image from the working tree; `mise run test-sandbox`
+  then runs the real-runtime sandbox suite against it (both crates, release, one at a time). Those
+  tests are off by default, so `mise run test` does not need a container runtime installed.
 - `mise run deb` — build the Debian `.deb` package for the host arch (installs `cargo-deb` first
   if missing).
 - `mise run sweep` — reclaim space in **every** target dir this repo accumulates — the shared one

@@ -31,12 +31,15 @@
 //! along FR-019a's line — the runtime schedules, the probe asks the operating system — so
 //! [`os_theme_poll`] imports the one function it calls and owns none of it.
 
+use micold_client::features::settings::Msg as SettingsMsg;
 use std::time::Duration;
 
 use iced::time::every;
 use iced::Subscription;
 
 use micold_client::app::Message;
+use micold_client::features::notifications::Msg as NotificationsMsg;
+use micold_client::features::window::Msg as WindowMsg;
 
 use crate::shell::os_theme::detect_system_scheme;
 use crate::{probe_config, App};
@@ -70,9 +73,11 @@ pub fn subscription(app: &App) -> Subscription<Message> {
         window_focus_events(),
         // The daemon connection: one long-lived socket to the session host (feature 010, T041).
         micold_client::daemon::connection(app.placement.clone()),
-        iced::window::resize_events().map(|(_id, size)| Message::WindowResized {
-            width: size.width.max(0.0) as u16,
-            height: size.height.max(0.0) as u16,
+        iced::window::resize_events().map(|(_id, size)| {
+            Message::Window(WindowMsg::Resized {
+                width: size.width.max(0.0) as u16,
+                height: size.height.max(0.0) as u16,
+            })
         }),
     ];
     // Always polled — see [`BACKGROUND_OS_THEME_POLL`]. Only the cadence follows focus.
@@ -80,11 +85,10 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     // The snackbar's clock, subscribed **only while something is on screen** (FR-032a, SC-017).
     // A timer that ran at rest would hold the loop awake for the life of the process to count down
     // a notification that does not exist; `Queue::is_active` is what keeps it off.
-    if app.core.notify.is_active() {
-        subs.push(
-            every(SNACKBAR_TICK)
-                .map(|_| Message::NotificationsAdvanced(SNACKBAR_TICK.as_millis() as u32)),
-        );
+    if app.core.notifications.queue.is_active() {
+        subs.push(every(SNACKBAR_TICK).map(|_| {
+            Message::Notifications(NotificationsMsg::Advanced(SNACKBAR_TICK.as_millis() as u32))
+        }));
     }
     // The terminal output poll is gone — the daemon streams grid frames over the connection. Worktree
     // create now runs on the daemon too, so there is no local progress buffer to drain (T055).
@@ -149,7 +153,8 @@ fn window_focus_message(
 }
 
 fn os_theme_poll(interval: Duration) -> Subscription<Message> {
-    every(interval).map(|_instant| Message::SystemThemeChanged(detect_system_scheme()))
+    every(interval)
+        .map(|_instant| Message::Settings(SettingsMsg::SystemThemeChanged(detect_system_scheme())))
 }
 
 #[cfg(test)]

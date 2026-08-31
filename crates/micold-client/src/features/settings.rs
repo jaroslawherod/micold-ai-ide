@@ -8,7 +8,7 @@
 //! # The split this module used to record is closed
 //!
 //! It said: "the validation that turns these strings into settings — the range checks and their
-//! error messages — lives in `main.rs`'s `Message::SettingsSaved` arm rather than beside the type
+//! error messages — lives in the shell's settings-save arm rather than beside the type
 //! it validates, which is what FR-001 asks against."
 //!
 //! The sectioned view is what made that untenable rather than merely untidy. A rejected save now
@@ -17,11 +17,40 @@
 //! business knowing. That knowledge is a property of the draft's shape, so the validation came
 //! here with it. What is left in the shell is the part that was always the shell's: writing the
 //! file, telling a connected daemon, and re-sourcing the environment.
+//!
+//! # The vocabulary this feature declares
+//!
+//! Twenty-five transitions in [`Msg`]: the theme's two that apply outside the draft
+//! (`ThemePreferenceChanged`, `SystemThemeChanged`), the view's navigation
+//! (`Opened`, `SectionShown`, `RailToggled`), the four sections' nineteen field edits, and the two
+//! ways out (`Saved`, `Cancelled`).
+//!
+//! [`update`] routes all of them and is pure (data-model.md §1.1 shape A), but the feature's entry
+//! shape is **B**: `main.rs` has one `Message::Settings` arm and it goes to `shell/settings.rs`,
+//! because four of them additionally need `settings.json` written or read back
+//! (`Opened`, `Saved`, `ThemePreferenceChanged`). The rest reach [`update`]
+//! from there through the same wrapper variant they arrived under, so the pure path is identical
+//! whether or not the shell was in the way. One routing table, one place to look.
+//!
+//! # The state this feature remembers (feature 028, contract S1)
+//!
+//! Three fields in [`State`], reached as `state.settings`: `settings_draft`, the edits in flight
+//! while the view is open (`None` when it is closed — its presence *is* the view being shown);
+//! `theme_pref`, what the user chose; and `system_scheme`, what the desktop most recently reported.
+//!
+//! All three keep the names they had flat on the root (T032). `settings_draft` reads as a stutter
+//! and is not one: `settings.draft` would lose that this is a draft *of the settings*, and the
+//! field is distinguished from `theme_pref` beside it precisely by being the view's copy rather
+//! than the live value.
+//!
+//! **Saved settings are not here.** These are read back from `settings.json` by `shell/persist.rs`
+//! at the I/O boundary; what this struct holds is the in-flight edit and the two theme inputs the
+//! resolution needs.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use crate::app::State;
+use crate::features::session::{AvailabilitySource, CliAvailability};
 use crate::features::window::FieldId;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::RuntimeCapabilities;
@@ -30,7 +59,29 @@ use micold_core::sandbox::{
 };
 use micold_core::session::AiCli;
 use micold_core::settings::{DaemonConfig, Settings};
-use micold_core::theme::ThemePreference;
+use micold_core::theme::{SystemScheme, ThemePreference};
+
+/// What this feature remembers (feature 028, contract S1).
+///
+/// The fields keep the names they had as flat members of `app::State`, and the reducers below
+/// spell the root's type `crate::app::State` now that `State` here means this struct.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct State {
+    /// In-progress Settings edit, present only while the Settings view is shown (feature 006).
+    pub settings_draft: Option<SettingsDraft>,
+    /// Whether the Settings rail is showing icons alone (feature 027, FR-026c).
+    ///
+    /// Here rather than on [`SettingsDraft`], and that placement is the requirement: FR-026d calls
+    /// this view state, not a setting. On the draft it would be reverted by Cancel — so closing the
+    /// rail to read a page and then abandoning an edit would reopen it — written to disk on Save,
+    /// and subject to FR-029's save-together rule, which would make "the rail is closed" something
+    /// the user could fail to save. It outlives the draft and dies with the process.
+    pub settings_rail_collapsed: bool,
+    /// The last light/dark scheme reported by the OS poll (transient, not persisted).
+    pub system_scheme: SystemScheme,
+    /// How the app chooses its theme (persisted); defaults to following the OS (FR-005).
+    pub theme_pref: ThemePreference,
+}
 
 /// One page of the Settings view (FR-026).
 ///
@@ -65,6 +116,25 @@ impl SettingsSection {
             SettingsSection::Terminal => "Terminal",
             SettingsSection::Environment => "Environment",
             SettingsSection::Daemon => "Session service",
+        }
+    }
+
+    /// The section's icon, as the rail shows it beside — or instead of — the name (FR-026b).
+    ///
+    /// On the section rather than on the rail, for the same reason [`Self::label`] is: the rail is
+    /// one presentation of these, and a collapsed rail is a second. A glyph chosen inside a view
+    /// would be that view's, and the next surface to list sections would pick its own.
+    pub fn icon(self) -> crate::icons::Icon {
+        use crate::icons::Icon;
+        match self {
+            // The theme is the section's whole content today, and the sun is the glyph the app bar
+            // used for it before the duplicate was removed (FR-026e).
+            SettingsSection::Appearance => Icon::LightMode,
+            SettingsSection::Terminal => Icon::RegularTerminal,
+            // The environment section is where the default agent is chosen, which is the part of it
+            // a user is looking for when they come here.
+            SettingsSection::Environment => Icon::AiCli,
+            SettingsSection::Daemon => Icon::SessionService,
         }
     }
 
@@ -527,18 +597,161 @@ impl SettingsDraft {
     }
 }
 
-/// The theme mode was advanced one step (feature 003, FR-005).
+/// Everything the user can do to their settings (feature 028, FR-001).
 ///
-/// The menu stays open, so repeated clicks cycle.
-pub fn theme_mode_cycled(state: &mut State) {
-    state.theme_pref = state.theme_pref.next();
+/// # The variants kept their meaning and lost their prefix
+///
+/// The many that began with `Settings` do not any more — the type says which form (contract M1),
+/// so `SettingsScrollbackChanged` is `Msg::ScrollbackChanged`. The theme variants that apply
+/// immediately keep their names: `Theme` is not this feature's name, it is which setting, and
+/// dropping it would leave a bare `ModeCycled` that says nothing about what mode. `ThemeChanged`
+/// beside them is the *draft's* theme picker (feature 027, FR-027) and keeps the word for the
+/// same reason.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Msg {
+    /// The theme preference was set from outside the Settings form (FR-007, FR-008). The shell
+    /// persists the updated preference afterward.
+    ///
+    /// No control emits it since feature 027 removed the app bar's theme cycle (FR-026e), and it is
+    /// kept deliberately: it is the *contract* for a live theme change — apply it, and carry it into
+    /// an open draft rather than letting Save write the draft's stale copy back (BUG-001). Deleting
+    /// it would delete that rule along with it, and the rule is what a second writer would need to
+    /// obey the day one is added again.
+    ThemePreferenceChanged(ThemePreference),
+    /// The OS light/dark preference poll observed a (changed) scheme (FR-006). Transient;
+    /// never persisted. Carries the raw detection outcome — `Err(())` for a transient failure
+    /// (e.g. `dark_light::detect()` timing out under CPU load) — rather than an
+    /// already-resolved `SystemScheme`, specifically so the periodic poll's `Subscription::map`
+    /// closure (`os_theme_poll`, `src/main.rs`) does not need to capture the previous scheme:
+    /// iced panics if a subscription's mapping closure captures state, since that breaks the
+    /// stable identity it relies on to avoid restarting the underlying timer every frame.
+    /// [`system_theme_changed`] applies the same last-known fallback
+    /// (`theme::observe_system_scheme`) that used to be baked in at the call site instead.
+    SystemThemeChanged(Result<SystemScheme, ()>),
+    /// Open the Settings view (from the toolbar menu) (FR-019). The shell seeds the draft with
+    /// the current values.
+    Opened,
+    /// The Settings view moved to another section (feature 027, FR-026).
+    SectionShown(SettingsSection),
+    /// Collapse the Settings rail to its icons, or reopen it (feature 027, FR-026c/d).
+    ///
+    /// Deliberately not a `SettingsDraft` field: it is view state, so Cancel must not revert it and
+    /// Save must not write it to disk. See [`State::settings_rail_collapsed`].
+    RailToggled,
+    /// The Settings theme picker changed (feature 027, FR-027).
+    ///
+    /// Distinct from [`Msg::ThemePreferenceChanged`], which the app bar's cycle button emits and
+    /// which applies immediately from outside the form. This one edits the draft and takes effect on save, like every
+    /// other control on the form.
+    ThemeChanged(ThemePreference),
+    /// The Settings scrollback field changed.
+    ScrollbackChanged(String),
+    /// The Settings environment-include enabled checkbox was toggled (feature 011, FR-001).
+    EnvIncludeEnabledToggled(bool),
+    /// The Settings environment-include script path field changed (FR-002).
+    EnvIncludePathChanged(String),
+    /// The Settings environment-include timeout field changed (FR-003).
+    EnvIncludeTimeoutChanged(String),
+    /// The Settings **Default AI CLI** select changed (feature 026, FR-003).
+    DefaultAiCliChanged(AiCli),
+    /// Where the session service runs (feature 027, FR-001).
+    PlacementChanged(PlacementKind),
+    /// Which container runtime drives the sandbox (feature 027, FR-021).
+    RuntimeChanged(micold_core::sandbox::runtime::RuntimeKind),
+    /// How the sandbox image is obtained (feature 027, FR-024).
+    ImageKindChanged(micold_core::sandbox::image::ImageSourceKind),
+    /// The sandbox image's reference changed (feature 027, FR-024).
+    ImageReferenceChanged(String),
+    /// The archive an imported image is loaded from changed (feature 027, FR-024a).
+    ImagePathChanged(String),
+    /// One host credential's share was opted into or out of (feature 027, FR-004c).
+    CredentialToggled(micold_core::sandbox::CredentialShare, bool),
+    /// Whether sessions outlive the user's sign-out (feature 027, FR-014a).
+    SurviveLogoutToggled(bool),
+    /// Whether the sandbox may open outbound connections (feature 027, FR-017, FR-018).
+    NetworkChanged(micold_core::sandbox::NetworkPosture),
+    /// The sandbox's processor limit changed, in cores as typed (feature 027, FR-012).
+    ///
+    /// Four variants rather than one carrying which limit it is, unlike [`Msg::CredentialToggled`]:
+    /// the four credentials are one control repeated over a set, while these four are four
+    /// different quantities in three different units, and a single variant would only move the
+    /// `match` from here into the reducer.
+    CpuLimitChanged(String),
+    /// The sandbox's memory limit changed, in MiB as typed (feature 027, FR-013).
+    MemoryLimitChanged(String),
+    /// The sandbox's process-count limit changed, as typed (feature 027, FR-014).
+    PidLimitChanged(String),
+    /// The sandbox's writable-storage limit changed, in MiB as typed (feature 027, FR-015).
+    StorageLimitChanged(String),
+    /// Save the Settings form (validated + persisted by the shell) (FR-020, FR-021).
+    Saved,
+    /// Dismiss the Settings form without saving (Cancel or Esc).
+    Cancelled,
 }
 
-/// A theme preference was chosen outright.
+/// The pure half of this feature's reducer surface: shape A (contract M2).
+///
+/// Every arm is here, and every arm is pure. Four of them additionally need an effect — a write
+/// to `settings.json`, or the current values read back into the draft — and that half is
+/// `shell/settings.rs`'s `update`, which runs the effect and routes the rest here. Splitting by
+/// effect rather than by variant is what M2 asks for: nothing about opening the view is
+/// duplicated between the two, the shell simply has something extra to do afterwards.
+pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
+    match msg {
+        Msg::ThemePreferenceChanged(pref) => theme_preference_changed(state, pref),
+        Msg::SystemThemeChanged(detected) => system_theme_changed(state, detected),
+        Msg::Opened => opened(state),
+        Msg::SectionShown(section) => section_shown(state, section),
+        Msg::RailToggled => rail_toggled(state),
+        Msg::ThemeChanged(theme) => theme_changed(state, theme),
+        Msg::ScrollbackChanged(text) => scrollback_changed(state, text),
+        Msg::EnvIncludeEnabledToggled(enabled) => env_include_enabled_toggled(state, enabled),
+        Msg::EnvIncludePathChanged(text) => env_include_path_changed(state, text),
+        Msg::EnvIncludeTimeoutChanged(text) => env_include_timeout_changed(state, text),
+        Msg::DefaultAiCliChanged(which) => default_ai_cli_changed(state, which),
+        Msg::PlacementChanged(placement) => placement_changed(state, placement),
+        Msg::RuntimeChanged(runtime) => runtime_changed(state, runtime),
+        Msg::ImageKindChanged(kind) => image_kind_changed(state, kind),
+        Msg::ImageReferenceChanged(text) => image_reference_changed(state, text),
+        Msg::ImagePathChanged(text) => image_path_changed(state, text),
+        Msg::CredentialToggled(share, shared) => credential_toggled(state, share, shared),
+        Msg::SurviveLogoutToggled(survive) => survive_logout_toggled(state, survive),
+        Msg::NetworkChanged(posture) => network_changed(state, posture),
+        Msg::CpuLimitChanged(text) => cpu_limit_changed(state, text),
+        Msg::MemoryLimitChanged(text) => memory_limit_changed(state, text),
+        Msg::PidLimitChanged(text) => pid_limit_changed(state, text),
+        Msg::StorageLimitChanged(text) => storage_limit_changed(state, text),
+        Msg::Saved => saved(state),
+        Msg::Cancelled => cancelled(state),
+    }
+    Vec::new()
+}
+
+/// The theme mode was advanced one step (feature 003, FR-005).
+/// A theme preference was set from outside the Settings form, and applies immediately.
 ///
 /// Pure state change; the shell persists it at the I/O boundary (FR-009).
-pub fn theme_preference_changed(state: &mut State, pref: ThemePreference) {
-    state.theme_pref = pref;
+///
+/// # Why this survives the control that used it (BUG-001)
+///
+/// The theme was the one setting with two writers: the app bar's cycle, which applied at once, and
+/// the Appearance section, which drafts. Harmless while Settings was a 420dp modal covering the
+/// bar — the menu could not be reached while the form was open. FR-026 made Settings a
+/// full-surface view with the bar still on screen, so both became reachable at once, and a draft
+/// seeded when the view opened still said what the theme was *then*: cycling the menu and pressing
+/// Save reverted the theme the user had just chosen and could see applied.
+///
+/// FR-026e has since removed that second control, which dissolves the condition. This stays as the
+/// rule any future one must obey: apply, and carry the newer value into an open draft — rather
+/// than the form giving up drafting, because Cancel must still discard an Appearance edit. And
+/// deliberately **not** via [`edit`]: a choice made outside the form is not the user acting on the
+/// form, so it must not clear a validation error they are being asked to fix (FR-029) — that would
+/// empty the message and leave the rejected field unexplained.
+pub fn theme_preference_changed(state: &mut crate::app::State, pref: ThemePreference) {
+    state.settings.theme_pref = pref;
+    if let Some(draft) = &mut state.settings.settings_draft {
+        draft.appearance.theme = pref;
+    }
 }
 
 /// The OS reported its light/dark preference (feature 003).
@@ -547,20 +760,31 @@ pub fn theme_preference_changed(state: &mut State, pref: ThemePreference) {
 /// "unknown" must not overwrite a scheme already observed, or a single unanswered probe would
 /// flip the whole UI. The rule lives in core; this arm only records its answer.
 pub fn system_theme_changed(
-    state: &mut State,
+    state: &mut crate::app::State,
     detected: Result<micold_core::theme::SystemScheme, ()>,
 ) {
-    state.system_scheme = micold_core::theme::observe_system_scheme(detected, state.system_scheme);
+    state.settings.system_scheme =
+        micold_core::theme::observe_system_scheme(detected, state.settings.system_scheme);
+}
+
+/// The Settings rail was collapsed to its icons, or reopened (feature 027, FR-026c/d).
+///
+/// Not routed through [`edit`], and not touching the draft at all: FR-026d makes this view state,
+/// so it must not mark the form edited, must not clear a validation error the user is being asked
+/// to fix, and must survive both Save and Cancel. See [`State::settings_rail_collapsed`].
+///
+pub fn rail_toggled(state: &mut crate::app::State) {
+    state.settings.settings_rail_collapsed = !state.settings.settings_rail_collapsed;
 }
 
 /// Settings was opened (feature 006, FR-020; feature 027, FR-026).
 ///
 /// The shell seeds the current values; a draft is ensured here so the reducer path alone is
 /// enough to open the view in a test.
-pub fn opened(state: &mut State) {
+pub fn opened(state: &mut crate::app::State) {
     state.clear_for_dialog();
-    if state.settings_draft.is_none() {
-        state.settings_draft = Some(SettingsDraft::default());
+    if state.settings.settings_draft.is_none() {
+        state.settings.settings_draft = Some(SettingsDraft::default());
     }
 }
 
@@ -569,70 +793,76 @@ pub fn opened(state: &mut State) {
 /// Not an `edit`: moving between sections is navigation, and it must not clear a validation error
 /// the user is being asked to act on — FR-029 reports the error *in the section that owns it*, so
 /// clearing it on the way there would empty the page they were sent to.
-pub fn section_shown(state: &mut State, section: SettingsSection) {
-    if let Some(draft) = &mut state.settings_draft {
+pub fn section_shown(state: &mut crate::app::State, section: SettingsSection) {
+    if let Some(draft) = &mut state.settings.settings_draft {
         draft.show(section);
     }
 }
 
 /// Appearance: the theme was chosen (feature 027, FR-026).
-pub fn theme_changed(state: &mut State, theme: ThemePreference) {
+pub fn theme_changed(state: &mut crate::app::State, theme: ThemePreference) {
     edit(state, |draft| draft.appearance.theme = theme);
 }
 
 /// Terminal: the scrollback field was edited.
-pub fn scrollback_changed(state: &mut State, text: String) {
+pub fn scrollback_changed(state: &mut crate::app::State, text: String) {
     edit(state, |draft| draft.terminal.scrollback_lines = text);
 }
 
 /// Environment: the include toggle was flipped (feature 011).
-pub fn env_include_enabled_toggled(state: &mut State, enabled: bool) {
+pub fn env_include_enabled_toggled(state: &mut crate::app::State, enabled: bool) {
     edit(state, |draft| draft.environment.enabled = enabled);
 }
 
 /// Environment: the include script path was edited (feature 011).
-pub fn env_include_path_changed(state: &mut State, text: String) {
+pub fn env_include_path_changed(state: &mut crate::app::State, text: String) {
     edit(state, |draft| draft.environment.script_path = text);
 }
 
 /// Environment: the include timeout was edited (feature 011).
-pub fn env_include_timeout_changed(state: &mut State, text: String) {
+pub fn env_include_timeout_changed(state: &mut crate::app::State, text: String) {
     edit(state, |draft| draft.environment.timeout_secs = text);
 }
 
 /// Environment: the **Default AI CLI** select changed (feature 026, FR-003).
-pub fn default_ai_cli_changed(state: &mut State, which: AiCli) {
+pub fn default_ai_cli_changed(state: &mut crate::app::State, which: AiCli) {
     edit(state, |draft| draft.environment.default_ai_cli = which);
 }
 
 /// Session service: where sessions run (feature 027, FR-001).
-pub fn placement_changed(state: &mut State, placement: PlacementKind) {
+pub fn placement_changed(state: &mut crate::app::State, placement: PlacementKind) {
     edit(state, |draft| draft.daemon.placement = placement);
 }
 
 /// Session service: which container runtime the sandbox uses (feature 027, FR-002).
-pub fn runtime_changed(state: &mut State, runtime: micold_core::sandbox::runtime::RuntimeKind) {
+pub fn runtime_changed(
+    state: &mut crate::app::State,
+    runtime: micold_core::sandbox::runtime::RuntimeKind,
+) {
     edit(state, |draft| draft.daemon.profile.runtime = runtime);
 }
 
 /// Session service: where the sandbox image comes from (feature 027, FR-006).
-pub fn image_kind_changed(state: &mut State, kind: micold_core::sandbox::image::ImageSourceKind) {
+pub fn image_kind_changed(
+    state: &mut crate::app::State,
+    kind: micold_core::sandbox::image::ImageSourceKind,
+) {
     edit(state, |draft| draft.daemon.profile.image.kind = kind);
 }
 
 /// Session service: the image's reference (feature 027, FR-006).
-pub fn image_reference_changed(state: &mut State, text: String) {
+pub fn image_reference_changed(state: &mut crate::app::State, text: String) {
     edit(state, |draft| draft.daemon.profile.image.reference = text);
 }
 
 /// Session service: the archive an imported image is loaded from (feature 027, FR-006).
-pub fn image_path_changed(state: &mut State, text: String) {
+pub fn image_path_changed(state: &mut crate::app::State, text: String) {
     edit(state, |draft| draft.daemon.image_path = text);
 }
 
 /// Session service: one host credential's share opt-in (feature 027, FR-004c).
 pub fn credential_toggled(
-    state: &mut State,
+    state: &mut crate::app::State,
     share: micold_core::sandbox::CredentialShare,
     shared: bool,
 ) {
@@ -648,34 +878,37 @@ pub fn credential_toggled(
 }
 
 /// Session service: whether sessions outlive the sign-out that started them (feature 027, FR-014).
-pub fn survive_logout_toggled(state: &mut State, survive: bool) {
+pub fn survive_logout_toggled(state: &mut crate::app::State, survive: bool) {
     edit(state, |draft| {
         draft.daemon.profile.survive_logout = survive;
     });
 }
 
 /// Session service: the sandbox's network posture (feature 027, FR-011).
-pub fn network_changed(state: &mut State, posture: micold_core::sandbox::NetworkPosture) {
+pub fn network_changed(
+    state: &mut crate::app::State,
+    posture: micold_core::sandbox::NetworkPosture,
+) {
     edit(state, |draft| draft.daemon.profile.network = posture);
 }
 
 /// Session service: the processor limit, in cores (feature 027, FR-012).
-pub fn cpu_limit_changed(state: &mut State, text: String) {
+pub fn cpu_limit_changed(state: &mut crate::app::State, text: String) {
     edit(state, |draft| draft.daemon.cpus = text);
 }
 
 /// Session service: the memory limit, in MiB (feature 027, FR-013).
-pub fn memory_limit_changed(state: &mut State, text: String) {
+pub fn memory_limit_changed(state: &mut crate::app::State, text: String) {
     edit(state, |draft| draft.daemon.memory_mib = text);
 }
 
 /// Session service: the process-count limit (feature 027, FR-014).
-pub fn pid_limit_changed(state: &mut State, text: String) {
+pub fn pid_limit_changed(state: &mut crate::app::State, text: String) {
     edit(state, |draft| draft.daemon.pids = text);
 }
 
 /// Session service: the writable-storage limit, in MiB (feature 027, FR-015).
-pub fn storage_limit_changed(state: &mut State, text: String) {
+pub fn storage_limit_changed(state: &mut crate::app::State, text: String) {
     edit(state, |draft| draft.daemon.storage_mib = text);
 }
 
@@ -684,8 +917,8 @@ pub fn storage_limit_changed(state: &mut State, text: String) {
 /// Every field edit did these two things and the second was easy to forget: a stale validation
 /// error left beside a field the user has since corrected is the form telling them they are wrong
 /// after they have fixed it. One place, so a new field cannot omit it.
-fn edit(state: &mut State, change: impl FnOnce(&mut SettingsDraft)) {
-    if let Some(draft) = &mut state.settings_draft {
+fn edit(state: &mut crate::app::State, change: impl FnOnce(&mut SettingsDraft)) {
+    if let Some(draft) = &mut state.settings.settings_draft {
         change(draft);
         draft.edited();
     }
@@ -694,11 +927,63 @@ fn edit(state: &mut State, change: impl FnOnce(&mut SettingsDraft)) {
 /// The form was saved (feature 006).
 ///
 /// Validation and persistence happen in the shell; the reducer closes the view.
-pub fn saved(state: &mut State) {
-    state.settings_draft = None;
+pub fn saved(state: &mut crate::app::State) {
+    state.settings.settings_draft = None;
 }
 
 /// The form was dismissed without saving.
-pub fn cancelled(state: &mut State) {
-    state.settings_draft = None;
+pub fn cancelled(state: &mut crate::app::State) {
+    state.settings.settings_draft = None;
+}
+
+// --- Where a CLI is missing, and what to say about it (feature 027, FR-023b) ---
+
+/// The sentence shown where an image is chosen and where a CLI is chosen, when the place sessions
+/// run is missing one (FR-023b). `None` when there is nothing to say.
+///
+/// Two of the three `None` cases are the interesting ones:
+///
+/// - **the service has not answered yet.** Not "nothing is available" — the app has not asked, or
+///   the reply is in flight. Saying anything here would be a guess, and a guess that names a
+///   *specific* CLI as missing is worse than silence.
+/// - **everything is present.** The absence of a notice is the whole of "this is fine"; a green
+///   "all CLIs present" line is a second thing to read on every visit to a form that is not about
+///   AI CLIs.
+///
+/// The sentence never presents this as the application failing. It is a fact about the machine
+/// sessions run on, phrased as what that machine would have to provide, because that is where the
+/// user can act. FR-023b is explicit that it belongs *here*, at the two points of choice, and not
+/// at session start — by then the user has committed to something the app already knew would not
+/// work.
+pub fn missing_cli_notice(availability: Option<&CliAvailability>) -> Option<String> {
+    let availability = availability?;
+    let missing = availability.missing();
+    let names = name_list(&missing)?;
+    let verb = if missing.len() == 1 {
+        "isn't"
+    } else {
+        "aren't"
+    };
+    Some(match &availability.source {
+        AvailabilitySource::Image(reference) => format!(
+            "{names} {verb} in {reference}. Sessions run in that image, so it has to provide any \
+             AI CLI you want to use."
+        ),
+        AvailabilitySource::ThisComputer => {
+            format!("{names} {verb} installed on this computer, which is where sessions run.")
+        }
+    })
+}
+
+/// "Claude Code", "Claude Code and GitHub Copilot", "a, b and c" — `None` for an empty list.
+///
+/// Written out rather than `join(", ")` because this goes in a sentence, and a comma-separated
+/// list reads as a field value rather than as prose.
+fn name_list(clis: &[AiCli]) -> Option<String> {
+    let (last, rest) = clis.split_last()?;
+    if rest.is_empty() {
+        return Some(last.to_string());
+    }
+    let leading: Vec<String> = rest.iter().map(ToString::to_string).collect();
+    Some(format!("{} and {last}", leading.join(", ")))
 }

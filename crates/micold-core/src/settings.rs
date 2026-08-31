@@ -229,6 +229,10 @@ impl StoredSettings {
                 // accepted range named (FR-016). The two paths differ on purpose — one is the
                 // user's mistake, the other is a file they may not have written.
                 daemon.sandbox.budget.clamp();
+                // The same read-repairs-what-the-user-did-not-choose rule, applied to the image
+                // namespace this feature retired. Correcting `DEFAULT_IMAGE` only reached users
+                // with no `sandbox` block on disk; this reaches the ones who have one (FR-024).
+                daemon.sandbox.image.repair_retired_namespace();
                 daemon
             },
             // Not clamped, and not checked against availability: unlike the two numbers above,

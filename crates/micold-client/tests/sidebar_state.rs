@@ -3,7 +3,14 @@
 use micold_client::app::{
     on_escape, Message, State, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
 };
+use micold_client::features::help;
+use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::sidebar;
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::sidebar::{SidebarEntry, TagFilter};
+use micold_client::features::worktree::Msg as WorktreeMsg;
+use micold_client::features::worktree_form;
 use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
 use micold_core::session::{AiCli, Session, SessionLocation};
@@ -33,17 +40,17 @@ fn state_with_active() -> State {
 #[test]
 fn defaults_visible_with_default_width() {
     let state = State::default();
-    assert!(!state.sidebar_hidden);
+    assert!(!state.sidebar.hidden);
     assert_eq!(state.sidebar_width_px(), SIDEBAR_DEFAULT_WIDTH);
 }
 
 #[test]
 fn toggling_hides_and_shows() {
     let mut state = State::default();
-    state.update(Message::SidebarToggled);
-    assert!(state.sidebar_hidden);
-    state.update(Message::SidebarToggled);
-    assert!(!state.sidebar_hidden);
+    state.update(Message::Sidebar(SidebarMsg::Toggled));
+    assert!(state.sidebar.hidden);
+    state.update(Message::Sidebar(SidebarMsg::Toggled));
+    assert!(!state.sidebar.hidden);
 }
 
 /// The drag protocol changed with feature 017 (T041): the resize handle owns the drag itself, so
@@ -52,7 +59,7 @@ fn toggling_hides_and_shows() {
 #[test]
 fn a_reported_width_is_adopted() {
     let mut state = State::default();
-    state.update(Message::SidebarDragMoved(250));
+    state.update(Message::Sidebar(SidebarMsg::DragMoved(250)));
     assert_eq!(state.sidebar_width_px(), 250);
 }
 
@@ -63,10 +70,10 @@ fn a_reported_width_is_adopted() {
 fn drag_width_is_clamped_to_bounds() {
     let mut state = State::default();
 
-    state.update(Message::SidebarDragMoved(10)); // below min
+    state.update(Message::Sidebar(SidebarMsg::DragMoved(10))); // below min
     assert_eq!(state.sidebar_width_px(), SIDEBAR_MIN_WIDTH);
 
-    state.update(Message::SidebarDragMoved(5000)); // above max
+    state.update(Message::Sidebar(SidebarMsg::DragMoved(5000))); // above max
     assert_eq!(state.sidebar_width_px(), SIDEBAR_MAX_WIDTH);
 }
 
@@ -75,41 +82,41 @@ fn drag_width_is_clamped_to_bounds() {
 #[test]
 fn worktree_menu_toggles_replaces_and_dismisses() {
     let mut state = State::default();
-    let open_dir = |s: &State| s.worktree_menu_open.as_ref().map(|m| m.dir_name.clone());
+    let open_dir = |s: &State| s.worktree.menu_open.as_ref().map(|m| m.dir_name.clone());
     // Toggle open, at the point the row was pressed (018 FR-029d).
-    state.update(Message::WorktreeMenuToggled(
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-a".to_string(),
         (120, 300),
-    ));
+    )));
     assert_eq!(open_dir(&state).as_deref(), Some("feat-a"));
     assert_eq!(
-        state.worktree_menu_open.as_ref().unwrap().anchor,
+        state.worktree.menu_open.as_ref().unwrap().anchor,
         (120, 300)
     );
     // Toggling the same one closes it.
-    state.update(Message::WorktreeMenuToggled(
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-a".to_string(),
         (120, 300),
-    ));
-    assert_eq!(state.worktree_menu_open, None);
+    )));
+    assert_eq!(state.worktree.menu_open, None);
     // Opening a different one while one is open replaces it (only one open at a time) — and
     // re-anchors at its own press point rather than keeping the first one's (BUG-008).
-    state.update(Message::WorktreeMenuToggled(
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-a".to_string(),
         (120, 300),
-    ));
-    state.update(Message::WorktreeMenuToggled(
+    )));
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-b".to_string(),
         (140, 610),
-    ));
+    )));
     assert_eq!(open_dir(&state).as_deref(), Some("feat-b"));
     assert_eq!(
-        state.worktree_menu_open.as_ref().unwrap().anchor,
+        state.worktree.menu_open.as_ref().unwrap().anchor,
         (140, 610)
     );
     // Dismiss clears.
-    state.update(Message::WorktreeMenuDismissed);
-    assert_eq!(state.worktree_menu_open, None);
+    state.update(Message::Worktree(WorktreeMsg::MenuDismissed));
+    assert_eq!(state.worktree.menu_open, None);
 }
 
 // --- Cross-app clipboard copy (worktree "Copy name" context-menu action) ---
@@ -118,12 +125,14 @@ fn worktree_menu_toggles_replaces_and_dismisses() {
 fn text_copy_requested_is_a_no_op_in_the_pure_reducer() {
     // The binary performs the actual clipboard write; the reducer has no state to update.
     let mut state = State::default();
-    state.update(Message::WorktreeMenuToggled(
+    state.update(Message::Worktree(WorktreeMsg::MenuToggled(
         "feat-a".to_string(),
         (120, 300),
-    ));
+    )));
     let before = state.clone();
-    state.update(Message::TextCopyRequested("Login page".to_string()));
+    state.update(Message::Worktree(WorktreeMsg::TextCopyRequested(
+        "Login page".to_string(),
+    )));
     assert_eq!(state, before);
 }
 
@@ -132,24 +141,26 @@ fn text_copy_requested_is_a_no_op_in_the_pure_reducer() {
 #[test]
 fn worktree_rename_seeds_edits_and_applies() {
     let mut state = state_with_active();
-    state.update(Message::WorktreeRenameStarted(
+    state.update(Message::Worktree(WorktreeMsg::RenameStarted(
         "feat-abc-123_login-page".to_string(),
-    ));
+    )));
     assert_eq!(open_dialog(&state), Some("rename_worktree"));
-    assert!(state.worktree_menu_open.is_none());
-    let draft = state.worktree_rename_draft.as_ref().unwrap();
+    assert!(state.worktree.menu_open.is_none());
+    let draft = state.worktree.rename_draft.as_ref().unwrap();
     assert_eq!(draft.dir_name, "feat-abc-123_login-page");
     assert_eq!(draft.text, "Login page"); // seeded from the derived name
 
-    state.update(Message::WorktreeRenameTextChanged("My Login".to_string()));
+    state.update(Message::Worktree(WorktreeMsg::RenameTextChanged(
+        "My Login".to_string(),
+    )));
     assert_eq!(
-        state.worktree_rename_draft.as_ref().unwrap().text,
+        state.worktree.rename_draft.as_ref().unwrap().text,
         "My Login"
     );
 
-    state.update(Message::WorktreeRenameConfirmed);
+    state.update(Message::Worktree(WorktreeMsg::RenameConfirmed));
     assert_eq!(open_dialog(&state), None);
-    assert!(state.worktree_rename_draft.is_none());
+    assert!(state.worktree.rename_draft.is_none());
     assert_eq!(
         state.worktree_display_name("feat-abc-123_login-page"),
         "My Login"
@@ -159,13 +170,18 @@ fn worktree_rename_seeds_edits_and_applies() {
 #[test]
 fn worktree_rename_empty_keeps_prior_name_with_error() {
     let mut state = state_with_active();
-    state.update(Message::WorktreeRenameStarted("feat-x".to_string()));
-    state.update(Message::WorktreeRenameTextChanged("   ".to_string()));
-    state.update(Message::WorktreeRenameConfirmed);
+    state.update(Message::Worktree(WorktreeMsg::RenameStarted(
+        "feat-x".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameTextChanged(
+        "   ".to_string(),
+    )));
+    state.update(Message::Worktree(WorktreeMsg::RenameConfirmed));
     // Stays open with an error; no override applied → still the derived name.
     assert_eq!(open_dialog(&state), Some("rename_worktree"));
     assert!(state
-        .worktree_rename_draft
+        .worktree
+        .rename_draft
         .as_ref()
         .unwrap()
         .error
@@ -177,9 +193,13 @@ fn worktree_rename_empty_keeps_prior_name_with_error() {
 fn duplicate_worktree_display_names_are_allowed() {
     let mut state = state_with_active();
     for dir in ["feat-a", "feat-b"] {
-        state.update(Message::WorktreeRenameStarted(dir.to_string()));
-        state.update(Message::WorktreeRenameTextChanged("Same".to_string()));
-        state.update(Message::WorktreeRenameConfirmed);
+        state.update(Message::Worktree(WorktreeMsg::RenameStarted(
+            dir.to_string(),
+        )));
+        state.update(Message::Worktree(WorktreeMsg::RenameTextChanged(
+            "Same".to_string(),
+        )));
+        state.update(Message::Worktree(WorktreeMsg::RenameConfirmed));
     }
     // Identity stays distinct even though the displayed names collide (spec Edge Cases).
     assert_eq!(state.worktree_display_name("feat-a"), "Same");
@@ -191,14 +211,20 @@ fn duplicate_worktree_display_names_are_allowed() {
 #[test]
 fn worktree_hover_sets_and_clears() {
     let mut state = State::default();
-    state.update(Message::WorktreeHovered("feat-a".to_string()));
-    assert_eq!(state.hovered_worktree.as_deref(), Some("feat-a"));
+    state.update(Message::Worktree(WorktreeMsg::Hovered(
+        "feat-a".to_string(),
+    )));
+    assert_eq!(state.worktree.hovered.as_deref(), Some("feat-a"));
     // A stale exit from a different row does not clear the current hover.
-    state.update(Message::WorktreeUnhovered("feat-b".to_string()));
-    assert_eq!(state.hovered_worktree.as_deref(), Some("feat-a"));
+    state.update(Message::Worktree(WorktreeMsg::Unhovered(
+        "feat-b".to_string(),
+    )));
+    assert_eq!(state.worktree.hovered.as_deref(), Some("feat-a"));
     // Leaving the hovered row clears it.
-    state.update(Message::WorktreeUnhovered("feat-a".to_string()));
-    assert!(state.hovered_worktree.is_none());
+    state.update(Message::Worktree(WorktreeMsg::Unhovered(
+        "feat-a".to_string(),
+    )));
+    assert!(state.worktree.hovered.is_none());
 }
 
 // --- Feature 008 US4: sidebar filter set ---
@@ -207,17 +233,19 @@ fn worktree_hover_sets_and_clears() {
 fn sidebar_filter_toggles_and_clears() {
     let mut state = State::default();
     let feat = TagFilter::Type(ConventionalType::Feat);
-    state.update(Message::SidebarFilterToggled(feat));
-    assert!(state.sidebar_filters.contains(&feat));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
+    assert!(state.sidebar.filters.contains(&feat));
     // Toggling again removes it.
-    state.update(Message::SidebarFilterToggled(feat));
-    assert!(!state.sidebar_filters.contains(&feat));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
+    assert!(!state.sidebar.filters.contains(&feat));
     // Multiple filters accumulate; clear empties them all.
-    state.update(Message::SidebarFilterToggled(feat));
-    state.update(Message::SidebarFilterToggled(TagFilter::HasIssue));
-    assert_eq!(state.sidebar_filters.len(), 2);
-    state.update(Message::SidebarFiltersCleared);
-    assert!(state.sidebar_filters.is_empty());
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::HasIssue,
+    )));
+    assert_eq!(state.sidebar.filters.len(), 2);
+    state.update(Message::Sidebar(SidebarMsg::FiltersCleared));
+    assert!(state.sidebar.filters.is_empty());
 }
 
 // --- Feature 009: sidebar filter panel toggle ---
@@ -225,55 +253,58 @@ fn sidebar_filter_toggles_and_clears() {
 #[test]
 fn sidebar_filter_panel_starts_closed() {
     let state = State::default();
-    assert!(!state.sidebar_filter_open);
+    assert!(!state.sidebar.filter_open);
 }
 
 #[test]
 fn sidebar_filter_menu_toggle_opens_and_closes_and_excludes_siblings() {
     let mut state = State {
-        help_menu_open: true,
+        help: help::State {
+            help_menu_open: true,
+            ..Default::default()
+        },
         ..Default::default()
     };
 
-    state.update(Message::SidebarFilterMenuToggled);
-    assert!(state.sidebar_filter_open);
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
+    assert!(state.sidebar.filter_open);
     // Opening the filter panel closes the sibling popovers (mutual exclusion, symmetric with
-    // the existing HelpMenuToggled/ProjectSwitcherToggled pair).
-    assert!(!state.help_menu_open);
-    assert!(!state.project_switcher_open);
+    // the existing help::Msg::MenuToggled/project::Msg::SwitcherToggled pair).
+    assert!(!state.help.help_menu_open);
+    assert!(!state.project.switcher_open);
 
-    state.update(Message::SidebarFilterMenuToggled);
-    assert!(!state.sidebar_filter_open);
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
+    assert!(!state.sidebar.filter_open);
 }
 
 #[test]
 fn opening_help_menu_or_project_switcher_closes_the_filter_panel() {
     let mut state = State::default();
-    state.update(Message::SidebarFilterMenuToggled);
-    assert!(state.sidebar_filter_open);
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
+    assert!(state.sidebar.filter_open);
 
-    state.update(Message::HelpMenuToggled);
-    assert!(!state.sidebar_filter_open);
+    state.update(Message::Help(HelpMsg::MenuToggled));
+    assert!(!state.sidebar.filter_open);
 
-    state.update(Message::SidebarFilterMenuToggled);
-    assert!(state.sidebar_filter_open);
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
+    assert!(state.sidebar.filter_open);
 
-    state.update(Message::ProjectSwitcherToggled);
-    assert!(!state.sidebar_filter_open);
+    state.update(Message::Project(ProjectMsg::SwitcherToggled));
+    assert!(!state.sidebar.filter_open);
 }
 
 #[test]
 fn closing_the_filter_panel_never_changes_active_filters() {
     let mut state = State::default();
     let feat = TagFilter::Type(ConventionalType::Feat);
-    state.update(Message::SidebarFilterToggled(feat));
-    assert!(state.sidebar_filters.contains(&feat));
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(feat)));
+    assert!(state.sidebar.filters.contains(&feat));
 
-    state.update(Message::SidebarFilterMenuToggled); // open
-    assert!(state.sidebar_filters.contains(&feat));
-    state.update(Message::SidebarFilterMenuToggled); // close
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled)); // open
+    assert!(state.sidebar.filters.contains(&feat));
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled)); // close
     assert!(
-        state.sidebar_filters.contains(&feat),
+        state.sidebar.filters.contains(&feat),
         "toggling panel visibility must not alter the active filter set (FR-007/FR-008)"
     );
 }
@@ -283,10 +314,10 @@ fn escape_dismisses_the_open_filter_panel_when_no_overlay_is_open() {
     let mut state = State::default();
     assert_eq!(on_escape(&state), None);
 
-    state.sidebar_filter_open = true;
+    state.sidebar.filter_open = true;
     assert_eq!(
         on_escape(&state),
-        Some(Message::SidebarFilterMenuToggled),
+        Some(Message::Sidebar(SidebarMsg::FilterMenuToggled)),
         "Escape must dismiss the filter panel while it's open"
     );
 }
@@ -299,8 +330,15 @@ fn escape_prefers_an_open_overlay_over_the_filter_panel() {
     // keeps this combination from ever occurring (see the next test), but `on_escape` must not
     // silently disagree with the live subscription if that invariant is ever violated.
     let state = State {
-        sidebar_filter_open: true,
-        worktree_form: Some(Default::default()),
+        sidebar: sidebar::State {
+            filter_open: true,
+            ..Default::default()
+        },
+
+        worktree_form: worktree_form::State {
+            form: Some(Default::default()),
+            ..Default::default()
+        },
         ..Default::default()
     };
     assert_eq!(
@@ -314,18 +352,18 @@ fn escape_prefers_an_open_overlay_over_the_filter_panel() {
 #[test]
 fn opening_an_overlay_closes_the_filter_panel() {
     // Regression test: previously, opening a modal overlay (e.g. the Add Worktree form) while
-    // the filter accordion was open left `sidebar_filter_open` untouched, so `on_escape` and
+    // the filter accordion was open left `filter_open` untouched, so `on_escape` and
     // the live keyboard subscription disagreed about what Escape should dismiss. Every
     // overlay-open now routes through `State::open_overlay`, which resets it unconditionally.
     let mut state = State::default();
-    state.update(Message::SidebarFilterMenuToggled);
-    assert!(state.sidebar_filter_open);
+    state.update(Message::Sidebar(SidebarMsg::FilterMenuToggled));
+    assert!(state.sidebar.filter_open);
 
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::Opened,
     ));
     assert!(
-        !state.sidebar_filter_open,
+        !state.sidebar.filter_open,
         "opening an overlay must close the filter panel"
     );
     assert_eq!(open_dialog(&state), Some("add_worktree"));
@@ -336,7 +374,7 @@ fn opening_an_overlay_closes_the_filter_panel() {
 #[test]
 fn default_entry_stays_visible_with_an_active_tag_filter() {
     let mut state = state_with_active();
-    state.worktrees = vec![Worktree {
+    state.worktree.worktrees = vec![Worktree {
         dir_name: "feat-a".to_string(),
         path: PathBuf::from("/repo/.claude/worktrees/feat-a"),
         branch: Some("feat/a".to_string()),
@@ -345,8 +383,10 @@ fn default_entry_stays_visible_with_an_active_tag_filter() {
     }];
 
     // Sanity: a filter matching nothing still leaves worktree entries empty...
-    state.update(Message::SidebarFilterToggled(TagFilter::Type(
-        ConventionalType::Fix, // no `fix` worktree exists — this filter matches nothing
+    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
+        TagFilter::Type(
+            ConventionalType::Fix, // no `fix` worktree exists — this filter matches nothing
+        ),
     )));
     assert!(
         !state.available_tag_filters().is_empty(),
@@ -393,7 +433,7 @@ fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
     );
     let id = session.id;
     state.workspace.sessions.insert(path, vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
     let location = SessionLocation::Worktree("feat-a".to_string());
     assert!(
         state.location_open(&location),
@@ -428,7 +468,7 @@ fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
          (SC-008, FR-001b)"
     );
     assert!(
-        state.reveal_suppressed_for.is_none(),
+        state.session.reveal_suppressed_for.is_none(),
         "and nothing about the user's own choices is reset by a background discovery either"
     );
 }

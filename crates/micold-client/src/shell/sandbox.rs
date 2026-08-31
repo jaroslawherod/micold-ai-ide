@@ -11,6 +11,9 @@
 
 use std::path::PathBuf;
 
+use iced::Task;
+use micold_client::app::Message;
+use micold_client::features::sandbox::Msg as SandboxMsg;
 use micold_core::endpoint::DEFAULT_SANDBOX_PORT;
 use micold_core::protocol::auth::{host_token_path, Token, CONTAINER_TOKEN_PATH};
 use micold_core::sandbox::cli::CliRuntime;
@@ -100,11 +103,29 @@ pub fn start(
         });
     }
 
+    // The sandbox's own home, created here rather than left to the runtime (FR-004d). A bind
+    // source the runtime has to create it creates as **root**, which leaves the uid the container
+    // runs as unable to write to its own `HOME` — the failure this mount exists to fix, arriving by
+    // a different route. Created before `create` for the same reason the token is.
+    let sandbox_home = facts.state_dir.join(micold_core::sandbox::SANDBOX_HOME_DIR);
+    if let Err(e) = std::fs::create_dir_all(&sandbox_home) {
+        return Err(Failure {
+            stage: micold_core::sandbox::lifecycle::Stage::Creating,
+            error: micold_core::sandbox::runtime::RuntimeError::Unknown {
+                stderr: format!(
+                    "could not create the sandbox home directory {}: {e}",
+                    sandbox_home.display()
+                ),
+            },
+        });
+    }
+
     let mounts = MountSet::build(
         projects,
         profile,
         &facts.layout,
         facts.state_dir.clone(),
+        &facts.home,
         SecretMount {
             host: token_path,
             container: PathBuf::from(CONTAINER_TOKEN_PATH),
@@ -177,23 +198,29 @@ pub fn boot(plan: BootPlan) -> iced::Task<micold_client::app::Message> {
         .await;
 
         match outcome {
-            Ok(Ok(started)) => micold_client::app::Message::SandboxStarted(Box::new(started)),
-            Ok(Err(failure)) => micold_client::app::Message::SandboxFailed(Box::new(failure)),
+            Ok(Ok(started)) => {
+                micold_client::app::Message::Sandbox(SandboxMsg::Started(Box::new(started)))
+            }
+            Ok(Err(failure)) => {
+                micold_client::app::Message::Sandbox(SandboxMsg::Failed(Box::new(failure)))
+            }
             // A panicked or cancelled blocking task is still a sandbox that did not come up, and
             // the user needs the same standing banner for it as for a runtime that refused.
-            Err(join) => micold_client::app::Message::SandboxFailed(Box::new(Failure {
-                stage: micold_core::sandbox::lifecycle::Stage::Starting,
-                error: micold_core::sandbox::runtime::RuntimeError::Unknown {
-                    stderr: join.to_string(),
-                },
-            })),
+            Err(join) => {
+                micold_client::app::Message::Sandbox(SandboxMsg::Failed(Box::new(Failure {
+                    stage: micold_core::sandbox::lifecycle::Stage::Starting,
+                    error: micold_core::sandbox::runtime::RuntimeError::Unknown {
+                        stderr: join.to_string(),
+                    },
+                })))
+            }
         }
     })
 }
 
 /// Ask the runtime, once, whether our container is still running (FR-036, US6 scenario 3).
 ///
-/// Yields [`micold_client::app::Message::SandboxLost`] only when the answer is a definite no —
+/// Yields [`SandboxMsg::Lost`] only when the answer is a definite no —
 /// the container is absent, or present and stopped. A runtime that cannot be reached to ask is
 /// *not* an answer: reporting the sandbox lost because `docker` was briefly busy would replace a
 /// transient reconnect with a banner and a restart the user did not need.
@@ -211,7 +238,7 @@ pub fn check_alive(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
         .unwrap_or(false);
 
         if gone {
-            micold_client::app::Message::SandboxLost
+            micold_client::app::Message::Sandbox(SandboxMsg::Lost)
         } else {
             micold_client::app::Message::NoOp
         }
@@ -241,7 +268,7 @@ pub fn diagnostics(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
         .ok()
         .flatten()
         .unwrap_or_default();
-        micold_client::app::Message::SandboxDiagnostics(lines)
+        micold_client::app::Message::Sandbox(SandboxMsg::Diagnostics(lines))
     })
 }
 
@@ -268,13 +295,100 @@ pub fn stop(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
             }
         })
         .await;
-        micold_client::app::Message::SandboxLost
+        micold_client::app::Message::Sandbox(SandboxMsg::Lost)
     })
 }
 
 /// The port the sandbox publishes its control channel on.
 pub fn control_port() -> u16 {
     DEFAULT_SANDBOX_PORT
+}
+
+/// This feature's entry point: one arm in `main.rs` routes here (feature 028, contract M2).
+///
+/// Shape **B** with no pure half, like `shell/connection.rs` beside it: every arm returns a
+/// `Task` or writes the binary-owned `app.sandbox`, so by M2's rule none of the six belongs in
+/// `features/sandbox.rs`. The bodies did not move — they are `main.rs`'s six arms, verbatim, with
+/// the routing decision stated once next to them instead of interleaved with the overlay and
+/// session arms that surrounded them.
+pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
+    use micold_client::features::sandbox::Msg;
+
+    match msg {
+        // Feature 027. The sandbox's outcome is recorded, never acted on: a failure must not start
+        // a session somewhere else, and a success needs no prompting because the connection
+        // subscription is already retrying against the loopback port.
+        Msg::Started(started) => {
+            app.sandbox.started(*started);
+            iced::Task::none()
+        }
+        Msg::Failed(failure) => {
+            // Recorded and left standing. The banner draws it for as long as it lasts — the queue
+            // would show it once, for four seconds, while the sandbox stayed broken (FR-035b, S-3),
+            // which is exactly the edge case the spec calls out.
+            app.sandbox.failed(*failure);
+            iced::Task::none()
+        }
+        Msg::Diagnostics(lines) => {
+            match lines.last() {
+                // Phrased like the connected path's `RecentErrors` answer, because from the user's
+                // side it is the same question — only the route it took to be answered differs.
+                Some(latest) => app.core.notify_error(format!(
+                    "The session service logged {} line(s) inside the sandbox; most recent: {}",
+                    lines.len(),
+                    latest.trim()
+                )),
+                None => app.core.notify_info(
+                    "The sandbox is there, but the session service inside it has logged nothing.",
+                ),
+            }
+            iced::Task::none()
+        }
+        Msg::Lost => {
+            app.sandbox.container_lost(CONTAINER_NAME);
+            iced::Task::none()
+        }
+        // The one edge back into bring-up, and it is here because a person pressed something
+        // (R9, FR-035a). Both of these are user actions; neither is ever sent by the application
+        // to itself.
+        Msg::RestartRequested => {
+            match app.sandbox_boot.clone() {
+                Some(plan)
+                    if app
+                        .sandbox
+                        .restart(micold_core::sandbox::lifecycle::RestartRequested) =>
+                {
+                    // Going back to the sandbox has to take the connection with it. If a fallback
+                    // was in force, `placement.kind` is the host process; left there, the sandbox
+                    // would come up and every session would still be running outside it — the
+                    // banner saying "sandboxed" over an unconfined shell, which is the one thing
+                    // FR-035b exists to prevent.
+                    app.placement.kind =
+                        micold_core::sandbox::placement::PlacementKind::LocalSandbox;
+                    boot(plan)
+                }
+                _ => iced::Task::none(),
+            }
+        }
+        Msg::FallbackAccepted => {
+            if let Some(offer) = app.sandbox.fallback_offer() {
+                // Consent is not the whole of it. `daemon::connection` dials from `app.placement`,
+                // and for `LocalSandbox` it deliberately never falls back to a host process
+                // (FR-035, and the comment in `daemon.rs` says so). So the *only* thing that can
+                // turn accepted consent into a working service is moving the placement here —
+                // without this the user presses "Run without it for now", the banner changes, and
+                // the client goes on dialling a port nothing is listening on, forever.
+                //
+                // In memory only: nothing writes it back to the settings store, which is what
+                // makes the choice last for this occurrence alone (FR-035a).
+                if app.sandbox.accept_fallback(offer) {
+                    app.placement.kind =
+                        micold_core::sandbox::placement::PlacementKind::HostProcess;
+                }
+            }
+            iced::Task::none()
+        }
+    }
 }
 
 #[cfg(test)]

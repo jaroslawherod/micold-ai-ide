@@ -134,6 +134,22 @@ jobs:
       - name: Install iced system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
+          # Drop the vendor apt repositories the runner image preconfigures (Microsoft's
+          # `azure-cli` and `prod`, Google Chrome) before updating. Every package installed below
+          # comes from the Ubuntu archive; none has ever come from those. But `apt-get update`
+          # exits 100 if *any* configured repository fails, so an outage in software this project
+          # does not use fails the job -- as one did on 2026-08-27, when packages.microsoft.com
+          # answered 403 for both of its repositories and the only consequence was a red build
+          # that a re-run cleared.
+          #
+          # Emptying `sources.list.d` except for `ubuntu.sources` leaves the archive itself alone on
+          # both runner generations: jammy keeps it in `/etc/apt/sources.list`, noble in
+          # `sources.list.d/ubuntu.sources`. Deleting by exception rather than by `*.list` matters
+          # because the vendor repositories are defined as `.list` on one image generation and as
+          # deb822 `.sources` on the other. If a future image moved the archive somewhere this does
+          # remove, the install below would fail immediately on a missing package rather than
+          # silently install the wrong thing.
+          sudo find /etc/apt/sources.list.d -mindepth 1 -not -name ubuntu.sources -delete
           sudo apt-get update
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libx11-dev \
@@ -164,6 +180,13 @@ jobs:
       - name: Test (component library, showcase, and architecture gates, all platforms)
         # Windows defaults to `pwsh`, which does not treat `\` as a line continuation; pin bash so the
         # one readable multi-line invocation below parses identically on all three runners.
+        #
+        # Feature 028 adds three (T052 — FR-018): `root_vocabulary_is_cross_cutting`,
+        # `root_state_is_shared` and `logical_state_ownership`. They belong here rather than only in
+        # the Linux full-workspace run for the same reason the 021 block does — each reports its
+        # findings *by path* (`features/sidebar.rs`, `ui/mod.rs`, `state.sidebar.expanded`), and a
+        # `\` vs `/` difference in how a path is built goes unnoticed on a Linux-only run and then
+        # fails, or worse silently passes, on a contributor's Windows checkout.
         shell: bash
         run: |
           cargo test -p micold-client \
@@ -180,6 +203,9 @@ jobs:
             --test animated_layout_relayouts \
             --test feature_write_isolation \
             --test root_is_routing_only \
+            --test root_vocabulary_is_cross_cutting \
+            --test root_state_is_shared \
+            --test logical_state_ownership \
             --test features_are_render_free \
             --test no_concrete_implementations \
             --test overlay_registration \
@@ -261,8 +287,30 @@ jobs:
       # in `tests/sandbox_real_*.rs` whose function is not also named `sandbox_real_*` runs locally
       # and is silently skipped here — no failure, just a smaller number in the summary. Every
       # real-runtime test therefore carries the prefix in its own name.
-      - name: Test (real runtime)
+      - name: Test (real runtime, adapter layer)
         run: cargo test -p micold-core --features sandbox-real-runtime sandbox_real_ -- --test-threads=1
+      # The other half, and the half that carries the feature's headline claims. `micold-core`'s
+      # real-runtime targets cover the adapter -- argv a runtime accepts, the isolation it produces
+      # -- while `micold-daemon`'s cover what that isolation is *for*: the boundary probed from
+      # inside a session the daemon spawned (US1), terminal parity against a host daemon (US2),
+      # limits stopping the session and not the service (US4), the image carrying every AI CLI the
+      # application offers (FR-023a), the fingerprint refusal (FR-024d), and sessions surviving a
+      # client restart with the survival opt-in bringing the sandbox back unasked (FR-014a/b/c).
+      #
+      # They ran on no machine at all until now. The step above says `-p micold-core`, so cargo
+      # never built this crate's targets, and eleven tests -- including quickstart §B.2, which says
+      # in writing that its boxes "re-check themselves on every sandbox-runtime CI run" -- were
+      # verified exactly once, by hand, in the T120 pass. A test nothing runs is documentation.
+      #
+      # `--release` is required rather than preferred. The daemon inside the image is release-built,
+      # and `sandbox_real_session_start` compares it against `CARGO_BIN_EXE_micold-daemon`, which is
+      # whatever profile this run used: a debug host daemon against a release containerised one
+      # flatters the container, which is the wrong direction for "the sandbox is not much slower".
+      # The test refuses to report a number when the profiles disagree -- and refusing is a failure,
+      # which is why `--no-fail-fast` is here too. Without it cargo stops at that target and every
+      # target after it is skipped in silence, `sandbox_real_staleness` included.
+      - name: Test (real runtime, daemon)
+        run: cargo test --release -p micold-daemon --features sandbox-real-runtime sandbox_real_ --no-fail-fast -- --test-threads=1
 
   # Constitution Principle VII: documentation ships and is verified in CI.
   # Feature 021 (FR-027): the restructuring treats the existing suite as its behavior
@@ -333,6 +381,54 @@ jobs:
           # Feature 023 is developer-facing, so Principle VII is satisfied here rather than in the
           # user guide. This check runs on documentation-only changes too -- which is the point.
           test -f docs/development/ci-pipeline.md
+
+      # Feature 010, BUG-008. A success criterion that names no observable cannot be checked by
+      # anyone who is not standing at the machine, so it is skipped -- and CI stays green while it
+      # is, because nothing can fail a criterion nobody can run. This gate is deliberately in the
+      # `docs check` job: the omission is made in a spec file, on documentation-only changes, which
+      # is exactly when the rest of the pipeline is skipped.
+      #
+      # The check's own cases run FIRST, and this ordering is the point rather than tidiness: the
+      # assertion-freeze gate beside it shipped with cases that existed and nothing ran, which is
+      # this same bug one level down.
+      - name: The criteria check's own cases
+        run: scripts/tests/check-criteria-observables.test.sh
+      - name: Every success criterion names its observable
+        run: scripts/check-criteria-observables.sh
+
+      # The pre-merge half of the documentation site's checks (feature 028). They are steps in this
+      # job and not a job of their own, deliberately: `docs` is the one job feature 023 keeps running
+      # on a documentation-only change, so it is the only place a check over documentation is
+      # guaranteed to run at all -- and adding a job would mean adding it to `ci-complete`'s `needs:`
+      # and to the required-check name the default branch's ruleset holds, which lives outside this
+      # repository.
+      #
+      # lychee arrives as its published binary rather than through `cargo install`. This job has no
+      # Rust toolchain and wants none: installing one and compiling a link checker would cost a
+      # documentation-only change several minutes, which is the cost feature 023 exists to remove.
+      # `pages.yml` installs it with cargo instead, because it already has the toolchain, the cache
+      # and mdBook to install beside it.
+      - name: Install lychee
+        env:
+          LYCHEE_TAG: lychee-v0.24.2
+          LYCHEE_ASSET: lychee-x86_64-unknown-linux-gnu.tar.gz
+        run: |
+          set -euo pipefail
+          base="https://github.com/lycheeverse/lychee/releases/download/$LYCHEE_TAG"
+          curl -fsSL -O "$base/$LYCHEE_ASSET" -O "$base/$LYCHEE_ASSET.sha256"
+          sha256sum -c "$LYCHEE_ASSET.sha256"
+          # The binary is inside a directory named after the asset, not at the root of the
+          # archive -- `tar xzf "$LYCHEE_ASSET" lychee` finds nothing and fails the job.
+          tar xzf "$LYCHEE_ASSET"
+          sudo install -m 0755 "${LYCHEE_ASSET%.tar.gz}/lychee" /usr/local/bin/lychee
+          rm -rf "$LYCHEE_ASSET" "$LYCHEE_ASSET.sha256" "${LYCHEE_ASSET%.tar.gz}"
+          lychee --version
+      - name: Every page is listed, and the theme is drawn from the tokens
+        run: site/checks/page-set.sh
+      - name: The pages, the media manifest and the scenes agree
+        run: site/checks/media-references.sh
+      - name: Every internal link in the sources resolves
+        run: site/checks/links.sh --sources
 
   # The single status check the default branch's ruleset requires (feature 023). It states the
   # outcome of the run instead of enumerating the pipeline's internals, which is what lets the jobs

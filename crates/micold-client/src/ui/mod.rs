@@ -53,6 +53,14 @@ pub(crate) mod worktree_form;
 pub(crate) mod worktree_rename;
 
 use crate::app::{Message, State};
+use crate::features::connection::Msg as ConnectionMsg;
+use crate::features::help::Msg as HelpMsg;
+use crate::features::notifications::Msg as NotificationsMsg;
+use crate::features::project::Msg as ProjectMsg;
+use crate::features::sandbox::Msg as SandboxMsg;
+use crate::features::session::Msg as SessionMsg;
+use crate::features::sidebar::Msg as SidebarMsg;
+use crate::features::worktree::Msg as WorktreeMsg;
 use crate::icons::{icon_role, Icon, IconSurface};
 use iced::widget::{column, container, row, Space};
 use iced::{Element, Length, Subscription};
@@ -104,12 +112,36 @@ fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a,
             "The displayed content may be stale. Reconnecting…",
             roles,
         ),
+        // Past tense for the same reason the refusal's is (`010` BUG-023): this label is recorded
+        // when the takeover arrives and never re-derived, so "is now attached" went on asserting
+        // that a window killed minutes ago held the project. What happened is the part that stays
+        // true.
         ConnectionStatus::Displaced { by } => material::ConnectionBanner::new(
             "Another window took over this project",
-            format!("{by} is now attached — this window is read-only until you take it back."),
+            format!("{by} took it — this window is read-only until you take it back."),
             roles,
         )
-        .action("Take over", Message::ConnectionTakeoverRequested),
+        .action(
+            "Take over",
+            Message::Connection(ConnectionMsg::TakeoverRequested),
+        ),
+        // The same read-only state and the same button, and deliberately not the same sentence
+        // (`010` BUG-023): this window never held the project, so nothing was taken from it and
+        // there is no "back" to take it. Said in the past tense because it is a report of the
+        // answer this window got, not a live claim about who is attached now — the label is never
+        // re-derived, and the holder may since have exited.
+        ConnectionStatus::ProjectBusy { holder } => material::ConnectionBanner::new(
+            "This project is already open in another window",
+            format!(
+                "{holder} was holding it when this window asked, so this one is read-only. Take \
+                 it over to work here."
+            ),
+            roles,
+        )
+        .action(
+            "Take over",
+            Message::Connection(ConnectionMsg::TakeoverRequested),
+        ),
         ConnectionStatus::VersionMismatch {
             client,
             daemon,
@@ -125,7 +157,7 @@ fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a,
         )
         .action(
             "Restart service",
-            Message::ConnectionRestartServiceRequested,
+            Message::Connection(ConnectionMsg::RestartServiceRequested),
         ),
         ConnectionStatus::BuildMismatch {
             client_build,
@@ -141,7 +173,7 @@ fn connection_banner<'a>(status: &ConnectionStatus, roles: Roles) -> Element<'a,
         )
         .action(
             "Restart service",
-            Message::ConnectionRestartServiceRequested,
+            Message::Connection(ConnectionMsg::RestartServiceRequested),
         ),
     };
     container(banner)
@@ -175,17 +207,24 @@ fn sandbox_banner<'a>(
     // Each condition gets the action that ends it, because a banner that only states a problem is
     // a banner the user learns to ignore.
     let banner = if sandbox.fallback.is_some() {
-        material::ConnectionBanner::new("Running without the sandbox", notice, roles)
-            .action("Try the sandbox again", Message::SandboxRestartRequested)
+        material::ConnectionBanner::new("Running without the sandbox", notice, roles).action(
+            "Try the sandbox again",
+            Message::Sandbox(SandboxMsg::RestartRequested),
+        )
     } else {
         match &sandbox.state {
             SandboxState::Stale(_) => {
-                material::ConnectionBanner::new("The sandbox is out of date", notice, roles)
-                    .action("Restart the sandbox", Message::SandboxRestartRequested)
+                material::ConnectionBanner::new("The sandbox is out of date", notice, roles).action(
+                    "Restart the sandbox",
+                    Message::Sandbox(SandboxMsg::RestartRequested),
+                )
             }
             _ => material::ConnectionBanner::new("The sandbox did not start", notice, roles)
                 // Offered, never taken on our behalf (FR-035a). The button *is* the consent.
-                .action("Run without it for now", Message::SandboxFallbackAccepted),
+                .action(
+                    "Run without it for now",
+                    Message::Sandbox(SandboxMsg::FallbackAccepted),
+                ),
         }
     };
 
@@ -226,13 +265,14 @@ pub fn view<'a>(
     // Checked before the project branch, and returning early from the same `body` binding, so that
     // the app bar and the connection banner below still frame it — a full-surface view is not a
     // separate window, and the way out of it has to stay visible.
-    let body: Element<'a, Message> = if let Some(draft) = state.settings_draft.as_ref() {
+    let body: Element<'a, Message> = if let Some(draft) = state.settings.settings_draft.as_ref() {
         material::ViewFade::new(
             settings_view::view(
                 draft,
                 env_include_outcome,
-                &state.available_providers,
-                state.focused_field,
+                state.session.available_providers.as_ref(),
+                state.window.focused_field,
+                state.settings.settings_rail_collapsed,
                 scheme,
             ),
             bg,
@@ -240,7 +280,7 @@ pub fn view<'a>(
         .showing(main_content_key(state))
         .into()
     } else if state.workspace.active_project().is_some() {
-        let main_inner: Element<'a, Message> = if state.active_session.is_some() {
+        let main_inner: Element<'a, Message> = if state.session.active.is_some() {
             terminal::pane(state, grid, selection, display_offset, scheme)
         } else {
             shell::view(state, scheme)
@@ -253,10 +293,10 @@ pub fn view<'a>(
             sidebar::view(state, scheme),
             sidebar::collapsed_strip(scheme),
         )
-        .open(!state.sidebar_hidden)
+        .open(!state.sidebar.hidden)
         .handle(
             material::ResizeHandle::new(roles)
-                .on_resize(|x| Message::SidebarDragMoved(x.max(0.0) as u16)),
+                .on_resize(|x| Message::Sidebar(SidebarMsg::DragMoved(x.max(0.0) as u16))),
         )
         .into();
         row![left, main]
@@ -301,10 +341,10 @@ pub fn view<'a>(
     // would be nothing left on screen to fade out. Closed, it is inert and blocks nothing.
     let overflow_menu: cdk::overlay::Surface<'a, Message> = material::MenuOverlay::new(
         toolbar::overflow_items(state),
-        Message::HelpMenuToggled,
+        Message::Help(HelpMsg::MenuToggled),
         roles,
     )
-    .open(state.help_menu_open)
+    .open(state.help.help_menu_open)
     .into();
 
     // The project switcher panel — the same `MenuOverlay` the ⋮ menu is, carrying different items
@@ -328,7 +368,7 @@ pub fn view<'a>(
             // Unavailable projects are shown but cannot be activated (008 FR-008).
             message: e
                 .available
-                .then(|| Message::KnownProjectReopened(e.path.clone())),
+                .then(|| Message::Project(ProjectMsg::Reopened(e.path.clone()))),
             trailing_text: (e.running_count > 0).then(|| format!("{} running", e.running_count)),
             trailing_icon: (!e.available).then_some((
                 Icon::Unavailable,
@@ -337,7 +377,7 @@ pub fn view<'a>(
             // Right-click a project row to reach its "Forget project" menu (feature 015). Offered
             // even for unavailable projects — those are precisely the ones a user wants to forget.
             on_context: Some(Box::new(move |point| {
-                Message::ProjectMenuToggled(e.path.clone(), point)
+                Message::Project(ProjectMsg::MenuToggled(e.path.clone(), point))
             })),
         })
         .collect();
@@ -348,13 +388,16 @@ pub fn view<'a>(
         ..material::MenuItem::new(
             Icon::OpenProject,
             "Add project…",
-            Message::ProjectSelectorOpened,
+            Message::Project(ProjectMsg::SelectorOpened),
         )
     });
-    let switcher: cdk::overlay::Surface<'a, Message> =
-        material::MenuOverlay::new(switcher_items, Message::ProjectSwitcherToggled, roles)
-            .open(state.project_switcher_open)
-            .into();
+    let switcher: cdk::overlay::Surface<'a, Message> = material::MenuOverlay::new(
+        switcher_items,
+        Message::Project(ProjectMsg::SwitcherToggled),
+        roles,
+    )
+    .open(state.project.switcher_open)
+    .into();
 
     // The right-clicked project's context menu, at the cursor (feature 015), like a normal desktop
     // context menu: the panel's top-left corner sits at the click point. The anchor is clamped at
@@ -362,19 +405,19 @@ pub fn view<'a>(
     // the panel hanging off the edge. The switcher stays open behind it — which is now a property
     // of the context-menu layer rather than of the order these are built in.
     let project_menu: Option<cdk::overlay::Surface<'a, Message>> =
-        state.project_menu_open.as_ref().map(|menu| {
+        state.project.menu_open.as_ref().map(|menu| {
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(1),
-                state.window_size,
+                state.window.window_size,
             );
             material::MenuOverlay::new(
                 vec![material::MenuItem::new(
                     Icon::Delete,
                     "Forget project",
-                    Message::ProjectForgetRequested(menu.path.clone()),
+                    Message::Project(ProjectMsg::ForgetRequested(menu.path.clone())),
                 )],
-                Message::ProjectMenuDismissed,
+                Message::Project(ProjectMsg::MenuDismissed),
                 roles,
             )
             .anchor(iced::Point::new(x as f32, y as f32))
@@ -389,9 +432,10 @@ pub fn view<'a>(
     // position "the view does not know", which was a description of a parameter the row's
     // right-press did not carry rather than a decision about where a menu belongs.
     let worktree_menu: Option<cdk::overlay::Surface<'a, Message>> =
-        state.worktree_menu_open.as_ref().map(|menu| {
+        state.worktree.menu_open.as_ref().map(|menu| {
             let dir = &menu.dir_name;
             let included = state
+                .worktree
                 .worktrees
                 .iter()
                 .any(|w| &w.dir_name == dir && w.included);
@@ -399,9 +443,9 @@ pub fn view<'a>(
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(items.len()),
-                state.window_size,
+                state.window.window_size,
             );
-            material::MenuOverlay::new(items, Message::WorktreeMenuDismissed, roles)
+            material::MenuOverlay::new(items, Message::Worktree(WorktreeMsg::MenuDismissed), roles)
                 .anchor(iced::Point::new(x as f32, y as f32))
                 .into()
         });
@@ -409,14 +453,14 @@ pub fn view<'a>(
     // The session right-click context menu (feature 010's BUG-003). Only present while a session's
     // menu is open. Same anchor rule and the same clamping as the worktree menu above.
     let session_menu: Option<cdk::overlay::Surface<'a, Message>> =
-        state.session_menu_open.map(|menu| {
+        state.session.menu_open.map(|menu| {
             let items = session_menu_items(menu.id);
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(items.len()),
-                state.window_size,
+                state.window.window_size,
             );
-            material::MenuOverlay::new(items, Message::SessionMenuDismissed, roles)
+            material::MenuOverlay::new(items, Message::Session(SessionMsg::MenuDismissed), roles)
                 .anchor(iced::Point::new(x as f32, y as f32))
                 .into()
         });
@@ -433,8 +477,8 @@ pub fn view<'a>(
     // that one is anchored pane-local because a pane's origin is not known at render time, and this
     // point is already in window space, which is what this overlay takes.
     let shell_instance_menu: Option<cdk::overlay::Surface<'a, Message>> =
-        state.shell_instance_menu.and_then(|(tab, x, y)| {
-            let session = state.active_session?;
+        state.session.shell_instance_menu.and_then(|(tab, x, y)| {
+            let session = state.session.active?;
             let items = strip_tab_menu_items(state, session, tab);
             // FR-006b: a menu with no items does not open, and the secondary press does nothing.
             // With restart the only item and Close excluded (FR-004), this is the AI tab's state
@@ -445,16 +489,21 @@ pub fn view<'a>(
                 return None;
             }
             Some(
-                material::ContextMenu::new(items, (x, y), Message::ShellInstanceMenuClosed, roles)
-                    // Upward, from the bar's top edge rather than down from the press point: the tab
-                    // strip lives in the terminal's bottom bar, so a panel hung below the cursor has
-                    // the bar's remaining height to open into and is cut off by the window. The
-                    // press y is still what the primitive reports and still says which control was
-                    // pressed; it is the x that places the panel here. `app_bar::HEIGHT` is that bar's
-                    // height — §7.1's figure, read rather than restated (BUG-003's lesson, one bar
-                    // over).
-                    .rising_above(anatomy::app_bar::HEIGHT)
-                    .into(),
+                material::ContextMenu::new(
+                    items,
+                    (x, y),
+                    Message::Session(SessionMsg::ShellInstanceMenuClosed),
+                    roles,
+                )
+                // Upward, from the bar's top edge rather than down from the press point: the tab
+                // strip lives in the terminal's bottom bar, so a panel hung below the cursor has
+                // the bar's remaining height to open into and is cut off by the window. The
+                // press y is still what the primitive reports and still says which control was
+                // pressed; it is the x that places the panel here. `app_bar::HEIGHT` is that bar's
+                // height — §7.1's figure, read rather than restated (BUG-003's lesson, one bar
+                // over).
+                .rising_above(anatomy::app_bar::HEIGHT)
+                .into(),
             )
         });
 
@@ -462,16 +511,20 @@ pub fn view<'a>(
     // and clamped like every other menu here; its items are the *available* CLIs, named the
     // human-readable way, because a menu entry is a sentence and not a label in a width budget.
     let session_start_menu: Option<cdk::overlay::Surface<'a, Message>> =
-        state.session_start_menu.as_ref().map(|menu| {
+        state.session.start_menu.as_ref().map(|menu| {
             let items = session_start_menu_items(state, &menu.location);
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(items.len()),
-                state.window_size,
+                state.window.window_size,
             );
-            material::MenuOverlay::new(items, Message::SessionStartMenuDismissed, roles)
-                .anchor(iced::Point::new(x as f32, y as f32))
-                .into()
+            material::MenuOverlay::new(
+                items,
+                Message::Session(SessionMsg::StartMenuDismissed),
+                roles,
+            )
+            .anchor(iced::Point::new(x as f32, y as f32))
+            .into()
         });
 
     // The dialog body for whatever is open — or, if one has just closed, the snapshot it left
@@ -532,10 +585,11 @@ pub fn view<'a>(
     // above the dialog just as well — and changed the root's shape, which every recorded layout
     // anchor is expressed against. The band is what the overlay exists for.
     let snackbar: Option<cdk::overlay::Surface<'a, Message>> =
-        state.notify.visible().map(|visible| {
+        state.notifications.queue.visible().map(|visible| {
             cdk::overlay::Surface::new(
                 micold_core::overlay::Layer::Snackbar,
-                material::Snackbar::new(visible, roles).on_dismiss(Message::NotificationDismissed),
+                material::Snackbar::new(visible, roles)
+                    .on_dismiss(Message::Notifications(NotificationsMsg::Dismissed)),
                 cdk::overlay::Anchor::BottomCenter {
                     bottom: spacing::LG,
                 },
@@ -566,12 +620,12 @@ fn worktree_menu_items(
         material::MenuItem::new(
             Icon::Copy,
             "Copy name",
-            Message::TextCopyRequested(display_name.to_string()),
+            Message::Worktree(WorktreeMsg::TextCopyRequested(display_name.to_string())),
         ),
         material::MenuItem::new(
             Icon::Rename,
             "Rename",
-            Message::WorktreeRenameStarted(dir.to_string()),
+            Message::Worktree(WorktreeMsg::RenameStarted(dir.to_string())),
         ),
     ];
     // 016 BUG-002 (FR-030): inclusion is reversible from the row it produced. Offered only for the
@@ -581,13 +635,13 @@ fn worktree_menu_items(
         items.push(material::MenuItem::new(
             Icon::Close,
             "Stop showing",
-            Message::WorktreeExcludeRequested(dir.to_string()),
+            Message::Worktree(WorktreeMsg::ExcludeRequested(dir.to_string())),
         ));
     }
     items.push(material::MenuItem::new(
         Icon::Unavailable,
         "Delete",
-        Message::WorktreeDeleteRequested(dir.to_string()),
+        Message::Worktree(WorktreeMsg::DeleteRequested(dir.to_string())),
     ));
     items
 }
@@ -633,16 +687,16 @@ fn strip_tab_menu_items(
             "Restart",
             match tab {
                 terminal::StripTab::Instance(instance) => {
-                    Message::ShellInstanceRestartRequested(session, instance)
+                    Message::Session(SessionMsg::ShellInstanceRestartRequested(session, instance))
                 }
-                terminal::StripTab::Ai => Message::TerminalRestartRequested,
+                terminal::StripTab::Ai => Message::Session(SessionMsg::TerminalRestartRequested),
             },
         ));
     }
     if let terminal::StripTab::Instance(instance) = tab {
         items.push(material::MenuItem::labeled(
             "Close",
-            Message::ShellInstanceCloseRequested(session, instance),
+            Message::Session(SessionMsg::ShellInstanceCloseRequested(session, instance)),
         ));
     }
     items
@@ -683,15 +737,16 @@ fn session_start_menu_items(
     location: &micold_core::session::SessionLocation,
 ) -> Vec<material::MenuItem<Message>> {
     state
+        .session
         .offered_providers()
         .into_iter()
         .map(|provider| {
             material::MenuItem::labeled(
                 provider.to_string(),
-                Message::SessionStartRequested {
+                Message::Session(SessionMsg::StartRequested {
                     location: location.clone(),
                     provider,
-                },
+                }),
             )
         })
         .collect()
@@ -699,11 +754,15 @@ fn session_start_menu_items(
 
 fn session_menu_items(id: SessionId) -> Vec<material::MenuItem<Message>> {
     vec![
-        material::MenuItem::new(Icon::Close, "Close", Message::SessionCloseRequested(id)),
+        material::MenuItem::new(
+            Icon::Close,
+            "Close",
+            Message::Session(SessionMsg::CloseRequested(id)),
+        ),
         material::MenuItem::new(
             Icon::Unavailable,
             "Remove",
-            Message::SessionRemoveRequested(id),
+            Message::Session(SessionMsg::RemoveRequested(id)),
         ),
     ]
 }
@@ -716,10 +775,10 @@ fn main_content_key(state: &State) -> u64 {
     // way opening a project does. A sentinel rather than the next small integer: the session arm
     // below mixes a real id into the low bits, and a key that a session could collide with would
     // suppress the fade on exactly the transition it is for.
-    if state.settings_draft.is_some() {
+    if state.settings.settings_draft.is_some() {
         return u64::MAX;
     }
-    match (state.workspace.active_project(), state.active_session) {
+    match (state.workspace.active_project(), state.session.active) {
         (None, _) => 0,
         (Some(_), None) => 1,
         // Offset past the two fixed states; the id itself distinguishes one session from another.

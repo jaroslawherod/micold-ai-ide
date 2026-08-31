@@ -97,11 +97,11 @@ fn an_ordinary_notification_still_reaches_the_queue() {
     state.notify_error("could not create the worktree");
 
     assert!(
-        state.notify.visible().is_some(),
+        state.notifications.queue.visible().is_some(),
         "no notification reached the queue at all, so every assertion above is vacuous"
     );
     assert_eq!(
-        state.notify.pending(),
+        state.notifications.queue.pending(),
         0,
         "one message should not queue behind itself"
     );
@@ -184,13 +184,16 @@ fn the_sandbox_banner_is_drawn_from_the_sandbox_and_not_from_the_queue() {
 /// once about a condition that outlives the telling.
 #[test]
 fn a_failed_sandbox_is_not_announced_through_the_notification_queue() {
+    // Feature 028 folded the six flat `Message::Sandbox*` arms behind one wrapper and moved the
+    // reducer to the shell half, so the arm this reads is `Msg::Failed` in `shell/sandbox.rs`
+    // rather than `Message::SandboxFailed` in `main.rs`. Same arm, same claim about it.
     let main = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/main.rs"),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/shell/sandbox.rs"),
     )
-    .expect("read main.rs");
+    .expect("read shell/sandbox.rs");
 
     let start = main
-        .find("Message::SandboxFailed(failure) =>")
+        .find("Msg::Failed(failure) =>")
         .expect("the failure is no longer handled at all");
     let end = main[start..]
         .find("Task::none()")

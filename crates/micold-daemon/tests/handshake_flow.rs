@@ -25,6 +25,7 @@ async fn matching_handshake_gets_welcome_and_pong() {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
+            client_instance: micold_core::protocol::messages::ClientInstance::current(),
             client_package_version: PACKAGE_VERSION.into(),
             // Feature 027: the host-process placement presents no token, and a fingerprint
             // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
@@ -73,6 +74,7 @@ async fn mismatched_handshake_is_refused_naming_both_sides() {
             protocol_version: PROTOCOL_VERSION + 1,
             schema_hash: SCHEMA_HASH,
             client_build: "stale-client".into(),
+            client_instance: micold_core::protocol::messages::ClientInstance::current(),
             client_package_version: PACKAGE_VERSION.into(),
             // Feature 027: the host-process placement presents no token, and a fingerprint
             // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
@@ -125,6 +127,7 @@ async fn build_mismatch_is_refused_distinctly_when_contract_still_matches() {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "micold-ai-ide/0.0.0-stale".into(),
+            client_instance: micold_core::protocol::messages::ClientInstance::current(),
             client_package_version: "0.0.0-stale".into(),
             auth_token: None,
             client_fingerprint: BUILD_FINGERPRINT.into(),

@@ -21,9 +21,12 @@ mod support;
 use iced::advanced::widget::Tree;
 use iced::advanced::{clipboard, layout, mouse, Shell};
 use iced::{Element, Rectangle, Size};
+use micold_client::features::session;
+use micold_client::features::sidebar;
 
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
+use micold_client::features::session::Msg as SessionMsg;
 use micold_core::env_include::EnvIncludeOutcome;
 
 use support::layout::{self as lay, WINDOW};
@@ -75,7 +78,7 @@ fn first_frame_messages(state: &State) -> Vec<Message> {
 /// The reported grid, if the frame reported one.
 fn reported_grid(messages: &[Message]) -> Option<(u16, u16)> {
     messages.iter().find_map(|m| match m {
-        Message::TerminalResized { cols, rows } => Some((*cols, *rows)),
+        Message::Session(SessionMsg::TerminalResized { cols, rows }) => Some((*cols, *rows)),
         _ => None,
     })
 }
@@ -90,13 +93,21 @@ fn session_displayed_before_its_first_frame() -> State {
     let mut workspace = support::workspace_with(vec![("/tmp/project", vec![session])]);
     workspace.active = workspace.projects.first().map(|p| p.path.clone());
     let state = State {
+        session: session::State {
+            active: Some(id),
+            ..Default::default()
+        },
+
+        sidebar: sidebar::State {
+            width: 260,
+            ..Default::default()
+        },
+
         workspace,
-        active_session: Some(id),
-        sidebar_width: 260,
         ..State::default()
     };
     assert_eq!(
-        state.active_session,
+        state.session.active,
         Some(id),
         "the premise is that this session is displayed"
     );

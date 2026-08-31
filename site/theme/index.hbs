@@ -1,0 +1,445 @@
+<!DOCTYPE HTML>
+<html lang="{{ language }}" class="{{ default_theme }} sidebar-visible" dir="{{ text_direction }}">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>{{ title }}</title>
+        {{#if is_print }}
+        <meta name="robots" content="noindex">
+        {{/if}}
+        {{#if base_url}}
+        <base href="{{ base_url }}">
+        {{/if}}
+
+
+        <!-- Custom HTML head -->
+        {{> head}}
+
+        <meta name="description" content="{{ description }}">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        {{#if favicon_svg}}
+        <link rel="icon" href="{{ resource "favicon.svg" }}">
+        {{/if}}
+        {{#if favicon_png}}
+        <link rel="shortcut icon" href="{{ resource "favicon.png" }}">
+        {{/if}}
+        <link rel="stylesheet" href="{{ resource "css/variables.css" }}">
+        <link rel="stylesheet" href="{{ resource "css/general.css" }}">
+        <link rel="stylesheet" href="{{ resource "css/chrome.css" }}">
+        {{#if print_enable}}
+        <link rel="stylesheet" href="{{ resource "css/print.css" }}" media="print">
+        {{/if}}
+
+        <!-- Fonts: the application's own Roboto, served from this origin, declared in site.css.
+             mdBook's bundled Open Sans is deliberately not linked (FR-031, SC-015). -->
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="{{ resource "highlight.css" }}">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="{{ resource "tomorrow-night.css" }}">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="{{ resource "ayu-highlight.css" }}">
+
+        <!-- Custom theme stylesheets -->
+        {{#each additional_css}}
+        <link rel="stylesheet" href="{{ resource this }}">
+        {{/each}}
+
+        {{#if mathjax_support}}
+        <!-- MathJax -->
+        <script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+        {{/if}}
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "{{ path_to_root }}";
+            const default_light_theme = "{{ default_theme }}";
+            const default_dark_theme = "{{ preferred_dark_theme }}";
+        {{#if search_js}}
+            window.path_to_searchindex_js = "{{ resource "searchindex.js" }}";
+        {{/if}}
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="{{ resource "toc.js" }}"></script>
+    </head>
+    <body>
+    <!-- The first thing a keyboard reaches on every page. The sidebar comes before the prose in the
+         document, so without this the reader tabs through every chapter of the book before reaching
+         the first paragraph of the one they opened -- on every page, every time (WCAG 2.4.1, FR-024).
+         It is off-screen until it takes focus, and its target carries `tabindex="-1"` because a
+         plain <div> cannot be focused, and a skip link that moves nothing but the scroll position
+         leaves the keyboard exactly where it was. -->
+    <span id="micold-focus-origin" tabindex="-1"></span>
+    <a class="micold-skip-link" href="#mdbook-content">Skip to this page's content</a>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                {{#if search_enabled}}
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                {{/if}}
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('{{ default_theme }}')
+            html.classList.add(theme);
+            html.classList.add("js");
+
+            // Mirrored before first paint, so no page is ever painted in the wrong scheme.
+            const micoldDarkThemes = ["coal", "navy", "ayu"];
+            function micoldSyncScheme() {
+                const dark = micoldDarkThemes.some(t => html.classList.contains(t));
+                html.setAttribute("data-scheme", dark ? "dark" : "light");
+            }
+            micoldSyncScheme();
+            new MutationObserver(micoldSyncScheme)
+                .observe(html, { attributes: true, attributeFilter: ["class"] });
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="{{ path_to_root }}toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <!-- `role="button"` and `tabindex` are ours, not mdBook's. The element is a <label> for the
+                             hidden checkbox that drives the sidebar, and a bare label has no role -- so
+                             `aria-label` is prohibited on it and `aria-expanded` is not allowed, which is two
+                             WCAG 2.2 AA failures on every page. Worse, a label is not focusable and the
+                             checkbox behind it is `display: none`, so before this the toggle could not be
+                             reached from the keyboard at all. The role makes the ARIA legal and the tabindex
+                             makes it reachable; the handler below gives it the Enter and Space a button owes
+                             its user, since clicking a label is browser behaviour and pressing one is not. -->
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" role="button" tabindex="0" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            {{fa "solid" "bars"}}
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            {{fa "solid" "paintbrush"}}
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Dark</button></li>
+                        </ul>
+                        {{#if search_enabled}}
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            {{fa "solid" "magnifying-glass"}}
+                        </button>
+                        {{/if}}
+                    </div>
+
+                    <h1 class="menu-title">{{ book_title }}</h1>
+
+                    <div class="right-buttons">
+                        {{#if print_enable}}
+                        <a href="{{ path_to_root }}print.html" title="Print this book" aria-label="Print this book">
+                            {{fa "solid" "print" "print-button"}}
+                        </a>
+                        {{/if}}
+                        {{#if git_repository_url}}
+                        <a href="{{git_repository_url}}" title="Git repository" aria-label="Git repository">
+                            {{fa git_repository_icon_class git_repository_icon}}
+                        </a>
+                        {{/if}}
+                        {{#if git_repository_url}}
+                        <!-- Not `git_repository_edit_url`: mdBook builds that from the tree it
+                             rendered, which is the staging copy, so it names a file no commit has.
+                             `docs/` is where the prose lives; `index.md` is mdBook's own rename of
+                             `README.md` and is turned back here (book.toml, FR-007). -->
+                        <a href="{{git_repository_url}}/edit/main/docs/{{#if (eq path "index.md")}}README.md{{else}}{{path}}{{/if}}" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                            {{fa "solid" "pencil" "git-edit-button"}}
+                        </a>
+                        {{/if}}
+
+                    </div>
+                </div>
+
+                {{#if search_enabled}}
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                {{fa "solid" "spinner" "fa-spin"}}
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+                {{/if}}
+
+                <!-- Where the first Tab starts. mdBook's `toc.js` scrolls the sidebar to the
+                     chapter you are reading, and in Chromium a programmatic scroll moves the
+                     sequential focus navigation starting point with it -- so on every page the
+                     first Tab landed halfway down the table of contents, past the skip link and
+                     past the menu bar. Focusing an element at the top of the document puts the
+                     starting point back where the reader expects it. The element is not in the tab
+                     order itself (`tabindex="-1"`), so this costs a keyboard user nothing; the
+                     focus is programmatic and the last input was not a key, so no ring is drawn.
+                     Runs after the load event, which is after `toc.js` has done its scrolling. -->
+                <script>
+                    addEventListener('load', function () {
+                        requestAnimationFrame(function () {
+                            document.getElementById('micold-focus-origin').focus({ preventScroll: true });
+                        });
+                    });
+                </script>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar-toggle').addEventListener('keydown', function(event) {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            document.getElementById('mdbook-sidebar-toggle-anchor').click();
+                        }
+                    });
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content" tabindex="-1">
+                    <main>
+                        {{{ content }}}
+                    </main>
+
+                    <!-- mdBook's header partial, moved out of the app bar and under the prose: it
+                         carries the release this site was built from and a link to this page's
+                         source at that tag, which is footer material, not chrome. -->
+                    {{> header}}
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        {{#if previous}}
+                            <a rel="prev" href="{{ path_to_root }}{{previous.link}}" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                {{#if (eq ../text_direction "rtl")}}
+                                {{fa "solid" "angle-right"}}
+                                {{else}}
+                                {{fa "solid" "angle-left"}}
+                                {{/if}}
+                            </a>
+                        {{/if}}
+
+                        {{#if next}}
+                            <a rel="next prefetch" href="{{ path_to_root }}{{next.link}}" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                {{#if (eq ../text_direction "rtl")}}
+                                {{fa "solid" "angle-left"}}
+                                {{else}}
+                                {{fa "solid" "angle-right"}}
+                                {{/if}}
+                            </a>
+                        {{/if}}
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                {{#if previous}}
+                    <a rel="prev" href="{{ path_to_root }}{{previous.link}}" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        {{#if (eq ../text_direction "rtl")}}
+                        {{fa "solid" "angle-right"}}
+                        {{else}}
+                        {{fa "solid" "angle-left"}}
+                        {{/if}}
+                    </a>
+                {{/if}}
+
+                {{#if next}}
+                    <a rel="next prefetch" href="{{ path_to_root }}{{next.link}}" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        {{#if (eq text_direction "rtl")}}
+                        {{fa "solid" "angle-left"}}
+                        {{else}}
+                        {{fa "solid" "angle-right"}}
+                        {{/if}}
+                    </a>
+                {{/if}}
+            </nav>
+
+        </div>
+
+        <template id=fa-eye>{{fa "solid" "eye"}}</template>
+        <template id=fa-eye-slash>{{fa "solid" "eye-slash"}}</template>
+        <template id=fa-copy>{{fa "regular" "copy"}}</template>
+        <template id=fa-play>{{fa "solid" "play"}}</template>
+        <template id=fa-clock-rotate-left>{{fa "solid" "clock-rotate-left"}}</template>
+
+        {{#if live_reload_endpoint}}
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "{{{live_reload_endpoint}}}";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+        {{/if}}
+
+        {{#if playground_line_numbers}}
+        <script>
+            window.playground_line_numbers = true;
+        </script>
+        {{/if}}
+
+        {{#if playground_copyable}}
+        <script>
+            window.playground_copyable = true;
+        </script>
+        {{/if}}
+
+        {{#if playground_js}}
+        <script src="{{ resource "ace.js" }}"></script>
+        <script src="{{ resource "mode-rust.js" }}"></script>
+        <script src="{{ resource "editor.js" }}"></script>
+        <script src="{{ resource "theme-dawn.js" }}"></script>
+        <script src="{{ resource "theme-tomorrow_night.js" }}"></script>
+        {{/if}}
+
+        {{#if search_js}}
+        <script src="{{ resource "elasticlunr.min.js" }}"></script>
+        <script src="{{ resource "mark.min.js" }}"></script>
+        <script src="{{ resource "searcher.js" }}"></script>
+        {{/if}}
+
+        <script src="{{ resource "clipboard.min.js" }}"></script>
+        <script src="{{ resource "highlight.js" }}"></script>
+        <script src="{{ resource "book.js" }}"></script>
+
+        <!-- Custom JS scripts -->
+        {{#each additional_js}}
+        <script src="{{ resource this}}"></script>
+        {{/each}}
+
+        {{#if is_print}}
+        {{#if mathjax_support}}
+        <script>
+        window.addEventListener('load', function() {
+            MathJax.Hub.Register.StartupHook('End', function() {
+                window.setTimeout(window.print, 100);
+            });
+        });
+        </script>
+        {{else}}
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+        {{/if}}
+        {{/if}}
+
+        {{#if fragment_map}}
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const fragmentMap =
+                    {{{fragment_map}}}
+                ;
+                const target = fragmentMap[window.location.hash];
+                if (target) {
+                    let url = new URL(target, window.location.href);
+                    window.location.replace(url.href);
+                }
+            });
+        </script>
+        {{/if}}
+
+        <!-- A code block wider than the page scrolls sideways, and a region that scrolls has to be
+             reachable from the keyboard: someone who cannot use a pointer otherwise cannot read the
+             half of the line that is off-screen (WCAG 2.1.1, axe's `scrollable-region-focusable`).
+             Only the blocks that actually overflow get a tab stop -- giving every code block one
+             would make tabbing through a page of examples a chore for the same people. The widths
+             depend on the viewport, so this is recomputed when it changes. -->
+        <script>
+            (function codeBlocksReachableByKeyboard() {
+                const blocks = Array.from(document.querySelectorAll('pre > code'));
+                function sync() {
+                    for (const block of blocks) {
+                        if (block.scrollWidth > block.clientWidth) {
+                            block.setAttribute('tabindex', '0');
+                        } else {
+                            block.removeAttribute('tabindex');
+                        }
+                    }
+                }
+                sync();
+                window.addEventListener('resize', sync);
+                window.addEventListener('load', sync);
+            })();
+        </script>
+
+    </div>
+    </body>
+</html>

@@ -37,7 +37,8 @@ new_repo() {
   git -C "$dir" config user.email t@example.com
   git -C "$dir" config user.name t
   git -C "$dir" config commit.gpgsign false
-  mkdir -p "$dir/crates/thing/tests" "$dir/crates/thing/src" "$dir/specs/021-mvu-slice-architecture"
+  mkdir -p "$dir/crates/thing/tests" "$dir/crates/thing/src" \
+    "$dir/specs/021-mvu-slice-architecture" "$dir/specs/028-feature-encapsulation"
   cat > "$dir/crates/thing/tests/a.rs" <<'RS'
 #[test]
 fn it_starts_off() {
@@ -96,6 +97,12 @@ run() {
 # Make the change in-scope for FR-027 the way a real feature-021 change is: by ticking its tasks.
 claim_021() {
   printf -- '- [X] T0xx done\n' >> "$1/specs/021-mvu-slice-architecture/tasks.md"
+}
+
+# The same, for feature 028 -- whose FR-021 restates the freeze for its own duration. Two features
+# can be frozen at once, and the check has to pick the right one to read adjudications from.
+claim_028() {
+  printf -- '- [X] T0xx done\n' >> "$1/specs/028-feature-encapsulation/tasks.md"
 }
 
 # --- identity: what an assertion says, not which lines moved (issue #146) ------------------------
@@ -182,6 +189,31 @@ d="$(new_repo)"
 run "ASSERTION_FREEZE rejects an unknown mode" 2 "must be auto, enforce or report" "$d" HEAD ASSERTION_FREEZE=bogus
 rm -rf "$d"
 
+# --- scope: feature 028 freezes too, and scope decides which file is read (028 FR-021) -----------
+
+# 028's restructuring renames assertion spellings by the thousand without changing an expectation.
+# Out of scope it would report and exit 0, which is the failure mode the feature exists to correct.
+d="$(new_repo)"
+sed -i 's/!state.enabled,/state.enabled,/' "$d/crates/thing/tests/a.rs"
+claim_028 "$d"; commit_in "$d" reverse
+run "in scope by touching feature 028's directory" 1 "specs/028-feature-encapsulation/" "$d" HEAD~1
+rm -rf "$d"
+
+d="$(new_repo)"
+sed -i 's/!state.enabled,/state.enabled,/' "$d/crates/thing/tests/a.rs"
+commit_in "$d" reverse
+run "in scope by a branch naming 028" 1 "names feature 028" "$d" HEAD~1 FREEZE_BRANCH=feat/028-encapsulation
+rm -rf "$d"
+
+# The report has to cite the rule the *matched* feature carries. 028 has no FR-027 -- its FR-021
+# restates the freeze -- and a first run of this check blocked correctly while telling the reader to
+# go read the wrong requirement in the wrong document.
+d="$(new_repo)"
+sed -i 's/!state.enabled,/state.enabled,/' "$d/crates/thing/tests/a.rs"
+claim_028 "$d"; commit_in "$d" reverse
+run "the report cites the matched feature's rule" 1 "feature 028's FR-021" "$d" HEAD~1
+rm -rf "$d"
+
 # --- adjudications: the third option, and the rule that keeps it honest (T074) -------------------
 
 # An adjudication file lives in the feature directory. Written here rather than by the fixture's
@@ -193,6 +225,15 @@ adjudicate() {
     printf '# Adjudicated removals\n\n## %s\n\n' "$heading"
     printf 'was: %s\n' "$@"
   } > "$dir/specs/021-mvu-slice-architecture/assertion-adjudications.md"
+}
+
+adjudicate_028() {
+  local dir="$1" heading="$2"
+  shift 2
+  {
+    printf '# Adjudicated removals\n\n## %s\n\n' "$heading"
+    printf 'was: %s\n' "$@"
+  } > "$dir/specs/028-feature-encapsulation/assertion-adjudications.md"
 }
 
 # The case T074 exists for: a removal read, judged not to be a relaxation, and written down.
@@ -210,6 +251,16 @@ sed -i '/assert_eq!(state.count, 0);/d' "$d/crates/thing/tests/a.rs"
 adjudicate "$d" "T0xx — the counter moved into the daemon" 'assert_eq!(state.count,0)'
 claim_021 "$d"; commit_in "$d" adjudicated
 run "an adjudicated removal is named, with its task" 0 "T0xx — the counter moved into the daemon" "$d" HEAD~1
+rm -rf "$d"
+
+# The reason detect_scope hands back the directory and not just the sentence: an adjudication filed
+# under 028 must be the one consulted when 028 is what is in scope. Reading 021's would leave every
+# entry invisible and the removal unadjudicated, which is exit 1.
+d="$(new_repo)"
+sed -i '/assert_eq!(state.count, 0);/d' "$d/crates/thing/tests/a.rs"
+adjudicate_028 "$d" "T0xx — the path moved into the feature struct" 'assert_eq!(state.count,0)'
+claim_028 "$d"; commit_in "$d" adjudicated
+run "an adjudication in 028's directory is the one read" 0 "1 removal(s) adjudicated" "$d" HEAD~1
 rm -rf "$d"
 
 # The rule that makes the file safe: an entry naming an assertion that is still in the suite is a

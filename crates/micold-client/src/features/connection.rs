@@ -10,6 +10,80 @@
 //! So [`ConnectionStatus`] moves here whole, and [`connection_status`] takes the four facts it
 //! needs rather than the shell's `App`. What is left in `main.rs` is the lookup that turns the
 //! active project into a displacement, which is plumbing.
+//!
+//! # The vocabulary this feature declares
+//!
+//! Eleven transitions in [`Msg`]: the lifecycle (`Connected`, `Event`, `GridFrame`, `Disconnected`,
+//! `ConnectFailed`), the two mismatches a daemon can report (`VersionMismatch`, `BuildMismatch`), and
+//! the four things the user can ask of it (`TakeoverRequested`, `RestartServiceRequested`,
+//! `DiagnosticsRequested`, `LogoutSurvivalOutcome`).
+//!
+//! **This module declares no `update`.** The entry shape is **B** and only B (data-model.md §1.1):
+//! every one of the eleven is a socket, a process, or a version handshake, so all of them are routed
+//! by `shell/connection.rs` and the root's arm is a deliberate no-op alongside `NoOp`. What lives
+//! here is the decision the feature does have — [`connection_status`] — which is why the module
+//! exists at all, per the paragraph above.
+//!
+//! # The state this feature remembers: none (feature 028, contract S1)
+//!
+//! **This module declares no `State` either**, and it is the only feature module that does not.
+//! Feature 028 gave each feature a struct of its own for what it remembers; this feature remembers
+//! nothing to put in one. It owns none of the forty-three fields data-model.md §3 attributes, and
+//! it is the one feature absent from `OWNERS` in `tests/feature_write_isolation.rs` — the daemon
+//! connection *is* binary-owned runtime state, per the header above, so what it would remember is
+//! held by the shell and recomputed into [`ConnectionStatus`] on every view.
+//!
+//! An empty `pub struct State;` would be a place for a reader to look and find nothing, plus a
+//! field on `app::State` that no reducer writes and no view reads. That is the same no-ceremony
+//! reasoning research.md §R3 applies to this feature's *vocabulary*, where the absent `update` is
+//! recorded in the paragraph above rather than shipped as an empty function. Nine feature structs
+//! and one shared member is the whole of `app::State` (T037, T038).
+
+/// Why the service says this window may not write to a project, and who it named as the holder
+/// (`010` BUG-023).
+///
+/// Both causes leave the window read-only with the same take-over offer, which is why the refusal
+/// was folded onto the displacement to begin with. What the fold could not carry is *which of the
+/// two happened*, and by the time the banner is drawn nothing else in the app distinguishes them:
+/// the event is over and only its consequence is still visible. So the cause travels with the
+/// holder, from the frame that raised it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Hold {
+    /// The holding window's identity string, **as of the takeover or refusal that raised this
+    /// state**. See [`ConnectionStatus::Displaced`] on why it is not a live claim.
+    pub holder: String,
+    /// Which of the two events put this window in the read-only state.
+    pub cause: HoldCause,
+}
+
+/// The two ways the service can leave a window read-only on a project (`010` BUG-023).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoldCause {
+    /// This window held the project and another one took it (`Displaced`, FR-024). Something
+    /// happened *to* this window, and it happened after it was already working.
+    TakenOver,
+    /// This window asked for a project another window already held and was refused
+    /// (`Refused { ProjectBusy }`, FR-023). Nothing was taken from it; it was turned away.
+    AlreadyOpen,
+}
+
+impl Hold {
+    /// A hold raised by a takeover (FR-024).
+    pub fn taken_over(holder: impl Into<String>) -> Self {
+        Self {
+            holder: holder.into(),
+            cause: HoldCause::TakenOver,
+        }
+    }
+
+    /// A hold raised by a refused attach (FR-023).
+    pub fn already_open(holder: impl Into<String>) -> Self {
+        Self {
+            holder: holder.into(),
+            cause: HoldCause::AlreadyOpen,
+        }
+    }
+}
 
 /// The daemon-connection state, as it concerns the *active* project (US5, FR-024/027). Computed by
 /// the binary (the connection is binary-owned runtime state) and passed to `ui::view` so the shell
@@ -25,13 +99,22 @@ pub enum ConnectionStatus {
     /// (FR-024a) — the service decides who holds a project, so its acceptance ends this state
     /// whether or not the user pressed the takeover button.
     Displaced {
-        /// The taking-over window's identity string, **as of the takeover or refusal that raised
-        /// this state**. It is a point-in-time label, not a live one: it is never re-derived, so a
+        /// The taking-over window's identity string, **as of the takeover that raised this
+        /// state**. It is a point-in-time label, not a live one: it is never re-derived, so a
         /// window that has since exited can still be named here. That is tolerable because the
         /// label's job is to explain *why* this window is read-only, and the reason is historical
         /// by nature — but it must not be read as a claim that the named window is running now
         /// (BUG-007, T118).
         by: String,
+    },
+    /// This window asked for the active project and the service refused: another window already
+    /// holds it (FR-023). Read-only with the same take-over offer as
+    /// [`ConnectionStatus::Displaced`] — and a different thing to say about it, because nothing was
+    /// taken from this window (`010` BUG-023).
+    ProjectBusy {
+        /// The holding window's identity, as the refusal named it. The same point-in-time label as
+        /// `Displaced`'s, with the same caveat.
+        holder: String,
     },
     /// The running service speaks a different contract version (US6, FR-021/022). Names both versions
     /// and offers a one-click restart of the service.
@@ -69,7 +152,7 @@ pub enum ConnectionStatus {
 pub fn connection_status(
     version_mismatch: Option<&(u32, u32, String)>,
     build_mismatch: Option<&(String, String)>,
-    displaced_by: Option<&str>,
+    hold: Option<&Hold>,
     disconnected: bool,
 ) -> ConnectionStatus {
     if let Some((client, daemon, daemon_build)) = version_mismatch {
@@ -85,12 +168,94 @@ pub fn connection_status(
             daemon_build: daemon_build.clone(),
         };
     }
-    if let Some(by) = displaced_by {
-        return ConnectionStatus::Displaced { by: by.to_string() };
+    // One precedence slot for both, because the user can do exactly one thing about either: take
+    // the project over. Which sentence they are shown is the whole difference (`010` BUG-023).
+    if let Some(hold) = hold {
+        return match hold.cause {
+            HoldCause::TakenOver => ConnectionStatus::Displaced {
+                by: hold.holder.clone(),
+            },
+            HoldCause::AlreadyOpen => ConnectionStatus::ProjectBusy {
+                holder: hold.holder.clone(),
+            },
+        };
     }
     if disconnected {
         ConnectionStatus::Disconnected
     } else {
         ConnectionStatus::Connected
     }
+}
+
+/// Everything the daemon connection reports or is asked to do (feature 028, FR-001).
+///
+/// # The variants kept their meaning and lost their prefix
+///
+/// Seven began with `Daemon` and two with `Connection`; neither prefix survives, because the type
+/// now says which connection (contract M1). The result reads the way [`ConnectionStatus`] beside it
+/// already did — `Connected`, `Disconnected`, `VersionMismatch` — which is the same vocabulary
+/// about the same thing, and the duplication of names between the two is the point: a status is
+/// what a message leaves behind. `DiagnosticsRequested` and the two `LogoutSurvival` variants
+/// carried no prefix to drop.
+///
+/// # Every arm of this one is an effect
+///
+/// This is the feature data-model §1.1 calls shape B: the reducer entry is
+/// `shell/connection.rs`'s `update`, and there is no pure half. The connection is binary-owned
+/// runtime — an outbox handle, a socket that dropped, a service to restart — so `State::update`
+/// has never done anything with these but decline them, and it still declines them, now in one arm
+/// instead of eleven.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Msg {
+    /// The daemon connection is up: the binary stores the `Outbox` to drive sessions and adopts
+    /// the welcome catalog/settings.
+    Connected {
+        /// Handle for sending `ClientMsg`s to the daemon.
+        outbox: crate::daemon::Outbox,
+        /// The catalog as of the handshake.
+        catalog: micold_core::protocol::messages::CatalogSnapshot,
+        /// The service-owned settings.
+        settings: micold_core::protocol::messages::DaemonSettings,
+    },
+    /// A control message pushed by the daemon (catalog/settings changes, operation results, …).
+    Event(micold_core::protocol::messages::DaemonMsg),
+    /// A grid frame for the viewed session (full snapshot or delta), applied into the per-session
+    /// grid cache.
+    GridFrame(micold_core::protocol::grid::GridFrame),
+    /// The daemon connection dropped; the binary clears its outbox until it reconnects.
+    Disconnected,
+    /// Connecting to (or spawning) the daemon failed, with a human-facing reason.
+    ConnectFailed(String),
+    /// The user asked to take the active project back after being displaced (US5, FR-024):
+    /// re-attach with `force`.
+    TakeoverRequested,
+    /// The daemon refused the handshake on a contract mismatch (US6, FR-021): carries both protocol
+    /// versions and the daemon build so the client can render an actionable diagnostic.
+    VersionMismatch {
+        /// This client's protocol version.
+        client: u32,
+        /// The running daemon's protocol version.
+        daemon: u32,
+        /// The running daemon's human-facing build string.
+        daemon_build: String,
+    },
+    /// The daemon refused the handshake on a same-contract package-version difference (US6,
+    /// FR-022a, BUG-002): the wire contract matches, but a `.deb` upgrade installed a newer build
+    /// than the one still running. Carries both build strings so the client can render a distinct,
+    /// lower-severity diagnostic than [`Msg::VersionMismatch`].
+    BuildMismatch {
+        /// This client's human-facing build string.
+        client_build: String,
+        /// The running daemon's human-facing build string.
+        daemon_build: String,
+    },
+    /// The user chose "restart service" after a version or build mismatch (US6, FR-022/022a): stop
+    /// the mismatched daemon so the auto-reconnect spawns a matching one.
+    RestartServiceRequested,
+    /// The user asked to see where the session service logs and its recent errors (Phase 10,
+    /// FR-046): the binary requests both from the daemon and shows the answers as notices.
+    DiagnosticsRequested,
+    /// The logout-survival opt-in finished being applied; carries a ready-to-show message (info or
+    /// error).
+    LogoutSurvivalOutcome(String),
 }

@@ -1,34 +1,31 @@
-//! Stopping the session service *as an OS process* (feature 021, T055 — FR-019a).
+//! Starting, stopping and outliving the session service *as an OS process* (feature 021, T055 —
+//! FR-019a).
 //!
 //! **Not the same external system as `shell/daemon_sync.rs`, and the distinction is the reason
 //! this file exists.** That module is the conversation with a daemon that is running and speaking
-//! our protocol. This one is what you do when it is not: terminate a mismatched build by pid.
-//! That cannot be expressed as a `ClientMsg`, because it is used precisely when the protocol is
-//! unusable (FR-022).
+//! our protocol. This one is what you do when it is not: terminate a mismatched build by pid, and
+//! report what the configured placement does about surviving a logout. Neither can be expressed as
+//! a `ClientMsg` — the first is used precisely when the protocol is unusable (FR-022), and the
+//! second is a fact about where the service runs rather than anything the service could answer.
 //!
 //! It is the same argument T054 made for splitting the OS-theme probe from the clock that drives
 //! it: two systems that meet at one message are still two systems.
 //!
-//! # This runs off the update thread
+//! # One of these runs off the update thread, and it is no longer the survival one
 //!
-//! It spawns a process and waits for it. On the update thread that is a frozen window for as long
-//! as the stop takes, so it is a `Task::perform` over `spawn_blocking` that reports its outcome as
-//! an ordinary message rather than a return value.
-//!
-//! # What feature 028 removed
-//!
-//! There used to be a second job here: asking `loginctl`/`systemctl` to keep sessions alive across
-//! a logout. Feature 028 removed the mechanism itself (FR-005, packaging contract §4.11) — a
-//! service running directly on the computer no longer claims to survive logout on any platform —
-//! so the request, its outcome toast and the menu item that raised it went with it. The sandboxed
-//! placement still offers survival, and gets it from the container runtime rather than from
-//! anything this module could run.
+//! Stopping a mismatched build spawns a process and waits for it, so it is a `Task::perform` over
+//! `spawn_blocking` that reports its outcome as an ordinary message. The survival opt-in used to
+//! need the same treatment because the host-process arm spawned `loginctl`/`systemctl`; feature 028
+//! removed that arm (FR-005, packaging contract §4.11), so every placement now answers from memory
+//! and the task is only there to keep one message shape.
 
 use iced::Task;
 
 use micold_client::app::Message;
+use micold_core::sandbox::placement::Placement;
 
 use crate::App;
+use micold_client::features::connection::Msg as ConnectionMsg;
 
 /// "Restart service" (FR-022/022a): stop the mismatched daemon by its recorded pid.
 ///
@@ -67,11 +64,45 @@ pub(crate) fn on_restart_service_requested(app: &mut App) -> Task<Message> {
         },
         |r: Result<bool, String>| match r {
             Ok(_) => Message::NoOp,
-            Err(e) => {
-                Message::DaemonConnectFailed(format!("could not stop the mismatched service: {e}"))
-            }
+            Err(e) => Message::Connection(ConnectionMsg::ConnectFailed(format!(
+                "could not stop the mismatched service: {e}"
+            ))),
         },
     )
+}
+
+/// Apply the logout-survival opt-in for the configured placement (feature 027, FR-014a/b/d).
+///
+/// One entry point for both directions and all three placements, because there is one control: the
+/// Settings checkbox. It used to be a menu command that only ever *enabled*, and only ever through
+/// the Linux service manager — so a sandboxed user's menu item silently configured the wrong
+/// mechanism, and nobody could turn it off at all.
+///
+/// Answers immediately on every placement since feature 028 took the host-process mechanism away
+/// (FR-005): the sandbox's policy is a property of a container that already exists, and the other
+/// two placements have nothing to arrange. It still returns a `Task`, because the outcome still
+/// reaches the user as an ordinary message and the caller should not have to care which.
+///
+/// Never enabled by install (FR-038) — this runs only from a save that changed the value.
+pub(crate) fn on_survival_opt_in_changed(placement: Placement, enabling: bool) -> Task<Message> {
+    let outcome = if enabling {
+        micold_core::logout_survival::enable_for(&placement)
+    } else {
+        micold_core::logout_survival::disable_for(&placement)
+    };
+    Task::done(Message::Connection(ConnectionMsg::LogoutSurvivalOutcome(
+        outcome.user_message(),
+    )))
+}
+
+/// Both halves of the survival attempt come back here.
+///
+/// `notify_info`, not `notify_error`, whichever way it went: `SurvivalOutcome::user_message`
+/// already phrases a failure as a failure, and raising it as an error would style a "this
+/// platform does not support it" as something broken.
+pub(crate) fn on_logout_survival_outcome(app: &mut App, message: String) -> Task<Message> {
+    app.core.notify_info(message);
+    Task::none()
 }
 
 #[cfg(test)]
@@ -98,7 +129,8 @@ mod tests {
 
         let said = app
             .core
-            .notify
+            .notifications
+            .queue
             .visible()
             .is_some_and(|n| n.message.contains("sandbox"));
         assert!(
@@ -135,8 +167,18 @@ mod tests {
         let _ = on_restart_service_requested(&mut app);
 
         assert!(
-            app.core.notify.is_active(),
+            app.core.notifications.queue.is_active(),
             "restarting the service must tell the user what it costs"
         );
+    }
+
+    /// The survival outcome reaches the user whichever way it went.
+    #[test]
+    fn the_survival_outcome_is_reported() {
+        let mut app = base_app();
+
+        let _ = on_logout_survival_outcome(&mut app, "it worked".to_string());
+
+        assert!(app.core.notifications.queue.is_active());
     }
 }

@@ -1610,6 +1610,57 @@ a path only a second press exercises, or a pixel position.
 
 ---
 
+## Phase 8: Bugfix BUG-001 — an unavailable default is offered around, never said
+
+**Goal**: Close the fourth clause of FR-002 and FR-004 scenario 4. The T084 §B pass saw it (B7) and
+the table recorded it as a "wording gap"; it is not a wording gap — the reason the list opened was
+gone before any surface could draw it, so there was no wording to fix.
+
+### Tests for BUG-001 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T090 [BUG-001] `crates/micold-client/tests/unavailable_default_says_so.rs`: six rules over the
+      reducer — the intent carries the reason and only for the half that did not ask for the list;
+      the sentence appears with `Level::Error` and the list still opens; the sentence names the CLI
+      the way a menu does and not the way a shell does; the chevron says nothing; a default that
+      turned out to be installed says nothing; closing the list again says nothing.
+
+      The last three are what make it a gate rather than a patch. The reason is published by the
+      press and the binary re-probes `PATH` on the same message, so it is stale by one event — a fix
+      that trusted it would name a CLI the list underneath is about to offer. And
+      `start_menu_toggled` is a toggle: announcing unconditionally tells the user why a list they
+      just dismissed had appeared.
+
+      Widens `tests/features_session.rs::an_unavailable_default_offers_the_choice_rather_than_starting_or_substituting`
+      by the same clause. That test names the three wrong answers it rules out and asserts all three;
+      asserting three of four is how this shipped, and it is the shape T089 found too
+      (`SessionStartMenuAnchored(_)`).
+
+### Implementation for BUG-001
+
+- [X] T091 [BUG-001] `StartIntent::OfferChoice` becomes `{ providers, unavailable_default }`,
+      `Message::SessionStartMenuOpened` carries the same field, and
+      `features/session.rs::start_menu_toggled` returns `Outcome::NotificationRaised` with FR-010's
+      sentence when it opens a list in place of a session it cannot start.
+
+      The CLI travels rather than a flag: the sentence names it, and the name must come from the read
+      that decided it was missing. It rides on `SessionStartMenuOpened` rather than a message of its
+      own because that is the message the binary refreshes availability on (research R11) — a second
+      message would decide against a staler set. The notice goes out as an outcome, not a write:
+      `state.notify` belongs to `notifications`, and `tests/feature_write_isolation.rs` follows
+      helpers transitively.
+
+      The chevron's site passes `None` explicitly. With two providers that is unreachable — a chevron
+      is only drawn when both are installed (FR-006), so the default cannot be missing on a press
+      that has one — and the reducer's re-check would silence it regardless. It is written out so a
+      third provider does not inherit a banner on every override open.
+
+**Bugfix**: 2026-08-27 — BUG-001. **No requirement added**: FR-002 and FR-004 scenario 4 already ask
+for both halves of the sentence; only the second half shipped. **No task reopened**: T085 offers the
+right CLIs and starts nothing, which is what it was written to do; the missing clause had nowhere to
+live until `StartIntent` grew a place for it. See `bugs/BUG-001.md`.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

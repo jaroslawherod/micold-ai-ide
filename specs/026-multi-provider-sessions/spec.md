@@ -4,7 +4,24 @@
 
 **Created**: 2026-08-14
 
-**Status**: Draft
+**Status**: Closed 2026-08-27 — implemented and shipped; all 121 tasks in [tasks.md](./tasks.md) are
+done. Quickstart §A's gate table was walked row by row (T083) and every gate names a green test. §B
+B1–B8 ran 2026-08-25 against a real GitHub Copilot CLI 1.0.80 with `COPILOT_HOME` pointed at a
+scratch directory — headlessly, on Xvfb + lavapipe, via the repository's `visual-pass` skill rather
+than by a person at a display. B1, B2, B3, B5, B6 and B8 pass outright; B4 passes in its label, bar,
+register and title halves and failed on the badge's one-second claim. Four defects the pass found
+became tasks T086–T089 and are fixed: the activity badge never moved until some other broadcast ran,
+a failed resume was computed and dropped, the reason for a failed start was displayed nowhere, and
+the session-start list opened at the window origin instead of at the press. A fifth finding was
+filed rather than fixed in the pass, because closing it meant reshaping the intent type rather than
+editing a string — [BUG-001](./bugs/BUG-001.md), B7's wording gap: an unavailable stored default
+offered the available CLIs and started nothing, correctly, but never said the default was missing.
+It was fixed the same day it was filed (T090, T091), and the feature closes with no open defect.
+`mise run test` is green on Linux, macOS and Windows (T082), and no CI runner has `copilot`
+installed, which is the shape the feature was built to. Two claims are recorded as reasoned rather
+than run: Copilot's Windows base directory was verified from the CLI's own shipped bundle on this
+disk, not on a Windows host (T081), and frame pacing on real hardware is out of reach of a software
+rasteriser.
 
 **Input**: User description: "Multi-provider AI CLI sessions: generalise the existing AiCliProvider seam so a session records which AI coding CLI backs it, the user can choose that CLI when creating a session, and the choice persists across restarts — with GitHub Copilot CLI landed as the second provider alongside the existing Claude Code provider."
 

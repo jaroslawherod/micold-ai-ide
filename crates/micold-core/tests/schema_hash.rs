@@ -145,7 +145,11 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// while 026 was taking those same numbers here, so the merged wire carries both features'
 /// changes and both cannot be 7. Same case, same answer — the constant follows the bump, and 026
 /// still costs exactly one.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 8;
+///
+/// And 8 → 9 for `010` BUG-022, which makes a client *window* nameable on the wire
+/// (`ClientMsg::Hello::client_instance`, and a `ClientIdentity` on `DaemonMsg::Displaced::by` and
+/// `RefusalReason::ProjectBusy::holder`). Third time, same case, same answer.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 9;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

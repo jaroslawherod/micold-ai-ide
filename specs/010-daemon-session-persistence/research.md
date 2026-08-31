@@ -369,14 +369,35 @@ bursts.
 
 ### R2.3 Log directory per OS
 
+**Revised 2026-08-27 (BUG-015).** The table below is what the daemon does; what it *said* until then
+is kept underneath, because the reason it changed is not obvious.
+
 | OS | Location | Note |
 |---|---|---|
-| Linux | `state_dir()` → `~/.local/state/micold-daemon/logs/` | XDG basedir 0.8+ names logs as state data. **Not `cache_dir()`** — cache is defined as safely deletable and cleaners *do* delete it, eating logs mid-investigation. |
-| macOS | `~/Library/Logs/Micold/` | Platform convention (Console.app reads it). `directories` returns `None` for `state_dir()` here — hand-build from `home_dir()`. |
-| Windows | `data_local_dir()` → `%LOCALAPPDATA%\Micold\micold-daemon\logs\` | **Local, not Roaming** — logs must never sync to a roaming profile. |
+| all | `data_local_dir()` → `micold-ai-ide/micold-daemon.log` | One `ProjectDirs` lookup, no `cfg`. On Linux `~/.local/share/micold-ai-ide/`, on macOS `~/Library/Application Support/micold-ai-ide/`, on Windows `%LOCALAPPDATA%\micold-ai-ide\data\`. |
 
-Since `state_dir()` is `None` on two of three targets, write one `cfg`-matched helper rather than
-threading `Option` through init.
+`data_local_dir()`, **not `data_dir()`**: on Windows the latter is the *roaming* profile, and the
+original table's Windows row is still binding — logs must never sync to a roaming profile. On Linux
+and macOS the two resolve to the same directory, so this distinction costs nothing there.
+
+**Not `cache_dir()`**, which is the one rule from the original table that never moved: cache is
+defined as safely deletable and cleaners *do* delete it, eating logs mid-investigation.
+
+The original table specified `state_dir()` → `~/.local/state/micold-daemon/logs/` on Linux, on the
+grounds that XDG basedir 0.8+ names logs as state data — which it does, and which is why that was
+the right first answer. Two things happened after it was written. The implementation used
+`data_dir()` and nothing noticed for a year, so the quickstart's `ls` command pointed at a directory
+that had never existed on any install (BUG-015's second finding). And the sandbox (feature 027) began
+mounting the daemon's data directory into the container as its entire state directory — the image
+sets `XDG_DATA_HOME=/var/lib` and `MountSet::build` binds the host's data dir there — which is how a
+sandboxed daemon's log is readable from the host at all. Moving the log to `state_dir()` now would
+put it outside that mount, so it would take a second mount and a change to the rule-governed mount
+set to restore what data-dir placement already gives. `state_dir()` is also `None` on two of three
+targets, so it needs a `cfg`-matched helper that CI can only partly exercise.
+
+Against that, `data_local_dir()` has no safety hazard of its own — the deletable-cache objection does
+not apply to it — so the divergence was resolved in favour of the implementation, with the Windows
+roaming rule carried across as a one-word fix.
 
 ---
 

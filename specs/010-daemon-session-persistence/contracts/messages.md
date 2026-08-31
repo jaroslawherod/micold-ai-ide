@@ -18,7 +18,9 @@ Two categories, distinguished by the envelope `kind` byte:
 ### Connection
 
 ```rust
-Hello { protocol_version: u32, schema_hash: [u8; 32], client_build: String }  // both must match (Decision 4)
+Hello { protocol_version: u32, schema_hash: [u8; 32], client_build: String,
+        client_instance: ClientInstance }                    // versions must match (Decision 4);
+                                                       // the instance names the *window* (BUG-022)
 Attach { project: PathBuf, force: bool }      // force = confirmed takeover (FR-023)
 Detach { project: PathBuf }
 Goodbye                                        // clean disconnect; does NOT stop sessions
@@ -102,20 +104,28 @@ Ping { nonce: u64 }
 Welcome { daemon_build: String, catalog: CatalogSnapshot, settings: DaemonSettings }
 Refused { reason: RefusalReason }
 Attached { project: PathBuf, sessions: Vec<SessionSummary> }
-Displaced { project: PathBuf, by: String }     // this client lost the project to a takeover
+Displaced { project: PathBuf, by: ClientIdentity }  // this client lost the project to a takeover
 Pong { nonce: u64 }
 
 enum RefusalReason {
     VersionMismatch { client: u32, daemon: u32,
                       client_hash: [u8; 32], daemon_hash: [u8; 32],   // Decision 4
                       daemon_build: String },
-    ProjectBusy     { project: PathBuf, holder: String, since_secs: u64 },
+    ProjectBusy     { project: PathBuf, holder: ClientIdentity, since_secs: u64 },
     NotPermitted    { detail: String },
 }
 ```
 
 `Displaced` **MUST NOT** terminate the client. It stops rendering and sending input for that project,
 shows a disconnected state with a reconnect affordance, and keeps running (FR-024).
+
+`ClientIdentity` is `{ build: String, instance: ClientInstance }`, and `ClientInstance` is
+`{ pid: u32, nonce: String }` — the pid so a banner can name a window, the nonce so the identity is
+unique. A client **MUST** present the same instance on every connection it opens, and **MUST** treat
+a `Displaced` or a `ProjectBusy` whose identity is its own as its own superseded connection: ignore
+the former, reclaim with `Attach { force: true }` on the latter, with no user-facing takeover offer
+(BUG-022). The daemon compares nothing: exclusivity is per connection, and two connections sharing
+an instance are still two attachments.
 
 ### State projection (pushed, unsolicited)
 

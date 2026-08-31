@@ -15,7 +15,7 @@ fn two_projects_active_b() -> State {
         ..Default::default()
     };
     st.workspace.active = Some(PathBuf::from("/b")); // /a is inactive
-    st.active_session = Some(st.workspace.sessions[Path::new("/b")][0].id);
+    st.session.active = Some(st.workspace.sessions[Path::new("/b")][0].id);
     st
 }
 
@@ -40,8 +40,8 @@ fn marks_restart_only_when_owning_project_is_inactive() {
     st.note_background_restart(a_id); // /a inactive → marked
     st.note_background_restart(b_id); // /b active → NOT marked
 
-    assert!(st.restarted_while_inactive.contains(&a_id));
-    assert!(!st.restarted_while_inactive.contains(&b_id));
+    assert!(st.session.restarted_while_inactive.contains(&a_id));
+    assert!(!st.session.restarted_while_inactive.contains(&b_id));
 }
 
 /// FR-011 / SC-007: returning to a project whose session was restarted in the background tells
@@ -58,11 +58,12 @@ fn returning_to_project_notifies_the_user_and_clears_markers() {
     let a_id = st.workspace.sessions[Path::new("/a")][0].id;
     st.note_background_restart(a_id);
 
-    assert!(st.notify.visible().is_none());
+    assert!(st.notifications.queue.visible().is_none());
     assert!(switch(&mut st, "/a"));
 
     let visible = st
-        .notify
+        .notifications
+        .queue
         .visible()
         .expect("the return notice reached the queue");
     assert_eq!(visible.level, micold_core::notify::Level::Info);
@@ -70,8 +71,8 @@ fn returning_to_project_notifies_the_user_and_clears_markers() {
         visible.message,
         "A background session was restarted while you were away."
     );
-    assert!(st.restarted_while_inactive.is_empty());
+    assert!(st.session.restarted_while_inactive.is_empty());
 
     // The restored foreground session is active — the condition that hid the old banner.
-    assert!(st.active_session.is_some());
+    assert!(st.session.active.is_some());
 }

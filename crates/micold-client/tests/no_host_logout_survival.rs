@@ -8,29 +8,33 @@
 //! placement keeps the promise through the container runtime's restart policy, which is not a
 //! session-scoped registration and is not what this guard is about.
 //!
-//! A guard rather than a deletion diff, because the removal has four separate surfaces — a core
-//! function, two messages, and a menu item — and leaving any one behind leaves a path back. The
-//! menu item alone is enough: an entry that calls nothing is worse than the feature it lost.
+//! A guard rather than a deletion diff, because the removal has several separate surfaces — a core
+//! function, a message, and a menu item — and leaving any one behind leaves a path back. The menu
+//! item alone is enough: an entry that calls nothing is worse than the feature it lost.
 //!
-//! Scanned: `crates/micold-client/src/` and `crates/micold-core/src/`. Not `tests/`, so this file
-//! may quote the names it forbids.
+//! # What it does *not* forbid
+//!
+//! `LogoutSurvivalOutcome` stays. It reported the removed host-process attempt's result, but it now
+//! carries the sandbox checkbox's answer (feature 027 FR-014d), which §4.13 keeps. Forbidding the
+//! name would delete a working control to satisfy a guard.
+//!
+//! Scanned: `crates/micold-client/src/` and `crates/micold-core/src/`, **line comments stripped**.
+//! The removal is a fact about code, not about prose: a module doc that says "this used to offer
+//! `Keep sessions after logout`" is the record of the removal, not a way back to it. Not `tests/`,
+//! so this file may quote the names it forbids.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 /// `(needle, why it may not appear)`.
 ///
-/// The user-facing string is in the list on purpose. The two messages and the function could all
-/// be gone while the menu still rendered the label, and a menu item is the only one of the four a
-/// user can see.
+/// The user-facing string is in the list on purpose. The message and the function could both be
+/// gone while the menu still rendered the label, and a menu item is the only surface a user can
+/// see.
 const FORBIDDEN: &[(&str, &str)] = &[
     (
         "LogoutSurvivalRequested",
         "the message the removed menu item sent",
-    ),
-    (
-        "LogoutSurvivalOutcome",
-        "the message that reported the removed attempt's result",
     ),
     (
         "Keep sessions after logout",
@@ -74,12 +78,25 @@ fn names_host_enable(text: &str) -> bool {
         .any(|(i, _)| !text[i + PREFIX.len()..].starts_with("_for"))
 }
 
+/// The text with whole-line `//` comments dropped.
+///
+/// Prose that *names* the removed feature is how the removal stays explained — `ui/toolbar.rs`
+/// records which two commands the menu lost, and that sentence is worth more than the guard's
+/// literal reading of it. What may not survive is a line that still calls or renders the thing.
+fn code_only(text: &str) -> String {
+    text.lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// One violation, phrased so the failure says what to do about it.
 #[derive(Debug, PartialEq)]
 struct Violation(String);
 
 /// The rule over one file's text.
 fn violations_in(label: &str, text: &str) -> Vec<Violation> {
+    let text = &code_only(text);
     let mut out: Vec<Violation> = FORBIDDEN
         .iter()
         .filter(|(needle, _)| text.contains(needle))
@@ -193,5 +210,31 @@ fn a_menu_that_still_offers_it_fails() {
         found.len(),
         2,
         "expected the label and the message: {found:?}"
+    );
+}
+
+/// The other half of stripping comments: a doc comment that *records* the removal must pass, or
+/// the guard punishes the explanation. This is `ui/toolbar.rs`'s real first line.
+#[test]
+fn a_comment_recording_the_removal_passes() {
+    assert_eq!(
+        violations_in(
+            "src/ui/toolbar.rs",
+            "//! It used to carry a theme-mode cycle and a \"Keep sessions after logout\" command.",
+        ),
+        vec![]
+    );
+}
+
+/// And the sandbox's reporting message is not the removed surface (§4.13): it now answers the
+/// survive-logout checkbox, so naming it must not be a violation.
+#[test]
+fn the_sandbox_outcome_message_is_not_forbidden() {
+    assert_eq!(
+        violations_in(
+            "src/shell/service_control.rs",
+            "Task::done(Message::Connection(ConnectionMsg::LogoutSurvivalOutcome(m)))",
+        ),
+        vec![]
     );
 }

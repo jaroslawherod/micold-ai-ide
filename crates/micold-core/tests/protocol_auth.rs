@@ -28,6 +28,7 @@ fn introduction(token: Option<&Token>) -> Introduction {
         schema_hash: SCHEMA_HASH,
         package_version: PACKAGE_VERSION.to_string(),
         build: "test-client".to_string(),
+        instance: micold_core::protocol::messages::ClientInstance::current(),
         auth_token: token.map(|t| PresentedToken::new(t.as_str())),
         fingerprint: BUILD_FINGERPRINT.to_string(),
         require_fingerprint_match: false,
@@ -155,16 +156,17 @@ fn the_two_new_refusals_are_distinct_values() {
 /// `OperationResult::RepoRoot`, which moves the open-project gate to whichever side can actually
 /// see the folder (research R2 part 2).
 ///
-/// It was 6 and then 7 while the feature was in flight, and is 8 on the merge: feature 026 took 7
+/// It was 6 and then 7 while the feature was in flight, and 8 on the merge: feature 026 took 7
 /// on main for its own five additions, and both wire changes are present here, so both cannot be
-/// 7. See the constant's own comment.
+/// 7. See the constant's own comment. It is 9 since `010` BUG-022 made a client window nameable
+/// on the wire — another feature's bump, which this literal follows rather than resisting.
 ///
 /// The literal is the point. `SCHEMA_HASH` is generated and moves on its own; this integer does
 /// not, so a message added without touching it ships a wire change under an unchanged version and
 /// two builds that disagree will shake hands anyway. Failing here is the reminder.
 #[test]
-fn the_protocol_version_is_eight() {
-    assert_eq!(PROTOCOL_VERSION, 8);
+fn the_protocol_version_is_nine() {
+    assert_eq!(PROTOCOL_VERSION, 9);
 }
 
 /// The daemon finds its token where the image says it will. If these two drift, a sandbox starts
@@ -222,6 +224,7 @@ fn the_token_survives_no_debug_rendering_on_the_handshake_path() {
         protocol_version: PROTOCOL_VERSION,
         schema_hash: SCHEMA_HASH,
         client_build: "test-client".into(),
+        client_instance: micold_core::protocol::messages::ClientInstance::current(),
         client_package_version: PACKAGE_VERSION.into(),
         auth_token: Some(PresentedToken::new(token.as_str())),
         client_fingerprint: BUILD_FINGERPRINT.into(),
@@ -276,6 +279,7 @@ fn the_token_is_in_no_generated_argument_vector() {
             &profile,
             &CredentialLayout::conventional(dir.path(), None),
             dir.path().join("state"),
+            dir.path(),
             SecretMount {
                 host: host_path.clone(),
                 container: PathBuf::from(CONTAINER_TOKEN_PATH),

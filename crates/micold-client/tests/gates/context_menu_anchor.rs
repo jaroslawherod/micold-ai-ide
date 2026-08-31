@@ -44,6 +44,8 @@ use crate::panel_placement::anchored_panels;
 use crate::support::layout::{self as lay, LayoutRecord};
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
+use micold_client::features::sidebar;
+use micold_client::features::window;
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
@@ -102,16 +104,26 @@ fn with_project(sessions: Vec<Session>) -> State {
     workspace.active = workspace.projects.first().map(|p| p.path.clone());
 
     let mut state = State {
+        sidebar: sidebar::State {
+            width: 260,
+            ..Default::default()
+        },
+
+        window: window::State {
+            window_size: (lay::WINDOW.width as u16, lay::WINDOW.height as u16),
+            ..Default::default()
+        },
         workspace,
-        worktrees: (0..WORKTREE_COUNT)
-            .map(|i| worktree(&format!("feat-{i:02}"), &format!("feat/{i:02}")))
-            .collect(),
-        sidebar_width: 260,
+        worktree: micold_client::features::worktree::State {
+            worktrees: (0..WORKTREE_COUNT)
+                .map(|i| worktree(&format!("feat-{i:02}"), &format!("feat/{i:02}")))
+                .collect(),
+            ..Default::default()
+        },
         // Clamping is only meaningful against a window whose size the application knows.
-        window_size: (lay::WINDOW.width as u16, lay::WINDOW.height as u16),
         ..State::default()
     };
-    state.theme_pref = match RECORDED_SCHEME {
+    state.settings.theme_pref = match RECORDED_SCHEME {
         ColorScheme::Light => ThemePreference::Light,
         ColorScheme::Dark => ThemePreference::Dark,
     };
@@ -453,7 +465,7 @@ fn the_session_menu_opens_at_the_row_it_was_opened_from() {
         AiCli::ClaudeCode,
     );
     let mut state = with_project(vec![session]);
-    state.expanded.insert("feat-00".to_string());
+    state.sidebar.expanded.insert("feat-00".to_string());
 
     // Default row, then `feat-00`, then its session.
     assert_menu_opens_at_the_press(state, &sidebar_row(2), "a session row's context menu");
@@ -475,7 +487,7 @@ fn the_project_menu_opens_at_the_row_it_was_opened_from() {
         "Nothing changed, so the switcher's panel is not sized by what it lists and this gate can \
          no longer find it.",
     );
-    two.project_switcher_open = true;
+    two.project.switcher_open = true;
 
     // Inside the panel's first row: across the panel it was just measured at, and down past §7.5's
     // vertical padding into the middle of the item. The figures are the measured panel's own and

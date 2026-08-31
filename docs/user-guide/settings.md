@@ -15,6 +15,8 @@ holding it and marks the field — press **Cancel**, or Esc, to leave without sa
 | [Environment](#environment) | Which AI CLI a session runs, and the script sourced before it starts |
 | [Session service](#session-service) | Where sessions run, and what that service can reach |
 
+<!-- media: settings-view-light -->
+
 ## Appearance
 
 **Theme** — follow the system, or pin light or dark. Following the system switches with it while

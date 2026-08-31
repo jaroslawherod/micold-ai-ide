@@ -24,12 +24,14 @@
 //! discovery here only seeds the worktree list so the UI is populated before the daemon's
 //! post-attach refresh reconciles it.
 
+use micold_client::features::project::Msg as ProjectMsg;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iced::Task;
 
 use micold_client::app::Message;
+use micold_client::features::project;
 use micold_core::fs_scan::FolderBrowser;
 use micold_core::git::Git;
 use micold_core::protocol::messages::ClientMsg;
@@ -58,8 +60,8 @@ pub(crate) fn scan_task(
 
 fn scan(browser: &dyn FolderBrowser, dir: PathBuf) -> Message {
     match browser.list_subdirs(&dir) {
-        Ok(entries) => Message::SelectorListingReady(entries),
-        Err(error) => Message::SelectorListingFailed(error.to_string()),
+        Ok(entries) => Message::Project(ProjectMsg::SelectorListingReady(entries)),
+        Err(error) => Message::Project(ProjectMsg::SelectorListingFailed(error.to_string())),
     }
 }
 
@@ -84,16 +86,16 @@ pub(crate) fn discover_worktrees(git: Option<&dyn Git>, repo: &Path) -> Vec<Work
 pub(crate) fn on_project_selector_opened(app: &mut App) -> Task<Message> {
     let dir = start_dir();
     app.core.clear_for_dialog();
-    app.core.selector = Some(Selector::open_at(dir.clone()));
+    app.core.project.selector = Some(Selector::open_at(dir.clone()));
     scan_task(app.caps.browser(), dir)
 }
 
 /// Navigating the picker lists the directory the reducer moved to — but only when the reducer
 /// says it is waiting for one. Anything else (a cached listing, a refused navigation) already has
 /// its answer and must not spawn a second scan.
-pub(crate) fn on_selector_navigated(app: &mut App, message: Message) -> Task<Message> {
-    app.core.update(message);
-    match &app.core.selector {
+pub(crate) fn on_selector_navigated(app: &mut App, msg: project::Msg) -> Task<Message> {
+    app.core.update(Message::Project(msg));
+    match &app.core.project.selector {
         Some(selector) if selector.status == SelectorStatus::Loading => {
             scan_task(app.caps.browser(), selector.current_dir.clone())
         }
@@ -114,7 +116,7 @@ pub(crate) fn on_folder_chosen(app: &mut App, path: PathBuf) -> Task<Message> {
     // Close the picker BEFORE the git gate. Notifications render inside `base`, which
     // every modal wraps behind its scrim, so a refusal reported while the selector was
     // still open would be dimmed out of view.
-    app.core.selector = None;
+    app.core.project.selector = None;
     let Some(git) = app.caps.git() else {
         // No local git: ask the side that has one. Nothing is opened, refused, or persisted until
         // the answer lands — the gate has not been passed, only deferred.
@@ -125,8 +127,9 @@ pub(crate) fn on_folder_chosen(app: &mut App, path: PathBuf) -> Task<Message> {
         return Task::none();
     };
     if !git.is_repo_root(&path) {
-        app.core
-            .update(Message::ProjectOpenRefused(NOT_A_REPOSITORY.to_string()));
+        app.core.update(Message::Project(ProjectMsg::OpenRefused(
+            NOT_A_REPOSITORY.to_string(),
+        )));
         return Task::none();
     }
     open_verified_project(app, path)
@@ -147,8 +150,9 @@ pub(crate) fn on_repo_root_answer(
         return Task::none();
     }
     if !is_repo_root {
-        app.core
-            .update(Message::ProjectOpenRefused(NOT_A_REPOSITORY.to_string()));
+        app.core.update(Message::Project(ProjectMsg::OpenRefused(
+            NOT_A_REPOSITORY.to_string(),
+        )));
         return Task::none();
     }
     open_verified_project(app, answered)
@@ -174,7 +178,7 @@ fn open_verified_project(app: &mut App, path: PathBuf) -> Task<Message> {
     micold_client::app::drain(outcomes, |o| {
         micold_client::app::interpret(&mut app.core, o)
     });
-    app.core.worktree_error = None;
+    app.core.worktree_form.worktree_error = None;
     crate::log_foreground_choice(app, &path);
     // The daemon is the single writer: tell it to learn this project (persist + discover),
     // and switch this client's attachment to it. No local `persist()`, no local
@@ -260,7 +264,7 @@ mod tests {
             "nothing may be opened until the answer lands — the gate is deferred, not passed"
         );
         assert!(
-            app.core.notify.visible().is_none(),
+            app.core.notifications.queue.visible().is_none(),
             "nor may anything be refused: no verdict has been given yet"
         );
     }
@@ -312,7 +316,11 @@ mod tests {
         );
         assert!(app.core.workspace.active.is_none());
         assert_eq!(
-            app.core.notify.visible().map(|n| n.message.as_str()),
+            app.core
+                .notifications
+                .queue
+                .visible()
+                .map(|n| n.message.as_str()),
             Some(NOT_A_REPOSITORY),
             "the wording must not fork by who answered"
         );
@@ -363,7 +371,7 @@ mod tests {
     /// `base_app` carries the real git capability, and a temp dir is reliably not a repo root.
     fn choose_a_non_repository() -> App {
         let mut app = base_app();
-        app.core.selector = Some(Selector::open_at(PathBuf::from("/tmp")));
+        app.core.project.selector = Some(Selector::open_at(PathBuf::from("/tmp")));
         let dir = std::env::temp_dir().join("micold-t055-not-a-repo");
         let _ = std::fs::create_dir_all(&dir);
         let _ = on_folder_chosen(&mut app, dir);
@@ -392,7 +400,7 @@ mod tests {
     #[test]
     fn the_picker_closes_before_the_refusal_is_reported() {
         assert!(
-            choose_a_non_repository().core.selector.is_none(),
+            choose_a_non_repository().core.project.selector.is_none(),
             "the picker must close before the refusal is reported, or the notification renders \
              behind the modal's scrim and the user sees nothing happen"
         );
@@ -420,13 +428,17 @@ mod tests {
         );
 
         match scan(&browser, PathBuf::from("/work")) {
-            Message::SelectorListingReady(entries) => assert_eq!(entries.len(), 2),
+            Message::Project(ProjectMsg::SelectorListingReady(entries)) => {
+                assert_eq!(entries.len(), 2)
+            }
             other => panic!("expected a listing, got {other:?}"),
         }
         // A different directory is a different answer — an implementation that ignored `dir` and
         // returned one cached listing would pass the assertion above on its own.
         match scan(&browser, PathBuf::from("/elsewhere")) {
-            Message::SelectorListingReady(entries) => assert!(entries.is_empty()),
+            Message::Project(ProjectMsg::SelectorListingReady(entries)) => {
+                assert!(entries.is_empty())
+            }
             other => panic!("expected an empty listing, got {other:?}"),
         }
     }
@@ -439,7 +451,7 @@ mod tests {
         let browser = FakeFolderScanner::new().with_unreadable("/nope");
 
         match scan(&browser, PathBuf::from("/nope")) {
-            Message::SelectorListingFailed(_) => {}
+            Message::Project(ProjectMsg::SelectorListingFailed(_)) => {}
             other => panic!("expected a reported failure, got {other:?}"),
         }
     }

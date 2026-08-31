@@ -1,0 +1,69 @@
+# mdBook configuration for the published documentation site (feature 028).
+#
+# The book root is `site/`, so every path here is relative to this file.
+#
+# `src` points at the staging tree rather than at `docs/`: `stage.sh` copies the prose, substitutes
+# the version and the release assets, and expands the media directives there, so the prose in the
+# repository is never edited in place (FR-001, Assumptions § Source of truth).
+
+[book]
+title = "Micold AI IDE"
+authors = ["The Micold AI IDE authors"]
+language = "en"
+src = "build/src"
+
+[build]
+build-dir = "book"
+# A SUMMARY.md entry naming a file that does not exist is a page-set error, not something to paper
+# over with an empty page. `page-set.sh` catches it before merge; this catches it at build time too.
+create-missing = false
+
+[output.html]
+theme = "theme"
+# mdBook's own light/navy classes stay the mechanism — its theme picker, its keyboard shortcuts and
+# its localStorage all key off them — and `index.hbs` mirrors whichever is active onto the root
+# element's `data-scheme`, which is what the derived tokens key off
+# (contracts/theme-variables.md § Scheme selection). The picker is reduced to Auto/Light/Dark there,
+# matching the application's own Auto → Light → Dark cycle.
+default-theme = "light"
+preferred-dark-theme = "navy"
+no-section-label = true
+git-repository-url = "https://github.com/Cumulocity-IoT/micold-ai-ide"
+# mdBook 0.5 reads the Font Awesome *style* from the prefix -- `fab-` for brands, `fas-` for solid,
+# `far-` for regular. A bare `fa-github` is not "the default style", it is an unknown style, and it
+# fails the render rather than the icon.
+git-repository-icon = "fab-github"
+# `edit-url-template` is deliberately absent. mdBook fills its `{path}` from the tree it rendered,
+# which here is the staging copy — so the best it can produce is `site/build/src/daemon.md`, a path
+# that exists on the machine that built the site and in no commit. Both source links are therefore
+# rendered from `{{ path }}` directly: the pencil in the app bar in `theme/index.hbs`, pointing at
+# the default branch because a reader who spots a typo wants the file they can change; and the
+# per-page "view source" link in the generated `theme/header.hbs`, pointing at the published tag
+# because it shows the page as it was published (FR-007).
+# Loaded after mdBook's own stylesheets, so the cascade lands on ours. `tokens.css` is generated
+# from the application's design tokens and `site.css` contains no literal of its own (SC-014).
+# Both must be listed: mdBook copies the files it knows about out of the theme directory, and an
+# unlisted stylesheet sitting beside them is silently left behind.
+additional-css = ["theme/css/tokens.css", "theme/css/site.css"]
+
+# No code block on this site is a runnable Rust example, and mdBook's play button is not free: the
+# moment one `.playground` block exists on a page, `book.js` posts to play.rust-lang.org for the
+# crate list. That is a request to another host on a page that promises none (FR-027a, SC-015), and
+# it happens whether or not anyone presses the button.
+[output.html.playground]
+runnable = false
+
+[output.html.search]
+enable = true
+limit-results = 20
+use-boolean-and = true
+
+[output.html.fold]
+enable = true
+level = 1
+
+# The page set is what `docs/SUMMARY.md` declares and nothing else (FR-023). `print.html` is a
+# sixteenth-page-shaped copy of all sixteen, which would double every screenshot on the site and
+# give the per-page media budget a page that can never meet it.
+[output.html.print]
+enable = false

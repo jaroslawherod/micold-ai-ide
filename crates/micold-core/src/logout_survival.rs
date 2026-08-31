@@ -1,5 +1,5 @@
 //! Logout survival: the container runtime's restart policy, for a sandboxed daemon (feature 027
-//! FR-014a/b; narrowed by feature 028 FR-005).
+//! FR-014a/b/d; narrowed by feature 028 FR-005).
 //!
 //! Surviving a full logout — not just closing the window — belongs to **the sandboxed placement,
 //! and only to it**. A container runtime's restart policy is implemented by a service the platform
@@ -9,19 +9,21 @@
 //! # What feature 028 removed, and why
 //!
 //! There used to be a host-process mechanism here too: `loginctl enable-linger`, then
-//! `systemctl --user enable --now micold-daemon.socket`, run in the user's own session on request.
-//! It worked by registering the daemon with the user's service manager — and that registration is
-//! exactly what feature 028 removes, because the application is now the only thing that ever starts
-//! a session service (lifecycle contract §1.1, packaging contract §4.11). A promise resting on the
-//! registration could not outlive it, so [`Placement::HostProcess`] reports
-//! [`SurvivalOutcome::Unsupported`] on every platform, Linux included.
+//! `systemctl --user enable --now micold-daemon.socket`, run in the user's own session — with a
+//! `disable` mirroring it. It worked by registering the daemon with the user's service manager,
+//! and that registration is exactly what feature 028 removes, because the application is now the
+//! only thing that ever starts a session service (lifecycle contract §1.1, packaging contract
+//! §4.11). A promise resting on the registration could not outlive it, so
+//! [`Placement::HostProcess`] reports [`SurvivalOutcome::Unsupported`] in **both** directions, on
+//! every platform, Linux included.
 //!
 //! # Nothing is *done* here
 //!
-//! Even for the sandbox: the policy is applied when the container is created (`--restart
-//! unless-stopped`, see `sandbox::argv`). What [`enable_for`] does is report the truth about a
-//! sandbox that already exists — which, when the user has only just enabled the setting, is that it
-//! takes effect on the sandbox's next start.
+//! Every arm is pure now, which is what removing the host mechanism leaves behind. For the sandbox
+//! that was always true: the policy is an argument to container creation (`--restart
+//! unless-stopped`, see `sandbox::argv`), so what [`enable_for`] and [`disable_for`] do is report
+//! the truth about a sandbox that already exists — which, when the user has only just moved the
+//! setting, is that it takes effect on the sandbox's next start.
 
 use crate::sandbox::placement::Placement;
 
@@ -38,11 +40,14 @@ pub enum SurvivalOutcome {
     /// only mechanism that *ran* anything; it stays because [`Self::user_message`] is the one place
     /// that phrases a survival failure for a user, and the remote placement (FR-003a) will need it.
     Failed(String),
-    /// The sandbox will honour it, from its next start (feature 027, FR-014a/b).
+    /// The sandbox will honour the setting from its next start (feature 027, FR-014a/b/d).
     ///
     /// Its own variant rather than a [`Self::Failed`] with an explanatory string: nothing failed,
     /// and telling the user something failed when the answer is "restart the sandbox" sends them
     /// looking for a problem that is not there.
+    ///
+    /// It answers **both** directions, so its message is written to be true both ways — see
+    /// [`Self::user_message`].
     PendingSandboxRestart,
 }
 
@@ -58,11 +63,19 @@ impl SurvivalOutcome {
                  come back resumable after a logout; running the service in a container keeps them \
                  running through one."
                 .to_string(),
-            SurvivalOutcome::PendingSandboxRestart => "Sessions will survive logout once the \
-                 sandbox restarts — its restart policy is set when the container is created."
+            // Deliberately direction-neutral. Since feature 028 the sandbox is the only placement
+            // that answers this at all, so this one sentence has to serve both ticking and
+            // unticking the setting — and "sessions will survive logout once the sandbox restarts"
+            // said the opposite of what happened when the user had just withdrawn the opt-in
+            // (FR-014d asks for an *audible* withdrawal, not a misleading one).
+            SurvivalOutcome::PendingSandboxRestart => "Whether sessions survive logout is fixed \
+                 when the sandbox is created, so this takes effect the next time it restarts."
                 .to_string(),
+            // Neither "enable" nor "turn off": this one variant reports both directions, and a
+            // failure to *withdraw* the opt-in phrased as a failure to enable it would tell the
+            // user the opposite of what happened.
             SurvivalOutcome::Failed(detail) => {
-                format!("Couldn't enable logout survival: {detail}")
+                format!("Couldn't change whether sessions survive logout: {detail}")
             }
         }
     }
@@ -91,6 +104,25 @@ pub fn enable_for(placement: &Placement) -> SurvivalOutcome {
         }
         // A remote daemon's survival is the remote host's business, and this release cannot build
         // that placement anyway (FR-003a).
+        Placement::Remote(_) => SurvivalOutcome::Unsupported,
+    }
+}
+
+/// Withdraw logout survival for a resolved placement (feature 027, FR-014d).
+///
+/// The mirror of [`enable_for`], and it has to exist for the same reason the one control does: the
+/// opt-in is a checkbox, not a menu command, and a checkbox that only works in one direction is the
+/// "silently ineffective" FR-014d names.
+pub fn disable_for(placement: &Placement) -> SurvivalOutcome {
+    match placement {
+        // Nothing to withdraw, because feature 028 removed what there was to grant. Reporting
+        // `Unsupported` in this direction too is the honest answer, and it is the same answer
+        // `enable_for` gives — the pair has to agree or the checkbox tells two stories.
+        Placement::HostProcess => SurvivalOutcome::Unsupported,
+        // Nothing to run: the restart policy is an argument to `podman create`, so withdrawing it
+        // is something the *next* start does. Same answer as enabling, and true for the same
+        // reason — see [`enable_for`].
+        Placement::LocalSandbox(_) => SurvivalOutcome::PendingSandboxRestart,
         Placement::Remote(_) => SurvivalOutcome::Unsupported,
     }
 }
@@ -126,6 +158,18 @@ mod tests {
             .contains("polkit denied"));
     }
 
+    /// FR-014d, in the direction that is easy to get wrong: the sandbox's one answer is given for
+    /// both ticking and unticking, so it must not claim survival was just switched on.
+    #[test]
+    fn the_pending_message_reads_correctly_in_both_directions() {
+        let message = SurvivalOutcome::PendingSandboxRestart.user_message();
+        assert!(message.contains("restarts"));
+        assert!(
+            !message.contains("will survive logout"),
+            "unticking the setting must not be reported as enabling it: {message}"
+        );
+    }
+
     /// FR-014b, the bar the spec raises deliberately: the sandboxed placement offers survival on
     /// **every** platform.
     #[test]
@@ -141,21 +185,45 @@ mod tests {
         assert_eq!(outcome, SurvivalOutcome::PendingSandboxRestart);
         // Nothing failed. Saying it did sends the user looking for a problem that is not there.
         assert!(!matches!(outcome, SurvivalOutcome::Failed(_)));
-        assert!(outcome.user_message().contains("restarts"));
+    }
+
+    /// Withdrawing under the sandbox is the same "next start" answer as granting it, and for the
+    /// same reason: `--restart` is an argument to container creation, not a knob on a running one.
+    /// It must not report a *failure* — nothing failed, and there is nothing for the user to fix.
+    #[test]
+    fn withdrawing_under_the_sandbox_reports_a_pending_restart() {
+        let outcome = disable_for(&sandbox(true));
+        assert_eq!(outcome, SurvivalOutcome::PendingSandboxRestart);
+        assert!(!matches!(outcome, SurvivalOutcome::Failed(_)));
     }
 
     /// Feature 028, FR-005: the host process does not survive logout — and now that is true on
-    /// **Linux too**, not only on macOS and Windows.
+    /// **Linux too**, not only on macOS and Windows, and in both directions.
     ///
     /// Deliberately un-`cfg`-ed. The assertion this replaced was the Linux arm returning `Enabled`,
     /// and a platform-gated replacement would let the old promise creep back on the one platform
     /// where the mechanism used to exist, which is the only platform it could creep back on.
     #[test]
     fn the_host_process_no_longer_survives_logout_on_any_platform() {
-        assert_eq!(
+        for outcome in [
             enable_for(&Placement::HostProcess),
-            SurvivalOutcome::Unsupported
-        );
+            disable_for(&Placement::HostProcess),
+        ] {
+            assert_eq!(outcome, SurvivalOutcome::Unsupported);
+        }
+    }
+
+    /// FR-014d's "rather than being absent or silently ineffective": a placement that cannot do
+    /// this must *say so*, in both directions, and the message is what says it.
+    #[test]
+    fn a_placement_that_cannot_do_it_says_so_in_both_directions() {
+        let remote = Placement::Remote(crate::sandbox::placement::RemotePlacement {
+            host: "elsewhere".to_string(),
+        });
+        for outcome in [enable_for(&remote), disable_for(&remote)] {
+            assert_eq!(outcome, SurvivalOutcome::Unsupported);
+            assert!(!outcome.user_message().is_empty());
+        }
     }
 
     #[test]

@@ -28,7 +28,15 @@
 ///
 /// 027 developed against 6 and 7 of its own while 026 was taking the same two numbers on main.
 /// Both wire changes are present here, so both cannot be 7; the feature's whole delta is 8.
-pub const PROTOCOL_VERSION: u32 = 8;
+/// Bumped 8 → 9 for `010` BUG-022, in one edit for the reason 026 and 027 each used one: a client
+/// *window* becomes nameable on the wire. `ClientMsg::Hello` gains `client_instance`, and the two
+/// frames that report who holds a project — `DaemonMsg::Displaced::by` and
+/// `RefusalReason::ProjectBusy::holder` — carry a `ClientIdentity` (build **and** instance) where
+/// they carried a build string. All three are the same change: without the instance on the way in
+/// the daemon has none to report back, and without it on the way out a window cannot tell another
+/// window's takeover from its own reconnect displacing its own dead connection. It also settles
+/// BUG-023's deferred half, the holder that named nothing.
+pub const PROTOCOL_VERSION: u32 = 9;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

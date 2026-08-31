@@ -33,12 +33,14 @@
 //! It is also what made the two tests below possible without reinstating the `Capabilities`
 //! constructor T049 deleted for want of a caller.
 
+use micold_client::features::settings::Msg as SettingsMsg;
 use std::path::Path;
 
 use iced::Task;
 
 use micold_client::app::Message;
 use micold_core::protocol::messages::ClientMsg;
+use micold_core::sandbox::placement::Placement;
 use micold_core::settings::{Settings, SettingsStore};
 
 use micold_client::features::settings::SettingsDraft;
@@ -107,7 +109,7 @@ pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core:
         // (feature 011) when saving a theme change — this function only ever changes `theme`.
         let existing = store.load().settings;
         if let Err(err) = store.save(&Settings {
-            theme: core.theme_pref,
+            theme: core.settings.theme_pref,
             ..existing
         }) {
             core.notify_error(format!("Couldn't save your settings: {err}"));
@@ -130,11 +132,14 @@ pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core:
 /// Open Settings: let the reducer show the overlay, then seed the draft with the current
 /// scrollback value (FR-019/FR-020).
 pub fn on_settings_opened(app: &mut App) -> Task<Message> {
-    app.core.update(Message::SettingsOpened);
+    app.core.update(Message::Settings(SettingsMsg::Opened));
     // Refresh the availability set here, on the named event research R11 asks for --
-    // "when the choice is offered" -- rather than per frame, which would be a `PATH` probe
-    // per render and exactly the scheduled work SC-006 forbids (feature 026, T014a).
-    app.core.available_providers = app.caps.available_providers();
+    // "when the choice is offered" -- rather than per frame, which would be a probe per render and
+    // exactly the scheduled work SC-006 forbids (feature 026, T014a). The refresh is now a request
+    // to the service rather than a local `PATH` walk (feature 027, FR-023c); the reply lands a
+    // moment later and the view redraws, which is why the field keeps its previous answer in the
+    // meantime instead of being cleared.
+    crate::shell::daemon_sync::ask_cli_availability(app);
     // Seeded from one `Settings` value rather than field by field, so that a setting added to the
     // persisted shape is carried into the draft by `from_settings` instead of needing a line here
     // that somebody has to remember to write.
@@ -149,13 +154,13 @@ pub fn on_settings_opened(app: &mut App) -> Task<Message> {
         .map(|store| store.load().settings.daemon)
         .unwrap_or_default();
     let current = Settings {
-        theme: app.core.theme_pref,
+        theme: app.core.settings.theme_pref,
         scrollback_lines: app.scrollback_lines,
         env_include_enabled: app.env_include_enabled,
         env_include_script_path: app.env_include_script_path.clone(),
         env_include_timeout_secs: app.env_include_timeout_secs,
         daemon,
-        default_ai_cli: app.core.default_ai_cli,
+        default_ai_cli: app.core.session.default_ai_cli,
     };
     let mut draft = SettingsDraft::from_settings(&current);
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the
@@ -163,7 +168,7 @@ pub fn on_settings_opened(app: &mut App) -> Task<Message> {
     // to decide which limits are editable (FR-015), so it is carried across here rather than
     // guessed at inside the view.
     draft.daemon.capabilities = app.sandbox.capabilities.clone();
-    app.core.settings_draft = Some(draft);
+    app.core.settings.settings_draft = Some(draft);
     Task::none()
 }
 
@@ -175,21 +180,30 @@ pub fn on_settings_opened(app: &mut App) -> Task<Message> {
 /// rejection now has to name the *section* holding the field it is about, and this function has no
 /// business knowing which section a field is in — see [`SettingsDraft::validate`].
 pub fn on_settings_saved(app: &mut App) -> Task<Message> {
-    let Some(draft) = app.core.settings_draft.clone() else {
+    let Some(draft) = app.core.settings.settings_draft.clone() else {
         return Task::none();
     };
+
+    // Read before the write, because the decision below is about a *change*: see
+    // [`survival_step`]. `unwrap_or_default` treats "no settings file" as "never opted in", which
+    // is what a machine with no settings file is.
+    let survival_before = app
+        .caps
+        .settings()
+        .map(|store| store.load().settings.daemon.sandbox.survive_logout)
+        .unwrap_or_default();
 
     let valid = match draft.validate() {
         Ok(valid) => valid,
         Err(error) => {
-            if let Some(d) = app.core.settings_draft.as_mut() {
+            if let Some(d) = app.core.settings.settings_draft.as_mut() {
                 d.report(error);
             }
             return Task::none();
         }
     };
 
-    app.core.theme_pref = valid.theme;
+    app.core.settings.theme_pref = valid.theme;
     app.scrollback_lines = valid.scrollback_lines;
     app.env_include_enabled = valid.env_include_enabled;
     app.env_include_script_path = valid.env_include_script_path.clone();
@@ -198,7 +212,7 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
     // Nothing to validate: the select offers only installed CLIs and the value is a closed enum.
     // Deliberately **not** re-checked against availability here either -- a default naming a CLI
     // that has since been uninstalled is kept, not repaired (feature 026, research R11).
-    app.core.default_ai_cli = valid.default_ai_cli;
+    app.core.session.default_ai_cli = valid.default_ai_cli;
 
     let settings = valid.into_settings();
     if let Some(store) = app.caps.settings() {
@@ -234,8 +248,46 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
     app.env_include_cache.clear();
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);
-    app.core.update(Message::SettingsSaved); // closes the view
-    Task::none()
+    app.core.update(Message::Settings(SettingsMsg::Saved)); // closes the view
+
+    // The one thing in this form that is not just a value written to a file: making sessions
+    // survive logout has to be *arranged*, with the platform's service manager or with the
+    // container runtime depending on where the daemon runs (FR-014d). Saved first, then applied —
+    // the file is what the next launch reads, so a failure here must not lose the user's choice.
+    match survival_step(survival_before, settings.daemon.sandbox.survive_logout) {
+        SurvivalStep::Leave => Task::none(),
+        step => crate::shell::service_control::on_survival_opt_in_changed(
+            Placement::resolve(settings.daemon.placement, &settings.daemon.sandbox),
+            step == SurvivalStep::Enable,
+        ),
+    }
+}
+
+/// What a save owes the logout-survival opt-in (feature 027, FR-014d).
+///
+/// Pure, and separate from the save, so the rule can be stated once and tested without a service
+/// manager: **act on a change, and only on a change**. Every other field in this form is idempotent
+/// to re-apply; this one is not. Enabling stops the running daemon so the socket unit can activate
+/// a fresh one under the lingering manager, so re-running it on a save that only changed the
+/// scrollback limit would drop every live session for no reason at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurvivalStep {
+    /// Nothing to do: the opt-in is where it was.
+    Leave,
+    /// Newly on — arrange it with the configured placement.
+    Enable,
+    /// Newly off — withdraw it. A checkbox that could not be unticked would be FR-014d's "silently
+    /// ineffective" in the direction nobody tests.
+    Disable,
+}
+
+/// See [`SurvivalStep`].
+pub fn survival_step(before: bool, after: bool) -> SurvivalStep {
+    match (before, after) {
+        (false, true) => SurvivalStep::Enable,
+        (true, false) => SurvivalStep::Disable,
+        _ => SurvivalStep::Leave,
+    }
 }
 
 pub fn on_theme_changed(app: &mut App, message: Message) -> Task<Message> {
@@ -247,6 +299,9 @@ pub fn on_theme_changed(app: &mut App, message: Message) -> Task<Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use micold_client::features::settings;
+    use micold_core::sandbox::placement::PlacementKind;
+    use micold_core::sandbox::SandboxProfile;
     use micold_core::session::{AiCli, Session, SessionLocation};
     use micold_core::settings::FakeSettingsStore;
     use micold_core::theme::ThemePreference;
@@ -466,7 +521,10 @@ mod tests {
         };
         let store = FakeSettingsStore::loaded(stored.clone());
         let mut core = State {
-            theme_pref: ThemePreference::Dark,
+            settings: settings::State {
+                theme_pref: ThemePreference::Dark,
+                ..Default::default()
+            },
             ..State::default()
         };
 
@@ -501,7 +559,8 @@ mod tests {
             "the write was refused, so nothing was recorded"
         );
         let notice = core
-            .notify
+            .notifications
+            .queue
             .visible()
             .expect("a refused write must be reported");
         assert!(
@@ -519,6 +578,50 @@ mod tests {
     fn no_settings_store_is_not_an_error() {
         let mut core = State::default();
         persist_settings(None, &mut core);
-        assert!(core.notify.visible().is_none());
+        assert!(core.notifications.queue.visible().is_none());
+    }
+
+    /// The rule the whole opt-in rests on: a save acts on a *change*.
+    ///
+    /// Not a nicety. Enabling stops the running daemon so the socket unit can activate a fresh one
+    /// under the lingering manager — so a save that re-applied an unchanged opt-in would drop every
+    /// live session because the user edited the scrollback limit.
+    #[test]
+    fn only_a_change_to_the_opt_in_does_anything() {
+        assert_eq!(survival_step(false, false), SurvivalStep::Leave);
+        assert_eq!(survival_step(true, true), SurvivalStep::Leave);
+        assert_eq!(survival_step(false, true), SurvivalStep::Enable);
+        assert_eq!(survival_step(true, false), SurvivalStep::Disable);
+    }
+
+    /// FR-014d in the direction that is easy to forget: unticking has to withdraw it. The menu
+    /// command this replaced could only ever enable, so "turn it back off" was not a thing the
+    /// application could do at all.
+    #[test]
+    fn unticking_withdraws_it_rather_than_doing_nothing() {
+        assert_ne!(survival_step(true, false), SurvivalStep::Leave);
+    }
+
+    /// And the step is applied to the placement that is *configured*, not to the one this platform
+    /// happens to favour — which is the substance of FR-014d. Resolved the same way the save
+    /// resolves it, so a placement added later is dispatched here without an edit.
+    #[test]
+    fn the_step_is_applied_to_the_configured_placement() {
+        use micold_core::logout_survival::{disable_for, enable_for, SurvivalOutcome};
+
+        let profile = SandboxProfile {
+            survive_logout: true,
+            ..SandboxProfile::default()
+        };
+        let sandbox = Placement::resolve(PlacementKind::LocalSandbox, &profile);
+
+        // The sandbox answers on every platform (FR-014b), and since feature 028 it is the only
+        // placement that answers at all: resolving the host placement here would be `Unsupported`
+        // everywhere, not just off Linux.
+        assert_eq!(enable_for(&sandbox), SurvivalOutcome::Enabled);
+        assert_eq!(
+            disable_for(&sandbox),
+            SurvivalOutcome::PendingSandboxRestart
+        );
     }
 }

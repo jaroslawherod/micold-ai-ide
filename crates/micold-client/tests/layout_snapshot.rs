@@ -78,6 +78,15 @@ mod sibling_parity;
 #[path = "gates/tab_children_fit.rs"]
 mod tab_children_fit;
 
+// --- The rail-alignment gate (feature 027 §B.6) -------------------------------------------------
+
+// The same arrangement again, and the first gate a visual pass produced rather than a bug report.
+// It reads a *set* of same-kind components against each other the way `sibling_parity` does, but
+// for the one set whose members differ only in which is current — a rail's destinations, collapsed
+// to their icons, where "current" changes the button variant and therefore the inset.
+#[path = "gates/rail_icons_align.rs"]
+mod rail_icons_align;
+
 /// Feature 026's FR-002c, one level out from `tab_children_fit`: the bar's own controls must not be
 /// shrunk by a strip that grew. A second gate rather than a widened first one because the bar's
 /// children are not tabs and are not recognised by that gate's structural rule.
