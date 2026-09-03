@@ -187,6 +187,27 @@ if [ -d "$work/demo-a" ]; then
   fi
 fi
 
+# 4. **The providers.** The start affordance is a split button, and its chevron is *absent* -- not
+# disabled -- when only one AI CLI is installed, which puts the "+" beside it twenty pixels further
+# right. So the row action every session-opening scene reaches for moves depending on what the
+# capture machine happens to have on `PATH`: a developer with `claude` and `copilot` installed and a
+# runner with neither drew the same row in two different places, and the scenes clicked past it. The
+# stub therefore stands in for *every* provider the application declares, and this is the assertion
+# that keeps the two lists together -- a provider added to `AiCli::ALL` and not to the scene helpers
+# would move the affordance back and fail every session scene on the runner alone.
+declared="$(grep -oP 'fn command\(&self\) -> &.static str \{\s*\n\s*"\K[a-z0-9-]+' -z \
+  crates/micold-core/src/provider.rs 2>/dev/null | tr '\0' '\n' | sort -u | tr '\n' ' ')"
+installed="$(sed -n 's/^  for cli in \(.*\); do$/\1/p' site/capture/scenes/lib.sh \
+  | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+if [ -z "$declared" ]; then
+  skip "the stub stands in for every declared provider" "could not read AiCli::ALL's commands"
+elif [ "$declared" = "$installed" ]; then
+  pass "the stub stands in for every declared provider"
+else
+  fail "the stub stands in for every declared provider" \
+    "provider.rs declares [$declared], lib.sh installs [$installed]"
+fi
+
 echo
 if [ "$failures" -eq 0 ]; then
   echo "the capture harness: all assertions hold"

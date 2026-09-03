@@ -182,9 +182,21 @@ scene_start() {
 
   mkdir -p "$scene_work" "$scene_stub"
 
-  # The provider. The application spawns whatever the session's AI CLI is by name, so the stub is
-  # installed under that name and reached through the same code path as the real one.
-  ln -sf "$scene_site/capture/stub-cli.sh" "$scene_stub/claude"
+  # The providers. The application spawns whatever the session's AI CLI is by name, so the stub is
+  # installed under each name and reached through the same code path as the real one.
+  #
+  # *Every* name in `AiCli::ALL`, not just the one the scenes start a session on -- because the
+  # start affordance is a split button whose chevron is absent when only one CLI is installed, and
+  # absent means the "+" beside it sits twenty pixels further right. So the row action a scene
+  # reaches for was in a different place on a developer's machine (`claude` and `copilot` both
+  # installed) than on the runner (`claude` alone, from this directory), and the scene clicked past
+  # it into the row and reported that no session had started. The set of installed providers was an
+  # accident of the capture machine; FR-011b says a publication may not have those. Installing all
+  # of them makes the affordance the same everywhere, and makes a host that happens to have a real
+  # one on `PATH` change nothing, since it is already in the set.
+  for cli in claude copilot; do
+    ln -sf "$scene_site/capture/stub-cli.sh" "$scene_stub/$cli"
+  done
   PATH="$scene_stub:$PATH"
   export PATH
 
