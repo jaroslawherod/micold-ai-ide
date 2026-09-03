@@ -151,6 +151,17 @@ documented; the sentences it shares with the new behaviour are written by T027 a
 - [X] T032 [US2] Make `Presence` the single count in `crates/micold-daemon/src/state.rs` — `register`/`deregister` its only mutators, no second counter anywhere (lifecycle contract §2.5)
 - [X] T033 [US2] Confirm and, where missing, add EOF- and error-path deregistration in `crates/micold-daemon/src/server.rs:376-393`, so a crashed client is counted gone without a keepalive (research R6)
 
+**Note on the red step**: T029–T031 all passed the moment they were written, because the mechanism
+they cover landed in Phase 2 — US2 could not start without T012, and T011/T012 together already
+satisfied §2.5 and §2.6. The red step was recovered by deliberately breaking the mechanism twice and
+confirming each test is the one that notices; both probes and their output are recorded in
+`evidence/us2-presence.md`. T033 turned out to be confirmation only: `deregister` already ran after
+all three of `route`'s exits, so the change is the comment that says so.
+
+**One deviation**: the refusal test T007 had placed in `daemon_lifecycle.rs` moved to
+`presence_counting.rs`, its contractual home — `daemon_lifecycle.rs` asserts the *rule*,
+`presence_counting.rs` the *count*. Keeping both would have been the same assertion in two files.
+
 **Checkpoint**: the count the rule will read is correct under clean exits, crashes and refusals.
 
 ---
