@@ -22,6 +22,60 @@
         "speckit-bugfix-verify"
       ],
       "installed_at": "2026-07-16T09:12:22.503581+00:00"
+    },
+    "tdd": {
+      "version": "1.1.2",
+      "source": "local",
+      "manifest_hash": "sha256:e07b49d00feb217a92cdbacd9471326b71bd31c636b184718cabb7904a13e6b2",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "speckit.tdd.setup",
+          "speckit.tdd.plan",
+          "speckit.tdd.run",
+          "speckit.tdd.verify"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-09-03T18:02:01.639478+00:00"
+    },
+    "assess": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:6eba1ffbc264c7aa43e31b34303a8312ddad5b979772d2785c808179b402d9f2",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "speckit.assess.intake",
+          "speckit.assess.research",
+          "speckit.assess.define",
+          "speckit.assess.shape",
+          "speckit.assess.decide"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-09-03T18:02:35.073531+00:00"
+    },
+    "docguard": {
+      "version": "0.33.0",
+      "source": "local",
+      "manifest_hash": "sha256:d580a5d38e441847285fdecba7e99aa98020a548da8d575088f2b828d5ba03db",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "speckit.docguard.guard",
+          "speckit.docguard.fix",
+          "speckit.docguard.review",
+          "speckit.docguard.score",
+          "speckit.docguard.diagnose",
+          "speckit.docguard.generate"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-09-03T18:06:49.536969+00:00"
     }
   }
 }
