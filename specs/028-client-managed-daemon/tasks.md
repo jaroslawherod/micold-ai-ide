@@ -53,18 +53,18 @@ and may be delivered first or in parallel (see Dependencies).
 
 ### Tests (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T004 [P] Write failing unit tests for `Uptime` in `crates/micold-core/src/clock.rs` (`#[cfg(test)]`): monotonic across many consecutive reads, and `saturating_sub` of a later reading from an earlier one yields zero rather than panicking (data-model G3)
-- [ ] T005 [P] Write failing unit tests for `Presence` in `crates/micold-daemon/src/idle.rs`: `alone_since.is_some() ⟺ connected == 0`, a reconnect clears the armed deadline, and a daemon that has never had a client is idle from construction (data-model G1)
-- [ ] T006 [P] Write failing unit tests for `IdleWindow::expired` and `IDLE_WINDOW` in `crates/micold-daemon/src/idle.rs`: zero connections plus the window ⇒ expired, one connection ⇒ never, and the constant is 30 minutes (data-model G2, FR-008, FR-017)
-- [ ] T007 Rewrite `crates/micold-daemon/tests/daemon_lifecycle.rs` lines 20 and 73–104 to assert the clarified rule — a live session does **not** hold the daemon up — replacing the `may_exit`/`Lifecycle` assertions this feature retires (FR-006a); it must fail until T009–T011
+- [X] T004 [P] Write failing unit tests for `Uptime` in `crates/micold-core/src/clock.rs` (`#[cfg(test)]`): monotonic across many consecutive reads, and `saturating_sub` of a later reading from an earlier one yields zero rather than panicking (data-model G3)
+- [X] T005 [P] Write failing unit tests for `Presence` in `crates/micold-daemon/src/idle.rs`: `alone_since.is_some() ⟺ connected == 0`, a reconnect clears the armed deadline, and a daemon that has never had a client is idle from construction (data-model G1)
+- [X] T006 [P] Write failing unit tests for `IdleWindow::expired` and `IDLE_WINDOW` in `crates/micold-daemon/src/idle.rs`: zero connections plus the window ⇒ expired, one connection ⇒ never, and the constant is 30 minutes (data-model G2, FR-008, FR-017)
+- [X] T007 Rewrite `crates/micold-daemon/tests/daemon_lifecycle.rs` lines 20 and 73–104 to assert the clarified rule — a live session does **not** hold the daemon up — replacing the `may_exit`/`Lifecycle` assertions this feature retires (FR-006a); it must fail until T009–T011
 
 ### Implementation
 
-- [ ] T008 Implement `Uptime` and `now()` in `crates/micold-core/src/clock.rs` — `CLOCK_BOOTTIME` on Linux, `mach_continuous_time()` on macOS, `GetTickCount64()` on Windows — behind one `cfg`-free public signature, using the `libc`/`windows-sys` deps already declared in `crates/micold-core/Cargo.toml:42-50` (research R3, Principle VI)
-- [ ] T009 Implement `Presence` in `crates/micold-daemon/src/idle.rs` with `client_connected` / `client_disconnected` as the only transitions and `alone_since` initialised at construction (data-model G1)
-- [ ] T010 Implement `IdleWindow`, the `IDLE_WINDOW` constant and `StopReason` in `crates/micold-daemon/src/idle.rs` (data-model G2, G4)
-- [ ] T011 Replace the `Lifecycle` field and its `lifecycle()` accessor with `Presence` in `crates/micold-daemon/src/state.rs:34,45,242,254`, then delete `crates/micold-daemon/src/lifecycle.rs` and its `pub mod lifecycle;` declaration in `crates/micold-daemon/src/lib.rs`
-- [ ] T012 Feed `Presence` from the real accept loop — `state.register` at `crates/micold-daemon/src/server.rs:369` and `state.deregister` at `:393` — closing the "no call sites" gap research R1 found
+- [X] T008 Implement `Uptime` and `now()` in `crates/micold-core/src/clock.rs` — `CLOCK_BOOTTIME` on Linux, `mach_continuous_time()` on macOS, `GetTickCount64()` on Windows — behind one `cfg`-free public signature, using the `libc`/`windows-sys` deps already declared in `crates/micold-core/Cargo.toml:42-50` (research R3, Principle VI)
+- [X] T009 Implement `Presence` in `crates/micold-daemon/src/idle.rs` with `client_connected` / `client_disconnected` as the only transitions and `alone_since` initialised at construction (data-model G1)
+- [X] T010 Implement `IdleWindow`, the `IDLE_WINDOW` constant and `StopReason` in `crates/micold-daemon/src/idle.rs` (data-model G2, G4)
+- [X] T011 Replace the `Lifecycle` field and its `lifecycle()` accessor with `Presence` in `crates/micold-daemon/src/state.rs:34,45,242,254`, then delete `crates/micold-daemon/src/lifecycle.rs` and its `pub mod lifecycle;` declaration in `crates/micold-daemon/src/lib.rs`
+- [X] T012 Feed `Presence` from the real accept loop — `state.register` at `crates/micold-daemon/src/server.rs:369` and `state.deregister` at `:393` — closing the "no call sites" gap research R1 found
 
 **Checkpoint**: the rule, the counter and the clock exist, are tested, and are wired to real
 connections; nothing yet acts on them.
@@ -142,14 +142,14 @@ documented; the sentences it shares with the new behaviour are written by T027 a
 
 ### Tests (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T029 [P] [US2] Write failing test `crates/micold-daemon/tests/presence_counting.rs` — a refused handshake never increments the count, a completed handshake increments it once, a clean close decrements it (lifecycle contract §2.5)
-- [ ] T030 [P] [US2] Write failing test in `crates/micold-daemon/tests/presence_counting.rs` — a connection dropped without a clean close is counted as gone within 60 seconds (lifecycle contract §2.6, research R6)
-- [ ] T031 [P] [US2] Extend `crates/micold-daemon/tests/session_survival.rs` with a regression asserting the daemon still outlives client exit now that the systemd path is gone (FR-006, lifecycle contract §2.4)
+- [X] T029 [P] [US2] Write failing test `crates/micold-daemon/tests/presence_counting.rs` — a refused handshake never increments the count, a completed handshake increments it once, a clean close decrements it (lifecycle contract §2.5)
+- [X] T030 [P] [US2] Write failing test in `crates/micold-daemon/tests/presence_counting.rs` — a connection dropped without a clean close is counted as gone within 60 seconds (lifecycle contract §2.6, research R6)
+- [X] T031 [P] [US2] Extend `crates/micold-daemon/tests/session_survival.rs` with a regression asserting the daemon still outlives client exit now that the systemd path is gone (FR-006, lifecycle contract §2.4)
 
 ### Implementation
 
-- [ ] T032 [US2] Make `Presence` the single count in `crates/micold-daemon/src/state.rs` — `register`/`deregister` its only mutators, no second counter anywhere (lifecycle contract §2.5)
-- [ ] T033 [US2] Confirm and, where missing, add EOF- and error-path deregistration in `crates/micold-daemon/src/server.rs:376-393`, so a crashed client is counted gone without a keepalive (research R6)
+- [X] T032 [US2] Make `Presence` the single count in `crates/micold-daemon/src/state.rs` — `register`/`deregister` its only mutators, no second counter anywhere (lifecycle contract §2.5)
+- [X] T033 [US2] Confirm and, where missing, add EOF- and error-path deregistration in `crates/micold-daemon/src/server.rs:376-393`, so a crashed client is counted gone without a keepalive (research R6)
 
 **Checkpoint**: the count the rule will read is correct under clean exits, crashes and refusals.
 

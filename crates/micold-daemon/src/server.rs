@@ -369,6 +369,12 @@ where
     let result = route(&state, id, &mut incoming).await;
 
     // Cleanup: releasing the client drops its sender, which ends the writer task.
+    //
+    // Unconditional, and that is what makes the presence count honest (feature 028, T033, lifecycle
+    // contract §2.6). `route` has exactly three ways out — `Goodbye`, EOF, and a codec error — and
+    // the last two are what a crashed or `SIGKILL`ed client looks like from here. Because this runs
+    // after all three rather than on the clean one, a client that vanishes is counted gone as soon
+    // as its socket closes, with no keepalive to wait for (research R6).
     tracing::info!(client = id, "client disconnected");
     state.deregister(id);
     let _ = writer.await;
