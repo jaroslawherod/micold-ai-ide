@@ -94,7 +94,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
           INPUT_DOCS_REF: ${{ inputs.docs_ref }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REF_NAME: ${{ github.ref_name }}
           DISPATCHED: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           set -euo pipefail
@@ -104,9 +104,15 @@ jobs:
             echo "no release_tag given -- the newest published release is $tag"
           fi
 
+          # A dispatch defaults to the ref it was dispatched on, not to the default branch. Those
+          # are the same thing when somebody republishes the prose from `main`, and they are not
+          # when somebody dispatches on a branch to try a change to this pipeline before it is
+          # merged -- which is the documented way to do that. Defaulting to `main` there checked out
+          # `main`'s `site/`, ran `main`'s scenes, and reported on a change that was never in the
+          # run: two branch runs failed identically because the fix between them was not there.
           docs="$INPUT_DOCS_REF"
           if [ -z "$docs" ]; then
-            if [ "$DISPATCHED" = "true" ]; then docs="$DEFAULT_BRANCH"; else docs="$tag"; fi
+            if [ "$DISPATCHED" = "true" ]; then docs="$REF_NAME"; else docs="$tag"; fi
           fi
 
           # The tag is `micold-ai-ide-vX.Y.Z`; the version the pages show is `X.Y.Z`.

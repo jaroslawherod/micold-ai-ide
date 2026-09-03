@@ -81,16 +81,17 @@ the download links and the screenshots all describe one shipped version.
 Both inputs are optional on a manual run:
 
 ```bash
-gh workflow run pages.yml                                            # newest release + default branch prose
+gh workflow run pages.yml                                            # newest release + this ref's prose
 gh workflow run pages.yml -f release_tag=micold-ai-ide-v0.10.0       # that tag, prose included
 gh workflow run pages.yml -f docs_ref=main                           # newest release, prose from main
 ```
 
 - `release_tag` decides which application is built and captured. It defaults to the newest published
   release.
-- `docs_ref` decides where the prose comes from, and defaults to the default branch on a manual run
-  — so a typo corrected after a release can be published without cutting a new one. On the automatic
-  run it defaults to the release tag, so a publication is reproducible from the tag alone.
+- `docs_ref` decides where the prose comes from — so a typo corrected after a release can be
+  published without cutting a new one. On the automatic run it defaults to the release tag, so a
+  publication is reproducible from the tag alone. On a manual run it defaults to the ref the
+  dispatch names, which is what makes the recipe below a test of your branch rather than of `main`.
 
 ## Trying a change to the pipeline before it publishes
 

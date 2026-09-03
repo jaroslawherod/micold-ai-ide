@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag: { required: false, type: string }   # default: the newest published release
-      docs_ref:    { required: false, type: string }   # default: the default branch
+      docs_ref:    { required: false, type: string }   # default: the ref dispatched on
 
 concurrency:
   group: pages
@@ -34,7 +34,7 @@ environment:
 | Input | Release publication | Manual republish |
 |---|---|---|
 | `release_tag` | the tag just published | newest published release |
-| `docs_ref` | the same tag | the default branch |
+| `docs_ref` | the same tag | the ref the dispatch names |
 
 The asymmetry is the whole of FR-017: a republish exists to carry a documentation correction that
 landed after the release, so its prose defaults to where that correction is. A maintainer who wants
@@ -89,6 +89,14 @@ The deploy is also the one step a dispatch from a branch does not reach. Everyth
 which is how a change to this pipeline is tried before it is merged — and the built site leaves the
 run as the uploaded artifact, to be downloaded and served for review. Without the guard, dispatching
 the workflow on a branch would put that branch's site in front of every reader, silently.
+
+## The dispatched ref
+
+A dispatch takes `docs_ref` from the ref it was dispatched on, not from the default branch. The two
+agree for the ordinary case -- republishing the prose from `main` -- and they part company for the
+one this exists to serve: dispatching on a branch to try a change to this pipeline before merging
+it. Defaulting to the default branch there built `main`'s `site/` and reported on a change that was
+not in the run at all, which is a green or red that means nothing.
 
 ## The source ref
 
