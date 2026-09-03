@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.13.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.12.1...micold-ai-ide-v0.13.0) (2026-09-03)
+
+
+### Features
+
+* **027:** reach the users the namespace correction could not (FR-024) ([851af34](https://github.com/jaroslawherod/micold-ai-ide/commit/851af342b047636507fbe221825395495f958828))
+* **028:** a published documentation site, with the application in it ([#268](https://github.com/jaroslawherod/micold-ai-ide/issues/268)) ([841c32c](https://github.com/jaroslawherod/micold-ai-ide/commit/841c32c4f84b45db6bd5f94ef8e69d2e2a5c3c06))
+
+
+### Bug Fixes
+
+* **027:** the connect-time CLI availability ask never went out (BUG-002) ([49d0502](https://github.com/jaroslawherod/micold-ai-ide/commit/49d05026129b2b17dcf4d34a805586089499e5db))
+
 ## [0.12.1](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.12.0...micold-ai-ide-v0.12.1) (2026-08-27)
 
 
