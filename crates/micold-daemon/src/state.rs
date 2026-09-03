@@ -31,7 +31,7 @@ use tokio::sync::mpsc;
 use crate::activity::{Activity, ActivityEvent};
 use crate::catalog::Catalog;
 use crate::framer::Framer;
-use crate::lifecycle::Lifecycle;
+use crate::idle::Presence;
 use crate::supervision::{ExitOutcome, SupervisionAction};
 use crate::supervisor::PtySession;
 
@@ -42,7 +42,16 @@ pub type ClientId = u64;
 pub struct DaemonState {
     inner: Mutex<Inner>,
     next_id: AtomicU64,
-    lifecycle: Lifecycle,
+    /// The connection count the idle rule reads (feature 028, data-model G1).
+    ///
+    /// Its own mutex rather than a field on `Inner`, because it is read on a timer by the idle
+    /// tick and taken on every connect and disconnect, while `Inner` is the lock a multi-minute
+    /// git operation can be holding. Sharing one would make "is anyone connected?" wait on
+    /// whatever the session catalogue is doing.
+    ///
+    /// A mutex rather than the two atomics the retired `Lifecycle` used, because the count and its
+    /// armed deadline have to move together — see [`Presence`].
+    presence: Mutex<Presence>,
     /// The diagnostics handle (log location, runtime level reload, recent-errors ring), set once at
     /// startup by `server::run`. Absent for tests and the ephemeral catalog, which don't init logging.
     diagnostics: std::sync::OnceLock<crate::logging::Logging>,
@@ -266,7 +275,9 @@ impl DaemonState {
                 sizes: HashMap::new(),
             }),
             next_id: AtomicU64::new(1),
-            lifecycle: Lifecycle::new(),
+            // Armed from construction: a daemon spawned by a client that dies before handshaking
+            // must not outlive the machine (G1).
+            presence: Mutex::new(Presence::new(micold_core::clock::now())),
             diagnostics: std::sync::OnceLock::new(),
             hooks: std::sync::OnceLock::new(),
             auth_token: std::sync::OnceLock::new(),
@@ -277,9 +288,12 @@ impl DaemonState {
         self.inner.lock().expect("daemon state mutex poisoned")
     }
 
-    /// The lifecycle counters (FR-002).
-    pub fn lifecycle(&self) -> &Lifecycle {
-        &self.lifecycle
+    /// A snapshot of who is connected, for the idle rule and for tests (data-model G1).
+    ///
+    /// By value, and `Presence` is `Copy`: the rule is a pure function of a snapshot, so handing
+    /// out a reference into the lock would let a caller hold it across an evaluation for no gain.
+    pub fn presence(&self) -> Presence {
+        *self.presence.lock().expect("presence mutex poisoned")
     }
 
     /// Record the diagnostics handle at startup so the `LogLocation`/`RecentErrors`/`SetLogLevel`
@@ -548,7 +562,10 @@ impl DaemonState {
                 viewed: HashMap::new(),
             },
         );
-        self.lifecycle.client_connected();
+        self.presence
+            .lock()
+            .expect("presence mutex poisoned")
+            .client_connected();
         (id, rx)
     }
 
@@ -560,7 +577,10 @@ impl DaemonState {
             inner.clients.remove(&id);
             inner.attachments.retain(|_, att| att.client != id);
         }
-        self.lifecycle.client_disconnected();
+        self.presence
+            .lock()
+            .expect("presence mutex poisoned")
+            .client_disconnected(micold_core::clock::now());
     }
 
     /// Release every attachment `id` holds, without deregistering it (FR-025a, BUG-009, T121).
@@ -2039,8 +2059,14 @@ impl DaemonState {
     }
 
     /// The number of currently connected clients (test/observability).
+    ///
+    /// Reads [`Self::presence`] rather than the length of the client table, so that this and the
+    /// idle rule cannot disagree (feature 028, lifecycle contract §2.5: *exactly one* presence
+    /// count). The table's length tracked the same two transitions and so agreed by construction —
+    /// but two things that agree by construction drift the moment one of them grows a third
+    /// mutator, and the drift would show up as a daemon stopping with a window open.
     pub fn client_count(&self) -> usize {
-        self.lock().clients.len()
+        self.presence().connected()
     }
 
     /// Whether `project` currently has an attachment (test/observability).

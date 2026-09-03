@@ -36,6 +36,9 @@ libc = "0.2.189"
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
     "Win32_System_JobObjects",
+    # `GetTickCount64` for the suspend-inclusive clock (feature 028, research R3) — the Windows
+    # counterpart of Linux's `CLOCK_BOOTTIME`, and the reason no new dependency was needed.
+    "Win32_System_SystemInformation",
     "Win32_System_Threading",
 ] }
 # --- transport / async (daemon; the client already has tokio via iced) — plan W1 ---
