@@ -120,7 +120,7 @@ the published release actually contains.
 - [X] T033 [US1] Add the phone layout to `site/theme/css/site.css`: no horizontal scrolling at 360 px, images fitted to the viewport, the table of contents collapsing to a control (FR-025)
 - [X] T034 [US1] Generate the licences page in `site/stage.sh` from `/LICENSE`, `assets/fonts/LICENSE`, `assets/fonts/LICENSE-Roboto-OFL.txt` and `assets/fonts/PROVENANCE.md`, and add its entry to `docs/SUMMARY.md` (FR-008, FR-031)
 - [X] T035 [US1] Implement `site/checks/page-checks.mjs` with three of its five assertions — axe-core WCAG 2.2 AA over every page in both schemes, the home page's first-viewport facts, and the off-origin scan over `<img>`/`<link>`/`<script>`/`<source>`/CSS `url()` (T024, T025 green)
-- [ ] T036 [US1] Link the site from the repository: add it to the root `README.md`, and set the repository's website field with `gh repo edit --homepage https://cumulocity-iot.github.io/micold-ai-ide/` (FR-008a)
+- [ ] T036 [US1] Link the site from the repository: add it to the root `README.md`, and set the repository's website field with `gh repo edit --homepage https://jaroslawherod.github.io/micold-ai-ide/` (FR-008a)
 - [X] T037 [US1] Run `site/build.sh` end to end locally and walk quickstart A5 and A7 — the home page's capture is produced, and the media contains no personal path, no real project name and no window but the application's own (FR-013, SC-010)
 
 **Checkpoint**: The site has a front door with a real screenshot of the application on it, in the
@@ -243,7 +243,7 @@ and no video bytes were requested until a play control was pressed.
 
 ## Deferred — needs the upstream repository
 
-Four tasks act on `Cumulocity-IoT/micold-ai-ide` itself rather than on this tree, and this checkout's
+Four tasks act on `jaroslawherod/micold-ai-ide` itself rather than on this tree, and this checkout's
 remote is not that repository. They are left unchecked rather than reported as done:
 
 - **T036 (second half)** — `gh repo edit --homepage`. The `README.md` half is done; the website
@@ -359,10 +359,10 @@ links, guide captures), one on US4 (checks and workflows). US3 joins once `stage
   tree. `page-set.sh` (T054) has to know that generated page, or it will call it a missing file.
 - T036's second half is not done and cannot be done from here: `gh repo edit --homepage` would set
   the field on `jaroslawherod/micold-ai-ide`, which is what `origin` points at, while every URL in
-  this feature names `Cumulocity-IoT/micold-ai-ide` — the repository the workspace `Cargo.toml`
+  this feature names `jaroslawherod/micold-ai-ide` — the repository the workspace `Cargo.toml`
   declares and the one plan.md targets. That repository is not reachable with the credentials here.
   Whoever administers it runs:
-  `gh repo edit Cumulocity-IoT/micold-ai-ide --homepage https://cumulocity-iot.github.io/micold-ai-ide/`
+  `gh repo edit jaroslawherod/micold-ai-ide --homepage https://jaroslawherod.github.io/micold-ai-ide/`
   If the site is instead published from the fork, the address changes to
   `https://jaroslawherod.github.io/micold-ai-ide/` and has to be replaced in `site/book.toml`,
   `site/stage.sh`, `docs/install.md`, `docs/README.md`, `README.md` and the publication workflow.

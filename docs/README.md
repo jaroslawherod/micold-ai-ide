@@ -5,7 +5,7 @@ piece of work its own worktree, and runs an AI CLI session in a terminal beside 
 background service that keeps every session alive when you close the window.
 
 [**Install**](install.md) · [**Read the user guide**](user-guide/help-about.md) ·
-[Source on GitHub](https://github.com/Cumulocity-IoT/micold-ai-ide)
+[Source on GitHub](https://github.com/jaroslawherod/micold-ai-ide)
 
 <!-- media: main-window-light -->
 

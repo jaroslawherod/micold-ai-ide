@@ -185,7 +185,7 @@ echo "== the download links on the install page (FR-004a) =="
 cat > "$fixture/docs/user-guide/deep.md" <<'MD'
 # Deep page
 
-[the package](https://github.com/Cumulocity-IoT/micold-ai-ide/releases/download/{{MICOLD_TAG}}/micold-client_{{MICOLD_VERSION}}-1_amd64.deb)
+[the package](https://github.com/jaroslawherod/micold-ai-ide/releases/download/{{MICOLD_TAG}}/micold-client_{{MICOLD_VERSION}}-1_amd64.deb)
 MD
 
 if MICOLD_RELEASE_ASSETS="micold-client_9.9.9-1_amd64.deb micold-client_9.9.9-1_arm64.deb" \
@@ -215,7 +215,7 @@ fi
 cat > "$fixture/docs/user-guide/deep.md" <<'MD'
 # Deep page
 
-[the package](https://github.com/Cumulocity-IoT/micold-ai-ide/releases/download/v1.0.0/micold-client_9.9.9-1_amd64.deb)
+[the package](https://github.com/jaroslawherod/micold-ai-ide/releases/download/v1.0.0/micold-client_9.9.9-1_amd64.deb)
 MD
 if MICOLD_RELEASE_ASSETS="micold-client_9.9.9-1_amd64.deb" \
    "$STAGE" --docs "$fixture/docs" --media-manifest "$fixture/media.toml" \

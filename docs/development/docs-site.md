@@ -1,12 +1,12 @@
 # The documentation site: how a publication works
 
-<https://cumulocity-iot.github.io/micold-ai-ide/> is this `docs/` directory, rendered. It is
+<https://jaroslawherod.github.io/micold-ai-ide/> is this `docs/` directory, rendered. It is
 published by a workflow, from a release tag, with every screenshot on it captured from the
 application built at that tag — so the site a reader lands on shows the version they can download,
 and nobody has to remember to refresh a picture.
 
 This page is for the developer who has to change, trigger, or debug that. The tooling itself lives
-under `site/`, and [`site/README.md`](https://github.com/Cumulocity-IoT/micold-ai-ide/blob/main/site/README.md)
+under `site/`, and [`site/README.md`](https://github.com/jaroslawherod/micold-ai-ide/blob/main/site/README.md)
 is the map of what is in there.
 
 ## What runs, in order

@@ -43,7 +43,7 @@ upstream font defines), so adding a new icon never requires touching the font fi
 [`assets/fonts/PROVENANCE.md`][provenance] in the repository. The font is embedded in the
 application and needs no internet connection.
 
-[provenance]: https://github.com/Cumulocity-IoT/micold-ai-ide/blob/{{MICOLD_TAG}}/assets/fonts/PROVENANCE.md
+[provenance]: https://github.com/jaroslawherod/micold-ai-ide/blob/{{MICOLD_TAG}}/assets/fonts/PROVENANCE.md
 
 ## For contributors: adding a new icon
 

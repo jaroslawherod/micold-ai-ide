@@ -28,7 +28,7 @@ theme = "theme"
 default-theme = "light"
 preferred-dark-theme = "navy"
 no-section-label = true
-git-repository-url = "https://github.com/Cumulocity-IoT/micold-ai-ide"
+git-repository-url = "https://github.com/jaroslawherod/micold-ai-ide"
 # mdBook 0.5 reads the Font Awesome *style* from the prefix -- `fab-` for brands, `fas-` for solid,
 # `far-` for regular. A bare `fa-github` is not "the default style", it is an unknown style, and it
 # fails the render rather than the icon.
