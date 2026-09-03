@@ -54,10 +54,38 @@ scene_lock="${scene_project%/*}/.capture-lock"
 scene_width="${MICOLD_CAPTURE_WIDTH:-1440}"
 scene_height="${MICOLD_CAPTURE_HEIGHT:-900}"
 
+# A scene fails on a machine nobody is sitting at, and the two programs that could say why write
+# their diagnostics to files rather than to this shell: the client's output is redirected to
+# `$scene_log`, and the daemon -- which is what actually spawns a session's provider -- logs under
+# the display's own data directory. Both are printed here, labelled and empty-or-not, because a
+# failure that prints only the assertion leaves a CI log with nothing in it to read.
 scene_die() {
   printf 'scene: %s\n' "$1" >&2
-  [ -f "$scene_log" ] && tail -20 "$scene_log" >&2
+  printf 'scene: --- client log (%s) ---\n' "$scene_log" >&2
+  [ -f "$scene_log" ] && tail -40 "$scene_log" >&2
+  local daemon_log="${XDG_DATA_HOME:-}/micold-ai-ide/micold-daemon.log"
+  printf 'scene: --- daemon log (%s) ---\n' "$daemon_log" >&2
+  [ -f "$daemon_log" ] && tail -40 "$daemon_log" >&2
+  scene_failure_shot
   exit 1
+}
+
+# The state the scene died in, as a picture.
+#
+# Every assertion in this file exists because a click that lands on nothing produces a plausible
+# frame rather than an error -- and the same reasoning applies to the failure itself: "no session
+# started from the row at y=247" does not say whether the row was empty, the list was a different
+# length, or the action was drawn somewhere else. On a machine nobody is sitting at, a frame of the
+# whole display is the only thing that does. It goes under `site/build/`, which is where the
+# publication workflow looks for debris to keep when a run fails.
+scene_failure_shot() {
+  local dir="$scene_root/site/build/failed"
+  local name
+  name="$(basename "${0%.sh}")"
+  mkdir -p "$dir" 2>/dev/null || return 0
+  [ -n "${DISPLAY:-}" ] || return 0
+  import -window root -define png:exclude-chunks=date,time "$dir/$name.png" 2>/dev/null || return 0
+  printf 'scene: the failing state is in site/build/failed/%s.png\n' "$name" >&2
 }
 
 scene_note() {
@@ -439,11 +467,19 @@ scene_stop() {
     kill "$scene_pid" 2>/dev/null || true
     wait "$scene_pid" 2>/dev/null || true
   fi
-  # The daemon outlives the client by design (it is a session service), so it is stopped by name
-  # *within this run's own pin directory* -- never by pattern across the machine, which would kill
-  # a daemon a person on this machine is using.
+  # The daemon outlives the client by design (it is a session service), and a scene that died before
+  # `scene_stop` leaves a client behind that `$scene_pid` -- a variable, private to the process that
+  # set it -- cannot name. Both are therefore stopped by name *within this run's own pin directory*,
+  # never by pattern across the machine, which would kill what a person on this machine is using.
   pkill -f "^$scene_pin/micold-daemon" 2>/dev/null || true
+  pkill -f "^$scene_pin/micold-ai-ide" 2>/dev/null || true
   scene_pid=""
   # Releases the project for the next run (and for the next scene of this one).
   exec 8>&-
 }
+
+# A scene that fails partway leaves its client running, and a running client cannot be overwritten:
+# the next scene's `cp` into the pin directory gets ETXTBSY -- "Text file busy" -- and dies before it
+# has launched anything. One scene going wrong turned into every later scene going wrong that way,
+# so the cleanup runs on the way out however the scene ends.
+trap scene_stop EXIT

@@ -262,6 +262,19 @@ jobs:
           VERSION: ${{ steps.refs.outputs.version }}
         run: site/build.sh --version "$VERSION" --tag "$RELEASE_TAG"
 
+      # A capture runs on a display nobody is watching, and its failures are about pixels: a control
+      # drawn somewhere other than where the scene reaches for it, a list of a different length, a
+      # window that opened on nothing. The scene library photographs the display it died on; this
+      # keeps that photograph, so the next attempt starts from a picture rather than from a guess.
+      - name: Keep the failing capture's frames
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: capture-failure
+          path: site/build/failed
+          if-no-files-found: ignore
+          retention-days: 7
+
       # --- 13. the deploy -------------------------------------------------------------------------
       #
       # Everything above has to have passed to get here, which is the whole of FR-018: a failed check
