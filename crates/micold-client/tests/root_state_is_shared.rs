@@ -39,7 +39,7 @@
 //! (feature 017), which exists to assert that these facts outlive the widget that shows them, and
 //! by the overlay suite, which asks the whole window which surface is open. FR-021 forbids
 //! relaxing those tests to let a path move, so the allowlist is the honest record — the rule is
-//! live, it has thirteen hits, and all thirteen are answered.
+//! live, it has fourteen hits, and all fourteen are answered.
 //!
 //! # Neither list may outlive its reason
 //!
@@ -92,13 +92,15 @@ const SHARED: &[(&str, &str)] = &[(
 /// assertion to make room for a move. The list is measured, not chosen: it is exactly what
 /// [`component_local_candidates`] returns, and every candidate had a pinning assertion already.
 ///
-/// Nine of the thirteen are *which surface is open* — a dialog, a menu, a switcher, a panel. That is
+/// Nine of the fourteen are *which surface is open* — a dialog, a menu, a switcher, a panel. That is
 /// not a coincidence: modality is the one thing a component cannot own, because deciding what
 /// Escape does and what a scroll dismisses is a question about the whole window. The overlay suite
 /// (`overlay_dismissal_delta.rs`, `overlay_dispatch_ordering.rs`) asks it of `app::State` for every
-/// surface at once, so each of those flags is pinned by construction. The other four are what the
+/// surface at once, so each of those flags is pinned by construction. The other five are what the
 /// sidebar remembers across a re-discovery, the tag filter that decides which rows exist, how large
-/// the window is, and whether the Settings rail is collapsed to its icons.
+/// the window is, whether the Settings rail is collapsed to its icons, and whether this copy is
+/// installed at all — which refuses to start a session, so it cannot belong to the screen that
+/// says so.
 const COMPONENT_LOCAL: &[(&str, &str)] = &[
     (
         "help.about_open",
@@ -166,6 +168,12 @@ const COMPONENT_LOCAL: &[(&str, &str)] = &[
         "sidebar.hidden",
         "tests/logical_state_ownership.rs::sidebar_visibility_is_application_owned — whether the \
          sidebar is shown is the window's layout decision, not the sidebar's",
+    ),
+    (
+        "window.install_location",
+        "tests/features_window.rs::nothing_this_feature_does_clears_the_block — the verdict has \
+         to survive every other operation the window owns, so it is asserted on `app::State` and \
+         not on the screen it produces (feature 028, FR-019)",
     ),
     (
         "window.window_size",
