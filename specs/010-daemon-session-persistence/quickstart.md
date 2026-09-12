@@ -126,10 +126,25 @@ mise run run
 ```
 
 **Expected**: previously running sessions appear in a **distinct interrupted-resumable state** — not
-`Running`, not indistinguishable from a deliberate stop — and **no agent process is auto-relaunched**.
-A single explicit action resumes each, continuing the prior conversation.
+`Running`, not indistinguishable from a deliberate stop. **The service relaunches nothing**: every
+session it recovered is presented, none is respawned.
 
-This is the safety property: a service restart must never cause an agent to take action unasked.
+The client then restores the session you were last on in the project it reopens, and restoring a
+session resumes it (`025-last-session-memory` FR-004a) — so **that one** leaves the interrupted-
+resumable state because you opened the project, exactly as clicking it would have. Every other session
+— its neighbours in the same project, and every session in every other project — MUST still be
+interrupted-resumable with no process behind it, and MUST take one explicit action to resume,
+continuing the prior conversation.
+
+So this is a check on the **count**, not on silence: after the relaunch there is at most **one** new
+agent process and it belongs to the session on screen. Count them rather than judging by the pane in
+front of you — `pgrep -fa 'claude|copilot'` before the relaunch and after — since the failure worth
+catching is a restart that quietly wakes the sessions nobody opened.
+
+*(Amended 2026-08-27 — BUG-016. Until then this row asked for no agent process at all and called that
+"the safety property"; the client had resumed the displayed session since `025`'s BUG-002, so the row
+described something the build had stopped doing. What is true, and is what `025` says it traded for,
+is the bound on scope above.)*
 
 ---
 
@@ -235,7 +250,9 @@ mise run run                                # must reclaim it and start cleanly
 ```
 
 Hostile directory (Linux `/tmp` fallback) — with `XDG_RUNTIME_DIR` unset and a wrong-owner or
-wrong-mode `/tmp/micold-<uid>`, startup **MUST bail loudly**, not bind anyway.
+wrong-mode `/tmp/micold-<uid>`, startup **MUST bail loudly**, not bind anyway — and **MUST leave the
+directory as it found it**, so that what it refused is still there for a human to look at. Silently
+repairing the mode and continuing is the failure this block exists to catch (BUG-019).
 
 ---
 
@@ -260,8 +277,12 @@ For each failure in S7, S8 and S11, confirm the cause is determinable from logs 
 the UI**, without rebuilding or reading source.
 
 ```bash
-ls -l ~/.local/state/micold-daemon/logs/    # Linux; see research R2.3 for macOS/Windows
+ls -l ~/.local/share/micold-ai-ide/micold-daemon.log*   # Linux; see research R2.3 for macOS/Windows
 ```
+
+The daemon reports its own choice on its first line, which is the quicker check when the file is not
+where you expect: `micold-daemon starting … sink=File log_path=Some("…")`. A `sink=Journald` there
+from an auto-spawned daemon means the log is being discarded — see BUG-015.
 
 **Expected**: total log size is hard-capped (rotation count × size limit) and does not grow without
 bound. **No terminal content or user input appears in any log entry** (FR-047) — grep for a string

@@ -24,7 +24,7 @@ fn three_projects() -> State {
         ..Default::default()
     };
     st.workspace.active = Some(PathBuf::from("/p1"));
-    st.active_session = Some(st.workspace.sessions[Path::new("/p1")][0].id);
+    st.session.active = Some(st.workspace.sessions[Path::new("/p1")][0].id);
     st
 }
 
@@ -125,7 +125,7 @@ fn displayed_session_always_belongs_to_the_active_project() {
         assert!(st.switch_active(Path::new(p)).is_some());
         let expected = st.workspace.sessions[Path::new(p)][0].id;
         assert_eq!(
-            st.active_session,
+            st.session.active,
             Some(expected),
             "no cross-project leak of foreground"
         );

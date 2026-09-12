@@ -8,11 +8,13 @@
 //! surface that closes when its neighbour does not.
 
 use micold_client::app::Message;
+use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::overlay::{DismissalRules, SurfaceId};
 use micold_core::overlay::{dismisses, Layer, Surface, Trigger};
 
 fn cancellable(layer: Layer) -> DismissalRules {
-    DismissalRules::for_layer(layer).cancelled_by(Message::AboutClosed)
+    DismissalRules::for_layer(layer).cancelled_by(Message::Help(HelpMsg::AboutClosed))
 }
 
 #[test]
@@ -75,11 +77,12 @@ fn a_surface_with_no_cancel_message_has_no_implicit_close() {
 
 #[test]
 fn the_cancel_message_is_the_one_the_surface_named() {
-    let rules = DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::SettingsCancelled);
+    let rules = DismissalRules::for_layer(Layer::Dialog)
+        .cancelled_by(Message::Settings(SettingsMsg::Cancelled));
 
     assert_eq!(
         rules.on(Trigger::Escape),
-        Some(&Message::SettingsCancelled),
+        Some(&Message::Settings(SettingsMsg::Cancelled)),
         "dispatch asks one question — what happens on this trigger — and gets the pairing, so it \
          cannot mismatch a surface's rule with another's message"
     );

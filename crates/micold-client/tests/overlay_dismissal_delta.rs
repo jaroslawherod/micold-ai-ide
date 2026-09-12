@@ -32,6 +32,14 @@
 //! worktree list they describe actually sends. Every assertion is unchanged; only the stimulus is,
 //! and it is now the real one.
 
+use micold_client::features::help;
+use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project;
+use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::sidebar;
+use micold_client::features::sidebar::Msg as SidebarMsg;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{Message, State};
@@ -53,7 +61,10 @@ fn open_dialog(state: &State) -> Option<&'static str> {
 /// Open the About dialog, the stand-in for "a dialog" throughout this file.
 fn with_about() -> State {
     State {
-        about_open: true,
+        help: help::State {
+            about_open: true,
+            ..Default::default()
+        },
         ..State::default()
     }
 }
@@ -61,8 +72,8 @@ fn with_about() -> State {
 /// A state with the overflow menu open.
 fn with_help_menu() -> State {
     let mut state = State::default();
-    state.update(Message::HelpMenuToggled);
-    assert!(state.help_menu_open, "precondition: the menu is open");
+    state.update(Message::Help(HelpMsg::MenuToggled));
+    assert!(state.help.help_menu_open, "precondition: the menu is open");
     state
 }
 
@@ -86,7 +97,7 @@ fn a_dialog_now_dismisses_on_a_scrim_click() {
     let state = with_about();
     assert_eq!(
         micold_client::app::on_escape(&state),
-        Some(Message::AboutClosed),
+        Some(Message::Help(HelpMsg::AboutClosed)),
         "the scrim emits whatever Escape would, so the two paths cannot disagree"
     );
 }
@@ -98,7 +109,7 @@ fn a_dialog_still_survives_scrolling_behind_it() {
     assert!(!dismisses(Surface::Dialog, Trigger::ScrollBeneath));
 
     let mut state = with_about();
-    state.update(Message::SidebarScrolled(SCROLLED));
+    state.update(Message::Sidebar(SidebarMsg::Scrolled(SCROLLED)));
     assert_eq!(
         open_dialog(&state),
         Some("about"),
@@ -118,9 +129,9 @@ fn a_menu_now_closes_when_the_list_beneath_it_scrolls() {
     assert!(dismisses(Surface::NonModal, Trigger::ScrollBeneath));
 
     let mut state = with_help_menu();
-    state.update(Message::SidebarScrolled(SCROLLED));
+    state.update(Message::Sidebar(SidebarMsg::Scrolled(SCROLLED)));
     assert!(
-        !state.help_menu_open,
+        !state.help.help_menu_open,
         "the overflow menu must close when content scrolls beneath it"
     );
 }
@@ -130,20 +141,31 @@ fn a_menu_now_closes_when_the_list_beneath_it_scrolls() {
 #[test]
 fn every_non_modal_surface_closes_on_a_scroll_beneath() {
     let mut state = State {
-        help_menu_open: true,
-        project_switcher_open: true,
-        sidebar_filter_open: true,
+        sidebar: sidebar::State {
+            filter_open: true,
+            ..Default::default()
+        },
+
+        project: project::State {
+            switcher_open: true,
+            ..Default::default()
+        },
+
+        help: help::State {
+            help_menu_open: true,
+            ..Default::default()
+        },
         ..State::default()
     };
 
-    state.update(Message::SidebarScrolled(SCROLLED));
+    state.update(Message::Sidebar(SidebarMsg::Scrolled(SCROLLED)));
 
-    assert!(!state.help_menu_open, "overflow menu");
-    assert!(!state.project_switcher_open, "project switcher");
-    assert!(!state.sidebar_filter_open, "sidebar filter panel");
-    assert!(state.project_menu_open.is_none(), "project context menu");
-    assert!(state.worktree_menu_open.is_none(), "worktree context menu");
-    assert!(state.session_menu_open.is_none(), "session context menu");
+    assert!(!state.help.help_menu_open, "overflow menu");
+    assert!(!state.project.switcher_open, "project switcher");
+    assert!(!state.sidebar.filter_open, "sidebar filter panel");
+    assert!(state.project.menu_open.is_none(), "project context menu");
+    assert!(state.worktree.menu_open.is_none(), "worktree context menu");
+    assert!(state.session.menu_open.is_none(), "session context menu");
 }
 
 // ---------------------------------------------------------------------------
@@ -157,8 +179,8 @@ fn outside_click_dismissal_of_a_menu_is_unchanged() {
     assert!(dismisses(Surface::NonModal, Trigger::OutsideClick));
 
     let mut state = with_help_menu();
-    state.update(Message::HelpMenuToggled);
-    assert!(!state.help_menu_open);
+    state.update(Message::Help(HelpMsg::MenuToggled));
+    assert!(!state.help.help_menu_open);
 }
 
 /// Escape closes what it always closed. Feature 017 changed which *other* gestures close a
@@ -167,53 +189,57 @@ fn outside_click_dismissal_of_a_menu_is_unchanged() {
 fn escape_still_reaches_exactly_what_it_used_to() {
     #[allow(clippy::type_complexity)]
     let dialogs: &[(&str, fn(&mut State), Message)] = &[
-        ("about", |s| s.about_open = true, Message::AboutClosed),
+        (
+            "about",
+            |s| s.help.about_open = true,
+            Message::Help(HelpMsg::AboutClosed),
+        ),
         (
             "project_selector",
-            |s| s.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
-            Message::ProjectSelectorClosed,
+            |s| s.project.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
+            Message::Project(ProjectMsg::SelectorClosed),
         ),
         (
             "rename_project",
             |s| {
-                s.rename_draft = Some(RenameDraft {
+                s.project.rename_draft = Some(RenameDraft {
                     path: PathBuf::from("/tmp"),
                     text: String::new(),
                     error: None,
                 })
             },
-            Message::RenameCancelled,
+            Message::Project(ProjectMsg::RenameCancelled),
         ),
         (
             "add_worktree",
-            |s| s.worktree_form = Some(Default::default()),
+            |s| s.worktree_form.form = Some(Default::default()),
             Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
         ),
         (
             "confirm_worktree_delete",
-            |s| s.worktree_delete_target = Some("wt".to_string()),
-            Message::WorktreeDeleteCancelled,
+            |s| s.worktree.delete_target = Some("wt".to_string()),
+            Message::Worktree(WorktreeMsg::DeleteCancelled),
         ),
         (
             "rename_worktree",
             |s| {
-                s.worktree_rename_draft = Some(WorktreeRenameDraft {
+                s.worktree.rename_draft = Some(WorktreeRenameDraft {
                     dir_name: "wt".to_string(),
                     text: String::new(),
                     error: None,
                 })
             },
-            Message::WorktreeRenameCancelled,
+            Message::Worktree(WorktreeMsg::RenameCancelled),
         ),
         (
             "confirm_session_remove",
-            |s| s.session_remove_target = Some(SessionId::new()),
-            Message::SessionRemoveCancelled,
+            |s| s.session.remove_target = Some(SessionId::new()),
+            Message::Session(SessionMsg::RemoveCancelled),
         ),
         (
             "confirm_forget_project",
-            |s| s.forget_target = Some(PathBuf::from("/p")),
-            Message::ProjectForgetCancelled,
+            |s| s.project.forget_target = Some(PathBuf::from("/p")),
+            Message::Project(ProjectMsg::ForgetCancelled),
         ),
     ];
 
@@ -238,12 +264,12 @@ fn escape_still_reaches_exactly_what_it_used_to() {
 fn scrolling_with_nothing_open_changes_nothing() {
     let mut state = State::default();
     let before = state.clone();
-    state.update(Message::SidebarScrolled(SCROLLED));
+    state.update(Message::Sidebar(SidebarMsg::Scrolled(SCROLLED)));
     assert_eq!(
         open_dialog(&state),
         open_dialog(&before),
         "an idle scroll must not touch the overlay"
     );
-    assert!(!state.help_menu_open);
-    assert!(!state.project_switcher_open);
+    assert!(!state.help.help_menu_open);
+    assert!(!state.project.switcher_open);
 }

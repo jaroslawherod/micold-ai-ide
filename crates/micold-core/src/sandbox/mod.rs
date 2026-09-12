@@ -350,6 +350,13 @@ impl ProjectMount {
 /// the daemon never updates.
 pub const STATE_CONTAINER_DIR: &str = "/var/lib/micold-ai-ide";
 
+/// The application-owned home directory's name, under the host state directory (FR-004d).
+///
+/// Under the state directory rather than beside it, so it inherits that directory's two properties
+/// without a second decision: it persists across container recreation, and it is somewhere the user
+/// can look at from the host. It is *not* the user's home — see [`HomeMount`].
+pub const SANDBOX_HOME_DIR: &str = "sandbox-home";
+
 /// The daemon's state directory, bind-mounted from the host.
 ///
 /// # Why not a runtime-managed named volume
@@ -386,18 +393,51 @@ pub struct SecretMount {
     pub container: PathBuf,
 }
 
+/// The sandbox's own home directory, mounted where the container's `HOME` points (FR-004d).
+///
+/// The sandbox runs as the host uid, which has no `/etc/passwd` entry inside the container and so
+/// no home of its own; `argv` therefore passes the *host's* home path as `HOME`, because that is
+/// the path a shared `~/.gitconfig` is mounted at (research R2). That path does not exist in the
+/// image, and the uid cannot create it — so every tool that writes to `~` before doing anything
+/// else fails. `@github/copilot` does exactly that and dies with `EACCES: mkdir '/home/<user>'`;
+/// `claude` survives it, which is why this went unnoticed until both were in the image (FR-023a).
+///
+/// The fix is a directory the *application* owns, mounted at that path. It is not the user's home
+/// and nothing of theirs is ever copied into it: `ls ~` inside a session lists what previous
+/// sessions wrote there and nothing else, which is what `sandbox_real_boundary` asserts. Because it
+/// lives under the state directory it also survives container recreation, so an AI CLI's own
+/// settings persist exactly as far as the daemon's do (FR-011).
+///
+/// Declared here rather than emitted by `argv` on its own, because obligation C-3 says the mounts
+/// are *exactly* this set — an implicit home mount is the class of convenience that obligation
+/// exists to forbid. Making it explicit keeps the rule literally true.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HomeMount {
+    /// The application-owned directory, under the state directory. Created before the sandbox
+    /// starts; a runtime that had to create it would create it owned by root.
+    pub host: PathBuf,
+    /// The host home path, which is what `HOME` is set to inside the container.
+    pub container: PathBuf,
+}
+
 /// Everything the sandbox can see (FR-006 … FR-011).
 ///
 /// The load-bearing rule of this feature is rule M-1: **only** what is listed here is mounted. The
 /// user's home, the runtime's own control socket, and anything not registered are absent. A
 /// sandbox's guarantee is what it cannot reach, so a convenience mount added here is not a
 /// convenience — it is the feature failing quietly.
+///
+/// [`Self::home`] is not an exception to that. It mounts a directory the *application* owns at the
+/// path the user's home occupies — which shadows the host home rather than sharing it, and is the
+/// only reason a session can write to `~` at all (FR-004d).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MountSet {
     /// One per registered project.
     pub projects: Vec<ProjectMount>,
     /// Daemon state; survives container recreation, and stays readable from the host.
     pub state: StateMount,
+    /// A writable home of the sandbox's own, at the path `HOME` names (FR-004d).
+    pub home: HomeMount,
     /// The authentication token.
     pub secret: SecretMount,
     /// Credential mounts, one per active opt-in. Empty unless the user opted in (rule N-1).
@@ -496,9 +536,18 @@ impl MountSet {
         profile: &SandboxProfile,
         layout: &CredentialLayout,
         state_dir: impl Into<PathBuf>,
+        home: &Path,
         secret: SecretMount,
     ) -> Self {
-        Self::build_for(projects, profile, layout, state_dir, secret, cfg!(windows))
+        Self::build_for(
+            projects,
+            profile,
+            layout,
+            state_dir,
+            home,
+            secret,
+            cfg!(windows),
+        )
     }
 
     /// [`MountSet::build`], under a *named* platform's path mapping rather than this one's.
@@ -511,9 +560,11 @@ impl MountSet {
         profile: &SandboxProfile,
         layout: &CredentialLayout,
         state_dir: impl Into<PathBuf>,
+        home: &Path,
         secret: SecretMount,
         windows_host: bool,
     ) -> Self {
+        let state_dir = state_dir.into();
         let credentials = profile
             .credentials
             .iter()
@@ -535,8 +586,15 @@ impl MountSet {
                 .cloned()
                 .map(|p| ProjectMount::project_for(p, windows_host))
                 .collect(),
+            home: HomeMount {
+                host: state_dir.join(SANDBOX_HOME_DIR),
+                // The host's own home path: `argv` sets `HOME` to it, and a shared credential is
+                // mounted at it. Anything else here would put `HOME` and the credentials in two
+                // different places, which is the failure this mount exists to end.
+                container: pathmap::map_for(home, windows_host),
+            },
             state: StateMount {
-                host: state_dir.into(),
+                host: state_dir,
                 container: PathBuf::from(STATE_CONTAINER_DIR),
             },
             secret,
@@ -551,6 +609,7 @@ impl MountSet {
             .iter()
             .map(|m| m.host.as_path())
             .chain(std::iter::once(self.state.host.as_path()))
+            .chain(std::iter::once(self.home.host.as_path()))
             .chain(std::iter::once(self.secret.host.as_path()))
             .chain(self.credentials.iter().map(|c| c.host.as_path()))
             .collect()

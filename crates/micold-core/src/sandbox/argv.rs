@@ -9,8 +9,10 @@
 //! - **C-2**: a limit the runtime cannot enforce produces *no flag*. The user's stored value is
 //!   preserved, but never passed. Passing it anyway is the silent drift `endpoint.rs` already
 //!   refuses to tolerate, and here it would leave the user believing a bound exists.
-//! - **C-3**: the mounts are exactly the [`MountSet`] and nothing else. No implicit home mount, no
-//!   runtime control socket. A sandbox's guarantee is what it *cannot* reach.
+//! - **C-3**: the mounts are exactly the [`MountSet`] and nothing else. No implicit mount of any
+//!   kind, no runtime control socket. A sandbox's guarantee is what it *cannot* reach. The
+//!   sandbox's own home is mounted, and is in the set for that reason (FR-004d): the rule is that
+//!   this function invents no mount, not that some particular mount is absent.
 
 use std::ffi::OsString;
 
@@ -149,6 +151,20 @@ fn budget_args(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> 
 /// The mount flags: exactly the [`MountSet`], and nothing else (obligation C-3).
 fn mount_args(mounts: &MountSet) -> Vec<OsString> {
     let mut args: Vec<OsString> = Vec::new();
+    // The sandbox's own home, first: every other mount whose path falls under it — a project in
+    // the user's home, a shared `~/.gitconfig` — has to land *on top of* it rather than under it.
+    // Both runtimes sort mounts by destination depth and so would order this correctly whatever
+    // order they were given in, but the argv is the thing a reader debugs, and reading it
+    // parent-first is how the nesting is obvious.
+    args.push("-v".into());
+    args.push(
+        format!(
+            "{}:{}:rw",
+            mounts.home.host.display(),
+            mounts.home.container.display()
+        )
+        .into(),
+    );
     for m in &mounts.projects {
         let mode = if m.writable { "rw" } else { "ro" };
         args.push("-v".into());
@@ -187,8 +203,8 @@ mod tests {
     use crate::sandbox::image::ImageSource;
     use crate::sandbox::runtime::{IdentityMapping, LimitSupport, RuntimeKind};
     use crate::sandbox::{
-        Bytes, CredentialMount, CredentialShare, MilliCpus, NetworkPosture, ProjectMount,
-        ResourceBudget, SandboxProfile, SecretMount, StateMount,
+        Bytes, CredentialMount, CredentialShare, HomeMount, MilliCpus, NetworkPosture,
+        ProjectMount, ResourceBudget, SandboxProfile, SecretMount, StateMount,
     };
     use std::collections::BTreeSet;
     use std::path::PathBuf;
@@ -219,6 +235,10 @@ mod tests {
                 ..SandboxProfile::default()
             },
             mounts: MountSet {
+                home: HomeMount {
+                    host: PathBuf::from("/home/u/.local/share/micold-ai-ide/sandbox-home"),
+                    container: PathBuf::from("/home/u"),
+                },
                 projects: vec![ProjectMount {
                     host: PathBuf::from("/home/u/p"),
                     container: PathBuf::from("/home/u/p"),
@@ -339,6 +359,8 @@ mod tests {
     fn argv_mounts_are_exactly_the_mount_set() {
         // Conformance check K-4, compared as sets. This is the assertion that would fail if anyone
         // added a "convenience" mount — the user's home, a cache directory, the runtime socket.
+        // The sandbox's *own* home is in the set (FR-004d) and so is expected here; what the check
+        // forbids is a mount `argv` invents, and the count is what makes that difference bite.
         let mut s = spec();
         s.mounts.credentials = vec![CredentialMount {
             share: CredentialShare::GitConfig,
@@ -354,8 +376,18 @@ mod tests {
                 .filter(|(_, a)| a.as_str() == "-v")
                 .filter_map(|(i, _)| args.get(i + 1).cloned())
                 .collect();
-            // projects + state volume + secret + one credential
-            assert_eq!(mounted.len(), 4, "{kind} mounted: {mounted:?}");
+            // sandbox home + projects + state volume + secret + one credential
+            assert_eq!(mounted.len(), 5, "{kind} mounted: {mounted:?}");
+            // The home is the application's own directory mounted *at* the host home path — not
+            // the host home mounted anywhere. Asserting the pair, not just the destination, is
+            // what keeps the two apart: `/home/u:/home/u` would satisfy a destination-only check
+            // and hand the sandbox the user's home (FR-004, FR-004d).
+            assert!(
+                mounted
+                    .iter()
+                    .any(|m| m == "/home/u/.local/share/micold-ai-ide/sandbox-home:/home/u:rw"),
+                "{kind} mounted: {mounted:?}"
+            );
             assert!(mounted
                 .iter()
                 .any(|m| m.starts_with("/home/u/p:/home/u/p:rw")));

@@ -38,6 +38,17 @@
 //! the message the subscription emits, and `the_keyboard_subscription_names_no_surface` reads the
 //! function to confirm it still emits only that one.
 
+use micold_client::features::help;
+use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::project;
+use micold_client::features::project::Msg as ProjectMsg;
+use micold_client::features::session;
+use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::settings::Msg as SettingsMsg;
+use micold_client::features::settings::PendingPlacementChange;
+use micold_client::features::sidebar;
+use micold_client::features::sidebar::Msg as SidebarMsg;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use std::path::PathBuf;
 
 use micold_client::app::{on_escape, Message, State};
@@ -45,6 +56,7 @@ use micold_client::features::project::RenameDraft;
 use micold_client::features::worktree::WorktreeRenameDraft;
 use micold_client::overlay::registry::{self, Probe};
 use micold_core::overlay::{Layer, Trigger};
+use micold_core::sandbox::placement::PlacementKind;
 use micold_core::selector::Selector;
 use micold_core::session::SessionId;
 
@@ -70,19 +82,19 @@ fn dialogs() -> Vec<Dialog> {
     vec![
         Dialog {
             id: "about",
-            cancel: Message::AboutClosed,
-            open: |state| state.about_open = true,
+            cancel: Message::Help(HelpMsg::AboutClosed),
+            open: |state| state.help.about_open = true,
         },
         Dialog {
             id: "project_selector",
-            cancel: Message::ProjectSelectorClosed,
-            open: |state| state.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
+            cancel: Message::Project(ProjectMsg::SelectorClosed),
+            open: |state| state.project.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
         },
         Dialog {
             id: "rename_project",
-            cancel: Message::RenameCancelled,
+            cancel: Message::Project(ProjectMsg::RenameCancelled),
             open: |state| {
-                state.rename_draft = Some(RenameDraft {
+                state.project.rename_draft = Some(RenameDraft {
                     path: PathBuf::from("/tmp"),
                     text: String::new(),
                     error: None,
@@ -92,18 +104,18 @@ fn dialogs() -> Vec<Dialog> {
         Dialog {
             id: "add_worktree",
             cancel: Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
-            open: |state| state.worktree_form = Some(Default::default()),
+            open: |state| state.worktree_form.form = Some(Default::default()),
         },
         Dialog {
             id: "confirm_worktree_delete",
-            cancel: Message::WorktreeDeleteCancelled,
-            open: |state| state.worktree_delete_target = Some("wt".to_string()),
+            cancel: Message::Worktree(WorktreeMsg::DeleteCancelled),
+            open: |state| state.worktree.delete_target = Some("wt".to_string()),
         },
         Dialog {
             id: "rename_worktree",
-            cancel: Message::WorktreeRenameCancelled,
+            cancel: Message::Worktree(WorktreeMsg::RenameCancelled),
             open: |state| {
-                state.worktree_rename_draft = Some(WorktreeRenameDraft {
+                state.worktree.rename_draft = Some(WorktreeRenameDraft {
                     dir_name: "wt".to_string(),
                     text: String::new(),
                     error: None,
@@ -112,13 +124,26 @@ fn dialogs() -> Vec<Dialog> {
         },
         Dialog {
             id: "confirm_session_remove",
-            cancel: Message::SessionRemoveCancelled,
-            open: |state| state.session_remove_target = Some(SessionId::new()),
+            cancel: Message::Session(SessionMsg::RemoveCancelled),
+            open: |state| state.session.remove_target = Some(SessionId::new()),
         },
         Dialog {
             id: "confirm_forget_project",
-            cancel: Message::ProjectForgetCancelled,
-            open: |state| state.forget_target = Some(PathBuf::from("/p")),
+            cancel: Message::Project(ProjectMsg::ForgetCancelled),
+            open: |state| state.project.forget_target = Some(PathBuf::from("/p")),
+        },
+        // Settings itself is not here and will not be — it is a view (FR-026). This is the one
+        // question it asks before applying a change that ends processes (BUG-003, FR-032), and a
+        // question with no way past it but an answer is exactly what this registry is a list of.
+        Dialog {
+            id: "confirm_placement",
+            cancel: Message::Settings(SettingsMsg::PlacementChangeCancelled),
+            open: |state| {
+                state.settings.pending_placement = Some(PendingPlacementChange {
+                    from: PlacementKind::HostProcess,
+                    to: PlacementKind::LocalSandbox,
+                })
+            },
         },
     ]
 }
@@ -126,7 +151,10 @@ fn dialogs() -> Vec<Dialog> {
 /// A state with `dialog` open (or nothing open, for `None`) and the filter panel as asked.
 fn state(dialog: Option<&Dialog>, filter_open: bool) -> State {
     let mut state = State {
-        sidebar_filter_open: filter_open,
+        sidebar: sidebar::State {
+            filter_open,
+            ..Default::default()
+        },
         ..Default::default()
     };
     if let Some(dialog) = dialog {
@@ -162,7 +190,7 @@ fn escape_closes_the_open_dialog_in_every_state() {
     // of.
     for (dialog, filter, state) in every_state() {
         let cancel = dialog.as_ref().map(|d| d.cancel.clone());
-        let panel = filter.then_some(Message::SidebarFilterMenuToggled);
+        let panel = filter.then_some(Message::Sidebar(SidebarMsg::FilterMenuToggled));
         // A dialog outranks the panel; with no dialog open the panel is the topmost surface.
         let want = cancel.or(panel);
         let (name, filter) = (label(&dialog), if filter { "open" } else { "closed" });
@@ -209,22 +237,24 @@ fn every_dialog_is_in_the_list() {
     // The compile-time half of this went with the enum: an exhaustive `match` used to make a
     // dialog added without an expectation a build error. Nothing about a registration line is
     // exhaustive, so the hold is now arithmetic — this list against the registry's own count of
-    // dialogs. A ninth dialog registered without a row here fails on the second assertion, and
-    // the eighteen states this file covers stay eighteen.
+    // dialogs. A tenth dialog registered without a row here fails on the second assertion, and
+    // the twenty states this file covers stay twenty.
     //
-    // Nine until feature 027. Settings was the largest of them and is no longer a dialog at all —
-    // it is a view (FR-026), so it neither floats nor takes Escape, and the count going *down* is
-    // this file noticing that rather than a row being lost.
+    // Nine, then eight, then nine again. Settings was the largest of the original nine and is no
+    // longer a dialog at all — it is a view (FR-026), so it neither floats nor takes Escape. The
+    // count coming back up is not that decision reversed: `confirm_placement` is the question the
+    // view asks before it moves where sessions run (BUG-003, FR-032), which floats over the view
+    // and does take Escape.
     assert_eq!(
         dialogs().len(),
-        8,
-        "the dialog list has drifted. Add the new dialog here, or the eighteen states this file is \
-         meant to cover are no longer eighteen"
+        9,
+        "the dialog list has drifted. Add the new dialog here, or the twenty states this file is \
+         meant to cover are no longer twenty"
     );
     assert_eq!(
         every_state().len(),
-        18,
-        "eight dialogs plus nothing open, each with the filter panel open and closed"
+        20,
+        "nine dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()
@@ -282,7 +312,7 @@ fn the_reducer_opens_a_dialog_through_that_mechanism() {
     // actually call it. Driven with real messages rather than by setting fields, so an arm that
     // forgets the call fails here — which is the failure the enum could not have.
     let openers: &[(&str, Message)] = &[
-        ("about", Message::AboutOpened),
+        ("about", Message::Help(HelpMsg::AboutOpened)),
         (
             "add_worktree",
             Message::WorktreeForm(micold_client::features::worktree_form::Msg::Opened),
@@ -317,12 +347,15 @@ fn a_modal_keeps_escape_whatever_floats_above_it() {
 
     let top = registry::topmost(&both).expect("a modal and a popover are open");
     assert_eq!(top.layer(), Layer::Dialog);
-    assert_eq!(registry::escape(&both), Some(Message::AboutClosed));
+    assert_eq!(
+        registry::escape(&both),
+        Some(Message::Help(HelpMsg::AboutClosed))
+    );
 
     let popover_alone = state(None, true);
     assert_eq!(
         registry::escape(&popover_alone),
-        Some(Message::SidebarFilterMenuToggled),
+        Some(Message::Sidebar(SidebarMsg::FilterMenuToggled)),
         "with no modal the popover is the topmost surface, and Escape is its own"
     );
 }
@@ -334,7 +367,7 @@ fn a_scroll_beneath_reaches_every_menu_and_no_dialog() {
     // not a modal is over them.
     assert_eq!(
         registry::scroll_beneath(&state(Some(&dialogs()[0]), true)),
-        vec![Message::SidebarFilterMenuToggled],
+        vec![Message::Sidebar(SidebarMsg::FilterMenuToggled)],
         "a scroll behind an open modal still invalidates the menu anchored beneath it, and does \
          not touch the modal"
     );
@@ -375,7 +408,7 @@ fn a_surface_is_registered_by_naming_it_once_and_nothing_else() {
     assert_eq!(open.layer(), Layer::Popover);
     assert_eq!(
         open.on(Trigger::Escape),
-        Some(&Message::SidebarFilterMenuToggled)
+        Some(&Message::Sidebar(SidebarMsg::FilterMenuToggled))
     );
 }
 
@@ -393,20 +426,23 @@ fn escape_now_reaches_every_popover() {
     // modal closes popovers; both still hold, and are asserted above. It does not require that a
     // surface Escape never reached keeps not being reached.
     let mut state = State {
-        help_menu_open: true,
+        help: help::State {
+            help_menu_open: true,
+            ..Default::default()
+        },
         ..Default::default()
     };
     assert_eq!(
         registry::escape(&state),
-        Some(Message::HelpMenuToggled),
+        Some(Message::Help(HelpMsg::MenuToggled)),
         "Escape closes the overflow menu, which before T031 it left open"
     );
 
     // And the priority is unchanged: a modal over it still takes Escape for itself.
-    state.about_open = true;
+    state.help.about_open = true;
     assert_eq!(
         registry::escape(&state),
-        Some(Message::AboutClosed),
+        Some(Message::Help(HelpMsg::AboutClosed)),
         "a dialog outranks a menu, whichever was opened first (contract D1)"
     );
 }
@@ -454,18 +490,21 @@ fn pressing_escape_closes_the_topmost_surface() {
         "the dialog took the Escape"
     );
     assert!(
-        both.sidebar_filter_open,
+        both.sidebar.filter_open,
         "and the popover beneath it is untouched — one Escape closes one surface"
     );
 
     // A popover alone, including one the pre-T031 keyboard path never reached.
     let mut menu = State {
-        help_menu_open: true,
+        help: help::State {
+            help_menu_open: true,
+            ..Default::default()
+        },
         ..Default::default()
     };
     menu.update(Message::EscapePressed);
     assert!(
-        !menu.help_menu_open,
+        !menu.help.help_menu_open,
         "Escape now reaches the overflow menu, which the subscription's match never named"
     );
 }
@@ -553,10 +592,25 @@ fn a_popover_is_not_drawn_from_the_registry() {
     let mut drawn = Vec::new();
     for probe in registry::probes() {
         let state = State {
-            help_menu_open: true,
-            project_switcher_open: true,
-            sidebar_filter_open: true,
-            terminal_context_menu: Some((4, 2)),
+            session: session::State {
+                terminal_context_menu: Some((4, 2)),
+                ..Default::default()
+            },
+
+            sidebar: sidebar::State {
+                filter_open: true,
+                ..Default::default()
+            },
+
+            project: project::State {
+                switcher_open: true,
+                ..Default::default()
+            },
+
+            help: help::State {
+                help_menu_open: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
         if let Some(open) = probe(&state) {
@@ -579,7 +633,7 @@ fn a_dialog_draws_from_its_own_state() {
     // paired with looks for state a different dialog owns.
     //
     // Driven through the reducer rather than by assigning fields, so the live state is the one the
-    // application actually produces. Seven of the nine dialogs can be opened that way. The project
+    // application actually produces. Eight of the nine dialogs can be opened that way. The project
     // selector's listing and a session's record are established by the binary, not the pure core,
     // so a `State` built here has neither and the view would correctly return `None` — they are
     // covered by `every_dialog_is_registered_with_a_view` above and by their own feature tests.
@@ -600,7 +654,7 @@ fn a_dialog_draws_from_its_own_state() {
                 availability: micold_core::project::Availability::Available,
             });
         state.workspace.active = Some(std::path::PathBuf::from("/p"));
-        state.worktrees = vec![micold_core::worktree::Worktree {
+        state.worktree.worktrees = vec![micold_core::worktree::Worktree {
             dir_name: "feat-x".to_string(),
             path: std::path::PathBuf::from("/p/.claude/worktrees/feat-x"),
             branch: Some("feat/x".to_string()),
@@ -612,9 +666,11 @@ fn a_dialog_draws_from_its_own_state() {
 
     #[allow(clippy::type_complexity)]
     let openers: &[(&str, fn(&mut State))] = &[
-        ("about", |s| s.update(Message::AboutOpened)),
+        ("about", |s| s.update(Message::Help(HelpMsg::AboutOpened))),
         ("rename_project", |s| {
-            s.update(Message::RenameStarted(std::path::PathBuf::from("/p")))
+            s.update(Message::Project(ProjectMsg::RenameStarted(
+                std::path::PathBuf::from("/p"),
+            )))
         }),
         ("add_worktree", |s| {
             s.update(Message::WorktreeForm(
@@ -622,15 +678,25 @@ fn a_dialog_draws_from_its_own_state() {
             ))
         }),
         ("confirm_worktree_delete", |s| {
-            s.update(Message::WorktreeDeleteRequested("feat-x".to_string()))
+            s.update(Message::Worktree(WorktreeMsg::DeleteRequested(
+                "feat-x".to_string(),
+            )))
         }),
         ("rename_worktree", |s| {
-            s.update(Message::WorktreeRenameStarted("feat-x".to_string()))
+            s.update(Message::Worktree(WorktreeMsg::RenameStarted(
+                "feat-x".to_string(),
+            )))
         }),
         ("confirm_forget_project", |s| {
-            s.update(Message::ProjectForgetRequested(std::path::PathBuf::from(
-                "/p",
+            s.update(Message::Project(ProjectMsg::ForgetRequested(
+                std::path::PathBuf::from("/p"),
             )))
+        }),
+        ("confirm_placement", |s| {
+            s.update(Message::Settings(SettingsMsg::PlacementChangeRequested {
+                from: PlacementKind::HostProcess,
+                to: PlacementKind::LocalSandbox,
+            }))
         }),
     ];
 

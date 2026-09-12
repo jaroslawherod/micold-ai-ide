@@ -210,6 +210,64 @@ impl GridCache {
             .map(|i| self.lines.get(&LineId(self.viewport_top.0 + i as i64)))
             .collect()
     }
+
+    /// The one scrollback range worth asking the daemon for, with the view scrolled back `offset`
+    /// lines and `inflight` already asked for and not yet answered. `None` when every revealed row
+    /// is cached or already on its way.
+    ///
+    /// # Why this is a function rather than three lines at the call site (`010` BUG-021)
+    ///
+    /// It used to be three lines at the call site, and they asked for
+    /// `first_uncached_line .. viewport_top` — everything from the revealed line down to the *live
+    /// tail*. That range is correct and it is the wrong size: it grows with scroll depth, so 600
+    /// lines back asks for 600 lines, once per wheel notch, and the total work over a gesture is
+    /// quadratic in how far it goes. The daemon serves each faithfully and serially under the
+    /// session's terminal lock, which is how a three-second gesture left it saturated for fifteen
+    /// seconds of silence and the pane blank throughout.
+    ///
+    /// What a scrolled-back view actually needs is the rows it reveals. So the range returned here
+    /// is bounded by construction — at most two viewports, whatever the depth:
+    ///
+    /// * it starts at the first revealed line that is neither cached nor already asked for;
+    /// * it runs forward only to the end of that uncached run, capped at one viewport and at
+    ///   `viewport_top` — asking past a line already here re-fetches what the last answer brought;
+    /// * and it extends one viewport *further into history*, which is the direction the gesture is
+    ///   travelling, so the next thirty-odd notches find their lines cached instead of asking again
+    ///   for each one.
+    ///
+    /// `inflight` is what makes the prefetch worth having. During a fast gesture no response has
+    /// arrived yet, so without it every notch would compute the same uncached run and ask for it
+    /// again; with it, one request covers a viewport of travel and the notches in between send
+    /// nothing.
+    pub fn needed_scrollback(
+        &self,
+        offset: usize,
+        inflight: &[std::ops::Range<LineId>],
+    ) -> Option<std::ops::Range<LineId>> {
+        let vt = self.viewport_top.0;
+        let oldest = self.oldest_available.0;
+        let rows = self.rows as i64;
+        let top = (vt - offset as i64).max(oldest);
+
+        // "Have it, or it is coming." Either way, asking again buys nothing.
+        let held = |lid: i64| {
+            self.lines.contains_key(&LineId(lid))
+                || inflight.iter().any(|r| r.contains(&LineId(lid)))
+        };
+
+        let bottom = (top + rows).min(vt);
+        let from = (top..bottom).find(|&lid| !held(lid))?;
+
+        let mut end = from;
+        while end < (from + rows).min(vt) && !held(end) {
+            end += 1;
+        }
+        let mut start = from;
+        while start > (from - rows).max(oldest) && !held(start - 1) {
+            start -= 1;
+        }
+        Some(LineId(start)..LineId(end))
+    }
 }
 
 impl Default for GridCache {
@@ -311,6 +369,131 @@ mod tests {
             mode: 0,
             input_serial: None,
         }
+    }
+
+    // --- `010` BUG-021: the range a scrolled-back view asks for ---------------------------------
+
+    /// A cache holding its `rows` visible lines at `viewport_top` and none of its history — the
+    /// state a window is in the moment a scroll-back gesture starts.
+    fn at_the_tail(viewport_top: i64, rows: u16, oldest: i64) -> GridCache {
+        let mut f = frame(1, 1, true, viewport_top, rows);
+        f.oldest_available = LineId(oldest);
+        f.lines = (0..rows as i64)
+            .map(|i| line(viewport_top + i, "x", 0))
+            .collect();
+        let mut cache = GridCache::new();
+        cache.apply(&f);
+        cache
+    }
+
+    fn len(range: &std::ops::Range<LineId>) -> i64 {
+        range.end.0 - range.start.0
+    }
+
+    /// The reported defect, stated as the one thing that was wrong: the range ran from the revealed
+    /// line down to the *live tail*, so its size was the scroll depth.
+    #[test]
+    fn a_scrolled_view_asks_for_the_rows_it_reveals_not_the_history_beneath_them() {
+        let cache = at_the_tail(4000, 69, 0);
+
+        let deep = cache
+            .needed_scrollback(600, &[])
+            .expect("600 lines back reveals history nothing has fetched");
+
+        assert!(
+            deep.end.0 < 4000,
+            "a request that reaches the live tail is the bug: it asks for {} lines to reveal 69",
+            len(&deep)
+        );
+        assert!(
+            len(&deep) <= 2 * 69,
+            "the revealed rows plus one viewport of prefetch is the whole of what is needed; \
+             this asked for {}",
+            len(&deep)
+        );
+    }
+
+    /// And the same claim where it actually bit: the cost of a gesture grew with how far it went,
+    /// which is what turned a three-second scroll into fifteen seconds of daemon work.
+    #[test]
+    fn the_size_of_a_request_does_not_grow_with_the_depth_of_the_scroll() {
+        let cache = at_the_tail(4000, 69, 0);
+
+        let shallow = cache.needed_scrollback(100, &[]).expect("100 back");
+        let deep = cache.needed_scrollback(600, &[]).expect("600 back");
+        let deeper = cache.needed_scrollback(3000, &[]).expect("3000 back");
+
+        assert_eq!(
+            len(&deep),
+            len(&shallow),
+            "600 lines back is not 6x the work"
+        );
+        assert_eq!(len(&deeper), len(&shallow), "nor is 3000 lines back 30x it");
+    }
+
+    /// The other half of the storm: during a fast gesture no answer has arrived yet, so every notch
+    /// computed the same un-cached run and asked for it again. A range already on its way is one
+    /// this view already has coming.
+    #[test]
+    fn a_range_already_asked_for_is_not_asked_for_again() {
+        let cache = at_the_tail(4000, 69, 0);
+        let first = cache.needed_scrollback(600, &[]).expect("600 back");
+
+        assert_eq!(
+            cache.needed_scrollback(600, std::slice::from_ref(&first)),
+            None,
+            "the same position must not re-ask for what it just asked for"
+        );
+        assert_eq!(
+            cache.needed_scrollback(610, std::slice::from_ref(&first)),
+            None,
+            "and neither must the next five notches — that is what the prefetch is for"
+        );
+    }
+
+    /// When the gesture does travel past what is on its way, the next request picks up where that
+    /// one stops. An overlap would re-fetch lines the previous answer is already bringing.
+    #[test]
+    fn the_next_request_starts_where_the_last_one_stops() {
+        let cache = at_the_tail(4000, 69, 0);
+        let first = cache.needed_scrollback(600, &[]).expect("600 back");
+
+        let next = cache
+            .needed_scrollback(700, std::slice::from_ref(&first))
+            .expect("100 lines further back is past the prefetch");
+
+        assert!(
+            next.end <= first.start,
+            "{next:?} overlaps {first:?} — those lines are already coming"
+        );
+    }
+
+    /// Nothing is asked for when the revealed rows are already here. Without this the view would
+    /// re-request its own scrollback on every notch of a scroll back *down* towards the tail.
+    #[test]
+    fn a_view_whose_revealed_rows_are_cached_asks_for_nothing() {
+        let mut cache = at_the_tail(4000, 69, 0);
+        let fetched: Vec<WireLine> = (3990..4000).map(|id| line(id, "old", 0)).collect();
+        cache.apply_scrollback(&fetched, &[style(1)], &[]);
+
+        assert_eq!(cache.needed_scrollback(10, &[]), None);
+    }
+
+    /// The trim watermark bounds the request from below. Asking past it is asking for lines the
+    /// daemon has already dropped — served as an empty response, which would then clear the
+    /// in-flight record and let the same empty request be made again on the next notch.
+    #[test]
+    fn a_request_never_reaches_below_the_oldest_retained_line() {
+        let cache = at_the_tail(4000, 69, 3350);
+
+        let deep = cache
+            .needed_scrollback(1000, &[])
+            .expect("clamped to the watermark, but still revealing un-cached lines");
+
+        assert!(
+            deep.start.0 >= 3350,
+            "{deep:?} starts below the oldest line the daemon still has"
+        );
     }
 
     #[test]

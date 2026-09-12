@@ -25,9 +25,9 @@ use crate::app::Message;
 use crate::features::settings::{SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::material::{Text, TypeRole};
-use iced::widget::column;
+use iced::widget::{column, container, Space};
 use iced::{Element, Length};
-use micold_core::tokens::{spacing, Roles};
+use micold_core::tokens::{anatomy, spacing, Roles};
 
 /// A durable enum, paired with the name the picker shows for it.
 ///
@@ -99,6 +99,42 @@ pub fn group<'a>(title: &'static str, roles: Roles) -> Element<'a, Message> {
 /// An explanatory line under a control, in the ordinary muted tone.
 pub fn note<'a>(text: impl Into<std::borrow::Cow<'a, str>>, roles: Roles) -> Element<'a, Message> {
     Text::new(text, TypeRole::Caption, roles).muted().into()
+}
+
+/// A note that belongs to the **control above it**, not to the page.
+///
+/// Same tone as [`note`], but returned attached to the control and inset to the column that
+/// control's own supporting text sits in. A page stacks its controls at one margin, so a bare
+/// `note` between two of them lands on the left edge of the *next* control and reads as belonging
+/// to that one — which is exactly backwards for a line explaining the field above. Feature 027's
+/// §B.6 pass found that: the missing-CLI sentence lined up with the checkbox under it rather than
+/// with the select it was about. Sharing the field's inset and its own tighter spacing makes the
+/// pair read as one block.
+/// Takes the note as an `Option` and emits the column either way, with a `Space` where there is no
+/// note — the same shape [`FormField`](crate::ui::material::FormField) gives its own supporting
+/// text. A control that changes depth in the widget tree depending on whether it has something to
+/// say makes every layout assertion about the page conditional on that, and the tests that press a
+/// control address it by path.
+pub fn field_note<'a>(
+    control: impl Into<Element<'a, Message>>,
+    text: Option<impl Into<std::borrow::Cow<'a, str>>>,
+    roles: Roles,
+) -> Element<'a, Message> {
+    let beneath: Element<'a, Message> = match text {
+        Some(text) => container(note(text, roles))
+            .padding(iced::Padding {
+                top: 0.0,
+                bottom: 0.0,
+                left: anatomy::text_field::PADDING,
+                right: anatomy::text_field::PADDING,
+            })
+            .into(),
+        None => Space::new().into(),
+    };
+    column![control.into(), beneath]
+        .spacing(spacing::XS)
+        .width(Length::Fill)
+        .into()
 }
 
 /// An explanatory line that is a *warning* — a capability being granted, a restart being implied.

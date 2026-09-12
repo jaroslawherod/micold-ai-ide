@@ -342,7 +342,7 @@ fn the_reason_a_start_failed_reaches_the_client_as_something_to_read() {
     // already there.
     reconcile_catalog(&mut core, &state.welcome_payload().0, false);
     assert_eq!(
-        core.notify.visible(),
+        core.notifications.queue.visible(),
         None,
         "a session that has not been started has nothing to report"
     );
@@ -353,7 +353,8 @@ fn the_reason_a_start_failed_reaches_the_client_as_something_to_read() {
     reconcile_catalog(&mut core, &state.welcome_payload().0, false);
 
     let shown = core
-        .notify
+        .notifications
+        .queue
         .visible()
         .expect(
             "a start that failed must say why somewhere the user can read it — the bar's `failed` \
@@ -381,11 +382,11 @@ fn the_reason_a_start_failed_reaches_the_client_as_something_to_read() {
     // Said once. `reconcile_catalog` runs on every `CatalogChanged`, and since T086 an activity
     // badge moving is one — a level-triggered banner would be a new one every few seconds for as
     // long as the session stays failed.
-    core.notify.dismiss();
+    core.notifications.queue.dismiss();
     reconcile_catalog(&mut core, &state.welcome_payload().0, false);
     reconcile_catalog(&mut core, &state.welcome_payload().0, false);
     assert_eq!(
-        core.notify.visible(),
+        core.notifications.queue.visible(),
         None,
         "an unchanged failure is not news on every snapshot that carries it"
     );

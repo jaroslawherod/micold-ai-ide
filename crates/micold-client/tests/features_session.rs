@@ -19,7 +19,10 @@
 //! the kind of thing a refactor breaks quietly.
 
 use micold_client::app::State;
-use micold_client::features::session::{ForegroundChoice, SelectKind};
+use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::session::{
+    AvailabilitySource, CliAvailability, ForegroundChoice, SelectKind,
+};
 use micold_core::project::{Availability, Project};
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
 use std::path::{Path, PathBuf};
@@ -62,7 +65,7 @@ fn two_projects(a: usize, b: usize) -> (State, Vec<SessionId>, Vec<SessionId>) {
 #[test]
 fn switching_to_an_unknown_project_changes_nothing_and_says_so() {
     let (mut st, a, _) = two_projects(1, 1);
-    st.active_session = Some(a[0]);
+    st.session.active = Some(a[0]);
 
     let switched = st.switch_active(Path::new("/nowhere")).is_some();
 
@@ -77,7 +80,7 @@ fn switching_to_an_unknown_project_changes_nothing_and_says_so() {
          not switching"
     );
     assert_eq!(
-        st.active_session,
+        st.session.active,
         Some(a[0]),
         "and it must leave the foreground alone too"
     );
@@ -86,13 +89,13 @@ fn switching_to_an_unknown_project_changes_nothing_and_says_so() {
 #[test]
 fn switching_away_and_back_returns_to_the_session_that_was_in_front() {
     let (mut st, a, _) = two_projects(2, 1);
-    st.active_session = Some(a[1]);
+    st.session.active = Some(a[1]);
 
     assert!(st.switch_active(Path::new("/b")).is_some());
     assert!(st.switch_active(Path::new("/a")).is_some());
 
     assert_eq!(
-        st.active_session,
+        st.session.active,
         Some(a[1]),
         "the outgoing foreground is recorded BEFORE activation (data-model.md I1); record it \
          after and you store the incoming project's session under the outgoing project's key, \
@@ -107,7 +110,7 @@ fn entering_a_project_with_no_recorded_foreground_falls_back_to_a_running_sessio
     assert!(st.switch_active(Path::new("/b")).is_some());
 
     assert_eq!(
-        st.active_session,
+        st.session.active,
         Some(b[0]),
         "a first visit has nothing stored, so the project shows its first running session \
          rather than an empty shell"
@@ -122,7 +125,9 @@ fn a_switch_lands_on_a_terminal_ready_to_type() {
     // is a restored session's terminal. An explicit release made before the switch goes with it
     // (FR-021a): it was about the moment, not about the session.
     let (mut st, _, _) = two_projects(1, 1);
-    st.update(micold_client::app::Message::TerminalFocusReleased);
+    st.update(micold_client::app::Message::Session(
+        SessionMsg::TerminalFocusReleased,
+    ));
 
     assert!(st.switch_active(Path::new("/b")).is_some());
 
@@ -140,7 +145,7 @@ fn a_restart_in_the_active_project_raises_no_return_notice() {
     st.note_background_restart(a[0]);
 
     assert!(
-        !st.restarted_while_inactive.contains(&a[0]),
+        !st.session.restarted_while_inactive.contains(&a[0]),
         "the user watched it happen — telling them about it on return would be noise"
     );
 }
@@ -151,14 +156,14 @@ fn a_restart_in_an_inactive_project_is_remembered_until_the_user_returns() {
 
     st.note_background_restart(b[0]);
     assert!(
-        st.restarted_while_inactive.contains(&b[0]),
+        st.session.restarted_while_inactive.contains(&b[0]),
         "it happened out of sight, so it is owed a notice"
     );
 
     assert!(st.switch_active(Path::new("/b")).is_some());
 
     assert!(
-        !st.restarted_while_inactive.contains(&b[0]),
+        !st.session.restarted_while_inactive.contains(&b[0]),
         "the marker is consumed on arrival, or the same notice reappears on every later visit"
     );
 }
@@ -204,7 +209,7 @@ fn the_three_selection_kinds_stay_distinct() {
 #[test]
 fn the_remembered_session_is_chosen_when_it_is_still_running() {
     let (mut st, a, _) = two_projects(2, 1);
-    st.active_session = Some(a[1]);
+    st.session.active = Some(a[1]);
     st.record_foreground();
 
     assert_eq!(
@@ -225,7 +230,7 @@ fn the_remembered_session_is_chosen_when_it_is_still_running() {
 #[test]
 fn a_remembered_session_is_restored_even_after_it_has_stopped() {
     let (mut st, a, _) = two_projects(2, 1);
-    st.active_session = Some(a[1]);
+    st.session.active = Some(a[1]);
     st.record_foreground();
     let stopped = a[1];
     if let Some((_, session)) = st.workspace.find_session_mut(stopped) {
@@ -244,7 +249,7 @@ fn a_remembered_session_is_restored_even_after_it_has_stopped() {
 #[test]
 fn a_remembered_session_that_was_closed_is_not_restored() {
     let (mut st, a, _) = two_projects(2, 1);
-    st.active_session = Some(a[1]);
+    st.session.active = Some(a[1]);
     st.record_foreground();
     let closed = a[1];
     if let Some((_, session)) = st.workspace.find_session_mut(closed) {
@@ -265,7 +270,7 @@ fn a_remembered_session_that_was_closed_is_not_restored() {
 #[test]
 fn restoring_a_stopped_session_does_not_start_it() {
     let (mut st, a, _) = two_projects(1, 1);
-    st.active_session = Some(a[0]);
+    st.session.active = Some(a[0]);
     st.record_foreground();
     if let Some((_, session)) = st.workspace.find_session_mut(a[0]) {
         session.record_clean_exit();
@@ -274,7 +279,7 @@ fn restoring_a_stopped_session_does_not_start_it() {
     assert!(st.switch_active(Path::new("/b")).is_some());
     assert!(st.switch_active(Path::new("/a")).is_some());
 
-    assert_eq!(st.active_session, Some(a[0]), "restored");
+    assert_eq!(st.session.active, Some(a[0]), "restored");
     assert!(
         !st.workspace.find_session(a[0]).unwrap().1.is_active(),
         "restoring is a display decision; starting a process is not. FR-001/FR-002 keep a switch \
@@ -315,14 +320,14 @@ fn a_key_nothing_was_filed_under_is_its_own_answer() {
 #[test]
 fn the_choice_is_recorded_where_the_binary_can_log_it() {
     let (mut st, a, _) = two_projects(1, 1);
-    st.active_session = Some(a[0]);
+    st.session.active = Some(a[0]);
     st.record_foreground();
 
     assert!(st.switch_active(Path::new("/b")).is_some());
     assert!(st.switch_active(Path::new("/a")).is_some());
 
     assert_eq!(
-        st.last_foreground_choice,
+        st.session.last_foreground_choice,
         Some(ForegroundChoice::Remembered(a[0])),
         "the reducer decides; the binary logs. Keeping the reason on the state is what lets the \
          log line say why without the decision leaking into the I/O boundary"
@@ -353,11 +358,11 @@ fn a_foreground_resolved_before_the_catalog_arrived_is_resolved_again_when_it_do
         .expect("sessions");
     let _ = st.restore_after_activation(Path::new("/a"));
     assert_eq!(
-        st.last_foreground_choice,
+        st.session.last_foreground_choice,
         Some(ForegroundChoice::NoSessionsForKey),
         "with no sessions filed under the key, this is the honest answer — the bug is that it is final"
     );
-    assert_eq!(st.active_session, None);
+    assert_eq!(st.session.active, None);
 
     // The catalog arrives; `reconcile_catalog` files the sessions under the project.
     st.workspace.sessions.insert(PathBuf::from("/a"), staged);
@@ -367,7 +372,7 @@ fn a_foreground_resolved_before_the_catalog_arrived_is_resolved_again_when_it_do
         "the resolve must be re-run now that the data it needed exists"
     );
     assert_eq!(
-        st.active_session,
+        st.session.active,
         Some(ids_a[0]),
         "the session the daemon was hosting all along is now the current one, which is also what \
          opens its row in the sidebar"
@@ -389,11 +394,11 @@ fn a_deliberate_landing_on_the_project_overview_is_left_alone() {
     let _ = st.restore_after_activation(Path::new("/a"));
     assert!(
         matches!(
-            st.last_foreground_choice,
+            st.session.last_foreground_choice,
             Some(ForegroundChoice::NoneActive { .. })
         ),
         "got {:?}",
-        st.last_foreground_choice
+        st.session.last_foreground_choice
     );
 
     assert!(
@@ -401,7 +406,7 @@ fn a_deliberate_landing_on_the_project_overview_is_left_alone() {
         "nothing was missing, so nothing is re-resolved — the user is on the overview because that \
          is where the rule put them (FR-007)"
     );
-    assert_eq!(st.active_session, None);
+    assert_eq!(st.session.active, None);
 }
 
 /// A session already chosen must never be replaced by a later catalog: a reconnect mid-session
@@ -414,7 +419,7 @@ fn a_catalog_arriving_mid_session_does_not_move_the_user() {
 
     assert!(st.resolve_foreground_after_catalog().is_none());
     assert_eq!(
-        st.active_session,
+        st.session.active,
         Some(ids_a[1]),
         "a reconnect must not relocate the user to a different session"
     );
@@ -453,7 +458,7 @@ fn the_connect_path_re_resolves_the_foreground_after_folding_the_catalog() {
              catalog existed and answered `NoSessionsForKey` against sessions still on the wire",
     );
     let reads_active = connected
-        .find("app.core.active_session")
+        .find("app.core.session.active")
         .expect("on_connected decides what to view from active_session");
 
     assert!(
@@ -474,17 +479,19 @@ use micold_client::features::session::{PressTarget, StartIntent};
 
 /// A state with a chosen default and a chosen availability set.
 fn state_with(default_ai_cli: AiCli, available: &[AiCli]) -> State {
-    State {
-        default_ai_cli,
-        available_providers: available.to_vec(),
-        ..State::default()
-    }
+    let mut state = State::default();
+    state.session.default_ai_cli = default_ai_cli;
+    state.session.available_providers = Some(CliAvailability {
+        available: available.to_vec(),
+        source: AvailabilitySource::ThisComputer,
+    });
+    state
 }
 
 #[test]
 fn a_start_with_no_override_uses_the_stored_default() {
     let state = state_with(AiCli::Copilot, &[AiCli::ClaudeCode, AiCli::Copilot]);
-    assert_eq!(state.provider_for_start(None), AiCli::Copilot);
+    assert_eq!(state.session.provider_for_start(None), AiCli::Copilot);
 }
 
 #[test]
@@ -495,11 +502,11 @@ fn an_override_wins_and_leaves_the_setting_untouched() {
     let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode, AiCli::Copilot]);
 
     assert_eq!(
-        state.provider_for_start(Some(AiCli::Copilot)),
+        state.session.provider_for_start(Some(AiCli::Copilot)),
         AiCli::Copilot
     );
     assert_eq!(
-        state.default_ai_cli,
+        state.session.default_ai_cli,
         AiCli::ClaudeCode,
         "choosing an override for one session must not change what the next one defaults to"
     );
@@ -517,7 +524,7 @@ fn changing_the_default_changes_no_existing_sessions_provider() {
         .sessions
         .insert(PathBuf::from("/repo"), vec![existing.clone()]);
 
-    state.default_ai_cli = AiCli::ClaudeCode;
+    state.session.default_ai_cli = AiCli::ClaudeCode;
 
     assert_eq!(
         state.workspace.sessions[Path::new("/repo")][0].provider,
@@ -525,7 +532,7 @@ fn changing_the_default_changes_no_existing_sessions_provider() {
         "the open session still runs the CLI it was started on"
     );
     assert_eq!(
-        state.provider_for_start(None),
+        state.session.provider_for_start(None),
         AiCli::ClaudeCode,
         "and the next new one takes the new default"
     );
@@ -536,7 +543,7 @@ fn the_primary_half_starts_the_default_in_one_press() {
     // SC-001: the one-interaction start survives the affordance gaining a second half.
     let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode, AiCli::Copilot]);
     assert_eq!(
-        state.start_intent(PressTarget::Primary),
+        state.session.start_intent(PressTarget::Primary),
         StartIntent::Start(AiCli::ClaudeCode)
     );
 }
@@ -545,8 +552,12 @@ fn the_primary_half_starts_the_default_in_one_press() {
 fn the_secondary_half_offers_the_installed_clis_and_starts_nothing() {
     let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode, AiCli::Copilot]);
     assert_eq!(
-        state.start_intent(PressTarget::Secondary),
-        StartIntent::OfferChoice(vec![AiCli::ClaudeCode, AiCli::Copilot])
+        state.session.start_intent(PressTarget::Secondary),
+        StartIntent::OfferChoice {
+            providers: vec![AiCli::ClaudeCode, AiCli::Copilot],
+            unavailable_default: None,
+        },
+        "and nothing to announce — this press asked for the list (BUG-001)"
     );
 }
 
@@ -556,9 +567,9 @@ fn a_single_installed_cli_has_no_secondary_half_at_all() {
     // experience than the plain button it replaced, so the half is absent rather than disabled.
     let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode]);
 
-    assert!(!state.start_affordance_offers_a_choice());
+    assert!(!state.session.start_affordance_offers_a_choice());
     assert_eq!(
-        state.start_intent(PressTarget::Primary),
+        state.session.start_intent(PressTarget::Primary),
         StartIntent::Start(AiCli::ClaudeCode),
         "and the primary half is unchanged — the single-CLI user is unaffected by this feature"
     );
@@ -570,15 +581,22 @@ fn an_unavailable_default_offers_the_choice_rather_than_starting_or_substituting
     // silently start the other CLI (FR-002 forbids substituting), silently do nothing (the user
     // pressed a button), or start the missing one and let the spawn fail (that is FR-010's story,
     // not this one — the application knows *now* that it cannot).
+    //
+    // There is a fourth clause, and asserting only the three above is how it shipped missing:
+    // FR-002 says to *say* the default is unavailable. The answer therefore names it, and
+    // `tests/unavailable_default_says_so.rs` follows it from here to the sentence (BUG-001).
     let state = state_with(AiCli::Copilot, &[AiCli::ClaudeCode]);
 
-    assert!(!state.default_ai_cli_is_available());
+    assert!(!state.session.default_ai_cli_is_available());
     assert_eq!(
-        state.start_intent(PressTarget::Primary),
-        StartIntent::OfferChoice(vec![AiCli::ClaudeCode])
+        state.session.start_intent(PressTarget::Primary),
+        StartIntent::OfferChoice {
+            providers: vec![AiCli::ClaudeCode],
+            unavailable_default: Some(AiCli::Copilot),
+        }
     );
     assert_eq!(
-        state.default_ai_cli,
+        state.session.default_ai_cli,
         AiCli::Copilot,
         "and the stored default is not rewritten on the way past (research R11)"
     );
@@ -588,9 +606,12 @@ fn an_unavailable_default_offers_the_choice_rather_than_starting_or_substituting
 fn no_installed_cli_means_nothing_to_offer() {
     let state = state_with(AiCli::ClaudeCode, &[]);
     for target in [PressTarget::Primary, PressTarget::Secondary] {
-        assert_eq!(state.start_intent(target), StartIntent::NothingAvailable);
+        assert_eq!(
+            state.session.start_intent(target),
+            StartIntent::NothingAvailable
+        );
     }
-    assert!(!state.start_affordance_offers_a_choice());
+    assert!(!state.session.start_affordance_offers_a_choice());
 }
 
 #[test]
@@ -598,6 +619,6 @@ fn only_installed_clis_are_ever_offered() {
     // FR-006 for the menus — the Settings select and the override list read this one function, so
     // an unavailable CLI cannot appear in one and not the other.
     let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode]);
-    assert_eq!(state.offered_providers(), vec![AiCli::ClaudeCode]);
-    assert!(!state.offered_providers().contains(&AiCli::Copilot));
+    assert_eq!(state.session.offered_providers(), vec![AiCli::ClaudeCode]);
+    assert!(!state.session.offered_providers().contains(&AiCli::Copilot));
 }

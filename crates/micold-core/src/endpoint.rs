@@ -7,7 +7,7 @@
 //! | OS | Endpoint | Guard |
 //! |---|---|---|
 //! | Linux | `$XDG_RUNTIME_DIR/micold/daemon.sock` | dir `0700`, sticky bit so cleanup won't reap it |
-//! | Linux (`$XDG_RUNTIME_DIR` unset) | `/tmp/micold-<uid>/daemon.sock` | dir created `0700` **and verified** |
+//! | Linux (`$XDG_RUNTIME_DIR` unset) | `/tmp/micold-<uid>/daemon.sock` | dir created `0700`, or **verified, never repaired** if it already exists |
 //! | macOS | `$HOME/.micold/run/d.sock` | dir `0700`; `sun_path` length asserted at resolve time |
 //! | Windows | `\\.\pipe\Micold.Daemon.<user-SID>` | explicit protected DACL (applied at bind, T083) |
 //!
@@ -103,9 +103,41 @@ mod imp {
     }
 
     /// Create `dir` (and parents) if missing, then force its mode to exactly `mode`.
+    ///
+    /// Repair is unconditional, so this is only sound where the *parent* is already ours: the XDG
+    /// runtime dir and `$HOME`. On a world-writable parent use [`guard_predictable_dir`], which
+    /// verifies instead of repairing.
     fn ensure_dir_mode(dir: &std::path::Path, mode: u32) -> io::Result<()> {
         fs::create_dir_all(dir)?;
         fs::set_permissions(dir, fs::Permissions::from_mode(mode))
+    }
+
+    /// Prepare a directory whose parent is world-writable and whose name is predictable: create it
+    /// `0700` if it is not there, and **verify it before touching it** if it is.
+    ///
+    /// The order is the entire point, and getting it wrong is silent (BUG-019). `ensure_dir_mode`
+    /// then verify — what this path did until 2026-08-27 — cannot fail: `create_dir_all` succeeds on
+    /// an existing directory and `set_permissions` overwrites whatever mode it had, so by the time
+    /// the verifier looks the mode is always `0o700` and its refusal is unreachable. A hostile
+    /// directory was quietly *repaired* and bound into, which is the opposite of what
+    /// protocol.md §1 asks for: anything an attacker left inside it survives the `chmod`.
+    ///
+    /// So the two cases are kept apart. `create_dir` (not `create_dir_all`) distinguishes them
+    /// atomically — `AlreadyExists` is the pre-existing branch, and nothing else reaches it. The
+    /// fresh directory is verified too, cheaply, because `mkdir`'s mode is masked by the umask and a
+    /// `0700` umask would leave it `0000`; the point is that the verifier is now the only way past
+    /// this function.
+    #[cfg(not(target_os = "macos"))]
+    fn guard_predictable_dir(dir: &std::path::Path) -> io::Result<()> {
+        use std::os::unix::fs::DirBuilderExt;
+        match fs::DirBuilder::new().mode(0o700).create(dir) {
+            Ok(()) => {}
+            // Someone else's directory, our own from last time, or a planted symlink — the verifier
+            // is what tells them apart, and it is not allowed to be preceded by a repair.
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e),
+        }
+        verify_owned_0700(dir)
     }
 
     /// Verify a *predictable, world-writable-parent* directory is ours and locked down. Uses
@@ -154,11 +186,21 @@ mod imp {
             ensure_dir_mode(&dir, 0o1700)?;
             return Ok(endpoint_in(&dir));
         }
-        // Fallback: /tmp is world-writable and the path is predictable, so create-then-VERIFY.
-        let dir = PathBuf::from(format!("/tmp/micold-{}", euid()));
-        ensure_dir_mode(&dir, 0o700)?;
-        verify_owned_0700(&dir)?;
-        Ok(endpoint_in(&dir))
+        // Fallback: /tmp is world-writable and the path is predictable, so verify before we
+        // touch it — see `guard_predictable_dir`.
+        resolve_in_predictable_dir(&PathBuf::from(format!("/tmp/micold-{}", euid())))
+    }
+
+    /// The `/tmp`-style fallback, with the directory as a parameter.
+    ///
+    /// `resolve()` above chooses `/tmp/micold-<uid>` and nothing else; splitting the choice from the
+    /// guarding is what lets a test drive this path against a directory it can make hostile. Driving
+    /// the real `resolve()` would mean making the *actual* `/tmp/micold-<uid>` world-writable on the
+    /// machine running the suite, next to a daemon that may be using it (BUG-019).
+    #[cfg(not(target_os = "macos"))]
+    pub(super) fn resolve_in_predictable_dir(dir: &std::path::Path) -> io::Result<Endpoint> {
+        guard_predictable_dir(dir)?;
+        Ok(endpoint_in(dir))
     }
 
     #[cfg(target_os = "macos")]
@@ -190,10 +232,7 @@ mod imp {
     // Other Unix (e.g. BSD): treat like Linux's XDG/tmp policy.
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     pub(super) fn resolve() -> io::Result<Endpoint> {
-        let dir = PathBuf::from(format!("/tmp/micold-{}", euid()));
-        ensure_dir_mode(&dir, 0o700)?;
-        verify_owned_0700(&dir)?;
-        Ok(endpoint_in(&dir))
+        resolve_in_predictable_dir(&PathBuf::from(format!("/tmp/micold-{}", euid())))
     }
 
     #[cfg(any(target_os = "linux", not(target_os = "macos")))]
@@ -273,14 +312,118 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
-    fn wrong_owner_dir_bails_loudly() {
+    fn a_loose_mode_is_rejected_by_the_verifier() {
         use std::os::unix::fs::PermissionsExt;
-        // A dir with mode 0o755 (not 0o700) must be rejected by the /tmp verifier.
+        // A dir with mode 0o755 (not 0o700) must be rejected by the /tmp verifier. This is the
+        // predicate on its own; `a_pre_existing_loose_directory_is_refused_not_repaired` below is
+        // what says `resolve()` ever reaches it. (Named `wrong_owner_dir_bails_loudly` until
+        // 2026-08-27, which promised an owner check and performed a mode one — BUG-019.)
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path().join("loose");
         std::fs::create_dir(&dir).unwrap();
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
         let err = imp::verify_owned_0700(&dir).expect_err("loose mode must be rejected");
         assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_directory_owned_by_someone_else_is_refused_by_owner_and_says_so() {
+        // The owner branch needs a directory belonging to another uid, which a test cannot create.
+        // `/` is owned by root on every machine this runs on, and reading it creates nothing — so it
+        // is the one such directory always available. When the suite itself runs as root, `/` *is*
+        // ours and the branch is unreachable; skip rather than assert the wrong thing.
+        // SAFETY: `geteuid` takes no arguments and cannot fail.
+        if unsafe { libc::geteuid() } == 0 {
+            return;
+        }
+        let err = imp::verify_owned_0700(std::path::Path::new("/"))
+            .expect_err("a root-owned directory must be refused");
+        assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+        assert!(
+            err.to_string().contains("owned by uid 0"),
+            "the refusal must name the owner, not the mode: {err}"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_missing_directory_is_created_locked_down() {
+        use std::os::unix::fs::PermissionsExt;
+        // The ordinary first run: nothing there, so make it, 0700, and bind in it.
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("micold-fresh");
+        let ep = imp::resolve_in_predictable_dir(&dir).expect("a fresh dir is not hostile");
+        assert_eq!(ep.socket_path, dir.join("daemon.sock"));
+        let mode = std::fs::symlink_metadata(&dir)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o700, "a directory we create must be ours alone");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_directory_that_is_already_ours_and_locked_down_is_accepted() {
+        use std::os::unix::fs::PermissionsExt;
+        // The ordinary second run. Refusing every pre-existing directory would be a safe rule and a
+        // useless one — the daemon restarts into the same directory it made.
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("micold-again");
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        imp::resolve_in_predictable_dir(&dir).expect("our own 0700 dir must be accepted");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_pre_existing_loose_directory_is_refused_not_repaired() {
+        use std::os::unix::fs::PermissionsExt;
+        // Quickstart S11, third block, as reported: a world-writable `/tmp/micold-<uid>` must bail
+        // loudly. The second assertion is the one that distinguishes the fix from the defect —
+        // repairing the mode and *then* verifying also ends 0700, and never fails (BUG-019).
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("micold-loose");
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).unwrap();
+
+        let err = imp::resolve_in_predictable_dir(&dir).expect_err("a 0777 dir must be refused");
+        assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+        assert!(
+            err.to_string().contains("0o777"),
+            "the refusal must name the mode it found: {err}"
+        );
+        let mode = std::fs::symlink_metadata(&dir)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(
+            mode, 0o777,
+            "the directory must be left as found — a human decides what to do with it"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_symlink_in_place_of_the_directory_is_refused() {
+        use std::os::unix::fs::PermissionsExt;
+        // The planted symlink `symlink_metadata` exists for: the target is ours and 0700, so every
+        // check but the first one passes. `create_dir` on it returns AlreadyExists, which is exactly
+        // why the pre-existing branch must verify rather than assume.
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("elsewhere");
+        std::fs::create_dir(&target).unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let link = tmp.path().join("micold-link");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let err = imp::resolve_in_predictable_dir(&link).expect_err("a symlink must be refused");
+        assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+        assert!(
+            err.to_string().contains("not a directory"),
+            "the refusal must say what it found: {err}"
+        );
     }
 }

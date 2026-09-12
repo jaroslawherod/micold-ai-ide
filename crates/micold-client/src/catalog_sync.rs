@@ -170,7 +170,7 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
     }
     announce_start_failures(core, snapshot);
     // Mirror the active project's worktrees from the daemon's git discovery into the render state
-    // (the sidebar reads `core.worktrees` + `worktree_names`). Only on `CatalogChanged` pushes, not
+    // (the sidebar reads `core.worktree.worktrees` + `worktree_names`). Only on `CatalogChanged` pushes, not
     // the initial welcome: the welcome's worktree cache is empty until the post-attach refresh, so
     // syncing it would briefly blank the list boot-time local discovery had populated (T055).
     if sync_worktrees {
@@ -218,7 +218,7 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
     // Feature 024: through `set_current_session`, like every other app-initiated clear, so the row
     // the vanished session was in is committed open rather than snapping shut under the user
     // (FR-001c). Nothing is armed: there is no session to scroll to.
-    if let Some(id) = core.active_session {
+    if let Some(id) = core.session.active {
         if core.workspace.find_session(id).is_none() {
             // T067a-6: committing the outgoing row is an outcome now, so it has to be applied —
             // a dropped `Vec<Outcome>` here is the row snapping shut, which is the thing FR-001c
@@ -277,19 +277,22 @@ fn announce_start_failures(core: &mut State, snapshot: &CatalogSnapshot) {
             // still produces.
             WireLifecycle::Failed { reason, .. } if !reason.trim().is_empty() => reason,
             _ => {
-                core.announced_start_failures.remove(&summary.id);
+                core.session.announced_start_failures.remove(&summary.id);
                 continue;
             }
         };
-        if core.announced_start_failures.get(&summary.id) == Some(reason) {
+        if core.session.announced_start_failures.get(&summary.id) == Some(reason) {
             continue;
         }
-        core.announced_start_failures
+        core.session
+            .announced_start_failures
             .insert(summary.id, reason.clone());
-        core.notify.push(micold_core::notify::Notification::new(
-            micold_core::notify::Level::Error,
-            reason.clone(),
-        ));
+        core.notifications
+            .queue
+            .push(micold_core::notify::Notification::new(
+                micold_core::notify::Level::Error,
+                reason.clone(),
+            ));
     }
 }
 

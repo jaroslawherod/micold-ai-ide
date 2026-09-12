@@ -36,6 +36,7 @@ async fn a_responsive_daemon_is_never_reaped() {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
+            client_instance: micold_core::protocol::messages::ClientInstance::current(),
             client_package_version: PACKAGE_VERSION.into(),
             // Feature 027: the host-process placement presents no token, and a fingerprint
             // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
@@ -95,6 +96,7 @@ async fn a_half_open_connection_is_surfaced_within_10s() {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: "test-client".into(),
+            client_instance: micold_core::protocol::messages::ClientInstance::current(),
             client_package_version: PACKAGE_VERSION.into(),
             // Feature 027: the host-process placement presents no token, and a fingerprint
             // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile

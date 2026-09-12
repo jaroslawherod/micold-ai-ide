@@ -381,16 +381,23 @@ fn the_recorded_scroll_overflow_is_the_sidebar_list() {
         workspace.active = workspace.projects.first().map(|p| p.path.clone());
         let state = micold_client::app::State {
             workspace,
-            worktrees: (0..worktrees)
-                .map(|i| micold_core::worktree::Worktree {
-                    dir_name: format!("feat-{i:02}"),
-                    path: std::path::PathBuf::from("/fixture/project").join(format!("feat-{i:02}")),
-                    branch: Some(format!("feat/{i:02}")),
-                    status: micold_core::worktree::WorktreeStatus::Valid,
-                    included: false,
-                })
-                .collect(),
-            sidebar_width: 260,
+            worktree: micold_client::features::worktree::State {
+                worktrees: (0..worktrees)
+                    .map(|i| micold_core::worktree::Worktree {
+                        dir_name: format!("feat-{i:02}"),
+                        path: std::path::PathBuf::from("/fixture/project")
+                            .join(format!("feat-{i:02}")),
+                        branch: Some(format!("feat/{i:02}")),
+                        status: micold_core::worktree::WorktreeStatus::Valid,
+                        included: false,
+                    })
+                    .collect(),
+                ..Default::default()
+            },
+            sidebar: micold_client::features::sidebar::State {
+                width: 260,
+                ..Default::default()
+            },
             ..micold_client::app::State::default()
         };
 
@@ -640,8 +647,11 @@ fn the_recorded_escapes_are_the_accordion_reveal() {
         workspace.active = workspace.projects.first().map(|p| p.path.clone());
         let state = micold_client::app::State {
             workspace,
-            sidebar_width: 260,
-            sidebar_filter_open: filter_open,
+            sidebar: micold_client::features::sidebar::State {
+                width: 260,
+                filter_open,
+                ..Default::default()
+            },
             ..micold_client::app::State::default()
         };
 

@@ -1,6 +1,7 @@
 //! The Terminal section — the embedded terminal's own settings (feature 027, FR-027).
 
 use crate::app::Message;
+use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::{SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
@@ -13,7 +14,7 @@ use micold_core::tokens::Roles;
 // Read by `tests/settings_sections.rs`, which is a separate crate and cannot be seen from here —
 // so to the compiler this is unused. Deleting it would take the gate's evidence with it.
 #[allow(dead_code)]
-pub const SETTINGS: &[(&str, &str)] = &[("scrollback_lines", "SettingsScrollbackChanged")];
+pub const SETTINGS: &[(&str, &str)] = &[("scrollback_lines", "ScrollbackChanged")];
 
 /// The Terminal page.
 pub fn view<'a>(
@@ -36,8 +37,8 @@ pub fn view<'a>(
         .supporting("Lines kept per terminal")
         .error(error)
         .track_focus(FieldId::SettingsScrollback, focused)
-        .on_input(Message::SettingsScrollbackChanged)
-        .on_submit(Message::SettingsSaved);
+        .on_input(|v| Message::Settings(SettingsMsg::ScrollbackChanged(v)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
 
     page(
         "Terminal",

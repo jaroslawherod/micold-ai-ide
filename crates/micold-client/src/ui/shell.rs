@@ -3,6 +3,7 @@
 //! as Material surfaces from the active scheme's design tokens.
 
 use crate::app::{Message, State};
+use crate::features::project::Msg as ProjectMsg;
 use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::material::{self, Button, Glyph, IconLabel, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, container, row};
@@ -34,7 +35,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
                 Text::new(project.path.display().to_string(), TypeRole::Caption, r).muted(),
                 Button::outlined("Open another project", r)
                     .leading(Icon::OpenProject)
-                    .on_press(Message::ProjectSelectorOpened),
+                    .on_press(Message::Project(ProjectMsg::SelectorOpened)),
             ]
             .spacing(spacing::SM),
             SurfaceKind::Plain,
@@ -54,7 +55,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
                 .muted(),
                 Button::filled("Open a project", r)
                     .leading(Icon::OpenProject)
-                    .on_press(Message::ProjectSelectorOpened),
+                    .on_press(Message::Project(ProjectMsg::SelectorOpened)),
             ]
             .spacing(spacing::MD),
             SurfaceKind::Plain,
@@ -69,7 +70,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
 
     // The background-restart return notice (feature 008, FR-011 / SC-007) used to be drawn
     // here. It never appeared: this function is the *else* branch of
-    // `if state.active_session.is_some()`, and returning to a project restores its foreground
+    // `if state.session.active.is_some()`, and returning to a project restores its foreground
     // session, so the branch was not taken in the one case the banner existed for. It is now
     // an ordinary entry on the global notification surface in `ui::view`.
     body = body.push(header);
@@ -90,7 +91,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             let reopen = if available {
                 Button::filled("Open", r)
                     .leading(Icon::OpenProject)
-                    .on_press(Message::KnownProjectReopened(project.path.clone()))
+                    .on_press(Message::Project(ProjectMsg::Reopened(project.path.clone())))
             } else {
                 Button::filled("Unavailable", r)
             };
@@ -99,7 +100,9 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             // is unavailable (FR-017, FR-018).
             let rename = Button::outlined("Rename", r)
                 .leading(Icon::Rename)
-                .on_press(Message::RenameStarted(project.path.clone()));
+                .on_press(Message::Project(ProjectMsg::RenameStarted(
+                    project.path.clone(),
+                )));
 
             // Forget removes the project (and its remembered metadata) from the list. Enabled for
             // every entry — including Unavailable ones, for which it is the primary way to clear a
@@ -107,7 +110,9 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             // the destructive-to-metadata action; the confirmation dialog is the real safeguard.
             let forget = Button::outlined("Forget", r)
                 .leading_tinted(Icon::Delete, error_tint)
-                .on_press(Message::ProjectForgetRequested(project.path.clone()));
+                .on_press(Message::Project(ProjectMsg::ForgetRequested(
+                    project.path.clone(),
+                )));
 
             let mut entry = row![].spacing(spacing::SM).align_y(Alignment::Center);
             if is_active {

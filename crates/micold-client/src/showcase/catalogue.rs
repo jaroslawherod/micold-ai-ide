@@ -23,7 +23,7 @@
 //! The build tells you when you have not: the completeness check names what is missing, in either
 //! direction.
 //!
-//! [contracts/gallery-catalogue.md]: https://github.com/Cumulocity-IoT/micold-ai-ide/blob/main/specs/020-component-showcase-gallery/contracts/gallery-catalogue.md
+//! [contracts/gallery-catalogue.md]: https://github.com/jaroslawherod/micold-ai-ide/blob/main/specs/020-component-showcase-gallery/contracts/gallery-catalogue.md
 
 use iced::Element;
 use micold_core::tokens::Roles;
@@ -454,7 +454,10 @@ pub const COMPONENTS: &[Entry] = &[
         // record the caller fills in, not a component. It is on the page all the same — a rail is
         // nothing but the sections it was given.
         posed: &["with a badge on the last row"],
-        live: &["press a row to make it current"],
+        live: &[
+            "press a row to make it current",
+            "collapse it to its icons, and back",
+        ],
         interactive: true,
         section: Section::Components,
         layout: Layout::Inline,
@@ -684,7 +687,11 @@ an unavailable row",
         // enum. Posed states instead.
         variants: &[],
         density: &[],
-        posed: &["below (the default)", "to the left"],
+        posed: &[
+            "below (the default)",
+            "to the left",
+            "multi-line, wrapped at the ceiling",
+        ],
         live: &["hover and wait"],
         interactive: true,
         section: Section::Components,

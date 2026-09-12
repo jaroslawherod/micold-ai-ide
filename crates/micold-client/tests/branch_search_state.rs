@@ -76,7 +76,7 @@ fn picker() -> State {
 }
 
 fn form(state: &State) -> &WorktreeForm {
-    state.worktree_form.as_ref().unwrap()
+    state.worktree_form.form.as_ref().unwrap()
 }
 
 /// The branch names currently on offer, in the order they are offered.

@@ -41,6 +41,7 @@ async fn connect(state: &Arc<DaemonState>, build: &str) -> Client {
             protocol_version: PROTOCOL_VERSION,
             schema_hash: SCHEMA_HASH,
             client_build: build.into(),
+            client_instance: micold_core::protocol::messages::ClientInstance::current(),
             client_package_version: PACKAGE_VERSION.into(),
             // Feature 027: the host-process placement presents no token, and a fingerprint
             // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
@@ -170,7 +171,7 @@ async fn attach_is_exclusive_and_a_forced_takeover_displaces_the_holder() {
         }) => {
             assert_eq!(p, project);
             assert_eq!(
-                holder, "client-a",
+                holder.build, "client-a",
                 "the refusal must name the current holder"
             );
         }
@@ -195,7 +196,7 @@ async fn attach_is_exclusive_and_a_forced_takeover_displaces_the_holder() {
             Frame::Control(DaemonMsg::CatalogChanged { .. }) => continue,
             Frame::Control(DaemonMsg::Displaced { project: p, by }) => {
                 assert_eq!(p, project);
-                assert_eq!(by, "client-b");
+                assert_eq!(by.build, "client-b");
                 break;
             }
             other => panic!("expected Displaced on the previous holder, got {other:?}"),

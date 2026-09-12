@@ -3,7 +3,7 @@ name: speckit-bugfix-verify
 description: Verify that bugfix patches are consistent across all spec artifacts
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
-  author: github-spec-kit
+  author: Quratulain-bilal
   source: extension:bugfix
 user-invocable: true
 disable-model-invocation: false

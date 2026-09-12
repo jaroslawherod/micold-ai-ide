@@ -8,10 +8,37 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+/// The registry namespace the release publishes into — this repository's owner on GHCR.
+///
+/// Split out from [`DEFAULT_IMAGE`] so the release workflow has one string to check itself
+/// against. `.github/workflows/release.yml` greps this file for the repository it is about to push
+/// to, and fails the release if it does not appear: a default that points somewhere nothing is
+/// published is exactly the state this feature shipped in until 0.11.0, and it is invisible —
+/// the app looks correct, and only a user's first pull discovers the name resolves to nothing.
+pub const DEFAULT_IMAGE_REPOSITORY: &str = "ghcr.io/jaroslawherod/micold-daemon";
+
 /// The registry reference the app ships with. An immutable version tag, never a moving one — a
 /// moving tag can change under a running sandbox, which is the case [`ImageRef::is_moving`] exists
 /// to detect.
-pub const DEFAULT_IMAGE: &str = concat!("ghcr.io/micold/micold-daemon:", env!("CARGO_PKG_VERSION"));
+///
+/// The tag is the application's own version, so the client and the image it asks for are released
+/// together (FR-024). What makes that reference resolvable is the `image` job in
+/// `.github/workflows/release.yml`, which builds this exact tag for amd64 and arm64 and pushes it
+/// before the release leaves draft — so a published release cannot name an image that does not
+/// exist.
+pub const DEFAULT_IMAGE: &str = concat!(
+    "ghcr.io/jaroslawherod/micold-daemon:",
+    env!("CARGO_PKG_VERSION")
+);
+
+/// The namespace `DEFAULT_IMAGE` used to name, and which nothing was ever published into.
+///
+/// Correcting the constant (FR-024) fixed the default. It did not fix the *files* — settings are
+/// stored as values, not as "whatever the app defaults to today", so every user who had opened the
+/// sandbox section before 0.12.0 has this namespace written to disk and would keep asking a
+/// registry for an image that has never existed there. [`ImageSource::repair_retired_namespace`]
+/// is what reaches them.
+const RETIRED_IMAGE_REPOSITORY: &str = "ghcr.io/micold/micold-daemon";
 
 /// The tag `mise run image` produces, and the one a stale-image refusal names (FR-024c).
 pub const DEV_IMAGE_TAG: &str = "micold-daemon:dev";
@@ -44,7 +71,7 @@ pub struct ImageSource {
     /// Which acquisition path applies.
     #[serde(default)]
     pub kind: ImageSourceKind,
-    /// The image reference, e.g. `ghcr.io/micold/micold-daemon:0.27.0`.
+    /// The image reference, e.g. `ghcr.io/jaroslawherod/micold-daemon:0.11.0`.
     #[serde(default = "default_reference")]
     pub reference: String,
     /// The archive to load, set only when [`Self::kind`] is [`ImageSourceKind::ImportedFile`].
@@ -80,6 +107,32 @@ impl ImageSource {
     /// stale by definition, because both came from the same working tree.
     pub fn refuses_fingerprint_mismatch(&self) -> bool {
         self.kind == ImageSourceKind::LocalBuild
+    }
+
+    /// Replace a reference into the retired namespace with today's default.
+    ///
+    /// Applied on read, alongside the budget clamp, for the reason rule S-7 gives: a value the user
+    /// did not choose and cannot act on is repaired when the file is opened rather than reported.
+    /// And they did not choose it — nothing was ever pushed to `ghcr.io/micold`, so any registry
+    /// reference naming it is a default the app wrote there itself, tag included. Replacing the
+    /// whole reference rather than rewriting the namespace is deliberate: the persisted tag is the
+    /// version that wrote the file, and the new namespace has no such tag either.
+    ///
+    /// Scoped to [`ImageSourceKind::Registry`]: an imported archive or a local build named after
+    /// that namespace is a name for something the user has on disk, and renaming it would break a
+    /// working setup to fix a reference nothing pulls.
+    pub fn repair_retired_namespace(&mut self) {
+        if self.kind != ImageSourceKind::Registry {
+            return;
+        }
+        let repository = self
+            .reference
+            .rsplit_once(':')
+            .map(|(repo, _)| repo)
+            .unwrap_or(&self.reference);
+        if repository == RETIRED_IMAGE_REPOSITORY {
+            self.reference = DEFAULT_IMAGE.to_string();
+        }
     }
 
     /// Everything wrong with this source, as values rather than prose.
@@ -147,7 +200,7 @@ impl ImageSourceProblem {
 pub struct ImageRef {
     /// The registry host, if the reference named one.
     pub registry: Option<String>,
-    /// The repository path, e.g. `micold/micold-daemon`.
+    /// The repository path, e.g. `jaroslawherod/micold-daemon`.
     pub repository: String,
     /// The tag, if the reference is tagged rather than digest-pinned.
     pub tag: Option<String>,
@@ -279,12 +332,67 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_persisted_reference_into_the_retired_namespace_is_replaced_by_the_default() {
+        // The exact value found on this developer's own machine on 2026-08-27: written by the app
+        // itself, at a version whose default named a namespace nothing was ever pushed to.
+        let mut src = ImageSource {
+            kind: ImageSourceKind::Registry,
+            reference: "ghcr.io/micold/micold-daemon:0.10.0".into(),
+            path: None,
+        };
+        src.repair_retired_namespace();
+        assert_eq!(src.reference, DEFAULT_IMAGE);
+    }
+
+    #[test]
+    fn a_reference_the_user_chose_is_left_alone() {
+        for reference in [
+            "ghcr.io/jaroslawherod/micold-daemon:0.11.0",
+            "registry.example.com/micold/micold-daemon:1.0.0",
+            "ghcr.io/micold/something-else:0.10.0",
+        ] {
+            let mut src = ImageSource {
+                kind: ImageSourceKind::Registry,
+                reference: reference.into(),
+                path: None,
+            };
+            src.repair_retired_namespace();
+            assert_eq!(src.reference, reference, "{reference} should be untouched");
+        }
+    }
+
+    #[test]
+    fn the_retired_namespace_is_not_the_one_being_published_to() {
+        // If these ever agreed, the repair above would rewrite every correct reference to itself
+        // forever, and a real regression of the namespace would be indistinguishable from a fix.
+        assert_ne!(DEFAULT_IMAGE_REPOSITORY, RETIRED_IMAGE_REPOSITORY);
+    }
+
+    #[test]
+    fn an_archive_or_local_build_named_after_the_retired_namespace_is_left_alone() {
+        // These name something on disk, not something to pull. Rewriting them would break a setup
+        // that works in order to fix a reference nothing resolves.
+        for kind in [ImageSourceKind::ImportedFile, ImageSourceKind::LocalBuild] {
+            let mut src = ImageSource {
+                kind,
+                reference: "ghcr.io/micold/micold-daemon:0.10.0".into(),
+                path: Some(PathBuf::from("/tmp/img.tar")),
+            };
+            src.repair_retired_namespace();
+            assert_eq!(src.reference, "ghcr.io/micold/micold-daemon:0.10.0");
+        }
+    }
+
+    #[test]
     fn a_registry_reference_round_trips() {
-        let r = ImageRef::parse("ghcr.io/micold/micold-daemon:0.27.0").unwrap();
+        let r = ImageRef::parse("ghcr.io/jaroslawherod/micold-daemon:0.11.0").unwrap();
         assert_eq!(r.registry.as_deref(), Some("ghcr.io"));
-        assert_eq!(r.repository, "micold/micold-daemon");
-        assert_eq!(r.tag.as_deref(), Some("0.27.0"));
-        assert_eq!(r.to_reference(), "ghcr.io/micold/micold-daemon:0.27.0");
+        assert_eq!(r.repository, "jaroslawherod/micold-daemon");
+        assert_eq!(r.tag.as_deref(), Some("0.11.0"));
+        assert_eq!(
+            r.to_reference(),
+            "ghcr.io/jaroslawherod/micold-daemon:0.11.0"
+        );
     }
 
     #[test]
@@ -306,9 +414,9 @@ mod tests {
 
     #[test]
     fn a_first_segment_without_a_dot_is_part_of_the_repository() {
-        let r = ImageRef::parse("micold/micold-daemon:0.1.0").unwrap();
+        let r = ImageRef::parse("jaroslawherod/micold-daemon:0.1.0").unwrap();
         assert_eq!(r.registry, None);
-        assert_eq!(r.repository, "micold/micold-daemon");
+        assert_eq!(r.repository, "jaroslawherod/micold-daemon");
     }
 
     #[test]
@@ -349,6 +457,29 @@ mod tests {
         assert!(
             !r.is_moving(),
             "the shipped default must not be a moving tag"
+        );
+    }
+
+    #[test]
+    fn the_default_names_the_repository_the_release_publishes_to() {
+        // Two constants, one fact. The release workflow greps this file for
+        // `DEFAULT_IMAGE_REPOSITORY`'s value and refuses to publish a release whose image job
+        // would push anywhere else; that check is only worth anything while the reference the app
+        // actually resolves is built from the same string. Splitting them and letting them drift
+        // would leave the grep passing against a constant nothing reads.
+        let r = ImageSource::default().parsed().expect("default parses");
+        assert_eq!(
+            format!(
+                "{}/{}",
+                r.registry.as_deref().unwrap_or_default(),
+                r.repository
+            ),
+            DEFAULT_IMAGE_REPOSITORY
+        );
+        assert_eq!(
+            r.tag.as_deref(),
+            Some(env!("CARGO_PKG_VERSION")),
+            "the image is tagged with the application version it ships beside (FR-024)"
         );
     }
 

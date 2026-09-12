@@ -38,6 +38,8 @@ fn expected(icon: Icon) -> char {
         Icon::ActivityWorking => '\u{e837}',
         Icon::ActivityEnded => '\u{e836}',
         Icon::SelectChevron => '\u{e5cf}',
+        Icon::SessionService => '\u{e875}',
+        Icon::Refresh => '\u{e5d5}',
     }
 }
 
@@ -63,8 +65,10 @@ fn all_covers_every_variant_without_duplicates() {
     // moved into the vocabulary by BUG-004), +1 for Search (feature 021's type-ahead field —
     // a magnifier, distinct from Filter's funnel), +1 for SelectChevron (feature 022's select
     // trailing affordance — `expand_more`, the glyph §7.7 gives the control and the one thing that
-    // tells a select from a text field at a glance).
-    assert_eq!(Icon::ALL.len(), 30, "curated set size");
+    // tells a select from a text field at a glance), +1 for Refresh (feature 029's sidebar-header
+    // control — Material's `refresh`, chosen over `sync` and `autorenew` because those two say
+    // "there is a remote" and "this happens by itself", and neither is true here).
+    assert_eq!(Icon::ALL.len(), 32, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

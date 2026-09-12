@@ -5,6 +5,7 @@
 //! `quickstart.md` (Principle I GUI-wiring exception); here we assert the pure state transitions.
 
 use micold_client::app::{on_escape, Message, State};
+use micold_client::features::project::Msg as ProjectMsg;
 use micold_core::project::{Availability, Project};
 use micold_core::session::{AiCli, Session, SessionLocation};
 use std::path::{Path, PathBuf};
@@ -37,11 +38,13 @@ fn state_with_projects(paths: &[&str]) -> State {
 fn forget_requested_opens_confirmation_and_sets_target() {
     let mut state = state_with_projects(&["/a", "/b"]);
 
-    state.update(Message::ProjectForgetRequested(PathBuf::from("/a")));
+    state.update(Message::Project(ProjectMsg::ForgetRequested(
+        PathBuf::from("/a"),
+    )));
 
     assert_eq!(open_dialog(&state), Some("confirm_forget_project"));
     assert_eq!(
-        state.forget_target.as_deref(),
+        state.project.forget_target.as_deref(),
         Some(std::path::Path::new("/a"))
     );
     // Requesting does not yet remove anything.
@@ -51,12 +54,14 @@ fn forget_requested_opens_confirmation_and_sets_target() {
 #[test]
 fn forget_cancelled_closes_and_changes_nothing() {
     let mut state = state_with_projects(&["/a", "/b"]);
-    state.update(Message::ProjectForgetRequested(PathBuf::from("/a")));
+    state.update(Message::Project(ProjectMsg::ForgetRequested(
+        PathBuf::from("/a"),
+    )));
 
-    state.update(Message::ProjectForgetCancelled);
+    state.update(Message::Project(ProjectMsg::ForgetCancelled));
 
     assert_eq!(open_dialog(&state), None);
-    assert!(state.forget_target.is_none());
+    assert!(state.project.forget_target.is_none());
     assert_eq!(
         state.workspace.projects.len(),
         2,
@@ -68,12 +73,14 @@ fn forget_cancelled_closes_and_changes_nothing() {
 #[test]
 fn forget_confirmed_removes_the_nonactive_target_others_remain() {
     let mut state = state_with_projects(&["/a", "/b"]); // active = /b
-    state.update(Message::ProjectForgetRequested(PathBuf::from("/a")));
+    state.update(Message::Project(ProjectMsg::ForgetRequested(
+        PathBuf::from("/a"),
+    )));
 
-    state.update(Message::ProjectForgetConfirmed);
+    state.update(Message::Project(ProjectMsg::ForgetConfirmed));
 
     assert_eq!(open_dialog(&state), None);
-    assert!(state.forget_target.is_none());
+    assert!(state.project.forget_target.is_none());
     assert_eq!(state.workspace.projects.len(), 1);
     assert_eq!(state.workspace.projects[0].path, PathBuf::from("/b"));
     assert_eq!(
@@ -86,8 +93,13 @@ fn forget_confirmed_removes_the_nonactive_target_others_remain() {
 #[test]
 fn escape_cancels_the_forget_confirmation() {
     let mut state = state_with_projects(&["/a", "/b"]);
-    state.update(Message::ProjectForgetRequested(PathBuf::from("/a")));
-    assert_eq!(on_escape(&state), Some(Message::ProjectForgetCancelled));
+    state.update(Message::Project(ProjectMsg::ForgetRequested(
+        PathBuf::from("/a"),
+    )));
+    assert_eq!(
+        on_escape(&state),
+        Some(Message::Project(ProjectMsg::ForgetCancelled))
+    );
 }
 
 // --- US2: forgetting the active project clears the active working space + active session ---
@@ -105,10 +117,12 @@ fn forget_confirmed_on_active_project_clears_active_and_active_session() {
         .workspace
         .sessions
         .insert(PathBuf::from("/b"), vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
 
-    state.update(Message::ProjectForgetRequested(PathBuf::from("/b")));
-    state.update(Message::ProjectForgetConfirmed);
+    state.update(Message::Project(ProjectMsg::ForgetRequested(
+        PathBuf::from("/b"),
+    )));
+    state.update(Message::Project(ProjectMsg::ForgetConfirmed));
 
     assert!(!state
         .workspace
@@ -119,14 +133,16 @@ fn forget_confirmed_on_active_project_clears_active_and_active_session() {
         state.workspace.active, None,
         "active working space cleared (FR-008)"
     );
-    assert!(state.active_session.is_none(), "active session cleared");
+    assert!(state.session.active.is_none(), "active session cleared");
 }
 
 #[test]
 fn forgetting_the_last_project_leaves_an_empty_list() {
     let mut state = state_with_projects(&["/only"]); // active = /only
-    state.update(Message::ProjectForgetRequested(PathBuf::from("/only")));
-    state.update(Message::ProjectForgetConfirmed);
+    state.update(Message::Project(ProjectMsg::ForgetRequested(
+        PathBuf::from("/only"),
+    )));
+    state.update(Message::Project(ProjectMsg::ForgetConfirmed));
 
     assert!(
         state.workspace.projects.is_empty(),
@@ -144,14 +160,16 @@ fn forgetting_a_background_project_leaves_active_untouched() {
         .workspace
         .sessions
         .insert(PathBuf::from("/fg"), vec![session]);
-    state.active_session = Some(id);
+    state.session.active = Some(id);
 
-    state.update(Message::ProjectForgetRequested(PathBuf::from("/bg")));
-    state.update(Message::ProjectForgetConfirmed);
+    state.update(Message::Project(ProjectMsg::ForgetRequested(
+        PathBuf::from("/bg"),
+    )));
+    state.update(Message::Project(ProjectMsg::ForgetConfirmed));
 
     assert_eq!(state.workspace.active, Some(PathBuf::from("/fg")));
     assert_eq!(
-        state.active_session,
+        state.session.active,
         Some(id),
         "foreground session untouched"
     );
@@ -172,9 +190,11 @@ fn forget_confirmed_removes_an_unavailable_project() {
         p.availability = Availability::Unavailable;
     }
 
-    state.update(Message::ProjectForgetRequested(PathBuf::from("/gone")));
+    state.update(Message::Project(ProjectMsg::ForgetRequested(
+        PathBuf::from("/gone"),
+    )));
     assert_eq!(open_dialog(&state), Some("confirm_forget_project"));
-    state.update(Message::ProjectForgetConfirmed);
+    state.update(Message::Project(ProjectMsg::ForgetConfirmed));
 
     assert!(!state
         .workspace
@@ -198,18 +218,20 @@ fn forgetting_the_active_project_clears_the_current_session_through_the_one_path
         .workspace
         .sessions
         .insert(PathBuf::from("/b"), vec![session]);
-    state.active_session = Some(id);
-    state.pending_reveal_scroll = false;
+    state.session.active = Some(id);
+    state.sidebar.pending_reveal_scroll = false;
 
-    state.update(Message::ProjectForgetRequested(PathBuf::from("/b")));
-    state.update(Message::ProjectForgetConfirmed);
+    state.update(Message::Project(ProjectMsg::ForgetRequested(
+        PathBuf::from("/b"),
+    )));
+    state.update(Message::Project(ProjectMsg::ForgetConfirmed));
 
     assert!(
-        state.active_session.is_none(),
+        state.session.active.is_none(),
         "the project holding it is gone, so no session is current"
     );
     assert!(
-        !state.pending_reveal_scroll,
+        !state.sidebar.pending_reveal_scroll,
         "and nothing is armed to scroll to. This is an app-initiated clear like the close and \
          remove arms, and it goes through the same function for the same reason — a scroll armed \
          with no target stays armed, then fires against whatever row appears next (invariant I5)"

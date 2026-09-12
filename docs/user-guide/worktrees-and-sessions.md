@@ -24,6 +24,43 @@ choose a folder.
   shows its name in the error color with a **missing** or **invalid** status tag — you cannot
   start new sessions on it until it is resolved.
 
+<!-- media: worktree-sidebar-light -->
+
+### Refreshing the list
+
+The sidebar's worktree list is not live. It is rebuilt when you open or switch to a project, and
+after this app itself creates, deletes, renames, includes or excludes a worktree — but nothing is
+watching the repository. So a worktree that appears by any other route is invisible until one of
+those moments comes round again: one you created with `git worktree add` in a terminal, one a
+coding agent made for its own work, or one you removed by hand.
+
+Click the **refresh** button in the sidebar header — between the "Worktrees" title and **add
+worktree** — to re-read the list right now. Whatever git and the filesystem currently report is
+what you get: worktrees that appeared are added, ones that are gone are removed, and a branch that
+changed is shown as it now is.
+
+Switching away from the project and back used to be the only way to force this, and it no longer
+is. Nothing else about your view changes: the rows you had expanded stay expanded, your tag
+filters stay applied, and the session you are working in keeps running.
+
+While the re-read is running the button dims and stops responding, and its hover label reads
+"Refreshing worktrees…" — pressing it again does nothing, because one refresh is already on its
+way. When the answer arrives you get a short "Worktree list refreshed." notice. That notice is the
+point of the whole exchange on a project where nothing has changed: most refreshes find nothing,
+and without it a button that correctly did its job would be indistinguishable from one that ignored
+you.
+
+If the re-read cannot be done — the project folder has been moved or deleted, git cannot read the
+repository, or the session service is not running — you get a notice saying why, and **the list you
+were already looking at stays on screen**. A failed refresh never empties the sidebar. The button
+returns to normal either way, so you can fix the problem and press it again. In the rare case where
+no answer comes back at all, it gives up after about half a minute rather than staying dimmed.
+
+The button re-reads the list once, and that is all it does: it starts no timer, installs no watcher,
+and changes nothing about the list's behaviour afterwards. The list is still not live, and it never
+re-reads itself in the background — on demand means on demand. If you want to know whether something
+changed, press it.
+
 ### Reading a worktree: name & tags
 
 Each worktree is shown as a clean, human-friendly **name** on the first line, with small
@@ -115,6 +152,8 @@ Two things to know about that switch:
 - **Resize**: drag the thin handle on the sidebar's right edge to make it wider or narrower.
 - **Hide**: click the **hide** button (panel-collapse icon) in the sidebar header, next to
   **add worktree**. The sidebar collapses to a thin strip.
+- Hiding takes the header with it, so the **refresh** button is unavailable until you show the
+  sidebar again; the collapsed strip hosts only the **show** button.
 - **Show**: click the **show** button (panel-open icon) on the collapsed strip to bring it back.
 
 ## The "Default" entry: sessions without a worktree
@@ -144,9 +183,22 @@ is unnecessary overhead this avoids.
   isolating them from each other.
 - The Default entry is **never hidden by the sidebar's tag filters** — since it isn't a
   worktree, filtering by branch-derived tags doesn't apply to it; it always stays visible.
-- Hover any sidebar entry, Default or worktree, to see a tooltip with its location relative to
-  the project (e.g. the project root itself for Default, or a worktree's relative directory
-  path) — useful for confirming exactly where a session is about to run before you start it.
+- Hover any sidebar entry to see a tooltip describing it. For the **Default** entry that is its
+  location — the project root itself. For a **worktree** the tooltip leads with the worktree's
+  **full name**, then gives its location relative to the project. The sidebar is narrow, so a long
+  name is shortened with an ellipsis in the row itself; hovering is how you read the whole of it,
+  and how you confirm exactly where a session is about to run before you start it.
+- A worktree's tooltip also names the two things its row label cannot show, each on its own line:
+  the **branch** it is bound to, and — when it differs from the displayed name — the **folder** on
+  disk. Both are absent from the row because the displayed name is derived by stripping the type
+  token and the ticket out of the folder name, which is what makes it readable and also what makes
+  it unusable as a path or a branch to type.
+- A row that is **flagged** explains itself on hover. A worktree whose directory is gone, or whose
+  directory git does not recognise, adds a **Status** line reading `missing` or `invalid` — the
+  same word as the chip on the row. A worktree you added from outside this app's own
+  `.claude/worktrees/` folder marks its location `(outside this app)`, which is why that one path
+  is absolute where the others are relative. A healthy worktree says nothing about its status, so
+  the rows that do have something to say are the ones that stand out.
 
 ## Creating a worktree
 
@@ -177,6 +229,8 @@ worktree at `.claude/worktrees/feat-abc-123_login-page`. With no ticket, `chore`
 `chore/cleanup` — no `_` anywhere. Illegal characters in the ticket or name are automatically
 simplified (slugified), so `#123` is a perfectly good ticket; it shows up as a `#123` tag in the
 sidebar.
+
+<!-- media: create-worktree-light -->
 
 The `_` separates the ticket from the description, and it is on the branch as well as the folder.
 That is what lets the app read the ticket back later: delete a worktree and re-create it from the
@@ -551,6 +605,8 @@ commands, scripts, or anything else scoped to that session's worktree without le
   crash-auto-restart if it happens to exit while you're looking at the shell, and switching back
   reattaches to that same conversation with nothing lost.
 
+<!-- media: switch-session-light -->
+
 ### Running more than one Regular Terminal instance
 
 A session isn't limited to a single Regular Terminal — you can open as many independent shell
@@ -677,6 +733,8 @@ The embedded terminal renders the AI CLI's output like a real terminal, not as f
   programs redraw cleanly, with the cursor shown at its current position.
 - **Focus** — the terminal you are looking at is where the keyboard goes, unless you have handed
   it away or something that types has taken it (a colored border marks the focused terminal).
+
+<!-- media: session-terminal-light -->
 
 ## Interacting with the terminal
 

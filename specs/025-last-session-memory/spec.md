@@ -190,6 +190,15 @@ that no longer exists is worse than not remembering at all.
   > [`018-material3-visual-system`](../018-material3-visual-system/spec.md) (a component on an accent
   > fill draws that fill's paired `on_*` role). A bare `grep FR-004a specs/` returns both; cite an id
   > with its feature when the reader may be outside it.
+
+  > **Cross-feature note (2026-08-27 — `010` BUG-016).** This rule supersedes a prohibition in a
+  > second place, not only in this feature's own FR-004:
+  > [`010-daemon-session-persistence`](../010-daemon-session-persistence/spec.md) **FR-006b** said
+  > that a service restart can never cause an agent to take action without the user asking for it,
+  > and the client resuming a restored session is exactly that action seen from `010`'s side. The
+  > trade this feature recorded — the scope, not the prohibition — is what `010` FR-006b now states,
+  > and the sentence above ("at most one session is resumed, in the project being opened") is the
+  > half both features rely on. Amending either rule means amending both.
 - **FR-005**: The application MUST NOT restore a session that has been closed, or whose record no
   longer exists. In those cases it MUST fall back to the same behaviour as a project with no
   memory.

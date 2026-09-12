@@ -340,10 +340,15 @@ pub fn navigation_drawer<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Eleme
 
 /// `SectionList` — the navigation rail a full-surface view is divided by (feature 027, FR-026a).
 ///
-/// One live instance rather than three posed ones. The component's whole subject is *which row is
-/// current*, and three static rails each claiming a different row would show the same thing three
-/// times without ever showing the transition between them. The badge rides on the last row, which
-/// is where the settings surface puts it.
+/// One live instance rather than several posed ones. The component's whole subject is *which row is
+/// current*, and static rails each claiming a different row would show the same thing several times
+/// without ever showing the transition between them. The badge rides on the last row, which is
+/// where the settings surface puts it.
+///
+/// The collapse control is live for the same reason (FR-026d). Collapsed, a row is its icon and
+/// nothing else, and the claim that costs nothing — every destination still pressable, the badged
+/// row still marked — is a claim about a rail you can collapse and then press, not about a second
+/// picture of one.
 pub fn section_list<'a>(showcase: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     let mut sections = vec![
         material::Section::new("Appearance", Message::SectionShown(0)),
@@ -351,17 +356,29 @@ pub fn section_list<'a>(showcase: &'a Showcase, roles: Roles, _i: usize) -> Elem
         material::Section::new("Environment", Message::SectionShown(2)),
         material::Section::new("Session service", Message::SectionShown(3)),
     ];
+    // The settings surface's own four icons, so the page shows the glyphs a reader will actually
+    // meet rather than four stand-ins that happen to be distinguishable.
+    for (row, icon) in sections.iter_mut().zip([
+        Icon::LightMode,
+        Icon::RegularTerminal,
+        Icon::AiCli,
+        Icon::SessionService,
+    ]) {
+        row.icon = Some(icon);
+    }
     sections[3].badge = Some("Sharing".to_string());
 
     arrange(
         vec![posed(
-            "press a row to make it current",
+            "press a row to make it current; collapse it to its icons",
             iced::widget::container(
                 material::SectionList::new(sections, roles)
                     .selected(showcase.section_shown())
+                    .collapsed(showcase.section_rail_collapsed())
+                    .toggle(Message::SectionRailToggled)
                     .badge_accent(roles.error, roles.on_error),
             )
-            .height(Length::Fixed(200.0)),
+            .height(Length::Fixed(240.0)),
             roles,
         )],
         Layout::Inline,

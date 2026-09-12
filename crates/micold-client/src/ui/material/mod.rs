@@ -206,10 +206,25 @@ use micold_core::tokens::{spacing, Roles};
 /// directly.
 pub use iced::widget::tooltip::Position as TooltipPosition;
 
+/// The widest a tooltip panel may grow before its label wraps (feature 029, FR-009).
+///
+/// Material 3's ceiling for a rich tooltip, and component-owned rather than an `anatomy::` token:
+/// `anatomy::ALL` is a fixed array asserted against feature 018's contract, which names no tooltip
+/// figure at all, so adding one there would edit that feature's gate to state something it never
+/// claimed. `tab.rs`'s `LABEL_MAX_WIDTH` is the precedent for a component holding its own ceiling.
+///
+/// It matters here because a tooltip's label used to be one short phrase and is now a block of
+/// lines, one of which is a filesystem path. Unbounded, the panel measures at that path's natural
+/// width and can end up wider than the sidebar it is describing.
+pub const TOOLTIP_MAX_WIDTH: f32 = 320.0;
+
 /// Wrap any element with a hover tooltip describing the action it triggers (Principle VIII
 /// builder-API rule: construct with the required content + label + roles, then optionally
 /// `.position(...)`, then `.into()`). Theme-aware surface styling; shown below the element by
 /// default.
+///
+/// The label may be multi-line: it is bounded at [`TOOLTIP_MAX_WIDTH`] and wraps on glyphs where a
+/// word boundary is unavailable, so a long path breaks rather than widening the panel.
 pub struct Tooltip<'a, M> {
     content: Element<'a, M>,
     label: String,
@@ -241,9 +256,17 @@ impl<'a, M: 'a> Tooltip<'a, M> {
 impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
     fn from(t: Tooltip<'a, M>) -> Self {
         // A tooltip explains, so it is prose at `Caption` — Material's `body_small`.
-        let tip = container(Text::new(t.label, TypeRole::Caption, t.roles))
-            .padding(spacing::XS)
-            .style(style::surface(t.roles));
+        //
+        // `WordOrGlyph` rather than the stack's default `Word`: the labels this carries include
+        // filesystem paths, which contain no spaces and so cannot be word-wrapped at all. Without
+        // the glyph fallback the ceiling below would be a limit the text simply ignores.
+        let tip = container(
+            Text::new(t.label, TypeRole::Caption, t.roles)
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+        )
+        .max_width(TOOLTIP_MAX_WIDTH)
+        .padding(spacing::XS)
+        .style(style::surface(t.roles));
         tooltip(t.content, tip, t.position).gap(spacing::XS).into()
     }
 }

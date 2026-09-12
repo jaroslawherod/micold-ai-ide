@@ -37,6 +37,8 @@ To reopen a project, click **Open** next to it. It becomes your active working s
 immediately, without opening the folder browser. Micold also remembers which project was
 active last time.
 
+<!-- media: open-project-light -->
+
 The list is stored on your own machine (no account, no network required — Micold works
 fully offline). Opening a folder that is already in the list simply reactivates the existing
 entry; it never creates a duplicate.

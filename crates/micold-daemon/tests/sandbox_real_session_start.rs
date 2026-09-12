@@ -295,6 +295,13 @@ fn start_sandbox(data_home: &Path, project: &Path, token_path: &Path) -> Sandbox
         data_home.join("micold-ai-ide").display()
     );
     let token_mount = format!("{}:/run/micold/token:ro", token_path.display());
+    // The sandbox's own writable home, at the path `HOME` names (FR-004d). Mirrored from
+    // `argv::mount_args`; created here because a bind source the runtime creates it creates as root.
+    let home_dir = data_home
+        .join("micold-ai-ide")
+        .join(micold_core::sandbox::SANDBOX_HOME_DIR);
+    std::fs::create_dir_all(&home_dir).unwrap();
+    let home_mount = format!("{}:{home}:rw", home_dir.display());
 
     docker(&[
         "create",
@@ -312,6 +319,8 @@ fn start_sandbox(data_home: &Path, project: &Path, token_path: &Path) -> Sandbox
         &home_env,
         "-e",
         &shell_env,
+        "-v",
+        &home_mount,
         "-v",
         &project_mount,
         "-v",

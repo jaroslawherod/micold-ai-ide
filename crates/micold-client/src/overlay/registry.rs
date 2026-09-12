@@ -293,7 +293,10 @@ register! {
     crate::features::session::ShellInstanceMenu,
     // Settings is deliberately absent as of feature 027: it is a full-surface view reached from
     // the toolbar, not a floating surface, so it has no dismissal rules, no layer, and nothing to
-    // displace. `SettingsDialog` and `ui/settings_form.rs` went with the registration.
+    // displace. `SettingsDialog` and `ui/settings_form.rs` went with the registration. The
+    // confirmation below is a different thing: not the form, but the one question the form asks
+    // before it applies a change that ends processes (BUG-003, FR-032).
+    crate::features::settings::ConfirmPlacementDialog => crate::ui::confirm_placement::dialog,
     crate::features::sidebar::SidebarFilterPanel {
         displaces:
             crate::features::help::HelpMenu,

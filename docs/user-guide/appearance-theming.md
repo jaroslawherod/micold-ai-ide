@@ -107,6 +107,17 @@ By default the application follows your operating system's light or dark setting
 Both themes are first-class: the dark theme is fully designed for legibility, not a dimmed
 version of the light one.
 
+<!-- media: main-window-dark -->
+
+The rest of the application is drawn the same way in both — the worktree sidebar with a session
+open in it, that session's terminal, and Settings:
+
+<!-- media: worktree-sidebar-dark -->
+
+<!-- media: session-terminal-dark -->
+
+<!-- media: settings-view-dark -->
+
 > **Linux note:** OS theme detection uses the XDG desktop portal (with GTK/KDE settings as a
 > fallback). On a session without any of these available, the app cannot read a preference
 > and shows the light theme. Choosing a theme explicitly (below) always works.
@@ -124,6 +135,8 @@ next mode**:
 The cycle order is Auto → Light → Dark → Auto. The menu stays open while you cycle so you can
 click again. Your choice takes effect immediately and is remembered across restarts. Cycling
 back to **Auto** resumes tracking your OS preference and switching live when it changes.
+
+<!-- media: theme-follow-light -->
 
 ## Motion & animations
 

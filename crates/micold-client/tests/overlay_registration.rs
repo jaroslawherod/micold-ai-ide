@@ -57,40 +57,44 @@ use std::path::{Path, PathBuf};
 /// opening exactly one surface is what makes "registers as *itself*" testable at all.
 #[allow(clippy::type_complexity)]
 const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
-    ("help_menu_open", "help_menu", |s| s.help_menu_open = true),
-    ("project_switcher_open", "project_switcher", |s| {
-        s.project_switcher_open = true
+    ("help.help_menu_open", "help_menu", |s| {
+        s.help.help_menu_open = true
     }),
-    ("sidebar_filter_open", "sidebar_filter", |s| {
-        s.sidebar_filter_open = true
+    ("project.switcher_open", "project_switcher", |s| {
+        s.project.switcher_open = true
     }),
-    ("project_menu_open", "project_menu", |s| {
-        s.project_menu_open = Some(ProjectMenu {
+    ("sidebar.filter_open", "sidebar_filter", |s| {
+        s.sidebar.filter_open = true
+    }),
+    ("project.menu_open", "project_menu", |s| {
+        s.project.menu_open = Some(ProjectMenu {
             path: PathBuf::from("/tmp/p"),
             anchor: (10, 10),
         })
     }),
-    ("worktree_menu_open", "worktree_menu", |s| {
-        s.worktree_menu_open = Some(micold_client::features::worktree::WorktreeMenu {
+    ("worktree.menu_open", "worktree_menu", |s| {
+        s.worktree.menu_open = Some(micold_client::features::worktree::WorktreeMenu {
             dir_name: "feature-x".to_string(),
             anchor: (120, 300),
         })
     }),
-    ("session_menu_open", "session_menu", |s| {
-        s.session_menu_open = Some(micold_client::features::session::SessionMenu {
+    ("session.menu_open", "session_menu", |s| {
+        s.session.menu_open = Some(micold_client::features::session::SessionMenu {
             id: SessionId::new(),
             anchor: (120, 340),
         })
     }),
-    ("terminal_context_menu", "terminal_context_menu", |s| {
-        s.terminal_context_menu = Some((4, 2))
-    }),
+    (
+        "session.terminal_context_menu",
+        "terminal_context_menu",
+        |s| s.session.terminal_context_menu = Some((4, 2)),
+    ),
     // The terminal *tab's* menu, not the terminal's own (feature 012, BUG-005). Two context menus
     // on the same screen, on different things: this one acts on an instance, that one on the
     // content. It carries the instance because the menu belongs to the tab it was opened on rather
     // than to the active one — FR-010a is about restarting an instance you have not selected.
-    ("shell_instance_menu", "shell_instance_menu", |s| {
-        s.shell_instance_menu = Some((
+    ("session.shell_instance_menu", "shell_instance_menu", |s| {
+        s.session.shell_instance_menu = Some((
             micold_client::ui::terminal::StripTab::Instance(ShellInstanceId(1)),
             4,
             2,
@@ -99,8 +103,8 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
     // Feature 026: the "start a session on…" list, opened from a row's chevron. A menu rather than
     // a dialog — summoned from a control, anchored to the sidebar, dismissed by clicking away —
     // so it registers in the context-menu band with the other two.
-    ("session_start_menu", "session_start_menu", |s| {
-        s.session_start_menu = Some(micold_client::features::session::StartMenu {
+    ("session.start_menu", "session_start_menu", |s| {
+        s.session.start_menu = Some(micold_client::features::session::StartMenu {
             location: SessionLocation::Default,
             anchor: (4, 2),
         })
@@ -115,11 +119,47 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
 /// to being true.
 #[allow(clippy::type_complexity)]
 const DIALOG_FLAGS: &[(&str, &str, fn(&mut State))] =
-    &[("about_open", "about", |s| s.about_open = true)];
+    &[("help.about_open", "about", |s| s.help.about_open = true)];
 
 /// Popover-shaped fields actually declared on `State`, so the lists above cannot go stale.
+///
+/// Feature 028 moves a feature's fields behind a struct of its own, so the scan follows them: a
+/// member whose type is `crate::features::<n>::State` is opened and its own popover-shaped fields
+/// are reported under the path they are written through now — `help.help_menu_open`, not
+/// `help_menu_open`. Qualifying them is the point of descending rather than flattening: once each
+/// feature declares its own state, two of them may each have a `menu_open`, and a bare-name set
+/// would let the second hide behind the first.
 fn declared_popovers() -> BTreeSet<String> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app.rs");
+    let mut found = BTreeSet::new();
+    for (name, ty) in struct_fields("src/app.rs") {
+        let feature = ty
+            .strip_prefix("crate::features::")
+            .and_then(|ty| ty.strip_suffix("::State"));
+        match feature {
+            Some(feature) => found.extend(
+                struct_fields(&format!("src/features/{feature}.rs"))
+                    .into_iter()
+                    .map(|(field, _)| field)
+                    .filter(|field| popover_shaped(field))
+                    .map(|field| format!("{name}.{field}")),
+            ),
+            None if popover_shaped(&name) => {
+                found.insert(name);
+            }
+            None => {}
+        }
+    }
+    found
+}
+
+/// A field name shaped like a popover flag — what the scan recognizes without being told.
+fn popover_shaped(name: &str) -> bool {
+    name.ends_with("_open") || name.contains("_menu")
+}
+
+/// The `pub` fields of the `State` declared in `<rel>`, as `(name, type)` pairs.
+fn struct_fields(rel: &str) -> Vec<(String, String)> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
     let src = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     let at = src.find("pub struct State {").expect("State has moved");
     let rest = &src[at..];
@@ -127,9 +167,9 @@ fn declared_popovers() -> BTreeSet<String> {
     rest[..end]
         .lines()
         .filter_map(|line| {
-            let line = line.trim();
-            let name = line.strip_prefix("pub ")?.split(':').next()?;
-            (name.ends_with("_open") || name.contains("_menu")).then(|| name.to_string())
+            let (name, ty) = line.trim().strip_prefix("pub ")?.split_once(':')?;
+            let ty = ty.trim().trim_end_matches(',');
+            Some((name.trim().to_string(), ty.to_string()))
         })
         .collect()
 }

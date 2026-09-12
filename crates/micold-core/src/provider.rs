@@ -186,6 +186,29 @@ impl std::fmt::Display for AiCli {
     }
 }
 
+/// Which AI CLIs resolve **in this process's own environment** (feature 027, FR-023c).
+///
+/// The name is the point. FR-023c says availability MUST be determined *where sessions run* —
+/// inside the sandbox under sandboxed placement, on the host under host placement — and the only
+/// honest way to answer that is to ask the process that runs them. That process is the session
+/// service, so the service calls this and reports the answer over the protocol
+/// ([`crate::protocol::messages::ClientMsg::AiCliAvailabilityRequest`]).
+///
+/// **The client must not call it.** Under sandboxed placement the client is on the host and the
+/// sessions are not, so the client's own `PATH` answers a different question — one whose answer
+/// happens to look plausible, which is why the mistake survived a whole feature. Before 027 the
+/// client probed itself and the picker offered whatever the *developer's* machine had installed;
+/// `micold-client/tests/cli_availability_comes_from_the_service.rs` is the gate that keeps it from
+/// coming back.
+///
+/// In `AiCli::ALL`'s order, so the list a picker is built from is the declared one.
+pub fn available_here() -> Vec<AiCli> {
+    AiCli::ALL
+        .into_iter()
+        .filter(|which| which.provider().is_available())
+        .collect()
+}
+
 /// Whether `command` resolves to a file on `PATH` (feature 026, FR-006/FR-010).
 ///
 /// Platform-neutral **without a `cfg`**, which is Principle VI's ask rather than a flourish: the

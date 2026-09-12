@@ -86,6 +86,19 @@ pub enum Icon {
     /// control opens a list. Distinct from [`Icon::ShowSidebar`]'s panel glyph: this one says
     /// "there is more to choose from here", not "there is a panel to reveal".
     SelectChevron,
+    /// The settings section that configures the session service (feature 027, FR-026b).
+    ///
+    /// Material's `dns` — the stacked-server glyph. Distinct from [`Icon::Settings`] on purpose:
+    /// the gear is what *opens* Settings, and a rail row inside Settings drawn with the gear reads
+    /// as "settings" rather than as one section of them.
+    SessionService,
+    /// Re-read the project's worktree list on demand (feature 029, FR-001).
+    ///
+    /// Material's `refresh` — the open circular arrow. Chosen over two glyphs that look like
+    /// candidates and are not: `sync`'s two arrows say there is a *remote* to reconcile with, and
+    /// `autorenew` says the thing happens *by itself*. This control has neither property (029
+    /// FR-012), and an icon that promises one is worse than no icon at all.
+    Refresh,
 }
 
 impl Icon {
@@ -121,6 +134,8 @@ impl Icon {
         Icon::ActivityWorking,
         Icon::ActivityEnded,
         Icon::SelectChevron,
+        Icon::SessionService,
+        Icon::Refresh,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -164,6 +179,9 @@ impl Icon {
             // `expand_more` — Material's own chevron for "this opens a list", and what M3's filled
             // select carries in its trailing slot.
             Icon::SelectChevron => '\u{e5cf}',
+            // `dns`.
+            Icon::SessionService => '\u{e875}',
+            Icon::Refresh => '\u{e5d5}',
         }
     }
 }

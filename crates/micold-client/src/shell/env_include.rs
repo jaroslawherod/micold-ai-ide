@@ -56,7 +56,7 @@ pub(crate) fn resolve_env_include(
 /// session's own directory if there is one (most relevant to what the user is currently looking
 /// at), else the active project's root, else the app process's own current directory.
 pub(crate) fn default_resolution_cwd(core: &State) -> PathBuf {
-    if let Some(id) = core.active_session {
+    if let Some(id) = core.session.active {
         if let Some((cwd, _, _)) = session_cwd_mode_and_active_shell(core, id) {
             return cwd;
         }
@@ -71,7 +71,7 @@ pub(crate) fn default_resolution_cwd(core: &State) -> PathBuf {
 /// `env_include_last_outcome` to this attempt's outcome (feature 011 FR-007, BUG-002). Called on
 /// `TerminalRestartRequested` for the restarted session's own directory (leaving every other
 /// cached directory untouched, since only this one needs a fresh attempt), and from
-/// `Message::SettingsSaved`'s handler after it clears the whole cache (every cached directory is
+/// `settings::Msg::Saved`'s handler after it clears the whole cache (every cached directory is
 /// stale once the enabled/path/timeout settings themselves changed) — the two refresh triggers
 /// the spec's Clarifications name.
 pub(crate) fn refresh_env_include(app: &mut App, cwd: &Path) {

@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use micold_client::app::State;
 use micold_client::catalog_sync::reconcile_catalog;
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::messages::WireLifecycle;
+use micold_core::protocol::messages::{ActivitySignal, WireLifecycle};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLocation, TerminalMode, MAX_RESTART_ATTEMPTS,
 };
@@ -130,6 +130,24 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
         state.live_session(id).is_none(),
         "a session that gave up has its process dropped (no restart pending)"
     );
+    // And the row says it is over (`010` BUG-018). The give-up drops the live entry, and the FSM
+    // went with it, so before this the badge fell back to `Unknown` — the same nothing a live
+    // session whose hooks never fired draws. The reason is the tick's own word for the outcome, not
+    // the sentence above: that one belongs to `Failed`, which the client reads separately.
+    let activity = state
+        .catalog_snapshot()
+        .projects
+        .iter()
+        .flat_map(|p| &p.sessions)
+        .find(|s| s.id == id)
+        .map(|s| s.activity.clone());
+    assert_eq!(
+        activity,
+        Some(ActivitySignal::Ended {
+            reason: "crash loop".to_string()
+        }),
+        "a session that gave up reads Ended"
+    );
 
     // And the join: the snapshot the daemon would really publish, fed to the real client. This is
     // the half neither side can fail on its own — `announce_start_failures` reads the wire reason,
@@ -137,7 +155,10 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
     let mut core = State::default();
     reconcile_catalog(&mut core, &state.welcome_payload().0, false);
     assert_eq!(
-        core.notify.visible().map(|n| n.message.clone()),
+        core.notifications
+            .queue
+            .visible()
+            .map(|n| n.message.clone()),
         Some(reason.clone()),
         "the give-up the daemon recorded is what the user is told"
     );

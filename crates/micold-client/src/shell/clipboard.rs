@@ -23,6 +23,8 @@
 use iced::Task;
 
 use micold_client::app::Message;
+use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::Outcome;
 use micold_client::selection;
 
@@ -57,7 +59,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
 /// and a whitespace-only one both come back as `None` from `selection::copy_request` rather than
 /// being filtered here.
 pub fn selection_copy_request(app: &App) -> Option<Outcome> {
-    let grid = app.core.active_session.and_then(|id| app.grids.get(&id))?;
+    let grid = app.core.session.active.and_then(|id| app.grids.get(&id))?;
     selection::copy_request(app.selection.as_ref(), |id| {
         grid.line(id).map(|l| l.text.clone())
     })
@@ -65,15 +67,21 @@ pub fn selection_copy_request(app: &App) -> Option<Outcome> {
 
 /// Copy the current selection to the system clipboard (FR-013). Also closes the menu.
 pub fn on_copy_requested(app: &mut App) -> Task<Message> {
-    app.core.update(Message::TerminalContextMenuClosed);
+    app.core
+        .update(Message::Session(SessionMsg::TerminalContextMenuClosed));
     selection_copy_request(app).map_or_else(Task::none, interpret)
 }
 
 /// Paste the system clipboard into the displayed session's PTY (FR-013). The read is async;
 /// its result flows back through `TerminalBytes`, which honours the Running write-gate.
 pub fn on_paste_requested(app: &mut App) -> Task<Message> {
-    app.core.update(Message::TerminalContextMenuClosed);
-    iced::clipboard::read().map(|c| Message::TerminalBytes(c.unwrap_or_default().into_bytes()))
+    app.core
+        .update(Message::Session(SessionMsg::TerminalContextMenuClosed));
+    iced::clipboard::read().map(|c| {
+        Message::Session(SessionMsg::TerminalBytes(
+            c.unwrap_or_default().into_bytes(),
+        ))
+    })
 }
 
 /// Copy arbitrary displayed text (e.g. a worktree name) to the system clipboard, so
@@ -84,6 +92,7 @@ pub fn on_paste_requested(app: &mut App) -> Task<Message> {
 /// feature for the display name), so there is nothing left here to decide and no second
 /// emitter to write. Translating it is all the shell does.
 pub fn on_text_copy_requested(app: &mut App, text: String) -> Task<Message> {
-    app.core.update(Message::WorktreeMenuDismissed);
+    app.core
+        .update(Message::Worktree(WorktreeMsg::MenuDismissed));
     interpret(Outcome::ClipboardWrite(text))
 }

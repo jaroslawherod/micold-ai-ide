@@ -69,7 +69,13 @@ fn remembered_on_disk(dir: &TempDir, project: &Path) -> Option<SessionId> {
 #[test]
 fn viewing_a_session_records_it_for_the_next_launch() {
     let (dir, state, project, first, _) = daemon_with_two_sessions();
-    let (client, _rx) = state.register("test".to_string());
+    let (client, _rx) = state.register(micold_core::protocol::messages::ClientIdentity::new(
+        "test",
+        micold_core::protocol::messages::ClientInstance {
+            pid: 0,
+            nonce: "test".into(),
+        },
+    ));
 
     state.set_viewed(client, project.clone(), Some(first));
 
@@ -84,7 +90,13 @@ fn viewing_a_session_records_it_for_the_next_launch() {
 #[test]
 fn reporting_no_session_does_not_erase_the_memory() {
     let (dir, state, project, first, _) = daemon_with_two_sessions();
-    let (client, _rx) = state.register("test".to_string());
+    let (client, _rx) = state.register(micold_core::protocol::messages::ClientIdentity::new(
+        "test",
+        micold_core::protocol::messages::ClientInstance {
+            pid: 0,
+            nonce: "test".into(),
+        },
+    ));
     state.set_viewed(client, project.clone(), Some(first));
 
     state.set_viewed(client, project.clone(), None);
@@ -102,7 +114,13 @@ fn reporting_no_session_does_not_erase_the_memory() {
 #[test]
 fn moving_to_another_session_replaces_the_memory() {
     let (dir, state, project, first, second) = daemon_with_two_sessions();
-    let (client, _rx) = state.register("test".to_string());
+    let (client, _rx) = state.register(micold_core::protocol::messages::ClientIdentity::new(
+        "test",
+        micold_core::protocol::messages::ClientInstance {
+            pid: 0,
+            nonce: "test".into(),
+        },
+    ));
     state.set_viewed(client, project.clone(), Some(first));
 
     state.set_viewed(client, project.clone(), Some(second));
@@ -119,7 +137,13 @@ fn moving_to_another_session_replaces_the_memory() {
 #[test]
 fn a_no_session_report_for_a_project_with_no_memory_stays_no_memory() {
     let (dir, state, project, _, _) = daemon_with_two_sessions();
-    let (client, _rx) = state.register("test".to_string());
+    let (client, _rx) = state.register(micold_core::protocol::messages::ClientIdentity::new(
+        "test",
+        micold_core::protocol::messages::ClientInstance {
+            pid: 0,
+            nonce: "test".into(),
+        },
+    ));
 
     state.set_viewed(client, project.clone(), None);
 
@@ -134,8 +158,20 @@ fn a_no_session_report_for_a_project_with_no_memory_stays_no_memory() {
 #[test]
 fn a_second_client_viewing_elsewhere_does_not_disturb_the_first_projects_memory() {
     let (dir, state, project, first, _) = daemon_with_two_sessions();
-    let (client_a, _rx_a) = state.register("test-a".to_string());
-    let (client_b, _rx_b) = state.register("test-b".to_string());
+    let (client_a, _rx_a) = state.register(micold_core::protocol::messages::ClientIdentity::new(
+        "test-a",
+        micold_core::protocol::messages::ClientInstance {
+            pid: 0,
+            nonce: "test-a".into(),
+        },
+    ));
+    let (client_b, _rx_b) = state.register(micold_core::protocol::messages::ClientIdentity::new(
+        "test-b",
+        micold_core::protocol::messages::ClientInstance {
+            pid: 0,
+            nonce: "test-b".into(),
+        },
+    ));
     state.set_viewed(client_a, project.clone(), Some(first));
 
     // Two windows, as the spec's edge cases allow. The second is looking at a different project.

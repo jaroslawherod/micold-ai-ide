@@ -5,7 +5,7 @@
 //!
 //! | Context | Detection | Sink |
 //! |---|---|---|
-//! | systemd user unit | `JOURNAL_STREAM` is set | stderr, undecorated (journald adds its own metadata) |
+//! | systemd user unit | `JOURNAL_STREAM` names *our own* fd 2 | stderr, undecorated (journald adds its own metadata) |
 //! | Foreground / dev | stderr `is_terminal()` | stderr, pretty + ANSI |
 //! | Auto-spawned (detached) | neither | rotating file under the user data dir |
 //!
@@ -181,10 +181,66 @@ impl io::Write for RotateHandle {
     }
 }
 
+/// Is *our own* stderr the journal stream systemd named in `JOURNAL_STREAM`?
+///
+/// The variable's **presence** does not answer that, and reading it as though it did is what left
+/// the auto-spawned daemon with no log at all (BUG-015). `JOURNAL_STREAM` is inherited: it survives
+/// every fork/exec down the tree, including into a child whose stderr the parent has redirected
+/// somewhere else entirely — which is exactly the desktop case, where the client is started by the
+/// graphical session and points the daemon's stderr at `/dev/null`. Presence therefore means "some
+/// ancestor's stderr went to the journal", and choosing journald on it means discarding every line.
+///
+/// systemd specifies the check instead of the detection: the value is `device:inode` of the stream,
+/// and `sd_journal_stream_fd(3)` says applications "may check whether their standard output or
+/// standard error output match this value". So compare it against `fstat(2)` of the descriptor in
+/// hand, which is what distinguishes the two cases.
+///
+/// Linux-only because systemd is. Everywhere else there is no journal to be, and this is `false`.
+#[cfg(target_os = "linux")]
+fn stderr_is_journal_stream() -> bool {
+    use std::os::fd::AsRawFd;
+    std::env::var_os("JOURNAL_STREAM")
+        .is_some_and(|value| names_this_stream(&value, io::stderr().as_raw_fd()))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn stderr_is_journal_stream() -> bool {
+    false
+}
+
+/// Does `value` — a `JOURNAL_STREAM` value, `device:inode` in decimal — name the stream `fd` is
+/// open on? A value we cannot parse is not a match; the fallback is a log we can read.
+#[cfg(target_os = "linux")]
+fn names_this_stream(value: &std::ffi::OsStr, fd: std::os::fd::RawFd) -> bool {
+    let Some((dev, ino)) = value.to_str().and_then(|s| s.split_once(':')) else {
+        return false;
+    };
+    let (Ok(dev), Ok(ino)) = (dev.parse::<u64>(), ino.parse::<u64>()) else {
+        return false;
+    };
+    let mut stat = std::mem::MaybeUninit::<libc::stat>::uninit();
+    // SAFETY: `fstat` writes a `struct stat` through the pointer we own and touches nothing else.
+    // `fd` is only read for the duration of the call, and a bad one is reported as -1, not UB.
+    if unsafe { libc::fstat(fd, stat.as_mut_ptr()) } != 0 {
+        return false;
+    }
+    // SAFETY: `fstat` returned 0, so it initialised the struct.
+    let stat = unsafe { stat.assume_init() };
+    stat.st_dev == dev && stat.st_ino == ino
+}
+
 /// The conventional log file location, beside the other per-user daemon state.
+///
+/// `data_local_dir`, not `data_dir`, and the difference only shows on Windows, where the latter is
+/// the **roaming** profile: R2.3 requires that logs never sync to a roaming profile, and until
+/// 2026-08-27 they did (BUG-015). On Linux and macOS the two are the same directory, which is what
+/// makes this a one-word fix rather than a move — and the directory has to stay put, because the
+/// sandbox (feature 027) mounts it into the container as the daemon's whole state directory. That
+/// mount is why the log is here and not under `state_dir()` as R2.3 first specified; R2.3 now
+/// records the implemented location.
 pub fn default_log_path() -> Option<PathBuf> {
     directories::ProjectDirs::from("", "", "micold-ai-ide")
-        .map(|dirs| dirs.data_dir().join("micold-daemon.log"))
+        .map(|dirs| dirs.data_local_dir().join("micold-daemon.log"))
 }
 
 fn base_filter() -> EnvFilter {
@@ -202,7 +258,7 @@ pub fn init() -> io::Result<Logging> {
 
     // systemd sets JOURNAL_STREAM on units whose stdout/stderr go to the journal; the journal
     // supplies timestamps and metadata, so ours would be redundant noise.
-    if std::env::var_os("JOURNAL_STREAM").is_some() {
+    if stderr_is_journal_stream() {
         let layer = fmt::layer()
             .with_ansi(false)
             .without_time()
@@ -307,6 +363,88 @@ fn owner_only_open_options() -> Option<std::fs::OpenOptions> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "linux")]
+    use std::os::unix::fs::MetadataExt;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn an_inherited_journal_stream_is_not_our_own() {
+        use std::os::fd::AsRawFd;
+        // A real stream, named the way systemd names one, that simply is not the one we hold. This
+        // is the desktop case in miniature: the variable came down the tree, our fd 2 did not.
+        let dir = tempfile::tempdir().unwrap();
+        let other = dir.path().join("someone-elses-stream");
+        std::fs::write(&other, b"").unwrap();
+        let meta = std::fs::metadata(&other).unwrap();
+        let value = std::ffi::OsString::from(format!("{}:{}", meta.dev(), meta.ino()));
+        assert!(!names_this_stream(&value, io::stderr().as_raw_fd()));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_stream_we_are_actually_holding_is_recognised() {
+        use std::os::fd::AsRawFd;
+        // The half a blanket `false` would also satisfy. Under a systemd user unit fd 2 *is* the
+        // named stream, and answering "no" there would double every line into a file nobody reads.
+        let fd = io::stderr().as_raw_fd();
+        let mut stat = std::mem::MaybeUninit::<libc::stat>::uninit();
+        // SAFETY: same contract as `names_this_stream`'s own call.
+        assert_eq!(unsafe { libc::fstat(fd, stat.as_mut_ptr()) }, 0);
+        // SAFETY: `fstat` returned 0.
+        let stat = unsafe { stat.assume_init() };
+        let value = std::ffi::OsString::from(format!("{}:{}", stat.st_dev, stat.st_ino));
+        assert!(names_this_stream(&value, fd));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_device_half_of_the_comparison_is_not_optional() {
+        use std::os::fd::AsRawFd;
+        // Our own inode number, on a device that is not ours. Inode numbers are only unique within a
+        // filesystem, so comparing the inode alone would call this a match — and a probe that
+        // dropped `st_dev` passed every other gate in this file.
+        let fd = io::stderr().as_raw_fd();
+        let mut stat = std::mem::MaybeUninit::<libc::stat>::uninit();
+        // SAFETY: same contract as `names_this_stream`'s own call.
+        assert_eq!(unsafe { libc::fstat(fd, stat.as_mut_ptr()) }, 0);
+        // SAFETY: `fstat` returned 0.
+        let stat = unsafe { stat.assume_init() };
+        let value = std::ffi::OsString::from(format!("{}:{}", stat.st_dev + 1, stat.st_ino));
+        assert!(
+            !names_this_stream(&value, fd),
+            "the device must be compared too"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn the_log_never_lands_in_the_roaming_profile() {
+        // R2.3: logs must never sync to a roaming profile. `data_dir()` on Windows *is* the roaming
+        // one, and this is the only platform where it differs from `data_local_dir()` — so this is
+        // the only place the rule can be checked, and it runs in the Windows CI job (BUG-015).
+        let Ok(local) = std::env::var("LOCALAPPDATA") else {
+            return;
+        };
+        let path = default_log_path().expect("a log path on Windows");
+        let path = path.to_string_lossy().to_lowercase();
+        assert!(
+            path.starts_with(&local.to_lowercase()),
+            "the log must live under %LOCALAPPDATA%, got {path}"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_value_we_cannot_read_is_not_a_match() {
+        use std::os::fd::AsRawFd;
+        // Not a match, rather than an error or a panic: the fallback is a log we can read, so an
+        // unparseable value costs nothing, and systemd is free to change the format.
+        let fd = io::stderr().as_raw_fd();
+        for bad in ["", "8", "8:", ":12", "eight:twelve", "8:12:16"] {
+            let value = std::ffi::OsString::from(bad);
+            assert!(!names_this_stream(&value, fd), "{bad:?} must not match");
+        }
+    }
 
     #[test]
     fn total_disk_use_is_hard_capped() {

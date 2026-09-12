@@ -3,6 +3,7 @@
 //! navigation, and lets the user open the current folder as a project.
 
 use crate::app::{Message, State};
+use crate::features::project::Msg as ProjectMsg;
 use crate::icons::{icon_role, Icon, IconSurface};
 use crate::ui::material::{
     self, Button, ButtonVariant, IconLabel, Scrollable, SurfaceKind, Text, TypeRole,
@@ -24,7 +25,7 @@ pub fn modal<'a>(selector: &'a Selector, scheme: ColorScheme) -> Element<'a, Mes
     let header = row![
         Button::outlined("Up", r)
             .leading(Icon::NavigateUp)
-            .on_press(Message::SelectorNavigatedUp),
+            .on_press(Message::Project(ProjectMsg::SelectorNavigatedUp)),
         Text::new(
             selector.current_dir.display().to_string(),
             TypeRole::Caption,
@@ -64,7 +65,9 @@ pub fn modal<'a>(selector: &'a Selector, scheme: ColorScheme) -> Element<'a, Mes
                     }
                     list = list.push(
                         Button::with_content(label, ButtonVariant::Text, r)
-                            .on_press(Message::SelectorNavigatedInto(entry.path.clone()))
+                            .on_press(Message::Project(ProjectMsg::SelectorNavigatedInto(
+                                entry.path.clone(),
+                            )))
                             .width(Length::Fill),
                     );
                 }
@@ -76,8 +79,10 @@ pub fn modal<'a>(selector: &'a Selector, scheme: ColorScheme) -> Element<'a, Mes
     let actions = row![
         Button::filled("Open this folder", r)
             .leading(Icon::OpenProject)
-            .on_press(Message::FolderChosen(selector.current_dir.clone())),
-        Button::outlined("Cancel", r).on_press(Message::ProjectSelectorClosed),
+            .on_press(Message::Project(ProjectMsg::FolderChosen(
+                selector.current_dir.clone()
+            ))),
+        Button::outlined("Cancel", r).on_press(Message::Project(ProjectMsg::SelectorClosed)),
     ]
     .spacing(spacing::SM);
 
@@ -112,6 +117,7 @@ pub fn dialog<'a>(
     _env_include_outcome: &'a EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
     state
+        .project
         .selector
         .as_ref()
         .map(|selector| modal(selector, scheme))

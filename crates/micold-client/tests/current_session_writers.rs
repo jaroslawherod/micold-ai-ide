@@ -14,7 +14,7 @@
 //!
 //! # The one exemption
 //!
-//! `Message::SessionSelected` writes the field directly. The user clicked a row they could already
+//! `Message::Session(SessionMsg::Selected)` writes the field directly. The user clicked a row they could already
 //! see, so revealing it would open nothing they had not opened and scroll a list they were reading
 //! (FR-006). It is named here rather than inferred, so adding a second exemption is a deliberate
 //! edit to this file.
@@ -70,13 +70,13 @@ fn production_only(text: &str) -> String {
     }
 }
 
-/// A line assigning to `active_session` — `self.active_session = …` or `core.active_session = …`.
+/// A line assigning to `active_session` — `self.session.active = …` or `core.session.active = …`.
 ///
 /// Comparisons (`==`, `!=`) and reads are not writes, so the check is for a single `=` that is not
 /// part of one. Deliberately textual: the alternative is a full parse, and a writer this check
 /// cannot see is a writer a reviewer would not see either.
 fn is_a_write(line: &str) -> bool {
-    let Some(rest) = line.split_once(".active_session") else {
+    let Some(rest) = line.split_once(".session.active") else {
         return false;
     };
     let after = rest.1.trim_start();

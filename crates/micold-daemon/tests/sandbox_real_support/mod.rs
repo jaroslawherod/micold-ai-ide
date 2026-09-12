@@ -286,7 +286,8 @@ pub struct SandboxSpec<'a> {
     pub project: &'a Path,
     pub token_path: &'a Path,
     /// The daemon's `HOME`, and so the session's. Passing the **host** home is what `argv::create`
-    /// does, and it is what makes "`ls ~` shows nothing" worth asserting at all.
+    /// does, and it is what makes "`ls ~` shows nothing" worth asserting at all. The directory
+    /// actually mounted there is the application's own (FR-004d), never the host's.
     pub home: &'a str,
     /// The session-survival opt-in, which selects the container's restart policy — the whole of
     /// the mechanism behind FR-014a. Off in every probe but the one that is about it: a container
@@ -368,6 +369,16 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
         spec.data_home.join("micold-ai-ide").display()
     );
     let token_mount = format!("{}:/run/micold/token:ro", spec.token_path.display());
+    // The sandbox's own writable home, at the path `HOME` names (FR-004d). Created here rather than
+    // left to the runtime, which would create a missing bind source owned by **root** — leaving the
+    // uid the container runs as unable to write to its own home, which is the defect this mount
+    // exists to fix arriving by another route.
+    let home_dir = spec
+        .data_home
+        .join("micold-ai-ide")
+        .join(micold_core::sandbox::SANDBOX_HOME_DIR);
+    std::fs::create_dir_all(&home_dir).unwrap();
+    let home_mount = format!("{}:{}:rw", home_dir.display(), spec.home);
 
     let mut args: Vec<String> = [
         "create",
@@ -390,6 +401,10 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
         // probe's output must not depend on whose login files the host happens to have.
         "-e",
         "SHELL=/bin/sh",
+        // Home first, for the reason `argv::mount_args` gives: the project usually lives *under*
+        // the user's home, so it has to land on top of this mount rather than under it.
+        "-v",
+        &home_mount,
         "-v",
         &project_mount,
         "-v",

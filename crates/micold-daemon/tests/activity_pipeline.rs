@@ -425,7 +425,13 @@ fn an_event_log_append_pushes_the_new_badge_to_connected_clients() {
         AiCli::Copilot,
     )));
     let session = register_cat(&state, id);
-    let (_client, mut rx) = state.register("test".to_string());
+    let (_client, mut rx) = state.register(micold_core::protocol::messages::ClientIdentity::new(
+        "test",
+        micold_core::protocol::messages::ClientInstance {
+            pid: 0,
+            nonce: "test".into(),
+        },
+    ));
     state.open_event_log_tail(id);
 
     let append = |line: &str| {

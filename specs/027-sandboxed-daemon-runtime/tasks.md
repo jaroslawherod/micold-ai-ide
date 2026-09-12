@@ -186,6 +186,12 @@ check both themes at the supported window sizes.
 - [X] T068 [P] [US3] Move the terminal settings into `crates/micold-client/src/ui/settings/terminal.rs`
 - [X] T069 [P] [US3] Move the environment-include settings into `crates/micold-client/src/ui/settings/environment.rs`
 - [X] T070 [US3] Build the daemon section in `crates/micold-client/src/ui/settings/daemon.rs` — placement, runtime, image, and the sandbox controls promoted out of T042's temporary home (FR-027)
+      — ⚠️ **Scope note (BUG-003)**: this built the control that sets the placement; nothing was
+      ever written that made the value act. FR-032 and FR-033 are absent from this task's
+      requirement list because `data-model.md` §7 had claimed them for `SandboxState`, so the
+      section saves the choice and the daemon never moves. **Not reopened** — the control is
+      correct against FR-027, and the missing work is work that was never scheduled, not work that
+      drifted. It is Phase 17.
 - [X] T071 [US3] Grow `SettingsDraft` to hold per-section drafts with validation beside the type in `crates/micold-client/src/features/settings.rs` (US3 scenarios 2 and 3)
 - [X] T072 [US3] Render each active credential opt-in individually while it is active, in `crates/micold-client/src/ui/settings/daemon.rs` (FR-004c, N-2)
 - [X] T073 [US3] Route the view into the shell and remove `crates/micold-client/src/ui/settings_form.rs`'s modal, updating `crates/micold-client/src/ui/mod.rs`'s `view` signature
@@ -444,6 +450,37 @@ does a session start unsandboxed without an explicit choice.
 
 ---
 
+## Phase 10: Bugfix BUG-001 — Save reverts a theme chosen from the app bar
+
+**Goal**: Stop the Settings view undoing a choice the user made outside it and can see applied. The
+T075 visual pass observed this twice and recorded it as out of scope; it is not — the two writers on
+the theme were harmless while Settings was a modal covering the app bar, and FR-026 is what put them
+both on screen at once.
+
+### Tests for BUG-001 (MANDATORY — Constitution Principle I) ⚠️
+
+- [x] T121 [BUG-001] `crates/micold-client/tests/settings_draft_tracks_the_live_theme.rs`: four
+      rules over the reducer — the cycle, the outright pick, that an Appearance edit is *still* only
+      a draft, and that the menu works with no form open. The middle two are the ones that make this
+      a gate rather than a patch: a fix applied to `ThemeModeCycled` alone leaves
+      `ThemePreferenceChanged` reachable, and "fixing" it by applying the theme live would leave
+      Cancel nothing to discard. The first two were confirmed red against the unfixed reducer.
+
+### Implementation for BUG-001
+
+- [x] T122 [BUG-001] `features/settings.rs::apply_theme`, called by both app-bar entry points: set
+      `theme_pref`, and carry it into `settings_draft.appearance.theme` when a form is open. A
+      change made outside the form is newer than the draft, so the draft takes it. Deliberately not
+      via `edit()` — that clears `draft.error`, and a theme picked from the app bar is not the user
+      acting on the form, so clearing it would empty the message FR-029 sends them to read.
+
+**Bugfix**: 2026-08-27 — BUG-001. **No requirement added**: FR-020's save semantics and FR-026's
+full-surface view are each correct; the defect is in their interaction, which neither had to state.
+**No task reopened**: T065 renders the Appearance section as specified, and the staleness is on the
+seeding side. See `bugs/BUG-001.md`.
+
+---
+
 ## Dependencies
 
 ```text
@@ -465,6 +502,492 @@ shippable before US3 lands, and T070 retires it.
 
 **Cross-story ordering that is not a dependency.** US5's podman dialect is written against the same
 conformance suite as Docker's, so it can begin as soon as T037 exists, not when Phase 3 ends.
+
+## Phase 11: FR-023a and FR-004d — the image ships the AI CLIs, and `~` is writable
+
+**Goal**: Make "a sandboxed session can run the AI CLI the user picked" true rather than assumed.
+FR-023 has always said the image carries "the tooling a session needs"; the published image carried
+none of the AI CLIs, and the 22 green real-runtime probes could not see it because every one of them
+drives a shell. Shipping them then exposed a second defect underneath: `HOME` pointed at a path that
+does not exist inside the container, so the first thing an AI CLI does — write to `~` — failed.
+
+**Why the two are one phase.** Neither is shippable alone. The image without the home fix ships a
+`copilot` that dies on `EACCES: mkdir '/home/<user>'` at startup; the home fix without the image
+fixes a home nothing was using.
+
+### Tests (MANDATORY — Constitution Principle I) ⚠️
+
+- [x] T123 [US1] `crates/micold-daemon/tests/sandbox_real_ai_cli.rs`: for every `AiCli::ALL`
+      variant, its command is on `PATH` inside a real sandbox **and runs** (`--version` exits 0).
+      Driven from `AiCli::ALL` rather than a written-out list, so a third provider added to the
+      application fails this until the image ships it. Confirmed red twice: first with both CLIs
+      missing, then — after the image shipped them — with `[("copilot", "rc=1")]`, which is the
+      defect T125 fixes. Locating a binary is not enough here: `claude` tolerated the broken home
+      and `copilot` did not, so a `command -v` check would have passed while a session failed.
+- [x] T124 [US1] `crates/micold-daemon/tests/sandbox_real_boundary.rs`: `~` is writable, what lands
+      there appears in the application's own directory, and it does **not** appear in the user's
+      home. The file's existing probes all pass with *no* home at all — a `HOME` pointing nowhere
+      lists nothing either — so the write is what distinguishes a shadowed home from a missing one.
+
+### Implementation
+
+- [x] T125 [US1] `sandbox/mod.rs`: `HomeMount`, a fifth member of `MountSet`, mounting
+      `<state>/sandbox-home` at the host home path; `argv::mount_args` emits it first, since a
+      project under the user's home has to land on top of it. Declared in the set rather than
+      emitted by `argv` because obligation C-3 is that `argv` invents no mount — an implicit home
+      mount is exactly the convenience C-3 forbids, and an explicit one keeps the rule literally
+      true. `shell/sandbox.rs` creates the directory before `create`: a bind source the runtime has
+      to create, it creates as root.
+- [x] T126 [US1] `packaging/sandbox/Containerfile`: base `node:22-trixie-slim` and pinned
+      `@anthropic-ai/claude-code` and `@github/copilot`. Both constraints on that tag are load
+      bearing and recorded in the file — trixie for glibc, 22 because claude-code declares
+      `engines: node >=22.0.0` and trixie ships Node 20.
+- [x] T127 [US1] `sandbox_argv.rs`, `sandbox_credentials.rs`, `argv.rs`'s K-4 check: the mount-count
+      assertions move by one, and the home is excluded from `mapped_volumes` — it is a
+      *substitution*, not a mapping, so its two halves are supposed to differ on every platform.
+      The credentials test gains the assertion that keeps the two apart: the container half is the
+      user's home path and the host half is never it.
+
+**Not in this phase**: FR-023b and FR-023c. Reporting a missing CLI where the image is chosen, and
+answering availability from inside the sandbox instead of from the client's own `PATH`
+(`provider.rs::resolves_on_path`), are a settings-surface change with their own tests.
+
+**Requirement added**: FR-004d, and FR-023 split into FR-023a/b/c with SC-012. FR-023 said the image
+carries what a session needs without saying who owns that when the user substitutes an image, and
+nothing said the sandbox has a home of its own — which is why an image that satisfied FR-023 on
+paper still could not run the CLI it shipped.
+
+## Phase 12: FR-026b–e and FR-014d — the rail becomes a navigation rail, and the menu stops duplicating it
+
+**Goal**: every section identified by an icon as well as a name; the rail collapsible to those icons
+and still fully navigable; and no setting offered by two controls, with nothing lost when the
+duplicates go.
+
+**Why now**: FR-026 made Settings a full surface that no longer covers the app bar, which turned two
+long-harmless duplicates into two live writers of one value — that is BUG-001's whole mechanism. The
+rail's fixed width is the other half of the same surface: it was introduced to make Settings roomy
+and is the one part of it that cannot be given back.
+
+### Tests first
+
+- [x] T128 [US3] *(test)* every `SettingsSection` carries an icon, and no two share one (FR-026b).
+      Written against `SettingsSection::icon` rather than against the rendered rail, because the rail
+      is one presentation of the section and a second one must not be able to invent its own icons.
+      **Landed in `tests/settings_rail.rs`, not `settings_sections.rs`**: the icons and the collapse
+      are one claim — icons exist *so that* collapsing keeps the sections distinguishable — and
+      `settings_sections.rs` is a source-scanning gate about which section owns which setting.
+- [x] T129 [US3] *(test)* `ui/material/section_list.rs` unit tests: the collapsed rail's width is
+      the Material navigation-rail width and is stable across which section is current and whether a
+      badge is shown — the same claims the expanded gates already make, now made per state (FR-026c).
+      "One pressable node per section and no label text" is asserted through `row_parts`, a pure
+      description of what a row is built from, rather than by walking the widget tree: the tree can
+      only be asked where things are, and what had to be shown is that collapsing costs no
+      *information* — the glyph stays, the badge stays in the one form there is room for, and only
+      the name goes.
+- [x] T130 [US3] *(test)* `crates/micold-client/tests/settings_rail.rs`: reaching every section
+      while collapsed; the toggle flips the flag; the flag survives closing and reopening Settings
+      within the session; Cancel does not revert it, Save does not write it, and closing the rail is
+      not an edit to the form (FR-026c, FR-026d). One file with T128 — see there.
+- [x] T131 [US3] *(test)* `crates/micold-client/tests/settings_sections.rs`: no message the app
+      bar's overflow menu emits is one a settings section owns (FR-026e, SC-014), plus a gate that
+      `logout_survival::enable_for` still has a caller, so removing the menu item cannot quietly
+      remove the host-process capability. A **source scan** of `overflow_items` rather than a call
+      to it: `ui/mod.rs` declares `mod toolbar;` privately, and widening the crate's public API to
+      let a test look at a menu would be a worse trade than reading the file the gate is about — the
+      same trade `settings_sections.rs` already makes for the sections themselves.
+- [x] T132 [US3] *(test)* saving resolves the survival opt-in through the *configured* placement —
+      the service-manager flow under host-process, the restart policy under sandboxed — and says so
+      where the placement cannot offer it (FR-014d, SC-014). **Not in `features_settings.rs`**: the
+      save path is `shell/persist.rs`, which lives in the GUI binary and no integration test can
+      reach, so the gates are inline `#[cfg(test)]` modules beside the code they are about —
+      `survival_step` in `persist.rs` (act on a change, and only on a change, in both directions),
+      `survival_support` in `ui/settings/daemon.rs` (every placement says what it will do), and
+      `enable_for`/`disable_for` in `micold-core` (the dispatch itself).
+
+### Implementation
+
+- [x] T133 [US3] `features/settings.rs`: `SettingsSection::icon`, beside `label` and `index`;
+      `ui/material/section_list.rs`'s `Section` gains an icon and renders it in the leading slot
+      `Button` already has. Icons from the existing `Icon` set — Principle VIII, and FR-026b says so
+      explicitly because a settings-only icon set is the obvious shortcut here.
+- [x] T134 [US3] `ui/material/section_list.rs`: the collapsed rendering, plus the affordance that
+      toggles it. In the shared component rather than in the view, because FR-026a forbids a private
+      rail and a collapsed rail built in `settings_view.rs` would be exactly that. The control is
+      drawn *below* the destinations: it is not one of the places the user navigates to, and putting
+      it first would make the top-left glyph — where the eye starts — the one that goes nowhere.
+      Landed with the showcase entry made live in both widths (`showcase/sections/surfaces.rs`,
+      `showcase/state.rs`): Principle VIII wants the state on the page, and a second *posed* rail
+      would show a picture of a collapsed rail without showing the one claim it makes — that every
+      destination is still pressable once the labels are gone.
+- [x] T135 [US3] `app.rs`/`ui/settings_view.rs`: `settings_rail_collapsed` on `State` beside
+      `settings_section`, a message that toggles it, and the rail rendered in the state it names.
+      Not in `SettingsDraft` and not in `settings.json`: FR-026d makes it view state, which is what
+      keeps it out of the save-together rule and off the schema.
+- [x] T136 [US3] `ui/toolbar.rs`: drop the theme cycle and "Keep sessions after logout"; keep open
+      Settings, diagnostics and About. `Message::ThemeModeCycled` and `mode_icon` went with the
+      first, `Message::LogoutSurvivalRequested` with the second, and `ui/settings/appearance.rs`'s
+      note and module doc — which argued for keeping the toolbar shortcut — are rewritten to say why
+      it went. The BUG-001 fix stays. `Message::ThemePreferenceChanged` is **kept without a
+      producer**, deliberately: it is the reducer's contract for a live theme change, and it is that
+      rule — apply it, and carry it into an open draft — that a second writer would have to obey the
+      day one is added again. Deleting it would delete the rule with it. The BUG-001 gate now drives
+      that message.
+- [x] T137 [US3] `shell/persist.rs`/`shell/service_control.rs`: saving the form applies the
+      survival opt-in through `logout_survival::enable_for` with the resolved placement — the caller
+      that function was written for and had never had. This is what makes removing the menu item
+      safe: without it, dropping the item drops the host-process capability with it.
+
+      Two things the plan did not name, both required by FR-014d's "rather than being absent or
+      silently ineffective". **`disable_for`**, new in `micold-core`: the menu command could only
+      ever enable, so until now unticking the box wrote `false` to a file and left the socket unit
+      enabled — the sessions went on surviving. It disables and stops the unit, and deliberately
+      does **not** run `loginctl disable-linger`, which is a per-user switch other services may rely
+      on and which this application did not create exclusively. And **`survival_support`** in the
+      section: the checkbox now says what the configured placement will actually do with it, and
+      warns where the host-process mechanism is unavailable instead of sitting there inert.
+
+**Not in this phase**: FR-023b and FR-023c, still. They are a settings-surface change and this phase
+is a settings-surface phase, but they are about *the image* and are gated on asking the container
+what it has rather than asking the client's `PATH` — a protocol question, not a layout one. Phase 13
+is that question.
+
+**Requirements added**: FR-026b, FR-026c, FR-026d, FR-026e, FR-014d, SC-013, SC-014.
+
+## Phase 13: FR-023b and FR-023c — the answer comes from where sessions run, and the missing one is named
+
+**Goal**: stop the client answering "which AI CLIs exist" from its own `PATH`, and say — at the two
+points of choice, and only there — which CLI the running sandbox does not provide.
+
+**Why now**: Phase 11 made the published image ship every AI CLI (FR-023a). That is the whole of the
+guarantee for a user on the default image, and it is worth nothing to a user who substituted one —
+FR-025 says they may, FR-023b says the obligation goes with the image, and nothing in this
+application can make a stranger's image keep it. What is left to do is the only honest thing: find
+out, and say so.
+
+**The defect underneath, which is not a UI defect.** `Capabilities::available_providers()` walked
+*this process's* `PATH`. That was correct while the session service was always a child of this
+process, and FR-021 ended that: the client is on the host, the sessions are in a container, and the
+same four lines went on answering confidently about the wrong machine. It does not crash, and it
+does not look wrong on any machine a developer would test it on — a workstation has both CLIs
+installed, so the host's answer and the container's agree everywhere except on the user's machine.
+That is why the fix is a protocol pair and a gate, not a better probe.
+
+### Tests first
+
+- [x] T138 [US3] *(test)* `crates/micold-core/tests/available_here.rs`: the probe over a scratch
+      `PATH` — nothing installed offers nothing, one installed offers exactly that one, uninstalling
+      shrinks the offer, and the order is `AiCli::ALL`'s rather than `PATH`'s. **Moved, not
+      written**: this suite was `shell/capabilities.rs`'s inline module and its assertions are
+      unchanged, because what they assert never depended on who was asking. FR-023c moved the
+      question into `micold-core`, so its test came with it.
+- [x] T139 [US3] *(test)* `crates/micold-daemon/tests/ai_cli_availability.rs`: over a real duplex
+      connection, `AiCliAvailabilityRequest` is answered from the **service's own** environment —
+      a stubbed `claude` on a scratch `PATH` comes back as exactly `[ClaudeCode]`, and an
+      environment with no CLI at all comes back as an empty set rather than as a failure. The two
+      together are what pin the answer to the process that ran it: either alone is satisfied by a
+      constant.
+- [x] T140 [US3] *(test)* `crates/micold-client/tests/cli_availability_comes_from_the_service.rs`:
+      no client source calls `available_here` or `provider().is_available()`, **and** the shell is
+      still seen issuing the request, handling the reply, and writing the field. Both halves,
+      because a scan for an absence passes trivially once the feature is deleted rather than moved.
+      Seen to fail: reintroducing a one-line probe into `features/session.rs` reports
+      "``features/session.rs`` calls ``provider().is_available()…)``".
+- [x] T141 [US3] *(test)*
+      `crates/micold-client/tests/missing_cli_is_reported_where_it_is_chosen.rs`: the notice names
+      the CLI, the image, and the obligation; says nothing before the service has answered; says
+      nothing when everything is present; names every CLI when the image provides none; and under
+      the host placement names no image at all. Asserted by parts rather than verbatim — the parts
+      are exactly what FR-023b enumerates, so an assertion that loses one is a requirement that
+      stopped being met.
+
+### Implementation
+
+- [x] T142 [US3] `micold-core`: `provider::available_here()`, and the `AiCliAvailabilityRequest` /
+      `AiCliAvailability` pair in `protocol/messages.rs`. The reply carries the set and **only** the
+      set — not the image, not whether it is containerised at all. The client started the service
+      and holds both already, and a second copy of a fact one side owns is a second thing that can
+      disagree.
+- [x] T143 [US3] `micold-daemon/src/server.rs`: answer the request from `available_here()`. Four
+      lines, and the whole of FR-023c: the process that will spawn the CLI is the process that says
+      whether it is there.
+- [X] ⚠️ **Was reopened (BUG-002), closed again** T144 [US3] `micold-client`: delete `Capabilities::available_providers()`; change
+      `State::available_providers` to `Option<CliAvailability>`; ask on connect and on the two named
+      events research R11 already required (Settings opening, the override menu opening); fill the
+      field from the reply, **stamping it** with what it describes as it arrives. The stamp is read
+      from the sandbox's own state rather than the configured placement, because those come apart in
+      the one case that matters — after FR-035a's "run without it for now" the placement still says
+      the user wanted a container and the thing answering is a host process.
+      **Reopened 2026-08-28 (BUG-002)**: three of the four halves landed. The connect-time ask did
+      not — `on_connected` calls `ask_cli_availability` above the line that installs the outbox, so
+      the call takes its own disconnected early-return every time and no request goes out. Closed
+      again 2026-08-28 by T157/T158.
+- [x] T145 [US3] `features/settings.rs::missing_cli_notice`, rendered in `ui/settings/environment.rs`
+      under the CLI picker and in `ui/settings/daemon.rs` under the image reference — FR-023b's two
+      points of choice, and not session start. It names the image the service was **started from**,
+      never the one in the draft field: the field may say something the running container has never
+      heard of, and naming it would describe a machine that does not exist yet. Muted, not a
+      caution: an image with one AI CLI may be exactly what its author intended, and a red warning
+      on every visit is a nag rather than an answer.
+
+- [x] T146 [US3] quickstart §B.6, last box: look at the notice in place. The wording is already
+      gated on painted strings; what a test cannot settle is whether a muted line under a select
+      reads as an answer about the image or as something gone wrong, in both schemes. Record it in
+      `evidence/us3-settings-view.md` with the rest of the §B.6 pass. It found one: the notice sat
+      in the column of the control *below* it. Fixed with a shared `field_note`, gated by
+      `a_field_note_shares_its_fields_column.rs`, which fails on the old geometry.
+
+**Requirements closed**: FR-023b, FR-023c. With them the feature has no unimplemented requirement
+left. T146 closed the last §B box with it.
+
+---
+
+## Phase 14: the real-runtime job was testing half the feature
+
+**Goal**: Make the claims the sandbox exists for re-check themselves, rather than resting on one
+manual pass. T006 asked for a job "running the `sandbox_real_*` tests"; what it delivered runs
+`-p micold-core`, and the other eleven live in `micold-daemon`.
+
+The eleven are not the remainder — they are the headline. `micold-core`'s twelve cover the adapter:
+argv a real runtime accepts, the isolation it produces, egress, storage, lifecycle. `micold-daemon`'s
+cover what that isolation is *for*, and every one of them is a user story's own claim: the boundary
+probed from **inside a session the daemon spawned** (US1, quickstart §B.2), a sandboxed terminal
+answering exactly as an unsandboxed one (US2, §B.3), a limit stopping the session and not the
+service (US4), the image carrying every AI CLI the application offers (FR-023a), the fingerprint
+refusal (FR-024d), and sessions surviving a client restart with the survival opt-in bringing the
+sandbox back unasked (FR-014a/b/c).
+
+They ran on no machine at all. Not skipped, not disabled — never built, because cargo was never
+asked for that crate's targets, and a package nobody names produces no output to notice. The one
+run they have had is T120's, by hand, on 2026-08-26. Meanwhile §B.2 says in writing that its boxes
+"re-check themselves on every `sandbox-runtime` CI run", which was false the day it was written.
+This is the same shape as the assertion gate's own untested cases, recorded in `ci.yml`: *"They
+existed and nothing ran them."*
+
+- [x] T147 `.github/workflows/ci.yml`: a second step in `sandbox-runtime`, `cargo test --release -p
+      micold-daemon --features sandbox-real-runtime sandbox_real_ --no-fail-fast --
+      --test-threads=1`. `--release` is required rather than preferred — the daemon inside the image
+      is release-built, `sandbox_real_session_start` compares it against `CARGO_BIN_EXE_micold-daemon`,
+      and a debug host daemon against a release containerised one flatters the container, which is
+      the wrong direction for a claim of the form "the sandbox is not much slower". The test refuses
+      to report a number when the profiles disagree, refusing is a failure, and without
+      `--no-fail-fast` cargo stops at that target and skips every one after it in silence —
+      `sandbox_real_staleness` included. That is T120's lesson, which until now was written down in
+      a task and enforced nowhere.
+- [x] T148 `mise.toml`: `mise run test-sandbox`, both crates in the one invocation that reports the
+      truth, refusing early when the runtime or `micold-daemon:dev` is missing. Every way of
+      getting this invocation wrong is silent and reports success — naming one crate, dropping
+      `--release`, dropping `--no-fail-fast`, dropping `--test-threads=1`, or expecting
+      `sandbox_real_` to match file names rather than test names. A one-command form is what stops
+      the next pass from rediscovering that list.
+- [x] T149 Run all 23 against a real runtime on the branch that adds the job, so the job is landed
+      green rather than hopefully: `evidence/real-runtime-ci-coverage.md`.
+
+**Requirements closed**: none new. What closes here is a gap between what the feature claims to
+verify continuously and what it verified continuously — which is the sort of gap that is only ever
+found by counting.
+
+## Phase 15: nothing published the image FR-024 requires
+
+**Goal**: Make the reference the application ships with resolve to something. FR-024 says the
+default image "MUST be published and versioned with the application release and acquired
+automatically, so a first run requires no manual image preparation." Through 0.11.0 none of that
+was true: `release.yml` built `.deb`s and nothing else, and `DEFAULT_IMAGE` named
+`ghcr.io/micold/micold-daemon:<version>` — a namespace this repository does not own, in which
+nothing had ever been pushed.
+
+This is the one requirement in the feature with no implementation behind it, and every property
+that would normally expose that was pointing the other way. The sandbox is opt-in, so no default
+path touches it. The image's *own* tests build `micold-daemon:dev` locally, so the whole
+real-runtime suite — all 23 of Phase 14's tests — passes without a registry existing. T117's
+performance evidence even wrote the symptom down, that "the route that would (a registry pull) has
+nothing published to pull", and read it as a measurement caveat rather than as a missing feature.
+What a first-time user would actually have met is a `denied`, on the one path FR-024 exists to make
+automatic.
+
+- [x] T150 `crates/micold-core/src/sandbox/image.rs`: point `DEFAULT_IMAGE` at
+      `ghcr.io/jaroslawherod/micold-daemon`, this repository's own GHCR namespace, and split the
+      repository out into `DEFAULT_IMAGE_REPOSITORY` so the release workflow has one string to
+      check itself against. A unit test binds the two together — the split is only worth anything
+      while the reference the app resolves is built from the same value the workflow greps for.
+- [x] T151 `.github/workflows/release.yml`: an `image` job per architecture (amd64 on
+      `ubuntu-22.04`, arm64 on `ubuntu-22.04-arm`) that builds the daemon natively, builds the
+      image, and pushes `:<version>-<arch>`; then `image-manifest` composing the multi-architecture
+      `:<version>` the client actually asks for. Three guards run before anything is built, because
+      each failure they catch produces a *successful* release that no user can pull from: the tag
+      must carry the expected prefix, `[workspace.package] version` must equal the tag's version,
+      and `image.rs` must name the namespace this job is about to push to.
+- [x] T152 The same two runtime checks the local `mise run image` does, now on the release path and
+      per architecture: the daemon must *execute* inside the image (a build only proves the file
+      was copied — glibc is what decides whether it runs, and the failure surfaces at a user's
+      first session, not here), and both AI CLIs must be on `PATH` (FR-023a). Per-architecture
+      rather than once, because an npm package with native components is precisely the thing that
+      is present on amd64 and absent on arm64.
+- [x] T153 `publish` waits for `image-manifest`. A GitHub release is immutable once published, so a
+      published release whose version names an unpullable image is permanent; a draft one is a
+      re-run. This orders the failure the recoverable way round.
+- [x] T154 `packaging/sandbox/Containerfile`: `org.opencontainers.image.source` and friends, so
+      GHCR attaches the package to this repository instead of leaving it loose under the account.
+      The URL is the real remote and deliberately not `[workspace.package] repository`, which still
+      names an older home — following the manifest here would break the link silently.
+- [x] T155 Docs: `packaging/sandbox/README.md` (publishing is the release's job),
+      `docs/user-guide/sandboxed-daemon.md` and the settings-schema contract moved off the namespace
+      that never existed. `evidence/image-publishing.md` records what was verified before the first
+      release ran it, and then what that release did.
+- [x] T156 Ran it. `micold-ai-ide-v0.12.0` (run `33081010155`) published
+      `ghcr.io/jaroslawherod/micold-daemon:0.12.0` as an index over `linux/amd64` and `linux/arm64`,
+      with the per-architecture tags beside it. The three guards passed against a real tag, and
+      the AI-CLI check passed on the arm64 runner — the one thing the host measurements could not
+      reach.
+- [x] T157 The first run, end to end, against the published image — a real client on Xvfb resolving
+      `DEFAULT_IMAGE` from a settings file that does not name an image, pulling `:0.12.0` from GHCR,
+      starting the sandbox and running `claude` inside the container. This is the only check in the
+      feature that exercises the default rather than a reference a test supplied, which is precisely
+      the gap the wrong namespace slipped through. `evidence/first-run-end-to-end.md`.
+- [x] T158 Repair a persisted reference into the retired `ghcr.io/micold` namespace on read
+      (`ImageSource::repair_retired_namespace`, called from `StoredSettings::into_settings` beside
+      the budget clamp). T155 corrected the constant, which reaches every user with no `sandbox`
+      block on disk — and nobody who had ever opened the sandbox section, whose file holds the dead
+      namespace as a *value* that no serde default can displace. Found on this developer's own
+      machine while setting T157 up: `"reference": "ghcr.io/micold/micold-daemon:0.10.0"`. Scoped to
+      registry sources, so an archive or local build named after that namespace keeps its name.
+      Tests: four in `sandbox/image.rs`, three in `tests/settings_retired_image_namespace.rs`.
+
+**One prediction here was wrong, and is recorded rather than quietly dropped**: T155 originally
+carried a hand step, on the rule that a GHCR package is private when first created and would need
+its visibility flipped before FR-024 became observable. It did not — the package was public on
+creation, because the job pushes with `GITHUB_TOKEN` from a workflow in this repository, so the
+package arrives linked to it and inherits its visibility. An anonymous pull of `:0.12.0` answers
+200. That rule is about packages pushed with a personal access token, which arrive unlinked.
+`evidence/image-publishing.md` keeps the check that distinguishes the two states, because a private
+package's `denied` is indistinguishable from a package that was never pushed.
+
+**T157 also found a defect outside this feature, and did not fix it here**: the session supervisor
+restarted `claude` 24 times in 13 minutes without ever reaching `MAX_RESTART_ATTEMPTS`, because the
+survivor reset in `state.rs` clears the counter for any process still alive one ~250 ms tick after
+its respawn. Feature 010's FR-022a guard therefore only fires against a process that dies inside a
+quarter of a second, not against the start-run-die shape every configuration failure actually takes.
+Recorded in `evidence/first-run-end-to-end.md`; it belongs to 010.
+
+**Requirements closed**: FR-024.
+
+## Phase 16: Bugfix BUG-002 — the connect-time availability ask never went out
+
+**Goal**: Make T144's first half real. The client asks the service which AI CLIs it can run at three
+moments; two of them work. The third — the connection itself — is a call placed 37 lines above the
+assignment it depends on, so it returns without sending and `State::available_providers` stays
+`None` for the whole run unless the user happens to open Settings. `None` is read as the empty set
+by everything that decides what to offer, so the sidebar's override chevron is absent (026 FR-004,
+FR-006) and an unavailable default starts instead of offering (026 FR-002).
+
+### Tests for BUG-002 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T157 [BUG-002] `crates/micold-client/src/main.rs::tests::connecting_asks_which_clis_the_service_can_run`:
+      drive `Msg::Connected` with an outbox whose receiver the test holds, and assert
+      `ClientMsg::AiCliAvailabilityRequest` arrives on **that** connection's channel. Behavioural,
+      not textual, because that is the whole lesson of this bug:
+      `cli_availability_comes_from_the_service.rs` asserts the three spellings appear under `shell/`
+      and they do — a dead call site spells identically to a live one, which is why a source scan
+      watched this ship. Second assertion in the same test: after the reply is folded in,
+      `start_affordance_offers_a_choice()` is true for a two-CLI answer, so the gate covers the
+      symptom and not only the send. Confirm both red against the unfixed `on_connected`.
+      **Landed in `src/main.rs`'s test module, not `tests/`** as this task first said: `App` is a
+      type of the *binary* crate — an integration test under `tests/` links `micold_client`, the
+      lib, and cannot name it. The `connect(app, catalog) -> Vec<ClientMsg>` fixture the assertion
+      needs was already there. A third assertion was added after the first red run: the connection
+      must send `ClientMsg::Attach` too. Without it the fixture passed for a second reason — it sent
+      *nothing at all*, so an `Outbox` that dropped every message would have failed the test
+      identically to the bug. With an active project the red run reads
+      `[Attach, SetViewedSession]` — the outbox demonstrably working, and the availability request
+      demonstrably absent.
+
+### Implementation for BUG-002
+
+- [X] T158 [BUG-002] `shell/daemon_sync.rs::on_connected`: move `ask_cli_availability(app)` below
+      `app.daemon = Some(outbox)`. The comment already standing at that assignment — "`app.daemon`
+      is assigned before the sends, not after, because `view_and_start` below reads it" — states the
+      rule this call was breaking; extend it to name the availability ask as the second reader, so
+      the next send added above the line is recognised as the same mistake. Done: the ask now sits
+      immediately below the assignment and the comment names both readers and says what a send
+      placed above the line actually does — returns silently, rather than merely arriving late.
+
+**Bugfix**: 2026-08-28 — BUG-002. **No requirement added**: FR-023c is correct and the plan states
+the intended behaviour ("asks on connect and again whenever a surface that offers a CLI opens"); the
+code is what drifted. **Clarified, not added**: FR-023c gains a note that a set which has not been
+answered yet is not an empty set, and 026 FR-006 the same on its own side — the reading that let the
+drift look correct. **One task reopened**: T144. See `bugs/BUG-002.md`.
+
+## Phase 17: Bugfix BUG-003 — choosing "In a container" saved the choice and did nothing else
+
+**Goal**: Make the placement select move the daemon. Set **Where sessions run** to *In a container*,
+press Save, and today the view closes, the note reads "Currently in a container.", and the session
+service is still the host process it was — every session unconfined, nothing said. The next launch
+does come up sandboxed, which is why this survived: it is not broken forever, only for as long as
+the user believes they are contained and are not.
+
+FR-032 and FR-033 said to confirm and restart. Neither produced a task, because `data-model.md` §7
+had folded them into `SandboxState`'s requirement range. FR-032a, FR-032b and FR-033a settle what
+they left open.
+
+### Tests for BUG-003 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T159 [BUG-003] *(test)* `crates/micold-client/tests/saving_a_placement_moves_the_daemon.rs`:
+      a save whose draft placement differs from the store's asks for confirmation and applies
+      **nothing** before it is answered — not the placement, and not the other fields either
+      (FR-032, FR-032a). Confirmed red against the current reducer, where the save writes every
+      field and asks nothing.
+      **Written in two files, not one.** T159–T162 name a single integration test, and half of what
+      they assert is unreachable from one: `App`, `shell::persist` and `app.placement` live in the
+      **binary**, so `tests/*.rs` cannot see them. The pure half (what the reducer does with a
+      pending change) is the file named above; the shell half (T162) is in `main.rs`'s
+      `#[cfg(test)] mod tests`, beside the other `update_inner` tests. Splitting on the crate
+      boundary rather than writing the lot as binary tests keeps the rules that *are* pure testable
+      without a `Task` runtime, which is the same division M2 draws in the code.
+- [X] T160 [BUG-003] *(test)* Same file — a save that leaves the placement where it was asks
+      nothing and behaves exactly as it does today, and choosing a placement then pressing Cancel
+      asks nothing (FR-032a). This is the rule that keeps the fix from becoming a modal in front of
+      every Save; it mirrors `persist.rs::survival_step`'s "act on a change, and only on a change",
+      which is why the two are asserted together.
+- [X] T161 [BUG-003] *(test)* Same file — declining leaves the store byte-for-byte unchanged, the
+      settings surface open, and the draft holding every edit the user had made, the placement
+      included (FR-032b). The one that would catch a fix which saves the other four fields and
+      silently drops the fifth — the failure class BUG-001 was.
+- [X] T162 [BUG-003] *(test)* `crates/micold-client/src/main.rs` (`mod tests`, not the file above —
+      see T159) — confirming moves `app.placement`, and yields the bring-up
+      task rather than deferring to the next launch (FR-033a). Asserted through the boot plan the
+      save must construct, since a user switching *into* the sandbox has none from `startup.rs`;
+      without that the fix would be an assignment that dials a port nothing is listening on.
+- [X] T163 [BUG-003] *(test)* [P] `crates/micold-client/tests/settings_reports_the_live_placement.rs`:
+      the note under the select renders the placement **in force**, not the draft's, so it cannot
+      read "Currently in a container." over a host process (FR-035b). A separate file because it is
+      a view property and needs none of the save path.
+
+### Implementation for BUG-003
+
+- [X] T164 [BUG-003] `crates/micold-client/src/ui/confirm_placement.rs` and its `SurfaceId` in
+      `features/settings.rs` — the modal, following the `confirm_*.rs` family's shape
+      (`FloatingSurface` + `Registered`, `material::dialog::fields`/`actions`). It names the
+      placement being moved to, that the service restarts, and — when sessions are running — how
+      many stop and that they become resumable (FR-032, FR-033).
+- [X] T165 [BUG-003] `shell/persist.rs::on_settings_saved` — read the stored placement before the
+      write, alongside the survival opt-in that already does this; on a difference, raise the
+      confirmation and return without writing. Split the applying half into a
+      `on_placement_change_confirmed` that performs the save it deferred, assigns `app.placement`,
+      builds the `BootPlan` from the validated settings, and returns `shell::sandbox::boot` — the
+      third caller of the mechanism `RestartRequested` and `FallbackAccepted` already use
+      (FR-032a, FR-032b, FR-033a).
+- [X] T166 [BUG-003] `crates/micold-client/src/ui/settings/daemon.rs` — the note reads the live
+      placement, and the select's supporting text stops saying "Takes effect the next time the
+      application starts". That string was an accurate description of the code and an undeclared
+      narrowing of FR-032, recorded where nobody would read it as a gap; FR-033a no longer permits
+      what it promises (FR-035b).
+
+**Bugfix**: 2026-09-03 — BUG-003. **Requirements added**: FR-032a, FR-032b, FR-033a — see `spec.md`.
+**Design corrected**: `data-model.md` §7's requirement range, which is what swallowed FR-032/FR-033;
+`plan.md` gained the increment. **No task reopened**: T070 built the control it was asked for and is
+annotated in place, because the defect is a task that was never written rather than one that
+drifted. See `bugs/BUG-003.md`.
+
+---
 
 ## Parallel Opportunities
 
@@ -488,6 +1011,26 @@ clearest parallel block in the feature; T074 parallel throughout.
 **Phase 8**: T099–T103 parallel; T111 alongside.
 
 **Phase 9**: T114–T117 and T119 all parallel.
+
+**Phase 13**: T138, T139 and T141 are three independent test files. T140 is the only one that has to
+follow its implementation, because what it asserts is an absence that does not exist yet. T146 is a
+manual pass and follows everything.
+
+**Phase 14**: T147 and T148 are independent files. T149 has to follow both, since what it records is
+those two run.
+
+**Phase 15**: T150 and T154 are independent files. T151 has to follow T150 — its guard greps for
+what T150 writes — and T152/T153 are steps and edges within T151's job graph rather than separate
+work. T155 follows everything, because a release that has not run yet is the one thing it cannot
+record.
+
+**Phase 16**: none. T158 is one moved line and T157 must fail against the code before it moves, so
+the two are strictly ordered.
+
+**Phase 17**: T159–T161 are one file and sequential within it. T162 is a *different* file — the
+binary's own `mod tests`, because `App`, `shell::persist` and `app.placement` are not reachable from
+`tests/*.rs` — so it is parallel with the three, as is T163. T164 and T166 touch disjoint modules
+and are parallel; T165 needs T164's message to exist before it can raise anything.
 
 ## Implementation Strategy
 

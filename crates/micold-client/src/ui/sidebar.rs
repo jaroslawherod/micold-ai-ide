@@ -2,8 +2,11 @@
 //! shared [`tree_view`] primitive (FR-002, FR-003, Constitution Principle VIII).
 
 use crate::app::{Message, State};
+use crate::features::session::Msg as SessionMsg;
 use crate::features::session::{PressTarget, StartIntent};
+use crate::features::sidebar::Msg as SidebarMsg;
 use crate::features::sidebar::TagFilter;
+use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::icons::Icon;
 use crate::ui::material::{
@@ -35,13 +38,42 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     let r = tokens::roles(scheme);
     let width = state.sidebar_width_px() as f32;
 
-    // Header: filter (left) + title (fill) + add-worktree + hide.
+    // Header: filter (left) + title (fill) + refresh + add-worktree + hide.
     // Toggles the filter accordion below (feature 009); tinted to show whether any filter is
     // currently active even while the accordion is collapsed (FR-005, US2).
     let filter_toggle: Element<'_, Message> =
-        FilterTrigger::new(Message::SidebarFilterMenuToggled, r)
-            .active(!state.sidebar_filters.is_empty())
+        FilterTrigger::new(Message::Sidebar(SidebarMsg::FilterMenuToggled), r)
+            .active(!state.sidebar.filters.is_empty())
             .into();
+    // Re-read the listing on the user's ask (feature 029, FR-001). Neutral tint, matching "Hide
+    // sidebar" rather than the accented "Add a worktree": refreshing is a routine action, not the
+    // header's primary one. It sits left of `add_worktree` so the two pre-existing controls keep
+    // their positions and the user's muscle memory (spec Assumptions).
+    //
+    // `on_press_maybe` rather than a disabled style: with no project open there is no listing to
+    // re-read, and a control with no message attached cannot be activated at all (FR-005). That is
+    // what makes unavailability structural instead of a guard the reducer has to remember.
+    //
+    // While one is running the same withheld `on_press` doubles as the busy affordance, and the
+    // tooltip says so. No spinner: an indeterminate indicator would be a new component for a state
+    // that is normally over within a frame or two, and the honest report of "a refresh is running"
+    // is the control refusing a second press (research R6).
+    let refresh = Tooltip::new(
+        IconButton::new(Icon::Refresh, r)
+            .compact()
+            .tint(r.on_surface_variant)
+            .on_press_maybe(
+                state
+                    .can_refresh_worktrees()
+                    .then_some(Message::Worktree(WorktreeMsg::RefreshRequested)),
+            ),
+        if state.worktree.refreshing {
+            "Refreshing worktrees…"
+        } else {
+            "Refresh the worktree list"
+        },
+        r,
+    );
     let add_worktree = Tooltip::new(
         IconButton::new(Icon::AddWorktree, r)
             .compact()
@@ -54,13 +86,14 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         IconButton::new(Icon::HideSidebar, r)
             .compact()
             .tint(r.on_surface_variant)
-            .on_press(Message::SidebarToggled),
+            .on_press(Message::Sidebar(SidebarMsg::Toggled)),
         "Hide sidebar",
         r,
     );
     let header = row![
         filter_toggle,
         Text::new("Worktrees", TypeRole::Section, r).width(Length::Fill),
+        refresh,
         add_worktree,
         hide,
     ]
@@ -85,7 +118,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         column![reveal_chip(state, r), filter_bar(state, r)].spacing(spacing::XS),
         r,
     )
-    .open(state.sidebar_filter_open)
+    .open(state.sidebar.filter_open)
     .into();
 
     // The "Default" entry (feature 010) is always present once a project is open — see
@@ -123,7 +156,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
                     r
                 )
                 .padding(spacing::XS)
-                .on_press(Message::SidebarFiltersCleared),
+                .on_press(Message::Sidebar(SidebarMsg::FiltersCleared)),
             ]
             .spacing(spacing::XS)
             .into(),
@@ -172,13 +205,15 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // (FR-025a), and the sidebar is the only scroll region beneath the bar. The reducer runs the
     // dismissal from this message too, so the third dismissal trigger (feature 017, FR-009) is
     // unchanged — a scrollable gets one subscription, not two.
-    .on_scroll_offset(Message::SidebarScrolled)
+    .on_scroll_offset(|offset| Message::Sidebar(SidebarMsg::Scrolled(offset)))
     // Feature 024: the reveal has to know whether its row is inside the viewport, and iced reports
     // no child position — so the geometry is computed, and this is the one input that is not
     // already in state. Reported from a sensor rather than from `on_scroll`, which fires only when
     // something scrolls; the frame that matters is the first one after a switch, where nothing has.
     .on_viewport_resize(|size| {
-        Message::SidebarViewportResized(crate::app::scroll_offset_px(size.height))
+        Message::Sidebar(SidebarMsg::ViewportResized(crate::app::scroll_offset_px(
+            size.height,
+        )))
     })
     // Addressable so `operation::scroll_to` can reach it. On the scrollable itself, never on the
     // sensor wrapping it — a wrapper that does not forward `operate` swallows scroll operations for
@@ -213,7 +248,7 @@ pub fn collapsed_strip(scheme: micold_core::theme::ColorScheme) -> Element<'stat
         IconButton::new(Icon::ShowSidebar, r)
             .compact()
             .tint(r.on_surface_variant)
-            .on_press(Message::SidebarToggled),
+            .on_press(Message::Sidebar(SidebarMsg::Toggled)),
         "Show sidebar",
         r,
     );
@@ -255,7 +290,7 @@ fn filter_chip(filter: TagFilter, active: bool, r: Roles) -> Element<'static, Me
     };
     ToggleChip::new(
         filter_label(filter),
-        Message::SidebarFilterToggled(filter),
+        Message::Sidebar(SidebarMsg::FilterToggled(filter)),
         r,
     )
     .active(active)
@@ -273,10 +308,10 @@ fn filter_chip(filter: TagFilter, active: bool, r: Roles) -> Element<'static, Me
 fn reveal_chip(state: &State, r: Roles) -> Element<'static, Message> {
     ToggleChip::new(
         "Show agent worktrees",
-        Message::ShowAgentWorktreesToggled,
+        Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled),
         r,
     )
-    .active(state.show_agent_worktrees)
+    .active(state.sidebar.show_agent_worktrees)
     .into()
 }
 
@@ -298,13 +333,13 @@ fn filter_bar(state: &State, r: Roles) -> Element<'static, Message> {
         for &filter in chunk {
             rw = rw.push(filter_chip(
                 filter,
-                state.sidebar_filters.contains(&filter),
+                state.sidebar.filters.contains(&filter),
                 r,
             ));
         }
         col = col.push(rw);
     }
-    if !state.sidebar_filters.is_empty() {
+    if !state.sidebar.filters.is_empty() {
         col = col.push(
             Button::with_content(
                 Text::new("Clear filters", TypeRole::SidebarTag, r),
@@ -312,7 +347,7 @@ fn filter_bar(state: &State, r: Roles) -> Element<'static, Message> {
                 r,
             )
             .padding(spacing::XS)
-            .on_press(Message::SidebarFiltersCleared),
+            .on_press(Message::Sidebar(SidebarMsg::FiltersCleared)),
         );
     }
     col.into()
@@ -324,14 +359,11 @@ fn tag_chip(tag: &Tag, r: Roles) -> (String, Rgb) {
     match tag {
         Tag::Type(t) => (t.as_str().to_string(), r.tag_fill(*t)),
         Tag::Issue(key) => (key.clone(), r.issue_tag().0),
-        Tag::Status(status) => {
-            let label = match status {
-                WorktreeStatus::Missing => "missing",
-                WorktreeStatus::Invalid => "invalid",
-                WorktreeStatus::Valid => "",
-            };
-            (label.to_string(), r.error)
-        }
+        // `unwrap_or_default` covers `Valid`, which `label()` answers with `None` rather than the
+        // `""` this arm used to spell out (feature 029, §4.2). A `Tag::Status(Valid)` is not
+        // constructed — `worktree_tags` only emits the tag for an unhealthy worktree — so this is
+        // a total match on a case that does not arise, not a blank chip anyone can see.
+        Tag::Status(status) => (status.label().unwrap_or_default().to_string(), r.error),
         // Feature 014 (FR-010b): a neutral accent, not `error` — an agent worktree is
         // informational, not a fault condition.
         Tag::Agent => ("agent".to_string(), r.on_surface_variant),
@@ -386,17 +418,25 @@ fn action_icon(
 /// very press — contains it, one extra press away. What is ruled out is the third answer, which is
 /// starting something other than what the user asked for.
 fn start_press(state: &State, location: SessionLocation) -> Message {
-    match state.start_intent(PressTarget::Primary) {
-        StartIntent::Start(provider) => Message::SessionStartRequested { location, provider },
-        StartIntent::OfferChoice(_) => Message::SessionStartMenuOpened(location),
+    match state.session.start_intent(PressTarget::Primary) {
+        StartIntent::Start(provider) => {
+            Message::Session(SessionMsg::StartRequested { location, provider })
+        }
+        StartIntent::OfferChoice {
+            unavailable_default,
+            ..
+        } => Message::Session(SessionMsg::StartMenuOpened {
+            location,
+            unavailable_default,
+        }),
         // Nothing at all is installed, so there is no list: FR-006 forbids opening one that is
         // present-and-empty, and an inert `+` would leave the user with a control that answers
         // nothing. The stored default goes to the daemon, whose report names the CLI to install
         // (FR-010) — in this state that report is the only thing that can tell the user anything.
-        StartIntent::NothingAvailable => Message::SessionStartRequested {
+        StartIntent::NothingAvailable => Message::Session(SessionMsg::StartRequested {
             location,
-            provider: state.provider_for_start(None),
-        },
+            provider: state.session.provider_for_start(None),
+        }),
     }
 }
 
@@ -427,14 +467,20 @@ fn start_session_action(
         .primary_tooltip(tooltip)
         .secondary_tooltip("Start a session on a different AI CLI")
         .on_press_maybe(active.then_some(press))
-        .on_secondary_press_maybe(
-            (active && offers_a_choice).then(|| Message::SessionStartMenuOpened(location)),
-        )
+        .on_secondary_press_maybe((active && offers_a_choice).then(|| {
+            Message::Session(SessionMsg::StartMenuOpened {
+                location,
+                // The chevron asked for the list. Nothing about it needs explaining, and a banner
+                // here would fire on every override open for a user who knows their default is
+                // gone (BUG-001).
+                unavailable_default: None,
+            })
+        }))
         // Where the list hangs from: the press point of whichever half opened it, since a sidebar
         // row's position is not something the view holds (018 BUG-008, FR-029d). Both halves can
         // open it — the chevron always, the primary half when the default is not installed.
-        .on_primary_anchor(Message::SessionStartMenuAnchored)
-        .on_secondary_anchor(Message::SessionStartMenuAnchored)
+        .on_primary_anchor(|anchor| Message::Session(SessionMsg::StartMenuAnchored(anchor)))
+        .on_secondary_anchor(|anchor| Message::Session(SessionMsg::StartMenuAnchored(anchor)))
         .into()
 }
 
@@ -464,7 +510,7 @@ fn row_actions_cluster(
     cluster = cluster.push(action_icon(
         Icon::Delete,
         r.error,
-        Message::WorktreeDeleteRequested(dir.to_string()),
+        Message::Worktree(WorktreeMsg::DeleteRequested(dir.to_string())),
         "Delete this worktree",
         active,
         r,
@@ -486,7 +532,7 @@ fn build_items(
     r: Roles,
 ) -> Vec<TreeItem<'static, Message>> {
     let mut items = Vec::new();
-    let hovered = state.hovered_worktree.as_deref();
+    let hovered = state.worktree.hovered.as_deref();
     let project_root = state.workspace.active.as_deref();
 
     for entry in entries {
@@ -530,20 +576,28 @@ fn build_items(
             .tags(tags)
             .on_right_press({
                 let dir = dir.clone();
-                move |point| Message::WorktreeMenuToggled(dir.clone(), point)
+                move |point| Message::Worktree(WorktreeMsg::MenuToggled(dir.clone(), point))
             })
             .hover(
-                Message::WorktreeHovered(dir.clone()),
-                Message::WorktreeUnhovered(dir.clone()),
+                Message::Worktree(WorktreeMsg::Hovered(dir.clone())),
+                Message::Worktree(WorktreeMsg::Unhovered(dir.clone())),
             )
             .expandable(
                 node.expanded,
-                Message::WorktreeExpansionToggled(dir.clone()),
+                Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(dir.clone())),
             );
-        // Location tooltip (feature 010, FR-010): the worktree's path relative to the project.
-        if let Some(root) = project_root {
-            item = item.row_tooltip(crate::features::sidebar::worktree_location_label(root, wt));
-        }
+        // Row tooltip (feature 010 FR-010, extended by feature 029): the full name the row had to
+        // shorten, plus the facts its prettified label leaves out. Attached unconditionally — an
+        // unknown project root costs the tooltip its `Location` line, not its existence (029 R5),
+        // and the builder is the only thing that decides which lines those are.
+        //
+        // `node.display_name` rather than a second derivation from `dir_name`: it is the exact
+        // string this row renders, so the row and its tooltip cannot disagree about a name (FR-002).
+        item = item.row_tooltip(crate::features::sidebar::worktree_tooltip(
+            project_root,
+            wt,
+            &node.display_name,
+        ));
 
         // Always reserve the action cluster's width so hovering never reflows the row; each row
         // fades its icons in/out independently via its own animation track (feature 008). The
@@ -557,14 +611,14 @@ fn build_items(
             // see `State` (feature 026, T014a). Both answers come from the render-free layer —
             // nothing here decides what a press means or whether there is a choice to offer.
             start_press(state, SessionLocation::Worktree(dir.clone())),
-            state.start_affordance_offers_a_choice(),
+            state.session.start_affordance_offers_a_choice(),
             r,
         ));
         items.push(item);
 
         if node.expanded {
             for session in &node.sessions {
-                items.push(session_tree_item(session, state.active_session, r));
+                items.push(session_tree_item(session, state.session.active, r));
             }
         }
     }
@@ -613,15 +667,15 @@ fn session_tree_item(
         // a session row is one line. The label changes the row's content, never its height.
         .annotation(session.provider.provider().command(), r.on_surface_variant)
         .selected(selected)
-        .on_press(Message::SessionSelected(session.id))
+        .on_press(Message::Session(SessionMsg::Selected(session.id)))
         .on_right_press({
             // The id, copied out of the borrow: the closure outlives this `&Session`.
             let id = session.id;
-            move |point| Message::SessionMenuToggled(id, point)
+            move |point| Message::Session(SessionMsg::MenuToggled(id, point))
         })
         .trailing(
             Icon::Close,
-            Message::SessionCloseRequested(session.id),
+            Message::Session(SessionMsg::CloseRequested(session.id)),
             "Close this session",
         )
 }
@@ -648,14 +702,17 @@ fn build_default_item(
         "Start a new session in the project root",
         true,
         start_press(state, SessionLocation::Default),
-        state.start_affordance_offers_a_choice(),
+        state.session.start_affordance_offers_a_choice(),
         r,
     );
 
     let item = TreeItem::new(0, node.display_name.to_string(), r.on_surface)
         // Distinct icon (FR-006): never the git/branch iconography used for worktree rows.
         .with_icon(Icon::ProjectRoot)
-        .expandable(node.expanded, Message::DefaultExpansionToggled)
+        .expandable(
+            node.expanded,
+            Message::Sidebar(SidebarMsg::DefaultExpansionToggled),
+        )
         .trailing_element(start_session)
         // Location tooltip (FR-010): fixed, since the Default entry is always the project root.
         .row_tooltip(crate::features::sidebar::DEFAULT_LOCATION_LABEL);
@@ -663,7 +720,7 @@ fn build_default_item(
 
     if node.expanded {
         for session in &node.sessions {
-            items.push(session_tree_item(session, state.active_session, r));
+            items.push(session_tree_item(session, state.session.active, r));
         }
     }
 

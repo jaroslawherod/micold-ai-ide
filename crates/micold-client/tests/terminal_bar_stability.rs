@@ -288,8 +288,8 @@ fn no_scattered_release_writes() {
 ///
 /// `restart_message` decides what the bar's restart control must act on, and `ui/terminal.rs`'s own
 /// unit tests prove that decision correct. Neither notices if the button stops asking: the defect
-/// was `.on_press(Message::TerminalRestartRequested)` written straight into the bar, restarting the
-/// session while the bar described a shell instance — and the session's AI CLI primary is still
+/// was `.on_press(Message::Session(SessionMsg::TerminalRestartRequested))` written straight into
+/// the bar, restarting the session while the bar described a shell instance — and the session's AI CLI primary is still
 /// alive in Regular mode, so pressing it did nothing at all.
 ///
 /// This is the same shape as `the_bar_does_not_branch_on_focus` above: a precondition of the bar
@@ -305,7 +305,7 @@ fn the_bars_restart_control_asks_which_process_it_is_restarting() {
          the attached process the way `attached_process_restartable` already does"
     );
     assert!(
-        !code.contains("on_press(Message::TerminalRestartRequested)"),
+        !code.contains("on_press(Message::Session(SessionMsg::TerminalRestartRequested))"),
         "a bare session-level restart in the bar is BUG-004: in Regular mode the session's primary \
          is still running, so the request is a no-op and the control does nothing"
     );

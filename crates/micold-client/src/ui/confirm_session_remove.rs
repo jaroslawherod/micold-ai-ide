@@ -3,6 +3,7 @@
 //! path back into the sidebar (the removed session's record is dropped outright).
 
 use crate::app::{Message, State};
+use crate::features::session::Msg as SessionMsg;
 use crate::ui::material::{self, Button, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, row};
 use iced::Element;
@@ -26,8 +27,8 @@ pub fn modal<'a>(label: &str, scheme: ColorScheme) -> Element<'a, Message> {
     ]);
 
     let actions = material::dialog::actions(row![
-        Button::filled("Remove", r).on_press(Message::SessionRemoveConfirmed),
-        Button::outlined("Cancel", r).on_press(Message::SessionRemoveCancelled),
+        Button::filled("Remove", r).on_press(Message::Session(SessionMsg::RemoveConfirmed)),
+        Button::outlined("Cancel", r).on_press(Message::Session(SessionMsg::RemoveCancelled)),
     ]);
 
     let dialog = material::Surface::new(
@@ -53,7 +54,8 @@ pub fn dialog<'a>(
     _env_include_outcome: &'a EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
     state
-        .session_remove_target
+        .session
+        .remove_target
         .and_then(|id| state.workspace.find_session(id))
         .map(|(_, session)| modal(session.label.display(), scheme))
 }

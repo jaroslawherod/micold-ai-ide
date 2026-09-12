@@ -248,7 +248,7 @@ fn a_retry_that_fails_again_reports_the_new_reason_and_offers_again() {
     s.failed(Failure {
         stage: Stage::Acquiring,
         error: RuntimeError::ImageNotFound {
-            reference: "ghcr.io/micold/sandbox:0.8.0".to_string(),
+            reference: "ghcr.io/example/sandbox:0.8.0".to_string(),
         },
     });
 

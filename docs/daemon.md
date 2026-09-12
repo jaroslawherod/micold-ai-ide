@@ -19,7 +19,7 @@ interpreted screen it has produced. Both live in the daemon, so:
 | **The app window crashes** | Same — the sessions are in a different process, untouched. |
 | **Rebuild / reinstall the app and relaunch** | The new window reconnects to the *same* daemon and finds every session where it left off. |
 | **Reopen a session after any of the above** | You get the **current** screen immediately (a snapshot, not a replay), with scrollback covering the whole time you were away. |
-| **Log out / end your login session** (Linux) | This is the one thing that can stop the daemon; see [Surviving logout](#surviving-logout) (User Story 7). |
+| **Log out / end your login session** (Linux) | This is the one thing that can stop the daemon; see [Surviving logout](#surviving-logout-user-story-7) (User Story 7). |
 
 Concretely, if you start a long-running build or an AI CLI session that is working through a task,
 close the window, and come back ten minutes later, the session is still `Running`, the screen shows
@@ -34,6 +34,14 @@ no window is open, so a chatty session left running for days cannot grow without
 scroll back, the app fetches history from the daemon on demand; you are never holding the entire
 history in the window. If you scroll past the oldest retained line, the view simply stops there
 rather than inventing content.
+
+What the app asks for is **the rows a scroll reveals**, plus a screenful of margin in the direction
+you are travelling — not everything between there and the live tail. That distinction is the whole
+of how fast scrolling back feels: a request sized by how *far* you have scrolled grows as you go, so
+the deeper you went the longer the pane stayed blank, and a fast gesture left the daemon working
+long after you stopped. A request sized by the viewport costs the same at line 4,000 as at line 40.
+The app also remembers what it has already asked for, so a gesture sends one request per screenful
+of travel rather than one per wheel notch.
 
 ### Why reattach is instant
 
@@ -190,7 +198,8 @@ all fully live and never interfering with one another.
 - **A second window on the same project is refused — with an offer, not a wall.** If you open a
   window on a project another window already holds, attachment is refused with a message naming the
   current holder and how long it has held it, and offering to **take over**. Nothing happens to the
-  other window until you confirm.
+  other window until you confirm. The refused window says the project is already open elsewhere —
+  not that anything was taken from it, which is the other case below and a different sentence.
 
 - **Takeover is deliberate and non-destructive.** When you confirm, the new window becomes the holder
   and the previous one is **displaced**: it shows a banner saying another window took over, stops
@@ -201,6 +210,14 @@ all fully live and never interfering with one another.
 - **A holder that goes away frees the project automatically.** If the window holding a project simply
   closes — or crashes — the project becomes attachable again with no ceremony and no service restart.
   The next window to ask for it just gets it.
+
+- **A window never displaces itself.** A window whose connection dies reconnects on its own, and for
+  a moment the service can be holding the project for a connection that no longer exists — the
+  window's own. Both the refusal and the displacement name the *window* that holds it, not just the
+  build, so a window recognises its own superseded connection and simply reclaims the project.
+  Nothing is shown and nothing is asked, because there is no other window to ask about. Two
+  genuinely different windows of the same build are still two windows, and still displace each
+  other.
 
 ### Detecting a dead connection
 
@@ -362,8 +379,9 @@ That transport carries none of the protection a `0700` directory gives: any loca
 to a loopback port. What replaces it is a shared secret, generated per sandbox start, written `0600`
 and bind-mounted read-only into the container. The guarantee moves from "you cannot reach it" to "you
 cannot answer for it", and the filesystem permission is still what enforces it. This is why the wire
-protocol grew an authenticated handshake — version 6 when the sandbox landed, and version 7 today,
-after the repository-root query the container placement also needed (below).
+protocol grew an authenticated handshake — version 6 when the sandbox landed, version 7 after the
+repository-root query the container placement also needed (below), and version 9 today, after a
+window became nameable on the wire so it could stop displacing itself.
 
 ### The lifecycle
 

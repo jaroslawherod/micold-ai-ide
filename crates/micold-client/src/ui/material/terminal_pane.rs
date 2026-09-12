@@ -6,6 +6,7 @@
 //! full focus gate land in feature 006 US2/US3; this file covers colour rendering + click focus.
 
 use crate::app::{route_key, KeyRouting, Message};
+use crate::features::session::Msg as SessionMsg;
 use crate::features::session::SelectKind;
 use crate::grid::GridCache;
 use crate::keymap;
@@ -115,10 +116,10 @@ where
         let state = tree.state.downcast_mut::<ReporterState>();
         if grid != state.last_grid {
             state.last_grid = grid;
-            shell.publish(Message::TerminalResized {
+            shell.publish(Message::Session(SessionMsg::TerminalResized {
                 cols: grid.0,
                 rows: grid.1,
-            });
+            }));
         }
 
         self.content.as_widget_mut().update(
@@ -780,7 +781,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                                     } else {
                                         -(screen_lines as i32)
                                     };
-                                    shell.publish(Message::TerminalScrolled(delta));
+                                    shell.publish(Message::Session(SessionMsg::TerminalScrolled(
+                                        delta,
+                                    )));
                                 }
                                 shell.capture_event();
                                 return;
@@ -798,7 +801,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     // Publish an absolute target, not a relative delta: several CursorMoved events
                     // are batched before the app update runs, so relative deltas computed against
                     // the pre-batch offset would accumulate and jump the view (drag flicker).
-                    shell.publish(Message::TerminalScrolledTo(target));
+                    shell.publish(Message::Session(SessionMsg::TerminalScrolledTo(target)));
                     shell.capture_event();
                     return;
                 }
@@ -824,7 +827,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 // user presses again (FR-008b, research R5).
                 let grants = press_grants_focus(self.focused, true);
                 if grants {
-                    shell.publish(Message::TerminalFocused);
+                    shell.publish(Message::Session(SessionMsg::TerminalFocused));
                 }
                 let focused_now = self.focused || grants;
                 let pos = cursor.position().unwrap_or_default();
@@ -835,7 +838,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     if let Some(seq) =
                         self.mouse_report_bytes(0, col, line, true, to_keymap_mods(state.modifiers))
                     {
-                        shell.publish(Message::TerminalBytes(seq));
+                        shell.publish(Message::Session(SessionMsg::TerminalBytes(seq)));
                     }
                     // Remember the held button so its release is reported too (FR-013a).
                     state.reporting_button = Some(0);
@@ -845,7 +848,11 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     let kind = select_kind(c.kind());
                     state.last_click = Some(c);
                     state.dragging = true;
-                    shell.publish(Message::TerminalSelectStart { col, line, kind });
+                    shell.publish(Message::Session(SessionMsg::TerminalSelectStart {
+                        col,
+                        line,
+                        kind,
+                    }));
                 }
                 shell.capture_event();
                 return;
@@ -866,7 +873,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                         true,
                         to_keymap_mods(state.modifiers),
                     ) {
-                        shell.publish(Message::TerminalBytes(seq));
+                        shell.publish(Message::Session(SessionMsg::TerminalBytes(seq)));
                     }
                 }
                 state.reported_cell = Some((col, line));
@@ -888,14 +895,17 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     false,
                     to_keymap_mods(state.modifiers),
                 ) {
-                    shell.publish(Message::TerminalBytes(seq));
+                    shell.publish(Message::Session(SessionMsg::TerminalBytes(seq)));
                 }
                 shell.capture_event();
                 return;
             }
             Event::Mouse(mouse::Event::CursorMoved { position }) if state.dragging => {
                 let (col, line) = grid_at(*position, bounds, metrics);
-                shell.publish(Message::TerminalSelectUpdate { col, line });
+                shell.publish(Message::Session(SessionMsg::TerminalSelectUpdate {
+                    col,
+                    line,
+                }));
                 shell.capture_event();
                 return;
             }
@@ -923,12 +933,14 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     if let Some(seq) =
                         self.mouse_report_bytes(1, col, line, true, to_keymap_mods(state.modifiers))
                     {
-                        shell.publish(Message::TerminalBytes(seq));
+                        shell.publish(Message::Session(SessionMsg::TerminalBytes(seq)));
                     }
                     state.reporting_button = Some(1);
                     state.reported_cell = Some((col, line));
                 } else if let Some(pasted) = clipboard.read(ClipboardKind::Standard) {
-                    shell.publish(Message::TerminalBytes(pasted.into_bytes()));
+                    shell.publish(Message::Session(SessionMsg::TerminalBytes(
+                        pasted.into_bytes(),
+                    )));
                 }
                 shell.capture_event();
                 return;
@@ -944,7 +956,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 // consumed solely to grant focus.
                 let grants = press_grants_focus(self.focused, true);
                 if grants {
-                    shell.publish(Message::TerminalFocused);
+                    shell.publish(Message::Session(SessionMsg::TerminalFocused));
                 }
                 let focused_now = self.focused || grants;
                 let pos = cursor.position().unwrap_or_default();
@@ -955,14 +967,17 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     if let Some(seq) =
                         self.mouse_report_bytes(2, col, line, true, to_keymap_mods(state.modifiers))
                     {
-                        shell.publish(Message::TerminalBytes(seq));
+                        shell.publish(Message::Session(SessionMsg::TerminalBytes(seq)));
                     }
                     state.reporting_button = Some(2);
                     state.reported_cell = Some((col, line));
                 } else {
                     let x = (pos.x - bounds.x).max(0.0) as u16;
                     let y = (pos.y - bounds.y).max(0.0) as u16;
-                    shell.publish(Message::TerminalContextMenuOpened { x, y });
+                    shell.publish(Message::Session(SessionMsg::TerminalContextMenuOpened {
+                        x,
+                        y,
+                    }));
                 }
                 shell.capture_event();
                 return;
@@ -983,14 +998,14 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                         for _ in 0..count {
                             if let Some(seq) = self.mouse_report_bytes(button, col, line, true, km)
                             {
-                                shell.publish(Message::TerminalBytes(seq));
+                                shell.publish(Message::Session(SessionMsg::TerminalBytes(seq)));
                             }
                         }
                         shell.capture_event();
                         return;
                     }
                     WheelRouting::ScrollLocally { lines } => {
-                        shell.publish(Message::TerminalScrolled(lines));
+                        shell.publish(Message::Session(SessionMsg::TerminalScrolled(lines)));
                         shell.capture_event();
                         return;
                     }
@@ -1025,15 +1040,15 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 // Unfocused: the key belongs to the surrounding app, so leave it uncaptured.
                 KeyRouting::App => {}
                 KeyRouting::Write(bytes) => {
-                    shell.publish(Message::TerminalBytes(bytes));
+                    shell.publish(Message::Session(SessionMsg::TerminalBytes(bytes)));
                     shell.capture_event();
                 }
                 KeyRouting::ReleaseFocus => {
-                    shell.publish(Message::TerminalFocusReleased);
+                    shell.publish(Message::Session(SessionMsg::TerminalFocusReleased));
                     shell.capture_event();
                 }
                 KeyRouting::NewTerminalInstance => {
-                    shell.publish(Message::ShellInstanceOpenRequested);
+                    shell.publish(Message::Session(SessionMsg::ShellInstanceOpenRequested));
                     shell.capture_event();
                 }
                 KeyRouting::Copy => {
@@ -1042,7 +1057,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 }
                 KeyRouting::Paste => {
                     if let Some(pasted) = clipboard.read(ClipboardKind::Standard) {
-                        shell.publish(Message::TerminalBytes(pasted.into_bytes()));
+                        shell.publish(Message::Session(SessionMsg::TerminalBytes(
+                            pasted.into_bytes(),
+                        )));
                     }
                     shell.capture_event();
                 }
@@ -1243,7 +1260,7 @@ mod tests {
         }
 
         fn reaches_the_process(m: &Message) -> bool {
-            matches!(m, Message::TerminalBytes(_))
+            matches!(m, Message::Session(SessionMsg::TerminalBytes(_)))
         }
 
         #[test]
@@ -1282,7 +1299,8 @@ mod tests {
             assert!(
                 !published.iter().any(|m| matches!(
                     m,
-                    Message::TerminalFocusReleased | Message::TerminalFocused
+                    Message::Session(SessionMsg::TerminalFocusReleased)
+                        | Message::Session(SessionMsg::TerminalFocused)
                 )),
                 "a press outside the pane must not change the keyboard holder \
                  (FR-005, FR-006, FR-008a): {published:?}"
@@ -1300,7 +1318,7 @@ mod tests {
             assert!(
                 published
                     .iter()
-                    .any(|m| matches!(m, Message::TerminalFocused)),
+                    .any(|m| matches!(m, Message::Session(SessionMsg::TerminalFocused))),
                 "a press inside an unfocused pane takes the keyboard (FR-008b): {published:?}"
             );
         }

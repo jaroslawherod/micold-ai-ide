@@ -15,7 +15,7 @@ use std::marker::PhantomData;
 
 use crate::ui::material::style;
 use iced::widget::text;
-use iced::widget::text::LineHeight;
+use iced::widget::text::{LineHeight, Wrapping};
 use iced::{Element, Font, Length};
 use micold_core::tokens::{typography, Rgb, Roles};
 
@@ -229,6 +229,7 @@ pub struct Text<'a, M> {
     width: Option<Length>,
     height: Option<Length>,
     align_y: Option<iced::alignment::Vertical>,
+    wrapping: Option<Wrapping>,
     marker: PhantomData<M>,
 }
 
@@ -244,6 +245,7 @@ impl<'a, M: 'a> Text<'a, M> {
             width: None,
             height: None,
             align_y: None,
+            wrapping: None,
             marker: PhantomData,
         }
     }
@@ -280,6 +282,18 @@ impl<'a, M: 'a> Text<'a, M> {
         self.align_y = Some(align);
         self
     }
+
+    /// How the text breaks when it does not fit the width it is given.
+    ///
+    /// Left unset, the rendering stack wraps on **word** boundaries, which is right for prose and
+    /// wrong for the one thing this application shows most: a filesystem path. A path contains no
+    /// spaces, so word wrapping cannot break it at all — it lays out at its full natural width and
+    /// widens whatever contains it. [`Wrapping::WordOrGlyph`] keeps word breaks where they exist
+    /// and falls back to breaking mid-token where they do not (feature 029, FR-009).
+    pub fn wrapping(mut self, wrapping: Wrapping) -> Self {
+        self.wrapping = Some(wrapping);
+        self
+    }
 }
 
 impl<'a, M: 'a> From<Text<'a, M>> for Element<'a, M> {
@@ -304,6 +318,9 @@ impl<'a, M: 'a> From<Text<'a, M>> for Element<'a, M> {
         }
         if let Some(align) = t.align_y {
             widget = widget.align_y(align);
+        }
+        if let Some(wrapping) = t.wrapping {
+            widget = widget.wrapping(wrapping);
         }
         widget.into()
     }

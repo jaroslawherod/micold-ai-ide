@@ -23,7 +23,7 @@ use micold_core::tokens::{self, spacing};
 /// The whole content area, for a copy that is not installed.
 pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
     let r = tokens::roles(scheme);
-    let location = state.install_location;
+    let location = state.window.install_location;
 
     let card = material::Surface::new(
         column![

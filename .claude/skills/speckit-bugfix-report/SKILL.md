@@ -4,7 +4,7 @@ description: Capture a bug and trace it back to the relevant spec, plan, and tas
   artifacts
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
-  author: github-spec-kit
+  author: Quratulain-bilal
   source: extension:bugfix
 user-invocable: true
 disable-model-invocation: false

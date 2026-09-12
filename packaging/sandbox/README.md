@@ -20,13 +20,50 @@ docker build -t micold-daemon:dev packaging/sandbox/
 
 ## Publish
 
-```sh
-docker tag micold-daemon:dev ghcr.io/<org>/micold-daemon:<version>
-docker push ghcr.io/<org>/micold-daemon:<version>
+**Publishing is the release's job, not a hand step.** The `image` and `image-manifest` jobs in
+`.github/workflows/release.yml` build this image for amd64 and arm64 on every release and push:
+
+```
+ghcr.io/jaroslawherod/micold-daemon:<version>          # multi-architecture, what the app pulls
+ghcr.io/jaroslawherod/micold-daemon:<version>-amd64    # the halves, kept for reproductions
+ghcr.io/jaroslawherod/micold-daemon:<version>-arm64
 ```
 
-Publish an **immutable version tag**. A moving tag (`:latest`) can change under a running sandbox,
-which is why the app detects one and treats it differently — see FR-024b.
+`<version>` is the application's own version, because that is what the client compiles into
+`DEFAULT_IMAGE` (`crates/micold-core/src/sandbox/image.rs`). The release job checks that agreement
+before it builds — the tag must match `[workspace.package] version`, and this repository's GHCR
+namespace must be the one that source file names — because when they drift the result is a release
+that looks entirely successful and points every first-time user at a tag with nothing behind it.
+That was the state of things up to and including 0.11.0, when nothing published an image at all.
+
+Only immutable version tags are pushed. A moving tag (`:latest`) can change under a running
+sandbox, which is why the app detects one and treats it differently — see FR-024b.
+
+### Visibility needs no hand step
+
+This was written the other way round before 0.12.0 actually ran, on the widely-repeated rule that a
+GHCR package is private when first created and must have its visibility flipped by hand. That rule
+does not apply here. 0.12.0 created the package and it came out **public**, pullable with no
+credentials at all:
+
+```sh
+tok=$(curl -s 'https://ghcr.io/token?scope=repository:jaroslawherod/micold-daemon:pull&service=ghcr.io' \
+      | jq -r .token)
+curl -sI -H "Authorization: Bearer $tok" \
+     https://ghcr.io/v2/jaroslawherod/micold-daemon/manifests/0.12.0   # 200
+```
+
+The reason is that the release job pushes with `GITHUB_TOKEN` from a workflow in this repository, so
+GitHub creates the package already *linked* to the repository — and a linked package inherits the
+repository's visibility, which here is public. The `org.opencontainers.image.source` label in the
+`Containerfile` is what makes that link legible afterwards, on the package page.
+
+The check above is the one worth keeping, because it is the only one that distinguishes the two
+states a user meets: it uses an anonymous token, which is exactly what an unauthenticated
+`docker pull` does. Run it after any release that creates a *new* package name; a private package
+answers `denied`, which from outside is indistinguishable from a package that was never pushed —
+that is, from the bug FR-024 exists to prevent. **If this repository were ever made private, the
+package would follow it**, and that failure would look identical.
 
 ## Offline export and import
 
@@ -35,8 +72,8 @@ would make that nearly-true rather than true. So the offline path is a first-cla
 
 ```sh
 # On a machine that can reach the registry
-docker pull ghcr.io/<org>/micold-daemon:<version>
-docker save ghcr.io/<org>/micold-daemon:<version> -o micold-daemon-<version>.tar
+docker pull ghcr.io/jaroslawherod/micold-daemon:<version>
+docker save ghcr.io/jaroslawherod/micold-daemon:<version> -o micold-daemon-<version>.tar
 
 # On the machine that cannot
 docker load -i micold-daemon-<version>.tar

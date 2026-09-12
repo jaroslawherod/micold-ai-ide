@@ -25,6 +25,8 @@ use iced::advanced::{clipboard, layout, mouse, Layout, Shell};
 use iced::{Element, Event, Point, Rectangle, Size};
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
+use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::session::{AvailabilitySource, CliAvailability};
 use micold_client::icons::Icon;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::session::{AiCli, SessionLocation};
@@ -36,14 +38,18 @@ const PROJECT: &str = "/fixture/start-press";
 fn with_project(default_ai_cli: AiCli, available: &[AiCli]) -> State {
     let mut workspace = support::workspace_with(vec![(PROJECT, vec![])]);
     workspace.active = workspace.projects.first().map(|p| p.path.clone());
-    State {
+    let mut state = State {
         workspace,
-        sidebar_width: 300,
-        window_size: (lay::WINDOW.width as u16, lay::WINDOW.height as u16),
-        default_ai_cli,
-        available_providers: available.to_vec(),
         ..State::default()
-    }
+    };
+    state.sidebar.width = 300;
+    state.window.window_size = (lay::WINDOW.width as u16, lay::WINDOW.height as u16);
+    state.session.default_ai_cli = default_ai_cli;
+    state.session.available_providers = Some(CliAvailability {
+        available: available.to_vec(),
+        source: AvailabilitySource::ThisComputer,
+    });
+    state
 }
 
 fn view(state: &State) -> Element<'_, Message> {
@@ -155,22 +161,26 @@ fn pressing_start_with_an_uninstalled_default_offers_the_choice_and_starts_nothi
     assert!(
         !published
             .iter()
-            .any(|m| matches!(m, Message::SessionStartRequested { .. })),
+            .any(|m| matches!(m, Message::Session(SessionMsg::StartRequested { .. }))),
         "nothing may be started on a CLI that is not installed — not the missing default, and not \
          a silent substitution of the one that is (FR-002/FR-004). Published: {published:?}"
     );
     assert!(
         published.iter().any(|m| matches!(
             m,
-            Message::SessionStartMenuOpened(SessionLocation::Default)
+            Message::Session(SessionMsg::StartMenuOpened {
+                location: SessionLocation::Default,
+                unavailable_default: Some(AiCli::Copilot),
+            })
         )),
         "and the press has to *do* something: the available CLIs are offered at that moment, which \
-         is the same list the chevron opens. Published: {published:?}"
+         is the same list the chevron opens — carrying which default could not be run, so the \
+         reducer can say so (BUG-001). Published: {published:?}"
     );
     assert!(
         published
             .iter()
-            .any(|m| matches!(m, Message::SessionStartMenuAnchored(_))),
+            .any(|m| matches!(m, Message::Session(SessionMsg::StartMenuAnchored(_)))),
         "with a point to hang the list from, since the primary half can now open one and a sidebar \
          row's position is not something the view holds (018 BUG-008). Published: {published:?}"
     );
@@ -186,17 +196,17 @@ fn pressing_start_with_the_default_installed_still_starts_it_in_one_interaction(
     assert!(
         published.iter().any(|m| matches!(
             m,
-            Message::SessionStartRequested {
+            Message::Session(SessionMsg::StartRequested {
                 location: SessionLocation::Default,
                 provider: AiCli::Copilot,
-            }
+            })
         )),
         "one press, the stored default, started (SC-001). Published: {published:?}"
     );
     assert!(
         !published
             .iter()
-            .any(|m| matches!(m, Message::SessionStartMenuOpened(_))),
+            .any(|m| matches!(m, Message::Session(SessionMsg::StartMenuOpened { .. }))),
         "and no list in the way of it. Published: {published:?}"
     );
 }
@@ -217,12 +227,15 @@ fn the_choice_is_offered_from_the_availability_set_the_press_can_still_refresh()
     let published = press_start(&state);
     let opened: Vec<&Message> = published
         .iter()
-        .filter(|m| matches!(m, Message::SessionStartMenuOpened(_)))
+        .filter(|m| matches!(m, Message::Session(SessionMsg::StartMenuOpened { .. })))
         .collect();
 
     assert_eq!(
         opened,
-        vec![&Message::SessionStartMenuOpened(SessionLocation::Default)],
+        vec![&Message::Session(SessionMsg::StartMenuOpened {
+            location: SessionLocation::Default,
+            unavailable_default: Some(AiCli::Copilot),
+        })],
         "one open, for this row's location — the chevron's message, so the refresh the binary does \
          on it happens for this press too. Published: {published:?}"
     );
@@ -268,7 +281,8 @@ fn the_list_the_primary_half_opens_hangs_from_the_press() {
     let state = state_after_press(state, at);
 
     let menu = state
-        .session_start_menu
+        .session
+        .start_menu
         .expect("the press opens the list (the assertions above); this reads where it hung it");
     assert_eq!(
         menu.anchor,
@@ -289,7 +303,8 @@ fn the_list_the_chevron_opens_hangs_from_the_press() {
     let state = state_after_press(state, at);
 
     let menu = state
-        .session_start_menu
+        .session
+        .start_menu
         .expect("the chevron opens the list; this reads where it hung it");
     assert_eq!(
         menu.anchor,

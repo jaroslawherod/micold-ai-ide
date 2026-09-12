@@ -6,6 +6,8 @@
 //! process or repository (Constitution Principle I).
 
 use micold_client::app::{Message, State};
+use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::worktree;
 use micold_core::git::{FakeGit, Git, GitCli};
 use micold_core::project::{Availability, Project};
 use micold_core::provider::{AiCliProvider, ClaudeProvider};
@@ -48,7 +50,7 @@ fn confirm_removes_worktree_branch_and_kills_only_matching_sessions() {
         availability: Availability::Available,
     });
     state.workspace.active = Some(repo.clone());
-    state.worktrees = vec![wt("feat-abc-123-x", &repo), wt("other", &repo)];
+    state.worktree.worktrees = vec![wt("feat-abc-123-x", &repo), wt("other", &repo)];
     let target_session = Session::start_new(
         SessionLocation::Worktree("feat-abc-123-x".to_string()),
         AiCli::ClaudeCode,
@@ -58,8 +60,8 @@ fn confirm_removes_worktree_branch_and_kills_only_matching_sessions() {
         AiCli::ClaudeCode,
     );
     let (target_id, other_id) = (target_session.id, other_session.id);
-    state.update(Message::SessionStarted(target_session));
-    state.update(Message::SessionStarted(other_session));
+    state.update(Message::Session(SessionMsg::Started(target_session)));
+    state.update(Message::Session(SessionMsg::Started(other_session)));
 
     // Stand in for the binary's live PTY handles.
     let mut handles: HashMap<_, FakeHandle> = HashMap::new();
@@ -98,7 +100,7 @@ fn confirm_removes_worktree_branch_and_kills_only_matching_sessions() {
 /// worktree recreated later with the same `dir_name` (hence the same transcript `cwd` encoding)
 /// would have its old sessions resurrected by reconciliation from their still-existing `claude`
 /// transcripts. Mirrors the fixed binary's confirmed-delete flow (`src/main.rs`
-/// `Message::WorktreeDeleteConfirmed`), which cannot be linked from an integration test — same
+/// `Message::Worktree(WorktreeMsg::DeleteConfirmed)`), which cannot be linked from an integration test — same
 /// reasoning as `tests/session_reconciliation.rs`.
 #[test]
 fn confirmed_delete_marks_the_worktrees_sessions_archived_but_not_others() {
@@ -117,7 +119,7 @@ fn confirmed_delete_marks_the_worktrees_sessions_archived_but_not_others() {
         availability: Availability::Available,
     });
     state.workspace.active = Some(repo.clone());
-    state.worktrees = vec![wt("feat-abc-123-x", &repo), wt("other", &repo)];
+    state.worktree.worktrees = vec![wt("feat-abc-123-x", &repo), wt("other", &repo)];
     let target_session = Session::start_new(
         SessionLocation::Worktree("feat-abc-123-x".to_string()),
         AiCli::ClaudeCode,
@@ -127,8 +129,8 @@ fn confirmed_delete_marks_the_worktrees_sessions_archived_but_not_others() {
         AiCli::ClaudeCode,
     );
     let (target_id, other_id) = (target_session.id, other_session.id);
-    state.update(Message::SessionStarted(target_session));
-    state.update(Message::SessionStarted(other_session));
+    state.update(Message::Session(SessionMsg::Started(target_session)));
+    state.update(Message::Session(SessionMsg::Started(other_session)));
 
     let mut handles: HashMap<_, FakeHandle> = HashMap::new();
     handles.insert(target_id, FakeHandle::default());
@@ -179,7 +181,11 @@ fn fr_023_failed_delete_is_reported_and_the_worktree_survives() {
     git.worktree_add_new_branch(&repo, branch, &target).unwrap();
 
     let mut state = State {
-        worktrees: vec![wt("feat-locked", &repo)],
+        worktree: worktree::State {
+            worktrees: vec![wt("feat-locked", &repo)],
+            ..Default::default()
+        },
+
         ..Default::default()
     };
 
@@ -189,7 +195,8 @@ fn fr_023_failed_delete_is_reported_and_the_worktree_survives() {
 
     // The failure reached the user through the surface that always renders.
     let visible = state
-        .notify
+        .notifications
+        .queue
         .visible()
         .expect("the refusal reached the queue");
     assert_eq!(visible.level, micold_core::notify::Level::Error);
@@ -226,13 +233,13 @@ fn fr_023_failed_delete_leaves_its_sessions_running_and_unarchived() {
         availability: Availability::Available,
     });
     state.workspace.active = Some(repo.clone());
-    state.worktrees = vec![wt("feat-locked", &repo)];
+    state.worktree.worktrees = vec![wt("feat-locked", &repo)];
     let session = Session::start_new(
         SessionLocation::Worktree("feat-locked".to_string()),
         AiCli::ClaudeCode,
     );
     let session_id = session.id;
-    state.update(Message::SessionStarted(session));
+    state.update(Message::Session(SessionMsg::Started(session)));
 
     let mut handles: HashMap<_, FakeHandle> = HashMap::new();
     handles.insert(session_id, FakeHandle::default());
@@ -368,7 +375,11 @@ fn fr_023a_successful_delete_is_silent_when_git_already_removed_the_dir() {
     git.worktree_add_new_branch(&repo, branch, &target).unwrap();
 
     let mut state = State {
-        worktrees: vec![wt("feat-gone", &repo)],
+        worktree: worktree::State {
+            worktrees: vec![wt("feat-gone", &repo)],
+            ..Default::default()
+        },
+
         ..Default::default()
     };
 
@@ -381,9 +392,9 @@ fn fr_023a_successful_delete_is_silent_when_git_already_removed_the_dir() {
     }
 
     assert!(
-        state.notify.visible().is_none(),
+        state.notifications.queue.visible().is_none(),
         "a fully successful delete must report nothing, got: {:?}",
-        state.notify.visible()
+        state.notifications.queue.visible()
     );
 }
 
@@ -405,12 +416,14 @@ fn fr_023_leftover_directory_is_still_reported() {
     }
 
     assert_eq!(
-        state.notify.pending() + usize::from(state.notify.visible().is_some()),
+        state.notifications.queue.pending()
+            + usize::from(state.notifications.queue.visible().is_some()),
         1,
         "a genuine leftover must still reach the user"
     );
     let visible = state
-        .notify
+        .notifications
+        .queue
         .visible()
         .expect("the failure reached the queue");
     assert_eq!(visible.level, micold_core::notify::Level::Error);

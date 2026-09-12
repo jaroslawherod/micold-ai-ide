@@ -78,6 +78,15 @@ mod sibling_parity;
 #[path = "gates/tab_children_fit.rs"]
 mod tab_children_fit;
 
+// --- The rail-alignment gate (feature 027 §B.6) -------------------------------------------------
+
+// The same arrangement again, and the first gate a visual pass produced rather than a bug report.
+// It reads a *set* of same-kind components against each other the way `sibling_parity` does, but
+// for the one set whose members differ only in which is current — a rail's destinations, collapsed
+// to their icons, where "current" changes the button variant and therefore the inset.
+#[path = "gates/rail_icons_align.rs"]
+mod rail_icons_align;
+
 /// Feature 026's FR-002c, one level out from `tab_children_fit`: the bar's own controls must not be
 /// shrunk by a strip that grew. A second gate rather than a widened first one because the bar's
 /// children are not tabs and are not recognised by that gate's structural rule.
@@ -90,6 +99,12 @@ mod bar_controls_hold_their_size;
 /// against the trailing edge — and an arrangement is a fact about coordinates.
 #[path = "gates/tabs_anchor_the_trailing_edge.rs"]
 mod tabs_anchor_the_trailing_edge;
+
+/// Feature 029's FR-006, and the only gate here that asserts geometry did **not** change. The
+/// refresh control's busy form withholds a press and swaps a tooltip, neither of which is layout —
+/// so it earns no fixture block, and this is the check that keeps that true.
+#[path = "gates/refresh_busy_holds_the_header.rs"]
+mod refresh_busy_holds_the_header;
 
 // --- The context-menu-anchor gate (BUG-008) -----------------------------------------------------
 

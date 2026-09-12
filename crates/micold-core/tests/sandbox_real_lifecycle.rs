@@ -26,6 +26,20 @@
 #![cfg(feature = "sandbox-real-runtime")]
 
 use std::path::PathBuf;
+/// The host home path, which is what the sandbox's `HOME` is set to (research R2).
+fn host_home() -> PathBuf {
+    PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".into()))
+}
+
+/// The application-owned directory mounted at that path (FR-004d), created before the container is.
+///
+/// The runtime would otherwise create the missing bind source itself, as **root** — leaving the uid
+/// the container runs as unable to write to its own `HOME`, which is the failure the mount exists to
+/// fix arriving by another route. `shell::sandbox::start` creates it for the same reason.
+fn make_sandbox_home(state: &std::path::Path) {
+    std::fs::create_dir_all(state.join(micold_core::sandbox::SANDBOX_HOME_DIR)).unwrap();
+}
+
 use std::process::Command;
 
 use micold_core::protocol::auth::Token;
@@ -70,6 +84,7 @@ impl Fixture {
         let state = dir.path().join("state");
         let project = dir.path().join("project");
         std::fs::create_dir_all(&state).unwrap();
+        make_sandbox_home(&state);
         std::fs::create_dir_all(&project).unwrap();
 
         let token = Token::generate();
@@ -96,6 +111,7 @@ impl Fixture {
                 &profile,
                 &CredentialLayout::default(),
                 state.clone(),
+                &host_home(),
                 SecretMount {
                     host: token_path,
                     container: PathBuf::from("/run/micold/token"),
@@ -106,7 +122,7 @@ impl Fixture {
             control_port: port,
             published_ports: Vec::new(),
             network_name: net.clone(),
-            home: PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".into())),
+            home: host_home(),
         };
 
         let runtime = CliRuntime::new(RuntimeKind::Docker, SystemRunner);
@@ -444,6 +460,7 @@ impl Fixture {
                 &profile,
                 &CredentialLayout::default(),
                 previous.state.clone(),
+                &host_home(),
                 SecretMount {
                     host: previous.state.join("sandbox.token"),
                     container: PathBuf::from("/run/micold/token"),
@@ -454,7 +471,7 @@ impl Fixture {
             control_port: port,
             published_ports: Vec::new(),
             network_name: net.clone(),
-            home: PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".into())),
+            home: host_home(),
         };
 
         let runtime = CliRuntime::new(RuntimeKind::Docker, SystemRunner);

@@ -5,6 +5,7 @@
 
 use crate::app::{Message, State};
 use crate::features::window::FieldId;
+use crate::features::worktree::Msg as WorktreeMsg;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{self, Button, Checkbox, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, row};
@@ -63,13 +64,13 @@ pub fn modal<'a>(
                 r,
             )
             .track_focus(FieldId::ConfirmDeleteAlsoBranch, focused)
-            .on_toggle(|checked| Message::WorktreeDeleteKeepBranchToggled(!checked)),
+            .on_toggle(|checked| Message::Worktree(WorktreeMsg::DeleteKeepBranchToggled(!checked))),
         );
     }
 
     let actions = material::dialog::actions(row![
-        Button::filled("Delete", r).on_press(Message::WorktreeDeleteConfirmed),
-        Button::outlined("Cancel", r).on_press(Message::WorktreeDeleteCancelled),
+        Button::filled("Delete", r).on_press(Message::Worktree(WorktreeMsg::DeleteConfirmed)),
+        Button::outlined("Cancel", r).on_press(Message::Worktree(WorktreeMsg::DeleteCancelled)),
     ]);
 
     let dialog = material::Surface::new(
@@ -94,8 +95,8 @@ pub fn dialog<'a>(
     scheme: ColorScheme,
     _env_include_outcome: &'a EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
-    state.worktree_delete_target.as_ref().map(|dir| {
-        let worktree = state.worktrees.iter().find(|w| &w.dir_name == dir);
+    state.worktree.delete_target.as_ref().map(|dir| {
+        let worktree = state.worktree.worktrees.iter().find(|w| &w.dir_name == dir);
         let branch = worktree.and_then(|w| w.branch.as_deref());
         let outside = worktree.filter(|w| w.included).map(|w| w.path.as_path());
         modal(
@@ -103,9 +104,9 @@ pub fn dialog<'a>(
             &state.worktree_display_name(dir),
             branch,
             outside,
-            state.worktree_delete_keep_branch,
+            state.worktree.delete_keep_branch,
             scheme,
-            state.focused_field,
+            state.window.focused_field,
         )
     })
 }

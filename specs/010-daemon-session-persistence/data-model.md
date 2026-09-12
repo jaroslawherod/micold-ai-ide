@@ -161,8 +161,11 @@ Session
 - **L2** — Behaviour is **identical whether or not a client is attached** (FR-005, SC-012). No
   branch anywhere in the FSM may consult attachment state.
 - **L3** — A clean exit (user typed `exit`) transitions to `Idle`, never `Restarting`.
-- **L4** — Daemon startup may only produce `InterruptedResumable`, never `Starting` (FR-006b) — a
-  service restart can never cause an agent to act unasked.
+- **L4** — Daemon startup may only produce `InterruptedResumable`, never `Starting` (FR-006b) — the
+  *service* relaunches nothing when it comes back. A client reopening a project then resumes the one
+  session it restores, and only that one (`025` FR-004a); this invariant is what keeps that a bound of
+  one rather than one per remembered session. *(Wording amended 2026-08-27 — BUG-016; it used to end
+  "a service restart can never cause an agent to act unasked", which the client had made untrue.)*
 - ⚠️ **L5 — known gap**: the restart counter has **no time window**, and `mark_running()` resets it.
   A session that crashes once an hour never trips the guard. Pre-existing
   (`src/session.rs:142`), but FR-005 moves it into an unattended context where it matters more.
