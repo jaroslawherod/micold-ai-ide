@@ -37,6 +37,14 @@ Green is the gate. What each gate is watching, for this feature:
 | `micold-daemon/tests/catalog_adoption.rs` | unchanged and still green: a discovered session's title still survives adoption (the path that worked before this feature) |
 | `micold-client/**` | **no new test, and no changed test.** The client is untouched by design (research R7); a diff here is a review failure (contract §4) |
 
+**US3 needed no implementation of its own.** The re-title and never-named gates
+(`session_name_persistence.rs`: `a_second_name_replaces_the_first_and_the_old_one_is_gone`,
+`a_never_named_session_stays_pending_beside_a_named_one`) were written after the US1 work and passed
+on their first run — latest-wins and "no session wears another's name" fall out of the write path's
+own shape (`Session::set_title` replaces; the lookup is by `SessionId`), not out of a rule added for
+them. Recorded here because a gate that passed without a change behind it is evidence about the
+design, and would otherwise look like a gate nobody ran.
+
 Also expected green, and worth naming because this feature could plausibly have broken them:
 
 ```bash

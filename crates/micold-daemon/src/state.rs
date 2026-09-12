@@ -40,6 +40,27 @@ use crate::supervisor::PtySession;
 /// A per-connection client identity (ephemeral; never persisted).
 pub type ClientId = u64;
 
+/// What one [`DaemonState::drain_signals`] pass observed on the live sessions.
+///
+/// Two things, because the supervisor does two different things with them: `changed` decides
+/// whether to push a `CatalogChanged`, and `names` is durable state that has to be written — on a
+/// blocking thread, which is why it comes back here rather than being written where it was seen
+/// (feature 029, research R2).
+#[derive(Debug, Default)]
+pub struct DrainedSignals {
+    /// A session's projected summary changed, so the supervisor tick pushes one `CatalogChanged`.
+    pub changed: bool,
+    /// The sessions whose stripped OSC-0 title differed from the previous drain, with the new
+    /// title. Debounced against `LiveSession::last_title`, so each change appears exactly once
+    /// however many ticks pass with the title unchanged.
+    ///
+    /// The title is the **stripped** one — the leading status glyph the agent puts in front of it
+    /// is already gone, and the braille-spinner edge was taken separately as activity evidence.
+    /// So this is precisely the text the row displays, which is what keeps the record and the
+    /// screen from being able to diverge.
+    pub names: Vec<(SessionId, String)>,
+}
+
 /// The daemon's shared, mutable runtime state.
 pub struct DaemonState {
     inner: Mutex<Inner>,
@@ -1119,6 +1140,90 @@ impl DaemonState {
             .adopt_discovered_sessions(project, found)
     }
 
+    /// Give every **known but unnamed** session of `project` the name its own AI CLI recorded for
+    /// it, persisting each one (feature 029, US2 — FR-006, FR-007, FR-010). Returns how many names
+    /// were recovered (`0` ⇒ no write happened).
+    ///
+    /// This is the one-time repair for every session that predates the live write path: the name
+    /// was observed and displayed for as long as the session ran, and never written, so the record
+    /// says `Pending` and the row reads "New session" until something runs it again. The
+    /// conversation's own store still has the name, and this pass fetches it without starting
+    /// anything.
+    ///
+    /// # Why it is not folded into [`Self::discover_external_sessions`]
+    ///
+    /// That pass deliberately subtracts the ids the catalog already knows *before* touching the
+    /// filesystem, which is what holds its per-*location* cost rule. These are exactly the ids it
+    /// subtracts. Recovery cannot be per location — a name is per conversation — so it is a
+    /// separate pass with a different bound: a recovered name is **persisted**, so a session costs
+    /// one read once and is `Named` for good (research R4).
+    ///
+    /// # Blocking
+    ///
+    /// Reads the providers' stores, so it runs in the same `spawn_blocking` hop as the worktree
+    /// refresh and the discovery pass, never on the async runtime.
+    ///
+    /// A `Named` session is filtered out **under the lock, before any filesystem access** — that is
+    /// what bounds the pass, and it is also what protects FR-008: a name already recorded is never
+    /// re-read, so a deleted transcript cannot take it away. A `None` read is a no-op for the same
+    /// reason: never an error, never a wrong name, and never a way back to `Pending`.
+    pub fn recover_session_names(&self, project: &Path) -> usize {
+        // Candidates, read under the lock, once: the session, where it runs, and which CLI owns it.
+        let candidates: Vec<(SessionId, SessionLocation, AiCli)> = {
+            let inner = self.lock();
+            inner
+                .catalog
+                .workspace()
+                .sessions
+                .get(project)
+                .map(|sessions| {
+                    sessions
+                        .iter()
+                        .filter(|s| !s.archived && matches!(s.label, SessionLabel::Pending))
+                        .map(|s| (s.id, s.location.clone(), s.provider))
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        if candidates.is_empty() {
+            return 0;
+        }
+
+        // Off the lock: everything below touches the providers' stores. Each session asks its
+        // **own** provider — one hoisted provider would read a Copilot session's name out of
+        // `claude`'s store, find nothing, or worse find another CLI's conversation under the same
+        // id and name the row wrongly (contract C16). A provider with no resolvable config dir
+        // contributes nothing and stops nothing (C20).
+        let found: Vec<(SessionId, String)> = candidates
+            .into_iter()
+            .filter_map(|(id, location, which)| {
+                let provider = which.provider();
+                let config_dir = provider.config_dir()?;
+                let title = provider.read_title(&config_dir, &location.cwd(project), id.0)?;
+                Some((id, title))
+            })
+            .collect();
+        if found.is_empty() {
+            return 0;
+        }
+
+        let mut inner = self.lock();
+        let mut recovered = 0;
+        for (id, name) in found {
+            match inner.catalog.record_session_name(id, &name) {
+                Ok(true) => recovered += 1,
+                // The live path got there first, in the time this pass spent off the lock.
+                Ok(false) => {}
+                Err(err) => tracing::warn!(
+                    session = %id.0,
+                    %err,
+                    "could not persist the recovered session name; it is still shown"
+                ),
+            }
+        }
+        recovered
+    }
+
     /// Set a worktree's display-name override for `project` (validated by the caller), persisting.
     pub fn set_worktree_display_name(
         &self,
@@ -1847,13 +1952,19 @@ impl DaemonState {
 
     /// Drain each live session's out-of-band terminal signals into runtime state (US2, T046/T047):
     /// the latest OSC-0 title (debounced against `last_title`) and the braille-spinner edge (fed to
-    /// the FSM as Working-only evidence, H1a). Returns `true` if any session's projected summary
-    /// changed, so the supervisor tick pushes one `CatalogChanged`. Cheap and lock-only — it reads
-    /// atomics/`Mutex<Option<String>>` already populated by the reader thread, never blocking I/O.
-    pub fn drain_signals(&self) -> bool {
-        let mut changed = false;
+    /// the FSM as Working-only evidence, H1a).
+    ///
+    /// Cheap and lock-only — it reads atomics/`Mutex<Option<String>>` already populated by the
+    /// reader thread, never blocking I/O. **That is why it returns the name changes instead of
+    /// recording them** (feature 029, research R2): the supervisor calls this directly on its async
+    /// task, and persisting a name means writing a project's state file, which is blocking I/O and
+    /// does not belong on the async runtime — let alone on the 250 ms tick path while the state
+    /// lock is held. The write is the caller's job, in its own `spawn_blocking` hop, and only when
+    /// there is something to write. See [`Self::record_observed_names`].
+    pub fn drain_signals(&self) -> DrainedSignals {
+        let mut out = DrainedSignals::default();
         let mut inner = self.lock();
-        for live in inner.sessions.values_mut() {
+        for (id, live) in inner.sessions.iter_mut() {
             let Some(proc) = live.procs.get(&live.attached) else {
                 continue;
             };
@@ -1863,17 +1974,50 @@ impl DaemonState {
                 let before = live.activity.signal().clone();
                 live.activity.apply(ActivityEvent::SpinnerObserved);
                 if live.activity.signal() != &before {
-                    changed = true;
+                    out.changed = true;
                 }
             }
-            // The live title, debounced: only a real change is a push.
+            // The live title, debounced: only a real change is a push — and, now, only a real
+            // change is a durable write. A spinner cycling through glyph frames on an otherwise
+            // stable title produces one change here, not thirty, because the glyph was stripped
+            // before the title reached `signals`.
             let title = signals.title();
             if title != live.last_title {
+                if let Some(name) = title.as_deref() {
+                    out.names.push((*id, name.to_string()));
+                }
                 live.last_title = title;
-                changed = true;
+                out.changed = true;
             }
         }
-        changed
+        out
+    }
+
+    /// Record the names [`Self::drain_signals`] observed, durably (feature 029, FR-003).
+    ///
+    /// **Blocking**: each write persists a project's state file, so this runs in the supervisor's
+    /// `spawn_blocking` hop and never on the async runtime.
+    ///
+    /// A failed write is logged and the rest of the batch continues — one session's bad write does
+    /// not abandon the others — and nothing is surfaced to the client. That is deliberate and is
+    /// what FR-009 asks for: the label is already updated in memory, so the user sees the right
+    /// name either way, and a read-only data directory is not a session failure. `WireLifecycle::
+    /// Failed` is about the session's *process*. It is the same posture `adopt_discovered_sessions`
+    /// takes, for the same reason.
+    pub fn record_observed_names(&self, changes: &[(SessionId, String)]) {
+        if changes.is_empty() {
+            return;
+        }
+        let mut inner = self.lock();
+        for (id, name) in changes {
+            if let Err(err) = inner.catalog.record_session_name(*id, name) {
+                tracing::warn!(
+                    session = %id.0,
+                    %err,
+                    "could not persist the session's name; it is still shown"
+                );
+            }
+        }
     }
 
     /// Respawn a session's primary process after a crash and swap it into the live registry. The

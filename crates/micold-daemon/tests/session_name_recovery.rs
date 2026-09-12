@@ -21,7 +21,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use micold_core::project::{Availability, Project};
-use micold_core::session::{AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -349,7 +351,10 @@ fn recovery_fills_pending_labels_from_the_clis_own_records_and_nothing_else() {
             label_of(&state, &project, claude_id),
             SessionLabel::Named("Still recovered".into())
         );
-        assert_eq!(label_of(&state, &project, copilot_id), SessionLabel::Pending);
+        assert_eq!(
+            label_of(&state, &project, copilot_id),
+            SessionLabel::Pending
+        );
     }
 
     // --- Recovery does not touch another project's sessions ---
@@ -363,7 +368,10 @@ fn recovery_fills_pending_labels_from_the_clis_own_records_and_nothing_else() {
         stores.claude_conversation(&SessionLocation::Default.cwd(&other), theirs, "Theirs");
 
         let data_dir = tempfile::tempdir().unwrap();
-        let mut ws = workspace_with(&project, vec![session(mine, SessionLabel::Pending, AiCli::ClaudeCode)]);
+        let mut ws = workspace_with(
+            &project,
+            vec![session(mine, SessionLabel::Pending, AiCli::ClaudeCode)],
+        );
         ws.projects
             .push(Project::new(other.clone(), true, Availability::Available));
         ws.sessions.insert(
@@ -376,7 +384,10 @@ fn recovery_fills_pending_labels_from_the_clis_own_records_and_nothing_else() {
         let state = DaemonState::new(catalog_at(data_dir.path()));
 
         assert_eq!(state.recover_session_names(&project), 1);
-        assert_eq!(label_of(&state, &project, mine), SessionLabel::Named("Mine".into()));
+        assert_eq!(
+            label_of(&state, &project, mine),
+            SessionLabel::Named("Mine".into())
+        );
         assert_eq!(
             label_of(&state, &other, theirs),
             SessionLabel::Pending,

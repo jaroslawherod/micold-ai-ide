@@ -21,7 +21,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use micold_core::project::{Availability, Project};
-use micold_core::session::{AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -286,7 +288,9 @@ fn a_second_name_replaces_the_first_and_the_old_one_is_gone() {
         &[(P1, vec![session(0x51, SessionLabel::Pending)])],
     );
 
-    assert!(catalog.record_session_name(id(0x51), "Fix the parser").unwrap());
+    assert!(catalog
+        .record_session_name(id(0x51), "Fix the parser")
+        .unwrap());
     assert!(
         catalog
             .record_session_name(id(0x51), "Write the release notes")

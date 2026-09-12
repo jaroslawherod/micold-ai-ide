@@ -19,7 +19,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use micold_core::project::{Availability, Project};
-use micold_core::session::{AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
 use tempfile::tempdir;

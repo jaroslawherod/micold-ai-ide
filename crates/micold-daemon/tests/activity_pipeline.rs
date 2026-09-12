@@ -273,7 +273,10 @@ fn the_observed_title_is_handed_back_for_recording_exactly_once() {
         observed.extend(state.drain_signals().names);
         !observed.is_empty()
     });
-    assert!(landed, "the observed title must be handed back to the caller");
+    assert!(
+        landed,
+        "the observed title must be handed back to the caller"
+    );
     assert_eq!(
         observed,
         vec![(id, "Fixing the parser".to_string())],

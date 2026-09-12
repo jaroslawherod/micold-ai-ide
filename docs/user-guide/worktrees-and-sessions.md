@@ -491,6 +491,30 @@ Right-click a worktree in the sidebar to open its context menu:
 Session labels come from the AI CLI itself (its own session title); until a title is available a
 placeholder is shown.
 
+### The name on a session row
+
+You never type a session's name. It is the AI CLI's own name for the conversation, and the row
+picks it up as soon as the CLI has one — usually a few exchanges in, once there is enough of a
+conversation to name.
+
+**The name stays.** Once a session has been named, that name is the row's, whether or not anything
+is running: after you close the app, after the background service restarts, after a reboot. You do
+not have to open a session to find out which one it is — the list you come back to reads the same
+as the list you left, so you can pick the session you want by its name alone.
+
+**"New session" means the conversation has no name yet**, not that the app hasn't finished loading.
+A session you created and never talked to reads "New session" for as long as that is true, and
+keeps reading it across restarts.
+
+**The newest name wins.** If the conversation moves on and the CLI re-titles it, the row follows,
+and that newer name is the one that comes back next time. Names are per session: re-titling one
+never touches another.
+
+**Sessions from before this was true get their names back.** If you have sessions that were showing
+"New session" even though you had named conversations in them, opening the project is enough — each
+one is looked up in its own CLI's records, once, and keeps the name it finds. A session whose
+conversation the CLI no longer has keeps the name it was already showing; nothing takes a name away.
+
 ## Choosing which AI CLI a session runs
 
 A session runs one AI coding CLI — Claude Code, GitHub Copilot or Pi Coding Agent — and which one is
