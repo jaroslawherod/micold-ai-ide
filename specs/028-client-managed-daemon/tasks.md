@@ -326,10 +326,26 @@ that pins the classification, because the integration test only reaches the race
 
 - [X] T060 [P] Run `cargo fmt --all` and `cargo clippy --workspace --all-targets -- -D warnings` — the local gate omits `fmt`, and CI stops at `cargo fmt --check` before any other job
 - [X] T061 Run `mise run test` and confirm the whole workspace is green
-- [ ] T062 Run `mise run test-sandbox` (or `cargo test -p micold-daemon --features sandbox-real-runtime sandbox_real_idle`) on a machine with a working Docker daemon (quickstart Part A, real-runtime section)
+- [X] T062 Run `mise run test-sandbox` (or `cargo test -p micold-daemon --features sandbox-real-runtime sandbox_real_idle`) on a machine with a working Docker daemon (quickstart Part A, real-runtime section) — recorded in `specs/028-client-managed-daemon/evidence/t062-real-runtime.md`
 - [X] T063 [P] Extend `crates/micold-core/tests/quickstart_a_runs_everywhere.rs` so quickstart Part A's commands stay covered by the existing gate
 - [X] T064 Sweep `crates/micold-daemon/tests/sandbox_real_staleness.rs`, `sandbox_real_limits.rs`, `sandbox_real_parity.rs`, `sandbox_real_boundary.rs`, `sandbox_real_fingerprint.rs` and `crates/micold-daemon/tests/sandbox_real_support/mod.rs` for `survive_logout` uses whose meaning the amendment changes
-- [ ] T065 Verify the pinned client/daemon pair still connects after the change — a mixed pair from `target-shared` refuses even with matching version numbers printed
+
+### What Phase 8 found on the way
+
+T063's new gate failed on its first run, against this feature's own quickstart: Part A said
+`cargo test … sandbox_idle`, and `sandbox_idle` is a *file stem*. cargo filters on test **names**,
+so that line selected nothing, exited 0 and printed `test result: ok` — a validation step that
+validated nothing. Fixed on both sides: the two tests in `sandbox_real_idle.rs` were renamed so the
+stem is also a name prefix, and the quickstart now says `sandbox_real_idle` and explains why.
+
+Reading the quickstart from a test then tripped `documentation_is_not_read.rs` (feature 023), which
+is the point of that gate: `specs/**` is declared documentation, CI skips the whole build for a
+change that touches only those paths, and a test that reads one makes the skip unsound. Feature 027
+had already met this and answered it by unsetting `micold-docs` on its own quickstart; 028's
+quickstart now carries the same exception, with the same reason written beside it in
+`.gitattributes` and pinned in `scripts/tests/documentation-set.test.sh`.
+
+- [X] T065 Verify the pinned client/daemon pair still connects after the change — a mixed pair from `target-shared` refuses even with matching version numbers printed — recorded in `specs/028-client-managed-daemon/evidence/t065-pinned-pair.md`
 - [ ] T066 Execute quickstart Part B (B1–B8) and record each with date, machine and outcome in `specs/028-client-managed-daemon/evidence/quickstart-b.md`
 - [ ] T067 Reconcile the spec artifacts with what was built — if any task forced a decision the design documents do not carry, amend `research.md`, `data-model.md` or `contracts/` rather than leaving the record wrong
 
