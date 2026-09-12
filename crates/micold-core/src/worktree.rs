@@ -25,6 +25,28 @@ pub enum WorktreeStatus {
     Invalid,
 }
 
+impl WorktreeStatus {
+    /// The one word the interface shows a worktree's health as, or `None` when there is nothing to
+    /// say (feature 029, FR-006, contract §4).
+    ///
+    /// `Option` rather than a string that happens to be empty for [`Valid`](Self::Valid). The
+    /// sidebar's status chip answered this with `""` and left every reader of it to remember that
+    /// a blank was meaningful; a second reader — the row's hover tooltip — is exactly the point at
+    /// which that convention would have been forgotten, and a blank chip or a `Status:` line with
+    /// nothing after it is how it would have shown up. Here "healthy has no word" is a fact of the
+    /// type, so a caller cannot forget it without the compiler saying so.
+    ///
+    /// It is the single source: the chip and the tooltip both read this, so they cannot come to
+    /// disagree about the same row (§4.2).
+    pub fn label(&self) -> Option<&'static str> {
+        match self {
+            Self::Valid => None,
+            Self::Missing => Some("missing"),
+            Self::Invalid => Some("invalid"),
+        }
+    }
+}
+
 /// Directory-name prefix reserved for an AI assistant's own worktrees (feature 014, FR-005).
 const AGENT_DIR_PREFIX: &str = "agent-";
 /// Branch-name prefix reserved for an AI assistant's own worktrees (feature 014, FR-005).

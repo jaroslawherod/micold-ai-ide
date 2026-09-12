@@ -389,17 +389,73 @@ pub fn scroll_target(
 /// project root.
 pub const DEFAULT_LOCATION_LABEL: &str = "Project root";
 
-/// A worktree's location, expressed relative to the project root, for its sidebar tooltip
-/// (feature 010, FR-010, research.md R6). Every worktree lives directly under
-/// `<project_root>/.claude/worktrees/`, so a plain `strip_prefix` suffices — no
-/// general-purpose relative-path algorithm is needed. Falls back to the absolute path in the
-/// unreachable case where a worktree's path is not actually under the project root.
-pub fn worktree_location_label(project_root: &Path, worktree: &Worktree) -> String {
-    worktree
-        .path
-        .strip_prefix(project_root)
-        .map(|rel| rel.display().to_string())
-        .unwrap_or_else(|_| worktree.path.display().to_string())
+/// Everything a worktree row's hover tooltip says, as one labelled line per fact
+/// (feature 029, contract `worktree-tooltip.md`).
+///
+/// Pure and total: no I/O and no clock, defined for every combination of its inputs — an unknown
+/// `project_root`, a worktree with no branch, any [`WorktreeStatus`]. Every fact it renders is
+/// already in the `Worktree` the row was built from, which is what keeps the hover path free of
+/// work (FR-012).
+///
+/// A fact the worktree does not have is an **absent line**, never a blank one and never a label
+/// with nothing after it (§2.2). That is the rule the whole shape turns on: a tooltip padded with
+/// empty rows is worse than a short one, because the reader cannot tell an unknown from a missing
+/// answer.
+///
+/// It replaces `worktree_location_label`, whose single value is now the `Location` line. That
+/// line's own behaviour is unchanged from feature 010's FR-010: relative to the project root when
+/// the worktree lives under it, absolute otherwise. Every worktree this app creates lives directly
+/// under `<project_root>/.claude/worktrees/`, so a plain `strip_prefix` suffices — the absolute
+/// fallback covers a worktree the app did not create (BUG-002's `included` rows), where rendering
+/// nothing would be worse than rendering a long path.
+pub fn worktree_tooltip(
+    project_root: Option<&Path>,
+    worktree: &Worktree,
+    display_name: &str,
+) -> String {
+    let mut lines: Vec<String> = Vec::new();
+
+    // First, always: the fact a shortened row could not show is the fact the reader hovered for
+    // (§2.3). `display_name` is the caller's — the same string the row renders, which a user's
+    // rename overrides — rather than a second derivation from `dir_name`, so the row and its
+    // tooltip cannot disagree about a name (FR-002).
+    lines.push(format!("Name: {display_name}"));
+
+    // The row's label is prettified — the type token and the ticket are stripped out of it — so
+    // the branch it is bound to appears nowhere on the row (FR-004).
+    if let Some(branch) = &worktree.branch {
+        lines.push(format!("Branch: {branch}"));
+    }
+
+    // The folder you would `cd` into, but only when it is not already on the line above. Printing
+    // the same string under two labels teaches nothing and costs the reader a comparison (FR-005).
+    if worktree.dir_name != display_name {
+        lines.push(format!("Folder: {}", worktree.dir_name));
+    }
+
+    if let Some(root) = project_root {
+        let mut location = worktree
+            .path
+            .strip_prefix(root)
+            .map(|rel| rel.display().to_string())
+            .unwrap_or_else(|_| worktree.path.display().to_string());
+        // On the location line rather than a line of its own, because the location is the thing it
+        // explains: an included worktree's path is absolute by construction (BUG-002), and among
+        // the relative ones that reads as an oddity until something says why (FR-007). The phrase
+        // is the row's own chip, word for word.
+        if worktree.included {
+            location.push_str(" (outside this app)");
+        }
+        lines.push(format!("Location: {location}"));
+    }
+
+    // Last: the condition is read after the thing it is a condition of. `label()` returning `None`
+    // for a healthy worktree is what keeps `Status: ok` off every row — normal reads as normal.
+    if let Some(status) = worktree.status.label() {
+        lines.push(format!("Status: {status}"));
+    }
+
+    lines.join("\n")
 }
 
 impl crate::app::State {

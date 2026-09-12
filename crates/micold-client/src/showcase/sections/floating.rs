@@ -214,6 +214,12 @@ pub fn menu_trigger<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a
 }
 
 /// `Tooltip` — hover-driven, so it has nothing to pose: point at an instance and wait.
+///
+/// The third instance is the one worth hovering. A tooltip's label used to be a single short
+/// phrase; it is now allowed to be a block of labelled lines, one of which is a filesystem path.
+/// That shape has a ceiling (`material::TOOLTIP_MAX_WIDTH`) and a glyph-level wrap, and neither is
+/// visible on a one-word label — so without an instance that reaches them, the gallery would be
+/// showing a component it no longer fully describes (feature 029).
 pub fn tooltip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(
         vec![
@@ -234,6 +240,18 @@ pub fn tooltip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
                     roles,
                 )
                 .position(material::TooltipPosition::Left),
+                roles,
+            ),
+            posed(
+                "multi-line, wrapped at the ceiling",
+                material::Tooltip::new(
+                    material::IconButton::new(Icon::ProjectRoot, roles).on_press(Message::NoOp),
+                    "Name: A worktree whose name is wider than the sidebar\n\
+                     Branch: feat/abc-123-a-long-branch-name\n\
+                     Folder: feat-abc-123_a-long-branch-name\n\
+                     Location: .claude/worktrees/feat-abc-123_a-long-branch-name",
+                    roles,
+                ),
                 roles,
             ),
         ],

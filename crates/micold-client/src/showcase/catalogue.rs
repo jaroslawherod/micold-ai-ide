@@ -687,7 +687,11 @@ an unavailable row",
         // enum. Posed states instead.
         variants: &[],
         density: &[],
-        posed: &["below (the default)", "to the left"],
+        posed: &[
+            "below (the default)",
+            "to the left",
+            "multi-line, wrapped at the ceiling",
+        ],
         live: &["hover and wait"],
         interactive: true,
         section: Section::Components,
