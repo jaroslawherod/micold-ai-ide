@@ -176,20 +176,52 @@ and completely, and the next start is indistinguishable from a first start.
 
 ### Tests (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T034 [P] [US3] Write failing integration test `crates/micold-daemon/tests/idle_stop.rs` — with a test-only short window, a daemon with zero connections exits by itself; with one connection it never does (FR-008, FR-009, lifecycle contract §3.7, §3.9)
-- [ ] T035 [P] [US3] Write failing test in `crates/micold-daemon/tests/idle_stop.rs` for the shutdown order — sessions are marked `InterruptedResumable` and persisted **before** their process trees are killed, and the endpoint is released last (data-model G5, lifecycle contract §3.11)
-- [ ] T036 [P] [US3] Write failing test `crates/micold-daemon/tests/idle_teardown.rs` — after the stop: no descendant process, no file at the endpoint path, the lock released, and a fresh daemon binds the same endpoint with no recovery step — looped over 20 consecutive stop-and-restart cycles, asserting zero residue on each (FR-013, FR-014, SC-007, lifecycle contract §3.12–3.13)
-- [ ] T037 [P] [US3] Write failing test `crates/micold-daemon/tests/idle_race.rs` — a connect issued as the window expires ends attached to a working daemon with no `DaemonConnectFailed` reaching the client (FR-016, lifecycle contract §4.14, research R5)
-- [ ] T038 [P] [US3] Write failing test in `crates/micold-daemon/tests/idle_stop.rs` — a live session does **not** extend the window, and afterwards the session is `InterruptedResumable` and did not auto-resume (FR-006a, FR-006b, FR-006c, lifecycle contract §3.10)
-- [ ] T039 [P] [US3] Write failing unit test in `crates/micold-client/src/daemon.rs` (`#[cfg(test)]`) — a single transient connect failure is absorbed by the existing `RECONNECT_BACKOFF` at line 126 without raising the connection banner (lifecycle contract §4.15)
+- [X] T034 [P] [US3] Write failing integration test `crates/micold-daemon/tests/idle_stop.rs` — with a test-only short window, a daemon with zero connections exits by itself; with one connection it never does (FR-008, FR-009, lifecycle contract §3.7, §3.9)
+- [X] T035 [P] [US3] Write failing test in `crates/micold-daemon/tests/idle_stop.rs` for the shutdown order — sessions are marked `InterruptedResumable` and persisted **before** their process trees are killed, and the endpoint is released last (data-model G5, lifecycle contract §3.11)
+- [X] T036 [P] [US3] Write failing test `crates/micold-daemon/tests/idle_teardown.rs` — after the stop: no descendant process, no file at the endpoint path, the lock released, and a fresh daemon binds the same endpoint with no recovery step — looped over 20 consecutive stop-and-restart cycles, asserting zero residue on each (FR-013, FR-014, SC-007, lifecycle contract §3.12–3.13)
+- [X] T037 [P] [US3] Write failing test `crates/micold-daemon/tests/idle_race.rs` — a connect issued as the window expires ends attached to a working daemon with no `DaemonConnectFailed` reaching the client (FR-016, lifecycle contract §4.14, research R5)
+- [X] T038 [P] [US3] Write failing test in `crates/micold-daemon/tests/idle_stop.rs` — a live session does **not** extend the window, and afterwards the session is `InterruptedResumable` and did not auto-resume (FR-006a, FR-006b, FR-006c, lifecycle contract §3.10)
+- [X] T039 [P] [US3] Write failing unit test in `crates/micold-client/src/daemon.rs` (`#[cfg(test)]`) — a single transient connect failure is absorbed by the existing `RECONNECT_BACKOFF` at line 126 without raising the connection banner (lifecycle contract §4.15)
 
 ### Implementation
 
-- [ ] T040 [US3] Add the 30-second idle tick beside `spawn_supervisor` in `crates/micold-daemon/src/server.rs:220-240`, evaluating `IdleWindow::expired` and signalling shutdown — a tick, not a single 30-minute sleep, so waking from suspend is prompt and the overshoot is bounded at 30 s (research R3, SC-004)
-- [ ] T041 [US3] Add a test-only window override (a constructor parameter or env var read once at startup, not a `cfg(test)` fork) in `crates/micold-daemon/src/idle.rs`, so integration tests run in seconds while T006 asserts the real 30-minute constant
-- [ ] T042 [US3] Implement the ordered unwind in `crates/micold-daemon/src/server.rs::run()` per data-model G5: diagnostics line, stop accepting, persist sessions as interrupted-resumable, drop the session table so `PtySession::Drop` terminates each process tree (`crates/micold-daemon/src/supervisor.rs:366-382`), drop `BoundListener` last, return `Ok(())`
-- [ ] T043 [US3] Ensure `crates/micold-daemon/src/main.rs` returns from `run()` normally and never calls `process::exit`, so every `Drop` in T042's order actually runs (research R4)
-- [ ] T044 [P] [US3] Document the idle window in `docs/daemon.md` — when the service stops, what happens to running sessions, and that reopening presents them as resumable (FR-025)
+- [X] T040 [US3] Add the 30-second idle tick beside `spawn_supervisor` in `crates/micold-daemon/src/server.rs:220-240`, evaluating `IdleWindow::expired` and signalling shutdown — a tick, not a single 30-minute sleep, so waking from suspend is prompt and the overshoot is bounded at 30 s (research R3, SC-004)
+- [X] T041 [US3] Add a test-only window override (a constructor parameter or env var read once at startup, not a `cfg(test)` fork) in `crates/micold-daemon/src/idle.rs`, so integration tests run in seconds while T006 asserts the real 30-minute constant
+- [X] T042 [US3] Implement the ordered unwind in `crates/micold-daemon/src/server.rs::run()` per data-model G5: diagnostics line, stop accepting, persist sessions as interrupted-resumable, drop the session table so `PtySession::Drop` terminates each process tree (`crates/micold-daemon/src/supervisor.rs:366-382`), drop `BoundListener` last, return `Ok(())`
+- [X] T043 [US3] Ensure `crates/micold-daemon/src/main.rs` returns from `run()` normally and never calls `process::exit`, so every `Drop` in T042's order actually runs (research R4)
+- [X] T044 [P] [US3] Document the idle window in `docs/daemon.md` — when the service stops, what happens to running sessions, and that reopening presents them as resumable (FR-025)
+
+### One deviation in US3 (T035/T038)
+
+T035 and T038 were written to assert the shutdown handoff **from disk**, and could not be: a
+session's lifecycle is not a persisted field. `StoredSession` (`micold-core/src/store.rs:130`)
+carries id, worktree, title, mode, archived and provider, and nothing else; every session loads as
+`Idle`, and what turns one back into `InterruptedResumable` at startup is
+`present_interrupted_resumable_at_startup`, which asks the AI CLI's own conversation store rather
+than reading anything this project wrote. That is the design feature 026 settled on, and it is what
+data-model L4 already records here — *"an idle stop introduces no new session state"*.
+
+So the assertion moved to the catalog the daemon itself reports (`state.sessions_for`), and the
+ordering property it was written for is intact and still the thing under test: the record says
+`InterruptedResumable` at a moment when `kill(pid, 0)` proves the process is still alive, and only
+then does dropping the session table kill it. Adding a persisted lifecycle field purely so a test
+could read one back would have been inventing durable state the product does not have — and G5's
+step 3 keeps its `persist()` (the catalog is written once, before the teardown) for everything that
+*is* durable.
+
+### The T037 race was real, and the fix is in the core (not the client)
+
+T037 failed on first run: one connect in fifty reached the caller as `Connection reset by peer`.
+Not flake — a connect succeeds the moment the kernel puts it on the listener's backlog, so a client
+that dials as the daemon stops gets an open stream from a daemon that will never accept it. No
+shutdown ordering removes that instant, which is why §4.15 puts the remedy on the client.
+
+It landed in `micold-core/src/connect.rs` rather than in T039's client-side absorption, because the
+entry point that has to close it is `connect_or_spawn` — the client absorbs a *reported* failure,
+and this one must never become one. Two halves: `connect_at` reads a handshake that dies under it
+(reset/abort/broken pipe/EOF) as absence, the same as a cold endpoint; and the poll loop spawns
+again after `RESPAWN_AFTER` (1 s), because the daemon it first spawned may have found the endpoint
+still owned by the one unwinding, said so, and exited.
 
 **Checkpoint**: the feature's core promise holds on the host placement, end to end.
 
@@ -216,7 +248,7 @@ B6 (opt-in on — still running, and the copy said so).
 - [ ] T050 [US4] Pass `MICOLD_IDLE_STOP` in `crates/micold-core/src/sandbox/argv.rs::create`, immediately beside the `MICOLD_IMAGE_REFERENCE` at line 114 and for the same reason — a daemon inside a container cannot see how its container was created (research R2a); pass T041's window override through the same `-e` path, or T047 and T048 have no way to run in seconds
 - [ ] T051 [US4] Read it once at daemon startup and suppress `IdleWindow` when its value is `off` — the value decides, not mere presence, so an unset variable or any other value leaves the idle rule in force — in `crates/micold-daemon/src/server.rs::run()` and `crates/micold-daemon/src/idle.rs`
 - [ ] T052 [US4] Make `survive_logout` part of what makes a sandbox stale in `crates/micold-core/src/sandbox/lifecycle.rs`, beside `mount_set_changed` — without this FR-022a silently does not hold, because both the restart policy and the environment are fixed at creation (research R2a)
-- [ ] T053 [P] [US4] Update `docs/user-guide/sandboxed-daemon.md` — the opt-in now means "keep the sandbox running: it survives logout and reboot, and is not stopped when idle" (FR-022, packaging contract §4.13)
+- [X] T053 [P] [US4] Update `docs/user-guide/sandboxed-daemon.md` — the opt-in now means "keep the sandbox running: it survives logout and reboot, and is not stopped when idle" (FR-022, packaging contract §4.13)
 - [ ] T054 [P] [US4] Update the toggle's copy in `crates/micold-client/src/ui/settings/daemon.rs:49,306` so it states that before the choice is made (spec FR-022, quickstart B6 step 3)
 
 **Checkpoint**: both placements behave identically except where the user asked otherwise.
@@ -239,8 +271,8 @@ with no other evidence.
 ### Implementation
 
 - [ ] T057 [US5] Emit the `StopReason::Idle` line through `crates/micold-daemon/src/logging.rs` as the first step of T042's unwind in `crates/micold-daemon/src/server.rs`
-- [ ] T058 [P] [US5] State in `docs/user-guide/worktrees-and-sessions.md` that closing the window leaves work running and that the service ends itself after a period with nothing connected (FR-025)
-- [ ] T059 [P] [US5] Note in `docs/user-guide/settings.md` what the sandbox toggle now promises (FR-025, packaging contract §4.13)
+- [X] T058 [P] [US5] State in `docs/user-guide/worktrees-and-sessions.md` that closing the window leaves work running and that the service ends itself after a period with nothing connected (FR-025)
+- [X] T059 [P] [US5] Note in `docs/user-guide/settings.md` what the sandbox toggle now promises (FR-025, packaging contract §4.13)
 
 ---
 

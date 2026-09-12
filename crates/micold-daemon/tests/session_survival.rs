@@ -320,7 +320,9 @@ async fn a_session_outlives_the_client_that_was_connected_when_it_started() {
         .unwrap();
     let state = Arc::new(DaemonState::new(Catalog::load(
         Box::new(JsonFileStore::at(projects_path)),
-        Box::new(JsonFileSettingsStore::at(store.path().join("settings.json"))),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
     )));
 
     // A client connects through the real accept path…

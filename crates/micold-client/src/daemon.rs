@@ -126,6 +126,44 @@ pub fn connection(placement: Placement) -> Subscription<Message> {
 /// (FR-028 — the fresh `Welcome` catalog is the resync).
 const RECONNECT_BACKOFF: std::time::Duration = std::time::Duration::from_secs(1);
 
+/// Consecutive failed connects, so a single transient one never reaches the user (feature 028,
+/// FR-016, lifecycle contract §4.15).
+///
+/// The idle stop opened a gap that did not exist while the daemon ran forever: come back to the
+/// machine at the thirty-minute mark and the first connect can land on a daemon that is unwinding,
+/// or on nothing at all. The client closes that gap itself — the reconnect loop backs off one
+/// [`RECONNECT_BACKOFF`] and, on the host placement, `connect_or_spawn` starts a fresh daemon — so
+/// a first failure is a fact about timing, not a fact the user can act on.
+///
+/// What the user still sees during the gap is the reconnecting banner (`Disconnected`), which is
+/// true. What they are spared is the error notification, which says the service could not be reached
+/// when it is about to be. A second consecutive failure is a different claim — the gap outlived the
+/// remedy — and that one is reported.
+///
+/// One state, not a timestamp: the streak is only ever read between two attempts a backoff apart, so
+/// the count *is* the elapsed time in the only unit that matters here.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct ConnectFailures {
+    consecutive: u32,
+}
+
+impl ConnectFailures {
+    /// Record a failed connect; returns whether it should reach the user.
+    fn record_failure(&mut self) -> bool {
+        self.consecutive += 1;
+        self.consecutive > 1
+    }
+
+    /// Record a connect that worked, so the *next* isolated gap is absorbed too.
+    ///
+    /// Without this the counter would measure the client's uptime rather than the daemon's absence:
+    /// a window open all day would treat a bad moment in the afternoon as a continuation of one that
+    /// morning and report it instantly.
+    fn record_success(&mut self) {
+        self.consecutive = 0;
+    }
+}
+
 /// One inbound event of the bidirectional pump, unifying the source streams so a single loop can
 /// service all of them without a `select!` (which would need fused, pinned futures).
 enum Io {
@@ -168,8 +206,11 @@ fn actor(placement: Placement) -> impl Stream<Item = Message> {
             // Reconnect loop: connect, pump until the link drops, surface it, back off, repeat. A
             // half-open connection is caught by the keepalive inside `pump`, so the client never sits
             // forever presenting stale content as live (FR-026/027).
+            // Owned by the reconnect loop rather than by one attempt: the whole point is what the
+            // *previous* attempt did.
+            let mut failures = ConnectFailures::default();
             loop {
-                match connect_and_pump(&placement, &endpoint, &mut output).await {
+                match connect_and_pump(&placement, &endpoint, &mut output, &mut failures).await {
                     PumpEnd::AppGone => return,
                     PumpEnd::Disconnected => {
                         if output
@@ -194,6 +235,7 @@ async fn connect_and_pump(
     placement: &Placement,
     endpoint: &endpoint::Endpoint,
     output: &mut mpsc::Sender<Message>,
+    failures: &mut ConnectFailures,
 ) -> PumpEnd {
     let attempt = match placement.kind {
         // Unchanged: auto-spawn a detached host process and poll until it accepts.
@@ -221,9 +263,12 @@ async fn connect_and_pump(
     let connected = match attempt {
         Ok(c) => c,
         Err(err) => {
-            return report_connect_failure(output, err.to_string()).await;
+            return report_transient_connect_failure(output, err.to_string(), failures).await;
         }
     };
+    // We reached *a* daemon. A refusal below is still a connection, and a connection is what the
+    // streak counts — the mismatch banners are its own state and say something specific.
+    failures.record_success();
     let (conn, welcome) = match connected {
         Connected::Ready(conn, welcome) => (conn, welcome),
         // A contract mismatch is its own recoverable state (US6, FR-021/022): surface both versions
@@ -376,6 +421,31 @@ fn stale_dev_image_advice(
     )
 }
 
+/// A connect that never reached a daemon, reported only once it has outlived one reconnect backoff
+/// (feature 028, FR-016, §4.15 — see [`ConnectFailures`]).
+///
+/// The first one is absorbed: the caller still gets `Disconnected`, so the reconnecting banner goes
+/// up and the loop retries a second later, but no error notification is raised for a gap the client
+/// is about to close itself.
+///
+/// Separate from [`report_connect_failure`], which the refusal paths use, and deliberately so: a
+/// refusal means a daemon answered and said no — a version or build mismatch the user has to act on.
+/// Absorbing one of those would delay a banner that is already correct, for a condition that will
+/// not resolve itself.
+async fn report_transient_connect_failure(
+    output: &mut mpsc::Sender<Message>,
+    reason: String,
+    failures: &mut ConnectFailures,
+) -> PumpEnd {
+    if !failures.record_failure() {
+        // Nothing is reported and nothing is logged from here: `log_line` belongs to the binary,
+        // not this module, and the next attempt one backoff later either succeeds — in which case
+        // there was nothing to tell — or reports this same reason itself.
+        return PumpEnd::Disconnected;
+    }
+    report_connect_failure(output, reason).await
+}
+
 /// Report a connect failure to the app and map it to a disconnect (so the outer loop retries). If the
 /// app is gone, that surfaces as `AppGone` instead.
 async fn report_connect_failure(output: &mut mpsc::Sender<Message>, reason: String) -> PumpEnd {
@@ -392,7 +462,56 @@ async fn report_connect_failure(output: &mut mpsc::Sender<Message>, reason: Stri
 
 #[cfg(test)]
 mod tests {
-    use super::stale_dev_image_advice;
+    use super::{stale_dev_image_advice, ConnectFailures};
+
+    /// §4.15 (feature 028) — one transient connect failure must not reach the user.
+    ///
+    /// The idle stop creates a gap that did not exist before: come back to the machine at the
+    /// thirty-minute mark and the client's next connect can land on a daemon that is unwinding, or
+    /// on nothing at all. The client closes that gap itself within one `RECONNECT_BACKOFF`, so
+    /// putting a banner up for it would be telling the user about a problem that is over before
+    /// they finish reading it — and a banner that cries wolf is a banner ignored when the daemon
+    /// really is gone.
+    #[test]
+    fn a_single_transient_connect_failure_does_not_raise_the_banner() {
+        let mut failures = ConnectFailures::default();
+        assert!(
+            !failures.record_failure(),
+            "the first failure is absorbed by the reconnect backoff"
+        );
+    }
+
+    /// …and a *second* consecutive failure does raise it. The rule is "absorb one", not "stay
+    /// quiet": a daemon that is genuinely gone must still reach the user, one backoff later.
+    #[test]
+    fn a_second_consecutive_failure_raises_the_banner() {
+        let mut failures = ConnectFailures::default();
+        assert!(!failures.record_failure());
+        assert!(
+            failures.record_failure(),
+            "a failure that persists past one backoff is not transient"
+        );
+        assert!(
+            failures.record_failure(),
+            "and it keeps being reported for as long as it lasts"
+        );
+    }
+
+    /// A success resets the streak, so the *next* isolated gap is absorbed too.
+    ///
+    /// Without this, a long-running client that had two bad moments hours apart would treat the
+    /// second one as a continuation of the first and raise the banner instantly — the counter would
+    /// be measuring the client's uptime rather than the daemon's absence.
+    #[test]
+    fn a_successful_connect_resets_the_streak() {
+        let mut failures = ConnectFailures::default();
+        assert!(!failures.record_failure());
+        failures.record_success();
+        assert!(
+            !failures.record_failure(),
+            "an isolated gap after a healthy connection is still an isolated gap"
+        );
+    }
 
     /// FR-024d asks for the tag **and** the rebuild command. Before this, the refusal reached the
     /// user as a `{:?}` dump of `StaleDevImage`, which carried the tag as debug noise and no remedy

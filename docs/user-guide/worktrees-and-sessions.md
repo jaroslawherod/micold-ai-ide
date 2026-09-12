@@ -757,8 +757,20 @@ auto-restarted under the same crash-loop guard as a foreground session. When you
 project a short **notice** tells you a background session was restarted — the state never changes
 silently. Dismiss it with its **Dismiss** button.
 
-> Background sessions live for as long as the app is running. Quitting the app stops every session;
-> on the next launch they are restored and resume the same conversations when selected.
+### Closing the window does not stop your work
+
+Sessions run in a background service, not inside the window, so **closing the last window leaves them
+running.** An agent mid-task keeps working, and reopening the application re-attaches to it with the
+output that accumulated while you were gone.
+
+That service does not run forever either. **After 30 continuous minutes with nothing connected it
+stops itself**, and reopening the application starts a fresh one. A session that was running when it
+stopped comes back *resumable* rather than lost: selecting it resumes the same conversation where it
+left off, and nothing is ever auto-resumed with nobody watching.
+
+Nothing about this is a setting you have to find, and nothing needs installing to make it work — see
+[the session service](../daemon.md) for what it does and does not promise, including what a reboot
+costs you.
 
 ## Colored, real-terminal output
 
