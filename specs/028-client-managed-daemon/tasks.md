@@ -365,6 +365,16 @@ B5 and B6 measured, R3 the suspend-inclusive clock B3 would have tested, and `co
 §6.19/§6.20 the stop reasons the logs printed verbatim; `docs/daemon.md` and
 `docs/user-guide/sandboxed-daemon.md` already describe both opt-ins to the user.
 
+What neither of them caught, and CI did: **the macOS arm of the new clock never compiled.** `libc`
+has dropped `mach_continuous_time` and deprecated the timebase type beside it, so every run since
+`ddcfe1e5` failed `build + test (macos-latest)` with `cannot find function mach_continuous_time in
+crate libc` while the other seven jobs stayed green — the local gate builds for this host only, and
+`clock.rs` is the one file in the feature with a platform split. The two symbols are now declared
+in the module against libSystem rather than imported from `libc`, which is a smaller debt than
+taking on `mach2` for two functions. `rustup target add aarch64-apple-darwin` plus
+`cargo check --target aarch64-apple-darwin` reproduces the whole thing locally in about a minute,
+and is what should be run before pushing anything under a `cfg(target_os)`.
+
 ---
 
 ## Dependencies & Execution Order
