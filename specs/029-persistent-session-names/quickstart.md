@@ -135,3 +135,74 @@ directory so a concurrent session's window or build cannot land in the run.
 
 Findings go under a dated heading below, including anything the pass turned up that this spec does
 not cover.
+
+### The pass (2026-09-12)
+
+| Recorded | |
+|---|---|
+| Date | 2026-09-12 |
+| Platform | Xvfb `:79` + lavapipe (software Vulkan), not a real display. Private `XDG_RUNTIME_DIR=/tmp/vp79`, private `XDG_DATA_HOME`, private `CLAUDE_CONFIG_DIR`, a throwaway git repo as the project |
+| Build | `micold-ai-ide` and `micold-daemon` from one `cargo build`, copied to `~/vp029/bin/` before the run and launched from there — never out of `target-shared/`. The daemon carries this feature (`strings` finds its recovery log lines), the client does not (it is unchanged by design). The pair connects: `client attached to daemon client_build=micold-ai-ide/0.12.1`, no build-mismatch refusal |
+| B1 — the names survive a daemon restart | **PASS** — [evidence](./evidence/B1-after-a-full-restart.png) |
+| B2 — opening a restored session does not disturb its name | **PASS** — [evidence](./evidence/B2-handover-six-frames.png) |
+| B3 — my existing sessions got their names back | **PASS** — [evidence](./evidence/B3-recovered-from-the-cli.png) |
+| B4 — the name follows a re-title | **PASS** — [evidence](./evidence/B4-retitled.png) |
+| B5 — an unnamed session still says so | **PASS** — in [B1](./evidence/B1-after-a-full-restart.png) and [B7](./evidence/B7-final-state.png) |
+| B6 — a storage failure is not a session failure | **PASS** — [evidence](./evidence/B6-unwritable-data-dir.png) |
+| B7 — nothing else moved | **PASS, with two things not reached** (busy/idle indicator, worktree rows — see below) — [evidence](./evidence/B7-final-state.png) |
+
+**The AI CLI was a stand-in, and that is the one caveat worth reading first.** Driving a real
+`claude` to title, re-title and *not* title three conversations on demand is not something this pass
+can arrange, so `claude` on the run's `PATH` was a ~20-line script that does exactly the two things
+this feature reads: it emits the conversation's name as an **OSC-0 terminal title**, and it appends
+`{"type":"ai-title","aiTitle":"…"}` to a transcript at
+`$CLAUDE_CONFIG_DIR/projects/<encoded-cwd>/<session-id>.jsonl`. Those two interfaces are the entire
+surface the daemon touches (`provider.rs`), and the application was not told it was talking to a
+stand-in. What is therefore *not* evidenced here is that the real `claude` still emits what it
+emitted when `read_title`/`parse_title` were written — the existing provider gates cover the parsing,
+not the emitting.
+
+**How each step was run.**
+
+- The project was seeded with **three sessions, all `Pending` on disk** (a pre-split `projects.json`
+  is a valid seed), each with a transcript so `prune_empty_sessions` would keep it. Exactly one of
+  the three (`2222…`) had an `ai-title` in its transcript the application had never seen — the
+  reporter's actual state, made deliberately.
+- **B3** is the first thing that happened: opening the project, *without opening any session*, logged
+  `recovered session names from the AI CLI's own records … count=1` and the row went from "New
+  session" to "Rename the daemon socket". The `title` key was then present in the project's state
+  file — so the second half of B3 is evidenced by the **second** run, whose log has no recovery line
+  at all (`count` never reported again) while the name is still on the row: it came from the
+  application's own record that time.
+- **B1 was run both ways.** Daemon only (client left running): killed by PID, the client showed
+  "Not connected … Reconnecting", respawned the daemon, and the rows kept their names. Then both
+  stopped and the client relaunched from cold. For that second run the stand-in was made **silent** —
+  its name file emptied, so no OSC-0 title is emitted for any session — and `last_session` was
+  removed from the state file so nothing auto-opened. Every name then on screen can only have come
+  from the record. Two named rows showed their names, the third showed "New session".
+- **B4** drove a re-title on a live session (`Fix the flaky login test` → `Cache the worktree list`):
+  the row followed within one debounce tick and the state file held only the new name — the previous
+  one is nowhere in it. After the restart in B1 the row still read the newest name.
+- **B6** ran `chmod 500` on the data directory and then re-titled the live session. The row showed
+  the new name, the session stayed `running`, no banner, no `Failed` — and the only trace was
+  `WARN … could not persist the session's name; it is still shown … err=Permission denied (os error
+  13)`, with the file still holding the previous name. Write permission restored, the next title
+  change persisted again (`Persist the session name`, new mtime).
+- **B7** also checked the path this feature could most easily have broken: a transcript for an
+  **unknown** session id was dropped into the CLI's store, and the next attach adopted it *with its
+  title* (`adopted sessions started outside this application … count=1`, row reads "Discovered from
+  the CLI"). A session created through the UI and never named stayed "New session" across a restart.
+  Five rows, five distinct labels, no row wearing another's name.
+
+**Not covered, and not marked passed.**
+
+- **The busy/idle indicator.** `claude`'s activity reaches the daemon through its hooks, which the
+  stand-in does not install, so no row was ever driven busy. Unchanged by this feature's diff, but
+  not seen.
+- **Worktree rows.** The throwaway project has no worktrees; only the Default (project-root) row and
+  the "No worktrees yet" empty state were exercised. `SessionLocation::Worktree` is covered by the
+  automated gates but not by this pass.
+- **SC-003's "no row passes through 'New session' on its way to being named"** is argued here rather
+  than caught frame-by-frame: with the CLI emitting nothing at all and no session started, a name on
+  screen has no other source than the record. A screenshot pipeline cannot reliably sample the first
+  paint after attach, which is the frame that claim is about.
