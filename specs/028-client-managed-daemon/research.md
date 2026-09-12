@@ -120,6 +120,22 @@ already uses.
 **Consequence for the tasks**: the opt-in must be part of what makes a sandbox stale, and a test has
 to assert that, or FR-022a silently does not hold. Nothing else about the sandbox changes.
 
+**As built (US4).** Two refinements this decision did not anticipate, neither of which changes it:
+
+- The staleness transition is `lifecycle::survive_logout_changed`, its own function rather than a
+  second caller of `mount_set_changed`. They are the same transition arrived at for different
+  reasons, and only one of them may change: if registering a project ever stops making a sandbox
+  stale, the opt-in must not silently stop too.
+- `MICOLD_IDLE_STOP`'s *name* moved to `micold-core::spawn` (`IDLE_STOP_ENV`, `IDLE_STOP_OFF`), with
+  `micold_daemon::idle` re-exporting it. The daemon reads the variable but cannot own its spelling:
+  the two places that write it — `sandbox/argv.rs` and the real-runtime harness — are both outside
+  the daemon and cannot depend on it. What a *value* means is still the daemon's, in
+  `idle::configured_window`.
+
+`argv::create` deliberately does **not** forward this process's own `MICOLD_IDLE_STOP`. It is pure
+by obligation C-1, and a shortened window is a property of a test run rather than of a sandbox spec;
+the real-runtime tests pass theirs through the harness's `extra` argv instead.
+
 ---
 
 ## R3 — A window that survives suspend

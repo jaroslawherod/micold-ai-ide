@@ -19,6 +19,7 @@ use std::ffi::OsString;
 use super::dialect::Dialect;
 use super::runtime::RuntimeCapabilities;
 use super::{MountSet, NetworkPosture, SandboxSpec};
+use crate::spawn::{IDLE_STOP_ENV, IDLE_STOP_OFF};
 
 /// Flags that would hand the sandbox back the host, in whole or in part.
 ///
@@ -76,6 +77,25 @@ pub fn restart_policy(survive_logout: bool) -> &'static str {
     }
 }
 
+/// The [`IDLE_STOP_ENV`] value a sandbox is created with, or `None` to leave it unset (feature 028,
+/// FR-022, lifecycle contract §5.18).
+///
+/// `Some("off")` exactly when the keep-it-running opt-in is on. That is the single approved
+/// exception to "the same rule on both placements" (§5.16): a service the user explicitly asked to
+/// keep running is not one to stop for being unused. With the opt-in off this returns `None` and
+/// the variable is not passed at all — the daemon's own default *is* the shipped window, so passing
+/// it would say the same thing less clearly, and would give a reader of the argv something to
+/// wonder about.
+///
+/// The opt-in's other half is [`restart_policy`], and neither works alone: a container the runtime
+/// restarts that then stops itself for being idle is a stopped container. They are named side by
+/// side here because the real-runtime harness has to create its containers with the values the
+/// application would choose — a test that spelled `off` itself would be checking its own copy of
+/// this decision rather than this one.
+pub fn idle_stop_value(survive_logout: bool) -> Option<&'static str> {
+    survive_logout.then_some(IDLE_STOP_OFF)
+}
+
 pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     let dialect = Dialect::for_kind(caps.kind);
     let mut args: Vec<OsString> = vec!["create".into(), "--name".into(), (&spec.name).into()];
@@ -115,6 +135,15 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     // and the remedy is missing exactly the word the developer needs to act on it.
     args.push("-e".into());
     args.push(format!("MICOLD_IMAGE_REFERENCE={}", spec.profile.image.reference).into());
+
+    // How long this daemon should tolerate having nobody connected (FR-022, contract §5.18). Beside
+    // the image reference and for the same reason: a daemon inside a container cannot see how its
+    // container was created, so the one thing the sandbox does differently about the idle rule has
+    // to be told to it at creation. Absent unless the user asked — see `idle_stop_value`.
+    if let Some(value) = idle_stop_value(spec.profile.survive_logout) {
+        args.push("-e".into());
+        args.push(format!("{IDLE_STOP_ENV}={value}").into());
+    }
 
     args.extend(budget_args(spec, caps));
     args.extend(mount_args(&spec.mounts));
@@ -454,6 +483,43 @@ mod tests {
             assert!(
                 args.contains(&expected),
                 "{kind}: expected {expected:?} in {args:?}"
+            );
+        }
+    }
+
+    /// T045, FR-019/FR-022, lifecycle contract 5.17/5.18, research R2a.
+    ///
+    /// The idle rule is the same code on both placements; the *one* thing the sandbox does
+    /// differently is honour the keep-it-running opt-in by switching the rule off. A container's
+    /// daemon learns that at creation and nowhere else, for the reason the image reference is
+    /// passed the same way: a process inside a container cannot see how its container was made.
+    #[test]
+    fn the_keep_running_opt_in_is_the_only_thing_that_turns_the_idle_stop_off() {
+        let expected = format!("{IDLE_STOP_ENV}={IDLE_STOP_OFF}");
+        for kind in RuntimeKind::ALL {
+            // Off — the default. The variable is not passed at all, which is the same thing as
+            // passing the shipped window and says less.
+            let mut s = spec();
+            s.profile.survive_logout = false;
+            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            assert!(
+                !args.iter().any(|a| a.starts_with(IDLE_STOP_ENV)),
+                "{kind}: idle stop suppressed without anyone asking: {args:?}"
+            );
+
+            // On — the approved exception. A service the user asked to keep running is not one to
+            // stop for being unused.
+            s.profile.survive_logout = true;
+            let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+            assert!(
+                args.contains(&expected),
+                "{kind}: expected {expected:?} in {args:?}"
+            );
+            // And it travels with the restart policy, because on its own neither one keeps a
+            // sandbox alive: a restarting container that stops itself for being idle is stopped.
+            assert!(
+                args.iter().any(|a| a == restart_policy(true)),
+                "{kind}: {args:?}"
             );
         }
     }

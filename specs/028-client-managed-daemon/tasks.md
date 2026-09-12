@@ -237,19 +237,49 @@ B6 (opt-in on — still running, and the copy said so).
 
 ### Tests (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T045 [P] [US4] Write failing unit test in `crates/micold-core/src/sandbox/argv.rs` (`#[cfg(test)]`) — `create` emits `MICOLD_IDLE_STOP=off` exactly when `profile.survive_logout` is set, alongside the `--restart unless-stopped` that `restart_policy` (line 69) already selects (research R2a)
-- [ ] T046 [P] [US4] Write failing unit test in `crates/micold-core/src/sandbox/lifecycle.rs` (`#[cfg(test)]`) — toggling `survive_logout` against a `SandboxState::Running` yields `Stale`, mirroring `mount_set_changed` at line 388 (FR-022a, research R2a)
-- [ ] T047 [P] [US4] Write failing real-runtime test `crates/micold-daemon/tests/sandbox_idle.rs` behind `--features sandbox-real-runtime` — with the opt-in off, after the injected window the container reports status `exited` and `RestartCount` unchanged (FR-019, FR-020, lifecycle contract §5.17)
-- [ ] T048 [P] [US4] Write failing real-runtime test in `crates/micold-daemon/tests/sandbox_idle.rs` — with the opt-in on, the container is still running after the window, deliberately (FR-022, lifecycle contract §5.18)
-- [ ] T049 [P] [US4] Extend `crates/micold-core/tests/sandbox_parity.rs` so the presence count, the window, the clock and the shutdown order are asserted to be the same code on both placements (FR-018, lifecycle contract §5.16)
+- [X] T045 [P] [US4] Write failing unit test in `crates/micold-core/src/sandbox/argv.rs` (`#[cfg(test)]`) — `create` emits `MICOLD_IDLE_STOP=off` exactly when `profile.survive_logout` is set, alongside the `--restart unless-stopped` that `restart_policy` (line 69) already selects (research R2a)
+- [X] T046 [P] [US4] Write failing unit test in `crates/micold-core/src/sandbox/lifecycle.rs` (`#[cfg(test)]`) — toggling `survive_logout` against a `SandboxState::Running` yields `Stale`, mirroring `mount_set_changed` at line 388 (FR-022a, research R2a)
+- [X] T047 [P] [US4] Write failing real-runtime test `crates/micold-daemon/tests/sandbox_idle.rs` behind `--features sandbox-real-runtime` — with the opt-in off, after the injected window the container reports status `exited` and `RestartCount` unchanged (FR-019, FR-020, lifecycle contract §5.17)
+- [X] T048 [P] [US4] Write failing real-runtime test in `crates/micold-daemon/tests/sandbox_idle.rs` — with the opt-in on, the container is still running after the window, deliberately (FR-022, lifecycle contract §5.18)
+- [X] T049 [P] [US4] Extend `crates/micold-core/tests/sandbox_parity.rs` so the presence count, the window, the clock and the shutdown order are asserted to be the same code on both placements (FR-018, lifecycle contract §5.16)
 
 ### Implementation
 
-- [ ] T050 [US4] Pass `MICOLD_IDLE_STOP` in `crates/micold-core/src/sandbox/argv.rs::create`, immediately beside the `MICOLD_IMAGE_REFERENCE` at line 114 and for the same reason — a daemon inside a container cannot see how its container was created (research R2a); pass T041's window override through the same `-e` path, or T047 and T048 have no way to run in seconds
-- [ ] T051 [US4] Read it once at daemon startup and suppress `IdleWindow` when its value is `off` — the value decides, not mere presence, so an unset variable or any other value leaves the idle rule in force — in `crates/micold-daemon/src/server.rs::run()` and `crates/micold-daemon/src/idle.rs`
-- [ ] T052 [US4] Make `survive_logout` part of what makes a sandbox stale in `crates/micold-core/src/sandbox/lifecycle.rs`, beside `mount_set_changed` — without this FR-022a silently does not hold, because both the restart policy and the environment are fixed at creation (research R2a)
+- [X] T050 [US4] Pass `MICOLD_IDLE_STOP` in `crates/micold-core/src/sandbox/argv.rs::create`, immediately beside the `MICOLD_IMAGE_REFERENCE` at line 114 and for the same reason — a daemon inside a container cannot see how its container was created (research R2a); pass T041's window override through the same `-e` path, or T047 and T048 have no way to run in seconds
+- [X] T051 [US4] Read it once at daemon startup and suppress `IdleWindow` when its value is `off` — the value decides, not mere presence, so an unset variable or any other value leaves the idle rule in force — in `crates/micold-daemon/src/server.rs::run()` and `crates/micold-daemon/src/idle.rs`
+- [X] T052 [US4] Make `survive_logout` part of what makes a sandbox stale in `crates/micold-core/src/sandbox/lifecycle.rs`, beside `mount_set_changed` — without this FR-022a silently does not hold, because both the restart policy and the environment are fixed at creation (research R2a)
 - [X] T053 [P] [US4] Update `docs/user-guide/sandboxed-daemon.md` — the opt-in now means "keep the sandbox running: it survives logout and reboot, and is not stopped when idle" (FR-022, packaging contract §4.13)
-- [ ] T054 [P] [US4] Update the toggle's copy in `crates/micold-client/src/ui/settings/daemon.rs:49,306` so it states that before the choice is made (spec FR-022, quickstart B6 step 3)
+- [X] T054 [P] [US4] Update the toggle's copy in `crates/micold-client/src/ui/settings/daemon.rs:49,306` so it states that before the choice is made (spec FR-022, quickstart B6 step 3)
+
+### Four things US4 decided that the task text did not
+
+**The variable's name now lives in the core, not the daemon.** `MICOLD_IDLE_STOP` is *read* by
+`micold-daemon::idle` and *written* by `micold-core::sandbox::argv::create` and by the test
+harnesses — and the core cannot depend on the daemon. A constant owned by the reader would have to
+be spelled by hand at every writer, so `IDLE_STOP_ENV`/`IDLE_STOP_OFF` moved to
+`micold-core/src/spawn.rs` beside `DAEMON_BIN_ENV` (what a daemon is told at start) and
+`micold_daemon::idle` re-exports them. The daemon still owns what a *value* means; only the
+spelling of the name is shared.
+
+**T050's second clause was not implemented as written.** It asks `create` to "pass T041's window
+override through the same `-e` path" so T047/T048 can run in seconds. `create` is pure by
+obligation C-1 — same spec and capabilities, byte-identical argv, "no environment lookup, clock, or
+randomness may appear here" — and reading the host's own `MICOLD_IDLE_STOP` would break that and
+make its unit tests order-dependent on a process-global. So `create` emits only what the *spec*
+says (`idle_stop_value(survive_logout)`), and the real-runtime tests pass their shortened window
+through the harness's existing `extra` argv field, which is where a test's own timing belongs. The
+tests run in seconds either way; the argv builder stays a pure function.
+
+**T047/T048 landed in `sandbox_real_idle.rs`, not `sandbox_idle.rs`.** `mise run test-sandbox` — the
+canonical way these are run — filters on `sandbox_real_`, and the filter is matched against **test
+names, not file names** (`mise.toml` says so, at length, because every way of getting that
+invocation wrong reports success). A file named `sandbox_idle.rs` whose tests were not
+`sandbox_real_*` would be skipped by the standard runner and nobody would be told. T062's
+invocation is corrected to match.
+
+**T051 needed no code.** `idle::configured_window()` already read the variable once at startup and
+already made the *value* decide — `off` suppresses, unset or unparseable leaves the rule in force —
+and `server.rs::idle_watch` already parks forever on `None`. It was verified, not written.
 
 **Checkpoint**: both placements behave identically except where the user asked otherwise.
 
@@ -280,7 +310,7 @@ with no other evidence.
 
 - [ ] T060 [P] Run `cargo fmt --all` and `cargo clippy --workspace --all-targets -- -D warnings` — the local gate omits `fmt`, and CI stops at `cargo fmt --check` before any other job
 - [ ] T061 Run `mise run test` and confirm the whole workspace is green
-- [ ] T062 Run `cargo test -p micold-daemon --features sandbox-real-runtime sandbox_idle` on a machine with a working Docker daemon (quickstart Part A, real-runtime section)
+- [ ] T062 Run `mise run test-sandbox` (or `cargo test -p micold-daemon --features sandbox-real-runtime sandbox_real_idle`) on a machine with a working Docker daemon (quickstart Part A, real-runtime section)
 - [ ] T063 [P] Extend `crates/micold-core/tests/quickstart_a_runs_everywhere.rs` so quickstart Part A's commands stay covered by the existing gate
 - [ ] T064 Sweep `crates/micold-daemon/tests/sandbox_real_staleness.rs`, `sandbox_real_limits.rs`, `sandbox_real_parity.rs`, `sandbox_real_boundary.rs`, `sandbox_real_fingerprint.rs` and `crates/micold-daemon/tests/sandbox_real_support/mod.rs` for `survive_logout` uses whose meaning the amendment changes
 - [ ] T065 Verify the pinned client/daemon pair still connects after the change — a mixed pair from `target-shared` refuses even with matching version numbers printed

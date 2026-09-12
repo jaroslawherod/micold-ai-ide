@@ -291,10 +291,18 @@ fn apply_save(app: &mut App, valid: ValidSettings) -> Task<Message> {
     // the file is what the next launch reads, so this must not lose the user's choice.
     match survival_step(survival_before, settings.daemon.sandbox.survive_logout) {
         SurvivalStep::Leave => Task::none(),
-        step => crate::shell::service_control::on_survival_opt_in_changed(
-            Placement::resolve(settings.daemon.placement, &settings.daemon.sandbox),
-            step == SurvivalStep::Enable,
-        ),
+        step => {
+            // Feature 028, FR-022a: both halves of the opt-in — the restart policy and the idle
+            // rule — are written into the container's `create` argv, so the sandbox that is
+            // running was created under the old answer and is now out of date. Marked before the
+            // notification below, so a user who reads "this takes effect the next time the sandbox
+            // starts" can already see that it needs starting.
+            app.sandbox.survive_logout_changed();
+            crate::shell::service_control::on_survival_opt_in_changed(
+                Placement::resolve(settings.daemon.placement, &settings.daemon.sandbox),
+                step == SurvivalStep::Enable,
+            )
+        }
     }
 }
 

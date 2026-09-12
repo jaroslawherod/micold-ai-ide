@@ -11,7 +11,8 @@ use micold_core::sandbox::cli::CliRuntime;
 use micold_core::sandbox::exec::{CommandOutput, RecordingRunner};
 use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
 use micold_core::sandbox::lifecycle::{
-    bring_up, container_lost, mount_set_changed, restart, RestartRequested, SandboxState, Stage,
+    bring_up, container_lost, mount_set_changed, restart, survive_logout_changed, RestartRequested,
+    SandboxState, Stage,
 };
 use micold_core::sandbox::runtime::{ContainerId, Progress, RuntimeError, RuntimeKind};
 use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
@@ -353,6 +354,46 @@ fn registering_a_project_marks_a_running_sandbox_stale() {
 fn a_change_to_the_mount_set_never_restarts_anything() {
     for before in every_state() {
         let after = mount_set_changed(&before);
+
+        let restarting = |s: &SandboxState| {
+            matches!(
+                s,
+                SandboxState::Probing | SandboxState::Acquiring(_) | SandboxState::Starting
+            )
+        };
+        assert!(
+            !restarting(&after) || restarting(&before),
+            "{before:?} began restarting itself and became {after:?}"
+        );
+        assert_eq!(
+            after.container(),
+            before.container(),
+            "{before:?} lost or invented a container"
+        );
+    }
+}
+
+/// T046, FR-022a, research R2a.
+///
+/// Both halves of the keep-it-running opt-in — the restart policy and the idle rule — are fixed
+/// when the container is created, so a container already running was made under the old answer and
+/// cannot be talked into the new one. Without this the user toggles the control, the settings say
+/// one thing, the container does the other, and nothing on screen admits it.
+#[test]
+fn toggling_the_keep_running_opt_in_marks_a_running_sandbox_stale() {
+    let id = ContainerId("9f2b".into());
+    assert_eq!(
+        survive_logout_changed(&SandboxState::Running(id.clone())),
+        SandboxState::Stale(id)
+    );
+}
+
+/// And it is the same trade `mount_set_changed` makes, for the same reason: restarting to apply the
+/// new answer would end every session inside the container to service a settings change.
+#[test]
+fn a_change_to_the_keep_running_opt_in_never_restarts_anything() {
+    for before in every_state() {
+        let after = survive_logout_changed(&before);
 
         let restarting = |s: &SandboxState| {
             matches!(
