@@ -1963,3 +1963,16 @@ wrote it, and T162 exists so the next one is not guessed at.
 
 **Bugfix**: 2026-09-03 — BUG-025 (second arm) Added T159–T162 for FR-010c; extended SC-026. See
 `bugs/BUG-025.md`.
+
+## Phase 31: Convergence
+
+- [X] T163 CRITICAL — Document the settings-recovery and refused-save behaviour in
+  `docs/user-guide/settings.md` per Constitution VII / FR-042 (missing). Phase 30 shipped two
+  user-facing messages with no user-guide entry: the recovery notice T158 added ("Your settings
+  could not be read, so defaults are in use. The unreadable file was kept as `<path>`.") and the
+  refusal T160 surfaces when a save is declined because the base read did not return the stored
+  document (FR-010c). Neither `settings.json`, `settings.json.bak`, nor either message appears
+  anywhere under `docs/`, so a user who sees one has nothing to read. Cover: where settings are
+  stored, what the two messages mean, that the unreadable file is kept rather than discarded, and
+  what to do next (copy values back out of the `.bak`, then let the next save succeed). No
+  dependency
