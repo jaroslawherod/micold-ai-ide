@@ -67,6 +67,14 @@ scene_die() {
   printf 'scene: --- daemon log (%s) ---\n' "$daemon_log" >&2
   [ -f "$daemon_log" ] && tail -40 "$daemon_log" >&2
   scene_failure_shot
+  # Where the pointer and the window actually were. A coordinate in this file is only meaningful
+  # relative to a window at 0,0 of the size it was asked for, and neither is guaranteed on a
+  # display with no window manager.
+  [ -n "${DISPLAY:-}" ] && {
+    printf 'scene: pointer %s\n' "$(xdotool getmouselocation 2>/dev/null || echo unknown)" >&2
+    [ -n "${scene_win:-}" ] && printf 'scene: window %s\n' \
+      "$(xdotool getwindowgeometry "$scene_win" 2>/dev/null | tr '\n' ' ' || echo unknown)" >&2
+  }
   exit 1
 }
 
@@ -222,6 +230,20 @@ scene_start() {
   printf '{\n  "settings_version": 4,\n  "theme": "%s"\n}\n' "$preference" \
     >"$XDG_DATA_HOME/micold-ai-ide/settings.json"
 
+  # The service answers "which AI CLIs can I run" at `debug`, and `scene_wait_providers` below has
+  # to read that answer before any scene may click a row's start action. The default filter is
+  # `info`, so the one line that matters is turned on here -- for the service only, since the
+  # client writes nothing at all and a whole-workspace `debug` would bury it.
+  MICOLD_LOG="${MICOLD_LOG:-info,micold_daemon::server=debug}"
+  export MICOLD_LOG
+
+  # Where that answer lands, and how much of the file predates this scene. The daemon appends, and
+  # every scene of a run starts its own against the same path, so an offset is the only way to read
+  # *this* scene's lines rather than a previous scene's.
+  scene_daemon_log="$XDG_DATA_HOME/micold-ai-ide/micold-daemon.log"
+  scene_daemon_mark=0
+  [ -f "$scene_daemon_log" ] && scene_daemon_mark="$(stat -c %s "$scene_daemon_log")"
+
   # `env -u WAYLAND_DISPLAY` is not belt-and-braces: winit prefers Wayland and ignores DISPLAY
   # entirely when it is set, so the window would open on the host's real session -- or not at all.
   scene_note "launching on $DISPLAY in the $scheme scheme"
@@ -230,6 +252,8 @@ scene_start() {
 
   scene_wait_for_window
   scene_place_window
+  scene_wait_painted
+  scene_wait_providers
 
   # The one check that catches every pinning failure at once. It has to be read from the log,
   # because the window looks the same either way.
@@ -258,6 +282,56 @@ scene_place_window() {
   xdotool windowmove "$scene_win" 0 0
   # A resize is a relayout, and a frame taken during one is a frame of a half-drawn application.
   sleep 1
+}
+
+# A window exists long before the application has drawn into it.
+#
+# The client is a wgpu application rendered by `lavapipe`, and on a cold runner the first frame
+# waits on shader compilation -- seconds, not milliseconds. `scene_wait_for_window` answers "has a
+# window been mapped", which is a question about the toolkit; this answers "is there an application
+# in it", which is the question every scene after it actually depends on. The first capture of a
+# run published the difference: a mapped, entirely black window, refused by `scene_grab` as a blank
+# frame *after* the scene had already clicked at things that were not yet there.
+scene_wait_painted() {
+  local waited=0 mean
+  while :; do
+    mean="$(import -window root png:- 2>/dev/null \
+      | convert png:- -crop "${scene_width}x${scene_height}+0+0" +repage -format '%[fx:mean]' info: \
+      2>/dev/null || echo 0)"
+    case "$mean" in 0 | 0.0 | 0.000000) ;; *) break ;; esac
+    waited=$((waited + 1))
+    [ "$waited" -gt 60 ] && scene_die "the window is still blank 30s after it opened"
+    sleep 0.5
+  done
+}
+
+# Wait until the service has told the client which AI CLIs it can run.
+#
+# The set arrives over the wire (feature 027, FR-023c): the client asks on connect and the answer
+# lands "a moment later". Until it does, `State::available_providers` is `None`, and every decision
+# that reads it takes the empty-set branch -- so the start affordance draws *without* its chevron,
+# which moves the "+" twenty pixels right of where the scenes were measured, and a press on it
+# resolves to `StartIntent::NothingAvailable` and starts nothing. Both failures look identical from
+# the outside: a click that lands, and no session. On a developer's machine the answer beats the
+# first click; on a loaded runner it did not, and six scenes reported "no session started" for a
+# reason that was never about the coordinate they named.
+#
+# So the scene waits for the answer instead of assuming it, and refuses a set that would not draw
+# the affordance the coordinates were measured against.
+scene_wait_providers() {
+  local waited=0 line=""
+  while :; do
+    line="$(tail -c "+$((scene_daemon_mark + 1))" "$scene_daemon_log" 2>/dev/null \
+      | grep -m1 'AI CLI availability reported' || true)"
+    [ -n "$line" ] && break
+    waited=$((waited + 1))
+    [ "$waited" -gt 120 ] && scene_die "the service never reported which AI CLIs it can run"
+    sleep 0.25
+  done
+  case "$line" in
+    *ClaudeCode*Copilot* | *Copilot*ClaudeCode*) ;;
+    *) scene_die "the service can run only some of the stubs: ${line#*available=}" ;;
+  esac
 }
 
 # There is no window manager on the capture display, so nothing assigns input focus and keyboard
