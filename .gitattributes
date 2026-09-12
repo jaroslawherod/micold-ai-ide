@@ -56,3 +56,33 @@ specs/**      micold-docs
 # exists to catch would be the one edit it never sees. Must stay after `specs/**`, which sets the
 # attribute.
 /specs/027-sandboxed-daemon-runtime/quickstart.md -micold-docs
+
+# What a user can see, and what documents it (Constitution Principle VII).
+#
+# `micold-user-facing` marks the paths whose change a reader of the user guide could notice;
+# `micold-user-guide` marks the prose that documents them. One consumer reads both, through the
+# same `git check-attr` matcher:
+#   - scripts/check-user-guide-updated.sh  (did this change touch a screen without the guide)
+#
+# Pinned by scripts/tests/check-user-guide-updated.test.sh. `set` means yes; both `unset` and
+# `unspecified` mean no, so a path is not user-facing until declared otherwise -- the same default
+# the documentation set above uses, and for the same reason: the rule must fire on the paths
+# somebody thought about, not on everything that happens to be new.
+#
+# The scope is deliberately the client's screens and the behaviours they trigger, not every path a
+# user could eventually feel. A gate that demanded a user-guide edit for a refactor would be
+# labelled away within a week and stop protecting anything; one that fires on the sidebar, the
+# settings pages and the session and worktree flows is one nobody argues with. Widen it when a
+# change slips through, not in anticipation.
+
+crates/micold-client/src/ui/**       micold-user-facing
+crates/micold-client/src/features/** micold-user-facing
+
+# The component library underneath those screens is developer-facing: Principle VII is satisfied
+# for it by docs/development/component-library.md, which feature 020 established (its FR-024).
+# A ripple timing or a token tweak changes pixels without changing anything the guide says. Must
+# stay after `ui/**`, which sets the attribute -- the last matching line wins.
+crates/micold-client/src/ui/material/** -micold-user-facing
+crates/micold-client/src/ui/cdk/**      -micold-user-facing
+
+docs/user-guide/** micold-user-guide
