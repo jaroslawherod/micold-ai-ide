@@ -289,9 +289,14 @@ pub struct SandboxSpec<'a> {
     /// does, and it is what makes "`ls ~` shows nothing" worth asserting at all. The directory
     /// actually mounted there is the application's own (FR-004d), never the host's.
     pub home: &'a str,
-    /// The session-survival opt-in, which selects the container's restart policy — the whole of
-    /// the mechanism behind FR-014a. Off in every probe but the one that is about it: a container
-    /// that Docker would restart on its own outlives a failing test.
+    /// The session-survival opt-in, which selects the container's restart policy **and** tells the
+    /// daemon inside not to stop itself for being unused (feature 028 FR-022 amended FR-014a, which
+    /// the restart policy alone used to be the whole of). Off in every probe but the ones that are
+    /// about it: a container that Docker would restart on its own outlives a failing test.
+    ///
+    /// With it off, the daemon inside carries the ordinary thirty-minute idle window. No probe here
+    /// runs anywhere near that long, so nothing else in this suite has to care — but a probe that
+    /// ever did would find its container `exited` rather than gone, which is the answer, not a bug.
     pub survive_logout: bool,
     /// Extra `create` arguments — the limit flags, a different network posture.
     pub extra: &'a [String],

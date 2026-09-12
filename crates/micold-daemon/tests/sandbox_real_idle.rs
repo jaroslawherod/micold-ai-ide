@@ -93,7 +93,7 @@ fn wait_for_exit(container: &str, within: Duration) -> String {
 /// up, turning the idle stop into a restart loop that keeps the machine busy on behalf of nobody.
 /// Off is the default here precisely because that is the configuration the rule has to hold under.
 #[tokio::test]
-async fn sandbox_real_an_idle_sandbox_stops_and_stays_stopped() {
+async fn sandbox_real_idle_sandbox_stops_and_stays_stopped() {
     let dir = tempfile::tempdir().unwrap();
     let data = dir.path().join("data");
     let project = dir.path().join("project");
@@ -144,7 +144,7 @@ async fn sandbox_real_an_idle_sandbox_stops_and_stays_stopped() {
 /// running is not one to stop for being unused, so the sandbox is created with the idle rule
 /// switched off and there is nothing for the window to expire.
 #[tokio::test]
-async fn sandbox_real_the_keep_running_opt_in_is_not_idle_stopped() {
+async fn sandbox_real_idle_is_off_for_the_keep_running_opt_in() {
     let dir = tempfile::tempdir().unwrap();
     let data = dir.path().join("data");
     let project = dir.path().join("project");

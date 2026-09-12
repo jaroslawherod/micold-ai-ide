@@ -364,7 +364,16 @@ const IDLE_TICK_FLOOR: std::time::Duration = std::time::Duration::from_millis(40
 async fn unwind(state: &Arc<DaemonState>, reason: StopReason) {
     // Step 1: say why, before doing anything. This line is the only record of *which* way out this
     // was; absent it, an idle stop and a crash look identical in the log (data-model G4).
-    tracing::info!(reason = ?reason, "stopping");
+    //
+    // The reason is spelled out in words as well as carried in the field, because of who reads it:
+    // someone who left work running, came back to a machine where the service is gone, and opened
+    // the log to find out what happened (FR-024, contract §6.19). `reason=Idle` answers that only
+    // for a reader who knows this enum.
+    let why = match reason {
+        StopReason::Idle => "stopping: nothing has been connected for the whole idle window",
+        StopReason::Requested => "stopping: something asked this service to stop",
+    };
+    tracing::info!(reason = ?reason, "{why}");
 
     let worker = Arc::clone(state);
     let (marked, dropped) = tokio::task::spawn_blocking(move || {

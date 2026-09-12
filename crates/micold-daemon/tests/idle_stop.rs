@@ -23,8 +23,8 @@
 #![cfg(unix)]
 
 use std::collections::BTreeMap;
-use std::path::Path;
-use std::process::{Child, Command};
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use micold_core::project::{Availability, Project};
@@ -314,5 +314,170 @@ fn a_live_session_does_not_extend_the_window_and_is_left_resumable() {
         state.live_session(id).is_none(),
         "nothing may auto-resume the session — an agent brought back with no user watching is \
          worse than a service that stayed up (FR-006c)"
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// T055 / T056 [US5] — an automatic stop is visible, and a kill is not mistaken for one
+// ---------------------------------------------------------------------------------------------
+
+/// The start of the line an automatic stop writes (`server::unwind`, step 1 of data-model G5).
+///
+/// Matched on the prose rather than on `reason=Idle` alone: the line exists to be read by a person
+/// who came back to a machine and found the service gone, and a field naming an enum variant only
+/// answers that for someone who knows the enum (FR-024).
+const STOPPING: &str = "stopping:";
+
+/// The line the unwind writes once teardown is done, used here only for its position.
+const TEARDOWN_DONE: &str = "sessions handed off";
+
+/// A daemon whose diagnostics go to a file this test can read, and the directory holding it.
+///
+/// stderr is `/dev/null` deliberately. `logging::init` picks its sink by looking at fd 2, so a
+/// daemon that inherited the harness's stderr would log to the terminal when the suite is run by
+/// hand and to a file under CI — and an assertion about the log would then only be checked on one
+/// of them. `MICOLD_LOG` is `info` rather than the `warn` the tests above use, because an ordinary
+/// stop is not a warning: the line under test is an `info!`, and a daemon filtered to `warn` would
+/// satisfy T056 by writing nothing at all.
+fn spawn_daemon_logging_to_file(dir: &Path, idle_stop: &str) -> Child {
+    let data = dir.join("data");
+    std::fs::create_dir_all(&data).expect("create the child's data dir");
+    Command::new(DAEMON_BIN)
+        .env("XDG_RUNTIME_DIR", dir)
+        .env("HOME", dir)
+        .env("XDG_DATA_HOME", &data)
+        .env("MICOLD_LOG", "info")
+        .env(IDLE_STOP_ENV, idle_stop)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("the daemon binary must start")
+}
+
+/// Everything the daemon under `dir` has logged so far; empty while it has logged nothing.
+fn read_log(dir: &Path) -> String {
+    find_log(dir)
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .unwrap_or_default()
+}
+
+/// The daemon's log file somewhere under `dir`.
+///
+/// Found rather than constructed. Which directory `directories` hands back differs by platform —
+/// `$XDG_DATA_HOME` on Linux, `~/Library/Application Support` on macOS — and the alternative to
+/// looking for the file is resolving it through `logging::default_log_path`, which reads *this*
+/// process's environment. The helper above sets the child's instead, which is what lets the tests
+/// in this binary run concurrently; borrowing the parent's environment to answer a question about
+/// the child would give that up for a path either of us could have spelled.
+fn find_log(dir: &Path) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_log(&path) {
+                return Some(found);
+            }
+        } else if path
+            .file_name()
+            .is_some_and(|name| name == "micold-daemon.log")
+        {
+            return Some(path);
+        }
+    }
+    None
+}
+
+/// Wait until the daemon under `dir` has logged something matching `marker`. Returns whether it did.
+fn logged_within(dir: &Path, marker: &str, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if read_log(dir).contains(marker) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    false
+}
+
+/// FR-024, §6.19: an automatic stop writes exactly one line, naming inactivity, before teardown.
+///
+/// **Exactly one**, because the number is what makes the line countable. A stop that logged the
+/// reason from each of the two places the accept loop can end — or once per tick while it decided —
+/// would still "record the stop", and a reader counting stops in a week's log would be wrong.
+///
+/// **Before teardown** is asserted here as the log's half of the ordering: the reason is on disk
+/// before the line that reports the handoff finishing. The process half — that the record is
+/// durable while the session's process is still alive — is what
+/// `a_session_is_durably_interrupted_before_anything_kills_it` above is for; between them the
+/// order holds whether the stop completes or is interrupted partway.
+#[test]
+fn an_idle_stop_writes_one_line_naming_inactivity_before_it_tears_anything_down() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut daemon = spawn_daemon_logging_to_file(dir.path(), "300ms");
+
+    let exited = exited_within(&mut daemon, Duration::from_secs(30));
+    if !exited {
+        let _ = daemon.kill();
+    }
+    let log = read_log(dir.path());
+    assert!(exited, "the daemon never stopped itself; it logged: {log}");
+
+    let stops: Vec<&str> = log.lines().filter(|line| line.contains(STOPPING)).collect();
+    assert_eq!(
+        stops.len(),
+        1,
+        "an automatic stop must write exactly one line saying so, got {stops:?} from: {log}"
+    );
+    let line = stops[0];
+    assert!(
+        line.contains("reason=Idle"),
+        "the line must carry the reason a reader can match on, got: {line}"
+    );
+    assert!(
+        line.to_lowercase().contains("connected"),
+        "the line must name inactivity in words, not only as an enum variant, got: {line}"
+    );
+
+    let stop_at = log.find(STOPPING).expect("the line counted above");
+    let done_at = log.find(TEARDOWN_DONE).unwrap_or_else(|| {
+        panic!(
+            "the daemon must report the handoff finishing, so this test can say the reason came \
+             first; it logged: {log}"
+        )
+    });
+    assert!(
+        stop_at < done_at,
+        "the reason must be on disk before teardown finishes — a stop interrupted midway would \
+         otherwise leave a log that cannot be told from a crash, which is the whole point"
+    );
+}
+
+/// §6.20, data-model G4: a killed daemon writes no such line, so the log alone separates the two.
+///
+/// The waiting is the test. Killing a daemon that had not finished initialising its logging would
+/// produce an empty file and pass for the wrong reason — so this waits until the daemon has
+/// provably logged (the armed window), and only then kills it. What is left is a log with
+/// diagnostics in it and no stop line, which is exactly what a crash or an out-of-memory ending
+/// looks like: the absence is the evidence.
+#[test]
+fn a_killed_daemon_leaves_no_stop_line_behind() {
+    let dir = tempfile::tempdir().unwrap();
+    // An hour: this daemon has an ordinary idle rule and must be killed long before it fires.
+    let mut daemon = spawn_daemon_logging_to_file(dir.path(), "1h");
+
+    let armed = logged_within(dir.path(), "idle stop armed", Duration::from_secs(30));
+    let _ = daemon.kill(); // SIGKILL on Unix: nothing runs on the way out, which is the point.
+    let _ = daemon.wait();
+
+    let log = read_log(dir.path());
+    assert!(
+        armed,
+        "the daemon never logged anything, so an absent stop line proves nothing: {log}"
+    );
+    assert!(
+        !log.contains(STOPPING),
+        "a killed daemon must leave no stop line — reading the log has to tell a deliberate stop \
+         from a crash without further evidence, and it logged: {log}"
     );
 }

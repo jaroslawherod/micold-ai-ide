@@ -295,24 +295,40 @@ with no other evidence.
 
 ### Tests (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T055 [P] [US5] Write failing test in `crates/micold-daemon/tests/idle_stop.rs` — an idle stop writes exactly one diagnostics line naming inactivity, **before** teardown begins (FR-024, lifecycle contract §6.19)
-- [ ] T056 [P] [US5] Write failing test in `crates/micold-daemon/tests/idle_stop.rs` — a killed daemon produces no such line, so the log alone separates the two (lifecycle contract §6.20, data-model G4)
+- [X] T055 [P] [US5] Write failing test in `crates/micold-daemon/tests/idle_stop.rs` — an idle stop writes exactly one diagnostics line naming inactivity, **before** teardown begins (FR-024, lifecycle contract §6.19)
+- [X] T056 [P] [US5] Write failing test in `crates/micold-daemon/tests/idle_stop.rs` — a killed daemon produces no such line, so the log alone separates the two (lifecycle contract §6.20, data-model G4)
 
 ### Implementation
 
-- [ ] T057 [US5] Emit the `StopReason::Idle` line through `crates/micold-daemon/src/logging.rs` as the first step of T042's unwind in `crates/micold-daemon/src/server.rs`
+- [X] T057 [US5] Emit the `StopReason::Idle` line through `crates/micold-daemon/src/logging.rs` as the first step of T042's unwind in `crates/micold-daemon/src/server.rs`
 - [X] T058 [P] [US5] State in `docs/user-guide/worktrees-and-sessions.md` that closing the window leaves work running and that the service ends itself after a period with nothing connected (FR-025)
 - [X] T059 [P] [US5] Note in `docs/user-guide/settings.md` what the sandbox toggle now promises (FR-025, packaging contract §4.13)
+
+### What US5 found on the way
+
+T057 was already half-done: T042's unwind wrote `stopping reason=Idle` before teardown. What it did
+not do was FR-024's other half — *naming* inactivity. `reason=Idle` identifies the stop for anyone
+who knows the enum, and the person this line exists for is the one who came back to a machine, found
+the service gone, and opened the log. The message now says so in words, and the field stays for
+matching on.
+
+Writing T055 also exposed a real defect behind `tests/idle_race.rs` (T037), which had been failing
+about one run in five with `wire io error: Connection reset by peer`. `handshake_with` flattened the
+codec's error with `io::Error::other`, which reports kind `Other` — so `vanished_mid_handshake`
+could not recognise the reset a departing daemon ends a handshake with, and FR-016's guarantee
+turned into an error in front of the user exactly when the race it is about was lost.
+`CodecError` now converts to `io::Error` preserving the kind, and `connect.rs` carries a unit test
+that pins the classification, because the integration test only reaches the race by luck.
 
 ---
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T060 [P] Run `cargo fmt --all` and `cargo clippy --workspace --all-targets -- -D warnings` — the local gate omits `fmt`, and CI stops at `cargo fmt --check` before any other job
-- [ ] T061 Run `mise run test` and confirm the whole workspace is green
+- [X] T060 [P] Run `cargo fmt --all` and `cargo clippy --workspace --all-targets -- -D warnings` — the local gate omits `fmt`, and CI stops at `cargo fmt --check` before any other job
+- [X] T061 Run `mise run test` and confirm the whole workspace is green
 - [ ] T062 Run `mise run test-sandbox` (or `cargo test -p micold-daemon --features sandbox-real-runtime sandbox_real_idle`) on a machine with a working Docker daemon (quickstart Part A, real-runtime section)
-- [ ] T063 [P] Extend `crates/micold-core/tests/quickstart_a_runs_everywhere.rs` so quickstart Part A's commands stay covered by the existing gate
-- [ ] T064 Sweep `crates/micold-daemon/tests/sandbox_real_staleness.rs`, `sandbox_real_limits.rs`, `sandbox_real_parity.rs`, `sandbox_real_boundary.rs`, `sandbox_real_fingerprint.rs` and `crates/micold-daemon/tests/sandbox_real_support/mod.rs` for `survive_logout` uses whose meaning the amendment changes
+- [X] T063 [P] Extend `crates/micold-core/tests/quickstart_a_runs_everywhere.rs` so quickstart Part A's commands stay covered by the existing gate
+- [X] T064 Sweep `crates/micold-daemon/tests/sandbox_real_staleness.rs`, `sandbox_real_limits.rs`, `sandbox_real_parity.rs`, `sandbox_real_boundary.rs`, `sandbox_real_fingerprint.rs` and `crates/micold-daemon/tests/sandbox_real_support/mod.rs` for `survive_logout` uses whose meaning the amendment changes
 - [ ] T065 Verify the pinned client/daemon pair still connects after the change — a mixed pair from `target-shared` refuses even with matching version numbers printed
 - [ ] T066 Execute quickstart Part B (B1–B8) and record each with date, machine and outcome in `specs/028-client-managed-daemon/evidence/quickstart-b.md`
 - [ ] T067 Reconcile the spec artifacts with what was built — if any task forced a decision the design documents do not carry, amend `research.md`, `data-model.md` or `contracts/` rather than leaving the record wrong

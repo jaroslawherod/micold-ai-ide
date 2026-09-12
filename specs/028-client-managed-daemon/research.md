@@ -215,6 +215,20 @@ records a run that watches for it.
 (adds a state to the handshake for a window measured in milliseconds); an "I am stopping" wire
 message (a new protocol frame for a case the reconnect loop already handles).
 
+**As built (US3, corrected in US5)**: the machinery was there, as this said — but one link in it was
+broken, and the decision above is why nobody had noticed. "Treat it as an ordinary disconnect"
+depends on the client being able to *recognise* one: `connect::vanished_mid_handshake` classifies a
+reset, an abort or an EOF as absence, and `connect_or_spawn` then starts a daemon instead of
+returning an error. A reset that arrived through the wire codec reached it as
+`io::ErrorKind::Other`, because `handshake_with` flattened `CodecError` with `io::Error::other` —
+so the classification never fired, and FR-016's guarantee failed in the one instant it is about.
+
+`tests/idle_race.rs` (T037) caught it, at about one run in five, and was therefore green when US3
+landed. `CodecError` now converts to `io::Error` preserving the kind, and `connect.rs` carries a
+unit test pinning the classification, because a guard that only fires one run in five is not a
+guard. The lesson is the general one for this feature: a race test that passes is evidence only in
+proportion to how often it meets the race.
+
 ---
 
 ## R6 — Noticing that a client is gone

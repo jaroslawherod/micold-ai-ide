@@ -71,6 +71,22 @@ a type that cannot be added to a wall-clock time cannot accidentally be compared
 The distinguishing property is structural rather than textual: an idle stop writes its line **before**
 teardown begins, so the presence of the line is itself the evidence, and no crash can forge one.
 
+**As built (US5)**: the line names inactivity in words as well as in a `reason` field, because the
+reader it exists for is someone who found the service gone and opened the log — `reason=Idle`
+answers that only for someone who knows this enum.
+
+`Requested` has **no producer**, and the middle row above overstates what the code does. The stop
+path it names sends `SIGTERM`, which this daemon installs no handler for: the process ends on the
+default action, so nothing unwinds and no line is written. A requested stop therefore looks exactly
+like a kill in the diagnostics.
+
+That is left as it is rather than quietly fixed, and FR-024 still holds, because the requirement is
+that an *idle* stop be distinguishable — and it is, by being the only variant that writes anything.
+Giving `Requested` a producer means handling `SIGTERM` and unwinding through G5 on it, which is a
+change to how a requested stop tears down (today it does not run `Drop` at all, and leaves its
+socket for the next start to clean up). That is worth doing and is not this feature: no task asks
+for it, and no requirement here depends on it.
+
 ## G5 — Shutdown sequence
 
 Ordered, and the order is the contract (R4, FR-012–FR-014):
