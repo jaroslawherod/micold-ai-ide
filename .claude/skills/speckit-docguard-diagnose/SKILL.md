@@ -3,9 +3,13 @@ name: speckit-docguard-diagnose
 description: Diagnose documentation issues and generate AI-ready fix prompts
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
-  author: github-spec-kit
-  source: docguard:commands/diagnose.md
+  author: Ricardo Accioly
+  source: extension:docguard
+user-invocable: true
+disable-model-invocation: false
 ---
+
+# Docguard Diagnose Skill
 
 # DocGuard Diagnose
 
