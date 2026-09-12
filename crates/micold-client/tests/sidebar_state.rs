@@ -15,6 +15,7 @@ use micold_core::naming::ConventionalType;
 use micold_core::project::{Availability, Project};
 use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
@@ -470,5 +471,129 @@ fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
     assert!(
         state.session.reveal_suppressed_for.is_none(),
         "and nothing about the user's own choices is reset by a background discovery either"
+    );
+}
+
+// --- Feature 029: a refreshed listing is reconciled like any other (FR-004, FR-009, T034) -------
+//
+// The tests below drive `set_worktrees` + `drain` directly, and that is the point rather than a
+// shortcut. FR-004 says a user must not be able to tell from the result which trigger produced a
+// listing, and the way this codebase answers that is **structural**: there is one path, not two
+// kept in agreement. A refresh's listing arrives on the `CatalogChanged` broadcast like every
+// other, `reconcile_catalog` calls `core.set_worktrees(...)` and drains what it returns
+// (`catalog_sync.rs`), and `ClientMsg::WorktreeRefresh` adds no second route — the reducer arms
+// this feature adds touch `refreshing` and nothing else (`features_worktree.rs` holds that).
+//
+// So a refresh-specific pair of tests here would be a copy: it would assert about a path that does
+// not exist, pass whether or not the shared one behaved, and quietly suggest there were two. These
+// assert the shared path, and this comment is what ties them to the requirement.
+
+/// A worktree at `/repo`, matching the paths `state_with_active` sets up.
+fn listed(dir_name: &str) -> Worktree {
+    Worktree {
+        dir_name: dir_name.to_string(),
+        path: PathBuf::from("/repo/.claude/worktrees").join(dir_name),
+        branch: Some(format!("feat/{dir_name}")),
+        status: WorktreeStatus::Valid,
+        included: false,
+    }
+}
+
+/// Replace the listing the way the client does when one arrives: apply, then drain, so the sidebar
+/// prunes its own expansion set rather than the worktree feature reaching into it (T066).
+fn deliver(state: &mut State, worktrees: Vec<Worktree>) {
+    let outcomes = state.set_worktrees(worktrees);
+    micold_client::app::drain(outcomes, |o| micold_client::app::interpret(state, o));
+}
+
+/// An arranged sidebar: two worktrees, both expanded, a filter applied, scrolled, a session
+/// selected. Every field FR-009 names, set to something a reset would visibly undo.
+fn arranged() -> State {
+    let mut state = state_with_active();
+    deliver(&mut state, vec![listed("feat-a"), listed("feat-b")]);
+
+    state.sidebar.expanded.insert("feat-a".to_string());
+    state.sidebar.expanded.insert("feat-b".to_string());
+    state.sidebar.default_expanded = true;
+    state
+        .sidebar
+        .filters
+        .insert(TagFilter::Type(ConventionalType::Feat));
+    state.sidebar.scroll_offset = 240;
+    state.sidebar.viewport_height = 600;
+    state.sidebar.show_agent_worktrees = true;
+
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
+    let id = session.id;
+    state
+        .workspace
+        .sessions
+        .insert(PathBuf::from("/repo"), vec![session]);
+    state.session.active = Some(id);
+    state
+}
+
+/// FR-009: the common case. Most refreshes find nothing, and a refresh that rearranged the sidebar
+/// every time it found nothing would be worse than the switch-away-and-back it replaces.
+#[test]
+fn an_unchanged_listing_leaves_the_whole_arrangement_alone() {
+    let mut state = arranged();
+    let before = state.sidebar.clone();
+    let selected = state.session.active;
+
+    deliver(&mut state, vec![listed("feat-a"), listed("feat-b")]);
+
+    assert_eq!(
+        state.sidebar, before,
+        "a listing identical to the one on screen moved something in the sidebar. Expansion, \
+         filters and scroll position are the user's, not the listing's (FR-009)"
+    );
+    assert_eq!(
+        state.session.active, selected,
+        "and the session the user is working in is not a function of the worktree listing either"
+    );
+}
+
+/// FR-004: a worktree that is gone is reconciled by the path that already reconciles one, and the
+/// arrangement around it is left alone. Written as one test because "pruned" and "pruned *only*"
+/// are the same claim — a reconciliation that cleared the filters too would satisfy either half on
+/// its own.
+#[test]
+fn a_worktree_missing_from_the_listing_is_pruned_and_nothing_else_is() {
+    let mut state = arranged();
+    let selected = state.session.active;
+
+    deliver(&mut state, vec![listed("feat-a")]);
+
+    assert!(
+        !state.sidebar.expanded.contains("feat-b"),
+        "a worktree the listing no longer reports must not stay expanded — the row it expands is \
+         gone"
+    );
+    assert!(
+        state.sidebar.expanded.contains("feat-a"),
+        "and the one that survived must stay expanded; pruning is per row, not a reset"
+    );
+    assert!(
+        state.sidebar.default_expanded,
+        "the Default row is not a worktree and no listing can close it"
+    );
+    assert_eq!(
+        state.sidebar.filters,
+        BTreeSet::from([TagFilter::Type(ConventionalType::Feat)]),
+        "filters are view state, unrelated to which worktrees exist (FR-009)"
+    );
+    assert_eq!(
+        state.sidebar.scroll_offset, 240,
+        "and so is scroll position"
+    );
+    assert!(state.sidebar.show_agent_worktrees);
+    assert_eq!(
+        state.session.active, selected,
+        "the active session is on `feat-a`, which is still here — a listing that removed a \
+         *different* worktree has nothing to say about it"
     );
 }

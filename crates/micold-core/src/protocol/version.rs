@@ -36,7 +36,12 @@
 /// the daemon has none to report back, and without it on the way out a window cannot tell another
 /// window's takeover from its own reconnect displacing its own dead connection. It also settles
 /// BUG-023's deferred half, the holder that named nothing.
-pub const PROTOCOL_VERSION: u32 = 9;
+/// Bumped 9 → 10 for feature 029's `ClientMsg::WorktreeRefresh`: re-reading a project's worktree
+/// listing becomes something a **user can ask for**, where it was previously only a consequence of
+/// attach, create, delete, include, exclude or project-add. One variant is the feature's whole wire
+/// delta, so unlike 026/027 there was nothing to batch — but the same rule applies, and a second
+/// bump here would fail `tests/schema_hash.rs`.
+pub const PROTOCOL_VERSION: u32 = 10;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

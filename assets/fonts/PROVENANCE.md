@@ -94,6 +94,7 @@ pyftsubset _static.ttf \
 | `ActivityEnded` | `radio_button_unchecked` | `E836`   |
 | `SelectChevron` | `expand_more`         | `E5CF`         |
 | `SessionService` | `dns`                | `E875`         |
+| `Refresh`      | `refresh`              | `E5D5`         |
 
 **Why the activity dots are radio-button glyphs** (BUG-004): this file is a static instance
 pinned at **FILL=0**, and at that axis value the nominally-solid dots — `circle` (`EF4A`),

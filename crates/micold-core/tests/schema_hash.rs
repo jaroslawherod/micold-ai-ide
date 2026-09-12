@@ -149,7 +149,12 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 8 → 9 for `010` BUG-022, which makes a client *window* nameable on the wire
 /// (`ClientMsg::Hello::client_instance`, and a `ClientIdentity` on `DaemonMsg::Displaced::by` and
 /// `RefusalReason::ProjectBusy::holder`). Third time, same case, same answer.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 9;
+///
+/// And 9 → 10 for feature 029's `ClientMsg::WorktreeRefresh`. Fourth time, same case, same answer:
+/// the constant follows the wire, and 026 still costs exactly one bump. That this line has now been
+/// written four times is the gate working — each of those features had to come here and say which
+/// bump was theirs.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 10;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

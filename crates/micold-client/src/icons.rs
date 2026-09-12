@@ -92,6 +92,13 @@ pub enum Icon {
     /// the gear is what *opens* Settings, and a rail row inside Settings drawn with the gear reads
     /// as "settings" rather than as one section of them.
     SessionService,
+    /// Re-read the project's worktree list on demand (feature 029, FR-001).
+    ///
+    /// Material's `refresh` — the open circular arrow. Chosen over two glyphs that look like
+    /// candidates and are not: `sync`'s two arrows say there is a *remote* to reconcile with, and
+    /// `autorenew` says the thing happens *by itself*. This control has neither property (029
+    /// FR-012), and an icon that promises one is worse than no icon at all.
+    Refresh,
 }
 
 impl Icon {
@@ -128,6 +135,7 @@ impl Icon {
         Icon::ActivityEnded,
         Icon::SelectChevron,
         Icon::SessionService,
+        Icon::Refresh,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -173,6 +181,7 @@ impl Icon {
             Icon::SelectChevron => '\u{e5cf}',
             // `dns`.
             Icon::SessionService => '\u{e875}',
+            Icon::Refresh => '\u{e5d5}',
         }
     }
 }

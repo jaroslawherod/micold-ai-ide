@@ -251,6 +251,19 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
             ],
         },
+        // **Feature 029's busy header is deliberately not registered here** (T032). A refresh in
+        // flight withholds the control's `on_press` and swaps its tooltip string, and neither is
+        // geometry: an iced `Button` lays out the same whether or not it can be pressed, and a
+        // tooltip's own text goes through the overlay pass on hover, never at rest. So the state
+        // exists, and its fixture block would be `main-shell-sidebar-expanded` again, byte for
+        // byte — which is the one thing this file's own history warns about. `error-add-worktree-
+        // failed` and `error-project-unavailable` were each byte-identical to the state above
+        // until they were built differently, and both say so where they sit.
+        //
+        // A comment is not a check, so the claim is one: `gates/refresh_busy_holds_the_header.rs`
+        // resolves both headers and fails if any element moves, telling whoever moved it to
+        // register the state here. Answer FR-006 with a spinner or a second glyph later and that
+        // gate is what says the escape clause has expired.
         CoveredState {
             name: "main-shell-sidebar-collapsed",
             build: || {

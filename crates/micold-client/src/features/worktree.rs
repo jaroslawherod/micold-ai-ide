@@ -17,23 +17,25 @@
 //!
 //! # The vocabulary this feature declares
 //!
-//! Eighteen transitions in [`Msg`]: the listing (`Loaded`), the row menu (`MenuToggled`,
-//! `MenuDismissed`, `Hovered`, `Unhovered`), inclusion (`IncludeRequested`, `Included`,
-//! `ExcludeRequested`, `Excluded`), deletion and its confirmation (`DeleteRequested`,
+//! Twenty-one transitions in [`Msg`]: the listing (`Loaded`, `RefreshRequested`,
+//! `RefreshFinished`, `RefreshTimedOut`), the row menu
+//! (`MenuToggled`, `MenuDismissed`, `Hovered`, `Unhovered`), inclusion (`IncludeRequested`,
+//! `Included`, `ExcludeRequested`, `Excluded`), deletion and its confirmation (`DeleteRequested`,
 //! `DeleteConfirmed`, `DeleteCancelled`, `DeleteKeepBranchToggled`), the rename draft
 //! (`RenameStarted`, `RenameTextChanged`, `RenameConfirmed`, `RenameCancelled`), and
 //! `TextCopyRequested`.
 //!
-//! [`update`] is pure (data-model.md §1.1 shape A) and routes all eighteen. Five are matched a second
-//! time in `main.rs`, because each additionally touches something outside the process — git, the
-//! catalog on disk, or the clipboard: `IncludeRequested`, `ExcludeRequested`, `DeleteConfirmed`,
-//! `RenameConfirmed`, `TextCopyRequested` (M2).
+//! [`update`] is pure (data-model.md §1.1 shape A) and routes all twenty-one. Six are matched a
+//! second time in `main.rs`, because each additionally touches something outside the process —
+//! git, the catalog on disk, or the clipboard: `IncludeRequested`, `ExcludeRequested`,
+//! `DeleteConfirmed`, `RenameConfirmed`, `TextCopyRequested`, `RefreshRequested` (M2).
 //!
 //! # The state this feature remembers (feature 028, contract S1)
 //!
-//! Six fields in [`State`], reached as `state.worktree`: `worktrees`, the discovered list for the
-//! active project; `hovered` and `menu_open` for the row under the cursor and the row menu;
-//! `delete_target` and `delete_keep_branch` for the delete confirmation; and `rename_draft`.
+//! Seven fields in [`State`], reached as `state.worktree`: `worktrees`, the discovered list for
+//! the active project; `hovered` and `menu_open` for the row under the cursor and the row menu;
+//! `delete_target` and `delete_keep_branch` for the delete confirmation; `rename_draft`; and
+//! `refreshing`, whether a user-requested re-read of the listing is in flight (feature 029).
 //!
 //! Five shed the `worktree` the qualifier now carries — `hovered_worktree`, `worktree_menu_open`,
 //! `worktree_delete_target`, `worktree_delete_keep_branch` and `worktree_rename_draft` (T034).
@@ -58,7 +60,7 @@ use micold_core::worktree::{Worktree, WorktreeStatus};
 
 /// What this feature remembers (feature 028, contract S1).
 ///
-/// Five of the six shed the `worktree` the qualifier now carries: `hovered_worktree` is
+/// Five of the seven shed the `worktree` the qualifier now carries: `hovered_worktree` is
 /// `worktree.hovered`, and `worktree_delete_keep_branch`, `worktree_delete_target`,
 /// `worktree_menu_open` and `worktree_rename_draft` are `delete_keep_branch`, `delete_target`,
 /// `menu_open` and `rename_draft`. `worktrees` keeps its name because trimming it leaves nothing:
@@ -85,6 +87,21 @@ pub struct State {
     /// Worktrees discovered for the active project (feature 005, FR-018). Re-derived from git
     /// on open and after each mutation — never persisted.
     pub worktrees: Vec<Worktree>,
+    /// Whether a user-requested re-read of the worktree listing is in flight (feature 029,
+    /// FR-006).
+    ///
+    /// Owned here rather than by the sidebar because the thing being re-read is the *listing*,
+    /// and the listing is this feature's — the button's location in the sidebar header confers
+    /// nothing (research R4).
+    ///
+    /// A `bool` and not an `Option<u64>` holding the request id: correlation already lives in the
+    /// shell's `pending_ops` map, and putting a wire request id in a render-free feature's state
+    /// would give this module a second vocabulary — the protocol's — that no other feature module
+    /// carries. `Msg::RefreshTimedOut` does carry the id, for the shell arm that reads it.
+    ///
+    /// Transient and never persisted: a refresh that was in flight when the app closed did not
+    /// happen, and the next start re-reads on attach anyway.
+    pub refreshing: bool,
 }
 
 /// In-progress worktree-rename state, present only while the worktree-rename dialog is open
@@ -159,6 +176,26 @@ impl crate::app::State {
     /// (Principle I).
     pub fn has_visible_worktrees(&self) -> bool {
         self.visible_worktrees().next().is_some()
+    }
+
+    /// Whether the worktree listing can be re-read right now (feature 029, FR-005/FR-006).
+    ///
+    /// Lives here beside `has_visible_worktrees` rather than in `app.rs`, for the reason that one
+    /// does: the question is about worktrees, so it belongs to the feature that owns them
+    /// (feature 028). Pure and unit-tested, so the view's single `if` over it is the "thin glue
+    /// invoking already-tested pure logic" Principle I's exception describes rather than a
+    /// decision the render makes on its own (research R7).
+    ///
+    /// The `refreshing` half is what makes single-flight structural: while a refresh runs, no
+    /// press can produce a message, so there is nothing for a guard to catch. The reducer's own
+    /// drop of a second `RefreshRequested` remains as the second line of defence, because a
+    /// structural guarantee that lives only in a render is one refactor away from not existing.
+    ///
+    /// Deliberately **not** part of this: whether the client is connected. `send_op` already
+    /// raises "Not connected to the session service — can't refresh the worktree list right now."
+    /// by name, and telling the user why beats a control that is silently inert.
+    pub fn can_refresh_worktrees(&self) -> bool {
+        self.workspace.active.is_some() && !self.worktree.refreshing
     }
 }
 
@@ -531,13 +568,36 @@ pub enum Msg {
     /// Copy arbitrary displayed text (a worktree name) to the system clipboard. The binary
     /// performs the actual clipboard write; the reducer has no state to update.
     TextCopyRequested(String),
+    /// The user asked for the active project's worktrees to be re-read (feature 029, FR-003).
+    ///
+    /// The listing is not live: it is rebuilt on attach and after the app's own worktree
+    /// operations, so a worktree created in a terminal or by an agent is invisible until one of
+    /// those comes round again. This is the ask for one directly.
+    ///
+    /// Carries no project: the shell reads `workspace.active`, so there is no parameter a caller
+    /// could get wrong (029 FR-011, data-model §5).
+    RefreshRequested,
+    /// The re-read reached a terminal outcome — the daemon acknowledged it, or refused it
+    /// (feature 029, FR-007). Raised by the shell, which is the side that knows.
+    ///
+    /// Says nothing about *what* was found: the refreshed listing arrived ahead of this on the
+    /// catalog broadcast, through `set_worktrees`. All this ends is the control's busy state.
+    RefreshFinished,
+    /// The bounded wait for request `u64` elapsed with no answer at all (feature 029, FR-007).
+    ///
+    /// Carries the correlation id even though [`State::refreshing`] does not, because the *shell*
+    /// arm that receives it must tell a timer for the live request from one left over by a request
+    /// that already replied. The reducer ignores the payload; the shell reads it. This is the one
+    /// place the two vocabularies meet, and it meets in the shell, where correlation lives.
+    RefreshTimedOut(u64),
 }
 
 /// The pure half of this feature's reducer surface: shape A (contract M2).
 ///
-/// All eighteen arms are here. Five of them additionally need an effect — the daemon asked to
-/// include, exclude, delete or rename, and the clipboard written — and those five are matched a
-/// second time in `main.rs`, which runs the effect and lets the message fall through to here.
+/// All twenty-one arms are here. Six of them additionally need an effect — the daemon asked to
+/// include, exclude, delete, rename or re-read, and the clipboard written — and those six are
+/// matched a second time in `main.rs`, which runs the effect and lets the message fall through to
+/// here.
 /// That is the split `worktree_form` established and M2 names as the reference: by *effect*, not
 /// by variant, so nothing about a delete is duplicated between the two halves.
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
@@ -552,6 +612,16 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::IncludeRequested(_) => {}
         // The clipboard is the binary's; the reducer has no state to update.
         Msg::TextCopyRequested(_) => {}
+        // Same shape as `IncludeRequested` above, for the same reason: the *ask* changes nothing
+        // here. The re-read happens in the daemon and the answer comes back on `CatalogChanged`,
+        // through `set_worktrees` — the one path every other trigger already uses, which is what
+        // makes a refreshed listing indistinguishable from any other (029 FR-004, rule T6).
+        Msg::RefreshRequested => state.worktree.refreshing = true,
+        // Both exits write the same one field, and neither reads it first: an outcome arriving
+        // with nothing in flight is a late reply, not an error (rule T4). The id on the timeout is
+        // for the shell — by the time it reaches here, the shell has already decided this timer
+        // belongs to the refresh that is running.
+        Msg::RefreshFinished | Msg::RefreshTimedOut(_) => state.worktree.refreshing = false,
         Msg::ExcludeRequested(_) => exclude_requested(state),
         Msg::Excluded(path) => excluded(state, path),
         Msg::DeleteRequested(dir) => delete_requested(state, dir),

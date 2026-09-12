@@ -159,14 +159,16 @@ fn the_two_new_refusals_are_distinct_values() {
 /// It was 6 and then 7 while the feature was in flight, and 8 on the merge: feature 026 took 7
 /// on main for its own five additions, and both wire changes are present here, so both cannot be
 /// 7. See the constant's own comment. It is 9 since `010` BUG-022 made a client window nameable
-/// on the wire — another feature's bump, which this literal follows rather than resisting.
+/// on the wire — another feature's bump, which this literal follows rather than resisting. And 10
+/// since feature 029 added `ClientMsg::WorktreeRefresh`; same case, same answer.
 ///
 /// The literal is the point. `SCHEMA_HASH` is generated and moves on its own; this integer does
 /// not, so a message added without touching it ships a wire change under an unchanged version and
-/// two builds that disagree will shake hands anyway. Failing here is the reminder.
+/// two builds that disagree will shake hands anyway. Failing here is the reminder — and it worked:
+/// 029 arrived here because of this test, not despite it.
 #[test]
-fn the_protocol_version_is_nine() {
-    assert_eq!(PROTOCOL_VERSION, 9);
+fn the_protocol_version_is_ten() {
+    assert_eq!(PROTOCOL_VERSION, 10);
 }
 
 /// The daemon finds its token where the image says it will. If these two drift, a sandbox starts

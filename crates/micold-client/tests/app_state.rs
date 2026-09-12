@@ -2498,3 +2498,51 @@ fn a_memory_naming_a_closed_session_restores_nothing_and_disturbs_nothing() {
         "and the rest of the project is exactly as it was (FR-006)"
     );
 }
+
+// --- Feature 029: the refresh control's availability ------------------------------------------
+//
+// The predicate exists so the view's single `if` over it is thin glue invoking already-tested
+// pure logic (Principle I's exception, research R7) rather than a decision made in a render.
+
+#[test]
+fn the_worktree_listing_cannot_be_refreshed_with_no_project_open() {
+    let state = State::default();
+
+    assert!(
+        state.workspace.active.is_none(),
+        "the precondition this case is about"
+    );
+    assert!(
+        !state.can_refresh_worktrees(),
+        "there is no listing to re-read, so the control must not offer an action that cannot do \
+         anything (029 FR-005). The view attaches no `on_press` when this is false, which is what \
+         makes 'unavailable' structural rather than a guard the reducer has to remember"
+    );
+}
+
+#[test]
+fn the_worktree_listing_can_be_refreshed_once_a_project_is_open() {
+    let mut state = State::default();
+    state.workspace.active = Some(PathBuf::from("/repo"));
+
+    assert!(
+        state.can_refresh_worktrees(),
+        "an open project is the whole precondition (029 FR-003). Connectedness is deliberately \
+         *not* part of it: `send_op` raises 'Not connected to the session service' by name, and \
+         telling the user why beats a control that is silently inert"
+    );
+}
+
+#[test]
+fn the_worktree_listing_cannot_be_refreshed_while_a_refresh_is_already_running() {
+    let mut state = State::default();
+    state.workspace.active = Some(PathBuf::from("/repo"));
+    state.worktree.refreshing = true;
+
+    assert!(
+        !state.can_refresh_worktrees(),
+        "at most one refresh is in flight per project (029 FR-006, SC-005). The view withholds \
+         `on_press` on the strength of this, so a burst of clicks produces one request and not a \
+         queue of them"
+    );
+}

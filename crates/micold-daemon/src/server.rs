@@ -1394,6 +1394,15 @@ where
                     ),
                 }
             }
+            // The user asking for the re-read directly (feature 029, FR-003). Deliberately the
+            // whole arm: the same helper every other trigger reaches for, then the ack. Nothing is
+            // mutated and nothing is added — a second discovery path is exactly what FR-004 exists
+            // to prevent, and the listing rides out on the broadcast above rather than in the
+            // reply. The order matters: a client that has the ack has, by then, the listing.
+            ClientMsg::WorktreeRefresh { req, project } => {
+                refresh_worktrees_and_broadcast(state, project).await;
+                send_ack(state, id, req);
+            }
             // --- US3: project management + session delete through the daemon (T053) ---
             ClientMsg::ProjectAdd { req, path } => match state.add_project(&path) {
                 Ok(()) => {
