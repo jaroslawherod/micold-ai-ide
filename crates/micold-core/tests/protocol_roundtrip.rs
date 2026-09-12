@@ -168,6 +168,12 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             dir_name: "feat-x".into(),
             display_name: "X".into(),
         },
+        // Feature 029: the user-initiated re-read. Correlated like the read-only RPCs above,
+        // because its reply is the only thing that ends the button's busy state (029 FR-007).
+        ClientMsg::WorktreeRefresh {
+            req: 45,
+            project: PathBuf::from("/a"),
+        },
         ClientMsg::SessionCreate {
             req: 7,
             project: PathBuf::from("/a"),

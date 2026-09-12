@@ -38,13 +38,42 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     let r = tokens::roles(scheme);
     let width = state.sidebar_width_px() as f32;
 
-    // Header: filter (left) + title (fill) + add-worktree + hide.
+    // Header: filter (left) + title (fill) + refresh + add-worktree + hide.
     // Toggles the filter accordion below (feature 009); tinted to show whether any filter is
     // currently active even while the accordion is collapsed (FR-005, US2).
     let filter_toggle: Element<'_, Message> =
         FilterTrigger::new(Message::Sidebar(SidebarMsg::FilterMenuToggled), r)
             .active(!state.sidebar.filters.is_empty())
             .into();
+    // Re-read the listing on the user's ask (feature 029, FR-001). Neutral tint, matching "Hide
+    // sidebar" rather than the accented "Add a worktree": refreshing is a routine action, not the
+    // header's primary one. It sits left of `add_worktree` so the two pre-existing controls keep
+    // their positions and the user's muscle memory (spec Assumptions).
+    //
+    // `on_press_maybe` rather than a disabled style: with no project open there is no listing to
+    // re-read, and a control with no message attached cannot be activated at all (FR-005). That is
+    // what makes unavailability structural instead of a guard the reducer has to remember.
+    //
+    // While one is running the same withheld `on_press` doubles as the busy affordance, and the
+    // tooltip says so. No spinner: an indeterminate indicator would be a new component for a state
+    // that is normally over within a frame or two, and the honest report of "a refresh is running"
+    // is the control refusing a second press (research R6).
+    let refresh = Tooltip::new(
+        IconButton::new(Icon::Refresh, r)
+            .compact()
+            .tint(r.on_surface_variant)
+            .on_press_maybe(
+                state
+                    .can_refresh_worktrees()
+                    .then_some(Message::Worktree(WorktreeMsg::RefreshRequested)),
+            ),
+        if state.worktree.refreshing {
+            "Refreshing worktrees…"
+        } else {
+            "Refresh the worktree list"
+        },
+        r,
+    );
     let add_worktree = Tooltip::new(
         IconButton::new(Icon::AddWorktree, r)
             .compact()
@@ -64,6 +93,7 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     let header = row![
         filter_toggle,
         Text::new("Worktrees", TypeRole::Section, r).width(Length::Fill),
+        refresh,
         add_worktree,
         hide,
     ]

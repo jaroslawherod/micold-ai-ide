@@ -763,6 +763,15 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Worktree(WorktreeMsg::ExcludeRequested(dir)) => {
             shell::daemon_sync::on_worktree_exclude_requested(app, dir)
         }
+        Message::Worktree(WorktreeMsg::RefreshRequested) => {
+            shell::daemon_sync::on_worktree_refresh_requested(app)
+        }
+        // The bounded wait fired. Routed here rather than falling through to the reducer because
+        // whether *this* timer still names the live request is a question about correlation, and
+        // correlation lives in the shell.
+        Message::Worktree(WorktreeMsg::RefreshTimedOut(req)) => {
+            shell::daemon_sync::on_worktree_refresh_timed_out(app, req)
+        }
         other => {
             app.core.update(other);
             Task::none()

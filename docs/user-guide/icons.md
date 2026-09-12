@@ -25,6 +25,7 @@ status markers.
 | Show sidebar | Expand the sidebar | Collapsed sidebar |
 | Add session | Start a new session | Sidebar worktree rows |
 | Add worktree | Create a new worktree | Sidebar header |
+| Refresh | Re-read the project's worktree list from git | Sidebar header |
 | Delete | Delete a worktree | Sidebar worktree rows |
 | Filter | Toggle the tag-filter panel | Sidebar toolbar |
 | Search | Search a long list by typing | Branch search in the New worktree form |

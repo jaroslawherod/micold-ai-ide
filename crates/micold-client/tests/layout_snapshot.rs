@@ -100,6 +100,12 @@ mod bar_controls_hold_their_size;
 #[path = "gates/tabs_anchor_the_trailing_edge.rs"]
 mod tabs_anchor_the_trailing_edge;
 
+/// Feature 029's FR-006, and the only gate here that asserts geometry did **not** change. The
+/// refresh control's busy form withholds a press and swaps a tooltip, neither of which is layout —
+/// so it earns no fixture block, and this is the check that keeps that true.
+#[path = "gates/refresh_busy_holds_the_header.rs"]
+mod refresh_busy_holds_the_header;
+
 // --- The context-menu-anchor gate (BUG-008) -----------------------------------------------------
 
 // Here for a *different* reason than the five above: it builds its own states and reads no cache.

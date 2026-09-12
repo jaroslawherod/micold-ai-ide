@@ -103,6 +103,10 @@ pub enum PendingOp {
     WorktreeInclude(PathBuf),
     WorktreeExclude(PathBuf),
     WorktreeRename(String),
+    /// A `WorktreeRefresh` (feature 029). Carries nothing: the refreshed listing arrives on its
+    /// own as the `CatalogChanged` broadcast, and the only thing the reply adds is "it finished".
+    /// Correlated all the same, because that "it finished" is what ends the control's busy state.
+    WorktreeRefresh,
     ProjectAdd,
     ProjectRemove,
     ProjectRename,
@@ -131,6 +135,7 @@ impl PendingOp {
             PendingOp::WorktreeExclude(p) => {
                 format!("stop showing the worktree at {}", p.display())
             }
+            PendingOp::WorktreeRefresh => "refresh the worktree list".into(),
             PendingOp::ProjectAdd => "add the project".into(),
             PendingOp::ProjectRemove => "remove the project".into(),
             PendingOp::ProjectRename => "rename the project".into(),
@@ -254,6 +259,15 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
             PendingOp::WorktreeCreate(_) if app.core.worktree_form.form.is_some() => {
                 app.core
                     .update(Message::WorktreeForm(FormMsg::CreateInterrupted(text)));
+            }
+            // Feature 029: the generic sentence is right — a refresh that may or may not have
+            // taken effect costs nothing, because the reconnect's fresh welcome catalog re-reads
+            // anyway — but the control must come back to idle with it. This is the fourth exit
+            // from the busy state, alongside the ack, the failure and the timer (data-model §5).
+            PendingOp::WorktreeRefresh => {
+                app.core.notify_error(text);
+                app.core
+                    .update(Message::Worktree(WorktreeMsg::RefreshFinished));
             }
             _ => app.core.notify_error(text),
         }
@@ -601,6 +615,19 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                     }
                 }
             }
+            // Feature 029: the re-read finished. There is nothing to *apply* — the listing it
+            // produced already arrived on the `CatalogChanged` broadcast the daemon sends
+            // *before* this ack (contract §4), through the same `set_worktrees` every other
+            // trigger uses. What is left is telling the user, which matters here more than it
+            // does for any other operation: the common case of a refresh is that nothing visible
+            // changes, and a control that appears to do nothing is indistinguishable from a
+            // broken one (US2). An existing notice, deliberately — this feature defines no new
+            // notification, dialog or banner (spec Assumptions, research R6).
+            Some(PendingOp::WorktreeRefresh) => {
+                app.core
+                    .update(Message::Worktree(WorktreeMsg::RefreshFinished));
+                app.core.notify_info("Worktree list refreshed.");
+            }
             _ => {}
         },
         // FR-024: a stage push names the step in flight. Peeked, not removed — the
@@ -645,6 +672,18 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 Some(PendingOp::BranchList { .. }) => {
                     app.core.worktree_form.worktree_error =
                         Some(format!("Could not list branches: {message}"));
+                }
+                // Feature 029: the failure notice is the generic one below — "Couldn't refresh
+                // the worktree list: …" reads correctly and names the reason (FR-008). What this
+                // arm adds is the return to idle, so the control can be retried. Note what it
+                // does **not** do: it never reaches `set_worktrees`. A failed refresh leaves the
+                // listing exactly as it was rather than emptying the sidebar, and that is
+                // structural — the call is not on this path at all.
+                Some(PendingOp::WorktreeRefresh) => {
+                    app.core
+                        .update(Message::Worktree(WorktreeMsg::RefreshFinished));
+                    app.core
+                        .notify_error(format!("Couldn't refresh the worktree list: {message}"));
                 }
                 Some(op) => app
                     .core
@@ -1388,6 +1427,83 @@ pub fn on_worktree_include_requested(app: &mut App, path: PathBuf) -> Task<Messa
             }
         });
     }
+    Task::none()
+}
+
+/// The user asked for the active project's worktree listing to be re-read (feature 029, FR-003).
+///
+/// Mutates nothing — not the repository, not the app's own settings. What it asks for is the pass
+/// the daemon already runs on attach and after every worktree operation, at a moment the user
+/// chose instead of one the app chose. The refreshed listing comes back on the `CatalogChanged`
+/// broadcast rather than in the reply, which is what makes it indistinguishable from a listing
+/// produced by any other trigger (FR-004): there is one path, not two that agree.
+///
+/// No project parameter: the active project is read here, so FR-011 ("the active project only")
+/// has no caller that could get it wrong. With no project open there is nothing to re-read, and
+/// the view attaches no `on_press` in that state anyway (`can_refresh_worktrees`, FR-005) — the
+/// guard below is the second line of defence for a message arriving by some other route.
+pub fn on_worktree_refresh_requested(app: &mut App) -> Task<Message> {
+    // FR-005/FR-006 in one question. The view already withholds `on_press` when this is false, so
+    // reaching here with it false means the message arrived by some other route; the running
+    // refresh continues uninterrupted either way (US2 scenario 3).
+    if !app.core.can_refresh_worktrees() {
+        return Task::none();
+    }
+    let Some(project) = app.core.workspace.active.clone() else {
+        return Task::none();
+    };
+    let req = app.next_req;
+    send_op(app, PendingOp::WorktreeRefresh, move |req| {
+        ClientMsg::WorktreeRefresh { req, project }
+    });
+    if !app.pending_ops.contains_key(&req) {
+        // Disconnected. `send_op` has raised the notice naming the reason and sent nothing, so
+        // nothing is in flight — showing the control busy for the next 30 s would be a lie about
+        // a request that was never asked.
+        return Task::none();
+    }
+    app.core
+        .update(Message::Worktree(WorktreeMsg::RefreshRequested));
+    // The bounded wait (029 FR-007). Without it a daemon that accepts the request and then never
+    // answers — wedged on a very large repository, or killed between the read and the reply —
+    // leaves the control busy for the rest of the run, which is worse than a failure because the
+    // user cannot even retry.
+    //
+    // **This is the first timeout on this protocol.** Every other correlated RPC relies on the
+    // disconnect drain, which is enough while the connection itself fails but says nothing about a
+    // live connection that goes quiet. If a second operation needs one, make this a shared helper
+    // — `send_op` is the natural home — rather than copying the three lines below; two hand-rolled
+    // timers are how the two would come to disagree about what a timeout means (research R5).
+    Task::perform(
+        async move { tokio::time::sleep(REFRESH_TIMEOUT).await },
+        move |()| Message::Worktree(WorktreeMsg::RefreshTimedOut(req)),
+    )
+}
+
+/// How long the client waits for a refresh to be acknowledged before giving up on it (FR-007).
+///
+/// Generous on purpose: SC-002 asks for 2 seconds on a repository with up to 50 worktrees, and
+/// this is not that budget — it is the point past which the request is presumed lost. A tight
+/// value would abandon a slow-but-working re-read on a large repository and then tell the user it
+/// failed, which is the worse error of the two.
+const REFRESH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The bounded wait elapsed for request `req` (029 FR-007, rule T4).
+///
+/// The id is what makes this safe to fire late. A timer left over by a request that already
+/// replied finds nothing in `pending_ops` and does nothing — without it, that stale timer would
+/// end a refresh that started after it, returning the control to idle with a request still in
+/// flight. `State::refreshing` is a `bool` and cannot tell the two apart; this can.
+pub fn on_worktree_refresh_timed_out(app: &mut App, req: u64) -> Task<Message> {
+    if app.pending_ops.remove(&req).is_none() {
+        return Task::none();
+    }
+    app.core.notify_error(
+        "The session service didn't answer the request to refresh the worktree list. The list is \
+         unchanged — you can try again.",
+    );
+    app.core
+        .update(Message::Worktree(WorktreeMsg::RefreshTimedOut(req)));
     Task::none()
 }
 
@@ -2296,6 +2412,199 @@ pub(crate) mod tests {
         assert_eq!(
             visible.message,
             "A background session was restarted while you were away."
+        );
+    }
+
+    // ---- feature 029: the user asking for the worktree listing to be re-read ----------------
+
+    /// The disconnect drain and the generic failure notice both compose their sentence out of
+    /// `describe()`, so this string is user-facing in two places at once: "Couldn't refresh the
+    /// worktree list: …" and "…disconnected before confirming the request to refresh the worktree
+    /// list". Both read correctly only if the phrase is a bare verb phrase, which is what is
+    /// pinned here.
+    #[test]
+    fn the_refresh_op_describes_itself_as_a_verb_phrase_both_notices_can_use() {
+        assert_eq!(
+            PendingOp::WorktreeRefresh.describe(),
+            "refresh the worktree list"
+        );
+    }
+
+    /// The request goes out naming the active project, and only the active project (029 FR-011).
+    #[test]
+    fn asking_for_a_refresh_sends_one_correlated_request_for_the_active_project() {
+        let project = PathBuf::from("/repo/here");
+        let (mut app, mut rx) = connected_app();
+        app.core.workspace.active = Some(project.clone());
+
+        let _ = on_worktree_refresh_requested(&mut app);
+
+        let mut sent = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            sent.push(msg);
+        }
+        assert_eq!(
+            sent.len(),
+            1,
+            "one press, one request — the listing itself rides back on the CatalogChanged \
+             broadcast, so there is nothing else to ask for (contract §2)"
+        );
+        let ClientMsg::WorktreeRefresh { req, project: p } = &sent[0] else {
+            panic!("expected a WorktreeRefresh, got {:?}", sent[0]);
+        };
+        assert_eq!(p, &project);
+        assert!(
+            matches!(app.pending_ops.get(req), Some(PendingOp::WorktreeRefresh)),
+            "and it is correlated, because the reply is the only thing that can end the busy \
+             state the control shows (029 FR-007)"
+        );
+    }
+
+    /// The op resolves on its reply. `OperationResult::Ack` carries nothing — deliberately: the
+    /// refreshed listing arrived ahead of it on `CatalogChanged`, and a second copy in the reply
+    /// would be a second path to the same answer (contract §2, FR-004).
+    #[test]
+    fn the_refresh_reply_clears_the_pending_op() {
+        let (mut app, _rx) = connected_app();
+        app.core.workspace.active = Some(PathBuf::from("/repo/here"));
+        let _ = on_worktree_refresh_requested(&mut app);
+        let req = *app
+            .pending_ops
+            .iter()
+            .find(|(_, op)| matches!(op, PendingOp::WorktreeRefresh))
+            .expect("the op was recorded")
+            .0;
+
+        let _ = on_daemon_event(
+            &mut app,
+            DaemonMsg::OperationOk {
+                req,
+                result: OperationResult::Ack,
+            },
+        );
+
+        assert!(
+            app.pending_ops.is_empty(),
+            "a resolved op that stays in the map would make the next disconnect claim a request \
+             that already finished may not have taken effect"
+        );
+    }
+
+    /// FR-005 keeps the control unavailable with no project open; being *disconnected* is a
+    /// different thing, and deliberately not part of the predicate. `send_op` already names the
+    /// reason, and this asserts the refresh reuses that sentence rather than inventing one.
+    #[test]
+    fn asking_for_a_refresh_while_disconnected_reuses_the_existing_notice() {
+        let mut app = base_app();
+        app.daemon = None;
+        app.core.workspace.active = Some(PathBuf::from("/repo/here"));
+
+        let _ = on_worktree_refresh_requested(&mut app);
+
+        let visible = app
+            .core
+            .notifications
+            .queue
+            .visible()
+            .expect("the user is told why nothing happened");
+        assert_eq!(
+            visible.message,
+            "Not connected to the session service — can't refresh the worktree list right now."
+        );
+        assert!(
+            app.pending_ops.is_empty(),
+            "nothing was sent, so nothing is outstanding"
+        );
+    }
+
+    /// US2, rule T4: the bounded wait is the exit that does not depend on the daemon answering.
+    ///
+    /// This is the codebase's first timeout on this protocol, so the test asserts the timeout path
+    /// itself rather than the happy path around it (research R5): with no reply at all, the op is
+    /// resolved, the user is told, and the control returns to idle.
+    #[test]
+    fn a_refresh_that_is_never_answered_ends_at_the_bounded_wait() {
+        let (mut app, _rx) = connected_app();
+        app.core.workspace.active = Some(PathBuf::from("/repo/here"));
+        let _ = on_worktree_refresh_requested(&mut app);
+        let req = *app.pending_ops.keys().next().expect("the op was recorded");
+        assert!(app.core.worktree.refreshing, "the precondition: it is busy");
+
+        let _ = on_worktree_refresh_timed_out(&mut app, req);
+
+        assert!(
+            !app.core.worktree.refreshing,
+            "a control that stays busy for ever is worse than one that failed — the user cannot \
+             even retry (029 FR-007, US2 scenario 5)"
+        );
+        assert!(
+            app.pending_ops.is_empty(),
+            "and the op is resolved, so a disconnect later does not report it a second time"
+        );
+        assert!(
+            app.core.notifications.queue.visible().is_some(),
+            "the wait elapsing is something the user is told about, not a silent reset"
+        );
+    }
+
+    /// The other half of T4: the reply that finally arrives after the wait elapsed is discarded,
+    /// and discarded *quietly*. It is not a failure — the refresh may well have happened — and a
+    /// second refresh that started in the meantime must not be ended by it.
+    #[test]
+    fn a_reply_arriving_after_the_bounded_wait_is_discarded_without_an_error() {
+        let (mut app, _rx) = connected_app();
+        app.core.workspace.active = Some(PathBuf::from("/repo/here"));
+        let _ = on_worktree_refresh_requested(&mut app);
+        let stale = *app.pending_ops.keys().next().expect("the op was recorded");
+        let _ = on_worktree_refresh_timed_out(&mut app, stale);
+        app.core.notifications.queue = Default::default();
+        // A second refresh, started after the first was given up on.
+        let _ = on_worktree_refresh_requested(&mut app);
+        assert!(app.core.worktree.refreshing);
+
+        let _ = on_daemon_event(
+            &mut app,
+            DaemonMsg::OperationOk {
+                req: stale,
+                result: OperationResult::Ack,
+            },
+        );
+
+        assert!(
+            app.core.worktree.refreshing,
+            "the late reply belongs to the abandoned request, so it must not end the one now \
+             running — that would return the control to idle while a refresh is still in flight"
+        );
+        assert!(
+            app.core.notifications.queue.visible().is_none(),
+            "and it is not an error: the refresh may well have happened. Reporting one would \
+             train the user to ignore the notice that matters"
+        );
+    }
+
+    /// The mirror of the case above at the timer end: a timer left over by a request that already
+    /// replied must not end the refresh that started after it.
+    #[test]
+    fn a_stale_timer_does_not_end_the_refresh_that_replaced_it() {
+        let (mut app, _rx) = connected_app();
+        app.core.workspace.active = Some(PathBuf::from("/repo/here"));
+        let _ = on_worktree_refresh_requested(&mut app);
+        let first = *app.pending_ops.keys().next().expect("the op was recorded");
+        let _ = on_daemon_event(
+            &mut app,
+            DaemonMsg::OperationOk {
+                req: first,
+                result: OperationResult::Ack,
+            },
+        );
+        let _ = on_worktree_refresh_requested(&mut app);
+
+        let _ = on_worktree_refresh_timed_out(&mut app, first);
+
+        assert!(
+            app.core.worktree.refreshing,
+            "the correlation id is on the timer for exactly this reason (data-model §2.1): the \
+             flag alone cannot tell the two apart"
         );
     }
 

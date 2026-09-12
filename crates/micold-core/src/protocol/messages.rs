@@ -408,6 +408,25 @@ pub enum ClientMsg {
         /// `true` is today's (and the spec's) default; `false` keeps the branch.
         delete_branch: bool,
     },
+    /// Re-read a project's worktrees from git + the filesystem, on the user's explicit request
+    /// (feature 029, FR-003). **Mutates nothing** — neither the repository nor the app's own
+    /// settings. Idempotent, and safe to send at any time a project is open.
+    ///
+    /// Correlated despite mutating nothing, for the reason [`ClientMsg::BranchList`] is and one
+    /// more that is load-bearing: the reply is the only thing that ends the refresh control's
+    /// busy state (029 FR-007), and an uncorrelated request could not.
+    ///
+    /// The refreshed listing is **not** in the reply — it arrives as the `CatalogChanged` the
+    /// daemon already broadcasts, so a refreshed listing travels the one path every other listing
+    /// travels. That is 029 FR-004's implementation, not merely its consequence: a user must not
+    /// be able to tell which trigger produced the list, and one path guarantees that where two
+    /// kept in agreement would only promise it.
+    WorktreeRefresh {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+    },
     /// Rename a worktree's display name.
     WorktreeRename {
         /// Correlation id.
