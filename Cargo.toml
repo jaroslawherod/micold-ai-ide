@@ -10,7 +10,7 @@ members = ["crates/micold-core", "crates/micold-daemon", "crates/micold-client"]
 version = "0.12.1"
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/Cumulocity-IoT/micold-ai-ide"
+repository = "https://github.com/jaroslawherod/micold-ai-ide"
 # MSRV pinned to the latest stable toolchain (plan Decision 1). `std::fs::File::lock`
 # (stable since 1.89) replaces the former `fd-lock` dependency for the daemon singleton.
 rust-version = "1.97"

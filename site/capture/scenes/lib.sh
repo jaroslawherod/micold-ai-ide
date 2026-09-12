@@ -54,10 +54,46 @@ scene_lock="${scene_project%/*}/.capture-lock"
 scene_width="${MICOLD_CAPTURE_WIDTH:-1440}"
 scene_height="${MICOLD_CAPTURE_HEIGHT:-900}"
 
+# A scene fails on a machine nobody is sitting at, and the two programs that could say why write
+# their diagnostics to files rather than to this shell: the client's output is redirected to
+# `$scene_log`, and the daemon -- which is what actually spawns a session's provider -- logs under
+# the display's own data directory. Both are printed here, labelled and empty-or-not, because a
+# failure that prints only the assertion leaves a CI log with nothing in it to read.
 scene_die() {
   printf 'scene: %s\n' "$1" >&2
-  [ -f "$scene_log" ] && tail -20 "$scene_log" >&2
+  printf 'scene: --- client log (%s) ---\n' "$scene_log" >&2
+  [ -f "$scene_log" ] && tail -40 "$scene_log" >&2
+  local daemon_log="${XDG_DATA_HOME:-}/micold-ai-ide/micold-daemon.log"
+  printf 'scene: --- daemon log (%s) ---\n' "$daemon_log" >&2
+  [ -f "$daemon_log" ] && tail -40 "$daemon_log" >&2
+  scene_failure_shot
+  # Where the pointer and the window actually were. A coordinate in this file is only meaningful
+  # relative to a window at 0,0 of the size it was asked for, and neither is guaranteed on a
+  # display with no window manager.
+  [ -n "${DISPLAY:-}" ] && {
+    printf 'scene: pointer %s\n' "$(xdotool getmouselocation 2>/dev/null || echo unknown)" >&2
+    [ -n "${scene_win:-}" ] && printf 'scene: window %s\n' \
+      "$(xdotool getwindowgeometry "$scene_win" 2>/dev/null | tr '\n' ' ' || echo unknown)" >&2
+  }
   exit 1
+}
+
+# The state the scene died in, as a picture.
+#
+# Every assertion in this file exists because a click that lands on nothing produces a plausible
+# frame rather than an error -- and the same reasoning applies to the failure itself: "no session
+# started from the row at y=247" does not say whether the row was empty, the list was a different
+# length, or the action was drawn somewhere else. On a machine nobody is sitting at, a frame of the
+# whole display is the only thing that does. It goes under `site/build/`, which is where the
+# publication workflow looks for debris to keep when a run fails.
+scene_failure_shot() {
+  local dir="$scene_root/site/build/failed"
+  local name
+  name="$(basename "${0%.sh}")"
+  mkdir -p "$dir" 2>/dev/null || return 0
+  [ -n "${DISPLAY:-}" ] || return 0
+  import -window root -define png:exclude-chunks=date,time "$dir/$name.png" 2>/dev/null || return 0
+  printf 'scene: the failing state is in site/build/failed/%s.png\n' "$name" >&2
 }
 
 scene_note() {
@@ -154,9 +190,21 @@ scene_start() {
 
   mkdir -p "$scene_work" "$scene_stub"
 
-  # The provider. The application spawns whatever the session's AI CLI is by name, so the stub is
-  # installed under that name and reached through the same code path as the real one.
-  ln -sf "$scene_site/capture/stub-cli.sh" "$scene_stub/claude"
+  # The providers. The application spawns whatever the session's AI CLI is by name, so the stub is
+  # installed under each name and reached through the same code path as the real one.
+  #
+  # *Every* name in `AiCli::ALL`, not just the one the scenes start a session on -- because the
+  # start affordance is a split button whose chevron is absent when only one CLI is installed, and
+  # absent means the "+" beside it sits twenty pixels further right. So the row action a scene
+  # reaches for was in a different place on a developer's machine (`claude` and `copilot` both
+  # installed) than on the runner (`claude` alone, from this directory), and the scene clicked past
+  # it into the row and reported that no session had started. The set of installed providers was an
+  # accident of the capture machine; FR-011b says a publication may not have those. Installing all
+  # of them makes the affordance the same everywhere, and makes a host that happens to have a real
+  # one on `PATH` change nothing, since it is already in the set.
+  for cli in claude copilot; do
+    ln -sf "$scene_site/capture/stub-cli.sh" "$scene_stub/$cli"
+  done
   PATH="$scene_stub:$PATH"
   export PATH
 
@@ -182,6 +230,26 @@ scene_start() {
   printf '{\n  "settings_version": 4,\n  "theme": "%s"\n}\n' "$preference" \
     >"$XDG_DATA_HOME/micold-ai-ide/settings.json"
 
+  # The service answers "which AI CLIs can I run" at `debug`, and `scene_wait_providers` below has
+  # to read that answer before any scene may click a row's start action. The default filter is
+  # `info`, so the one line that matters is turned on here -- for the service only, since the
+  # client writes nothing at all and a whole-workspace `debug` would bury it.
+  #
+  # Set, not defaulted. `${MICOLD_LOG:-...}` looked harmless and was not: this application ships as
+  # a systemd user service that exports `MICOLD_LOG=info` into every process it starts, so a scene
+  # run from a terminal *inside the application* inherited `info`, never saw the line, and waited
+  # out `scene_wait_providers` -- while the same scene on a runner passed. The filter a scene runs
+  # under is the scene's, for the same reason the provider set and `$SHELL` are (FR-011b).
+  MICOLD_LOG="info,micold_daemon::server=debug"
+  export MICOLD_LOG
+
+  # Where that answer lands, and how much of the file predates this scene. The daemon appends, and
+  # every scene of a run starts its own against the same path, so an offset is the only way to read
+  # *this* scene's lines rather than a previous scene's.
+  scene_daemon_log="$XDG_DATA_HOME/micold-ai-ide/micold-daemon.log"
+  scene_daemon_mark=0
+  [ -f "$scene_daemon_log" ] && scene_daemon_mark="$(stat -c %s "$scene_daemon_log")"
+
   # `env -u WAYLAND_DISPLAY` is not belt-and-braces: winit prefers Wayland and ignores DISPLAY
   # entirely when it is set, so the window would open on the host's real session -- or not at all.
   scene_note "launching on $DISPLAY in the $scheme scheme"
@@ -190,6 +258,8 @@ scene_start() {
 
   scene_wait_for_window
   scene_place_window
+  scene_wait_painted
+  scene_wait_providers
 
   # The one check that catches every pinning failure at once. It has to be read from the log,
   # because the window looks the same either way.
@@ -218,6 +288,56 @@ scene_place_window() {
   xdotool windowmove "$scene_win" 0 0
   # A resize is a relayout, and a frame taken during one is a frame of a half-drawn application.
   sleep 1
+}
+
+# A window exists long before the application has drawn into it.
+#
+# The client is a wgpu application rendered by `lavapipe`, and on a cold runner the first frame
+# waits on shader compilation -- seconds, not milliseconds. `scene_wait_for_window` answers "has a
+# window been mapped", which is a question about the toolkit; this answers "is there an application
+# in it", which is the question every scene after it actually depends on. The first capture of a
+# run published the difference: a mapped, entirely black window, refused by `scene_grab` as a blank
+# frame *after* the scene had already clicked at things that were not yet there.
+scene_wait_painted() {
+  local waited=0 mean
+  while :; do
+    mean="$(import -window root png:- 2>/dev/null \
+      | convert png:- -crop "${scene_width}x${scene_height}+0+0" +repage -format '%[fx:mean]' info: \
+      2>/dev/null || echo 0)"
+    case "$mean" in 0 | 0.0 | 0.000000) ;; *) break ;; esac
+    waited=$((waited + 1))
+    [ "$waited" -gt 60 ] && scene_die "the window is still blank 30s after it opened"
+    sleep 0.5
+  done
+}
+
+# Wait until the service has told the client which AI CLIs it can run.
+#
+# The set arrives over the wire (feature 027, FR-023c): the client asks on connect and the answer
+# lands "a moment later". Until it does, `State::available_providers` is `None`, and every decision
+# that reads it takes the empty-set branch -- so the start affordance draws *without* its chevron,
+# which moves the "+" twenty pixels right of where the scenes were measured, and a press on it
+# resolves to `StartIntent::NothingAvailable` and starts nothing. Both failures look identical from
+# the outside: a click that lands, and no session. On a developer's machine the answer beats the
+# first click; on a loaded runner it did not, and six scenes reported "no session started" for a
+# reason that was never about the coordinate they named.
+#
+# So the scene waits for the answer instead of assuming it, and refuses a set that would not draw
+# the affordance the coordinates were measured against.
+scene_wait_providers() {
+  local waited=0 line=""
+  while :; do
+    line="$(tail -c "+$((scene_daemon_mark + 1))" "$scene_daemon_log" 2>/dev/null \
+      | grep -m1 'AI CLI availability reported' || true)"
+    [ -n "$line" ] && break
+    waited=$((waited + 1))
+    [ "$waited" -gt 120 ] && scene_die "the service never reported which AI CLIs it can run"
+    sleep 0.25
+  done
+  case "$line" in
+    *ClaudeCode*Copilot* | *Copilot*ClaudeCode*) ;;
+    *) scene_die "the service can run only some of the stubs: ${line#*available=}" ;;
+  esac
 }
 
 # There is no window manager on the capture display, so nothing assigns input focus and keyboard
@@ -439,11 +559,19 @@ scene_stop() {
     kill "$scene_pid" 2>/dev/null || true
     wait "$scene_pid" 2>/dev/null || true
   fi
-  # The daemon outlives the client by design (it is a session service), so it is stopped by name
-  # *within this run's own pin directory* -- never by pattern across the machine, which would kill
-  # a daemon a person on this machine is using.
+  # The daemon outlives the client by design (it is a session service), and a scene that died before
+  # `scene_stop` leaves a client behind that `$scene_pid` -- a variable, private to the process that
+  # set it -- cannot name. Both are therefore stopped by name *within this run's own pin directory*,
+  # never by pattern across the machine, which would kill what a person on this machine is using.
   pkill -f "^$scene_pin/micold-daemon" 2>/dev/null || true
+  pkill -f "^$scene_pin/micold-ai-ide" 2>/dev/null || true
   scene_pid=""
   # Releases the project for the next run (and for the next scene of this one).
   exec 8>&-
 }
+
+# A scene that fails partway leaves its client running, and a running client cannot be overwritten:
+# the next scene's `cp` into the pin directory gets ETXTBSY -- "Text file busy" -- and dies before it
+# has launched anything. One scene going wrong turned into every later scene going wrong that way,
+# so the cleanup runs on the way out however the scene ends.
+trap scene_stop EXIT

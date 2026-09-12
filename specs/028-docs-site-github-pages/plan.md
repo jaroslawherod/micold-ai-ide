@@ -56,7 +56,7 @@ the built HTML in the publication workflow before deploy (FR-005, FR-015c, FR-02
 judgement half of SC-001 and SC-006 is recorded once per release in this feature's
 [quickstart](./quickstart.md) Part B.
 
-**Target Platform**: GitHub Pages over HTTPS at `https://cumulocity-iot.github.io/micold-ai-ide/`.
+**Target Platform**: GitHub Pages over HTTPS at `https://jaroslawherod.github.io/micold-ai-ide/`.
 The publication host is `ubuntu-latest`. Readers are on current desktop and mobile browsers.
 
 **Project Type**: A static documentation site plus the build tooling that produces it, inside an

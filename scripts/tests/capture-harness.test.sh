@@ -187,6 +187,48 @@ if [ -d "$work/demo-a" ]; then
   fi
 fi
 
+# 4. **The providers.** The start affordance is a split button, and its chevron is *absent* -- not
+# disabled -- when only one AI CLI is installed, which puts the "+" beside it twenty pixels further
+# right. So the row action every session-opening scene reaches for moves depending on what the
+# capture machine happens to have on `PATH`: a developer with `claude` and `copilot` installed and a
+# runner with neither drew the same row in two different places, and the scenes clicked past it. The
+# stub therefore stands in for *every* provider the application declares, and this is the assertion
+# that keeps the two lists together -- a provider added to `AiCli::ALL` and not to the scene helpers
+# would move the affordance back and fail every session scene on the runner alone.
+declared="$(grep -oP 'fn command\(&self\) -> &.static str \{\s*\n\s*"\K[a-z0-9-]+' -z \
+  crates/micold-core/src/provider.rs 2>/dev/null | tr '\0' '\n' | sort -u | tr '\n' ' ')"
+installed="$(sed -n 's/^  for cli in \(.*\); do$/\1/p' site/capture/scenes/lib.sh \
+  | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+if [ -z "$declared" ]; then
+  skip "the stub stands in for every declared provider" "could not read AiCli::ALL's commands"
+elif [ "$declared" = "$installed" ]; then
+  pass "the stub stands in for every declared provider"
+else
+  fail "the stub stands in for every declared provider" \
+    "provider.rs declares [$declared], lib.sh installs [$installed]"
+fi
+
+# 5. **The environment a scene runs under is the scene's.** Everything above is one rule applied to
+# `PATH`, to `$SHELL` and to the provider set: a published frame may not depend on the machine that
+# produced it (FR-011b, FR-013). The log filter is the same rule and was the last place it leaked.
+# This application ships as a systemd user service that exports `MICOLD_LOG=info` into every process
+# it starts, so a scene run from a terminal *inside the application* inherited `info`, never saw the
+# service's answer to "which AI CLIs can I run", and waited out `scene_wait_providers` -- while the
+# same scene on a runner, where nothing sets the variable, passed. A `:-` default is what makes that
+# possible, so the assertion is that there is not one.
+filter_line="$(sed -n 's/^  MICOLD_LOG=\(.*\)$/\1/p' site/capture/scenes/lib.sh)"
+if [ -z "$filter_line" ]; then
+  fail "the scene sets its own log filter" "lib.sh assigns MICOLD_LOG nowhere"
+elif printf '%s' "$filter_line" | grep -q ':-'; then
+  fail "the scene sets its own log filter" \
+    "MICOLD_LOG defers to the environment: $filter_line"
+elif printf '%s' "$filter_line" | grep -q 'micold_daemon::server=debug'; then
+  pass "the scene sets its own log filter"
+else
+  fail "the scene sets its own log filter" \
+    "the filter does not turn on the availability line: $filter_line"
+fi
+
 echo
 if [ "$failures" -eq 0 ]; then
   echo "the capture harness: all assertions hold"

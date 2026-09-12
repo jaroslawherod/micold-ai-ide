@@ -273,14 +273,14 @@ MD
   cat <<MD
 
 The full provenance — where each file came from and how it was produced — is
-[\`assets/fonts/PROVENANCE.md\`](https://github.com/Cumulocity-IoT/micold-ai-ide/blob/$tag/assets/fonts/PROVENANCE.md)
+[\`assets/fonts/PROVENANCE.md\`](https://github.com/jaroslawherod/micold-ai-ide/blob/$tag/assets/fonts/PROVENANCE.md)
 in the repository at this release.
 
 ## Apache License 2.0
 
 This covers Micold AI IDE itself and the Material Symbols Outlined icon font. The icon font ships
 its own verbatim copy at
-[\`assets/fonts/LICENSE\`](https://github.com/Cumulocity-IoT/micold-ai-ide/blob/$tag/assets/fonts/LICENSE);
+[\`assets/fonts/LICENSE\`](https://github.com/jaroslawherod/micold-ai-ide/blob/$tag/assets/fonts/LICENSE);
 the text below is the project's own, which differs from it only in the appendix that names the
 copyright holder.
 
@@ -319,7 +319,7 @@ if [ -d "$theme" ]; then
 <div class="micold-release">
   <span class="micold-release-version">$(html_escape "$version")</span>
   <a class="micold-release-source"
-     href="https://github.com/Cumulocity-IoT/micold-ai-ide/blob/$(html_escape "$tag")/docs/{{#if (eq path "index.md")}}README.md{{else}}{{ path }}{{/if}}">View
+     href="https://github.com/jaroslawherod/micold-ai-ide/blob/$(html_escape "$tag")/docs/{{#if (eq path "index.md")}}README.md{{else}}{{ path }}{{/if}}">View
     this page's source</a>
 </div>
 HBS

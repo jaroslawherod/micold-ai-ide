@@ -8,7 +8,7 @@ it.
 Built in **Rust** with the **iced** GUI framework. All state lives on your machine — the app is
 fully functional offline (Constitution Principle IV).
 
-**Documentation: <https://cumulocity-iot.github.io/micold-ai-ide/>** — the user guide with
+**Documentation: <https://jaroslawherod.github.io/micold-ai-ide/>** — the user guide with
 screenshots of the running application, published from this repository on every release.
 
 ## Features
@@ -45,7 +45,7 @@ Linux build/runtime needs the usual GUI dev libraries (X11/Wayland/xkbcommon); s
 
 ## Documentation
 
-The published site is <https://cumulocity-iot.github.io/micold-ai-ide/>: the same documentation
+The published site is <https://jaroslawherod.github.io/micold-ai-ide/>: the same documentation
 this repository carries, at the latest release, with the screenshots captured from that release's
 own build.
 

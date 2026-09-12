@@ -9,8 +9,8 @@ Each release carries a `.deb` built natively for the two architectures the proje
 
 | Architecture | Download |
 |---|---|
-| 64-bit Intel/AMD (`amd64`) | [micold-client_{{MICOLD_VERSION}}-1_amd64.deb](https://github.com/Cumulocity-IoT/micold-ai-ide/releases/download/{{MICOLD_TAG}}/micold-client_{{MICOLD_VERSION}}-1_amd64.deb) |
-| 64-bit Arm (`arm64`) | [micold-client_{{MICOLD_VERSION}}-1_arm64.deb](https://github.com/Cumulocity-IoT/micold-ai-ide/releases/download/{{MICOLD_TAG}}/micold-client_{{MICOLD_VERSION}}-1_arm64.deb) |
+| 64-bit Intel/AMD (`amd64`) | [micold-client_{{MICOLD_VERSION}}-1_amd64.deb](https://github.com/jaroslawherod/micold-ai-ide/releases/download/{{MICOLD_TAG}}/micold-client_{{MICOLD_VERSION}}-1_amd64.deb) |
+| 64-bit Arm (`arm64`) | [micold-client_{{MICOLD_VERSION}}-1_arm64.deb](https://github.com/jaroslawherod/micold-ai-ide/releases/download/{{MICOLD_TAG}}/micold-client_{{MICOLD_VERSION}}-1_arm64.deb) |
 
 Install it with `apt`, which pulls in the packages it depends on — installing with `dpkg -i` instead
 leaves them unresolved:
@@ -45,7 +45,7 @@ You need [Rust](https://www.rust-lang.org/tools/install) (the version in `rust-t
 workload from the Visual Studio Build Tools — the linker comes from there.
 
 ```console
-$ git clone --branch {{MICOLD_TAG}} https://github.com/Cumulocity-IoT/micold-ai-ide.git
+$ git clone --branch {{MICOLD_TAG}} https://github.com/jaroslawherod/micold-ai-ide.git
 $ cd micold-ai-ide
 $ cargo build --release -p micold-client -p micold-daemon
 ```

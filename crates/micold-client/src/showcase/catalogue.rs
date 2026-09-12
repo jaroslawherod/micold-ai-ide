@@ -23,7 +23,7 @@
 //! The build tells you when you have not: the completeness check names what is missing, in either
 //! direction.
 //!
-//! [contracts/gallery-catalogue.md]: https://github.com/Cumulocity-IoT/micold-ai-ide/blob/main/specs/020-component-showcase-gallery/contracts/gallery-catalogue.md
+//! [contracts/gallery-catalogue.md]: https://github.com/jaroslawherod/micold-ai-ide/blob/main/specs/020-component-showcase-gallery/contracts/gallery-catalogue.md
 
 use iced::Element;
 use micold_core::tokens::Roles;

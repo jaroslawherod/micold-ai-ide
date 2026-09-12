@@ -1,12 +1,12 @@
 # The documentation site: how a publication works
 
-<https://cumulocity-iot.github.io/micold-ai-ide/> is this `docs/` directory, rendered. It is
+<https://jaroslawherod.github.io/micold-ai-ide/> is this `docs/` directory, rendered. It is
 published by a workflow, from a release tag, with every screenshot on it captured from the
 application built at that tag — so the site a reader lands on shows the version they can download,
 and nobody has to remember to refresh a picture.
 
 This page is for the developer who has to change, trigger, or debug that. The tooling itself lives
-under `site/`, and [`site/README.md`](https://github.com/Cumulocity-IoT/micold-ai-ide/blob/main/site/README.md)
+under `site/`, and [`site/README.md`](https://github.com/jaroslawherod/micold-ai-ide/blob/main/site/README.md)
 is the map of what is in there.
 
 ## What runs, in order
@@ -81,16 +81,32 @@ the download links and the screenshots all describe one shipped version.
 Both inputs are optional on a manual run:
 
 ```bash
-gh workflow run pages.yml                                            # newest release + default branch prose
+gh workflow run pages.yml                                            # newest release + this ref's prose
 gh workflow run pages.yml -f release_tag=micold-ai-ide-v0.10.0       # that tag, prose included
 gh workflow run pages.yml -f docs_ref=main                           # newest release, prose from main
 ```
 
 - `release_tag` decides which application is built and captured. It defaults to the newest published
   release.
-- `docs_ref` decides where the prose comes from, and defaults to the default branch on a manual run
-  — so a typo corrected after a release can be published without cutting a new one. On the automatic
-  run it defaults to the release tag, so a publication is reproducible from the tag alone.
+- `docs_ref` decides where the prose comes from — so a typo corrected after a release can be
+  published without cutting a new one. On the automatic run it defaults to the release tag, so a
+  publication is reproducible from the tag alone. On a manual run it defaults to the ref the
+  dispatch names, which is what makes the recipe below a test of your branch rather than of `main`.
+
+## Trying a change to the pipeline before it publishes
+
+Dispatch the workflow on the branch:
+
+```bash
+gh workflow run pages.yml --ref my-branch
+gh run download <run-id> -n github-pages   # the built site, as it would have been published
+```
+
+The run does everything a publication does — builds the application, captures the media, renders and
+runs every check — and then stops. Only the default branch and a `workflow_call` reach the deploy, so
+a branch's site can be downloaded and served for review without ever going in front of a reader.
+That is the only way to see a publication before it is one: the capture needs a display, ffmpeg and a
+release build, so nothing short of a run produces the pages.
 
 Runs are serialised with `concurrency: {group: pages, cancel-in-progress: true}`: two releases in
 quick succession cannot interleave, and the newer one wins.
