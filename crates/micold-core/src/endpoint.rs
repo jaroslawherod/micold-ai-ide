@@ -91,7 +91,11 @@ const SUN_PATH_MAX: usize = 103;
 mod imp {
     use super::*;
     use std::fs;
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    use std::os::unix::fs::PermissionsExt;
+    // Gated for the same reason as `euid` below: only the non-macOS paths read an owner off a
+    // metadata, so an ungated import warns on the one platform that never uses it.
+    #[cfg(not(target_os = "macos"))]
+    use std::os::unix::fs::MetadataExt;
 
     /// The current effective uid. Only the non-macOS paths (Linux/other-Unix `resolve` and
     /// `verify_owned_0700`) consult it; macOS keys the endpoint on `$HOME`, so gate it off there to

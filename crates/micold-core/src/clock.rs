@@ -73,11 +73,33 @@ fn read_nanos() -> u64 {
 ///
 /// The raw value is in Mach ticks, which are nanoseconds only when `timebase.numer == denom`; it is
 /// converted rather than assumed, because on some Apple silicon it is not.
+///
+/// # Why the two calls are declared here instead of taken from `libc`
+///
+/// `libc` has deprecated its Mach bindings and no longer exports `mach_continuous_time` at all —
+/// the macOS job is the only one that compiles this arm, and it failed with `cannot find function
+/// mach_continuous_time in crate libc` while the timebase type libc *does* still carry warned that
+/// it is deprecated too. What libc points at instead, `mach2`, is a whole dependency for the two
+/// symbols below. Both live in libSystem, which every Rust binary on this platform already links,
+/// so declaring them is the smaller of the two debts.
 #[cfg(target_os = "macos")]
 fn read_nanos() -> u64 {
-    let mut timebase = libc::mach_timebase_info_data_t { numer: 0, denom: 0 };
-    unsafe { libc::mach_timebase_info(&mut timebase) };
-    let ticks = unsafe { libc::mach_continuous_time() };
+    /// The tick-to-nanosecond ratio, as a fraction — Mach's `mach_timebase_info_data_t`.
+    #[repr(C)]
+    struct MachTimebaseInfo {
+        numer: u32,
+        denom: u32,
+    }
+
+    extern "C" {
+        fn mach_timebase_info(info: *mut MachTimebaseInfo) -> libc::c_int;
+        fn mach_continuous_time() -> u64;
+    }
+
+    let mut timebase = MachTimebaseInfo { numer: 0, denom: 0 };
+    // Cannot fail for a non-null destination, and that is a local's address.
+    unsafe { mach_timebase_info(&mut timebase) };
+    let ticks = unsafe { mach_continuous_time() };
     (ticks as u128 * timebase.numer as u128 / timebase.denom.max(1) as u128) as u64
 }
 
