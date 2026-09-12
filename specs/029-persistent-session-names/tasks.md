@@ -30,7 +30,7 @@ Three-crate Cargo workspace. `crates/micold-core/` (render-free core + persisten
 
 **Purpose**: Establish that any Red observed later belongs to a new test and not to a pre-existing failure.
 
-- [ ] T001 Run `mise run test` (the whole-workspace task in `mise.toml`) and confirm it is green before any edit; note the HEAD sha in the first test commit's message so later Red is attributable to a new test
+- [X] T001 Run `mise run test` (the whole-workspace task in `mise.toml`) and confirm it is green before any edit; note the HEAD sha in the first test commit's message so later Red is attributable to a new test
 
 ---
 
@@ -40,13 +40,13 @@ Three-crate Cargo workspace. `crates/micold-core/` (render-free core + persisten
 
 ### Tests (write first, observe Red)
 
-- [ ] T002 [P] Add `crates/micold-core/tests/session_name_round_trip.rs` pinning the existing `SessionLabel` ↔ `StoredSession::title` mapping: `Named(s)` saves and loads as `Named(s)`, `Pending` round-trips as `Pending`, and a session record written **without** a `title` key loads as `Pending` rather than erroring — the claim that lets this ship with no `schema_version` bump (contract §1). **Characterization gate**: this behaviour already exists in `crates/micold-core/src/store.rs`, so it will be green on arrival; it is here to fail if anyone changes the mapping underneath the feature
-- [ ] T003 Add `crates/micold-daemon/tests/session_name_persistence.rs` with failing tests for `Catalog::record_session_name` (contract C1, C2, C4, C6): it resolves the session by `SessionId` through `Workspace::find_session_mut` and sets `SessionLabel::Named`; recording the name the session already has returns `Ok(false)` and writes nothing; an empty name is a no-op returning `Ok(false)`; an unknown id returns `Ok(false)`; and exactly one session's label changes — every other session in that project and in a second project is untouched (Red: the method does not exist)
-- [ ] T004 Extend `crates/micold-daemon/tests/session_name_persistence.rs` with the FR-009 clause (contract C5): against a `Catalog::ephemeral()` the in-memory label still becomes `Named`, and nothing is reported as a session failure (Red: same missing method)
+- [X] T002 [P] Add `crates/micold-core/tests/session_name_round_trip.rs` pinning the existing `SessionLabel` ↔ `StoredSession::title` mapping: `Named(s)` saves and loads as `Named(s)`, `Pending` round-trips as `Pending`, and a session record written **without** a `title` key loads as `Pending` rather than erroring — the claim that lets this ship with no `schema_version` bump (contract §1). **Characterization gate**: this behaviour already exists in `crates/micold-core/src/store.rs`, so it will be green on arrival; it is here to fail if anyone changes the mapping underneath the feature
+- [X] T003 Add `crates/micold-daemon/tests/session_name_persistence.rs` with failing tests for `Catalog::record_session_name` (contract C1, C2, C4, C6): it resolves the session by `SessionId` through `Workspace::find_session_mut` and sets `SessionLabel::Named`; recording the name the session already has returns `Ok(false)` and writes nothing; an empty name is a no-op returning `Ok(false)`; an unknown id returns `Ok(false)`; and exactly one session's label changes — every other session in that project and in a second project is untouched (Red: the method does not exist)
+- [X] T004 Extend `crates/micold-daemon/tests/session_name_persistence.rs` with the FR-009 clause (contract C5): against a `Catalog::ephemeral()` the in-memory label still becomes `Named`, and nothing is reported as a session failure (Red: same missing method)
 
 ### Implementation
 
-- [ ] T005 Implement `Catalog::record_session_name(&mut self, id: SessionId, name: &str) -> io::Result<bool>` in `crates/micold-daemon/src/catalog.rs`, beside `remember_foreground` and following its compare-before-write shape: look the session up via `self.workspace.find_session_mut(id)`, return `Ok(false)` when the name is empty / unknown / already recorded, otherwise `session.set_title(name)` **in memory first**, then `self.persist()`, returning `Ok(true)`. Doc-comment why the comparison is load-bearing (research R3: the file holds every one of that project's session records). Run T002–T004 green
+- [X] T005 Implement `Catalog::record_session_name(&mut self, id: SessionId, name: &str) -> io::Result<bool>` in `crates/micold-daemon/src/catalog.rs`, beside `remember_foreground` and following its compare-before-write shape: look the session up via `self.workspace.find_session_mut(id)`, return `Ok(false)` when the name is empty / unknown / already recorded, otherwise `session.set_title(name)` **in memory first**, then `self.persist()`, returning `Ok(true)`. Doc-comment why the comparison is load-bearing (research R3: the file holds every one of that project's session records). Run T002–T004 green
 
 **Checkpoint**: the durable write exists and is covered. US1 and US2 can now proceed — in either order, or in parallel by two people.
 
@@ -60,18 +60,18 @@ Three-crate Cargo workspace. `crates/micold-core/` (render-free core + persisten
 
 ### Tests for User Story 1 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T006 [P] [US1] Extend `crates/micold-daemon/tests/activity_pipeline.rs`: the stripped OSC-0 title that becomes the live session title is **also** returned by `drain_signals` as an observed `(SessionId, String)` change, exactly once, and is not re-reported on the following drain when the title has not changed (contract C9, C10). Reuses the existing real-PTY `printf` fixture in that file (Red: `drain_signals` returns `bool`)
-- [ ] T007 [US1] Extend `crates/micold-daemon/tests/session_name_persistence.rs`: a name recorded for a session is still present after building a **fresh** `Catalog` over the same data directory — the in-process stand-in for a daemon restart (FR-001, SC-001) — and three sessions each keep their own distinct name across that reload, none of them reading as `Pending` (SC-001, SC-006)
+- [X] T006 [P] [US1] Extend `crates/micold-daemon/tests/activity_pipeline.rs`: the stripped OSC-0 title that becomes the live session title is **also** returned by `drain_signals` as an observed `(SessionId, String)` change, exactly once, and is not re-reported on the following drain when the title has not changed (contract C9, C10). Reuses the existing real-PTY `printf` fixture in that file (Red: `drain_signals` returns `bool`)
+- [X] T007 [US1] Extend `crates/micold-daemon/tests/session_name_persistence.rs`: a name recorded for a session is still present after building a **fresh** `Catalog` over the same data directory — the in-process stand-in for a daemon restart (FR-001, SC-001) — and three sessions each keep their own distinct name across that reload, none of them reading as `Pending` (SC-001, SC-006)
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Widen `DaemonState::drain_signals` in `crates/micold-daemon/src/state.rs` to return the existing "a projected summary changed" signal **plus** the debounced `(SessionId, String)` title changes it currently swallows into `LiveSession::last_title`. Keep it lock-only and free of blocking I/O (contract C7) and say so in the doc comment — the reason the write is the caller's job, not this method's (research R2). Update the existing call sites in `crates/micold-daemon/tests/activity_pipeline.rs` that ignore the return value
-- [ ] T009 [US1] Add `DaemonState::record_observed_names` to `crates/micold-daemon/src/state.rs`: forward each observed pair to `Catalog::record_session_name`, log a failure at `warn` and continue with the rest, and surface nothing to the client — no `WireLifecycle::Failed`, no lifecycle change (contract C12, C13; the convention `adopt_discovered_sessions` already follows)
-- [ ] T010 [US1] Wire it into the supervisor tick in `crates/micold-daemon/src/server.rs` (`spawn_supervisor`, ~line 243): take the changes from `drain_signals`, and when the set is non-empty hand it to `record_observed_names` inside a `tokio::task::spawn_blocking` hop — never on the async runtime (contract C11). No change to when `broadcast_catalog` fires
+- [X] T008 [US1] Widen `DaemonState::drain_signals` in `crates/micold-daemon/src/state.rs` to return the existing "a projected summary changed" signal **plus** the debounced `(SessionId, String)` title changes it currently swallows into `LiveSession::last_title`. Keep it lock-only and free of blocking I/O (contract C7) and say so in the doc comment — the reason the write is the caller's job, not this method's (research R2). Update the existing call sites in `crates/micold-daemon/tests/activity_pipeline.rs` that ignore the return value
+- [X] T009 [US1] Add `DaemonState::record_observed_names` to `crates/micold-daemon/src/state.rs`: forward each observed pair to `Catalog::record_session_name`, log a failure at `warn` and continue with the rest, and surface nothing to the client — no `WireLifecycle::Failed`, no lifecycle change (contract C12, C13; the convention `adopt_discovered_sessions` already follows)
+- [X] T010 [US1] Wire it into the supervisor tick in `crates/micold-daemon/src/server.rs` (`spawn_supervisor`, ~line 243): take the changes from `drain_signals`, and when the set is non-empty hand it to `record_observed_names` inside a `tokio::task::spawn_blocking` hop — never on the async runtime (contract C11). No change to when `broadcast_catalog` fires
 
 ### Documentation for User Story 1
 
-- [ ] T011 [P] [US1] Add a "The name on a session row" subsection to `docs/user-guide/worktrees-and-sessions.md` under *What the sidebar shows* (~line 428): the name comes from the conversation, not from you; it is remembered, so it is on the row whether or not the session is running; a row reads "New session" only when the conversation has never been named. Verify with `mise run site-check`
+- [X] T011 [P] [US1] Add a "The name on a session row" subsection to `docs/user-guide/worktrees-and-sessions.md` under *What the sidebar shows* (~line 428): the name comes from the conversation, not from you; it is remembered, so it is on the row whether or not the session is running; a row reads "New session" only when the conversation has never been named. Verify with `mise run site-check`
 
 **Checkpoint**: US1 is independently shippable — the reported bug is fixed for every session named from here on.
 
@@ -85,17 +85,17 @@ Three-crate Cargo workspace. `crates/micold-core/` (render-free core + persisten
 
 ### Tests for User Story 2 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T012 [P] [US2] Add `crates/micold-daemon/tests/session_name_recovery.rs` with failing tests for `DaemonState::recover_session_names(project)`: a known session labelled `Pending` whose provider records hold a name is recovered and the count reflects it; a session with no recorded name stays `Pending` and writes nothing (contract C17, FR-004); a provider whose `config_dir()` is `None` contributes nothing and does not suppress the other provider's contribution (contract C20). Model the fixtures on `crates/micold-daemon/tests/session_discovery.rs` (Red: the method does not exist)
-- [ ] T013 [US2] Extend `crates/micold-daemon/tests/session_name_recovery.rs`: the recovered name is **persisted**, so a second pass over the same state recovers `0` and a freshly loaded `Catalog` still has it (FR-007); a session already `Named` is skipped, and deleting its provider records afterwards does not cost it its name (FR-008, contract C15); and each session is read through **its own** provider, so a Copilot session's name is not looked for in `claude`'s store (contract C16)
+- [X] T012 [P] [US2] Add `crates/micold-daemon/tests/session_name_recovery.rs` with failing tests for `DaemonState::recover_session_names(project)`: a known session labelled `Pending` whose provider records hold a name is recovered and the count reflects it; a session with no recorded name stays `Pending` and writes nothing (contract C17, FR-004); a provider whose `config_dir()` is `None` contributes nothing and does not suppress the other provider's contribution (contract C20). Model the fixtures on `crates/micold-daemon/tests/session_discovery.rs` (Red: the method does not exist)
+- [X] T013 [US2] Extend `crates/micold-daemon/tests/session_name_recovery.rs`: the recovered name is **persisted**, so a second pass over the same state recovers `0` and a freshly loaded `Catalog` still has it (FR-007); a session already `Named` is skipped, and deleting its provider records afterwards does not cost it its name (FR-008, contract C15); and each session is read through **its own** provider, so a Copilot session's name is not looked for in `claude`'s store (contract C16)
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Implement `DaemonState::recover_session_names(&self, project: &Path) -> usize` in `crates/micold-daemon/src/state.rs`, beside `discover_external_sessions` and reading the same worktree cache for its location list: collect under the lock the project's sessions whose label is `Pending` (filtering **before** any filesystem access — contract C15, the bound on the pass), then off the lock ask each session's own `session.provider.provider()` for `read_title(config_dir, session.location.cwd(project), id)`, and record each `Some(name)` through `Catalog::record_session_name`. A `None` writes nothing. Doc-comment the cost argument from research R4 — FR-007 is what stops this repeating, not a per-location rule
-- [ ] T015 [US2] Call it from `refresh_worktrees_off_runtime` in `crates/micold-daemon/src/server.rs` (~line 1516), inside the **same** `spawn_blocking` hop that already refreshes worktrees and runs `discover_external_sessions`, after the discovery pass so a just-adopted session is not probed twice. Log the recovered count at `info` the way the discovery count is logged
+- [X] T014 [US2] Implement `DaemonState::recover_session_names(&self, project: &Path) -> usize` in `crates/micold-daemon/src/state.rs`, beside `discover_external_sessions` and reading the same worktree cache for its location list: collect under the lock the project's sessions whose label is `Pending` (filtering **before** any filesystem access — contract C15, the bound on the pass), then off the lock ask each session's own `session.provider.provider()` for `read_title(config_dir, session.location.cwd(project), id)`, and record each `Some(name)` through `Catalog::record_session_name`. A `None` writes nothing. Doc-comment the cost argument from research R4 — FR-007 is what stops this repeating, not a per-location rule
+- [X] T015 [US2] Call it from `refresh_worktrees_off_runtime` in `crates/micold-daemon/src/server.rs` (~line 1516), inside the **same** `spawn_blocking` hop that already refreshes worktrees and runs `discover_external_sessions`, after the discovery pass so a just-adopted session is not probed twice. Log the recovered count at `info` the way the discovery count is logged
 
 ### Documentation for User Story 2
 
-- [ ] T016 [US2] Extend the T011 subsection in `docs/user-guide/worktrees-and-sessions.md` with the recovery behaviour: sessions from before this existed get their names back the next time you open the project, read from the CLI's own records, once. Verify with `mise run site-check`
+- [X] T016 [US2] Extend the T011 subsection in `docs/user-guide/worktrees-and-sessions.md` with the recovery behaviour: sessions from before this existed get their names back the next time you open the project, read from the CLI's own records, once. Verify with `mise run site-check`
 
 **Checkpoint**: the reporter's existing sessions are named without them touching anything.
 
@@ -111,12 +111,12 @@ Three-crate Cargo workspace. `crates/micold-core/` (render-free core + persisten
 
 ### Tests for User Story 3 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T017 [P] [US3] Extend `crates/micold-daemon/tests/session_name_persistence.rs`: recording a second, different name replaces the first, the replacement survives a catalog reload, and the previous name is not readable anywhere afterwards (FR-005, SC-005)
-- [ ] T018 [US3] Extend `crates/micold-daemon/tests/session_name_persistence.rs`: a session that has never been named is `Pending` before and after a reload and its `SessionLabel::display()` is `"New session"` (FR-004); and a named and an unnamed session sharing a project and a location keep their own labels across a reload — neither inherits the other's (FR-012, SC-006)
+- [X] T017 [P] [US3] Extend `crates/micold-daemon/tests/session_name_persistence.rs`: recording a second, different name replaces the first, the replacement survives a catalog reload, and the previous name is not readable anywhere afterwards (FR-005, SC-005)
+- [X] T018 [US3] Extend `crates/micold-daemon/tests/session_name_persistence.rs`: a session that has never been named is `Pending` before and after a reload and its `SessionLabel::display()` is `"New session"` (FR-004); and a named and an unnamed session sharing a project and a location keep their own labels across a reload — neither inherits the other's (FR-012, SC-006)
 
 ### Implementation for User Story 3
 
-- [ ] T019 [US3] Run T017–T018. If green, record in `specs/029-persistent-session-names/quickstart.md` §A that they passed without new implementation and why (data-model invariants 2 and 3 hold by construction). If Red, fix in `crates/micold-daemon/src/catalog.rs` or `crates/micold-daemon/src/state.rs` — the defect is a path that clears or first-write-wins a label, and it must not be fixed by special-casing the test
+- [X] T019 [US3] Run T017–T018. If green, record in `specs/029-persistent-session-names/quickstart.md` §A that they passed without new implementation and why (data-model invariants 2 and 3 hold by construction). If Red, fix in `crates/micold-daemon/src/catalog.rs` or `crates/micold-daemon/src/state.rs` — the defect is a path that clears or first-write-wins a label, and it must not be fixed by special-casing the test
 
 ---
 
@@ -125,7 +125,7 @@ Three-crate Cargo workspace. `crates/micold-core/` (render-free core + persisten
 - [ ] T020 [P] Run `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` over the changed files (`crates/micold-daemon/src/{catalog,state,server}.rs` and the new `tests/`); `mise.toml` has no task for either, and CI stops at `fmt` before every other job
 - [ ] T021 [P] Run `mise run site-check` to confirm the documentation build passes with the T011/T016 edits (Principle VII)
 - [ ] T022 Run `mise run test` for the whole workspace, matching CI (Principle I), and `cargo check --target aarch64-apple-darwin` to confirm the change builds for macOS as well as this host (Principle VI)
-- [ ] T023 Confirm the diff touches **no** file under `crates/micold-client/` — a client change here would be a second writer of the catalog, which the contract forbids (contract §4). `git diff --name-only main...HEAD | grep micold-client` must be empty
+- [X] T023 Confirm the diff touches **no** file under `crates/micold-client/` — a client change here would be a second writer of the catalog, which the contract forbids (contract §4). `git diff --name-only main...HEAD | grep micold-client` must be empty
 - [ ] T024 Run the quickstart §B manual pass (B1–B7) against a release build with a real AI CLI, and append the dated record to `specs/029-persistent-session-names/quickstart.md` — including any step that could not be run and why. §B1 is the only proof of the central claim; no automated test restarts the daemon process
 
 ---

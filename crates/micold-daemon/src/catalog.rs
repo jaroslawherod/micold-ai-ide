@@ -22,7 +22,7 @@ use micold_core::protocol::messages::{
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{
-    AiCli, Session, SessionId, SessionLifecycle, SessionLocation, TerminalMode,
+    AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, TerminalMode,
 };
 
 use crate::supervision::{supervise_exit, ExitOutcome, SupervisionAction};
@@ -529,6 +529,54 @@ impl Catalog {
         self.workspace
             .foreground_by_project
             .insert(project.to_path_buf(), session);
+        self.persist()?;
+        Ok(true)
+    }
+
+    /// Record `name` as the durable label of the session `id` names, persisting (feature 029,
+    /// FR-001/FR-003). Returns whether anything was written.
+    ///
+    /// This is the mutator the name pipeline was missing. The daemon has always *observed* a
+    /// session's name — the AI CLI emits it as an OSC-0 terminal title, the supervisor tick reads
+    /// it into `LiveSession::last_title`, and `overlay_live_summaries` paints it onto the outgoing
+    /// summary — but nothing wrote it back, so `title` was `None` for every session this
+    /// application started and every one of them restored as `Pending` and read "New session"
+    /// until something ran it again. `Session::set_title` existed the whole time with no caller
+    /// that production could reach.
+    ///
+    /// # Why the comparison is load-bearing
+    ///
+    /// [`Self::persist`] rewrites the file holding **every one** of that project's session
+    /// records, and the supervisor re-observes a title it has already recorded on every reconnect,
+    /// re-attach and restart. Writing unconditionally would rewrite that file on each of them.
+    /// `remember_foreground` carries the same guard for the same reason, and the caller's own
+    /// debounce (`DaemonState::drain_signals`) is the first of the two.
+    ///
+    /// An **empty** name is rejected rather than stored: "New session" is a rendering of
+    /// `SessionLabel::Pending`, never a value, and a `Named("")` row would read as a session with
+    /// a blank name — the state the two-variant label exists to make unrepresentable (FR-004).
+    ///
+    /// An unknown `id` is `Ok(false)`, not an error: the live registry and the catalog can
+    /// disagree for a tick after a session is removed, and a name arriving for a session that has
+    /// just gone is ordinary rather than exceptional.
+    ///
+    /// The lookup goes through [`Workspace::find_session_mut`], which addresses the session by
+    /// `SessionId` and yields its owning project — never by index or position. That is what makes
+    /// "a name belongs to exactly one session" (FR-012) a property of this method rather than of
+    /// the caller's care.
+    pub fn record_session_name(&mut self, id: SessionId, name: &str) -> io::Result<bool> {
+        if name.is_empty() {
+            return Ok(false);
+        }
+        let Some((_project, session)) = self.workspace.find_session_mut(id) else {
+            return Ok(false);
+        };
+        if matches!(&session.label, SessionLabel::Named(current) if current == name) {
+            return Ok(false);
+        }
+        // In memory first, then the disk. A persist failure leaves the label updated and the
+        // caller logs it: a read-only data directory is not a session failure (FR-009).
+        session.set_title(name);
         self.persist()?;
         Ok(true)
     }
