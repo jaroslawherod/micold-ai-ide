@@ -70,9 +70,9 @@
       "installed_at": "2026-09-03T18:02:35.073531+00:00"
     },
     "docguard": {
-      "version": "0.33.0",
+      "version": "0.34.9",
       "source": "local",
-      "manifest_hash": "sha256:d580a5d38e441847285fdecba7e99aa98020a548da8d575088f2b828d5ba03db",
+      "manifest_hash": "sha256:becd549ccb6f2aebb2cce883b8b53a689a107670c84f24055839bfa74fbe7f10",
       "enabled": true,
       "priority": 10,
       "registered_commands": {
@@ -93,7 +93,7 @@
         "speckit-docguard-diagnose",
         "speckit-docguard-generate"
       ],
-      "installed_at": "2026-09-03T18:06:49.536969+00:00"
+      "installed_at": "2026-09-12T07:05:54.459813+00:00"
     }
   }
 }
