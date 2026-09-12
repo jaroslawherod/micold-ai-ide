@@ -83,6 +83,7 @@ pyftsubset _static.ttf \
 | `Delete`       | `delete`               | `E872`         |
 | `Copy`         | `content_copy`         | `E14D`         |
 | `Filter`       | `filter_list`          | `E152`         |
+| `Search`       | `search`               | `E8B6`         |
 | `AiCli`        | `auto_awesome`         | `E65F`         |
 | `RegularTerminal` | `terminal`          | `EB8E`         |
 | `ReleaseFocus` | `keyboard_hide`        | `E31A`         |
@@ -91,6 +92,8 @@ pyftsubset _static.ttf \
 | `Close`       | `close`                | `E5CD`         |
 | `ActivityWorking` | `radio_button_checked` | `E837`     |
 | `ActivityEnded` | `radio_button_unchecked` | `E836`   |
+| `SelectChevron` | `expand_more`         | `E5CF`         |
+| `SessionService` | `dns`                | `E875`         |
 
 **Why the activity dots are radio-button glyphs** (BUG-004): this file is a static instance
 pinned at **FILL=0**, and at that axis value the nominally-solid dots — `circle` (`EF4A`),
