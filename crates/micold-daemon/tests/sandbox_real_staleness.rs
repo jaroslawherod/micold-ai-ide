@@ -328,6 +328,11 @@ fn kill_the_container_process(container: &str) {
 ///
 /// `evidence/quickstart-b-closeout.md` says the same thing where a reader looking for the pass will
 /// find it.
+///
+/// Since feature 028 the opt-in has a second half — the daemon inside is also told not to stop
+/// itself for being unused (FR-022) — and this test still asserts only the restart policy, which is
+/// the half it is about. The other half is
+/// `sandbox_real_idle.rs::sandbox_real_idle_is_off_for_the_keep_running_opt_in`.
 #[tokio::test]
 async fn sandbox_real_the_survival_opt_in_brings_the_sandbox_back_without_the_application() {
     let dir = tempfile::tempdir().unwrap();

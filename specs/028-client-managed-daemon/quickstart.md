@@ -37,8 +37,20 @@ unit test on the constant, and observed for real in §B1.
 
 ```bash
 # The real-runtime parts (Linux + Docker), off by default so the default suite needs nothing:
-cargo test -p micold-daemon --features sandbox-real-runtime sandbox_idle
+mise run image
+mise run test-sandbox
 ```
+
+Or, to run just this feature's two real-runtime tests:
+
+```bash
+cargo test -p micold-daemon --features sandbox-real-runtime sandbox_real_idle
+```
+
+The filter is `sandbox_real_idle` and not `sandbox_idle`, because cargo matches it against **test
+names**, not file names — and a filter that selects nothing still exits 0 and prints `test result:
+ok`. That is why the canonical invocation is `mise run test-sandbox`, which builds the image, checks
+for a runtime, and uses the `sandbox_real_` prefix every one of these tests is named with.
 
 | what | asserts |
 |------|---------|

@@ -29,6 +29,14 @@ use std::path::{Path, PathBuf};
 /// promise, and a later feature making the same promise should say so in its own gate.
 const QUICKSTART: &str = "specs/027-sandboxed-daemon-runtime/quickstart.md";
 
+/// Feature 028's quickstart, which makes the same promise in the same shape (T063).
+///
+/// Its Part A is a list of *commands*, not of test targets, so what can rot is different: a command
+/// that no longer exists, or — worse — one that still runs and selects nothing. See
+/// [`every_command_part_a_gives_is_one_the_repo_provides`] and
+/// [`a_test_filter_part_a_gives_selects_at_least_one_test`].
+const QUICKSTART_028: &str = "specs/028-client-managed-daemon/quickstart.md";
+
 /// The crate whose §A rows are enumerated in the workflow. `micold-core`'s are covered wholesale
 /// by `--all-targets`, so only this one can drift.
 const ENUMERATED_CRATE: &str = "micold-client";
@@ -188,4 +196,159 @@ fn the_cross_platform_step_names_only_targets_that_exist() {
              rather than skipping it, so this breaks the matrix on all three runners at once."
         );
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Feature 028 (T063) — Part A's *commands*
+// ---------------------------------------------------------------------------------------------
+
+/// The section of `md` under a heading starting with `needle`, up to the next heading of that depth.
+fn section(md: &str, needle: &str, source: &str) -> String {
+    let after = md
+        .split_once(needle)
+        .unwrap_or_else(|| {
+            panic!("{source} has no `{needle}` heading — the scan is looking at the wrong document")
+        })
+        .1;
+    match after.split_once("\n## ") {
+        Some((body, _)) => body.to_string(),
+        None => after.to_string(),
+    }
+}
+
+/// Every command line inside the ```` ```bash ```` blocks of `section`.
+///
+/// Comment-only lines are dropped and a trailing `# …` is trimmed, which is the one thing this
+/// parser assumes about shell: that a `#` after whitespace starts a comment. The quickstart is
+/// written that way, and a command that needed a literal `#` would be caught by the assertions
+/// below rather than silently mis-read.
+fn commands_in(section: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut rest = section;
+    while let Some((_, after)) = rest.split_once("```bash") {
+        let (block, tail) = after.split_once("```").unwrap_or((after, ""));
+        for line in block.lines() {
+            let line = match line.split_once(" #") {
+                Some((command, _)) => command,
+                None => line,
+            };
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            found.push(line.to_string());
+        }
+        rest = tail;
+    }
+    found
+}
+
+/// FR-023 / Principle VI in the form a reader meets it: Part A's commands have to be real.
+///
+/// A quickstart is the one document someone follows literally, and a `mise run` task that was
+/// renamed leaves it failing at the first step with an error about the *tool*, which reads as the
+/// repo being broken rather than the document being stale. Nothing else in the suite reads this
+/// file, so nothing else would notice.
+#[test]
+fn every_command_part_a_gives_is_one_the_repo_provides() {
+    let quickstart = read(QUICKSTART_028);
+    let part_a = section(&quickstart, "## Part A", QUICKSTART_028);
+    let commands = commands_in(&part_a);
+    assert!(
+        !commands.is_empty(),
+        "Part A of {QUICKSTART_028} contains no commands — the scan is broken, not the quickstart"
+    );
+
+    let mise = read("mise.toml");
+    for command in &commands {
+        let Some(task) = command.strip_prefix("mise run ") else {
+            continue;
+        };
+        let task = task.split_whitespace().next().unwrap_or("");
+        assert!(
+            mise.contains(&format!("[tasks.{task}]")),
+            "Part A of {QUICKSTART_028} says to run `mise run {task}`, and mise.toml defines no \
+             such task — the first thing anyone validating this feature does would fail"
+        );
+    }
+}
+
+/// The trap `mise.toml` documents at length, asserted rather than explained (T062).
+///
+/// `cargo test … <filter>` matches the filter against **test names**, not file names, and a filter
+/// that selects nothing exits 0 and prints `test result: ok`. A quickstart line naming a file stem
+/// that is not also a test-name prefix therefore reports success while checking nothing — which is
+/// exactly what this feature's quickstart said (`sandbox_idle`) before T063.
+#[test]
+fn a_test_filter_part_a_gives_selects_at_least_one_test() {
+    let quickstart = read(QUICKSTART_028);
+    let part_a = section(&quickstart, "## Part A", QUICKSTART_028);
+
+    let mut checked = 0;
+    for command in commands_in(&part_a) {
+        let Some(rest) = command.strip_prefix("cargo test ") else {
+            continue;
+        };
+        // The filter is the last bare word: everything else in these lines is a flag or its value.
+        let Some(filter) = rest.split_whitespace().last() else {
+            continue;
+        };
+        if filter.starts_with('-') {
+            continue; // no filter on this line; it runs the whole target.
+        }
+        let krate = crate_of(&command).unwrap_or_else(|| {
+            panic!("`{command}` names no crate with -p, so this gate cannot find its tests")
+        });
+        assert!(
+            some_test_name_matches(&krate, filter),
+            "Part A of {QUICKSTART_028} says to run `{command}`, but no test in \
+             crates/{krate}/tests/ has a name containing `{filter}`. cargo would filter every test \
+             out, exit 0, and print `test result: ok` — a validation step that validates nothing."
+        );
+        checked += 1;
+    }
+    assert!(
+        checked > 0,
+        "no `cargo test … <filter>` line found in Part A of {QUICKSTART_028}; if the quickstart \
+         stopped giving one, delete this test rather than leave it passing vacuously"
+    );
+}
+
+/// The crate named by `-p <name>` in a cargo command line.
+fn crate_of(command: &str) -> Option<String> {
+    let (_, after) = command.split_once("-p ")?;
+    after.split_whitespace().next().map(str::to_string)
+}
+
+/// Whether any function in `krate`'s integration tests has a name containing `filter`.
+///
+/// Every function, not only the annotated ones: parsing out which are tests would need more of a
+/// Rust parser than a text scan has, and the extra ones only make this *permissive*. What it is
+/// for is the filter that matches nothing at all, which is the failure that reports success.
+fn some_test_name_matches(krate: &str, filter: &str) -> bool {
+    let dir = repo_root().join(format!("crates/{krate}/tests"));
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_none_or(|e| e != "rs") {
+            continue;
+        }
+        let Ok(source) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let mut rest = source.as_str();
+        while let Some((_, after)) = rest.split_once("fn ") {
+            let name: String = after
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            if name.contains(filter) {
+                return true;
+            }
+            rest = after;
+        }
+    }
+    false
 }

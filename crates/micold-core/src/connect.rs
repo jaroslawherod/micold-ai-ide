@@ -220,7 +220,7 @@ pub async fn handshake_with(
             require_fingerprint_match: credentials.require_fingerprint_match,
         }))
         .await
-        .map_err(io::Error::other)?;
+        .map_err(io::Error::from)?;
 
     match framed.next().await {
         Some(Ok(Frame::Control(DaemonMsg::Welcome {
@@ -240,7 +240,10 @@ pub async fn handshake_with(
             io::ErrorKind::InvalidData,
             format!("expected Welcome or Refused, got {other:?}"),
         )),
-        Some(Err(e)) => Err(io::Error::other(e)),
+        // `io::Error::from`, not `io::Error::other`: a reset arriving here is how a departing
+        // daemon most often ends a handshake, and [`vanished_mid_handshake`] can only recognise it
+        // if the kind survives the trip through the codec's error type.
+        Some(Err(e)) => Err(io::Error::from(e)),
         None => Err(io::Error::new(
             io::ErrorKind::UnexpectedEof,
             "daemon closed the connection during the handshake",
@@ -372,5 +375,52 @@ pub async fn connect_or_spawn(
         }
         tokio::time::sleep(backoff).await;
         backoff = (backoff * 2).min(Duration::from_millis(250));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::codec::CodecError;
+
+    /// FR-016, §4.14: a reset that arrives through the codec is still a reset.
+    ///
+    /// The race this guards is not reproducible on demand — it needs a connect to land inside the
+    /// instant an idle daemon is unwinding, which `tests/idle_race.rs` reaches roughly one run in
+    /// five — so the classification it depends on is pinned here, where it is deterministic.
+    ///
+    /// The failure this prevents is invisible at the call site: `io::Error::other` compiles, reads
+    /// fine, and turns "the daemon went away, look again" into "show the user an error", because
+    /// the only thing that distinguishes the two is a kind that conversion throws away.
+    #[test]
+    fn a_reset_arriving_through_the_codec_is_still_read_as_the_daemon_going_away() {
+        for kind in [
+            io::ErrorKind::ConnectionReset,
+            io::ErrorKind::ConnectionAborted,
+            io::ErrorKind::BrokenPipe,
+            io::ErrorKind::UnexpectedEof,
+        ] {
+            let wrapped: io::Error =
+                CodecError::Io(io::Error::new(kind, "the other end went")).into();
+            assert_eq!(wrapped.kind(), kind, "the kind must survive the codec");
+            assert!(
+                vanished_mid_handshake(&wrapped),
+                "a {kind:?} reaching the client through the codec must read as absence, not as a \
+                 failure to put in front of the user"
+            );
+        }
+    }
+
+    /// The other direction, so the conversion above cannot be "call everything a disconnect".
+    ///
+    /// A frame the daemon should never have sent is this layer's own failure and has no kind to
+    /// preserve; reading it as absence would make the client spawn a second daemon over a healthy
+    /// one every time the two disagreed about the protocol.
+    #[test]
+    fn a_protocol_failure_is_not_mistaken_for_a_departing_daemon() {
+        let wrapped: io::Error =
+            CodecError::ControlNotJson(crate::protocol::envelope::Encoding::Postcard).into();
+        assert_eq!(wrapped.kind(), io::ErrorKind::Other);
+        assert!(!vanished_mid_handshake(&wrapped));
     }
 }

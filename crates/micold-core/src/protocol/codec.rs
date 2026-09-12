@@ -131,6 +131,25 @@ impl std::fmt::Display for CodecError {
 
 impl std::error::Error for CodecError {}
 
+impl From<CodecError> for std::io::Error {
+    /// The kind survives the conversion, and that is the whole point of writing this by hand.
+    ///
+    /// `io::Error::other` would be shorter and is what every call site reached for first, but it
+    /// reports kind `Other` — so a caller that has to tell *what went wrong* from *the other end
+    /// went away* can no longer ask. `connect::vanished_mid_handshake` is exactly that caller: a
+    /// client dialling at the instant an idle daemon stops sees a reset arrive through this codec,
+    /// and must read it as "nobody is listening, start one" rather than as a failure to show the
+    /// user (feature 028 FR-016, lifecycle contract §4.14).
+    fn from(e: CodecError) -> Self {
+        match e {
+            CodecError::Io(io) => io,
+            // The rest are genuinely this layer's own failures — a malformed envelope, a body that
+            // would not deserialise — and have no kind of their own to preserve.
+            other => std::io::Error::other(other),
+        }
+    }
+}
+
 impl From<std::io::Error> for CodecError {
     fn from(e: std::io::Error) -> Self {
         CodecError::Io(e)
