@@ -1,5 +1,17 @@
 # Contract: Agent Worktree Classification
 
+> **Superseded by
+> [029's worktree-classification contract](../../029-worktree-provenance/contracts/worktree-classification.md).**
+>
+> The rule below classifies a worktree from its **name** — `agent-<16+ hex>` directory, or
+> `worktree-agent-<16+ hex>` branch. Feature 029 inverted that: the app records every worktree it
+> creates, and the question became *is there a record*, not *what is it called*. `Worktree::owner()`
+> and `Worktree::is_agent_owned()` no longer exist; `classify_owner(worktree, &provenance)` replaced
+> them, and the name pattern survives only as `matches_reserved_convention`, a veto inside 029's
+> one-time migration.
+>
+> This file is kept as the record of what 014 shipped. Do not implement it.
+
 Governs the pure core API that decides whether a discovered worktree belongs to the user or to an
 AI assistant, and the visible-set accessor every worktree surface reads from. This is the
 normative statement of FR-005/FR-006/FR-007 (research R1, R2, R3).

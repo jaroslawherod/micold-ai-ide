@@ -426,6 +426,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the user-guide gate below compares against the merge base
       - name: Required user-guide docs exist
         run: |
           test -f docs/user-guide/help-about.md
@@ -450,6 +452,37 @@ jobs:
           # account, and what a Developer ID would change. A packaging process nobody but CI can
           # run is one nobody can fix (FR-033).
           test -f docs/development/macos-packaging.md
+
+      # Constitution Principle VII, the half that was not mechanical. "Every user-facing feature
+      # MUST ship with corresponding user-guide documentation in the same change" was enforced by
+      # the docs *build* passing and by review noticing -- and review is what skips it when the
+      # diff is long and the feature works. The rule lives in `scripts/check-user-guide-updated.sh`
+      # and the path declaration in `.gitattributes`, so this workflow carries none of it.
+      #
+      # In this job rather than one of its own, deliberately: a new job would have to be added to
+      # `ci-complete`'s `needs:` AND to the required-check name in the default branch's ruleset,
+      # which lives outside this repository. `docs` also already runs unconditionally, which is
+      # what a gate about documentation needs.
+      #
+      # The check's own cases run FIRST, as they do for the criteria gate below -- the
+      # assertion-freeze gate shipped with cases that existed and nothing ran, and this ordering is
+      # how that stops repeating.
+      - name: The user-guide gate's own cases
+        run: scripts/tests/check-user-guide-updated.test.sh
+      - name: A user-facing feature updates the user guide
+        # Pull requests only: this is a pre-merge gate, and the label that waives it lives on a
+        # pull request. A push to main has already been through it.
+        if: github.event_name == 'pull_request'
+        env:
+          # Passed as environment rather than interpolated into the script: a title is arbitrary
+          # text somebody types, and `${{ }}` inside `run:` would put it in the shell's mouth.
+          CHANGE_TITLE: ${{ github.event.pull_request.title }}
+          DOCS_NOT_NEEDED: ${{ contains(github.event.pull_request.labels.*.name, 'docs-not-needed') }}
+        run: |
+          # fetch-depth: 0 does NOT create `origin/<base>` -- the same trap the classify and
+          # assertions jobs fetch explicitly to avoid.
+          git fetch --quiet origin "${{ github.base_ref }}"
+          scripts/check-user-guide-updated.sh "origin/${{ github.base_ref }}" HEAD
 
       # Feature 010, BUG-008. A success criterion that names no observable cannot be checked by
       # anyone who is not standing at the machine, so it is skipped -- and CI stays green while it

@@ -436,7 +436,9 @@ fn state_with_worktree_and_session(dir: &str) -> State {
         is_git_repo: true,
         availability: Availability::Available,
     });
-    state.workspace.active = Some(path);
+    state.workspace.active = Some(path.clone());
+    // The user's own: the app recorded creating it, which is what keeps it listed (029 FR-004).
+    state.workspace.record_user_created(&path, dir);
     state.worktree.worktrees.push(Worktree {
         dir_name: dir.to_string(),
         path: PathBuf::from(format!("/repo/.claude/worktrees/{dir}")),
@@ -608,6 +610,9 @@ fn escape_cancels_worktree_rename() {
 
 // --- Feature 014 US3: everything derived from the list stays consistent ---
 
+/// A worktree the app has no record of creating (029 FR-004). Pushed onto a fixture's list
+/// *without* a matching `record_user_created`, which is what hides it — the `agent-<hex>` name is
+/// 014's and now decides nothing.
 fn agent_worktree(hex: &str) -> Worktree {
     let dir = format!("agent-{hex}");
     Worktree {
@@ -2145,6 +2150,12 @@ fn state_with_many_worktrees(count: usize) -> State {
             included: false,
         })
         .collect();
+    // Feature 029: these are the *user's* worktrees — the fixture is about a long list, not about
+    // provenance — so each one carries the record that keeps it visible. Without it the projection
+    // this test measures would be empty and the scroll question would not arise.
+    for w in &state.worktree.worktrees {
+        state.workspace.record_user_created(&path, &w.dir_name);
+    }
     let session = Session::start_new(
         SessionLocation::Worktree(format!("feat-{:02}", count - 1)),
         AiCli::ClaudeCode,

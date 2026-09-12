@@ -69,41 +69,254 @@ fn is_agent_id(s: &str) -> bool {
     s.len() >= AGENT_ID_MIN_LEN && s.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-/// Who created a worktree (feature 014, FR-001): the user, or an AI assistant for its own
-/// background sub-task. An enum rather than a `bool` (Principle V) so a future third owner is an
+/// Who a worktree belongs to, as far as this application can tell (feature 014 FR-001, inverted by
+/// feature 029 FR-004). An enum rather than a `bool` (Principle V) so a future third owner is an
 /// added variant instead of a boolean-blindness refactor of every call site.
 ///
-/// Derived from names only — never stored on [`Worktree`], never persisted — so it cannot drift
-/// out of sync with the names it is derived from (FR-009, contracts/agent-worktree-classification.md).
+/// The variant names are 014's and the user-visible words are unchanged (029 FR-015a), but what
+/// they *mean* is now the opposite kind of statement. [`Self::Agent`] is no longer a claim about
+/// who made the worktree — it is the absence of a claim: this app has no record of creating it.
+/// Feature 014 read the answer off the directory and branch names, which caught the assistant's
+/// sub-agent worktrees and missed its session worktrees, because those land in the very same
+/// directory under ordinary, human-chosen names. Nothing in a name could have separated them.
+///
+/// Never stored on [`Worktree`], which carries git-and-filesystem facts: this is a fact about the
+/// application's own records, and a discovered worktree cannot answer it alone
+/// (contracts/worktree-classification.md).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WorktreeOwner {
-    /// Created by the user, through the app or by hand. Always listed.
+    /// Known to be the user's: recorded as created by this app, claimed, living outside the
+    /// directory the app manages, or belonging to a project whose records could not be read.
+    /// Always listed.
     User,
-    /// Created by an AI assistant for a sub-task. Hidden unless the reveal control is on (FR-002).
+    /// Not known to be the user's. Hidden unless the reveal control is on (014 FR-002).
     Agent,
 }
 
-/// Classify a worktree's owner from its names alone (feature 014, FR-005).
+/// Whether a worktree's names match the convention reserved for machine-generated worktrees
+/// (feature 014 FR-005, surviving into 029 as FR-007a).
 ///
-/// The single implementation of the naming half of FR-005, shared by [`Worktree::owner`] and by
-/// [`BlockReason`]'s classification — a second copy would let "this worktree is hidden" and "the
-/// branch is held by a hidden worktree" disagree about the same directory (BUG-001).
+/// **This is no longer a hiding signal.** It decides nothing about what the sidebar shows; the
+/// record does (see [`classify_owner`]). Its one remaining job is to veto the one-time migration:
+/// the backfill grandfathers worktrees the user demonstrably worked in, and a worktree named by
+/// this convention is one the assistant made for itself, so evidence of a session in it must not
+/// be read as the user adopting it.
 ///
 /// Either identifier suffices (OR, not AND): the directory survives when git no longer registers
-/// the worktree, the branch survives when the directory was renamed, and a detached worktree has no
-/// branch at all — all three must still classify (FR-007).
-fn classify_owner(dir_name: &str, branch: Option<&str>) -> WorktreeOwner {
+/// the worktree, the branch survives when the directory was renamed, and a detached worktree has
+/// no branch at all.
+pub fn matches_reserved_convention(dir_name: &str, branch: Option<&str>) -> bool {
     let dir_match = dir_name
         .strip_prefix(AGENT_DIR_PREFIX)
         .is_some_and(is_agent_id);
     let branch_match = branch
         .and_then(|b| b.strip_prefix(AGENT_BRANCH_PREFIX))
         .is_some_and(is_agent_id);
-    if dir_match || branch_match {
-        WorktreeOwner::Agent
-    } else {
-        WorktreeOwner::User
+    dir_match || branch_match
+}
+
+/// What this application knows about who created one project's worktrees (feature 029).
+///
+/// Two fields rather than one `Option<&BTreeSet<String>>`, because the difference between them is
+/// the whole hazard: an empty record set means "this app created none of these", and a project
+/// whose state file failed to parse *also* arrives with an empty set. Conflating them would hide
+/// every worktree the user has because a file did not parse. `state_unreadable` is checked first
+/// and short-circuits to [`WorktreeOwner::User`], so FR-011's fail-visible rule holds by
+/// construction rather than by every caller remembering to guard (data-model.md §4).
+#[derive(Debug, Clone, Copy)]
+pub struct ProvenanceView<'a> {
+    /// The `dir_name`s this app recorded creating in this project.
+    pub records: &'a std::collections::BTreeSet<String>,
+    /// Whether this project's durable state could not be read this run (FR-011).
+    pub state_unreadable: bool,
+}
+
+/// The empty record set, for the two constructors below. A `OnceLock` rather than a `const`
+/// because `BTreeSet::new` is not usable in a `static` initializer on the pinned toolchain.
+fn no_records() -> &'static std::collections::BTreeSet<String> {
+    static EMPTY: std::sync::OnceLock<std::collections::BTreeSet<String>> =
+        std::sync::OnceLock::new();
+    EMPTY.get_or_init(std::collections::BTreeSet::new)
+}
+
+impl<'a> ProvenanceView<'a> {
+    /// A view over `records` for a project whose state was read successfully.
+    pub fn new(records: &'a std::collections::BTreeSet<String>) -> Self {
+        Self {
+            records,
+            state_unreadable: false,
+        }
     }
+}
+
+impl ProvenanceView<'static> {
+    /// A readable project in which this app has created nothing. Everything directly under the
+    /// managed root classifies [`WorktreeOwner::Agent`].
+    pub fn none() -> Self {
+        Self {
+            records: no_records(),
+            state_unreadable: false,
+        }
+    }
+
+    /// A project whose records could not be read (FR-011): everything classifies
+    /// [`WorktreeOwner::User`], so a storage fault costs the user visibility of nothing.
+    pub fn unreadable() -> Self {
+        Self {
+            records: no_records(),
+            state_unreadable: true,
+        }
+    }
+}
+
+/// Classify a worktree from this application's records (feature 029, FR-004).
+///
+/// The single implementation, shared by the sidebar's visible set, the `agent` chip, and
+/// [`BlockReason`]'s holder classification — a second copy would let "this worktree is hidden" and
+/// "the branch is held by a hidden worktree" disagree about the same directory (BUG-001, 016
+/// FR-032).
+///
+/// Three conditions, in this order, and a worktree is [`WorktreeOwner::Agent`] only when all three
+/// hold: the project's records were readable, the worktree lives directly under the directory this
+/// app manages, and it is not in the records.
+///
+/// **Name-blind.** Two worktrees with identical records and locations classify identically however
+/// they are named — that is the inversion, and `dir_name` is read here only as the key the record
+/// is stored under, never as evidence about who made it.
+///
+/// The location half is `!worktree.included`, which is exactly "directly under the managed root":
+/// [`reconcile`] sets `included` for worktrees outside that root and skips including one inside it.
+/// Reading the flag rather than re-deriving it from a `root` parameter means no caller can supply
+/// the wrong root, and it keeps the precondition — that a `Worktree` came from `reconcile` — the
+/// same one [`Worktree::owner`] carried before it.
+///
+/// Pure, total, health-blind and stateless: no I/O, defined for `branch: None` and every
+/// [`WorktreeStatus`], and nothing is cached (FR-013).
+pub fn classify_owner(worktree: &Worktree, provenance: &ProvenanceView<'_>) -> WorktreeOwner {
+    classify_from_record(&worktree.dir_name, !worktree.included, provenance)
+}
+
+/// The rule itself, over the two facts it actually needs.
+///
+/// Separate from [`classify_owner`] because the blocked-branch sentence classifies a holder that
+/// is a [`WorktreeRecord`], not a [`Worktree`] — git reported it, `reconcile` never saw it. Both
+/// call this so that "this worktree is hidden" and "the branch is held by a hidden worktree"
+/// cannot disagree about the same directory (BUG-001, 016 FR-032). Private: callers should have to
+/// say which of the two shapes they hold rather than assert `under_managed_root` themselves.
+fn classify_from_record(
+    dir_name: &str,
+    under_managed_root: bool,
+    provenance: &ProvenanceView<'_>,
+) -> WorktreeOwner {
+    // Checked first, so an unreadable project can never reach the record lookup with an empty
+    // set and conclude the user made none of this (FR-011).
+    if provenance.state_unreadable {
+        return WorktreeOwner::User;
+    }
+    // Outside the directory this app manages, so this app never claimed to have made it, and the
+    // reveal control has never applied to it (014 FR-017, 016 BUG-002).
+    if !under_managed_root {
+        return WorktreeOwner::User;
+    }
+    if provenance.records.contains(dir_name) {
+        WorktreeOwner::User
+    } else {
+        WorktreeOwner::Agent
+    }
+}
+
+/// Every worktree this project's durable state already knows about, from the evidence the app
+/// holds without reading anything (feature 029, FR-006).
+///
+/// Two sources, unioned:
+///
+/// - `overrides` — the display-name map. Renaming a worktree is something only the user can have
+///   done, through this app, to a worktree they were looking at.
+/// - `session_dirs` — the `dir_name` of every session bound to a worktree. Starting a session
+///   there is the other thing only the user does.
+///
+/// The result is used for two different purposes, which is why the archived filter is *not* here:
+/// [`Catalog::snapshot`](../../micold_daemon/catalog/struct.Catalog.html) asks "what should be on
+/// screen" and filters archived sessions out before calling; the FR-006 migration asks "where did
+/// the user work" and must count them, because an archived session is still history. Each caller
+/// decides at its own call site (contract `provenance-store.md` §4).
+///
+/// Pure: no I/O, no discovery, and the caller supplies both sides.
+pub fn durably_known_worktrees<'a>(
+    overrides: Option<&std::collections::BTreeMap<String, String>>,
+    session_dirs: impl IntoIterator<Item = &'a str>,
+) -> std::collections::BTreeSet<String> {
+    let mut known: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    if let Some(map) = overrides {
+        known.extend(map.keys().cloned());
+    }
+    known.extend(session_dirs.into_iter().map(str::to_string));
+    known
+}
+
+/// The `dir_name` of every session in `sessions` that is bound to a worktree, archived ones
+/// included — the session half of [`durably_known_worktrees`]'s evidence.
+///
+/// `SessionLocation::Default` sessions run in the project root, which is not a worktree, so they
+/// contribute nothing.
+pub fn session_worktree_dirs(sessions: &[crate::session::Session]) -> impl Iterator<Item = &str> {
+    sessions.iter().filter_map(|s| match &s.location {
+        crate::session::SessionLocation::Worktree(dir) => Some(dir.as_str()),
+        crate::session::SessionLocation::Default => None,
+    })
+}
+
+/// The records the FR-006 backfill would write for one project — the one-time migration that keeps
+/// the worktrees a user already worked in from vanishing when the inversion lands.
+///
+/// Pure: it returns the set to write and writes nothing. Applying it, and persisting the
+/// `provenance_migrated` marker in the *same* write, is the daemon's step.
+///
+/// Returns `None` when the migration must not run at all, and the caller must then write neither
+/// records nor marker:
+///
+/// - `state_unreadable` (FR-011) — checked first. A project whose records failed to load arrives
+///   here indistinguishable from one that has none, and migrating from an empty set we cannot
+///   trust would write the wrong answer and mark it done forever. Its one chance survives to a run
+///   that can read it.
+/// - `already_migrated` (FR-006c) — the migration is a one-time event per project, not a standing
+///   rule. Were it standing, 014's "start a session in a revealed agent worktree" would quietly
+///   promote that worktree to the user's for good (FR-006d).
+///
+/// `Some(empty)` is a legitimate and different result: "ran, found no evidence". The caller still
+/// sets the marker for it — "ran and found nothing" and "never ran" are distinct states
+/// (data-model.md §3).
+///
+/// A worktree is backfilled iff all four hold:
+///
+/// 1. it is directly under `root` — nothing outside is ever classified from records (FR-005), so a
+///    record for it could only mislead a later reader;
+/// 2. its `dir_name` is in `evidence` (see [`durably_known_worktrees`]);
+/// 3. [`matches_reserved_convention`] is `false` for it — the FR-007a veto, and the only place in
+///    the codebase that still asks a name anything;
+/// 4. it is not already in `existing` — FR-006b, the migration never overwrites, which is what
+///    makes a second run over the same inputs empty.
+pub fn plan_backfill(
+    discovered: &[Worktree],
+    root: &Path,
+    evidence: &std::collections::BTreeSet<String>,
+    existing: &std::collections::BTreeSet<String>,
+    already_migrated: bool,
+    state_unreadable: bool,
+) -> Option<std::collections::BTreeSet<String>> {
+    if state_unreadable || already_migrated {
+        return None;
+    }
+    Some(
+        discovered
+            .iter()
+            .filter(|w| w.path.parent() == Some(root))
+            .filter(|w| evidence.contains(&w.dir_name))
+            .filter(|w| !matches_reserved_convention(&w.dir_name, w.branch.as_deref()))
+            .filter(|w| !existing.contains(&w.dir_name))
+            .map(|w| w.dir_name.clone())
+            .collect(),
+    )
 }
 
 /// The directory this project's worktrees live in — the one location the app manages.
@@ -156,24 +369,13 @@ impl Worktree {
         self.status == WorktreeStatus::Valid
     }
 
-    /// Classify this worktree from its names alone (feature 014, FR-005).
-    ///
-    /// PRECONDITION: `self` came from [`reconcile`], which already guarantees the worktree lives
-    /// directly under the project's `.claude/worktrees/` root — the *location* half of FR-005.
-    /// This method decides only the *naming* half, so do not call it on a `Worktree` obtained by
-    /// any other route (contracts/agent-worktree-classification.md).
-    ///
-    /// Pure, total, health-blind, and stateless: no I/O, defined for `branch: None` and every
-    /// [`WorktreeStatus`], and nothing is cached (FR-007, FR-009).
-    pub fn owner(&self) -> WorktreeOwner {
-        classify_owner(&self.dir_name, self.branch.as_deref())
-    }
-
-    /// `true` iff [`Self::owner`] is [`WorktreeOwner::Agent`] — the predicate the sidebar's
-    /// visible-set filtering reads (FR-002).
-    pub fn is_agent_owned(&self) -> bool {
-        matches!(self.owner(), WorktreeOwner::Agent)
-    }
+    // Feature 029 removed `owner()` and `is_agent_owned()` from this type rather than
+    // reimplementing them over the record set. A `Worktree` is what git and the filesystem
+    // report; who created it is a fact about this application's own records, which a discovered
+    // worktree does not carry and must not appear to. Leaving a shim here would have let every
+    // existing call site keep compiling against the deleted rule — removal makes the inversion a
+    // compile error at each of them instead (contracts/worktree-classification.md §1).
+    // The replacement is the free function [`classify_owner`].
 }
 
 /// One worktree entry parsed from `git worktree list --porcelain`.
@@ -659,6 +861,7 @@ fn checked_out_branches(
     records: &[WorktreeRecord],
     repo: &Path,
     included: &[PathBuf],
+    provenance: &ProvenanceView<'_>,
 ) -> Vec<(String, BlockReason)> {
     let root = worktrees_root(repo);
     records
@@ -673,7 +876,14 @@ fn checked_out_branches(
                 // worktrees is one the list is showing — before inclusion and after it (BUG-002).
                 BlockReason::CheckedOutAt {
                     path: rec.path.clone(),
-                    owner: classify_owner(&folder_name(&rec.path), rec.branch.as_deref()),
+                    // An included holder is under the second half of the condition above, so its
+                    // parent is not the root and it classifies `User` — the same answer the list
+                    // gives its row (029 FR-016).
+                    owner: classify_from_record(
+                        &folder_name(&rec.path),
+                        rec.path.parent() == Some(root.as_path()),
+                        provenance,
+                    ),
                 }
             } else {
                 BlockReason::CheckedOutOutsideApp {
@@ -700,6 +910,7 @@ pub fn preflight(
     branch: &str,
     target_exists: bool,
     included: &[PathBuf],
+    provenance: &ProvenanceView<'_>,
 ) -> io::Result<BranchSituation> {
     let porcelain = git.worktree_list_porcelain(repo)?;
     let records = parse_worktrees(&porcelain);
@@ -712,7 +923,7 @@ pub fn preflight(
     }
 
     // 2. Checked out somewhere: neither reusable nor overwritable (FR-021).
-    if let Some((_, reason)) = checked_out_branches(&records, repo, included)
+    if let Some((_, reason)) = checked_out_branches(&records, repo, included, provenance)
         .into_iter()
         .find(|(b, _)| b == branch)
     {
@@ -762,10 +973,11 @@ pub fn branch_candidates(
     git: &dyn Git,
     repo: &Path,
     included: &[PathBuf],
+    provenance: &ProvenanceView<'_>,
 ) -> io::Result<Vec<BranchCandidate>> {
     let refs = git.list_branch_refs(repo)?;
     let porcelain = git.worktree_list_porcelain(repo)?;
-    let held = checked_out_branches(&parse_worktrees(&porcelain), repo, included);
+    let held = checked_out_branches(&parse_worktrees(&porcelain), repo, included, provenance);
 
     let mut candidates = parse_branch_refs(&refs);
     for candidate in &mut candidates {
@@ -1070,6 +1282,7 @@ pub fn create_worktree(
     target_exists: bool,
     mode: &CreateMode,
     included: &[PathBuf],
+    provenance: &ProvenanceView<'_>,
     on_progress: &mut dyn FnMut(CreateProgressEvent),
 ) -> Result<Worktree, CreateError> {
     // Pre-flight (fail fast, no mutation). Re-run here rather than trusting whatever the caller
@@ -1086,6 +1299,7 @@ pub fn create_worktree(
         &names.branch,
         target_exists,
         included,
+        provenance,
     )
     .map_err(|e| CreateError::RolledBack(e.to_string()))?;
     match &situation {

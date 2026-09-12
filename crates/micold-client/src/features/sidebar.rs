@@ -611,10 +611,11 @@ impl crate::app::State {
     /// hidden (feature 014, FR-002).
     pub fn worktree_tree(&self) -> Vec<WorktreeNode> {
         let sessions = self.active_sessions();
+        let provenance = self.provenance_view();
         self.visible_worktrees()
             .map(|worktree| WorktreeNode {
                 display_name: self.worktree_display_name(&worktree.dir_name),
-                tags: worktree_tags(worktree),
+                tags: worktree_tags(worktree, &provenance),
                 expanded: self.location_open(&SessionLocation::Worktree(worktree.dir_name.clone())),
                 sessions: sessions
                     .iter()
@@ -662,7 +663,7 @@ impl crate::app::State {
         let sessions = self.active_sessions();
         let node = WorktreeNode {
             display_name: self.worktree_display_name(&worktree.dir_name),
-            tags: worktree_tags(worktree),
+            tags: worktree_tags(worktree, &self.provenance_view()),
             expanded: self.location_open(&SessionLocation::Worktree(dir.clone())),
             sessions: sessions
                 .iter()
@@ -726,8 +727,9 @@ impl crate::app::State {
         let mut types = BTreeSet::new();
         let mut has_issue = false;
         let mut has_untyped = false;
+        let provenance = self.provenance_view();
         for worktree in self.visible_worktrees() {
-            let tags = worktree_tags(worktree);
+            let tags = worktree_tags(worktree, &provenance);
             let mut typed = false;
             for tag in &tags {
                 match tag {

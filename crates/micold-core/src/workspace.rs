@@ -12,7 +12,7 @@ use crate::project::{
     canonicalize_best_effort, validate_rename, Availability, Project, RenameError,
 };
 use crate::session::{Session, SessionId};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// The known-projects list plus the single active working space (referenced by path).
@@ -53,6 +53,45 @@ pub struct Workspace {
     /// keeps it current in memory, but `store.rs` has no locking, so a client-side save would
     /// clobber whatever the daemon had written since the client loaded.
     pub foreground_by_project: BTreeMap<PathBuf, SessionId>,
+    /// The worktrees this application created, per project (feature 029, FR-001). Keyed by the
+    /// project's canonical path, exactly as [`Self::sessions`] is, then holding `dir_name`s.
+    ///
+    /// This is the feature. Feature 014 asked a worktree's *name* who made it, which caught the
+    /// assistant's sub-agent worktrees and missed its session worktrees — those land in the same
+    /// directory under ordinary, human-chosen names. So the question inverts: instead of guessing
+    /// an author from a string, the app records what it did, and everything else is "not known to
+    /// be the user's" (contracts/worktree-classification.md).
+    ///
+    /// Absent means unrecorded, never "unknown": the one case where the difference matters — a
+    /// state file that failed to read — is carried separately by [`Self::unreadable_projects`],
+    /// because an empty set that could mean either would hide every worktree the user has.
+    ///
+    /// Written by the **daemon**, for the reason [`Self::foreground_by_project`] gives. Exactly
+    /// three writers put records in (creation, the one-time migration, the claim action) and two
+    /// take them out (worktree delete, project forget) — contracts/provenance-store.md §2.
+    pub worktree_provenance: BTreeMap<PathBuf, BTreeSet<String>>,
+    /// Projects whose one-time provenance backfill has already run (feature 029, FR-006c).
+    ///
+    /// The migration grandfathers worktrees the user demonstrably already worked in, from evidence
+    /// the app happens to hold. It is a *migration*, not a standing rule: evaluated continuously it
+    /// would let 014's own "start a session in a revealed agent worktree" permanently un-hide that
+    /// worktree. So it runs once per project and this records that it did.
+    ///
+    /// A marker rather than a timestamp or a schema version: the question is only ever "has this
+    /// project been through it", and a project forgotten and re-opened is a fresh project that
+    /// should migrate again from whatever evidence survives.
+    pub provenance_migrated: BTreeSet<PathBuf>,
+    /// Projects whose durable state could not be read **this run** (feature 029, FR-011).
+    ///
+    /// Never persisted, and deliberately not an `Option` around the record set: the failure is a
+    /// property of this process's reading of the disk, not of the project, and a later run that
+    /// reads the file must not inherit it.
+    ///
+    /// It exists because an empty record set would otherwise mean two opposite things — "this app
+    /// created nothing here" and "we could not find out" — and the second must fail *visible*,
+    /// listing everything, rather than hiding the user's own work behind a control they have no
+    /// reason to look for (data-model.md §4).
+    pub unreadable_projects: BTreeSet<PathBuf>,
 }
 
 impl Workspace {
@@ -126,6 +165,13 @@ impl Workspace {
         // the project. Leaving it would restore a session from a life the user deliberately ended,
         // and would name a session whose record has just gone with it.
         self.foreground_by_project.remove(&path);
+        // Feature 029: the record of what this app created here goes too, and so does the marker
+        // saying the backfill has run. Re-opening the folder is a fresh project — it migrates
+        // again from whatever evidence remains, rather than inheriting a set of names whose
+        // worktrees may since have been replaced by different ones (FR-009).
+        self.worktree_provenance.remove(&path);
+        self.provenance_migrated.remove(&path);
+        self.unreadable_projects.remove(&path);
         if self.active.as_ref() == Some(&path) {
             self.active = None;
         }
@@ -179,6 +225,55 @@ impl Workspace {
                 }
             }
         }
+    }
+
+    /// Whether this application created `dir_name` in `project` (feature 029, FR-004).
+    ///
+    /// The bare record lookup, and *not* the classification: a worktree outside the managed root
+    /// is the user's whether or not it is recorded, and an unreadable project's worktrees are all
+    /// the user's. Both of those are location and failure questions rather than record questions,
+    /// so they live with the classifier
+    /// ([`crate::worktree::classify_owner`]) which has the location in hand.
+    pub fn is_user_created(&self, project: &Path, dir_name: &str) -> bool {
+        self.worktree_provenance
+            .get(project)
+            .is_some_and(|set| set.contains(dir_name))
+    }
+
+    /// Record that this application created `dir_name` in `project` (feature 029, FR-001).
+    ///
+    /// Idempotent — a `BTreeSet` insert — which the claim action relies on: claiming a worktree
+    /// that is already recorded must be a no-op rather than an error (FR-022).
+    pub fn record_user_created(&mut self, project: &Path, dir_name: &str) {
+        self.worktree_provenance
+            .entry(project.to_path_buf())
+            .or_default()
+            .insert(dir_name.to_string());
+    }
+
+    /// Drop the record for `dir_name` in `project` (feature 029, FR-009), pruning an emptied
+    /// project key so the on-disk shape matches [`Self::clear_worktree_name`]'s.
+    ///
+    /// Called when the worktree is deleted, so that a later worktree reusing the directory name
+    /// inherits nothing: the record names a directory, and the directory the record was about is
+    /// gone. Idempotent.
+    pub fn forget_user_created(&mut self, project: &Path, dir_name: &str) {
+        if let Some(set) = self.worktree_provenance.get_mut(project) {
+            set.remove(dir_name);
+            if set.is_empty() {
+                self.worktree_provenance.remove(project);
+            }
+        }
+    }
+
+    /// The worktrees this app created in `project` (feature 029). Empty when it created none —
+    /// or when the project's state could not be read, which the caller must distinguish via
+    /// [`Self::unreadable_projects`] before drawing any conclusion from the emptiness.
+    pub fn user_created_worktrees(&self, project: &Path) -> &BTreeSet<String> {
+        static EMPTY: std::sync::OnceLock<BTreeSet<String>> = std::sync::OnceLock::new();
+        self.worktree_provenance
+            .get(project)
+            .unwrap_or_else(|| EMPTY.get_or_init(BTreeSet::new))
     }
 
     /// Recompute every project's availability from the filesystem (FR-022). Called after

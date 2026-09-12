@@ -198,6 +198,26 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
                         .collect(),
                 );
                 crate::app::drain(outcomes, |o| crate::app::interpret(core, o));
+                // Mirror the provenance record (feature 029, FR-001). Rebuilt from the snapshot
+                // rather than merged into, exactly as the display names below are: the daemon is
+                // the single writer, so a record it no longer reports — a worktree deleted from
+                // another window — must go here too. That is also why an optimistic record made
+                // by this client's own create (FR-010) is safe: the very next snapshot carries
+                // the durable one back, and if persistence failed the row simply reverts to
+                // hidden rather than lying about being the user's forever.
+                let created: std::collections::BTreeSet<String> = project
+                    .worktrees
+                    .iter()
+                    .filter(|w| w.user_created)
+                    .map(|w| w.dir_name.clone())
+                    .collect();
+                if created.is_empty() {
+                    core.workspace.worktree_provenance.remove(&active);
+                } else {
+                    core.workspace
+                        .worktree_provenance
+                        .insert(active.clone(), created);
+                }
                 // Mirror display-name overrides from the catalog (a second window sees a rename).
                 let names: std::collections::BTreeMap<String, String> = project
                     .worktrees

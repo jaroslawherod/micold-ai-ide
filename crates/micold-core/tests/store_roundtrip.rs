@@ -707,3 +707,98 @@ fn an_unknown_provider_is_a_load_error_not_a_silent_fallback() {
         "and the unreadable original is moved aside rather than deleted — the same recovery the          store already applies to any file it cannot parse, which is exactly why declining to load          an unknown provider is a safe failure rather than a destructive one"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// Feature 029 (T004): the provenance record and the migration marker persist per project.
+//
+// Both ride `StoredProjectState` as `#[serde(default)]` fields with no `schema_version` bump,
+// for the reason `last_session` and `included_worktrees` already record: a file written before
+// they existed loads as "nothing recorded, not yet migrated", which is exactly the state a
+// pre-029 installation is in.
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn provenance_and_migration_marker_roundtrip_per_project() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a", "a", true));
+    ws.projects.push(project("/b", "b", true));
+    ws.record_user_created(Path::new("/a"), "feat-x");
+    ws.record_user_created(Path::new("/a"), "fix-y");
+    ws.provenance_migrated.insert(PathBuf::from("/a"));
+    store.save(&ws).unwrap();
+
+    let out = store.load();
+    assert_eq!(out.status, LoadStatus::Loaded);
+    assert!(out.workspace.is_user_created(Path::new("/a"), "feat-x"));
+    assert!(out.workspace.is_user_created(Path::new("/a"), "fix-y"));
+    assert!(out.workspace.provenance_migrated.contains(Path::new("/a")));
+    assert!(
+        !out.workspace.provenance_migrated.contains(Path::new("/b")),
+        "the marker is per project — /b has still never been migrated"
+    );
+    assert!(
+        !out.workspace
+            .worktree_provenance
+            .contains_key(Path::new("/b")),
+        "and a project with no records keeps no key"
+    );
+}
+
+#[test]
+fn a_state_file_without_the_provenance_fields_loads_as_unrecorded_and_unmigrated() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a", "a", true));
+    store.save(&ws).unwrap();
+
+    // Rewrite /a's state file as a pre-029 build would have left it: the fields simply absent.
+    let path = store.project_state_path(Path::new("/a"));
+    std::fs::write(
+        &path,
+        r#"{"schema_version":1,"sessions":[],"worktree_display_names":{}}"#,
+    )
+    .unwrap();
+
+    let out = store.load();
+    assert_eq!(out.status, LoadStatus::Loaded);
+    assert!(
+        !out.workspace.is_user_created(Path::new("/a"), "feat-x"),
+        "absent means unrecorded, not corrupt"
+    );
+    assert!(
+        !out.workspace.provenance_migrated.contains(Path::new("/a")),
+        "absent means not yet migrated — which is what makes the one-time backfill run"
+    );
+}
+
+#[test]
+fn saving_unchanged_provenance_is_byte_identical() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a", "a", true));
+    // Inserted out of order: the stored form is a sorted set, so the file must not depend on
+    // the order the daemon happened to learn about them.
+    ws.record_user_created(Path::new("/a"), "zeta");
+    ws.record_user_created(Path::new("/a"), "alpha");
+    store.save(&ws).unwrap();
+
+    let path = store.project_state_path(Path::new("/a"));
+    let first = std::fs::read_to_string(&path).unwrap();
+    store.save(&ws).unwrap();
+    let second = std::fs::read_to_string(&path).unwrap();
+
+    assert_eq!(
+        first, second,
+        "a save that changes nothing writes the same bytes"
+    );
+    let alpha = first.find("alpha").expect("alpha present");
+    let zeta = first.find("zeta").expect("zeta present");
+    assert!(alpha < zeta, "records are written in sorted order");
+}

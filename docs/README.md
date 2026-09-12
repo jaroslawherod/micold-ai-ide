@@ -31,7 +31,8 @@ follows describes the version you are reading it from (constitution, Principle V
 - [Icons](user-guide/icons.md) — the shared Material icon set, where each icon appears, theming,
   licensing, and how to add a new icon.
 - [Worktrees & Sessions](user-guide/worktrees-and-sessions.md) — opening a git project, the
-  worktree sidebar (including how agent-created worktrees are hidden and how to reveal them),
+  worktree sidebar (including why only the worktrees the app created are listed, how to reveal
+  the rest, and how to claim one you made yourself),
   creating worktrees (on a new branch, or by searching for one that already exists locally or on
   a remote),
   and running AI CLI sessions (`claude` or `copilot`) in the embedded terminal

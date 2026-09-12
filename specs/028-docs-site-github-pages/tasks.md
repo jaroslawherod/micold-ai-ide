@@ -120,7 +120,7 @@ the published release actually contains.
 - [X] T033 [US1] Add the phone layout to `site/theme/css/site.css`: no horizontal scrolling at 360 px, images fitted to the viewport, the table of contents collapsing to a control (FR-025)
 - [X] T034 [US1] Generate the licences page in `site/stage.sh` from `/LICENSE`, `assets/fonts/LICENSE`, `assets/fonts/LICENSE-Roboto-OFL.txt` and `assets/fonts/PROVENANCE.md`, and add its entry to `docs/SUMMARY.md` (FR-008, FR-031)
 - [X] T035 [US1] Implement `site/checks/page-checks.mjs` with three of its five assertions — axe-core WCAG 2.2 AA over every page in both schemes, the home page's first-viewport facts, and the off-origin scan over `<img>`/`<link>`/`<script>`/`<source>`/CSS `url()` (T024, T025 green)
-- [ ] T036 [US1] Link the site from the repository: add it to the root `README.md`, and set the repository's website field with `gh repo edit --homepage https://jaroslawherod.github.io/micold-ai-ide/` (FR-008a)
+- [X] T036 [US1] Link the site from the repository: add it to the root `README.md`, and set the repository's website field with `gh repo edit --homepage https://jaroslawherod.github.io/micold-ai-ide/` (FR-008a)
 - [X] T037 [US1] Run `site/build.sh` end to end locally and walk quickstart A5 and A7 — the home page's capture is produced, and the media contains no personal path, no real project name and no window but the application's own (FR-013, SC-010)
 
 **Checkpoint**: The site has a front door with a real screenshot of the application on it, in the
@@ -190,7 +190,7 @@ fails on it while the three-platform matrix stays skipped.
 - [X] T060 [US4] Add the three pre-merge checks as **steps inside the existing `docs` job** of `.github/workflows/ci.yml` — `page-set.sh`, `media-references.sh`, `links.sh --sources` — adding no job, so `ci-complete`'s `needs:` and the required `ci complete` check name are untouched (FR-021, FR-022, FR-023, FR-020)
 - [X] T061 [US4] Assert the documentation-only skip survives: `git check-attr micold-docs site/media.toml site/checks/page-set.sh` reports the paths as code, `scripts/tests/documentation-set.test.sh` still passes, and `scripts/classify-change.sh` on a docs-only diff still classifies it as documentation (FR-020, quickstart A1)
 - [X] T062 [US4] Write `docs/development/docs-site.md` — how a publication works, what each check catches, how to trigger a republish, and why the trigger is a reusable workflow rather than a release event — and add its `docs/SUMMARY.md` entry (Principle VII)
-- [ ] T063 [US4] Enable GitHub Pages on the repository with source **GitHub Actions** (a repository setting, outside this change; until the first successful publication the address serves GitHub's own 404, which is the "unpublished" edge case)
+- [X] T063 [US4] Enable GitHub Pages on the repository with source **GitHub Actions** (a repository setting, outside this change; until the first successful publication the address serves GitHub's own 404, which is the "unpublished" edge case)
 - [ ] T064 [US4] Run `pages.yml` via `workflow_dispatch` against an existing tag and confirm the site deploys, then break a check deliberately and confirm the run fails with the previous site still reachable (quickstart A9; FR-017, FR-018, FR-020a)
 
 **Checkpoint**: The site publishes itself on release, republishes on demand, and a documentation

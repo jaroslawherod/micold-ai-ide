@@ -382,6 +382,11 @@ fn default_entry_stays_visible_with_an_active_tag_filter() {
         status: WorktreeStatus::Valid,
         included: false,
     }];
+    // Inside the managed root, so it is listed only with a record saying this app created it
+    // (029 FR-004) — and an unlisted worktree offers no filter to toggle.
+    state
+        .workspace
+        .record_user_created(&PathBuf::from("/repo"), "feat-a");
 
     // Sanity: a filter matching nothing still leaves worktree entries empty...
     state.update(Message::Sidebar(SidebarMsg::FilterToggled(

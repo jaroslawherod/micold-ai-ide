@@ -611,6 +611,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Worktree(WorktreeMsg::RenameConfirmed) => {
             shell::daemon_sync::on_worktree_rename_confirmed(app)
         }
+        // Feature 029 FR-020. The same split `RenameConfirmed` establishes: the pure reducer
+        // applies the record, this half makes it durable.
+        Message::Worktree(WorktreeMsg::ClaimRequested(dir_name)) => {
+            shell::daemon_sync::on_worktree_claim_requested(app, dir_name)
+        }
         Message::WorktreeForm(FormMsg::Submitted) => {
             shell::daemon_sync::on_add_worktree_submitted(app)
         }

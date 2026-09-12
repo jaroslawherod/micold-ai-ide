@@ -289,6 +289,15 @@ fn a_narrow_session_row_shortens_the_title_and_never_the_cli_label() {
             status: WorktreeStatus::Valid,
             included: false,
         }];
+        // A worktree inside the managed root is listed only if this app recorded creating it
+        // (029 FR-004). Without the record the sidebar draws "No worktrees yet" and the row this
+        // gate is about never exists.
+        let project = state
+            .workspace
+            .active_project()
+            .map(|p| p.path.clone())
+            .expect("the fixture activates the project it just opened");
+        state.workspace.record_user_created(&project, "feat-short");
         state.sidebar.width = width;
         state.sidebar.expanded.insert("feat-short".to_string());
         state.settings.theme_pref = micold_core::theme::ThemePreference::Light;

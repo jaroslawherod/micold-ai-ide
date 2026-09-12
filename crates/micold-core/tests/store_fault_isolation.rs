@@ -80,8 +80,9 @@ fn corrupt_one_project_state_file_does_not_affect_others() {
         SessionLabel::Named("B session".to_string())
     );
 
-    // The corrupt file is preserved as a backup (mirrors the catalog's own corrupt-file handling).
-    assert!(a_state_path.with_extension("json.bak").exists());
+    // The corrupt file is left exactly where it is (029 FR-011): renaming it aside preserved the
+    // bytes but let the next reader mistake the damage for a project that never had a state file.
+    assert_eq!(std::fs::read_to_string(&a_state_path).unwrap(), "not json");
 }
 
 #[test]
@@ -280,4 +281,152 @@ fn a_corrupt_project_state_file_leaves_that_project_with_no_memory() {
          that nothing loaded can resolve"
     );
     assert!(!loaded.workspace.sessions.contains_key(Path::new("/a/one")));
+}
+
+// ---------------------------------------------------------------------------------------
+// Feature 029 (T005): a project whose state file cannot be read is *named* as such.
+//
+// Under 014 an unreadable file degrading to empty was safe — classification came from names, so
+// losing the records lost only rename overrides. Under 029 an empty record set means "the app
+// created none of these", i.e. hide everything. The load must therefore distinguish "no records"
+// from "records unknown", which is what `unreadable_projects` is for (FR-011, data-model §4).
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn a_corrupt_project_state_file_marks_the_project_unreadable() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a", "a", true));
+    ws.projects.push(project("/b", "b", true));
+    ws.record_user_created(Path::new("/a"), "feat-x");
+    ws.record_user_created(Path::new("/b"), "feat-y");
+    store.save(&ws).unwrap();
+
+    std::fs::write(store.project_state_path(Path::new("/a")), "not json").unwrap();
+
+    let out = store.load();
+    assert!(
+        out.workspace.unreadable_projects.contains(Path::new("/a")),
+        "the project whose file failed to parse is named"
+    );
+    assert!(
+        !out.workspace.unreadable_projects.contains(Path::new("/b")),
+        "and no other project is — the fault stays isolated (FR-012a)"
+    );
+    assert!(
+        !out.workspace
+            .worktree_provenance
+            .contains_key(Path::new("/a")),
+        "its records are still dropped; it is the *not knowing* that is now recorded"
+    );
+    assert!(
+        out.workspace.is_user_created(Path::new("/b"), "feat-y"),
+        "/b's own records survive intact"
+    );
+}
+
+#[test]
+fn a_project_with_no_state_file_is_not_unreadable() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/fresh", "fresh", true));
+    store.save(&ws).unwrap();
+    std::fs::remove_file(store.project_state_path(Path::new("/fresh"))).unwrap();
+
+    let out = store.load();
+    assert!(
+        out.workspace.unreadable_projects.is_empty(),
+        "a project that has never been saved has nothing to fail reading — it is simply new, \
+         and a new project genuinely has created nothing"
+    );
+}
+
+#[test]
+fn unreadable_is_not_persisted() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a", "a", true));
+    ws.unreadable_projects.insert(PathBuf::from("/a"));
+    store.save(&ws).unwrap();
+
+    let out = store.load();
+    assert!(
+        out.workspace.unreadable_projects.is_empty(),
+        "it describes this run's reading of the disk, not a fact about the project — a later \
+         run that reads the file successfully must not inherit the failure"
+    );
+}
+
+/// 029 FR-011, found walking quickstart Part 3 step 6: the corrupt file used to be renamed aside at
+/// load, so the *second* reader of the same store in the same launch — the daemon the client just
+/// spawned — saw a merely missing file, did not mark the project unreadable, and ran the one-time
+/// backfill against evidence that had just been discarded. Every reader must reach the same verdict.
+#[test]
+fn a_corrupt_project_state_file_stays_unreadable_for_every_reader() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a", "a", true));
+    ws.record_user_created(Path::new("/a"), "feat-x");
+    store.save(&ws).unwrap();
+
+    std::fs::write(store.project_state_path(Path::new("/a")), "not json").unwrap();
+
+    for reader in 1..=2 {
+        let out = store.load();
+        assert!(
+            out.workspace.unreadable_projects.contains(Path::new("/a")),
+            "reader {reader} must see the same failure — a load that hides the damage from the \
+             next reader is how the FR-006 migration gets consumed by a failed read"
+        );
+    }
+}
+
+/// 029 FR-011: "a transient failure cannot overwrite the true record set". A save during a run that
+/// could not read a project's state would write that project's file from the empty state the
+/// failure degraded to, destroying records the next run could otherwise have read back.
+#[test]
+fn saving_never_overwrites_an_unreadable_projects_state_file() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a", "a", true));
+    ws.projects.push(project("/b", "b", true));
+    ws.record_user_created(Path::new("/a"), "feat-x");
+    ws.record_user_created(Path::new("/b"), "feat-y");
+    store.save(&ws).unwrap();
+
+    let a_state_path = store.project_state_path(Path::new("/a"));
+    std::fs::write(&a_state_path, "not json").unwrap();
+    let damaged = std::fs::read(&a_state_path).unwrap();
+
+    let out = store.load();
+    assert!(out.workspace.unreadable_projects.contains(Path::new("/a")));
+    store.save(&out.workspace).unwrap();
+
+    assert_eq!(
+        std::fs::read(&a_state_path).unwrap(),
+        damaged,
+        "the unreadable project's file is left exactly as found"
+    );
+    let after = store.load();
+    assert!(
+        after
+            .workspace
+            .unreadable_projects
+            .contains(Path::new("/a")),
+        "so the next run fails visible too, rather than inheriting an empty record set"
+    );
+    assert!(
+        after.workspace.is_user_created(Path::new("/b"), "feat-y"),
+        "and the readable projects are still saved as usual"
+    );
 }

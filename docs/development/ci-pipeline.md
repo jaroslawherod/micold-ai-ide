@@ -136,6 +136,56 @@ Two properties are load-bearing, and both are asserted by
 Renaming the `ci complete` job breaks the merge gate for every pull request, and no pull request
 can fix it — the ruleset lives in repository settings, not in the repo.
 
+## The user-guide gate
+
+Constitution Principle VII says a user-facing feature is not done until its documentation exists,
+and the Documentation gate requires the guide to be updated in the same pull request. Half of that
+was already mechanical — the docs build runs in CI — and half was not: whether the guide had in
+fact been updated was left to review, which is the half a reviewer skips when the diff is long and
+the feature works. `scripts/check-user-guide-updated.sh` is the other half.
+
+It blocks a pull request when **all** of these hold:
+
+1. Its title is a conventional-commit **feature** — `feat:`, `feat(scope):`, either with a `!`.
+2. It touches a path declared `micold-user-facing` in `.gitattributes` — the client's screens
+   (`crates/micold-client/src/ui/**`) and the behaviours they trigger
+   (`crates/micold-client/src/features/**`).
+3. It touches no page declared `micold-user-guide` — that is, nothing under `docs/user-guide/`.
+
+A developer doc does not satisfy it. The reader Principle VII protects is the person using the
+application, not the person building it.
+
+### Why features and not every edit
+
+The word in the principle is "feature", and holding the gate to it is what makes it worth having.
+Replayed over the sixty merges before the gate existed, firing on any edit under the declared
+paths would have blocked ten changes — eight of them bug fixes whose guide page says nothing
+different. A label applied that often stops being read. Firing on `feat` alone would have blocked
+two, and both were real omissions: naming the AI CLIs the service cannot find, and the Settings
+icon rail.
+
+Nothing lints the title prefix today, so writing `fix` gets past this. It is a guard against
+forgetting, not against intent — and the convention is already load-bearing, since release-please
+reads the same prefixes to decide version numbers.
+
+The component library underneath the screens (`ui/material/**`, `ui/cdk/**`) is deliberately
+excluded: Principle VII is satisfied for it by
+[the component library guide](component-library.md), and a ripple timing or a token tweak changes
+pixels without changing anything the user guide says.
+
+### Getting past it
+
+Either update the page in `docs/user-guide/` that the change makes wrong, or label the pull
+request **`docs-not-needed`**. Like `full-ci`, applying a label starts a fresh run, so the waiver
+takes effect without a push.
+
+The label is a decision somebody signs, not a way to make the check quiet. If you find yourself
+applying it to most features, the declared path set is wrong — widen or narrow `.gitattributes`
+rather than training everyone to reach for the label.
+
+The gate runs on pull requests only; a push to main has already been through it. Its own cases are
+in `scripts/tests/check-user-guide-updated.test.sh` and run in the same job, before it.
+
 ## The macOS packaging step
 
 The macOS `.app` bundle is composed and launched inside the **`test` job's macOS leg**, as a step —
