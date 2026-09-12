@@ -122,9 +122,9 @@ Three-crate Cargo workspace. `crates/micold-core/` (render-free core + persisten
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T020 [P] Run `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` over the changed files (`crates/micold-daemon/src/{catalog,state,server}.rs` and the new `tests/`); `mise.toml` has no task for either, and CI stops at `fmt` before every other job
-- [ ] T021 [P] Run `mise run site-check` to confirm the documentation build passes with the T011/T016 edits (Principle VII)
-- [ ] T022 Run `mise run test` for the whole workspace, matching CI (Principle I), and `cargo check --target aarch64-apple-darwin` to confirm the change builds for macOS as well as this host (Principle VI)
+- [X] T020 [P] Run `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` over the changed files (`crates/micold-daemon/src/{catalog,state,server}.rs` and the new `tests/`); `mise.toml` has no task for either, and CI stops at `fmt` before every other job
+- [X] T021 [P] Run `mise run site-check` to confirm the documentation build passes with the T011/T016 edits (Principle VII) — run as `site/build.sh --no-media` (2026-09-12): the theme emit, the stage and the mdBook render all pass with the edits, and `site/checks/links.sh` resolves every internal link (its only 20 errors are the media `--no-media` deliberately did not capture). The media-presence check and `page-checks.mjs` (axe-core in a real browser) are the two steps `--no-media` cannot satisfy — they need the capture harness and a `playwright install --with-deps`, which the publishing workflow does.
+- [X] T022 Run `mise run test` for the whole workspace, matching CI (Principle I), and `cargo check --target aarch64-apple-darwin` to confirm the change builds for macOS as well as this host (Principle VI)
 - [X] T023 Confirm the diff touches **no** file under `crates/micold-client/` — a client change here would be a second writer of the catalog, which the contract forbids (contract §4). `git diff --name-only main...HEAD | grep micold-client` must be empty
 - [ ] T024 Run the quickstart §B manual pass (B1–B7) against a release build with a real AI CLI, and append the dated record to `specs/029-persistent-session-names/quickstart.md` — including any step that could not be run and why. §B1 is the only proof of the central claim; no automated test restarts the daemon process
 
