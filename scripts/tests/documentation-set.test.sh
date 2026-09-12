@@ -65,6 +65,10 @@ expect specs/027-sandboxed-daemon-runtime/quickstart.md unset
 # Its neighbours are unaffected -- the exception is one file, not the feature's directory.
 expect specs/027-sandboxed-daemon-runtime/spec.md  set
 expect specs/027-sandboxed-daemon-runtime/tasks.md set
+# The same shape, feature 028: `crates/micold-core/tests/macos_package_gate.rs` holds `ci.yml`'s
+# macOS packaging step to §B of this quickstart.
+expect specs/028-macos-package/quickstart.md       unset
+expect specs/028-macos-package/spec.md             set
 
 echo
 echo "== code (everything not declared) =="

@@ -56,3 +56,29 @@ specs/**      micold-docs
 # exists to catch would be the one edit it never sees. Must stay after `specs/**`, which sets the
 # attribute.
 /specs/027-sandboxed-daemon-runtime/quickstart.md -micold-docs
+
+# Same reason, feature 028: `crates/micold-core/tests/macos_package_gate.rs` compares §B of this
+# quickstart against the macOS packaging step in `ci.yml`, so the file is a test input rather than
+# prose. Must stay after `specs/**`, which sets the attribute.
+/specs/028-macos-package/quickstart.md -micold-docs
+
+# Read by a test, so a test input rather than documentation: this page states the macOS version
+# floor, and `crates/micold-core/tests/macos_minimum_version.rs` holds it equal to the
+# `LSMinimumSystemVersion` the operating system enforces. If it stayed documentation, moving the
+# floor in the prose would skip the whole pipeline -- so the one edit the gate exists to catch
+# would be the one edit it never sees. Must stay after `docs/**`, which sets the attribute.
+/docs/user-guide/install-macos.md -micold-docs
+
+# Read by a test, so a test input rather than documentation: `docs/daemon.md`, this page and
+# `crates/micold-core/src/logout_survival.rs` are the three places that answer "what happens when I
+# log out?" on macOS, and `crates/micold-core/tests/macos_logout_claims_agree.rs` requires the same
+# sentence in all three (feature 028, FR-032). The user guide above is already carved out for the
+# version floor; this is the same argument for the other page. Must stay after `docs/**`, which
+# sets the attribute.
+/docs/daemon.md -micold-docs
+
+# The download-page trust notice, appended to a release's body before it is published (feature
+# 028, SC-001). It is prose about the download, read only by the `publish` job at release time --
+# nothing in the build, the suite or the package opens it. Listed explicitly because `/*.md`
+# above matches the repository root only.
+/.github/release-notice-macos.md micold-docs

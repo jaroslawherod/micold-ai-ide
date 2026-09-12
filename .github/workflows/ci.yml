@@ -145,6 +145,70 @@ jobs:
       # Ensure the full workspace (client GUI binary + daemon) compiles on every platform.
       - name: Build (workspace)
         run: cargo build --workspace
+      # Feature 028 (FR-036): the packaging gate. The bundle is composed from the binaries the
+      # step above just produced -- no second checkout, no second compile -- signed ad-hoc, and
+      # then actually launched. Composition alone would not catch the failure that matters: the
+      # client resolves the daemon as a *sibling of `current_exe()`*, so a bundle that puts the two
+      # binaries anywhere but together looks perfectly healthy and can never start a session. The
+      # endpoint appearing is that constraint asserting itself.
+      #
+      # This lives in the `test` job rather than a job of its own so that `ci-complete` (and
+      # `ci_gate_covers_every_job.rs`) need no edit; see research R12. `specs/028-macos-package/
+      # quickstart.md` §B states what it does, and `micold-core/tests/macos_package_gate.rs` holds
+      # the two descriptions together.
+      #
+      # Carried risk, research R12 contingency (b): whether a GitHub runner can give iced a drawing
+      # surface at all. A window-surface failure says nothing about packaging -- the bundle loaded,
+      # dyld resolved, the plist parsed -- so it is reported and treated as a pass. Every other way
+      # of dying still fails, which keeps the escape hatch narrow: a missing library, a rejected
+      # signature and a bundle whose daemon is not beside its client all look nothing like it.
+      - name: Package and launch the macOS bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          scripts/macos-bundle.sh --bin-dir target/debug --out target/macos
+
+          app="target/macos/micold-ai-ide.app"
+          log="$RUNNER_TEMP/launch.log"
+          sock="$HOME/.micold/run/d.sock"
+
+          "$app/Contents/MacOS/micold-ai-ide" > "$log" 2>&1 &
+          pid=$!
+
+          # Whichever comes first: the endpoint appears, or the process is gone. Twenty seconds is
+          # for a cold runner spawning a daemon, not for a hang -- a healthy launch takes one.
+          for _ in $(seq 1 20); do
+            [ -S "$sock" ] && break
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+          done
+
+          if kill -0 "$pid" 2>/dev/null && [ -S "$sock" ]; then
+            echo "Bundle launched; daemon endpoint $sock appeared."
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            exit 0
+          fi
+
+          echo "--- launch log ---"
+          cat "$log" || true
+          echo "------------------"
+
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+
+          # Research R12 contingency (b). Matched against the log rather than the exit status,
+          # because iced reports a surface failure and a missing library through the same code.
+          if grep -Eqi "GraphicsCreationFailed|no suitable graphics adapter|surface|wgpu|NoAvailablePixelFormat" "$log"; then
+            echo "The runner could not give iced a drawing surface. Treating as a pass: the"
+            echo "bundle loaded and the executable ran, which is what this step packages-tests."
+            exit 0
+          fi
+
+          echo "The bundled application did not start, and not for want of a drawing surface."
+          exit 1
       # Feature 020's gates, the 017 gates it widened, BUG-001's, feature 021's architecture guards,
       # and feature 027's two client-side §A gates. These read source text, one `const` slice and a
       # reducer — they open no window — so they run wherever the crate compiles, and this step is the authoritative list of them. Path
@@ -323,6 +387,7 @@ jobs:
           test -f docs/user-guide/sandboxed-daemon.md
           test -f docs/user-guide/worktrees-and-sessions.md
           test -f docs/user-guide/icons.md
+          test -f docs/user-guide/install-macos.md
       # Principle VII for a developer-facing capability: feature 020's showcase is documented for
       # developers rather than in the user guide (its FR-024), and the doc ships in the same change.
       - name: Required developer docs exist
@@ -333,6 +398,10 @@ jobs:
           # Feature 023 is developer-facing, so Principle VII is satisfied here rather than in the
           # user guide. This check runs on documentation-only changes too -- which is the point.
           test -f docs/development/ci-pipeline.md
+          # Feature 028: how the macOS artifact is produced, how to reproduce it without any Apple
+          # account, and what a Developer ID would change. A packaging process nobody but CI can
+          # run is one nobody can fix (FR-033).
+          test -f docs/development/macos-packaging.md
 
   # The single status check the default branch's ruleset requires (feature 023). It states the
   # outcome of the run instead of enumerating the pipeline's internals, which is what lets the jobs

@@ -292,8 +292,12 @@ login session ends, the daemon included. Making sessions survive a logout is:
 - **Supported on Linux**, via one explicit, user-enabled setting (below). It is **never turned on for
   you** — not by installation, not silently.
 - **Not supported on macOS or Windows** *for a service running directly on your computer*. There is
-  no unprivileged equivalent, so the app does not pretend to offer one. On those platforms sessions
-  survive closing the window but not logging out.
+  no unprivileged equivalent, so the app does not pretend to offer one. On macOS, sessions survive
+  closing the window but not logging out when the session service runs directly on your computer;
+  running it in a container is the supported way to survive logout there. Windows is the same.
+  (That sentence is the one `docs/user-guide/install-macos.md` and
+  `crates/micold-core/src/logout_survival.rs` also carry, held equal by
+  `crates/micold-core/tests/macos_logout_claims_agree.rs`.)
 - **Supported everywhere when the service runs in a container** — see
   [Where the service runs](#where-the-service-runs-feature-027) below. Not a second mechanism
   bolted on: it is the container runtime's own restart policy, and the runtime is a service the
