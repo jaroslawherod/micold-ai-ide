@@ -22,6 +22,7 @@ use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     branch_candidates, create_worktree, explain_directory_taken, parse_worktrees, preflight,
     remove_worktree, remove_worktree_dir, CreateError, CreateProgressEvent, Leftover,
+    ProvenanceView,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
@@ -863,6 +864,10 @@ where
                 // blocked holder is described (016 BUG-002, FR-032), and the lock must not be held
                 // across the git work.
                 let included = state.included_worktrees(&project);
+                // Read here for the same reason as `included`, and used for the same job: the
+                // re-verification inside `create_worktree` classifies a blocked holder, and it must
+                // classify it exactly as the list does (016 FR-032, 029 FR-016).
+                let (created, unreadable) = state.provenance(&project);
                 let task_state = Arc::clone(state);
                 tokio::spawn(async move {
                     let state = &task_state;
@@ -908,6 +913,10 @@ where
                             target_exists,
                             &mode,
                             &included,
+                            &ProvenanceView {
+                                records: &created,
+                                state_unreadable: unreadable,
+                            },
                             &mut on_progress,
                         );
                         // `RolledBack` is the only outcome in which this attempt created anything
@@ -921,6 +930,23 @@ where
                     .await;
                     match result {
                         Ok(Ok(_worktree)) => {
+                            // Feature 029 FR-002/FR-010: the record is written *before* the
+                            // broadcast, so the very first snapshot the client renders already
+                            // carries `user_created: true`. Written after the create succeeded and
+                            // only then — a rolled-back attempt left nothing on disk to own.
+                            //
+                            // A persistence failure is not fatal to the create: the worktree
+                            // exists, the user is looking at it, and the client's own optimistic
+                            // record keeps it listed for this run (FR-010). The next successful
+                            // write, or the claim action, recovers the durable half.
+                            if let Err(e) = state.record_worktree_provenance(&project, &dir_name) {
+                                tracing::warn!(
+                                    project = %project.display(),
+                                    dir_name = %dir_name,
+                                    error = %e,
+                                    "could not record worktree provenance"
+                                );
+                            }
                             refresh_worktrees_and_broadcast(state, project).await;
                             state.send(
                                 id,
@@ -962,6 +988,7 @@ where
                     continue;
                 };
                 let included = state.included_worktrees(&project);
+                let (created, unreadable) = state.provenance(&project);
                 let situation = tokio::task::spawn_blocking(move || {
                     let target = repo.join(".claude/worktrees").join(&dir_name);
                     let target_exists = target.exists()
@@ -975,6 +1002,10 @@ where
                         &branch,
                         target_exists,
                         &included,
+                        &ProvenanceView {
+                            records: &created,
+                            state_unreadable: unreadable,
+                        },
                     )
                 })
                 .await;
@@ -1042,8 +1073,17 @@ where
                     continue;
                 };
                 let included = state.included_worktrees(&project);
+                let (created, unreadable) = state.provenance(&project);
                 let listed = tokio::task::spawn_blocking(move || {
-                    branch_candidates(&GitCli::new(), &repo, &included)
+                    branch_candidates(
+                        &GitCli::new(),
+                        &repo,
+                        &included,
+                        &ProvenanceView {
+                            records: &created,
+                            state_unreadable: unreadable,
+                        },
+                    )
                 })
                 .await;
                 match listed {
@@ -1181,6 +1221,18 @@ where
                                 }
                             }
                             state.invalidate_env_include(&cache_path);
+                            // Feature 029 FR-018: the record dies with the worktree, and only once
+                            // git has actually released it. A directory name is reusable, so a
+                            // record that outlived its worktree would hand the next thing created
+                            // at that path an ownership nobody granted it.
+                            if let Err(e) = state.forget_worktree_provenance(&project, &dir_name) {
+                                tracing::warn!(
+                                    project = %project.display(),
+                                    worktree = %dir_name,
+                                    error = %e,
+                                    "could not forget the deleted worktree's provenance"
+                                );
+                            }
                             if leftovers.is_empty() {
                                 tracing::info!(
                                     project = %project.display(),
@@ -1284,6 +1336,44 @@ where
                             kind: ErrorKind::InvalidInput,
                             message: rename_error_message(e).into(),
                             detail: None,
+                        },
+                    ),
+                }
+            }
+            // --- 029 FR-020: the user telling the app a worktree is theirs ---
+            ClientMsg::WorktreeClaim {
+                req,
+                project,
+                dir_name,
+            } => {
+                // Durable catalog state with no git involved, like the rename above — and with no
+                // validation step, because there is no user-supplied string here, only a directory
+                // name the client picked off a row it is already drawing. Persistence is therefore
+                // the only thing that can fail.
+                //
+                // Nothing checks `matches_reserved_convention` (FR-023) and nothing touches the
+                // filesystem (FR-003): the user is stating a fact about authorship, and the app's
+                // job is to write it down.
+                match state.claim_worktree(&project, &dir_name) {
+                    Ok(()) => {
+                        // Broadcast so a second open window drops the `agent` chip too — the same
+                        // mechanism that already carries a rename between windows.
+                        state.broadcast_catalog();
+                        state.send(
+                            id,
+                            DaemonMsg::OperationOk {
+                                req,
+                                result: OperationResult::Ack,
+                            },
+                        );
+                    }
+                    Err(e) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::IoFailed,
+                            message: "failed to persist the claim".into(),
+                            detail: Some(e.to_string()),
                         },
                     ),
                 }

@@ -119,23 +119,35 @@ somewhere your filters do allow. Adding it changes nothing about the filter chip
 
 ### Agent worktrees
 
-Some AI coding tools create their own throwaway worktrees inside your project — one per
-background sub-task — using the same `.claude/worktrees/` folder the app manages. They have
-machine-generated names such as `agent-a885b42dc521fbda1`, you didn't create them, and they
-usually disappear on their own.
+AI coding assistants create worktrees of their own inside your project, in the same
+`.claude/worktrees/` folder the app manages. Some are throwaway scratch worktrees for a background
+sub-task, with machine-generated names like `agent-a885b42dc521fbda1`. Others are ordinary session
+worktrees the assistant made because you asked it to work on something, and those carry perfectly
+normal names — `fix-the-parser`, `try-the-new-api` — indistinguishable from anything you would type
+yourself.
 
-**The app hides them.** They don't appear in the sidebar, they aren't counted, and they never
-show up as somewhere you can start a session. Your own worktrees are untouched, including any
-whose name happens to begin with "agent" — only the machine-generated pattern (the `agent-`
-prefix followed by a long run of hexadecimal characters) is treated as reserved.
+**The app lists the worktrees it created for you, and hides the rest.** When you add a worktree
+here, the app writes down that it made it, and that note is what puts it in the sidebar. A worktree
+that turns up in the managed folder without one — because an assistant made it, or because you
+created it by hand with `git worktree add` — is hidden. Hidden worktrees aren't counted and never
+appear as somewhere you can start a session.
 
-Hiding is display-only. The app never deletes, prunes, renames, or otherwise modifies an agent
-worktree or its branch — that lifecycle belongs to the tool that created it, not to the app. If
-you want to see them, `git worktree list` in a terminal still shows everything.
+This is why a worktree's *name* no longer decides anything. Naming one `agent-something` doesn't
+hide it if you made it here, and giving one an ordinary name doesn't reveal it if you didn't.
+
+Hiding is display-only. The app never deletes, prunes, renames, or otherwise modifies a hidden
+worktree or its branch — that lifecycle belongs to whoever created it. `git worktree list` in a
+terminal still shows everything.
 
 **To see them in the app**, open the filter panel and tap **Show agent worktrees**. They join the
 list, each marked with a muted `agent` chip so you can always tell them apart from your own work.
 Tag filters apply to them exactly as they do to everything else.
+
+**The number beside the switch** is how many worktrees it is currently withholding — exactly the
+number of rows that appear when you turn it on. It counts only worktrees in the managed folder that
+the app has no note for; worktrees you keep elsewhere are never hidden and never counted. When
+there is nothing to reveal the number is absent rather than zero, and once the switch is on it
+disappears, because at that point nothing is being held back.
 
 Two things to know about that switch:
 
@@ -146,6 +158,35 @@ Two things to know about that switch:
   the same confirmation as any other worktree. There is no extra safety net, so take care —
   deleting a worktree an agent is still using will disrupt whatever it was doing, exactly as it
   would from a terminal.
+
+**Worktrees the app didn't create.** If you keep a worktree you made yourself in
+`.claude/worktrees/`, it will be hidden along with the assistant's. Reveal it, then use **Claim as
+mine** in its right-click menu — the app writes down the same note it would have written had it
+created the worktree, and the row stays listed from then on, including after a restart. Nothing on
+disk changes: no branch is touched, no file is moved, and uncommitted work in the worktree is left
+exactly as it was. Claiming the same worktree twice does nothing the second time, and it works
+whatever the worktree is called — including names that look like the assistant's own.
+
+There is no undo, on purpose: un-claiming would hide the very row you used to do it, so the row
+would disappear mid-click. A note goes away when the worktree does — delete the worktree, or forget
+the project, and nothing is left behind.
+
+Worktrees kept anywhere else on disk are never hidden on these grounds; see
+[Including a worktree that already exists](#including-a-worktree-that-already-exists) if you
+have one.
+
+**What happened at the upgrade.** The first time this version opens a project, it looks for
+worktrees you demonstrably worked in — ones you had renamed, or that hold a session the app
+remembers — and adopts those, so they stay listed without your doing anything. That pass runs once
+per project. Anything it couldn't find evidence for is hidden, and **Claim as mine** brings back any
+it missed.
+
+**If the app can't read what it saved for a project**, nothing is hidden on these grounds: every
+worktree in the folder is listed, without `agent` chips and without a number beside the switch,
+because the app genuinely doesn't know which ones are yours. It also stops saving that project's
+notes for as long as the file stays unreadable, rather than replacing it with an empty one — so a
+passing glitch can't quietly erase what it knew. The file is left untouched for you to inspect or
+delete; once it reads cleanly again, everything resumes as before.
 
 ### Resizing and hiding the sidebar
 

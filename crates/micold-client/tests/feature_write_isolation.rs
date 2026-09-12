@@ -21,7 +21,7 @@
 //! The tenth is `workspace`, which holds the project catalog, the session lists and two worktree
 //! maps in a single core value. A field-level claim would have to assign it to one feature and
 //! would then be wrong for the other two, so [`OWNERS`] survives keyed by *path* and `workspace`
-//! appears only through its six members. Anything writing `state.workspace` **whole** is writing
+//! appears only through its nine members. Anything writing `state.workspace` **whole** is writing
 //! all three features' data at once, and is reported as such.
 //!
 //! # What counts as a feature's code today
@@ -42,7 +42,7 @@
 //!
 //! # A core type's own operation is not a cross-feature write
 //!
-//! The corollary of keying ownership by path is that `Workspace`'s six members answer to three
+//! The corollary of keying ownership by path is that `Workspace`'s nine members answer to three
 //! different features — which is right for an ordinary write and wrong for `Workspace`'s own
 //! methods. `forget` clears everything held against a project's path because that is its
 //! invariant; it is core code writing core's own members. A write a feature reaches *only* through
@@ -100,6 +100,14 @@ const OWNERS: &[(&str, &str)] = &[
     ("workspace.foreground_by_project", "session"),
     ("workspace.worktree_names", "worktree"),
     ("workspace.included_worktrees", "worktree"),
+    // Feature 029. The first two are the provenance record and its one-time migration marker: both
+    // are read only to decide whether a worktree is listed, so they answer to the same feature the
+    // visible set does. `unreadable_projects` is not about worktrees at all — it records that *this
+    // project's* state file could not be parsed, and the worktree feature only consults it to fail
+    // visible (FR-011).
+    ("workspace.worktree_provenance", "worktree"),
+    ("workspace.provenance_migrated", "worktree"),
+    ("workspace.unreadable_projects", "project"),
 ];
 
 /// Cross-feature writes that exist today, each with the feature that performs it and the path it
@@ -230,7 +238,7 @@ const CORE_MEDIATED: &[(&str, &str, &str, &str)] = &[
         "Workspace::activate",
     ),
     // Forgetting a project drops everything held against its path, and three features hold
-    // something: its sessions and foreground choice, its worktree names and its inclusions.
+    // something: its sessions and foreground choice, its worktree names, inclusions and provenance.
     (
         "project",
         "workspace.foreground_by_project",
@@ -245,6 +253,12 @@ const CORE_MEDIATED: &[(&str, &str, &str, &str)] = &[
     ),
     (
         "project",
+        "workspace.provenance_migrated",
+        "features/project.rs::forget_confirmed",
+        "Workspace::forget",
+    ),
+    (
+        "project",
         "workspace.sessions",
         "features/project.rs::forget_confirmed",
         "Workspace::forget",
@@ -252,6 +266,12 @@ const CORE_MEDIATED: &[(&str, &str, &str, &str)] = &[
     (
         "project",
         "workspace.worktree_names",
+        "features/project.rs::forget_confirmed",
+        "Workspace::forget",
+    ),
+    (
+        "project",
+        "workspace.worktree_provenance",
         "features/project.rs::forget_confirmed",
         "Workspace::forget",
     ),

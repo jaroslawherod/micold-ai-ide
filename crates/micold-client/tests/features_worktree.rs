@@ -9,10 +9,17 @@
 //! sidebar rows, no settings draft, no project switcher — only the worktree fields it sets and the
 //! worktree methods it calls. When Tier 3 splits `State`, this file should stop naming it at all,
 //! and that is the diff to watch for.
+//!
+//! Feature 029 added one name to that list: `micold_core::project::Project`. Visibility is now
+//! decided per project — a worktree is the user's because the app recorded creating it *in this
+//! project* — so a fixture cannot ask "is this visible?" without saying which project is active.
+//! That is a core type rather than another client feature's, which is the line the paragraph above
+//! is drawing.
 
 use micold_client::app::State;
 use micold_client::features::sidebar;
 use micold_client::features::worktree;
+use micold_core::project::{Availability, Project};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
@@ -26,7 +33,9 @@ fn worktree(dir_name: &str, branch: &str) -> Worktree {
     }
 }
 
-/// An assistant-owned worktree, by the naming convention feature 014 reserves for them.
+/// A worktree the app has no record of creating — an assistant's own, in practice (029 FR-004).
+/// Its `agent-`-shaped name is a leftover from 014 and decides nothing; `with_worktrees` withholding
+/// the record is what makes it assistant-owned here.
 fn agent_worktree() -> Worktree {
     worktree(
         "agent-0123456789abcdef0",
@@ -34,8 +43,15 @@ fn agent_worktree() -> Worktree {
     )
 }
 
+/// A state holding `worktrees`, none of which the app recorded creating.
 fn with_worktrees(worktrees: Vec<Worktree>, reveal: bool) -> State {
-    State {
+    with_records(worktrees, &[], reveal)
+}
+
+/// A state holding `worktrees`, of which the app recorded creating those named in `recorded`.
+fn with_records(worktrees: Vec<Worktree>, recorded: &[&str], reveal: bool) -> State {
+    let path = PathBuf::from("/p");
+    let mut state = State {
         sidebar: sidebar::State {
             show_agent_worktrees: reveal,
             ..Default::default()
@@ -46,7 +62,18 @@ fn with_worktrees(worktrees: Vec<Worktree>, reveal: bool) -> State {
             ..Default::default()
         },
         ..Default::default()
+    };
+    state.workspace.projects.push(Project {
+        path: path.clone(),
+        display_name: "p".to_string(),
+        is_git_repo: true,
+        availability: Availability::Available,
+    });
+    state.workspace.active = Some(path.clone());
+    for dir in recorded {
+        state.workspace.record_user_created(&path, dir);
     }
+    state
 }
 
 #[test]
@@ -89,7 +116,7 @@ fn a_user_owned_worktree_is_visible_whether_or_not_reveal_is_on() {
 
     for reveal in [false, true] {
         assert_eq!(
-            with_worktrees(vec![mine.clone()], reveal)
+            with_records(vec![mine.clone()], &["feat-thing"], reveal)
                 .visible_worktrees()
                 .count(),
             1,
@@ -101,7 +128,11 @@ fn a_user_owned_worktree_is_visible_whether_or_not_reveal_is_on() {
 
 #[test]
 fn a_worktree_with_no_rename_falls_back_to_a_name_derived_from_its_directory() {
-    let st = with_worktrees(vec![worktree("feat-add-thing", "feat/add-thing")], false);
+    let st = with_records(
+        vec![worktree("feat-add-thing", "feat/add-thing")],
+        &["feat-add-thing"],
+        false,
+    );
 
     let name = st.worktree_display_name("feat-add-thing");
 

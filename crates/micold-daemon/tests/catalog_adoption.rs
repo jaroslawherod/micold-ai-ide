@@ -42,6 +42,7 @@ fn seeded_workspace(project_path: &Path) -> Workspace {
         worktree_names,
         included_worktrees: BTreeMap::new(),
         foreground_by_project: BTreeMap::new(),
+        ..Workspace::empty()
     }
 }
 
@@ -126,6 +127,7 @@ fn archived_sessions_are_excluded_from_the_snapshot() {
         worktree_names: BTreeMap::new(),
         included_worktrees: BTreeMap::new(),
         foreground_by_project: BTreeMap::new(),
+        ..Workspace::empty()
     };
     JsonFileStore::at(projects_path.clone())
         .save(&workspace)

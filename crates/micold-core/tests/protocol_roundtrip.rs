@@ -174,6 +174,13 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             req: 45,
             project: PathBuf::from("/a"),
         },
+        // Feature 029 (T060). Modelled on the rename above — durable catalog state, no git — and
+        // carried here so the claim cannot be added to one encoding and forgotten in the other.
+        ClientMsg::WorktreeClaim {
+            req: 61,
+            project: PathBuf::from("/a"),
+            dir_name: "agent-a885b42dc521fbda1".into(),
+        },
         ClientMsg::SessionCreate {
             req: 7,
             project: PathBuf::from("/a"),
@@ -257,6 +264,9 @@ fn sample_catalog() -> CatalogSnapshot {
                 status: WorktreeStatus::Clean,
                 path: PathBuf::from("/a/.claude/worktrees/feat-x"),
                 included: false,
+                // Feature 029. `true` on purpose: a field only ever encoded `false` would
+                // survive being dropped, which is the failure this file exists to catch.
+                user_created: true,
             }],
             sessions: vec![sample_summary()],
         }],
@@ -530,4 +540,31 @@ fn envelope_header_round_trips_and_rejects_garbage() {
         Err(EnvelopeError::ShortHeader(2))
     ));
     assert_eq!(HEADER_LEN, 4);
+}
+
+// ---------------------------------------------------------------------------------------
+// Feature 029 (T006): the provenance flag reaches the client.
+//
+// `sample_catalog` carries `user_created: true`, so the two blanket round-trip tests above
+// already cover both encodings. What is left is the compatibility half: a JSON payload written
+// before the field existed must decode as `false` rather than fail, which is what makes an
+// older daemon's snapshot readable at all.
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn a_worktree_snapshot_without_the_provenance_flag_decodes_as_not_user_created() {
+    let json = r#"{
+        "dir_name": "feat-x",
+        "branch": "feat/x",
+        "display_name": "X",
+        "status": "Clean",
+        "path": "/a/.claude/worktrees/feat-x",
+        "included": false
+    }"#;
+    let decoded: WorktreeSnapshot = serde_json::from_str(json).expect("decodes without the field");
+    assert!(
+        !decoded.user_created,
+        "absent means 'not known to be the user's', which is the safe reading for a payload \
+         that predates the record"
+    );
 }

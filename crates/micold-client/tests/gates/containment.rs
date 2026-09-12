@@ -379,6 +379,16 @@ fn the_recorded_scroll_overflow_is_the_sidebar_list() {
     let escaping_nodes = |worktrees: usize| -> Vec<String> {
         let mut workspace = crate::support::workspace_with(vec![("/fixture/project", vec![])]);
         workspace.active = workspace.projects.first().map(|p| p.path.clone());
+        // Under provenance a worktree inside the managed root is listed only if this app recorded
+        // creating it (029 FR-004). Without the records the list holds thirty worktrees and draws
+        // no rows, so the one input this gate varies stops varying anything.
+        let project = workspace
+            .active
+            .clone()
+            .expect("the fixture activates the project it just opened");
+        for i in 0..worktrees {
+            workspace.record_user_created(&project, &format!("feat-{i:02}"));
+        }
         let state = micold_client::app::State {
             workspace,
             worktree: micold_client::features::worktree::State {

@@ -13,6 +13,23 @@ use iced::widget::button;
 use iced::{Background, Border, Color, Element};
 use micold_core::tokens::{anatomy, shape, state, Rgb, Roles};
 
+/// The text a chip renders, given its label and the quantity it stands in front of (feature 029,
+/// FR-025/FR-025a).
+///
+/// Zero returns the label unchanged, which is what keeps every un-counted call site pixel-identical
+/// and makes "hiding nothing" indistinguishable from "not counting" — the right reading, because a
+/// control withholding nothing has nothing to report.
+///
+/// Public and separate from the widget so the rule can be asserted without rendering: a chip is an
+/// `Element`, and an assertion about pixels would be an assertion about iced.
+pub fn chip_label(label: &str, count: usize) -> String {
+    if count == 0 {
+        label.to_string()
+    } else {
+        format!("{label} \u{00b7} {count}")
+    }
+}
+
 /// A pill-shaped on/off chip: filled in its accent while active, outlined while inactive.
 /// Pressing it emits `on_press`.
 ///
@@ -24,6 +41,7 @@ pub struct ToggleChip<M> {
     roles: Roles,
     active: bool,
     accent: Option<(Rgb, Rgb)>,
+    count: usize,
 }
 
 impl<M> ToggleChip<M> {
@@ -36,12 +54,29 @@ impl<M> ToggleChip<M> {
             roles,
             active: false,
             accent: None,
+            count: 0,
         }
     }
 
     /// Whether the chip reads as on (filled) or off (outlined).
     pub fn active(mut self, active: bool) -> Self {
         self.active = active;
+        self
+    }
+
+    /// A quantity the chip is standing in front of, rendered as a trailing `· N` (feature 029,
+    /// FR-025).
+    ///
+    /// **Zero renders nothing**, so a chip that never sets a count and a chip whose count happens
+    /// to be zero are the same pixels. That is what lets this be a step on the shared builder
+    /// rather than a second chip type: every existing call site keeps its exact appearance without
+    /// being touched, and the one caller that wants a number gets it by naming it.
+    ///
+    /// The number joins the label in one text node rather than sitting beside it as a second
+    /// widget — a chip is one 32dp pill with one centred line box (§7.6), and a second node would
+    /// have to re-derive that alignment and the 12dp padding to look like it belonged.
+    pub fn count(mut self, count: usize) -> Self {
+        self.count = count;
         self
     }
 
@@ -77,8 +112,9 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
         //
         // `Tag` keeps `sidebar_tag`: the contract's own row for the worktree tag says `label_small`
         // *in the sidebar*, and those sit inside 36dp dense rows where 32dp chips would not fit.
+        let label = chip_label(&chip.label, chip.count);
         let chip_button = button(
-            Text::new(chip.label, TypeRole::Action, r)
+            Text::new(label, TypeRole::Action, r)
                 // §7.6's label alignment (FR-030a), and the whole of BUG-001. A chip is 32dp and
                 // its label is a 20dp line box, so 12dp of slack exists by construction and
                 // *something* has to place it. Two defaults were placing it, neither chosen: the

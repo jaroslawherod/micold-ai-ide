@@ -6,7 +6,7 @@
 //! writer tasks own the socket sink. That keeps a slow or stuck client from blocking the state lock.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -431,6 +431,14 @@ impl DaemonState {
             Self::overlay_live_summaries(inner, &mut project.sessions);
             if let Some(discovered) = inner.worktrees.get(&project.path) {
                 let names = overrides.get(&project.path);
+                // Feature 029: the overlay replaces the durable list wholesale, so the provenance
+                // flag has to be re-derived here too — a worktree the catalog never heard of (no
+                // session, no rename) still appears in discovery, and its flag must come from the
+                // record rather than defaulting to `false` because this list was built elsewhere.
+                let created = inner
+                    .catalog
+                    .workspace()
+                    .user_created_worktrees(&project.path);
                 project.worktrees = discovered
                     .iter()
                     .map(|wt| WorktreeSnapshot {
@@ -443,6 +451,7 @@ impl DaemonState {
                         status: wire_worktree_status(wt.status),
                         path: wt.path.clone(),
                         included: wt.included,
+                        user_created: created.contains(&wt.dir_name),
                     })
                     .collect();
             }
@@ -802,9 +811,24 @@ impl DaemonState {
             Some((repo, true)) => {
                 let included = self.included_worktrees(project);
                 let discovered = worktree::discover(&GitCli::new(), &repo, &included);
-                self.lock()
-                    .worktrees
-                    .insert(project.to_path_buf(), discovered);
+                let mut inner = self.lock();
+                // Feature 029 FR-006: the one-time evidence backfill, here because this is the
+                // single point where the discovered list, the durable records and the marker are
+                // all in hand — already off the async runtime, and already on every path that can
+                // reveal a worktree to a user. It is a no-op after the first run per project
+                // (FR-006c) and refuses to run on an unreadable one (FR-011), so paying for the
+                // check on every refresh costs a set lookup.
+                if let Err(e) = inner
+                    .catalog
+                    .migrate_worktree_provenance(project, &discovered)
+                {
+                    tracing::warn!(
+                        project = %project.display(),
+                        error = %e,
+                        "could not persist the worktree provenance backfill"
+                    );
+                }
+                inner.worktrees.insert(project.to_path_buf(), discovered);
             }
             _ => {
                 self.lock().worktrees.remove(project);
@@ -820,9 +844,46 @@ impl DaemonState {
         self.lock().catalog.included_worktrees(project)
     }
 
+    /// What this app knows about who created `project`'s worktrees (029 FR-004), owned rather than
+    /// borrowed.
+    ///
+    /// Returned by value for the same reason as [`Self::included_worktrees`]: every caller hands it
+    /// to a `spawn_blocking` closure that shells out to git, and the lock must not be held across
+    /// that. The pair is reassembled into a [`ProvenanceView`] inside the closure, which is why
+    /// this returns the two facts rather than the view — the view borrows, and a borrow cannot
+    /// cross into a `'static` task.
+    pub fn provenance(&self, project: &Path) -> (BTreeSet<String>, bool) {
+        let inner = self.lock();
+        let workspace = inner.catalog.workspace();
+        (
+            workspace.user_created_worktrees(project).clone(),
+            workspace.unreadable_projects.contains(project),
+        )
+    }
+
     /// Start showing `path` among `project`'s worktrees, persisting it (016 BUG-002, FR-027).
     pub fn include_worktree(&self, project: &Path, path: &Path) -> io::Result<()> {
         self.lock().catalog.include_worktree(project, path)
+    }
+
+    /// Record that this app created `dir_name` under `project` (feature 029, FR-002/FR-003).
+    pub fn record_worktree_provenance(&self, project: &Path, dir_name: &str) -> io::Result<()> {
+        self.lock()
+            .catalog
+            .record_worktree_provenance(project, dir_name)
+    }
+
+    /// Claim `dir_name` under `project` as the user's own (029 FR-020) — the same record a create
+    /// writes, requested by the user instead of by the app.
+    pub fn claim_worktree(&self, project: &Path, dir_name: &str) -> io::Result<()> {
+        self.lock().catalog.claim_worktree(project, dir_name)
+    }
+
+    /// Drop the provenance record for a worktree that has just been removed (029 FR-018/FR-019).
+    pub fn forget_worktree_provenance(&self, project: &Path, dir_name: &str) -> io::Result<()> {
+        self.lock()
+            .catalog
+            .forget_worktree_provenance(project, dir_name)
     }
 
     /// Stop showing `path` (016 BUG-002, FR-030).

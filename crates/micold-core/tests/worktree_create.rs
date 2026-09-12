@@ -5,7 +5,8 @@
 use micold_core::git::{FakeGit, Git};
 use micold_core::naming::DerivedNames;
 use micold_core::worktree::{
-    create_worktree, CreateError, CreateMode, CreateProgressEvent, CreateStage, WorktreeStatus,
+    create_worktree, CreateError, CreateMode, CreateProgressEvent, CreateStage, ProvenanceView,
+    WorktreeStatus,
 };
 use std::path::PathBuf;
 
@@ -45,6 +46,7 @@ fn happy_path_creates_branch_and_worktree() {
         false,
         &CreateMode::NewBranch,
         &[],
+        &ProvenanceView::none(),
         &mut |_| {},
     )
     .unwrap();
@@ -74,6 +76,7 @@ fn a_new_branch_create_against_a_taken_name_is_rejected_without_mutation() {
         false,
         &CreateMode::NewBranch,
         &[],
+        &ProvenanceView::none(),
         &mut |_| {},
     )
     .unwrap_err();
@@ -94,6 +97,7 @@ fn duplicate_target_dir_is_rejected() {
         true,
         &CreateMode::NewBranch,
         &[],
+        &ProvenanceView::none(),
         &mut |_| {},
     )
     .unwrap_err();
@@ -117,6 +121,7 @@ fn submodules_are_fetched_when_present() {
         false,
         &CreateMode::NewBranch,
         &[],
+        &ProvenanceView::none(),
         &mut |e| events.push(e),
     )
     .unwrap();
@@ -160,6 +165,7 @@ fn submodule_fetch_is_skipped_when_absent() {
         false,
         &CreateMode::NewBranch,
         &[],
+        &ProvenanceView::none(),
         &mut |_| {},
     )
     .unwrap();
@@ -182,6 +188,7 @@ fn plain_repo_stage_sequence_has_no_submodule_stage() {
         false,
         &CreateMode::NewBranch,
         &[],
+        &ProvenanceView::none(),
         &mut |e| events.push(e),
     )
     .unwrap();
@@ -227,6 +234,7 @@ fn duplicate_registered_worktree_is_rejected() {
         false,
         &CreateMode::NewBranch,
         &[],
+        &ProvenanceView::none(),
         &mut |_| {},
     )
     .unwrap();
@@ -243,6 +251,7 @@ fn duplicate_registered_worktree_is_rejected() {
         false,
         &CreateMode::NewBranch,
         &[],
+        &ProvenanceView::none(),
         &mut |_| {},
     )
     .unwrap_err();
@@ -269,6 +278,7 @@ fn reuse_checks_out_the_existing_branch_without_recreating_it() {
         false,
         &CreateMode::ReuseLocal,
         &[],
+        &ProvenanceView::none(),
         &mut |_| {},
     )
     .unwrap();
@@ -299,6 +309,7 @@ fn reuse_progress_names_the_checkout_step() {
         false,
         &CreateMode::ReuseLocal,
         &[],
+        &ProvenanceView::none(),
         &mut |e| events.push(e),
     )
     .unwrap();
@@ -335,6 +346,7 @@ fn overwrite_replaces_the_branch_and_creates_the_worktree() {
         false,
         &CreateMode::Overwrite,
         &[],
+        &ProvenanceView::none(),
         &mut |_| {},
     )
     .unwrap();
@@ -365,6 +377,7 @@ fn tracking_a_remote_branch_creates_a_local_branch_that_tracks_it() {
             remote: "origin".to_string(),
         },
         &[],
+        &ProvenanceView::none(),
         &mut |_| {},
     )
     .unwrap();
@@ -401,6 +414,7 @@ fn starting_fresh_over_a_remote_only_name_creates_an_untracked_branch() {
         false,
         &CreateMode::NewBranch,
         &[],
+        &ProvenanceView::none(),
         &mut |_| {},
     )
     .unwrap();
@@ -424,6 +438,7 @@ fn a_free_name_still_creates_exactly_as_before() {
         false,
         &CreateMode::NewBranch,
         &[],
+        &ProvenanceView::none(),
         &mut |e| events.push(e),
     )
     .unwrap();
