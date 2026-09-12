@@ -64,8 +64,42 @@ therefore available without a dependency.
 | Single-instance lock | std `File::lock` | 1.89+ | no dependency; MSRV settled |
 
 **Storage**: Local files only (Principle IV). `projects.json` and `settings.json` in the existing
-`directories`-derived data dir, adopted **in place**. The daemon becomes the single writer,
-eliminating the current silent-clobber hazard (`src/store.rs` has no locking).
+`directories`-derived data dir, adopted **in place**. ~~The daemon becomes the single writer,
+eliminating the current silent-clobber hazard (`src/store.rs` has no locking).~~
+
+**Bugfix**: 2026-09-03 — BUG-025. The struck sentence held for `projects.json` and never held for
+`settings.json`. The field-ownership split (spec FR-010, FR-012a, FR-012b) makes the client a second
+writer of that one file *by design*, so the hazard the daemon was supposed to eliminate was left in
+place for it — and `027-sandboxed-daemon-runtime`'s state-directory bind mount keeps both writers on
+the same inode even when the daemon is containerised. The concurrency model for `settings.json` is
+therefore **two writers under mutual exclusion** (spec FR-010b), not one writer, and it needs both
+halves stated:
+
+- **Mutual exclusion**: an advisory lock (`std::fs::File::lock`, already in the dependency table
+  above for the single-instance lock — no new dependency) held across the **entire**
+  read-modify-write, taken on a sidecar lock file rather than on the settings file itself, since the
+  target is replaced by rename and a lock on the old inode would not be seen by the next writer.
+- **Per-writer staging paths**: the temp file a save writes through MUST be unique to the writer
+  (`settings.json.<pid>.tmp`), not derived from the target alone. This is the half that makes the
+  failure *impossible* rather than merely *unlikely* — with the lock alone, a writer that fails to
+  take it and proceeds anyway can still tear the file; with distinct staging paths, the worst
+  outcome is a lost update, which is recoverable and visible.
+
+"Atomic write" in this plan means temp-file-plus-rename, which is atomicity against a **reader** and
+against a **crash**. It was read as covering a concurrent **writer** and does not: two writers whose
+`O_TRUNC` opens both land before either `write` produce a short document over a long one's bytes.
+That distinction is why the hazard survived a sentence claiming to have eliminated it. See
+`bugs/BUG-025.md`.
+
+**Recovery is a display value, not a save base** (FR-010c, BUG-025's second arm). `SettingsStore::load`
+returns `Settings::default()` for a file that is missing, unreadable, or corrupt, so the app opens
+rather than failing (Principle IV) — and returns a `LoadStatus` beside it saying which. Every current
+caller takes `.settings` and drops `.status` (`catalog.rs:243`, `persist.rs:110`, and three read-only
+sites). For the two that use the result as the base of a write, that turns a *read* failure into
+permanent data loss, and `merged_with_existing`'s top-level-only merge — correct and documented —
+means one default `daemon` value replaces the stored sandbox profile whole. The storage model
+therefore has a third rule: **defaults may be shown, never written back**. A writer must branch on
+`LoadStatus` and refuse the save when the base is not the stored document.
 
 **Testing**: `cargo test --workspace` — the headless suite runs without the client crate
 (`-p micold-core -p micold-daemon`), so nothing under test pulls in iced (Principle I, FR-040).

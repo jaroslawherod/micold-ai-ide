@@ -160,6 +160,44 @@ pub struct SettingsOutcome {
 }
 
 /// Load and save application settings on the local filesystem (local-first).
+/// What one [`SettingsStore::update`] saw and did.
+///
+/// The base status is the part a plain `io::Result` cannot carry, and it is the part BUG-025
+/// needed: the reset had to be attributed by elimination from the bytes left on disk, because
+/// neither log recorded that a settings write had happened at all, let alone what document it
+/// merged into (T162).
+#[derive(Debug)]
+pub struct SettingsWrite {
+    /// The status of the read this write used as its base.
+    pub base: LoadStatus,
+    /// What the write itself did.
+    pub result: io::Result<()>,
+}
+
+impl SettingsWrite {
+    /// One log line naming the writer, the process, the base, and the outcome.
+    ///
+    /// Formatted here in the library rather than at each call site so it can be asserted on — the
+    /// same reason `attach_log_line` lives in the client's library. A diagnostic nothing tests is
+    /// a diagnostic that quietly stops being written, which is the failure this task is about.
+    pub fn log_line(&self, writer: &str) -> String {
+        let pid = std::process::id();
+        let base = match self.base {
+            LoadStatus::Loaded => "loaded",
+            LoadStatus::Missing => "missing",
+            LoadStatus::Recovered => "recovered",
+        };
+        match &self.result {
+            Ok(()) => format!("settings write: writer={writer} pid={pid} base={base} result=ok"),
+            Err(err) => {
+                format!(
+                    "settings write: writer={writer} pid={pid} base={base} result=failed err={err}"
+                )
+            }
+        }
+    }
+}
+
 pub trait SettingsStore {
     /// Load settings. Never fails: a missing or corrupt file yields [`Settings::default`]
     /// with the corresponding [`LoadStatus`] (FR-019).
@@ -167,6 +205,98 @@ pub trait SettingsStore {
 
     /// Persist settings. Writes atomically (temp file + rename).
     fn save(&self, settings: &Settings) -> io::Result<()>;
+
+    /// Read the stored settings, apply `change` to them, and write the result back.
+    ///
+    /// **The only way a writer should persist a change** (FR-010a, FR-010c). Both writers of this
+    /// file — the client for its own fields, the service for its five — must merge into the
+    /// document that is on disk at save time rather than into a copy of their own, and must not
+    /// merge into a base that a failed read produced. Doing that as `load()` then `save()` at each
+    /// call site is what BUG-025 was: the status beside the settings is easy to drop, and every
+    /// caller dropped it.
+    fn update(&self, change: &mut dyn FnMut(&mut Settings)) -> io::Result<()> {
+        self.update_reporting(change).result
+    }
+
+    /// [`SettingsStore::update`], plus the base status the write used — for the two call sites
+    /// that log it (T162). The behaviour is identical; only the report is wider.
+    fn update_reporting(&self, change: &mut dyn FnMut(&mut Settings)) -> SettingsWrite {
+        // Held across the read *and* the write (FR-010b, T154). Two writers whose read-modify-write
+        // cycles interleave both merge into the document from before the other's change, so the
+        // later writer writes the earlier one's change away — a perfectly valid file that is
+        // missing a setting the user was told had been saved. Staging each write separately (T153)
+        // makes the file parseable; only mutual exclusion makes it complete.
+        let guard = match self.begin_exclusive() {
+            Ok(guard) => guard,
+            // No base was read, so there is no honest status to report. `Missing` would claim a
+            // first run; the error itself says what happened.
+            Err(err) => {
+                return SettingsWrite {
+                    base: LoadStatus::Missing,
+                    result: Err(err),
+                }
+            }
+        };
+        let _guard = guard;
+        let outcome = self.load();
+        // A read that did not return the stored document must not be the base of a write, and a
+        // read failure must not destroy the file it failed to read (FR-010c, T159).
+        //
+        // The test is the file, not the status. `Missing` is a first run — there is nothing to
+        // lose and defaults are the right base. `Recovered` after a *corrupt* file is also safe:
+        // `load` has already moved that file aside to `.bak`, so nothing survives for this write
+        // to destroy. `Recovered` for a file that is still sitting there is the dangerous one —
+        // present, never corrupt, merely unreadable this time — and writing defaults over it
+        // replaces the whole `daemon` block, because the merge preserves top-level keys only.
+        if outcome.status != LoadStatus::Loaded && self.stored_document_exists() {
+            // Phrased to read correctly inside the client's "Couldn't save your settings: {err}"
+            // wrapper and the daemon's operation-error frame (T160) — the message a user sees is
+            // the whole point of refusing rather than quietly writing defaults.
+            return SettingsWrite {
+                base: outcome.status,
+                result: Err(io::Error::other(
+                    "the settings file could not be read, and saving now would replace it with \
+                     defaults",
+                )),
+            };
+        }
+        let base = outcome.status;
+        let mut settings = outcome.settings;
+        change(&mut settings);
+        SettingsWrite {
+            base,
+            result: self.save(&settings),
+        }
+    }
+
+    /// Whether a stored document is still present after [`SettingsStore::load`] has run.
+    ///
+    /// Only [`SettingsStore::update`] uses this, to tell a read failure that lost nothing from one
+    /// that is about to. Defaults to `false`: an in-memory store has no document on disk that a
+    /// save could destroy.
+    fn stored_document_exists(&self) -> bool {
+        false
+    }
+
+    /// Where [`SettingsStore::load`] preserves a file it could not parse, for a store that has
+    /// such a place.
+    ///
+    /// Exists so the recovery can be *reported* naming the file (T158): "your settings were reset"
+    /// is an apology, and the same sentence with the path is something the user can act on.
+    /// `None` for a store with nothing on disk to preserve.
+    fn recovery_path(&self) -> Option<PathBuf> {
+        None
+    }
+
+    /// Take exclusive access for the duration of one [`SettingsStore::update`], released when the
+    /// returned guard drops (FR-010b).
+    ///
+    /// Defaults to no guard at all: an in-memory store has one copy of the settings behind its own
+    /// `Mutex`, and no second process can reach it. Only a store backed by a shared file needs
+    /// this, and only that implementation pays for it.
+    fn begin_exclusive(&self) -> io::Result<Box<dyn Send>> {
+        Ok(Box::new(()))
+    }
 }
 
 /// The on-disk shape. Unknown fields are ignored on read and a missing `theme` takes its
@@ -263,12 +393,27 @@ impl JsonFileSettingsStore {
             .map(|dirs| Self::at(dirs.data_dir().join("settings.json")))
     }
 
+    /// Path of the temporary file used for one atomic write. Unique per call — see
+    /// [`crate::store`]'s `temp_path_for`, which this delegates to, for why deriving it from the
+    /// target alone is what made two writers of one settings file destroy each other (T153,
+    /// BUG-025).
     fn temp_path(&self) -> PathBuf {
-        self.path.with_extension("json.tmp")
+        crate::store::temp_path_for(&self.path)
     }
 
     fn backup_path(&self) -> PathBuf {
         self.path.with_extension("json.bak")
+    }
+
+    /// The sidecar whose file lock serialises read-modify-write cycles on `settings.json`.
+    ///
+    /// A sidecar rather than the settings file itself: the write replaces that file by rename, so
+    /// a lock held on it would be a lock on an inode no later writer will ever open. The sidecar
+    /// is never renamed and never deleted, so every writer that resolves the same settings path
+    /// resolves the same lock inode — including the daemon inside the sandbox, where the bind
+    /// mount makes the container path and the host path one file.
+    fn lock_path(&self) -> PathBuf {
+        self.path.with_extension("json.lock")
     }
 
     /// The document to write: this build's fields laid over whatever is already on disk.
@@ -305,6 +450,37 @@ impl JsonFileSettingsStore {
 }
 
 impl SettingsStore for JsonFileSettingsStore {
+    /// Blocks until the lock is ours (T154, T156). Waiting is the right answer over failing: the
+    /// critical section is one small read and one small write, the competing writer is about to
+    /// release, and a save that returns an error the user must act on — for a conflict the app
+    /// resolves by waiting a millisecond — would be noise. What FR-010b forbids is the third
+    /// option, proceeding *without* the lock; a lock that cannot be opened at all is a real
+    /// failure and is returned as one, which stops the save before anything is written.
+    fn begin_exclusive(&self) -> io::Result<Box<dyn Send>> {
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let lock = std::fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(self.lock_path())?;
+        lock.lock()?;
+        Ok(Box::new(lock))
+    }
+
+    fn recovery_path(&self) -> Option<PathBuf> {
+        Some(self.backup_path())
+    }
+
+    /// After a load, the file is still there for every failure except the corrupt one, which
+    /// `load` has moved aside to `.bak`. That is exactly the line [`SettingsStore::update`] needs
+    /// (FR-010c, T159).
+    fn stored_document_exists(&self) -> bool {
+        self.path.exists()
+    }
+
     fn load(&self) -> SettingsOutcome {
         let contents = match std::fs::read_to_string(&self.path) {
             Ok(contents) => contents,
@@ -366,11 +542,11 @@ impl SettingsStore for JsonFileSettingsStore {
         let json = serde_json::to_string_pretty(&self.merged_with_existing(&stored)?)
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
 
-        // Atomic write: temp file in the same directory, then rename over the target.
+        // Atomic write: temp file in the same directory, then rename over the target. The
+        // staging path is this write's alone (T153); sharing one across writers is what produced
+        // the truncated documents in BUG-025.
         let temp = self.temp_path();
-        std::fs::write(&temp, json)?;
-        std::fs::rename(&temp, &self.path)?;
-        Ok(())
+        crate::store::write_then_rename(&temp, &self.path, &json)
     }
 }
 
@@ -397,6 +573,8 @@ struct FakeSettingsState {
     saves: Vec<Settings>,
     /// When set, the next `save` fails with this kind.
     fail_next_save: Option<io::ErrorKind>,
+    /// What [`SettingsStore::recovery_path`] answers; `None` for a store that kept nothing.
+    recovery_path: Option<PathBuf>,
 }
 
 impl FakeSettingsStore {
@@ -423,6 +601,15 @@ impl FakeSettingsStore {
         fake
     }
 
+    /// A recovered store that kept the unreadable file at `preserved` — the shape
+    /// [`JsonFileSettingsStore`] leaves behind, without naming it outside the shell's single
+    /// assembly point (FR-018).
+    pub fn recovered_keeping(preserved: PathBuf) -> Self {
+        let fake = Self::recovered();
+        fake.inner.lock().expect("fake lock").recovery_path = Some(preserved);
+        fake
+    }
+
     /// Make the next [`SettingsStore::save`] fail.
     pub fn failing_save(self, kind: io::ErrorKind) -> Self {
         self.inner.lock().expect("fake lock").fail_next_save = Some(kind);
@@ -442,6 +629,10 @@ impl SettingsStore for FakeSettingsStore {
             settings: state.settings.clone(),
             status: state.status.unwrap_or(LoadStatus::Missing),
         }
+    }
+
+    fn recovery_path(&self) -> Option<PathBuf> {
+        self.inner.lock().expect("fake lock").recovery_path.clone()
     }
 
     fn save(&self, settings: &Settings) -> io::Result<()> {

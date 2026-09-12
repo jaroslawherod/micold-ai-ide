@@ -251,13 +251,22 @@ impl Catalog {
     /// carried one would make this daemon the authority on a question it has no opinion about.
     fn persist_service_settings(&self) -> io::Result<()> {
         if let Some(store) = &self.settings_store {
-            let mut on_disk = store.load().settings;
-            on_disk.scrollback_lines = self.settings.scrollback_lines;
-            on_disk.env_include_enabled = self.settings.env_include_enabled;
-            on_disk.env_include_script_path = self.settings.env_include_script_path.clone();
-            on_disk.env_include_timeout_secs = self.settings.env_include_timeout_secs;
-            on_disk.default_ai_cli = self.settings.default_ai_cli;
-            store.save(&on_disk)?;
+            // `update` rather than `load` + `save` (BUG-025, T155). Re-reading the file is what
+            // makes the client's fields survive this write; going through `update` is what stops
+            // that re-read from becoming a weapon when it *fails*, and holds the file against the
+            // client for the whole read-modify-write instead of just the rename (FR-010b, FR-010c).
+            let write = store.update_reporting(&mut |on_disk| {
+                on_disk.scrollback_lines = self.settings.scrollback_lines;
+                on_disk.env_include_enabled = self.settings.env_include_enabled;
+                on_disk.env_include_script_path = self.settings.env_include_script_path.clone();
+                on_disk.env_include_timeout_secs = self.settings.env_include_timeout_secs;
+                on_disk.default_ai_cli = self.settings.default_ai_cli;
+            });
+            // T162: the line that was missing when BUG-025 had to be attributed from the bytes on
+            // disk. Written for a refused write too — a save that did not happen is exactly the
+            // event nothing recorded.
+            tracing::info!("{}", write.log_line("daemon"));
+            write.result?;
         }
         Ok(())
     }
