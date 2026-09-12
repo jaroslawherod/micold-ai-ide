@@ -140,6 +140,27 @@ fn is_absent(e: &io::Error) -> bool {
     )
 }
 
+/// Whether an error means the daemon went away *during* the handshake.
+///
+/// This is the other half of [`is_absent`], and it exists because of one race the daemon cannot
+/// close from its side (contract §4.14/§4.15, research R5). A connect succeeds the moment the
+/// kernel puts it on the listener's backlog — the daemon need never accept it — so a client that
+/// dials at the instant an idle daemon stops gets an open stream and then a reset, an abort or a
+/// clean EOF, depending on how far the handshake got. There is no ordering the daemon can adopt
+/// that removes that instant; the remedy is here, where the client can simply look again.
+///
+/// From the caller's point of view a daemon that vanishes mid-handshake and a daemon that was
+/// never there are the same thing, and are treated the same: nobody is listening, start one.
+fn vanished_mid_handshake(e: &io::Error) -> bool {
+    matches!(
+        e.kind(),
+        io::ErrorKind::ConnectionReset
+            | io::ErrorKind::ConnectionAborted
+            | io::ErrorKind::BrokenPipe
+            | io::ErrorKind::UnexpectedEof
+    )
+}
+
 /// Open a raw connection to the endpoint, or `None` if nothing is listening.
 pub async fn dial(endpoint: &Endpoint) -> io::Result<Option<Transport>> {
     dial_address(&DialAddress::Local(endpoint.clone())).await
@@ -244,9 +265,13 @@ pub async fn connect_at(
     credentials: &Credentials,
 ) -> io::Result<Option<Connected>> {
     match dial_address(address).await? {
-        Some(stream) => handshake_with(stream, client_build, credentials)
-            .await
-            .map(Some),
+        Some(stream) => match handshake_with(stream, client_build, credentials).await {
+            Ok(connected) => Ok(Some(connected)),
+            // Not a failure to report: see [`vanished_mid_handshake`]. Reported as absence so
+            // every caller absorbs it the way it already absorbs a cold endpoint.
+            Err(e) if vanished_mid_handshake(&e) => Ok(None),
+            Err(e) => Err(e),
+        },
         None => Ok(None),
     }
 }
@@ -300,26 +325,40 @@ pub async fn connect_or_start(
     }
 }
 
-/// Connect, spawning a detached daemon first if none is listening, then polling until it accepts
+/// How long a spawned daemon is given to take the endpoint before another is spawned.
+///
+/// One spawn is not always enough, and the reason is the idle stop (US3): a daemon spawned while
+/// the previous one is still unwinding finds the endpoint owned, says so, and exits — correctly,
+/// since two daemons on one endpoint is the failure the singleton exists to prevent. By the time
+/// the old one has released it there is nobody left to answer, and waiting longer does not change
+/// that. So the poll spawns again, rather than waiting out the timeout for a daemon that already
+/// gave up. Long enough that a healthy cold start is never spawned over.
+const RESPAWN_AFTER: Duration = Duration::from_secs(1);
+
+/// Connect, spawning a detached daemon if none is listening, then polling until it accepts
 /// (FR-003; closes the SC-003 cold-start path).
+///
+/// Also closes the connect-as-the-window-expires race (FR-016, contract §4.15): between
+/// [`vanished_mid_handshake`] reading a departing daemon as absence and [`RESPAWN_AFTER`] spawning
+/// over one that lost the endpoint race, a connect issued at the moment an idle daemon stops ends
+/// attached to a fresh one rather than reaching the user as an error.
 pub async fn connect_or_spawn(
     endpoint: &Endpoint,
     client_build: &str,
     timeout: Duration,
 ) -> io::Result<Connected> {
-    if let Some(connected) = connect(endpoint, client_build).await? {
-        return Ok(connected);
-    }
-
-    let pid = crate::spawn::spawn_detached_daemon()?;
-    let _ = pid; // the daemon is intentionally not ours to wait on
-
     // The daemon is ready when it *accepts*, not when exec returns — poll until it answers.
     let deadline = std::time::Instant::now() + timeout;
     let mut backoff = Duration::from_millis(10);
+    let mut spawned_at: Option<std::time::Instant> = None;
     loop {
         if let Some(connected) = connect(endpoint, client_build).await? {
             return Ok(connected);
+        }
+        if spawned_at.is_none_or(|at| at.elapsed() >= RESPAWN_AFTER) {
+            let pid = crate::spawn::spawn_detached_daemon()?;
+            let _ = pid; // the daemon is intentionally not ours to wait on
+            spawned_at = Some(std::time::Instant::now());
         }
         if std::time::Instant::now() >= deadline {
             return Err(io::Error::new(

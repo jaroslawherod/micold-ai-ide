@@ -151,10 +151,22 @@ something is being shared.
 
 ### Sessions
 
-- **Keep sessions running after I sign out** — sessions outlive your sign-out. This is the
-  container's doing: it is created with a restart policy the container runtime honours on Linux,
-  macOS and Windows alike, which is why the setting takes effect the next time the sandbox starts.
-  A service running **directly on this computer** cannot do it on any platform — the app is the
-  only thing that starts one, and nothing it starts outlives the session it was started from. Your
-  sessions are still kept and come back resumable after a sign-out; only the running processes
-  inside them stop. See [the daemon's lifetime](../daemon.md#surviving-logout-run-the-service-in-a-container).
+- **Keep the service running when I'm signed out or away** — off by default. It answers one
+  question, and changes two things.
+
+  With it **off** (the default), the service stops when you sign out, and it also stops itself after
+  30 continuous minutes with nothing connected. Reopening the application starts a fresh one; a
+  session that was running comes back *resumable* rather than lost. See [when the service stops
+  itself](../daemon.md#it-stops-itself-when-nobody-has-used-it-for-30-minutes).
+
+  With it **on**, and only in a container: the sandbox is created with a restart policy the runtime
+  honours on Linux, macOS and Windows alike, **and** the idle stop does not apply to it — a service
+  you asked to keep running is not one to stop for being unused. Because both are fixed when the
+  container is created, changing this marks the running sandbox as out of date and takes effect the
+  next time it starts. See [keeping the sandbox
+  running](sandboxed-daemon.md#keeping-the-sandbox-running).
+
+  A service running **directly on this computer** cannot honour it on any platform — the app is the
+  only thing that starts one, and nothing it starts outlives the session it was started from. The
+  control says so rather than accepting a choice it cannot keep. Your sessions are still kept and
+  come back resumable; only the running processes inside them stop.

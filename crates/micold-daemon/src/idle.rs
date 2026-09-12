@@ -108,6 +108,12 @@ impl IdleWindow {
         Self { window }
     }
 
+    /// How long the window is. The tick interval is derived from it, so a shortened window is
+    /// still evaluated several times before it expires.
+    pub fn window(&self) -> Duration {
+        self.window
+    }
+
     /// Whether the service should stop now.
     ///
     /// Live sessions are not an argument, and that is the clarified rule rather than an omission —
@@ -121,6 +127,86 @@ impl IdleWindow {
                 .alone_since
                 .is_some_and(|since| now.saturating_sub(since) >= self.window)
     }
+}
+
+/// The environment variable that overrides the idle window (T041, T050/T051).
+///
+/// Two audiences, one variable. Integration tests set it to a few hundred milliseconds so the whole
+/// stop-and-restart cycle runs in seconds — waiting out [`IDLE_WINDOW`] would make this feature's
+/// suite take half an hour, and a suite that slow is a suite that gets `#[ignore]`d. The sandbox
+/// sets it too, because a container's daemon is started with an explicit argv and that is where its
+/// lifetime is decided (US4).
+///
+/// Not a user setting. It is read once at startup and never surfaced in the UI: see [`IDLE_WINDOW`]
+/// for why the window is not configurable, and note that nothing here changes that — this overrides
+/// the window for a *process the tooling started*, not for the user's own service.
+pub const IDLE_STOP_ENV: &str = "MICOLD_IDLE_STOP";
+
+/// The value that turns the idle stop off entirely.
+pub const IDLE_STOP_OFF: &str = "off";
+
+/// The idle rule this process should run, read from the environment once at startup.
+///
+/// `None` means *never stop on idle*. Reading it here rather than at each tick is deliberate: a
+/// daemon whose stopping behaviour could change under it while it runs would be untestable and
+/// unexplainable, and there is no scenario where a running service should start or stop obeying the
+/// rule halfway through its life.
+///
+/// An unparseable value falls back to the shipped window with a warning rather than failing to
+/// start. The variable is a test and packaging affordance; a typo in it must not be the reason a
+/// user's service will not come up.
+pub fn configured_window() -> Option<IdleWindow> {
+    match std::env::var(IDLE_STOP_ENV) {
+        Err(_) => Some(IdleWindow::default()),
+        Ok(raw) => match parse_window(&raw) {
+            Ok(window) => window,
+            Err(reason) => {
+                tracing::warn!(
+                    env = IDLE_STOP_ENV,
+                    value = %raw,
+                    %reason,
+                    "unrecognised idle-stop setting; using the standard window"
+                );
+                Some(IdleWindow::default())
+            }
+        },
+    }
+}
+
+/// Parse an [`IDLE_STOP_ENV`] value: `off`, a duration like `250ms` / `90s` / `30m` / `2h`, or empty
+/// for the default.
+///
+/// Its own function, and pure, so the parsing is tested without a process environment — env vars are
+/// global to a test binary, and a table-driven test of a parser is worth more than three tests that
+/// cannot run concurrently.
+fn parse_window(raw: &str) -> Result<Option<IdleWindow>, String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Ok(Some(IdleWindow::default()));
+    }
+    if raw.eq_ignore_ascii_case(IDLE_STOP_OFF) {
+        return Ok(None);
+    }
+    let (digits, unit) = raw.split_at(
+        raw.find(|c: char| !c.is_ascii_digit())
+            .ok_or_else(|| format!("`{raw}` has no unit; write `250ms`, `90s`, `30m` or `2h`"))?,
+    );
+    let value: u64 = digits
+        .parse()
+        .map_err(|_| format!("`{digits}` is not a number"))?;
+    let duration = match unit {
+        "ms" => Duration::from_millis(value),
+        "s" => Duration::from_secs(value),
+        "m" => Duration::from_secs(value * 60),
+        "h" => Duration::from_secs(value * 3_600),
+        other => return Err(format!("`{other}` is not a unit; use ms, s, m or h")),
+    };
+    if duration.is_zero() {
+        // A zero window would stop the daemon on its first tick, before any client could connect —
+        // which reads as "the service will not start" and is never what anyone meant to ask for.
+        return Err("a zero window would stop the service before anything could connect".into());
+    }
+    Ok(Some(IdleWindow::new(duration)))
 }
 
 /// Why the service is unwinding (G4).
@@ -238,7 +324,10 @@ mod tests {
 
         assert!(!rule.expired(&presence, at(0)));
         assert!(!rule.expired(&presence, at(1_799)));
-        assert!(rule.expired(&presence, at(1_800)), "the window is inclusive");
+        assert!(
+            rule.expired(&presence, at(1_800)),
+            "the window is inclusive"
+        );
         assert!(rule.expired(&presence, at(100_000)));
     }
 
@@ -288,5 +377,49 @@ mod tests {
         let presence = Presence::new(at(0));
         assert!(!rule.expired(&presence, Uptime::from_nanos(49_000_000)));
         assert!(rule.expired(&presence, Uptime::from_nanos(50_000_000)));
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // T041 — the window override
+    // -----------------------------------------------------------------------------------------
+
+    /// The parser, as a table. Every accepted shape and every rejected one in one place, because
+    /// the failure mode of this parser is silent: a value that does not parse the way its author
+    /// expected produces a daemon with the wrong lifetime and no error anywhere.
+    #[test]
+    fn the_window_override_parses_what_it_promises() {
+        let cases: &[(&str, Result<Option<Duration>, ()>)] = &[
+            ("", Ok(Some(IDLE_WINDOW))),
+            ("   ", Ok(Some(IDLE_WINDOW))),
+            ("off", Ok(None)),
+            ("OFF", Ok(None)),
+            (" Off ", Ok(None)),
+            ("250ms", Ok(Some(Duration::from_millis(250)))),
+            ("90s", Ok(Some(Duration::from_secs(90)))),
+            ("30m", Ok(Some(IDLE_WINDOW))),
+            ("2h", Ok(Some(Duration::from_secs(7_200)))),
+            // Rejected, every one of them falling back to the shipped window at the caller.
+            ("30", Err(())),
+            ("m", Err(())),
+            ("30 minutes", Err(())),
+            ("-5s", Err(())),
+            ("0s", Err(())),
+            ("0ms", Err(())),
+        ];
+        for (raw, expected) in cases {
+            let actual = parse_window(raw)
+                .map(|w| w.map(|w| w.window()))
+                .map_err(|_| ());
+            assert_eq!(actual, *expected, "parsing {raw:?}");
+        }
+    }
+
+    /// `off` is the one value that means *no rule at all*, and it has to be distinguishable from a
+    /// very long window: the sandbox uses it to say "this container's lifetime is the runtime's
+    /// business, not mine" (US4), and a 100-year window would still start a ticker for nothing.
+    #[test]
+    fn off_yields_no_rule_rather_than_a_long_one() {
+        assert_eq!(parse_window("off"), Ok(None));
+        assert!(matches!(parse_window("8760h"), Ok(Some(_))));
     }
 }

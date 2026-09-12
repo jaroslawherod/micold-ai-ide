@@ -793,6 +793,33 @@ impl Catalog {
         marked
     }
 
+    /// Mark each of `ids` interrupted-but-resumable and persist once (feature 028, G5).
+    ///
+    /// Returns how many records actually changed. One persist for the whole set rather than one per
+    /// session, because this runs on the shutdown path: the file has to become true in a single
+    /// write, and a stop that is itself interrupted must not leave half the sessions saying
+    /// `Running`.
+    pub fn mark_sessions_interrupted(&mut self, ids: &[SessionId]) -> io::Result<usize> {
+        let wanted: std::collections::HashSet<SessionId> = ids.iter().copied().collect();
+        let mut marked = 0;
+        for sessions in self.workspace.sessions.values_mut() {
+            for session in sessions.iter_mut() {
+                if !wanted.contains(&session.id) {
+                    continue;
+                }
+                let before = session.lifecycle.clone();
+                session.mark_interrupted_by_shutdown();
+                if session.lifecycle != before {
+                    marked += 1;
+                }
+            }
+        }
+        if marked > 0 {
+            self.persist()?;
+        }
+        Ok(marked)
+    }
+
     /// The ids this catalog already has a record of at `project`, archived ones included.
     ///
     /// Archived ones **included** deliberately: discovery must not resurrect a session the user

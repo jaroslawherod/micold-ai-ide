@@ -1202,6 +1202,47 @@ impl DaemonState {
             })
     }
 
+    /// Phase one of the idle unwind: make every live session durable as `InterruptedResumable`
+    /// (feature 028, data-model G5, lifecycle contract §3.11). Returns how many records changed.
+    ///
+    /// **Runs before [`Self::take_live_sessions`], and that order is the whole point.** The record
+    /// has to be true of a daemon that is already gone, so it reaches disk while the processes it
+    /// describes are still running — a stop interrupted between the two phases then leaves a
+    /// resumable session and an orphaned process tree, which is recoverable, rather than a record
+    /// claiming `Running` with nothing behind it, which is not.
+    ///
+    /// Sessions are *marked*, never resumed (FR-006b/c): the next start presents them as resumable
+    /// and waits for the user to ask.
+    pub fn mark_live_sessions_interrupted(&self) -> usize {
+        let mut inner = self.lock();
+        let ids: Vec<SessionId> = inner.sessions.keys().copied().collect();
+        match inner.catalog.mark_sessions_interrupted(&ids) {
+            Ok(marked) => marked,
+            Err(err) => {
+                // Logged, not propagated. The daemon is stopping either way; failing the unwind
+                // here would skip the process teardown below it and leave the tree orphaned, which
+                // is strictly worse than a stale record the next start will reconcile.
+                tracing::error!(%err, "could not persist sessions as interrupted-resumable");
+                0
+            }
+        }
+    }
+
+    /// Phase two of the idle unwind: drop the live session table, returning how many were dropped.
+    ///
+    /// Dropping is the teardown. Each [`LiveSession`] owns its `PtySession`, whose `Drop`
+    /// terminates the process tree (`supervisor.rs`), so there is no kill loop here and no way for
+    /// one to drift out of step with the normal close path.
+    ///
+    /// Taken out of the lock before being dropped, so the (possibly slow) process teardown does not
+    /// happen with the state lock held.
+    pub fn take_live_sessions(&self) -> usize {
+        let sessions = std::mem::take(&mut self.lock().sessions);
+        let count = sessions.len();
+        drop(sessions);
+        count
+    }
+
     /// The (non-archived) session summaries for a project, from durable state. Used to build the
     /// `Attached` reply after any attach-time pruning so it reflects the pruned result.
     ///

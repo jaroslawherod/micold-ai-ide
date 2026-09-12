@@ -471,6 +471,25 @@ impl Session {
         }
     }
 
+    /// Present a live session as interrupted-but-resumable because *this* service is stopping
+    /// (feature 028, data-model G5, lifecycle contract §3.11).
+    ///
+    /// The counterpart to [`Self::mark_interrupted_resumable`], and deliberately a second method
+    /// rather than a relaxed guard on that one. They answer different questions. That one runs at
+    /// startup over records loaded from disk, where everything is `Idle` and anything else is a
+    /// persisted fact this must not overwrite. This one runs at shutdown over sessions whose
+    /// processes are about to be killed, where `Running` is exactly the state that has to change —
+    /// leaving it would put a record on disk that is false the moment the daemon is gone, and the
+    /// next start would show a running session with no process behind it.
+    ///
+    /// A no-op for a session that is not active, so a `Failed` or already-interrupted record keeps
+    /// the more specific thing it says.
+    pub fn mark_interrupted_by_shutdown(&mut self) {
+        if self.is_active() {
+            self.lifecycle = SessionLifecycle::InterruptedResumable;
+        }
+    }
+
     /// The process is up: `Starting`/`Restarting` → `Running` (resets the crash-loop counter).
     pub fn mark_running(&mut self) {
         self.lifecycle = SessionLifecycle::Running;

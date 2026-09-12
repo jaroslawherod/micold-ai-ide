@@ -117,11 +117,12 @@ async fn the_window_arms_when_the_last_client_leaves_and_expires_after_it() {
     let armed = alone
         .alone_since()
         .expect("the window must arm when the last client leaves");
-    assert!(!rule.expired(&alone, armed), "not idle the instant it empties");
     assert!(
-        rule.expired(&alone, micold_core::clock::Uptime::from_nanos(
-            u64::MAX
-        )),
+        !rule.expired(&alone, armed),
+        "not idle the instant it empties"
+    );
+    assert!(
+        rule.expired(&alone, micold_core::clock::Uptime::from_nanos(u64::MAX)),
         "thirty minutes with nobody connected must expire the window"
     );
 }

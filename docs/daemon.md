@@ -5,8 +5,10 @@ is separate from the app window. The window (the *client*) is a thin viewer: it 
 and sends your keystrokes, but it does not own the running process. That separation is what makes
 the guarantees below possible.
 
-You never start the daemon yourself. The first time the app needs it, it launches one automatically
-and it keeps running in the background afterward.
+You never start the daemon yourself. The first time the app needs it, it launches one automatically,
+and it keeps running in the background afterward — through closing and reopening windows, and for as
+long as you keep using the app. When nobody has been connected for half an hour it stops itself; the
+next thing you open starts a new one. Both halves are described below.
 
 ## What survives, and what doesn't (User Story 1)
 
@@ -19,7 +21,8 @@ interpreted screen it has produced. Both live in the daemon, so:
 | **The app window crashes** | Same — the sessions are in a different process, untouched. |
 | **Rebuild / reinstall the app and relaunch** | The new window reconnects to the *same* daemon and finds every session where it left off. |
 | **Reopen a session after any of the above** | You get the **current** screen immediately (a snapshot, not a replay), with scrollback covering the whole time you were away. |
-| **Log out / end your login session** | This stops a daemon running directly on your computer, and its sessions become interrupted-resumable. To keep sessions across a logout, run the service [in a container](#surviving-logout-run-the-service-in-a-container). |
+| **Log out / end your login session** | This stops a daemon running directly on your computer, and its sessions become interrupted-resumable. To keep sessions across a logout, run the service [in a container](user-guide/sandboxed-daemon.md#keeping-the-sandbox-running). |
+| **Walk away for half an hour** | With no window connected for 30 continuous minutes the daemon stops itself, and its sessions become interrupted-resumable. Reopening the app starts a fresh one — see [below](#it-stops-itself-when-nobody-has-used-it-for-30-minutes). |
 
 Concretely, if you start a long-running build or an AI CLI session that is working through a task,
 close the window, and come back ten minutes later, the session is still `Running`, the screen shows
@@ -56,6 +59,54 @@ keeps reopening a busy session fast regardless of how long it ran unattended.
   a reboot (the processes are gone); when you next launch the app, it starts a fresh daemon.
 - The daemon persists the *catalog* (your projects, worktrees, and session identities) to disk, so
   those reappear after a reboot — but a session's live process and its on-screen scrollback do not.
+
+## It stops itself when nobody has used it for 30 minutes
+
+The service outlives your windows, but not indefinitely. **If no window has been connected for 30
+continuous minutes, it stops itself.** Nothing you do brings it back manually — the next time you
+open the app, it starts a fresh one, the same way it started the first.
+
+What the timer measures is deliberately narrow: **whether any window is connected, and nothing else.**
+
+- Closing your last window starts the clock. Opening a window — any window, on any project — stops
+  it, and closing that one starts it over from zero.
+- **A session that is still running does not hold the service up.** This is the part worth knowing:
+  leave an agent working and close the window, come back an hour later, and the service will have
+  stopped. It is not a bug and it is not lost work — see below.
+- Time your machine spends asleep counts. A laptop closed for the night comes back to a service that
+  has already stopped, rather than one that stops half an hour after you wake it.
+
+### What happens to a session that was running
+
+Before anything is shut down, every live session is recorded as **interrupted-resumable** — the same
+state described under [interrupted-resumable sessions](#interrupted-resumable-sessions-after-any-service-restart)
+further down, and reached by the same path an ordinary service restart takes. Opening the session resumes the conversation where it left off.
+
+Nothing is auto-resumed when the next service starts. An agent brought back with nobody watching it
+is worse than a service that stopped, so the resume is always a deliberate action of yours.
+
+### Why 30 minutes, and why it is not a setting
+
+A background service running for nobody costs memory and battery on a machine you have walked away
+from. Thirty minutes is long enough that stepping out for coffee, or closing a window to open another,
+never costs you a restart; short enough that an overnight machine is not hosting an idle service until
+morning.
+
+It is not configurable, and that is a deliberate omission rather than a missing feature: the value
+answers "how long should this machine keep a service running for nobody?", which is not a question
+you have the information to answer better than the default — and every answer anyone would pick is
+this one. Restarting is cheap and automatic, so nothing is lost by picking the shorter side.
+
+The one place the answer differs is a service running **in a container**, where the container runtime
+owns the process lifetime; see [running the session service in a container](user-guide/sandboxed-daemon.md).
+
+### If you click just as it is stopping
+
+You can catch the service at the exact moment it decides to go. The app handles this itself: a
+connection that fails because the service is on its way out is retried a second later, and on the
+direct placement that retry starts a fresh service. You may briefly see the reconnecting banner. You
+will not see an error for it — an error only appears if the problem outlasts that retry, which means
+it is a real one.
 
 ## Attaching, driving, and the activity badges (User Story 2)
 
