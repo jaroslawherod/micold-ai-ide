@@ -208,14 +208,17 @@ fn worktree_node_display_name_derived_when_no_override() {
 
 // T019: the worktree location label is the worktree's path relative to the project root
 // (research.md R6 — Path::strip_prefix, since every worktree always lives directly under
-// `<project_root>/.claude/worktrees/`).
+// `<project_root>/.claude/worktrees/`). Feature 029 moved it onto a labelled `Location:` line of
+// the row's fuller tooltip; the claim itself is preserved rather than redesigned (029 §3.1).
 #[test]
 fn worktree_location_label_is_relative_to_project_root() {
     let root = PathBuf::from("/repo");
     let wt = worktree("feat-a", WorktreeStatus::Valid);
-    assert_eq!(
-        micold_client::features::sidebar::worktree_location_label(&root, &wt),
-        ".claude/worktrees/feat-a"
+    let tip = micold_client::features::sidebar::worktree_tooltip(Some(&root), &wt, "Feat a");
+    assert!(
+        tip.lines()
+            .any(|l| l == "Location: .claude/worktrees/feat-a"),
+        "got {tip:?}"
     );
 }
 

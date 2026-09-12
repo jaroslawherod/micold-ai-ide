@@ -309,7 +309,7 @@ fn only_the_root_drives_a_feature() {
     // anything but the root calls one, that caller has to learn about every feature that arrives
     // afterwards. Reading is deliberately untouched: `crate::ui` names feature types to draw them
     // and calls their pure query helpers (`clamp_menu_anchor`, `help_actions`,
-    // `worktree_location_label`, `connection_status`), which is FR-003a working as intended.
+    // `worktree_tooltip`, `connection_status`), which is FR-003a working as intended.
     let sources = sources();
     let reducers: BTreeMap<String, BTreeSet<String>> = feature_modules()
         .into_iter()

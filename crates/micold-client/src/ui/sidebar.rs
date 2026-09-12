@@ -359,14 +359,11 @@ fn tag_chip(tag: &Tag, r: Roles) -> (String, Rgb) {
     match tag {
         Tag::Type(t) => (t.as_str().to_string(), r.tag_fill(*t)),
         Tag::Issue(key) => (key.clone(), r.issue_tag().0),
-        Tag::Status(status) => {
-            let label = match status {
-                WorktreeStatus::Missing => "missing",
-                WorktreeStatus::Invalid => "invalid",
-                WorktreeStatus::Valid => "",
-            };
-            (label.to_string(), r.error)
-        }
+        // `unwrap_or_default` covers `Valid`, which `label()` answers with `None` rather than the
+        // `""` this arm used to spell out (feature 029, §4.2). A `Tag::Status(Valid)` is not
+        // constructed — `worktree_tags` only emits the tag for an unhealthy worktree — so this is
+        // a total match on a case that does not arise, not a blank chip anyone can see.
+        Tag::Status(status) => (status.label().unwrap_or_default().to_string(), r.error),
         // Feature 014 (FR-010b): a neutral accent, not `error` — an agent worktree is
         // informational, not a fault condition.
         Tag::Agent => ("agent".to_string(), r.on_surface_variant),
@@ -589,10 +586,18 @@ fn build_items(
                 node.expanded,
                 Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(dir.clone())),
             );
-        // Location tooltip (feature 010, FR-010): the worktree's path relative to the project.
-        if let Some(root) = project_root {
-            item = item.row_tooltip(crate::features::sidebar::worktree_location_label(root, wt));
-        }
+        // Row tooltip (feature 010 FR-010, extended by feature 029): the full name the row had to
+        // shorten, plus the facts its prettified label leaves out. Attached unconditionally — an
+        // unknown project root costs the tooltip its `Location` line, not its existence (029 R5),
+        // and the builder is the only thing that decides which lines those are.
+        //
+        // `node.display_name` rather than a second derivation from `dir_name`: it is the exact
+        // string this row renders, so the row and its tooltip cannot disagree about a name (FR-002).
+        item = item.row_tooltip(crate::features::sidebar::worktree_tooltip(
+            project_root,
+            wt,
+            &node.display_name,
+        ));
 
         // Always reserve the action cluster's width so hovering never reflows the row; each row
         // fades its icons in/out independently via its own animation track (feature 008). The

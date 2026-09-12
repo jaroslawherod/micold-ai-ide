@@ -183,9 +183,22 @@ is unnecessary overhead this avoids.
   isolating them from each other.
 - The Default entry is **never hidden by the sidebar's tag filters** — since it isn't a
   worktree, filtering by branch-derived tags doesn't apply to it; it always stays visible.
-- Hover any sidebar entry, Default or worktree, to see a tooltip with its location relative to
-  the project (e.g. the project root itself for Default, or a worktree's relative directory
-  path) — useful for confirming exactly where a session is about to run before you start it.
+- Hover any sidebar entry to see a tooltip describing it. For the **Default** entry that is its
+  location — the project root itself. For a **worktree** the tooltip leads with the worktree's
+  **full name**, then gives its location relative to the project. The sidebar is narrow, so a long
+  name is shortened with an ellipsis in the row itself; hovering is how you read the whole of it,
+  and how you confirm exactly where a session is about to run before you start it.
+- A worktree's tooltip also names the two things its row label cannot show, each on its own line:
+  the **branch** it is bound to, and — when it differs from the displayed name — the **folder** on
+  disk. Both are absent from the row because the displayed name is derived by stripping the type
+  token and the ticket out of the folder name, which is what makes it readable and also what makes
+  it unusable as a path or a branch to type.
+- A row that is **flagged** explains itself on hover. A worktree whose directory is gone, or whose
+  directory git does not recognise, adds a **Status** line reading `missing` or `invalid` — the
+  same word as the chip on the row. A worktree you added from outside this app's own
+  `.claude/worktrees/` folder marks its location `(outside this app)`, which is why that one path
+  is absolute where the others are relative. A healthy worktree says nothing about its status, so
+  the rows that do have something to say are the ones that stand out.
 
 ## Creating a worktree
 

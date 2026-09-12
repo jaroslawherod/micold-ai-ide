@@ -14,7 +14,7 @@
 
 use micold_client::features::sidebar::{
     current_session_row, effective_open, filters_from_env_value, matches_filters, row_heights,
-    scroll_target, worktree_location_label, DefaultNode, SidebarEntry, TagFilter, WorktreeNode,
+    scroll_target, worktree_tooltip, DefaultNode, SidebarEntry, TagFilter, WorktreeNode,
     DEFAULT_LOCATION_LABEL, FILTER_ENV_VAR,
 };
 use micold_core::naming::{ConventionalType, Tag};
@@ -31,6 +31,27 @@ fn worktree(dir_name: &str) -> Worktree {
         status: WorktreeStatus::Valid,
         included: false,
     }
+}
+
+/// The value of a `"<Label>: <value>"` line in a tooltip, or `None` when the tooltip has no such
+/// line at all.
+///
+/// `None` is the interesting answer throughout this file. Contract §2.2 says an absent fact is an
+/// *absent line* — never a blank one, never a label with nothing after it — so a helper that
+/// returned `Some("")` for `"Branch: "` would let exactly the bug these tests exist to catch pass.
+fn line(tooltip: &str, label: &str) -> Option<String> {
+    let prefix = format!("{label}: ");
+    tooltip
+        .lines()
+        .find_map(|l| l.strip_prefix(&prefix).map(str::to_string))
+}
+
+/// Every label the tooltip mentions, in the order it mentions them.
+fn labels(tooltip: &str) -> Vec<&str> {
+    tooltip
+        .lines()
+        .filter_map(|l| l.split_once(": ").map(|(label, _)| label))
+        .collect()
 }
 
 fn filters(of: impl IntoIterator<Item = TagFilter>) -> BTreeSet<TagFilter> {
@@ -76,14 +97,17 @@ fn the_untyped_filter_selects_the_rows_the_type_filters_cannot_reach() {
     );
 }
 
+// --- Feature 029: the tooltip's `Location` line (contract §3) ---
+
 #[test]
 fn a_worktrees_location_reads_relative_to_the_project_it_belongs_to() {
-    let label = worktree_location_label(Path::new("/p"), &worktree("feat-a"));
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a");
+    let location = line(&tip, "Location").expect("a worktree under a known root has a location");
 
     assert!(
-        !label.starts_with("/p"),
+        !location.starts_with("/p"),
         "the tooltip says where a worktree sits inside the project, so the project's own path is \
-         noise: got {label:?}"
+         noise: got {location:?}"
     );
 }
 
@@ -93,10 +117,246 @@ fn a_worktree_outside_the_project_still_gets_a_label() {
     stray.path = PathBuf::from("/elsewhere/feat-a");
 
     assert_eq!(
-        worktree_location_label(Path::new("/p"), &stray),
-        "/elsewhere/feat-a",
+        line(
+            &worktree_tooltip(Some(Path::new("/p")), &stray, "Feat a"),
+            "Location"
+        )
+        .as_deref(),
+        Some("/elsewhere/feat-a"),
         "an unrelatable path falls back to itself — a tooltip that renders nothing would be worse \
          than one that renders an absolute path"
+    );
+}
+
+// --- Feature 029 US1: the `Name` line (FR-001, FR-002) ---
+
+#[test]
+fn the_tooltip_leads_with_the_name_the_row_had_to_shorten() {
+    let long = "a-worktree-whose-name-is-far-wider-than-any-sidebar-will-ever-be";
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), long);
+
+    assert_eq!(
+        tip.lines().next(),
+        Some(format!("Name: {long}").as_str()),
+        "the fact a shortened row could not show is the fact the tooltip leads with, and it \
+         carries the whole name however long it is (§2.3): got {tip:?}"
+    );
+}
+
+#[test]
+fn the_name_line_survives_an_unknown_project_root() {
+    let tip = worktree_tooltip(None, &worktree("feat-a"), "Feat a");
+
+    assert_eq!(
+        line(&tip, "Name").as_deref(),
+        Some("Feat a"),
+        "the name does not depend on knowing where the project is — a tooltip that lost its \
+         leading line because the root was unknown would fail the one story this feature is for"
+    );
+}
+
+#[test]
+fn the_name_is_the_one_the_row_renders_not_a_re_derivation() {
+    // `display_name` is the caller's, and the caller's is `State::worktree_display_name`, which a
+    // user's rename overrides. Deriving a second one here from `dir_name` would make the tooltip
+    // contradict the row it is explaining — for exactly the renamed worktrees whose row label and
+    // folder name have most reason to differ (FR-002).
+    let tip = worktree_tooltip(
+        Some(Path::new("/p")),
+        &worktree("feat-a"),
+        "Renamed by hand",
+    );
+
+    assert_eq!(
+        line(&tip, "Name").as_deref(),
+        Some("Renamed by hand"),
+        "got {tip:?}"
+    );
+}
+
+// --- Feature 029 US2: the `Branch` and `Folder` lines (FR-004, FR-005) ---
+
+#[test]
+fn a_bound_branch_is_named_verbatim() {
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a");
+
+    assert_eq!(
+        line(&tip, "Branch").as_deref(),
+        Some("feat/feat-a"),
+        "the row's label is prettified and drops the branch entirely, so the tooltip is the only \
+         place it can be read — and it is read literally, as git would accept it: got {tip:?}"
+    );
+}
+
+#[test]
+fn a_worktree_with_no_branch_has_no_branch_line() {
+    let mut orphan = worktree("feat-a");
+    orphan.branch = None;
+
+    let tip = worktree_tooltip(Some(Path::new("/p")), &orphan, "Feat a");
+
+    assert_eq!(
+        line(&tip, "Branch"),
+        None,
+        "an orphan directory is bound to nothing, and `Branch: ` with nothing after it reads as a \
+         broken tooltip rather than as an absent fact (§2.2): got {tip:?}"
+    );
+    assert!(
+        !tip.contains("Branch"),
+        "not a placeholder either — no `Branch: none`, no `Branch: -`: got {tip:?}"
+    );
+}
+
+#[test]
+fn the_folder_on_disk_is_named_when_it_differs_from_the_displayed_name() {
+    let tip = worktree_tooltip(
+        Some(Path::new("/p")),
+        &worktree("feat-abc-123_login-page"),
+        "Login page",
+    );
+
+    assert_eq!(
+        line(&tip, "Folder").as_deref(),
+        Some("feat-abc-123_login-page"),
+        "the displayed name is derived by stripping the type token and the ticket, so the folder \
+         you would `cd` into is not recoverable from the row: got {tip:?}"
+    );
+}
+
+#[test]
+fn a_folder_that_is_already_the_displayed_name_is_not_repeated() {
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("scratch"), "scratch");
+
+    assert_eq!(
+        line(&tip, "Folder"),
+        None,
+        "printing the same string twice under two labels teaches the reader nothing and makes \
+         them check whether the two differ (FR-005): got {tip:?}"
+    );
+}
+
+#[test]
+fn the_lines_appear_in_one_fixed_order() {
+    let tip = worktree_tooltip(
+        Some(Path::new("/p")),
+        &worktree("feat-abc-123_login-page"),
+        "Login page",
+    );
+
+    assert_eq!(
+        labels(&tip),
+        vec!["Name", "Branch", "Folder", "Location"],
+        "a tooltip whose lines move around is one the reader has to *read* rather than glance at; \
+         the order is the contract (§2): got {tip:?}"
+    );
+}
+
+// --- Feature 029 US3: a flagged row explains itself (FR-006, FR-007) ---
+
+#[test]
+fn an_unhealthy_worktree_says_so_in_the_same_word_its_chip_uses() {
+    for (status, word) in [
+        (WorktreeStatus::Missing, "missing"),
+        (WorktreeStatus::Invalid, "invalid"),
+    ] {
+        let mut wt = worktree("feat-a");
+        wt.status = status;
+        let tip = worktree_tooltip(Some(Path::new("/p")), &wt, "Feat a");
+
+        assert_eq!(
+            line(&tip, "Status").as_deref(),
+            Some(word),
+            "the row cues this with colour and a chip; the tooltip is where it is said in words, \
+             and both read `WorktreeStatus::label` so they cannot drift apart: got {tip:?}"
+        );
+    }
+}
+
+#[test]
+fn a_healthy_worktree_has_no_status_line() {
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a");
+
+    assert!(
+        !tip.contains("Status"),
+        "normal reads as normal — a `Status: ok` on every row is noise that makes the rows that \
+         do have something to say harder to spot (§4.3): got {tip:?}"
+    );
+}
+
+#[test]
+fn the_status_line_comes_last() {
+    let mut wt = worktree("feat-abc-123_login-page");
+    wt.status = WorktreeStatus::Missing;
+    let tip = worktree_tooltip(Some(Path::new("/p")), &wt, "Login page");
+
+    assert_eq!(
+        labels(&tip),
+        vec!["Name", "Branch", "Folder", "Location", "Status"],
+        "the condition is read after the thing it is a condition of: got {tip:?}"
+    );
+}
+
+#[test]
+fn a_worktree_from_outside_this_app_says_so_beside_its_path() {
+    let mut outside = worktree("feat-a");
+    outside.path = PathBuf::from("/elsewhere/feat-a");
+    outside.included = true;
+
+    assert_eq!(
+        line(
+            &worktree_tooltip(Some(Path::new("/p")), &outside, "Feat a"),
+            "Location"
+        )
+        .as_deref(),
+        Some("/elsewhere/feat-a (outside this app)"),
+        "the note belongs on the location line because the location is what it explains — an \
+         absolute path among relative ones is otherwise just an oddity (FR-007, §3.2)"
+    );
+}
+
+#[test]
+fn a_worktree_this_app_created_carries_no_such_note() {
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a");
+
+    assert!(!tip.contains("outside this app"), "got {tip:?}");
+}
+
+#[test]
+fn the_location_is_a_labelled_line_rather_than_a_bare_path() {
+    let tip = worktree_tooltip(Some(Path::new("/p")), &worktree("feat-a"), "Feat a");
+
+    assert!(
+        labels(&tip).contains(&"Location"),
+        "every fact in the tooltip is labelled, so the one fact that predates this feature is \
+         labelled too — otherwise a bare path sits among labelled lines and reads as a stray: \
+         got {tip:?}"
+    );
+}
+
+#[test]
+fn an_unknown_project_root_drops_the_location_line_and_nothing_else() {
+    let wt = worktree("feat-a");
+    let rooted = worktree_tooltip(Some(Path::new("/p")), &wt, "Feat a");
+    let rootless = worktree_tooltip(None, &wt, "Feat a");
+
+    assert_eq!(
+        line(&rootless, "Location"),
+        None,
+        "with no project root there is nothing true to say about where the worktree sits \
+         *within* it, so the line is absent rather than empty or absolute: got {rootless:?}"
+    );
+    assert_eq!(
+        labels(&rootless),
+        labels(&rooted)
+            .into_iter()
+            .filter(|l| *l != "Location")
+            .collect::<Vec<_>>(),
+        "an unknown root costs the tooltip exactly one line — the tooltip does not disappear \
+         because the root is unknown (research R5)"
+    );
+    assert!(
+        !rootless.lines().any(|l| l.trim().is_empty()),
+        "an omitted line leaves no blank behind: got {rootless:?}"
     );
 }
 
