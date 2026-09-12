@@ -72,6 +72,12 @@ for a runtime, and uses the `sandbox_real_` prefix every one of these tests is n
    error. Resume it and confirm it runs. Time this step — attached and usable in under 3 seconds
    (SC-006).
 
+   **Type something into the session first** — at step 1, a real prompt the AI CLI answers, not just
+   a shell command. "Marked resumable" is decided by the CLI's own transcript file
+   (`~/.claude/projects/<encoded-cwd>/<id>.jsonl`): a session with no recorded conversation is
+   *archived* on the next start by the pre-existing empty-session pruning (feature `026`), so an
+   empty session disappears here and it is not this feature doing it.
+
 **Record**: the two timestamps, the time-to-attached, and that step 5 showed nothing red.
 
 ### B2. The window is about connections, not activity

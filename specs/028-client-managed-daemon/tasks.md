@@ -329,6 +329,9 @@ that pins the classification, because the integration test only reaches the race
 - [X] T062 Run `mise run test-sandbox` (or `cargo test -p micold-daemon --features sandbox-real-runtime sandbox_real_idle`) on a machine with a working Docker daemon (quickstart Part A, real-runtime section) — recorded in `specs/028-client-managed-daemon/evidence/t062-real-runtime.md`
 - [X] T063 [P] Extend `crates/micold-core/tests/quickstart_a_runs_everywhere.rs` so quickstart Part A's commands stay covered by the existing gate
 - [X] T064 Sweep `crates/micold-daemon/tests/sandbox_real_staleness.rs`, `sandbox_real_limits.rs`, `sandbox_real_parity.rs`, `sandbox_real_boundary.rs`, `sandbox_real_fingerprint.rs` and `crates/micold-daemon/tests/sandbox_real_support/mod.rs` for `survive_logout` uses whose meaning the amendment changes
+- [X] T065 Verify the pinned client/daemon pair still connects after the change — a mixed pair from `target-shared` refuses even with matching version numbers printed — recorded in `specs/028-client-managed-daemon/evidence/t065-pinned-pair.md`
+- [X] T066 Execute quickstart Part B (B1–B8) and record each with date, machine and outcome in `specs/028-client-managed-daemon/evidence/quickstart-b.md`
+- [X] T067 Reconcile the spec artifacts with what was built — if any task forced a decision the design documents do not carry, amend `research.md`, `data-model.md` or `contracts/` rather than leaving the record wrong
 
 ### What Phase 8 found on the way
 
@@ -345,9 +348,22 @@ had already met this and answered it by unsetting `micold-docs` on its own quick
 quickstart now carries the same exception, with the same reason written beside it in
 `.gitattributes` and pinned in `scripts/tests/documentation-set.test.sh`.
 
-- [X] T065 Verify the pinned client/daemon pair still connects after the change — a mixed pair from `target-shared` refuses even with matching version numbers printed — recorded in `specs/028-client-managed-daemon/evidence/t065-pinned-pair.md`
-- [ ] T066 Execute quickstart Part B (B1–B8) and record each with date, machine and outcome in `specs/028-client-managed-daemon/evidence/quickstart-b.md`
-- [ ] T067 Reconcile the spec artifacts with what was built — if any task forced a decision the design documents do not carry, amend `research.md`, `data-model.md` or `contracts/` rather than leaving the record wrong
+T066 ran Part B for real: five scenarios passed on private displays with real thirty-minute windows
+(`evidence/quickstart-b.md`), and B3/B7/B8 are written up as unrun with the reason, because a shared
+workstation cannot be suspended and the package scenarios need a fresh VM. Two things it forced:
+
+- **B1 step 5 needed a precondition the quickstart did not state.** "The session is marked
+  resumable" is decided by the AI CLI's own transcript file; a session with nothing recorded is
+  *archived* on the next start by the pre-existing empty-session pruning (`026`), so a session
+  started but never prompted disappears at that step and it is not this feature doing it.
+  `quickstart.md` B1 now says so, and B4 carries the demonstration with a transcript present.
+- **The sandbox container's name is a constant**, so B5 and B6 cannot run concurrently on one
+  machine however well isolated their data directories are. They ran sequentially.
+
+T067 found nothing else out of step. R2 already carries the restart-policy/idle-stop exclusion that
+B5 and B6 measured, R3 the suspend-inclusive clock B3 would have tested, and `contracts/lifecycle.md`
+§6.19/§6.20 the stop reasons the logs printed verbatim; `docs/daemon.md` and
+`docs/user-guide/sandboxed-daemon.md` already describe both opt-ins to the user.
 
 ---
 
