@@ -312,6 +312,14 @@ fn reveal_chip(state: &State, r: Roles) -> Element<'static, Message> {
         r,
     )
     .active(state.sidebar.show_agent_worktrees)
+    // Feature 029 FR-025: how many worktrees the control is withholding. The migration can take
+    // rows away on first launch, and a number beside the switch is what accounts for them on
+    // screen — without it the only evidence would be a list that is quietly shorter than it was.
+    //
+    // The label string is deliberately unchanged (FR-015a): 014's wording is what users learned,
+    // and the count sits beside it rather than rewriting it. Zero renders nothing, so a project
+    // hiding nothing looks exactly as it did.
+    .count(state.hidden_worktree_count())
     .into()
 }
 

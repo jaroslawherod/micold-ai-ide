@@ -3,11 +3,24 @@
 //! contract `branch-picker.md` §2).
 
 use micold_core::git::FakeGit;
-use micold_core::worktree::{branch_candidates, BlockReason, BranchOrigin, WorktreeOwner};
+use micold_core::worktree::{
+    branch_candidates, BlockReason, BranchOrigin, ProvenanceView, WorktreeOwner,
+};
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 fn repo() -> PathBuf {
     PathBuf::from("/repo")
+}
+
+/// The record set for a project the app created `names` in (029 FR-004).
+///
+/// The blocked-branch sentence classifies a holder exactly as the sidebar classifies its row (016
+/// FR-032), so under provenance these tests have to say which worktrees the app created — a
+/// holder's *name* no longer decides it. `mine()` is the fixture for "the app made this one";
+/// [`ProvenanceView::none`] is the fixture for "it did not".
+fn mine(names: &[&str]) -> BTreeSet<String> {
+    names.iter().map(|s| s.to_string()).collect()
 }
 
 /// A repository with: two free local branches, one local branch held by a worktree, the
@@ -45,7 +58,13 @@ fn hidden_holders() -> FakeGit {
 
 #[test]
 fn the_list_contains_local_and_remote_branches_with_their_origin() {
-    let candidates = branch_candidates(&mixed(), &repo(), &[]).unwrap();
+    let candidates = branch_candidates(
+        &mixed(),
+        &repo(),
+        &[],
+        &ProvenanceView::new(&mine(&["feat-held"])),
+    )
+    .unwrap();
     let names: Vec<&str> = candidates.iter().map(|c| c.name.as_str()).collect();
 
     assert_eq!(names.len(), 6);
@@ -73,7 +92,13 @@ fn the_list_contains_local_and_remote_branches_with_their_origin() {
 
 #[test]
 fn branches_held_elsewhere_are_marked_unavailable_with_the_right_reason() {
-    let candidates = branch_candidates(&mixed(), &repo(), &[]).unwrap();
+    let candidates = branch_candidates(
+        &mixed(),
+        &repo(),
+        &[],
+        &ProvenanceView::new(&mine(&["feat-held"])),
+    )
+    .unwrap();
 
     // FR-021's two cases are distinguished, so the UI can phrase them differently.
     let main = candidates.iter().find(|c| c.name == "main").unwrap();
@@ -101,7 +126,8 @@ fn branches_held_elsewhere_are_marked_unavailable_with_the_right_reason() {
 /// UI never describes them as a worktree the user could go and find (FR-021a, FR-021b).
 #[test]
 fn holders_the_sidebar_cannot_show_are_marked_with_their_own_reasons() {
-    let candidates = branch_candidates(&hidden_holders(), &repo(), &[]).unwrap();
+    let candidates =
+        branch_candidates(&hidden_holders(), &repo(), &[], &ProvenanceView::none()).unwrap();
     let reason = |name: &str| {
         candidates
             .iter()
@@ -133,9 +159,97 @@ fn holders_the_sidebar_cannot_show_are_marked_with_their_own_reasons() {
     assert!(candidates.iter().any(|c| c.name == "feat/agent-held"));
 }
 
+/// T016 [US1] — 029 FR-016: the holder's owner comes from the record, not from its name.
+///
+/// The same fixture as above, differing only in that the app recorded creating the
+/// `agent-deadbeefdeadbeef` worktree. 014 would have called it `Agent` on the strength of the name
+/// whatever the records said; the picker must agree with the sidebar, and the sidebar now lists
+/// this one (FR-007b). A disagreement here is BUG-001 returning by the other door: the list showing
+/// a row the picker calls hidden.
+#[test]
+fn a_recorded_holder_is_the_users_however_it_is_named() {
+    let records = mine(&["agent-deadbeefdeadbeef"]);
+    let candidates = branch_candidates(
+        &hidden_holders(),
+        &repo(),
+        &[],
+        &ProvenanceView::new(&records),
+    )
+    .unwrap();
+
+    assert_eq!(
+        candidates
+            .iter()
+            .find(|c| c.name == "feat/agent-held")
+            .unwrap()
+            .blocked_by,
+        Some(BlockReason::CheckedOutAt {
+            path: PathBuf::from("/repo/.claude/worktrees/agent-deadbeefdeadbeef"),
+            owner: WorktreeOwner::User,
+        })
+    );
+}
+
+/// T016 [US1] — and the converse: an ordinary-looking holder the app has no record of is not the
+/// user's. This is the assistant *session* worktree case, which 014 could not see at all.
+#[test]
+fn an_unrecorded_holder_under_the_root_is_not_the_users_however_ordinary_its_name() {
+    let candidates = branch_candidates(
+        &mixed(),
+        &repo(),
+        &[],
+        // `feat-held` deliberately withheld.
+        &ProvenanceView::none(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        candidates
+            .iter()
+            .find(|c| c.name == "feat/held")
+            .unwrap()
+            .blocked_by,
+        Some(BlockReason::CheckedOutAt {
+            path: PathBuf::from("/repo/.claude/worktrees/feat-held"),
+            owner: WorktreeOwner::Agent,
+        })
+    );
+}
+
+/// T016 [US1] — FR-011 reaches the picker too: if the project's records could not be read, no
+/// holder is described as one the user cannot see.
+#[test]
+fn an_unreadable_project_describes_every_holder_as_the_users() {
+    let candidates = branch_candidates(
+        &hidden_holders(),
+        &repo(),
+        &[],
+        &ProvenanceView::unreadable(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        candidates
+            .iter()
+            .find(|c| c.name == "feat/agent-held")
+            .unwrap()
+            .blocked_by,
+        Some(BlockReason::CheckedOutAt {
+            path: PathBuf::from("/repo/.claude/worktrees/agent-deadbeefdeadbeef"),
+            owner: WorktreeOwner::User,
+        })
+    );
+}
+
 #[test]
 fn ordering_is_available_first_then_local_then_by_remote_then_by_name() {
-    let candidates = branch_candidates(&mixed(), &repo(), &[]).unwrap();
+    let candidates = branch_candidates(
+        &mixed(),
+        &repo(),
+        &[],
+        &ProvenanceView::new(&mine(&["feat-held"])),
+    )
+    .unwrap();
     let rendered: Vec<String> = candidates.iter().map(|c| c.name.clone()).collect();
 
     assert_eq!(
@@ -156,7 +270,13 @@ fn ordering_is_available_first_then_local_then_by_remote_then_by_name() {
 
 #[test]
 fn row_labels_read_as_the_contract_specifies() {
-    let candidates = branch_candidates(&mixed(), &repo(), &[]).unwrap();
+    let candidates = branch_candidates(
+        &mixed(),
+        &repo(),
+        &[],
+        &ProvenanceView::new(&mine(&["feat-held"])),
+    )
+    .unwrap();
     let label = |name: &str| {
         candidates
             .iter()
@@ -177,7 +297,8 @@ fn row_labels_read_as_the_contract_specifies() {
 /// (contract `branch-picker.md` §2).
 #[test]
 fn rows_for_holders_the_sidebar_cannot_show_name_the_kind_not_a_folder() {
-    let candidates = branch_candidates(&hidden_holders(), &repo(), &[]).unwrap();
+    let candidates =
+        branch_candidates(&hidden_holders(), &repo(), &[], &ProvenanceView::none()).unwrap();
     let label = |name: &str| {
         candidates
             .iter()
@@ -202,7 +323,11 @@ fn a_repository_with_no_branches_yields_an_empty_list() {
     // FR-013's "there are none" case — the caller says so explicitly rather than showing an
     // empty control.
     let git = FakeGit::new().with_repo("/repo");
-    assert!(branch_candidates(&git, &repo(), &[]).unwrap().is_empty());
+    assert!(
+        branch_candidates(&git, &repo(), &[], &ProvenanceView::none())
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]
@@ -213,7 +338,7 @@ fn a_repository_whose_every_branch_is_checked_out_yields_no_available_candidate(
         .with_branch("/repo", "main")
         .with_worktree("/repo", "/repo", "main");
 
-    let candidates = branch_candidates(&git, &repo(), &[]).unwrap();
+    let candidates = branch_candidates(&git, &repo(), &[], &ProvenanceView::none()).unwrap();
     assert_eq!(candidates.len(), 1);
     assert!(!candidates.iter().any(|c| c.is_available()));
 }
@@ -226,7 +351,7 @@ fn a_local_branch_hides_the_remote_one_of_the_same_name() {
         .with_branch("/repo", "feat/x")
         .with_remote_branch("/repo", "origin", "feat/x");
 
-    let candidates = branch_candidates(&git, &repo(), &[]).unwrap();
+    let candidates = branch_candidates(&git, &repo(), &[], &ProvenanceView::none()).unwrap();
     assert_eq!(candidates.len(), 1);
     assert_eq!(candidates[0].origin, BranchOrigin::Local);
 }
@@ -239,7 +364,7 @@ fn listing_never_mutates_the_repository() {
         git.worktrees(&repo()),
         git.remote_branches(&repo()),
     );
-    let _ = branch_candidates(&git, &repo(), &[]).unwrap();
+    let _ = branch_candidates(&git, &repo(), &[], &ProvenanceView::none()).unwrap();
     let after = (
         git.branches(&repo()),
         git.worktrees(&repo()),

@@ -107,6 +107,11 @@ pub enum PendingOp {
     /// own as the `CatalogChanged` broadcast, and the only thing the reply adds is "it finished".
     /// Correlated all the same, because that "it finished" is what ends the control's busy state.
     WorktreeRefresh,
+    /// A `WorktreeClaim` (029 FR-020), carrying the directory name so a persistence failure can
+    /// name what it was about. The reducer already applied the record optimistically; this exists
+    /// so a failure to make it durable reaches the user rather than being discovered at the next
+    /// restart.
+    WorktreeClaim(String),
     ProjectAdd,
     ProjectRemove,
     ProjectRename,
@@ -131,6 +136,7 @@ impl PendingOp {
             }
             PendingOp::WorktreeDelete(d) => format!("delete the worktree \"{d}\""),
             PendingOp::WorktreeRename(d) => format!("rename the worktree \"{d}\""),
+            PendingOp::WorktreeClaim(d) => format!("claim the worktree \"{d}\""),
             PendingOp::WorktreeInclude(p) => format!("include the worktree at {}", p.display()),
             PendingOp::WorktreeExclude(p) => {
                 format!("stop showing the worktree at {}", p.display())
@@ -991,6 +997,30 @@ pub fn on_worktree_rename_confirmed(app: &mut App) -> Task<Message> {
                 );
             }
         }
+    }
+    Task::none()
+}
+
+/// Tell the daemon the user claims this worktree as their own (029 FR-020).
+///
+/// The pure reducer runs first and has already recorded it, so the row is the user's in this
+/// frame; the RPC makes it durable. Nothing is validated on the way out — the directory name came
+/// off a row the sidebar is drawing, and there is no user-typed string here.
+pub fn on_worktree_claim_requested(app: &mut App, dir_name: String) -> Task<Message> {
+    app.core
+        .update(Message::Worktree(WorktreeMsg::ClaimRequested(
+            dir_name.clone(),
+        )));
+    if let Some(project) = app.core.workspace.active.clone() {
+        send_op(
+            app,
+            PendingOp::WorktreeClaim(dir_name.clone()),
+            move |req| ClientMsg::WorktreeClaim {
+                req,
+                project,
+                dir_name,
+            },
+        );
     }
     Task::none()
 }

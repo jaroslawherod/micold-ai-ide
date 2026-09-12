@@ -237,3 +237,76 @@ fn forgetting_the_active_project_clears_the_current_session_through_the_one_path
          with no target stays armed, then fires against whatever row appears next (invariant I5)"
     );
 }
+
+// --- Feature 029 (T054): the provenance record and its migration marker go with the project ----
+
+#[test]
+fn forgetting_a_project_discards_its_provenance_and_its_migration_marker() {
+    let mut state = state_with_projects(&["/a", "/b"]); // active = /b
+    state
+        .workspace
+        .record_user_created(Path::new("/a"), "feat-login");
+    state
+        .workspace
+        .record_user_created(Path::new("/b"), "feat-search");
+    state
+        .workspace
+        .provenance_migrated
+        .insert(PathBuf::from("/a"));
+    state
+        .workspace
+        .provenance_migrated
+        .insert(PathBuf::from("/b"));
+    state
+        .workspace
+        .unreadable_projects
+        .insert(PathBuf::from("/a"));
+
+    state.update(Message::Project(ProjectMsg::ForgetRequested(
+        PathBuf::from("/a"),
+    )));
+    state.update(Message::Project(ProjectMsg::ForgetConfirmed));
+
+    assert!(
+        !state
+            .workspace
+            .is_user_created(Path::new("/a"), "feat-login"),
+        "the record of what this app made in /a goes with /a (FR-009)"
+    );
+    assert!(
+        !state
+            .workspace
+            .worktree_provenance
+            .contains_key(Path::new("/a")),
+        "and the project key with it, rather than an empty set left behind"
+    );
+    assert!(
+        !state
+            .workspace
+            .provenance_migrated
+            .contains(Path::new("/a")),
+        "re-opening the folder is a fresh project: it must migrate again from whatever evidence \
+         survives, rather than inherit a marker saying it already did"
+    );
+    assert!(
+        !state
+            .workspace
+            .unreadable_projects
+            .contains(Path::new("/a")),
+        "the this-run read failure is about a project that is no longer here"
+    );
+
+    assert!(
+        state
+            .workspace
+            .is_user_created(Path::new("/b"), "feat-search"),
+        "the untouched project keeps its records"
+    );
+    assert!(
+        state
+            .workspace
+            .provenance_migrated
+            .contains(Path::new("/b")),
+        "and its marker"
+    );
+}

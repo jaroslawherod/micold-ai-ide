@@ -438,6 +438,24 @@ pub enum ClientMsg {
         /// New display name.
         display_name: String,
     },
+    /// Record a worktree the app did not create as the user's own (feature 029, FR-020).
+    ///
+    /// Durable catalog state with no git involved, exactly like [`Self::WorktreeRename`] — the
+    /// worktree directory and its branch are untouched (FR-003). It is answered with
+    /// [`OperationResult::Ack`] and a catalog broadcast, or with
+    /// [`ErrorKind::IoFailed`] if the record cannot be persisted; there is no `InvalidInput`
+    /// case, because unlike a rename there is no user-supplied string to validate.
+    ///
+    /// There is deliberately no inverse (FR-024): a worktree leaves the user-owned set only by
+    /// being deleted, or by its project being forgotten.
+    WorktreeClaim {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+        /// Worktree directory name.
+        dir_name: String,
+    },
     /// Create a session bound to a worktree.
     SessionCreate {
         /// Correlation id.
@@ -917,6 +935,22 @@ pub struct WorktreeSnapshot {
     pub path: PathBuf,
     /// Shown because the user asked for it, not because of where it lives (016 BUG-002, FR-027).
     pub included: bool,
+    /// Whether this application created this worktree (feature 029, FR-001).
+    ///
+    /// The provenance record, projected. Sent per worktree rather than as a per-project set for
+    /// the reason `display_name` is: the client renders rows, and a row that has to reach back
+    /// into a second collection to learn what it is can disagree with the one it came from.
+    ///
+    /// **Not the classification.** Whether a worktree is *hidden* additionally depends on where it
+    /// lives and on whether the project's records could be read at all — questions the client
+    /// answers with [`micold_core::worktree::classify_owner`] using this as one input.
+    ///
+    /// `#[serde(default)]` so a snapshot written before the field existed decodes as `false`
+    /// rather than failing. Note the postcard encoding cannot honour a default for a missing
+    /// field, which costs nothing here: the handshake refuses a mismatched client/daemon pair
+    /// before any snapshot is sent.
+    #[serde(default)]
+    pub user_created: bool,
 }
 
 /// Worktree status (data-model §Worktree).

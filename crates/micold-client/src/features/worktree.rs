@@ -17,18 +17,19 @@
 //!
 //! # The vocabulary this feature declares
 //!
-//! Twenty-one transitions in [`Msg`]: the listing (`Loaded`, `RefreshRequested`,
+//! Twenty-two transitions in [`Msg`]: the listing (`Loaded`, `RefreshRequested`,
 //! `RefreshFinished`, `RefreshTimedOut`), the row menu
 //! (`MenuToggled`, `MenuDismissed`, `Hovered`, `Unhovered`), inclusion (`IncludeRequested`,
 //! `Included`, `ExcludeRequested`, `Excluded`), deletion and its confirmation (`DeleteRequested`,
 //! `DeleteConfirmed`, `DeleteCancelled`, `DeleteKeepBranchToggled`), the rename draft
-//! (`RenameStarted`, `RenameTextChanged`, `RenameConfirmed`, `RenameCancelled`), and
-//! `TextCopyRequested`.
+//! (`RenameStarted`, `RenameTextChanged`, `RenameConfirmed`, `RenameCancelled`),
+//! `TextCopyRequested`, and `ClaimRequested`.
 //!
-//! [`update`] is pure (data-model.md §1.1 shape A) and routes all twenty-one. Six are matched a
+//! [`update`] is pure (data-model.md §1.1 shape A) and routes all twenty-two. Seven are matched a
 //! second time in `main.rs`, because each additionally touches something outside the process —
 //! git, the catalog on disk, or the clipboard: `IncludeRequested`, `ExcludeRequested`,
-//! `DeleteConfirmed`, `RenameConfirmed`, `TextCopyRequested`, `RefreshRequested` (M2).
+//! `DeleteConfirmed`, `RenameConfirmed`, `TextCopyRequested`, `RefreshRequested`,
+//! `ClaimRequested` (M2).
 //!
 //! # The state this feature remembers (feature 028, contract S1)
 //!
@@ -56,7 +57,9 @@ use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::naming::{display_name, parse_tags, Tag};
 use micold_core::overlay::Layer;
-use micold_core::worktree::{Worktree, WorktreeStatus};
+use micold_core::worktree::{
+    classify_owner, ProvenanceView, Worktree, WorktreeOwner, WorktreeStatus,
+};
 
 /// What this feature remembers (feature 028, contract S1).
 ///
@@ -123,15 +126,17 @@ pub struct WorktreeRenameDraft {
 /// `pub(crate)` rather than private: the sidebar's row and chip projections both read it from
 /// `features/sidebar.rs`. It was private while it and its callers shared one file, and the
 /// widening is the cost of the boundary — Tier 3 revisits it (T062).
-pub(crate) fn worktree_tags(worktree: &Worktree) -> Vec<Tag> {
+pub(crate) fn worktree_tags(worktree: &Worktree, provenance: &ProvenanceView<'_>) -> Vec<Tag> {
     let mut tags = parse_tags(&worktree.dir_name);
     if worktree.status != WorktreeStatus::Valid {
         tags.push(Tag::Status(worktree.status));
     }
-    // Feature 014 (FR-010b). Injected here rather than in `parse_tags`, which only sees the
-    // directory name and so cannot consult the branch. Only ever *seen* when the reveal
-    // control is on, since a hidden worktree produces no row at all.
-    if worktree.is_agent_owned() {
+    // Feature 014 (FR-010b), now decided by the record rather than by the name (029 FR-015).
+    // Injected here rather than in `parse_tags`, which sees only the directory name — and under
+    // provenance could not decide this from any name at all. The tag, its label and its
+    // non-filterability are untouched (FR-015a); what changed is which worktrees carry it.
+    // Only ever *seen* when the reveal control is on, since a hidden worktree produces no row.
+    if classify_owner(worktree, provenance) == WorktreeOwner::Agent {
         tags.push(Tag::Agent);
     }
     tags
@@ -148,6 +153,30 @@ impl crate::app::State {
             .unwrap_or_else(|| display_name(dir_name))
     }
 
+    /// What this app knows about who created the active project's worktrees (029 FR-004).
+    ///
+    /// Private, and rebuilt per call rather than cached: the record set lives in
+    /// [`crate::app::State::workspace`], where the catalog snapshot keeps it current, and a cached
+    /// view is a second copy that can be stale for exactly one frame — the frame in which a
+    /// just-created worktree would appear unrecorded, which is the bug FR-010 forbids.
+    ///
+    /// With no active project there is nothing to classify against; [`ProvenanceView::none`] is
+    /// correct rather than merely convenient, since the worktree list is empty too.
+    ///
+    /// `pub(crate)` for the same reason as [`worktree_tags`], which now needs it: the sidebar's
+    /// row and chip projections live in `features/sidebar.rs`, so the classification input has to
+    /// cross that boundary with them.
+    pub(crate) fn provenance_view(&self) -> ProvenanceView<'_> {
+        let Some(project) = self.workspace.active_project() else {
+            return ProvenanceView::none();
+        };
+        ProvenanceView {
+            records: self.workspace.user_created_worktrees(&project.path),
+            // FR-011: a project whose durable state could not be read hides nothing.
+            state_unreadable: self.workspace.unreadable_projects.contains(&project.path),
+        }
+    }
+
     /// The worktrees currently shown to the user (feature 014, FR-002/FR-003): all of them while
     /// the reveal control is on, only user-owned ones while it is off.
     ///
@@ -161,10 +190,24 @@ impl crate::app::State {
     /// override must survive.
     pub fn visible_worktrees(&self) -> impl Iterator<Item = &Worktree> {
         let show_all = self.sidebar.show_agent_worktrees;
+        let provenance = self.provenance_view();
         self.worktree
             .worktrees
             .iter()
-            .filter(move |w| show_all || !w.is_agent_owned())
+            .filter(move |w| show_all || classify_owner(w, &provenance) == WorktreeOwner::User)
+    }
+
+    /// How many worktrees the reveal control is currently withholding (feature 029, FR-025).
+    ///
+    /// Zero while the control is on — it is withholding nothing then — and zero for a project
+    /// whose worktrees are all the user's.
+    ///
+    /// Defined as the *difference* between the whole list and the visible one rather than as a
+    /// second filter over the same predicate (FR-025b). Two filters that had to agree would be two
+    /// places to get the rule wrong, and the number beside a control is a promise about what that
+    /// control does: switching it on must add exactly this many rows, always.
+    pub fn hidden_worktree_count(&self) -> usize {
+        self.worktree.worktrees.len() - self.visible_worktrees().count()
     }
 
     /// Whether any worktree is currently visible (feature 014, FR-003). Drives the sidebar's
@@ -323,7 +366,20 @@ pub fn loaded(
 /// its caller can vouch for. [`included`] keys on path instead because the daemon answers an
 /// include with one. Reached only through `Outcome::WorktreeCreated` — the form that ran the
 /// create does not own this list.
+///
+/// **Records provenance optimistically** (feature 029, FR-010). The daemon writes the durable
+/// record and re-broadcasts, but this reducer runs first and cannot wait: without the record, a
+/// worktree the user just made would be classified `Agent` for the frames in between and flicker
+/// out of the list they are looking at. Recording here also means a *failed* durable write still
+/// leaves the worktree listed for this run — the user made it, so they must be able to see it,
+/// whatever the disk did. `catalog_sync` reconciles the map to the daemon's answer on the next
+/// snapshot, so this is an optimism the daemon corrects, not a second source of truth.
 pub fn created(state: &mut crate::app::State, worktree: Worktree) -> Vec<crate::features::Outcome> {
+    if let Some(project) = state.workspace.active_project().map(|p| p.path.clone()) {
+        state
+            .workspace
+            .record_user_created(&project, &worktree.dir_name);
+    }
     if !state
         .worktree
         .worktrees
@@ -374,6 +430,24 @@ pub fn menu_toggled(
 
 /// The worktree context menu was dismissed.
 pub fn menu_dismissed(state: &mut crate::app::State) {
+    state.worktree.menu_open = None;
+}
+
+/// The user claimed a revealed worktree as their own (feature 029, FR-020/FR-022).
+///
+/// Optimistic, for the reason `created()` is: the daemon writes the same record a moment later and
+/// the next catalog push confirms it, but the row has to be the user's *in this frame*. Waiting for
+/// the ack would leave a just-claimed row still wearing the `agent` chip, and would make it vanish
+/// under the cursor if the user switched reveal off in the meantime.
+///
+/// Touches `worktree_provenance` and `menu_open` and nothing else — not `show_agent_worktrees`,
+/// not the filters, not `worktrees`. A claim states who a worktree belongs to; it does not change
+/// what the sidebar is showing or what it is filtered by.
+pub fn claim_requested(state: &mut crate::app::State, dir: String) {
+    if let Some(project) = state.workspace.active_project().map(|p| p.path.clone()) {
+        state.workspace.record_user_created(&project, &dir);
+    }
+    // Chosen from the row menu, so close it — the same courtesy every other menu action does.
     state.worktree.menu_open = None;
 }
 
@@ -590,14 +664,19 @@ pub enum Msg {
     /// that already replied. The reducer ignores the payload; the shell reads it. This is the one
     /// place the two vocabularies meet, and it meets in the shell, where correlation lives.
     RefreshTimedOut(u64),
+    /// Claim a revealed worktree as the user's own (feature 029, FR-020), by `dir_name`.
+    ///
+    /// Offered only on a row that classifies `Agent`, which — since a hidden worktree draws no row
+    /// — means only while the reveal control is on. There is no inverse (FR-024).
+    ClaimRequested(String),
 }
 
 /// The pure half of this feature's reducer surface: shape A (contract M2).
 ///
-/// All twenty-one arms are here. Six of them additionally need an effect — the daemon asked to
-/// include, exclude, delete, rename or re-read, and the clipboard written — and those six are
-/// matched a second time in `main.rs`, which runs the effect and lets the message fall through to
-/// here.
+/// All twenty-two arms are here. Seven of them additionally need an effect — the daemon asked
+/// to include, exclude, delete, rename, re-read or claim, and the clipboard written — and those
+/// seven are matched a second time in `main.rs`, which runs the effect and lets the message fall
+/// through to here.
 /// That is the split `worktree_form` established and M2 names as the reference: by *effect*, not
 /// by variant, so nothing about a delete is duplicated between the two halves.
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
@@ -634,6 +713,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::RenameCancelled => rename_cancelled(state),
         Msg::Hovered(dir) => hovered(state, dir),
         Msg::Unhovered(dir) => unhovered(state, dir),
+        Msg::ClaimRequested(dir) => claim_requested(state, dir),
     }
     Vec::new()
 }

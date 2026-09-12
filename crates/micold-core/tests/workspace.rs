@@ -314,3 +314,95 @@ fn forgetting_a_project_forgets_which_session_it_was_on() {
          worktree names already do, and the memory is one more"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// Feature 029 (T003): the provenance record — what this app created, per project.
+//
+// The record is the whole feature: 014 asked a worktree's name who made it, and 029 asks this
+// map instead. These tests pin the accessors and the removals; who writes them is the daemon's
+// business (contracts/provenance-store.md §2).
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn a_worktree_is_not_user_created_until_it_is_recorded() {
+    let mut ws = Workspace::empty();
+    ws.open_or_activate(PathBuf::from("/a"), &plain());
+    let key = canonicalize_best_effort(Path::new("/a"));
+
+    assert!(
+        !ws.is_user_created(&key, "feat-x"),
+        "an unrecorded worktree is not the user's — 029 FR-004"
+    );
+    ws.record_user_created(&key, "feat-x");
+    assert!(ws.is_user_created(&key, "feat-x"));
+}
+
+#[test]
+fn recording_the_same_worktree_twice_changes_nothing() {
+    let mut ws = Workspace::empty();
+    let key = PathBuf::from("/a");
+    ws.record_user_created(&key, "feat-x");
+    let after_first = ws.worktree_provenance.clone();
+    ws.record_user_created(&key, "feat-x");
+
+    assert_eq!(
+        ws.worktree_provenance, after_first,
+        "recording is idempotent — the claim action re-records freely (FR-022)"
+    );
+}
+
+#[test]
+fn provenance_is_scoped_to_its_project() {
+    let mut ws = Workspace::empty();
+    ws.record_user_created(Path::new("/a"), "feat-x");
+
+    assert!(ws.is_user_created(Path::new("/a"), "feat-x"));
+    assert!(
+        !ws.is_user_created(Path::new("/b"), "feat-x"),
+        "two projects may hold same-named worktrees and must not answer for each other"
+    );
+}
+
+#[test]
+fn forgetting_a_worktree_removes_only_that_record_and_prunes_an_emptied_project() {
+    let mut ws = Workspace::empty();
+    ws.record_user_created(Path::new("/a"), "feat-x");
+    ws.record_user_created(Path::new("/a"), "feat-y");
+
+    ws.forget_user_created(Path::new("/a"), "feat-x");
+    assert!(!ws.is_user_created(Path::new("/a"), "feat-x"));
+    assert!(ws.is_user_created(Path::new("/a"), "feat-y"));
+
+    ws.forget_user_created(Path::new("/a"), "feat-y");
+    assert!(
+        !ws.worktree_provenance.contains_key(Path::new("/a")),
+        "an emptied project key is pruned, like `clear_worktree_name` prunes its own"
+    );
+}
+
+#[test]
+fn forgetting_an_unrecorded_worktree_is_a_no_op() {
+    let mut ws = Workspace::empty();
+    ws.forget_user_created(Path::new("/a"), "never-existed");
+    assert!(ws.worktree_provenance.is_empty());
+}
+
+#[test]
+fn forget_drops_provenance_and_the_migration_marker_for_that_path() {
+    let mut ws = Workspace::empty();
+    ws.open_or_activate(PathBuf::from("/a"), &plain());
+    let key = canonicalize_best_effort(Path::new("/a"));
+    ws.record_user_created(&key, "feat-x");
+    ws.provenance_migrated.insert(key.clone());
+
+    ws.forget(Path::new("/a"));
+
+    assert!(
+        !ws.worktree_provenance.contains_key(&key),
+        "provenance goes with the project (029 FR-009)"
+    );
+    assert!(
+        !ws.provenance_migrated.contains(&key),
+        "and so does the marker — re-opening the folder is a fresh project that migrates again"
+    );
+}

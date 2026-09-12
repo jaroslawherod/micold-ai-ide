@@ -95,6 +95,28 @@ fn with_projects(count: usize) -> State {
     );
     workspace.active = workspace.projects.first().map(|p| p.path.clone());
     state.workspace = workspace;
+    record_every_worktree(state)
+}
+
+/// Record every worktree in `state` as one this app created (029 FR-001).
+///
+/// A worktree inside the managed root is listed only if there is a record saying the app created
+/// it (029 FR-004), so a fixture that fills `worktree.worktrees` and stops renders a sidebar with
+/// no rows — and this gate presses rows. These stand for ordinary worktrees made through the app,
+/// so they carry the records ordinary worktrees have.
+fn record_every_worktree(mut state: State) -> State {
+    let Some(project) = state.workspace.active_project().map(|p| p.path.clone()) else {
+        return state;
+    };
+    let names: Vec<String> = state
+        .worktree
+        .worktrees
+        .iter()
+        .map(|w| w.dir_name.clone())
+        .collect();
+    for name in names {
+        state.workspace.record_user_created(&project, &name);
+    }
     state
 }
 
@@ -127,7 +149,7 @@ fn with_project(sessions: Vec<Session>) -> State {
         ColorScheme::Light => ThemePreference::Light,
         ColorScheme::Dark => ThemePreference::Dark,
     };
-    state
+    record_every_worktree(state)
 }
 
 /// Render `state` and resolve its geometry.

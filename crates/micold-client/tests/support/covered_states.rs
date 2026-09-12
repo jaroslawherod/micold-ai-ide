@@ -201,6 +201,33 @@ fn with_project() -> State {
         state.workspace.active_project().is_some(),
         "the covered state must have a project open, or it is not covering what it claims"
     );
+    record_every_worktree(state)
+}
+
+/// Record every worktree in `state` as one this app created (feature 029, FR-001).
+///
+/// Under provenance a worktree inside the managed root is listed only if there is a record saying
+/// the app created it, so a fixture that sets `worktree.worktrees` and stops renders a sidebar
+/// with no worktree rows at all — which is not the state any of these fixtures claims to cover.
+/// The states here stand for ordinary worktrees the user made through the app, so they carry the
+/// records that ordinary worktrees have. The reveal control and the hidden set get their own
+/// fixtures (`tests/worktree_visibility.rs`); this is the everyday case.
+///
+/// Applied after the list is built rather than inside `worktree()`, because the record belongs to
+/// the workspace and is keyed by project — the constructor has neither.
+fn record_every_worktree(mut state: State) -> State {
+    let Some(project) = state.workspace.active_project().map(|p| p.path.clone()) else {
+        return state;
+    };
+    let names: Vec<String> = state
+        .worktree
+        .worktrees
+        .iter()
+        .map(|w| w.dir_name.clone())
+        .collect();
+    for name in names {
+        state.workspace.record_user_created(&project, &name);
+    }
     state
 }
 
@@ -427,6 +454,10 @@ pub fn covered_states() -> &'static [CoveredState] {
 
                 let mut state = with_project();
                 state.workspace = workspace;
+                // The replacement discards `with_project`'s provenance records along with
+                // everything else the workspace held, and a worktree with no record is not
+                // listed (029 FR-004). Re-record, or this state renders an empty sidebar.
+                state = record_every_worktree(state);
                 state.sidebar.expanded.insert("feat-short".to_string());
                 state.window.window_size = (1280, 800);
                 state.session.menu_open = Some(SessionMenu {
@@ -545,7 +576,10 @@ pub fn covered_states() -> &'static [CoveredState] {
                 state.worktree.worktrees = (0..30)
                     .map(|i| worktree(&format!("feat-{i:02}"), &format!("feat/{i:02}")))
                     .collect();
-                StateUnderTest::new(state)
+                // Replacing the list leaves `with_project`'s records pointing at worktrees that
+                // are gone, so re-record: without this the list holds thirty rows and shows none,
+                // and the one state that scrolls stops scrolling.
+                StateUnderTest::new(record_every_worktree(state))
             },
             anchors: &[Anchor {
                 name: "shell.root",
@@ -733,6 +767,10 @@ pub fn covered_states() -> &'static [CoveredState] {
 
                 let mut state = with_project();
                 state.workspace = workspace;
+                // The replacement discards `with_project`'s provenance records along with
+                // everything else the workspace held, and a worktree with no record is not
+                // listed (029 FR-004). Re-record, or this state renders an empty sidebar.
+                state = record_every_worktree(state);
                 state.session.active = Some(active);
                 StateUnderTest::new(state)
             },
@@ -835,6 +873,10 @@ pub fn covered_states() -> &'static [CoveredState] {
 
                 let mut state = with_project();
                 state.workspace = workspace;
+                // The replacement discards `with_project`'s provenance records along with
+                // everything else the workspace held, and a worktree with no record is not
+                // listed (029 FR-004). Re-record, or this state renders an empty sidebar.
+                state = record_every_worktree(state);
                 state.session.active = Some(active);
                 // The width the bar actually gives the scrolling region, which the running
                 // application learns from `Scrollable::on_viewport_resize` and a hand-built state
@@ -939,6 +981,10 @@ pub fn covered_states() -> &'static [CoveredState] {
 
                 let mut state = with_project();
                 state.workspace = workspace;
+                // The replacement discards `with_project`'s provenance records along with
+                // everything else the workspace held, and a worktree with no record is not
+                // listed (029 FR-004). Re-record, or this state renders an empty sidebar.
+                state = record_every_worktree(state);
                 state.session.active = Some(active);
                 // The width the bar actually gives the scrolling region, which the running
                 // application learns from `Scrollable::on_viewport_resize` and a hand-built state
@@ -1004,6 +1050,10 @@ pub fn covered_states() -> &'static [CoveredState] {
 
                 let mut state = with_project();
                 state.workspace = workspace;
+                // The replacement discards `with_project`'s provenance records along with
+                // everything else the workspace held, and a worktree with no record is not
+                // listed (029 FR-004). Re-record, or this state renders an empty sidebar.
+                state = record_every_worktree(state);
                 // The one line this state is about. Without it the session exists in the workspace
                 // and the sidebar still draws a flat list of depth-0 rows.
                 state.sidebar.expanded.insert("feat-short".to_string());
@@ -1072,6 +1122,10 @@ pub fn covered_states() -> &'static [CoveredState] {
                 let mut workspace = super::workspace_with(vec![(PROJECT, vec![]), (OTHER, vec![])]);
                 workspace.active = workspace.projects.first().map(|p| p.path.clone());
                 state.workspace = workspace;
+                // The replacement discards `with_project`'s provenance records along with
+                // everything else the workspace held, and a worktree with no record is not
+                // listed (029 FR-004). Re-record, or this state renders an empty sidebar.
+                state = record_every_worktree(state);
                 state.project.switcher_open = true;
                 StateUnderTest::new(state)
             },

@@ -22,7 +22,7 @@ use crate::session::{AiCli, Session, SessionId, SessionLabel, SessionLocation, T
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -346,6 +346,14 @@ impl StoredCatalog {
             // Feature 025: never carried by the catalog itself. It lives in each project's own
             // state file and is filled in by `load` after this, alongside that project's sessions.
             foreground_by_project: BTreeMap::new(),
+            // Feature 029: same — per project, filled in by `load`. There is deliberately no
+            // legacy catalog fallback for these: the catalog never carried provenance, so a
+            // pre-029 file has none to migrate, and the project simply arrives unmigrated and
+            // goes through the one-time backfill.
+            worktree_provenance: BTreeMap::new(),
+            provenance_migrated: BTreeSet::new(),
+            // Never persisted at all — it describes this run's reading of the disk (FR-011).
+            unreadable_projects: BTreeSet::new(),
         }
     }
 }
@@ -376,6 +384,25 @@ struct StoredProjectState {
     /// and an older build reading one that carries it ignores an unknown field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     included_worktrees: Vec<PathBuf>,
+    /// The worktrees this application created in this project (feature 029, FR-001).
+    ///
+    /// `#[serde(default)]` and no `schema_version` bump, for the reason `last_session` records —
+    /// but the consequence here is louder, so it is worth stating: absent means "recorded none",
+    /// and under 029 that would hide every worktree. What makes the upgrade survivable is not
+    /// this default but the one-time backfill that runs beside it (FR-006), which is why
+    /// `provenance_migrated` below is stored in the same file and written in the same save.
+    ///
+    /// A `Vec` on the wire and a `BTreeSet` in memory: `serde_json` has no set-shaped literal
+    /// worth the round-trip, and the in-memory set already guarantees the sorted, deduplicated
+    /// order this is written in.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    created_worktrees: Vec<String>,
+    /// Whether the one-time provenance backfill has run for this project (feature 029, FR-006c).
+    ///
+    /// `#[serde(default)]` = `false` = "not yet", which is precisely the state every installation
+    /// upgrading into this feature is in.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    provenance_migrated: bool,
 }
 
 impl StoredProjectState {
@@ -398,6 +425,12 @@ impl StoredProjectState {
                 .get(project_path)
                 .cloned()
                 .unwrap_or_default(),
+            created_worktrees: ws
+                .worktree_provenance
+                .get(project_path)
+                .map(|set| set.iter().cloned().collect())
+                .unwrap_or_default(),
+            provenance_migrated: ws.provenance_migrated.contains(project_path),
         }
     }
 }
@@ -462,12 +495,14 @@ fn load_project_state(path: &Path) -> ProjectStateLoad {
     };
     match serde_json::from_str::<StoredProjectState>(&contents) {
         Ok(state) => ProjectStateLoad::Found(state),
-        Err(_) => {
-            // Corrupt: preserve the bad file (best-effort) and recover to empty, isolated to
-            // this project only (FR-012a) — mirrors the catalog's own corrupt-file handling.
-            let _ = std::fs::rename(path, backup_path_for(path));
-            ProjectStateLoad::Corrupt
-        }
+        // Corrupt: recover to empty for this project only (FR-012a), and leave the file exactly
+        // as found (029 FR-011). It used to be renamed aside here, which preserved the bytes but
+        // hid the damage from the *next* reader of the same store — the daemon the client has just
+        // spawned reads a merely missing file, marks nothing unreadable, and runs the one-time
+        // FR-006 backfill against evidence that has just been discarded, writing its done-marker.
+        // Leaving the file in place makes every reader reach the same verdict, and [`save`] then
+        // declines to overwrite it.
+        Err(_) => ProjectStateLoad::Corrupt,
     }
 }
 
@@ -613,6 +648,23 @@ impl ProjectStore for JsonFileStore {
                             .included_worktrees
                             .insert(project.path.clone(), state.included_worktrees);
                     }
+                    // Feature 029. Absent in a file written before the field existed, which is
+                    // "this app has created nothing here" — true of a project it has never
+                    // created a worktree in, and made survivable for every other project by the
+                    // one-time backfill the marker below gates.
+                    if state.created_worktrees.is_empty() {
+                        workspace.worktree_provenance.remove(&project.path);
+                    } else {
+                        workspace.worktree_provenance.insert(
+                            project.path.clone(),
+                            state.created_worktrees.into_iter().collect(),
+                        );
+                    }
+                    if state.provenance_migrated {
+                        workspace.provenance_migrated.insert(project.path.clone());
+                    } else {
+                        workspace.provenance_migrated.remove(&project.path);
+                    }
                     // Feature 025. Absent in a file written before this field existed, which is
                     // "no memory" — the behaviour this application had until now.
                     match state.last_session {
@@ -631,6 +683,19 @@ impl ProjectStore for JsonFileStore {
                     // nothing, for a project that never had sessions/overrides).
                 }
                 ProjectStateLoad::Corrupt => {
+                    // Feature 029, FR-011. Every other line in this arm drops data that degrades
+                    // to a smaller, still-correct app: fewer sessions, derived names, no included
+                    // worktrees. Provenance does not degrade that way — an empty record set reads
+                    // as "the app created none of these", i.e. hide them all, which would take the
+                    // user's own worktrees off the screen because a file failed to parse. So the
+                    // failure is *named* here, and the classifier treats a named project as all
+                    // the user's until the file can be read again.
+                    workspace.unreadable_projects.insert(project.path.clone());
+                    workspace.worktree_provenance.remove(&project.path);
+                    // The marker goes too: a project we could not read has not been proven
+                    // migrated, and re-running the backfill on a readable file is idempotent
+                    // whereas skipping it on a lost marker is not recoverable.
+                    workspace.provenance_migrated.remove(&project.path);
                     workspace.sessions.remove(&project.path);
                     workspace.worktree_names.remove(&project.path);
                     // …and shows no worktree it could only have learned about from that file.
@@ -658,6 +723,15 @@ impl ProjectStore for JsonFileStore {
         let mut first_err = None;
         let mut state_write_failed = vec![false; workspace.projects.len()];
         for (i, project) in workspace.projects.iter().enumerate() {
+            if workspace.unreadable_projects.contains(&project.path) {
+                // 029 FR-011: this run could not read this project's state, so everything held in
+                // memory for it is the empty shape that failure degraded to. Writing that back
+                // would overwrite the true record set with nothing, and would leave the next run
+                // reading a well-formed file that merely has no records — indistinguishable from a
+                // project awaiting migration, which is how a transient read failure consumes the
+                // one-time backfill. A later run that can read the file saves it as usual.
+                continue;
+            }
             let state = StoredProjectState::from_workspace(workspace, &project.path);
             let path = self.project_state_path(&project.path);
             if let Err(err) = write_project_state(&path, &state) {

@@ -20,6 +20,11 @@ pub(crate) mod material;
 /// composes the `full` measurement scene and a ripple only starts from a press, so it needs the one
 /// traversal that can reach a ripple's per-instance state — and nothing else from the library.
 pub use focus::{into_view as focus_into_view, scroll_focused_into_view};
+/// The reveal control's `label · N` rule (feature 029, FR-025a), named individually for the same
+/// reason the ripple below is: `tests/toggle_chip_count.rs` asserts the rule — zero renders the
+/// label alone — and the module itself stays `pub(crate)` so a call site cannot reach past it into
+/// the widget's styling.
+pub use material::chip_label;
 pub use material::ripple_pulse;
 pub use material::target_offset_delta;
 /// The bring-up indicator, and the wording it shows. Named individually — like the ripple
@@ -441,7 +446,14 @@ pub fn view<'a>(
                 .worktrees
                 .iter()
                 .any(|w| &w.dir_name == dir && w.included);
-            let items = worktree_menu_items(dir, &state.worktree_display_name(dir), included);
+            // 029 FR-020: the claim is offered exactly when the row is not yet the user's.
+            let claimable = state.worktree.worktrees.iter().any(|w| {
+                &w.dir_name == dir
+                    && micold_core::worktree::classify_owner(w, &state.provenance_view())
+                        == micold_core::worktree::WorktreeOwner::Agent
+            });
+            let items =
+                worktree_menu_items(dir, &state.worktree_display_name(dir), included, claimable);
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(items.len()),
@@ -613,10 +625,23 @@ pub fn view<'a>(
 
 /// The items in a worktree's right-click context menu (feature 008, FR-013; "Copy name" added
 /// for cross-application clipboard access to labels the app doesn't render as selectable text).
+///
+/// # "Claim as mine" (feature 029, FR-020)
+///
+/// Offered when `claimable` — the row classifies `Agent`, meaning this app has no record of making
+/// it. Since a worktree with no record draws no row at all unless the reveal control is on, that is
+/// the same as "only on a revealed row", expressed as the classification rather than as the control
+/// so the two cannot disagree.
+///
+/// It goes in **this** menu and not in `row_actions_cluster()`. 014 FR-013 forbids the hover cluster
+/// being special-cased for an agent row and 029 FR-015 restates it: a revealed row offers exactly
+/// the same actions as any other, none hidden, reordered or given an extra confirmation. Adding an
+/// action to the cluster for one class of row is precisely what both forbid.
 fn worktree_menu_items(
     dir: &str,
     display_name: &str,
     included: bool,
+    claimable: bool,
 ) -> Vec<material::MenuItem<Message>> {
     let mut items = vec![
         material::MenuItem::new(
@@ -638,6 +663,20 @@ fn worktree_menu_items(
             Icon::Close,
             "Stop showing",
             Message::Worktree(WorktreeMsg::ExcludeRequested(dir.to_string())),
+        ));
+    }
+    // 029 FR-020. Above Delete, because it is the item a user who has just revealed a row is
+    // looking for, and because the destructive action stays last.
+    //
+    // `check_circle` rather than a new codepoint: the glyph already means "yes, this one" where the
+    // switcher marks the active project, and the vocabulary is deliberately closed — a new icon is
+    // a font entry, a `PROVENANCE.md` row and a regression-locked codepoint, which is a change to
+    // the icon set rather than to this feature.
+    if claimable {
+        items.push(material::MenuItem::new(
+            Icon::ActiveMarker,
+            "Claim as mine",
+            Message::Worktree(WorktreeMsg::ClaimRequested(dir.to_string())),
         ));
     }
     items.push(material::MenuItem::new(
