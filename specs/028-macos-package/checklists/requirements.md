@@ -126,6 +126,43 @@ FR-029, the Principle VIII gate for the new screen, and a concrete mechanism for
 trust notice) and in `quickstart.md` (§A's gate list brought back into agreement with `tasks.md`).
 They are recorded here only so this file explains why the spec moved and the checklist did not.
 
+### Validation pass 5 (2026-09-12) — against what shipped
+
+Re-read every item against the implementation rather than against the spec's own prose. **All 16
+items still pass**, and nothing in the spec was edited to make them: this pass is a check that the
+requirements turned out to be the ones the work was actually held to, not a revision.
+
+What the pass actually looked at, and what it found:
+
+- **"Requirements are testable and unambiguous"** — the strongest evidence is that requirements
+  failed. FR-002/FR-006's bundle contract, FR-011's draft-hold, FR-015's signature rule, FR-019's
+  refusal, FR-025's no-registration rule and FR-032's agreement-between-documents each became a gate
+  that went red before it went green. A requirement nobody could have written a failing test for
+  would have been discovered here; none was.
+- **FR-004's floor clause, rewritten in pass 4, held up.** The three obligations it replaced one
+  uncheckable MUST with are all met and all checked: the value lives in `packaging/macos/Info.plist.in`
+  alone, `macos_minimum_version.rs` holds it equal to the number in `docs/user-guide/install-macos.md`,
+  and "Before a release: re-check the version floor" is a named section of
+  `docs/development/macos-packaging.md`. Pass 4's judgement that this was a strengthening rather than
+  a weakening is confirmed by implementation.
+- **"No implementation details leak into specification"** — the plan and the tasks carry the bundle
+  layout, `codesign`, `hdiutil`, the workflow steps and the `.app`/`.dmg` split, and the spec still
+  carries none of them. The vocabulary exception recorded under *Deliberate wording choices* below
+  needed no widening.
+- **"Feature meets measurable outcomes defined in Success Criteria"** — this is the one item that
+  passes *as a checklist item* while the feature does not yet fully demonstrate it, and the
+  distinction is worth stating plainly rather than leaving for a reader to notice. The item asks
+  whether the success criteria are the right measurable outcomes for the feature, and they are.
+  Whether they have been *observed* is a different question: SC-001, SC-003, SC-004, SC-005, SC-007,
+  SC-008, SC-009 and SC-012 are all §C rows, and §C needs a real Mac. Tasks T059 and T001 are open
+  for exactly that reason, and T057/T058 record the same boundary. Ticking this item is not a claim
+  that a stranger has installed the application.
+
+One thing changed outside the spec as a result of this pass: nothing. The two gates that went red
+during T057 were defects in the gates, not in the requirements — `feature_write_isolation.rs` needed
+the new state field named, and `release_publishes_complete_sets.rs` was reading a comment as a
+command — and neither reopened a requirement.
+
 ### Deliberate wording choices
 
 Recorded so a reviewer does not read them as leaked implementation:

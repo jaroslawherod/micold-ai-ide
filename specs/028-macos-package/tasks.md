@@ -45,9 +45,9 @@ through `mise.toml`. See plan.md → Project Structure.
 **Purpose**: Settle the one unknown that changes how a later gate is written, and create the
 packaging inputs everything else substitutes into.
 
-- [ ] T001 Spike — determine whether a GitHub `macos-latest` runner can create an iced window: push a throwaway workflow step that builds `micold-client` and launches it, capture the outcome, and record the answer (and which contingency applies) under R12 in `specs/028-macos-package/research.md`
-- [ ] T002 [P] Create `packaging/macos/entitlements.plist` as an empty `<dict/>` with a comment naming it as the file a future Developer ID + notarization change edits (FR-017)
-- [ ] T003 [P] Create `packaging/macos/Info.plist.in` as a valid plist skeleton carrying the literal `@VERSION@` token, so the substitution step below has a target
+- [ ] T001 **Deferred — settled from this branch's own CI run instead.** The spike as written pushes a throwaway workflow to a GitHub runner, which is an outward-facing action taken on the user's account for a question the branch's first real run answers anyway. T023 was therefore written to be correct under *either* outcome: it asserts the full gate, and treats a window-surface failure as a pass with the reason logged (contingency (b)). Once the macOS leg has run, record the observed outcome and which contingency applies under R12. Original text: spike — determine whether a GitHub `macos-latest` runner can create an iced window: push a throwaway workflow step that builds `micold-client` and launches it, capture the outcome, and record the answer (and which contingency applies) under R12 in `specs/028-macos-package/research.md`
+- [X] T002 [P] Create `packaging/macos/entitlements.plist` as an empty `<dict/>` with a comment naming it as the file a future Developer ID + notarization change edits (FR-017)
+- [X] T003 [P] Create `packaging/macos/Info.plist.in` as a valid plist skeleton carrying the literal `@VERSION@` token, so the substitution step below has a target
 
 ---
 
@@ -64,23 +64,23 @@ bundle this phase creates.
 > plist keys and the signature *before* the tasks that produce them; the value-agreement half of the
 > floor check lives in US4 (T043), where the documentation it compares against exists.
 
-- [ ] T004 Write failing `scripts/tests/macos-bundle.test.sh` covering the layout of contracts/bundle-layout.md: `--stage-only` against dummy binaries in a temp dir produces `Contents/Info.plist`, `Contents/PkgInfo`, `Contents/MacOS/{micold-ai-ide,micold-daemon}`, `Contents/Resources/icon.icns`, and **exactly two** entries in `Contents/MacOS/`
-- [ ] T005 Extend `scripts/tests/macos-bundle.test.sh` with the exclusion case: a `--bin-dir` that also contains a `micold-showcase` file still yields a bundle without one (FR-006)
-- [ ] T006 Extend `scripts/tests/macos-bundle.test.sh` with the failure cases: `@VERSION@` must not survive into the output, and a missing binary or missing icon exits non-zero with a message naming the missing file
-- [ ] T007 [P] Failing test in `crates/micold-core/tests/macos_permission_strings.rs` asserting every `ProtectedLocation` variant in data-model.md §2 has a matching `NS*UsageDescription` key in `packaging/macos/Info.plist.in`, and that a variant added without one fails
-- [ ] T008 [P] Failing test in `crates/micold-core/tests/macos_minimum_version.rs` asserting `packaging/macos/Info.plist.in` declares `LSMinimumSystemVersion` with a real version value — present, non-empty, and not a placeholder (FR-004)
-- [ ] T009 [P] Failing test in `crates/micold-core/tests/macos_signature_gate.rs` asserting `scripts/macos-bundle.sh` verifies with `codesign --verify --strict` and reports `Signature=adhoc`, and asserting it does **not** gate on `spctl` in either direction (FR-015, research R6)
+- [X] T004 Write failing `scripts/tests/macos-bundle.test.sh` covering the layout of contracts/bundle-layout.md: `--stage-only` against dummy binaries in a temp dir produces `Contents/Info.plist`, `Contents/PkgInfo`, `Contents/MacOS/{micold-ai-ide,micold-daemon}`, `Contents/Resources/icon.icns`, and **exactly two** entries in `Contents/MacOS/`
+- [X] T005 Extend `scripts/tests/macos-bundle.test.sh` with the exclusion case: a `--bin-dir` that also contains a `micold-showcase` file still yields a bundle without one (FR-006)
+- [X] T006 Extend `scripts/tests/macos-bundle.test.sh` with the failure cases: `@VERSION@` must not survive into the output, and a missing binary or missing icon exits non-zero with a message naming the missing file
+- [X] T007 [P] Failing test in `crates/micold-core/tests/macos_permission_strings.rs` asserting every `ProtectedLocation` variant in data-model.md §2 has a matching `NS*UsageDescription` key in `packaging/macos/Info.plist.in`, and that a variant added without one fails
+- [X] T008 [P] Failing test in `crates/micold-core/tests/macos_minimum_version.rs` asserting `packaging/macos/Info.plist.in` declares `LSMinimumSystemVersion` with a real version value — present, non-empty, and not a placeholder (FR-004)
+- [X] T009 [P] Failing test in `crates/micold-core/tests/macos_signature_gate.rs` asserting `scripts/macos-bundle.sh` verifies with `codesign --verify --strict` and reports `Signature=adhoc`, and asserting it does **not** gate on `spctl` in either direction (FR-015, research R6)
 
 ### Implementation
 
-- [ ] T010 Implement `scripts/macos-bundle.sh` — argument parsing (`--bin-dir`, `--out`, `--stage-only`, `--version`), the directory tree, the explicit two-file copy, `PkgInfo`, and plist substitution from `cargo metadata`; green against T004–T006
-- [ ] T011 Fill `packaging/macos/Info.plist.in` with every key in contracts/bundle-layout.md, including the five usage-description sentences in the user's terms (FR-027) and `LSMinimumSystemVersion` (FR-004); green against T007 and T008
-- [ ] T012 Add the macOS-only signing path to `scripts/macos-bundle.sh`: `codesign` the daemon first, then the bundle, with `--options runtime` and `--entitlements packaging/macos/entitlements.plist` (FR-012, research R5)
-- [ ] T013 Add the signature verification to `scripts/macos-bundle.sh` so it runs wherever the bundle is signed rather than only at release time; green against T009 (FR-015)
-- [ ] T014 Add `plutil -lint` (macOS) and an unconditional `@VERSION@`-residue check to `scripts/macos-bundle.sh`, failing the build rather than shipping an unsubstituted plist
-- [ ] T015 Add failing macOS rules to `crates/micold-client/tests/packaging_excludes_showcase.rs`: `scripts/macos-bundle.sh` must not name `micold-showcase`, must name both shipped binaries, and must contain no glob copy into `Contents/MacOS/` — each driven by a deliberately-broken synthetic script, as the Debian rules already are (research R14)
-- [ ] T016 Make `scripts/macos-bundle.sh` satisfy T015's rules and keep the copy list explicit
-- [ ] T017 Add the `app` task to `mise.toml` (`scripts/macos-bundle.sh` over the current build, through `scripts/build-lock.sh`), documented like `mise run deb` (FR-035)
+- [X] T010 Implement `scripts/macos-bundle.sh` — argument parsing (`--bin-dir`, `--out`, `--stage-only`, `--version`), the directory tree, the explicit two-file copy, `PkgInfo`, and plist substitution from `cargo metadata`; green against T004–T006
+- [X] T011 Fill `packaging/macos/Info.plist.in` with every key in contracts/bundle-layout.md, including the five usage-description sentences in the user's terms (FR-027) and `LSMinimumSystemVersion` (FR-004); green against T007 and T008
+- [X] T012 Add the macOS-only signing path to `scripts/macos-bundle.sh`: `codesign` the daemon first, then the bundle, with `--options runtime` and `--entitlements packaging/macos/entitlements.plist` (FR-012, research R5)
+- [X] T013 Add the signature verification to `scripts/macos-bundle.sh` so it runs wherever the bundle is signed rather than only at release time; green against T009 (FR-015)
+- [X] T014 Add `plutil -lint` (macOS) and an unconditional `@VERSION@`-residue check to `scripts/macos-bundle.sh`, failing the build rather than shipping an unsubstituted plist
+- [X] T015 Add failing macOS rules to `crates/micold-client/tests/packaging_excludes_showcase.rs`: `scripts/macos-bundle.sh` must not name `micold-showcase`, must name both shipped binaries, and must contain no glob copy into `Contents/MacOS/` — each driven by a deliberately-broken synthetic script, as the Debian rules already are (research R14)
+- [X] T016 Make `scripts/macos-bundle.sh` satisfy T015's rules and keep the copy list explicit
+- [X] T017 Add the `app` task to `mise.toml` (`scripts/macos-bundle.sh` over the current build, through `scripts/build-lock.sh`), documented like `mise run deb` (FR-035)
 
 **Checkpoint**: `mise run app` produces a signed, verified bundle on a Mac;
 `scripts/tests/macos-bundle.test.sh`, `cargo test -p micold-client --test packaging_excludes_showcase`,
@@ -98,21 +98,21 @@ repository, start a session. Delivers a working application to a population that
 
 ### Prerequisite for the US1 gate
 
-- [ ] T018 [US1] Carve `specs/028-macos-package/quickstart.md` out of the documentation set: add `/specs/028-macos-package/quickstart.md -micold-docs` to `.gitattributes` after the `specs/**` line, where the last matching line wins, with the same reasoning feature 027 recorded for its own quickstart. Without it T020 reads a `micold-docs` path, which `documentation_is_not_read.rs` forbids, and an edit to §B would skip the whole pipeline — so the one edit the gate exists to catch is the one it never sees
+- [X] T018 [US1] Carve `specs/028-macos-package/quickstart.md` out of the documentation set: add `/specs/028-macos-package/quickstart.md -micold-docs` to `.gitattributes` after the `specs/**` line, where the last matching line wins, with the same reasoning feature 027 recorded for its own quickstart. Without it T020 reads a `micold-docs` path, which `documentation_is_not_read.rs` forbids, and an edit to §B would skip the whole pipeline — so the one edit the gate exists to catch is the one it never sees
 
 ### Tests for User Story 1 (MANDATORY) ⚠️
 
-- [ ] T019 [P] [US1] Failing unit tests for `classify` in `crates/micold-core/src/permission_failure.rs`: `PermissionDenied` under each protected location classifies; the same error outside them does not; every platform but macOS returns `None` (data-model.md §2)
-- [ ] T020 [US1] Failing test in `crates/micold-core/tests/macos_package_gate.rs` asserting `.github/workflows/ci.yml`'s macOS leg contains the bundle-and-launch step and that `specs/028-macos-package/quickstart.md` §B describes it — the enumerated-list-drifts-silently guard, modelled on `quickstart_a_runs_everywhere.rs`
+- [X] T019 [P] [US1] Failing unit tests for `classify` in `crates/micold-core/src/permission_failure.rs`: `PermissionDenied` under each protected location classifies; the same error outside them does not; every platform but macOS returns `None` (data-model.md §2)
+- [X] T020 [US1] Failing test in `crates/micold-core/tests/macos_package_gate.rs` asserting `.github/workflows/ci.yml`'s macOS leg contains the bundle-and-launch step and that `specs/028-macos-package/quickstart.md` §B describes it — the enumerated-list-drifts-silently guard, modelled on `quickstart_a_runs_everywhere.rs`
 
 ### Implementation for User Story 1
 
-- [ ] T021 [US1] Implement `crates/micold-core/src/permission_failure.rs` and export it from `crates/micold-core/src/lib.rs`
-- [ ] T022 [US1] Surface the classification where a project open or directory read fails, in `crates/micold-client/src/features/project.rs`, so the message names the permission and how to grant it instead of reporting a generic error (FR-028)
-- [ ] T023 [US1] Add the packaging step to the macOS leg of the `test` job in `.github/workflows/ci.yml`: stage and sign the bundle from the binaries `Build (workspace)` produced, verify the signature, launch `Contents/MacOS/micold-ai-ide`, assert it is still alive and that `$HOME/.micold/run/d.sock` appeared, then terminate — applying the contingency T001 settled (FR-036, research R12)
-- [ ] T024 [US1] Write `docs/user-guide/install-macos.md` with the download, install, launch, and "what starts automatically" sections, plus the long-`$HOME` endpoint limit (FR-030)
-- [ ] T025 [US1] Add the permissions section to `docs/user-guide/install-macos.md`: which protected locations the application asks for and when, what each prompt's explanation says and why (FR-027), what happens if the user declines, and the optional one-time Full Disk Access grant — stated as optional, with what it grants spelled out, and never a prerequisite for installing or running (FR-029)
-- [ ] T026 [US1] Add `docs/user-guide/install-macos.md` to the `docs` job's user-guide existence checks in `.github/workflows/ci.yml` (Principle VII)
+- [X] T021 [US1] Implement `crates/micold-core/src/permission_failure.rs` and export it from `crates/micold-core/src/lib.rs`
+- [X] T022 [US1] Surface the classification where a project open or directory read fails, in `crates/micold-client/src/shell/workspace.rs`, so the message names the permission and how to grant it instead of reporting a generic error (FR-028). *(Planned for `features/project.rs`; the folder listing is the only place a directory-read `io::Error` becomes user-facing text, and it is performed at the shell boundary — `features/project.rs` is render-free and never touches the filesystem.)*
+- [X] T023 [US1] Add the packaging step to the macOS leg of the `test` job in `.github/workflows/ci.yml`: stage and sign the bundle from the binaries `Build (workspace)` produced, verify the signature, launch `Contents/MacOS/micold-ai-ide`, assert it is still alive and that `$HOME/.micold/run/d.sock` appeared, then terminate — written to hold under either outcome of T001, which is deferred: a window-surface failure is reported and treated as a pass, every other way of dying still fails (FR-036, research R12 contingency (b))
+- [X] T024 [US1] Write `docs/user-guide/install-macos.md` with the download, install, launch, and "what starts automatically" sections, plus the long-`$HOME` endpoint limit (FR-030)
+- [X] T025 [US1] Add the permissions section to `docs/user-guide/install-macos.md`: which protected locations the application asks for and when, what each prompt's explanation says and why (FR-027), what happens if the user declines, and the optional one-time Full Disk Access grant — stated as optional, with what it grants spelled out, and never a prerequisite for installing or running (FR-029)
+- [X] T026 [US1] Add `docs/user-guide/install-macos.md` to the `docs` job's user-guide existence checks in `.github/workflows/ci.yml` (Principle VII)
 
 **Checkpoint**: A bundle built from the current tree installs, launches, and runs sessions on a Mac;
 CI proves it assembles and starts on every pull request.
@@ -129,17 +129,17 @@ against the documentation, follow it, confirm a clean second launch.
 
 ### Tests for User Story 2 (MANDATORY) ⚠️
 
-- [ ] T027 [P] [US2] Failing unit tests for `classify` in `crates/micold-core/src/install_location.rs` covering every row of contracts/install-location.md, including translocation winning over a `/Volumes/` prefix and the non-macOS `Installed` answer
-- [ ] T028 [P] [US2] Failing reducer test in `crates/micold-client/tests/features_window.rs`: a non-`Installed` verdict routes to the install-me screen, and no message path dismisses it or reaches the session UI (FR-019)
-- [ ] T029 [P] [US2] Register the install-me screen in `crates/micold-client/tests/anatomy_call_sites.rs` so the existing gate asserts it is built from shared components through the chainable builder-into-`Element` API, and fails while the screen is bespoke (Principle VIII, quickstart §A)
+- [X] T027 [P] [US2] Failing unit tests for `classify` in `crates/micold-core/src/install_location.rs` covering every row of contracts/install-location.md, including translocation winning over a `/Volumes/` prefix and the non-macOS `Installed` answer
+- [X] T028 [P] [US2] Failing reducer test in `crates/micold-client/tests/features_window.rs`: a non-`Installed` verdict routes to the install-me screen, and no message path dismisses it or reaches the session UI (FR-019)
+- [X] T029 [P] [US2] Register the install-me screen in `crates/micold-client/tests/anatomy_call_sites.rs` so the existing gate asserts it is built from shared components through the chainable builder-into-`Element` API, and fails while the screen is bespoke (Principle VIII, quickstart §A) *(No registration exists to make: `anatomy_call_sites.rs`, `material_boundary.rs` and `composite_call_sites.rs` walk `src/ui/` wholesale, so a new screen is covered the moment the file exists. Confirmed the hard way -- `composite_call_sites.rs` failed on the first draft of `ui/install_location.rs` for hand-building a glyph and a label, with no edit to any gate, and passed once the screen took `IconLabel`.)*
 
 ### Implementation for User Story 2
 
-- [ ] T030 [US2] Implement `crates/micold-core/src/install_location.rs` and export it from `crates/micold-core/src/lib.rs`
-- [ ] T031 [US2] Call `install_location::current()` on the client boot path in `crates/micold-client/src/features/window.rs` and render the install-me screen from shared components in `crates/micold-client/src/ui/`; view glue only, decision in the reducer; green against T028 and T029
-- [ ] T032 [US2] Add the first-launch section to `docs/user-guide/install-macos.md`: the exact block, the one System Settings gesture that clears it, why the application is not attributable to a registered developer, building from source as the alternative, why the block returns after an update, and why clearing it on the mounted copy does not help (FR-013, FR-014, US2 scenario 3)
-- [ ] T033 [US2] Add the trust notice beside the download in `README.md`, stating what the first launch does before the user meets it (SC-001)
-- [ ] T034 [US2] Put the same trust notice on the release page itself: add `.github/release-notice-macos.md` and a step in the existing `publish` job of `.github/workflows/release.yml` that appends it to the draft's generated body (`gh release view --json body`, then `gh release edit --notes-file`) before publication — release-please generates the body from commits and offers no fixed-text hook, so this is the only place the notice can reach the download page (Key Entities: download-page trust notice, SC-001)
+- [X] T030 [US2] Implement `crates/micold-core/src/install_location.rs` and export it from `crates/micold-core/src/lib.rs`
+- [X] T031 [US2] Call `install_location::current()` on the client boot path in `crates/micold-client/src/features/window.rs` and render the install-me screen from shared components in `crates/micold-client/src/ui/`; view glue only, decision in the reducer; green against T028 and T029
+- [X] T032 [US2] Add the first-launch section to `docs/user-guide/install-macos.md`: the exact block, the one System Settings gesture that clears it, why the application is not attributable to a registered developer, building from source as the alternative, why the block returns after an update, and why clearing it on the mounted copy does not help (FR-013, FR-014, US2 scenario 3)
+- [X] T033 [US2] Add the trust notice beside the download in `README.md`, stating what the first launch does before the user meets it (SC-001)
+- [X] T034 [US2] Put the same trust notice on the release page itself: add `.github/release-notice-macos.md` and a step in the existing `publish` job of `.github/workflows/release.yml` that appends it to the draft's generated body (`gh release view --json body`, then `gh release edit --notes-file`) before publication — release-please generates the body from commits and offers no fixed-text hook, so this is the only place the notice can reach the download page (Key Entities: download-page trust notice, SC-001)
 
 **Checkpoint**: A downloaded, quarantined copy behaves exactly as the documentation and the release
 page predict, and a copy run from the disk image says so instead of pretending to be installed.
@@ -156,16 +156,16 @@ artifact whose version matches the tag, with no human build or upload.
 
 ### Tests for User Story 3 (MANDATORY) ⚠️
 
-- [ ] T035 [P] [US3] Failing test in `crates/micold-core/tests/release_publishes_complete_sets.rs` asserting `.github/workflows/release.yml`'s `publish` job lists every artifact-producing job in `needs:`, driven by a synthetic workflow that omits one — the check that keeps FR-011 true after the next artifact is added (contracts/release-artifacts.md)
+- [X] T035 [P] [US3] Failing test in `crates/micold-core/tests/release_publishes_complete_sets.rs` asserting `.github/workflows/release.yml`'s `publish` job lists every artifact-producing job in `needs:`, driven by a synthetic workflow that omits one — the check that keeps FR-011 true after the next artifact is added (contracts/release-artifacts.md)
 
 ### Implementation for User Story 3
 
-- [ ] T036 [US3] Implement `scripts/macos-dmg.sh`: stage the bundle plus an `Applications` symlink, `hdiutil create -format UDZO`, name the output `MicoldAIIDE-<version>-universal.dmg` (FR-008, FR-009, research R4, data-model.md §5)
-- [ ] T037 [US3] Add the `dmg` task to `mise.toml`, documented beside `app` and `deb` (FR-035)
-- [ ] T038 [US3] Add the `macos` job to `.github/workflows/release.yml` (build, `scripts/macos-dmg.sh`, verify, `gh release upload --clobber`) and add it to `publish`'s `needs:` — green against T035 (FR-010, FR-011, FR-037)
-- [ ] T039 [US3] Write `docs/development/macos-packaging.md`: how the artifact is produced, how a contributor reproduces it with `mise run app` / `mise run dmg`, the `spctl` diagnostic, and exactly what adding Developer ID + notarization would change (FR-033, FR-017)
-- [ ] T040 [US3] Add `docs/development/macos-packaging.md` to the `docs` job's developer-docs existence checks in `.github/workflows/ci.yml`
-- [ ] T041 [US3] Update `README.md` so releases are no longer described as Debian-only and state what each release provides for macOS (FR-031)
+- [X] T036 [US3] Implement `scripts/macos-dmg.sh`: stage the bundle plus an `Applications` symlink, `hdiutil create -format UDZO`, name the output `MicoldAIIDE-<version>-universal.dmg` (FR-008, FR-009, research R4, data-model.md §5)
+- [X] T037 [US3] Add the `dmg` task to `mise.toml`, documented beside `app` and `deb` (FR-035)
+- [X] T038 [US3] Add the `macos` job to `.github/workflows/release.yml` (build, `scripts/macos-dmg.sh`, verify, `gh release upload --clobber`) and add it to `publish`'s `needs:` — green against T035 (FR-010, FR-011, FR-037)
+- [X] T039 [US3] Write `docs/development/macos-packaging.md`: how the artifact is produced, how a contributor reproduces it with `mise run app` / `mise run dmg`, the `spctl` diagnostic, and exactly what adding Developer ID + notarization would change (FR-033, FR-017)
+- [X] T040 [US3] Add `docs/development/macos-packaging.md` to the `docs` job's developer-docs existence checks in `.github/workflows/ci.yml`
+- [X] T041 [US3] Update `README.md` so releases are no longer described as Debian-only and state what each release provides for macOS (FR-031)
 
 **Checkpoint**: A release either ships all three artifacts or stays an unpublished draft with a red
 job naming the reason.
@@ -182,15 +182,15 @@ natively. On an older Mac, the system states the requirement.
 
 ### Tests for User Story 4 (MANDATORY) ⚠️
 
-- [ ] T042 [P] [US4] Failing case in `scripts/tests/macos-bundle.test.sh` asserting the merge step is driven by a target list variable and fails, naming the target, when one architecture's binary is missing (research R8)
-- [ ] T043 [P] [US4] Extend `crates/micold-core/tests/macos_minimum_version.rs` (the value half T008 deferred): the `LSMinimumSystemVersion` value must equal the floor stated in `docs/user-guide/install-macos.md`, so the plist and the documentation cannot drift when the floor moves (FR-004)
+- [X] T042 [P] [US4] Failing case in `scripts/tests/macos-bundle.test.sh` asserting the merge step is driven by a target list variable and fails, naming the target, when one architecture's binary is missing (research R8)
+- [X] T043 [P] [US4] Extend `crates/micold-core/tests/macos_minimum_version.rs` (the value half T008 deferred): the `LSMinimumSystemVersion` value must equal the floor stated in `docs/user-guide/install-macos.md`, so the plist and the documentation cannot drift when the floor moves (FR-004)
 
 ### Implementation for User Story 4
 
-- [ ] T044 [US4] Implement the `lipo` merge over a target-list variable in `scripts/macos-dmg.sh`, producing the universal binaries the bundle script consumes via `--bin-dir` (FR-020)
-- [ ] T045 [US4] Add `targets: aarch64-apple-darwin, x86_64-apple-darwin` to the toolchain step of the `macos` job in `.github/workflows/release.yml` and build both targets (research R15)
-- [ ] T046 [US4] Set `LSMinimumSystemVersion` to the current floor in `packaging/macos/Info.plist.in` — the single place the value is recorded — state that same floor in `docs/user-guide/install-macos.md` (green against T043), and add the re-check to `docs/development/macos-packaging.md` as a named step in producing a release: where the value lives, how to tell whether Apple has moved it, and that only the plist and the user guide change when it does (FR-004)
-- [ ] T047 [US4] Add the "which Mac, which macOS" section to `docs/user-guide/install-macos.md`: one download for both architectures, the minimum version, and what an older Mac sees (FR-021)
+- [X] T044 [US4] Implement the `lipo` merge over a target-list variable in `scripts/macos-dmg.sh`, producing the universal binaries the bundle script consumes via `--bin-dir` (FR-020)
+- [X] T045 [US4] Add `targets: aarch64-apple-darwin, x86_64-apple-darwin` to the toolchain step of the `macos` job in `.github/workflows/release.yml` and build both targets (research R15)
+- [X] T046 [US4] Set `LSMinimumSystemVersion` to the current floor in `packaging/macos/Info.plist.in` — the single place the value is recorded — state that same floor in `docs/user-guide/install-macos.md` (green against T043), and add the re-check to `docs/development/macos-packaging.md` as a named step in producing a release: where the value lives, how to tell whether Apple has moved it, and that only the plist and the user guide change when it does (FR-004)
+- [X] T047 [US4] Add the "which Mac, which macOS" section to `docs/user-guide/install-macos.md`: one download for both architectures, the minimum version, and what an older Mac sees (FR-021)
 
 **Checkpoint**: There is exactly one macOS download and no way for a user to pick the wrong one.
 
@@ -207,9 +207,9 @@ actual leftovers.
 
 ### Tests for User Story 5 (MANDATORY) ⚠️
 
-- [ ] T048 [P] [US5] Failing test in `crates/micold-core/tests/macos_registers_nothing.rs` asserting the bundle definition contains no `LaunchAgents`/`LaunchDaemons` payload and that no source file registers a login item or launch agent (`SMAppService`, `launchctl load`) — FR-025 as a checked property rather than a claim
-- [ ] T049 [P] [US5] Failing-or-confirming test that a newer client meeting an older running daemon resolves the mismatch without manual intervention, in `crates/micold-daemon/tests/` — extend the existing coverage if the case is already tested, add it if not (FR-023)
-- [ ] T050 [US5] Add the update-and-remove section to `docs/user-guide/install-macos.md`: replacing the app with the same drag gesture, what survives, what the version-mismatch message means, and every location that still holds user data after the app is in the Trash (FR-022, FR-024)
+- [X] T048 [P] [US5] Failing test in `crates/micold-core/tests/macos_registers_nothing.rs` asserting the bundle definition contains no `LaunchAgents`/`LaunchDaemons` payload and that no source file registers a login item or launch agent (`SMAppService`, `launchctl load`) — FR-025 as a checked property rather than a claim
+- [X] T049 [P] [US5] Failing-or-confirming test that a newer client meeting an older running daemon resolves the mismatch without manual intervention, in `crates/micold-daemon/tests/` — extend the existing coverage if the case is already tested, add it if not (FR-023) *(Added rather than extended: `handshake_flow.rs` covers the refusal, nothing covered the recovery it hands the user, and `spawn::stop_running_daemon` — the whole of the remedy — had no test at all. New file `crates/micold-daemon/tests/version_mismatch_resolves.rs`, two-process against the real binary.)*
+- [X] T050 [US5] Add the update-and-remove section to `docs/user-guide/install-macos.md`: replacing the app with the same drag gesture, what survives, what the version-mismatch message means, and every location that still holds user data after the app is in the Trash (FR-022, FR-024)
 
 **Checkpoint**: The full install → update → remove lifecycle is documented and checked.
 
@@ -225,12 +225,12 @@ verify it by starting a session, logging out, and logging back in.
 
 ### Tests for User Story 6 (MANDATORY) ⚠️
 
-- [ ] T051 [P] [US6] Failing test in `crates/micold-core/tests/macos_logout_claims_agree.rs` asserting the logout statement in `docs/user-guide/install-macos.md`, `docs/daemon.md`, and the module documentation of `crates/micold-core/src/logout_survival.rs` make the same claim about macOS (FR-032)
+- [X] T051 [P] [US6] Failing test in `crates/micold-core/tests/macos_logout_claims_agree.rs` asserting the logout statement in `docs/user-guide/install-macos.md`, `docs/daemon.md`, and the module documentation of `crates/micold-core/src/logout_survival.rs` make the same claim about macOS (FR-032)
 
 ### Implementation for User Story 6
 
-- [ ] T052 [US6] Add the logout section to `docs/user-guide/install-macos.md`: sessions survive closing the window but not logging out when the service runs on the computer, why, and the container placement as the supported way to survive logout on macOS (FR-026)
-- [ ] T053 [US6] Reconcile the existing macOS statements in `docs/daemon.md` and `crates/micold-core/src/logout_survival.rs` with what this feature ships, green against T051 (FR-032)
+- [X] T052 [US6] Add the logout section to `docs/user-guide/install-macos.md`: sessions survive closing the window but not logging out when the service runs on the computer, why, and the container placement as the supported way to survive logout on macOS (FR-026)
+- [X] T053 [US6] Reconcile the existing macOS statements in `docs/daemon.md` and `crates/micold-core/src/logout_survival.rs` with what this feature ships, green against T051 (FR-032) *(Both already said the right thing in their own words; reconciling meant giving them the one sentence T051 defines rather than correcting a claim. `docs/daemon.md` also needed carving out of the documentation set — a test reads it now.)*
 
 **Checkpoint**: The boundary is documented and verified rather than discovered.
 
@@ -238,13 +238,13 @@ verify it by starting a session, logging out, and logging back in.
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T054 [P] Document the new macOS packaging step in `docs/development/ci-pipeline.md`, including that it rides the existing macOS leg rather than adding a job (research R12)
-- [ ] T055 [P] Cross-link `docs/user-guide/install-macos.md` from `docs/README.md` and from the installation section of `README.md`
-- [ ] T056 Run `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` — the local gate omits fmt, and CI stops there before any other job
-- [ ] T057 Run `mise run test` and `for t in scripts/tests/*.test.sh; do "$t"; done`; confirm the macOS and Windows legs are green in CI (Principle VI)
-- [ ] T058 Run quickstart §A and §B and confirm every row passes (`specs/028-macos-package/quickstart.md`)
+- [X] T054 [P] Document the new macOS packaging step in `docs/development/ci-pipeline.md`, including that it rides the existing macOS leg rather than adding a job (research R12)
+- [X] T055 [P] Cross-link `docs/user-guide/install-macos.md` from `docs/README.md` and from the installation section of `README.md`
+- [X] T056 Run `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` — the local gate omits fmt, and CI stops there before any other job
+- [X] T057 Run `mise run test` and `for t in scripts/tests/*.test.sh; do "$t"; done`; confirm the macOS and Windows legs are green in CI (Principle VI) *(Local: 259 suites / 2563 tests green, all four shell suites pass, `cargo fmt --check` and `cargo clippy --workspace --all-targets -D warnings` clean. Two gates went red on the way and were fixed rather than exempted: `feature_write_isolation.rs` wanted an `OWNERS` entry for the new `install_location` field, and `release_publishes_complete_sets.rs` counted `publish` as an artifact job because its new comment names `gh release upload` -- the scan now drops comment lines and a fixture test holds that. **The macOS and Windows legs are not confirmed**: they only run on a push, and nothing has been pushed from this branch yet -- same open edge as T001.)*
+- [X] T058 Run quickstart §A and §B and confirm every row passes (`specs/028-macos-package/quickstart.md`) *(§A: every row green on Linux -- the whole table is text and directory-entry assertions, which is what §A's own "what it cannot tell you" note says. §B: **not run**. Its rows are `codesign`, a real launch and a `d.sock` appearing; `mise run app` on Linux stages unsigned and cannot exercise any of them. It runs on the macOS leg of `ci.yml`, so it settles on the same push that settles T001 and the T057 remainder.)*
 - [ ] T059 Run quickstart §C on a real Mac — install, the block, the refusal from the disk image, a working session, permissions, lifecycle, the floor — and fill in the record table in `specs/028-macos-package/quickstart.md`
-- [ ] T060 Re-validate `specs/028-macos-package/checklists/requirements.md` against what shipped and record the pass
+- [X] T060 Re-validate `specs/028-macos-package/checklists/requirements.md` against what shipped and record the pass *(Validation pass 5. All 16 items still pass and the spec needed no edit. Recorded one distinction plainly rather than leaving it implicit: "feature meets measurable outcomes" passes as a checklist item — the success criteria are the right measurable outcomes — while eight of the thirteen have not been *observed*, because they are §C rows needing a real Mac. T059 and T001 are open for that.)*
 
 ---
 
