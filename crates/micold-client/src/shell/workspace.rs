@@ -56,10 +56,23 @@ pub(crate) fn scan_task(
     Task::perform(async move { scan(&*browser, dir) }, |message| message)
 }
 
+/// On macOS a folder the user can see in Finder is not necessarily one this application may read:
+/// TCC gates Documents, Desktop, Downloads and mounted volumes per application, and reports the
+/// refusal as an ordinary `EACCES`. `error.to_string()` is then "Permission denied (os error 13)",
+/// which sends the user to `ls -l` and `chmod` for a problem that lives in System Settings.
+///
+/// So the error is offered to [`micold_core::permission_failure::classify`] first, which names the
+/// permission and where to grant it when — and only when — the path really is under a gated
+/// location and the failure really is a permission (FR-028). Everything else keeps the error the
+/// operating system gave, unchanged, on every platform.
 fn scan(browser: &dyn FolderBrowser, dir: PathBuf) -> Message {
     match browser.list_subdirs(&dir) {
         Ok(entries) => Message::SelectorListingReady(entries),
-        Err(error) => Message::SelectorListingFailed(error.to_string()),
+        Err(error) => Message::SelectorListingFailed(
+            micold_core::permission_failure::classify(&error, &dir)
+                .map(|failure| failure.user_message())
+                .unwrap_or_else(|| error.to_string()),
+        ),
     }
 }
 

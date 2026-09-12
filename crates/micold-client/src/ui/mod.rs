@@ -6,6 +6,9 @@ pub(crate) mod confirm_delete;
 pub(crate) mod confirm_forget;
 pub(crate) mod confirm_session_remove;
 mod focus;
+/// The install-me screen (feature 028, FR-019): shown instead of everything else when this copy
+/// is running from a mounted image or a translocated path.
+mod install_location;
 /// The component library. `pub(crate)` rather than private to `ui`, so the component showcase
 /// (feature 020, `crate::showcase`) can compose the very same components the application renders —
 /// which is the whole of FR-002. The crate's *public* API is unchanged: nothing outside
@@ -218,6 +221,16 @@ pub fn view<'a>(
     let scheme = state.color_scheme();
     let roles = tokens::roles(scheme);
     let bg = roles.background;
+
+    // Feature 028 (FR-019). Before anything else, and returning from the whole function rather
+    // than from the `body` binding below: a copy running from a mounted image or a translocated
+    // path shows one screen and nothing else. No app bar, no banners, no overlay stack -- every
+    // one of those is a way for the window to look like an installed application, which is
+    // precisely what this must not do. It is also why there is no dismissal to route: there is no
+    // state underneath to return to.
+    if state.install_blocked() {
+        return install_location::view(state, scheme);
+    }
 
     // With a project open, show the worktree sidebar beside the main area; the main area is
     // the embedded terminal when a session is active (FR-012), else the project surface. The

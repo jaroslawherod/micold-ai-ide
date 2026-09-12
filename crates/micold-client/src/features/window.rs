@@ -39,6 +39,7 @@
 //! [`field_focus_cleared`] below.
 
 use crate::app::State;
+use micold_core::install_location::InstallLocation;
 
 /// Which text field holds the keyboard, when one does (BUG-003).
 ///
@@ -113,6 +114,31 @@ pub fn field_focus_changed(state: &mut State, field: FieldId, focused: bool) {
 /// Reached from `Outcome::FieldFocusCleared`. Unconditional by design — see the outcome's own note.
 pub fn field_focus_cleared(state: &mut State) {
     state.focused_field = None;
+}
+
+/// Where this executable is running from, as the boot path found it (feature 028, FR-019).
+///
+/// The syscall (`current_exe()`) stays at the shell boundary and the verdict arrives here as a
+/// value, which is what lets this be a reducer: the interesting behaviour is not reading the path
+/// but what the window is then allowed to show, and that is decided here and tested without a
+/// window.
+///
+/// Written once, at boot. There is no message that clears it and no gesture that dismisses the
+/// screen it produces — see [`State::install_blocked`].
+pub fn install_location_reported(state: &mut State, location: InstallLocation) {
+    state.install_location = location;
+}
+
+impl State {
+    /// Whether the application must show the install-me screen instead of the session UI.
+    ///
+    /// The whole of FR-019's "MUST NOT run in a way that looks installed" is this one question,
+    /// asked in one place. A copy running from a mounted image or a translocated path is going to
+    /// disappear, taking whatever was done in it; a warning the user can dismiss is a warning the
+    /// user learns to dismiss, so there is no message that turns this off.
+    pub fn install_blocked(&self) -> bool {
+        !self.install_location.is_installed()
+    }
 }
 
 /// The window was resized (feature 015).

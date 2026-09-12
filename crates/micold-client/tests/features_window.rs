@@ -12,10 +12,13 @@
 //!
 //! Same caveat as `features_session.rs`: these reducers take `&mut State`, so the file builds one.
 //! What it holds to is the other half of SC-004 — it names no other feature's types. No drafts, no
-//! dialogs, no sessions; the only vocabulary here is `FieldId`, which `window` owns.
+//! dialogs, no sessions. The vocabulary is `FieldId`, which `window` owns, and — since feature 028
+//! — `InstallLocation`, which is a `micold-core` type this feature takes as its input rather than
+//! another feature's state.
 
 use micold_client::app::State;
 use micold_client::features::window::{self, FieldId};
+use micold_core::install_location::InstallLocation;
 
 #[test]
 fn focus_moves_to_whichever_field_reports_gaining_it() {
@@ -100,4 +103,96 @@ fn the_window_size_is_recorded_as_reported() {
     window::resized(&mut st, 1280, 720);
 
     assert_eq!(st.window_size, (1280, 720));
+}
+
+#[test]
+fn a_copy_that_is_not_installed_blocks_the_session_ui() {
+    // FR-019. Both non-`Installed` answers block, for the same reason and with different
+    // explanations: a mounted image is ejected, a translocated copy is discarded on close, and
+    // either way everything done in the meantime goes with it.
+    for location in [InstallLocation::MountedImage, InstallLocation::Translocated] {
+        let mut st = State::default();
+        window::install_location_reported(&mut st, location);
+
+        assert!(
+            st.install_blocked(),
+            "{location:?} must not be allowed to look like an installed application"
+        );
+    }
+}
+
+#[test]
+fn an_installed_copy_is_not_blocked_and_neither_is_a_fresh_state() {
+    // The default matters as much as the verdict: off macOS `Installed` is the only reachable
+    // answer, so a state built before anyone asked must not be a state that refuses to start.
+    assert!(!State::default().install_blocked());
+
+    let mut st = State::default();
+    window::install_location_reported(&mut st, InstallLocation::Installed);
+    assert!(!st.install_blocked());
+}
+
+#[test]
+fn nothing_this_feature_does_clears_the_block() {
+    // There is no "dismiss" reducer, and this is the check that none appears by accident: every
+    // other operation the window owns runs against a blocked state, and the block survives all of
+    // them. A warning the user can click past is a warning the user learns to click past.
+    let mut st = State::default();
+    window::install_location_reported(&mut st, InstallLocation::MountedImage);
+
+    window::resized(&mut st, 1280, 720);
+    window::field_focus_changed(&mut st, FieldId::SettingsScrollback, true);
+    window::field_focus_cleared(&mut st);
+    st.clear_for_dialog();
+
+    assert!(st.install_blocked());
+}
+
+#[test]
+fn exactly_one_place_in_the_crate_writes_the_verdict() {
+    // The test above can only speak for the reducers it can name. This one speaks for the crate:
+    // the field is written in one function, in this feature, and a second writer anywhere -- a
+    // dismissal on a button, a reset in a settings load -- fails here rather than quietly making
+    // FR-019's "no dismissal" untrue.
+    //
+    // Text over types, for the same reason `feature_write_isolation.rs` is: the property is about
+    // what a *source file* is allowed to do, and nothing in the type system says it.
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut writers: Vec<String> = Vec::new();
+    let mut stack = vec![src.clone()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("read src") {
+            let path = entry.expect("dir entry").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let code = std::fs::read_to_string(&path).expect("read source");
+                for line in code.lines() {
+                    let line = line.trim_start();
+                    if line.starts_with("//") {
+                        continue;
+                    }
+                    if line.contains("install_location =") {
+                        let rel = path.strip_prefix(&src).unwrap_or(&path);
+                        writers.push(format!(
+                            "{}: {line}",
+                            rel.display().to_string().replace('\\', "/")
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    assert_eq!(
+        writers.len(),
+        1,
+        "the install-location verdict must have exactly one writer, and it is \
+         `features/window.rs::install_location_reported`. Found: {writers:#?}"
+    );
+    assert!(
+        writers[0].starts_with("features/window.rs:"),
+        "found the writer somewhere else: {:?}",
+        writers[0]
+    );
 }

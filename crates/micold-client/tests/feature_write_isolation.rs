@@ -180,9 +180,16 @@ const OWNERS: &[(&str, &str)] = &[
     // `cursor` was the third of the three fields T063 created this feature for. `main`'s 018
     // BUG-008 fix deleted it: a context menu now anchors at the point its own press landed on,
     // carried by the message, rather than at a pointer position tracked separately and read later.
-    // That is a better answer than the one this feature was defending, and the window feature is
-    // two fields rather than three.
+    // That is a better answer than the one this feature was defending, and the window feature went
+    // back down to two fields. (Feature 028 makes it three again, below.)
     ("window_size", "window"),
+    // Where this copy of the application is running from (feature 028, FR-019). A fact about the
+    // installed thing rather than about any project, session or worktree, and the one screen that
+    // reads it replaces the whole window -- so it belongs with the other two facts the window
+    // feature keeps. Written once, at boot, by `install_location_reported`; nothing clears it, and
+    // `tests/features_window.rs::exactly_one_place_in_the_crate_writes_the_verdict` holds that
+    // there is exactly one assignment of it anywhere in the crate.
+    ("install_location", "window"),
 ];
 
 /// Cross-feature writes that exist today, each with the feature that performs it and the path it

@@ -610,6 +610,17 @@ pub enum Message {
     LogoutSurvivalRequested,
     /// The logout-survival enable flow finished; carries a ready-to-show message (info or error).
     LogoutSurvivalOutcome(String),
+
+    // ---- Feature 028: where this copy of the application is running from ----
+    /// Where the executable was found, answered once at boot (FR-019).
+    ///
+    /// Sent by the binary rather than by a gesture: `current_exe()` is a syscall, so the question
+    /// belongs at the I/O boundary, and the verdict is a value from there on. It arrives as a
+    /// message like everything else because the root is the only thing that drives a feature --
+    /// a second driver is a second place that has to learn about every feature added after it.
+    ///
+    /// There is no message that clears it. See `features::window::install_location_reported`.
+    InstallLocationReported(micold_core::install_location::InstallLocation),
 }
 
 /// Root application state for the single main window.
@@ -805,6 +816,17 @@ pub struct State {
     /// Last known window size in pixels (feature 015), used to clamp a context menu so it cannot
     /// open off-screen. `(0, 0)` means "not reported yet", which disables clamping. Transient.
     pub window_size: (u16, u16),
+    /// Where this executable is running from (feature 028, FR-019). Asked once at boot, because a
+    /// running executable does not move.
+    ///
+    /// Anything but `Installed` replaces the whole session UI with the install-me screen. It is a
+    /// property of the process rather than of any one view, which is why it sits here beside
+    /// `window_size` and is owned by `features/window.rs`: the question it answers is what this
+    /// *window* is allowed to show, and there is exactly one answer for the process's whole life.
+    ///
+    /// `Default` is `Installed` — off macOS it is the only reachable answer, and a state built
+    /// before anyone asked must not be a state that refuses to run.
+    pub install_location: micold_core::install_location::InstallLocation,
     /// The worktree whose right-click context menu is open, and where it was opened from
     /// (feature 008). At most one is open at a time; `None` means no menu is showing.
     pub worktree_menu_open: Option<WorktreeMenu>,
@@ -1097,6 +1119,9 @@ impl State {
             Message::RenameCancelled => crate::features::project::rename_cancelled(self),
             Message::WindowResized { width, height } => {
                 crate::features::window::resized(self, width, height)
+            }
+            Message::InstallLocationReported(location) => {
+                crate::features::window::install_location_reported(self, location)
             }
             Message::ProjectMenuToggled(path, anchor) => {
                 let outcomes = crate::features::project::menu_toggled(self, path, anchor);
