@@ -42,6 +42,7 @@ use micold_client::app::Message;
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::sandbox::placement::{Placement, PlacementKind};
 use micold_core::settings::{DaemonConfig, Settings, SettingsStore};
+use micold_core::store::LoadStatus;
 
 use micold_client::features::settings::{
     placement_step, PlacementStep, SettingsDraft, ValidSettings,
@@ -105,15 +106,55 @@ pub fn session_has_conversation(
     provider.has_recorded_conversation(&config, &cwd, session.id.0)
 }
 
+/// Tell the user their settings file was recovered, and where the old one went (T158, BUG-025).
+///
+/// `load` replaces an unreadable or unparseable `settings.json` with defaults so the application
+/// still opens (Principle IV) and returns a `LoadStatus` saying it did. Nothing read that status
+/// for this file — not one of its five call sites — so a corruption looked from the outside
+/// exactly like a fresh install: every preference gone, no message, no log line. The user who
+/// reported BUG-025 hit that on 2026-08-26 and, with only a restart to point at, reported it eight
+/// days later as settings being lost to a `.deb` upgrade.
+///
+/// `Missing` stays silent: a first run recovered nothing. That is the same line `update` draws at
+/// the write end (FR-010c) — a read that lost something, against a read that had nothing to lose.
+pub fn notify_settings_recovery(
+    store: &(dyn SettingsStore + Send + Sync),
+    status: LoadStatus,
+    core: &mut State,
+) {
+    // `Missing` is a first run: nothing was recovered, and saying so would tell a fresh install
+    // its settings were reset. `Loaded` is the ordinary case and says nothing at all.
+    if status != LoadStatus::Recovered {
+        return;
+    }
+    // Research R10: "your settings were reset" without the path is an apology; with it, it is
+    // something the user can act on — the file is still there to copy values back out of.
+    let preserved = store.recovery_path().filter(|path| path.exists());
+    let message = match preserved {
+        Some(path) => format!(
+            "Your settings could not be read, so defaults are in use. The unreadable file was \
+             kept as {}.",
+            path.display()
+        ),
+        None => "Your settings could not be read, so defaults are in use.".to_string(),
+    };
+    core.notify_info(message);
+}
+
 pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core: &mut State) {
     if let Some(store) = store {
         // Preserve the persisted scrollback limit (feature 006) and environment-include settings
         // (feature 011) when saving a theme change — this function only ever changes `theme`.
-        let existing = store.load().settings;
-        if let Err(err) = store.save(&Settings {
-            theme: core.settings.theme_pref,
-            ..existing
-        }) {
+        //
+        // Through `update` rather than `load` + `save` (BUG-025, T155). The spread above already
+        // said "keep every other field"; what it could not say is *which* document to keep them
+        // from. A separate load hands back defaults when the file cannot be read, and the spread
+        // then preserves those — writing a default `daemon` block over the user's whole sandbox
+        // profile on a click that says "theme".
+        let theme = core.settings.theme_pref;
+        let write = store.update_reporting(&mut |settings| settings.theme = theme);
+        crate::log_line(&write.log_line("client"));
+        if let Err(err) = write.result {
             core.notify_error(format!("Couldn't save your settings: {err}"));
         }
     }
@@ -250,7 +291,14 @@ fn apply_save(app: &mut App, valid: ValidSettings) -> Task<Message> {
 
     let settings = valid.into_settings();
     if let Some(store) = app.caps.settings() {
-        if let Err(err) = store.save(&settings) {
+        // The overlay owns every field, so this replaces the document whole — but it still goes
+        // through `update` (BUG-025, T155), for the two things `save` alone cannot do: take the
+        // lock the daemon's own write respects (FR-010b), and refuse when the stored document is
+        // there but unreadable rather than replacing it (FR-010c). The refusal reaches the user
+        // through the `notify_error` below, which is T160.
+        let write = store.update_reporting(&mut |stored| *stored = settings.clone());
+        crate::log_line(&write.log_line("client"));
+        if let Err(err) = write.result {
             app.core
                 .notify_error(format!("Couldn't save your settings: {err}"));
         }
@@ -739,6 +787,77 @@ mod tests {
         assert_eq!(
             disable_for(&sandbox),
             SurvivalOutcome::PendingSandboxRestart
+        );
+    }
+}
+
+#[cfg(test)]
+mod settings_recovery_tests {
+    use super::*;
+    use micold_core::settings::FakeSettingsStore;
+
+    /// The silence that made BUG-025 take eight days to reach a bug report.
+    #[test]
+    fn a_recovered_settings_file_is_reported_to_the_user() {
+        let store = FakeSettingsStore::recovered();
+        let mut core = State::default();
+
+        notify_settings_recovery(&store, LoadStatus::Recovered, &mut core);
+
+        let notice = core
+            .notifications
+            .queue
+            .visible()
+            .expect("a settings file that had to be recovered must be reported");
+        assert!(
+            notice.message.to_lowercase().contains("settings"),
+            "the notice does not say what was lost: {notice:?}"
+        );
+    }
+
+    /// A first run recovered nothing, and must not claim it did.
+    #[test]
+    fn a_missing_settings_file_is_not_reported() {
+        let store = FakeSettingsStore::new();
+        let mut core = State::default();
+
+        notify_settings_recovery(&store, LoadStatus::Missing, &mut core);
+
+        assert!(
+            core.notifications.queue.visible().is_none(),
+            "a fresh install was told its settings were reset"
+        );
+    }
+
+    /// A clean read says nothing at all.
+    #[test]
+    fn a_loaded_settings_file_is_not_reported() {
+        let store = FakeSettingsStore::loaded(Settings::default());
+        let mut core = State::default();
+
+        notify_settings_recovery(&store, LoadStatus::Loaded, &mut core);
+
+        assert!(core.notifications.queue.visible().is_none());
+    }
+
+    /// When the store has a preserved copy, the notice names it — the difference between an
+    /// apology and something the user can act on (T158).
+    #[test]
+    fn the_notice_names_the_preserved_file_when_there_is_one() {
+        // The preserved copy is a real file, because the notice only names one that is still
+        // there — a `.bak` the user cannot open is not something they can act on.
+        let dir = tempfile::tempdir().unwrap();
+        let preserved = dir.path().join("settings.json.bak");
+        std::fs::write(&preserved, b"{ not json").unwrap();
+        let store = FakeSettingsStore::recovered_keeping(preserved);
+
+        let mut core = State::default();
+        notify_settings_recovery(&store, LoadStatus::Recovered, &mut core);
+
+        let notice = core.notifications.queue.visible().expect("a notice");
+        assert!(
+            notice.message.contains("settings.json.bak"),
+            "the notice does not name the preserved file: {notice:?}"
         );
     }
 }

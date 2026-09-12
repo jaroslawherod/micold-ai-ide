@@ -103,7 +103,7 @@ and sees live catalog state, and the user stories can begin.
 ### Daemon skeleton, state ownership, lifecycle (micold-daemon) — plan W2
 
 - [X] T020 Implement daemon startup/bind/systemd-fd adoption (`listenfd`) and the tokio accept loop in `crates/micold-daemon/src/main.rs`. **Done**: daemon is now a lib+bin; `server::run` resolves the endpoint, runs `singleton::acquire` (or exits if a daemon already owns it), and serves each accepted connection via a stream-generic `serve_connection` that speaks the strict handshake (`Hello` → `Welcome`/`Refused`) and answers `Ping`/`Goodbye`. Linux systemd socket activation is adopted opportunistically (`listenfd`, `set_nonblocking(true)`), never required. End-to-end handshake covered by `tests/handshake_flow.rs` (2 tests). Catalog/attach/streaming layer on in T021–T022.
-- [X] T021 Implement the Catalog as the single writer of durable state (projects, worktrees, sessions, settings), adopting existing `projects.json`/`settings.json` in place (FR-008, FR-012) in `crates/micold-daemon/src/catalog.rs`. (External-modification detection is out of scope — see spec Out of Scope.) **Done**: wraps the existing `micold-core` stores so the on-disk shape is unchanged — only the writer changes. Provides `snapshot()` → `CatalogSnapshot`, `sessions_for()`, `settings_wire()`, clamped `set_scrollback()`, atomic `persist()`, and surfaces `LoadStatus` (C4 `Recovered` is now reported rather than swallowed). Worktree entries in the snapshot are derived from the durable knowledge (display-name overrides + session bindings); live git branch/status arrives with the worktree RPCs (T053). **Main-sync (2026-07-23, main `93a0a08`/`7dc9c8a`)**: core `Session` gained an `archived` flag (anti-resurrection — a deleted worktree's / removed session's record is kept but marked, so reconciliation can't resurrect it). `sessions_for` now **filters out archived sessions**, since the catalog snapshot is the single source clients render; covered by `catalog_adoption::archived_sessions_are_excluded_from_the_snapshot`. The new per-project storage-fault isolation (main `93a0a08`, `project_state_path`) — and its `d88c7a1` refinement (write per-project state *before* the catalog, keeping a catalog fallback copy only for projects whose own write just failed, via `skip_serializing_if`-empty) — are inherited transparently through the `ProjectStore` seam (unchanged trait surface); `Catalog::persist()` calls `store.save()`, so this lossless-migration guarantee holds for the daemon writer for free. Covered by `micold-core`'s carried `store_fault_isolation::migrating_project_whose_state_write_fails_keeps_a_catalog_fallback`.
+- [X] T021 Implement the Catalog as the single writer of durable state (projects, worktrees, sessions, settings), adopting existing `projects.json`/`settings.json` in place (FR-008, FR-012) in `crates/micold-daemon/src/catalog.rs`. (External-modification detection is out of scope — see spec Out of Scope.) **Done**: wraps the existing `micold-core` stores so the on-disk shape is unchanged — only the writer changes. Provides `snapshot()` → `CatalogSnapshot`, `sessions_for()`, `settings_wire()`, clamped `set_scrollback()`, atomic `persist()`, and surfaces `LoadStatus` (C4 `Recovered` is now reported rather than swallowed). Worktree entries in the snapshot are derived from the durable knowledge (display-name overrides + session bindings); live git branch/status arrives with the worktree RPCs (T053). **Main-sync (2026-07-23, main `93a0a08`/`7dc9c8a`)**: core `Session` gained an `archived` flag (anti-resurrection — a deleted worktree's / removed session's record is kept but marked, so reconciliation can't resurrect it). `sessions_for` now **filters out archived sessions**, since the catalog snapshot is the single source clients render; covered by `catalog_adoption::archived_sessions_are_excluded_from_the_snapshot`. The new per-project storage-fault isolation (main `93a0a08`, `project_state_path`) — and its `d88c7a1` refinement (write per-project state *before* the catalog, keeping a catalog fallback copy only for projects whose own write just failed, via `skip_serializing_if`-empty) — are inherited transparently through the `ProjectStore` seam (unchanged trait surface); `Catalog::persist()` calls `store.save()`, so this lossless-migration guarantee holds for the daemon writer for free. Covered by `micold-core`'s carried `store_fault_isolation::migrating_project_whose_state_write_fails_keeps_a_catalog_fallback`. **Correction (2026-09-03, BUG-025 — not a reopen)**: this task's "single writer of durable state (projects, worktrees, sessions, **settings**)" is true of `projects.json` — the client loads it and never saves it (`shell/startup.rs:128`) — and has never been true of `settings.json`, where FR-010's field-ownership split makes the client a co-writer *by design*. The code delivered here is not what is wrong; the description overstated its reach, and plan.md's §Storage carried the same overstatement. Phase 30 covers the concurrency the second writer needs.
 - [X] T022 Implement `Attach`/`Detach`/`SetViewedSession` routing and `CatalogChanged`/`SettingsChanged` push projection to all connected clients (FR-011) in `crates/micold-daemon/src/main.rs`. **Done** in `state.rs` + `server.rs` (the daemon is a lib+bin, so the routing lives in the library where it is testable). `DaemonState` holds the catalog, a client registry, and per-project attachments; each connection gets a writer task draining an unbounded channel, so a push from *another* connection reaches this one. Attach is exclusive with a `ProjectBusy` refusal naming the holder, `force` displaces (the displaced client is notified, never terminated), and disconnect releases every attachment the client held (T2). `broadcast`/`broadcast_catalog`/`set_scrollback` implement the push projection. The state mutex is never held across an `.await`.
 - [X] T023 Implement the "never exit while a session is alive" lifecycle rule and the zero-sessions-zero-clients permitted-exit (FR-002) in `crates/micold-daemon/src/lifecycle.rs`. **Done**: pure `may_exit(live_sessions, connected_clients)` predicate plus an atomic `Lifecycle` counter tracker wired into client connect/disconnect. Session counters are driven by the supervisor at T031.
 - [X] T024 [P] Test in `crates/micold-daemon/tests/daemon_lifecycle.rs`: daemon stays up with one live session and no clients; may exit at zero/zero; a catalog mutation reaches a second connected client without user action (FR-002, FR-011). **Done** (5 tests, end-to-end through the real `serve_connection` path): all three required assertions, plus attach exclusivity/forced-takeover and attachment release on disconnect. Catalog adoption itself is covered by `tests/catalog_adoption.rs` (5 tests).
@@ -1833,3 +1833,132 @@ someone rewrote it around an observable a machine could read.
   `wc -l crates/micold-daemon/src/platform/windows.rs` and read the body. When that function creates
   a job object and terminates it, this task is unblocked and its tests are writable
 
+
+---
+
+## Phase 30: Bugfix BUG-025 — two writers stage `settings.json` through one temp path
+
+**Goal**: make a concurrent save incapable of producing an unparseable `settings.json` (FR-010b,
+SC-026), so the user stops losing every setting they have chosen — theme, scrollback,
+environment-include, default AI CLI, service placement, and the whole sandbox profile — to a save
+that appeared to succeed.
+
+**Root cause**: three decisions that are each correct alone. The field-ownership split (FR-010,
+FR-012a, FR-012b) put two processes in one file. BUG-014's fix (FR-010a) made both of them
+read-modify-write, which is a critical section that nothing declared one — and which *widened* the
+window, because the service now holds a load-then-save where it had previously written straight out.
+And "atomic write" was implemented as temp-file-plus-rename, which is atomicity against a reader and
+against a crash but not against a second writer, through a staging path derived from the target
+(`self.path.with_extension("json.tmp")`) and therefore shared by every writer of that target. Two
+saves whose `O_TRUNC` opens both land before either `write` leave the shorter document over the
+longer one's bytes; the next `load` cannot parse the result, moves it to `.bak`, and adopts
+defaults. The two writes are back-to-back **by construction** — T100 wired the client to send
+`SettingsSet` immediately after its own write, and the service answers with its own load-then-save.
+
+**No task reopened.** T021 and T100 each built what they were asked for, and the requirements between
+them did not add up to a file that survives — the signature of a spec gap, not of drift. One
+annotation only: T021's description calls the Catalog "the single writer of durable state (projects,
+worktrees, sessions, **settings**)". That is true of `projects.json`, where the client loads and
+never saves (`shell/startup.rs:128`), and has never been true of `settings.json`, where FR-010's
+split makes the client a co-writer by design. Corrected in place rather than reopened, since the code
+T021 delivered is not what is wrong.
+
+**Why the sandbox does not separate the writers**: `027-sandboxed-daemon-runtime` bind-mounts the
+host state directory to `STATE_CONTAINER_DIR` and the image sets `XDG_DATA_HOME=/var/lib`, so both
+resolve to the same inode deliberately (FR-011 there, and correct for `projects.json`). Sandboxing
+neither causes nor fixes this bug, and the fix must hold with one writer inside a container — which
+is why the lock has to be an OS-level advisory lock on a file both can see, not an in-process one.
+
+- [X] T153 [BUG-025] Give every save its own staging path in
+  `crates/micold-core/src/settings.rs`: replace `temp_path()`'s `self.path.with_extension("json.tmp")`
+  with a path unique to the writing process (`settings.json.<pid>.tmp`), and remove it on both the
+  success and the error path so a crashed save leaves no orphan beside the settings file
+  (FR-010b clause 2). **Do this first**: it is a few lines, it needs no coordination between
+  processes, and on its own it downgrades the failure from *unparseable file, all settings lost* to
+  *lost update*, which is recoverable and visible. Apply the same change to `store.rs`'s
+  `temp_path_for` — `projects.json` is single-writer today (FR-008/FR-009, verified: the client
+  loads it and never saves it) but the shared-staging-path shape is the hazard, not the current
+  writer count, and the two files sit in one directory. No dependency
+- [X] T154 [BUG-025] Hold an advisory lock across the **whole** read-modify-write in
+  `JsonFileSettingsStore` (FR-010b clause 1): take `std::fs::File::lock` on a sidecar
+  `settings.json.lock` — a sidecar, not the settings file itself, because `save` replaces the target
+  by rename and a lock held on the replaced inode is invisible to the next writer. The lock must be
+  taken before `load`'s read and released after `save`'s rename, so the merge cannot straddle another
+  writer's write. `File::lock` is already in plan.md's dependency table (the single-instance lock);
+  no new dependency. Depends on T153
+- [X] T155 [BUG-025] Make the daemon's `persist_service_settings`
+  (`crates/micold-daemon/src/catalog.rs:242-250`) and the client's two save sites
+  (`shell/persist.rs:111`, `shell/persist.rs:219`) perform their read and their write inside one
+  locked section rather than as two independent store calls. Today each calls `store.load()` then
+  `store.save()`, and a lock taken inside each call separately would still let the other writer's
+  save land between them — FR-010b clause 1's "not for the write alone" is exactly this. Depends on
+  T154
+- [X] T156 [BUG-025] Decide what a save that cannot take the lock does, and implement it (FR-010b
+  clause 3). It must not proceed unsynchronised and must not silently drop the user's change; a
+  bounded wait then a surfaced error via the existing `notify_error` path is the expected answer.
+  Record the bound and the reasoning in `research.md`. Depends on T154
+- [X] T157 [P] [BUG-025] The regression gate: `crates/micold-core/tests/settings_concurrent_writers.rs`
+  (SC-026). Two threads — or two processes, if the lock proves to need it — save different owned
+  fields to one path concurrently, repeated enough times to hit the interleaving; assert after every
+  round that the file parses **and** that neither writer's owned fields were lost. The test must fail
+  against the pre-T153 code: the shape to reproduce is a short document followed by the tail of a
+  longer one, which is what `bugs/BUG-025-evidence/settings.json.bak.2026-08-26` holds. Depends on
+  T153
+- [X] T158 [P] [BUG-025] Decide whether `LoadStatus::Recovered` should be louder, and record the
+  decision. It is already surfaced, and the user in this report still did not connect the reset to
+  it — a `.bak` written silently is the reason a corruption from 2026-08-26 was reported as
+  "settings are lost after a `.deb` upgrade" eight days later. Either strengthen the notification to
+  name the `.bak` file and what was lost, or write down why the current surfacing is enough.
+  No dependency
+
+**Not in scope**: the `.deb` packaging. It ships no maintainer scripts and no conffiles
+(`crates/micold-client/Cargo.toml:62-86`, `packaging/micold-daemon.service`), so an install or an
+upgrade cannot remove a file it never declares. Restarting is when the damage becomes *visible* —
+`load` is the only code that inspects the file — not when it is done.
+
+**Bugfix**: 2026-09-03 — BUG-025 Added Phase 30 (T153–T158) for concurrent-writer safety on
+`settings.json` (FR-010b, SC-026). **No task reopened**; T021's description annotated. See
+`bugs/BUG-025.md`.
+
+### Second arm ⚠️ — a failed read becomes a write of defaults (FR-010c)
+
+Found while patching this bug, on the reporter's own machine at 2026-09-03 19:48: the stored
+`daemon` block reverted to `DaemonConfig::default()` **whole** — placement, runtime, image, budget,
+network, credential opt-ins, survive-logout — while every field the service owns kept a live value,
+and `settings.json.bak` was untouched. No corruption, so this is not the first arm. It is
+`persist_service_settings` merging into a `load()` that returned defaults, and
+`merged_with_existing` replacing the whole `daemon` key because it preserves top-level keys only.
+Copy preserved at `bugs/BUG-025-evidence/settings.json.daemon-block-reset.2026-09-03`.
+
+The attribution to a specific writer is by elimination, not by a log — nothing records which process
+wrote it, and T162 exists so the next one is not guessed at.
+
+- [X] T159 [BUG-025] Make a failed read refuse the write, not seed it (FR-010c). `SettingsOutcome`
+  already carries the `LoadStatus` that distinguishes `Loaded` from `Missing`/`Recovered`; every
+  caller drops it (`catalog.rs:243`, `persist.rs:110`, and the three read-only sites at
+  `persist.rs:154`, `persist.rs:193`, `startup.rs`). Give `JsonFileSettingsStore` a save path that
+  takes the base and its status together — or an `update(|settings| ...)` that does the locked
+  read-modify-write internally and returns an error for a non-`Loaded` base — so the refusal cannot
+  be forgotten at a call site. The read-only sites keep today's behaviour: showing defaults is
+  correct, persisting them is not. **No dependency** *(corrected 2026-09-03 by
+  `/speckit.bugfix.verify`: this was written as "depends on T154", which is a tidiness preference —
+  the lock and the merge would sit well together — and not a prerequisite. A status check needs a
+  save path that can see the `LoadStatus`, not a lock. As declared it parked the only fix for the
+  arm that is still recurring behind the largest change in the phase.)* If T154 lands first, fold
+  the status check into the same locked read-modify-write rather than adding a second one
+- [X] T160 [BUG-025] Surface that refusal where the user is: the client's existing `notify_error`
+  path for its own save, and the service's `OperationError` for a `SettingsSet` it cannot honour. A
+  save that silently does nothing is not an improvement on a save that silently writes defaults.
+  Depends on T159
+- [X] T161 [P] [BUG-025] `crates/micold-core/tests/settings_refuses_save_over_failed_read.rs`
+  (SC-026, second clause): make the read fail with a non-`NotFound` error against a file with real
+  stored content, attempt a save, and assert the save is refused **and the file is byte-identical
+  afterwards**. Both halves matter — a refusal that still truncated the file would pass the first
+  assertion alone. Depends on T159
+- [X] T162 [P] [BUG-025] Log every settings write at `info` with the writing process and the
+  `LoadStatus` its base came from. The reset above had to be attributed by elimination from the
+  bytes on disk, because neither `micold-client.log` nor `micold-daemon.log` records that a settings
+  write happened at all. No dependency
+
+**Bugfix**: 2026-09-03 — BUG-025 (second arm) Added T159–T162 for FR-010c; extended SC-026. See
+`bugs/BUG-025.md`.

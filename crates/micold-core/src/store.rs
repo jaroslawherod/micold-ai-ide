@@ -23,9 +23,11 @@ use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsStr;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// The current on-disk schema version (see the storage-schema contract). Shared by the catalog
 /// and the per-project state file — both are additive-only so far and have never needed to
@@ -462,8 +464,20 @@ fn project_id(path: &Path) -> String {
 }
 
 /// Path of the temporary file used for an atomic write to `path`.
-fn temp_path_for(path: &Path) -> PathBuf {
-    path.with_extension("json.tmp")
+///
+/// Unique per call, not derived from `path` alone (T153, BUG-025). A staging path that only the
+/// target decides is *shared* by every writer of that target: two of them open it with
+/// `O_TRUNC` before either has written, and the shorter document lands over the longer one's
+/// bytes. Rename-atomicity does not help — by the time either renames, the single staging file
+/// already holds the mixture. The process id separates writers in different processes; the
+/// counter separates threads and successive writes within one.
+pub(crate) fn temp_path_for(path: &Path) -> PathBuf {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let nonce = NEXT.fetch_add(1, Ordering::Relaxed);
+    let name = path.file_name().unwrap_or_else(|| OsStr::new("state.json"));
+    let mut staging = name.to_os_string();
+    staging.push(format!(".{}.{nonce}.tmp", std::process::id()));
+    path.with_file_name(staging)
 }
 
 /// Path a corrupt file at `path` is moved to before recovery.
@@ -480,8 +494,21 @@ fn write_project_state(path: &Path, state: &StoredProjectState) -> io::Result<()
     let json = serde_json::to_string_pretty(state)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
     let temp = temp_path_for(path);
-    std::fs::write(&temp, json)?;
-    std::fs::rename(&temp, path)?;
+    write_then_rename(&temp, path, &json)
+}
+
+/// Write `json` to `temp`, then rename it over `target`. On either failure the staging file is
+/// removed rather than left behind: staging paths are unique per write now (T153), so a leaked
+/// one is a file nobody will ever reuse or clean up.
+pub(crate) fn write_then_rename(temp: &Path, target: &Path, json: &str) -> io::Result<()> {
+    if let Err(err) = std::fs::write(temp, json) {
+        let _ = std::fs::remove_file(temp);
+        return Err(err);
+    }
+    if let Err(err) = std::fs::rename(temp, target) {
+        let _ = std::fs::remove_file(temp);
+        return Err(err);
+    }
     Ok(())
 }
 
@@ -759,8 +786,7 @@ impl ProjectStore for JsonFileStore {
 
         // Atomic write: temp file in the same directory, then rename over the target.
         let temp = self.temp_path();
-        std::fs::write(&temp, json)?;
-        std::fs::rename(&temp, &self.path)?;
+        write_then_rename(&temp, &self.path, &json)?;
 
         match first_err {
             Some(err) => Err(err),
