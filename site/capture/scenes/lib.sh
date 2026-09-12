@@ -234,7 +234,13 @@ scene_start() {
   # to read that answer before any scene may click a row's start action. The default filter is
   # `info`, so the one line that matters is turned on here -- for the service only, since the
   # client writes nothing at all and a whole-workspace `debug` would bury it.
-  MICOLD_LOG="${MICOLD_LOG:-info,micold_daemon::server=debug}"
+  #
+  # Set, not defaulted. `${MICOLD_LOG:-...}` looked harmless and was not: this application ships as
+  # a systemd user service that exports `MICOLD_LOG=info` into every process it starts, so a scene
+  # run from a terminal *inside the application* inherited `info`, never saw the line, and waited
+  # out `scene_wait_providers` -- while the same scene on a runner passed. The filter a scene runs
+  # under is the scene's, for the same reason the provider set and `$SHELL` are (FR-011b).
+  MICOLD_LOG="info,micold_daemon::server=debug"
   export MICOLD_LOG
 
   # Where that answer lands, and how much of the file predates this scene. The daemon appends, and
