@@ -725,21 +725,19 @@ mod tests {
     fn the_step_is_applied_to_the_configured_placement() {
         use micold_core::logout_survival::{disable_for, enable_for, SurvivalOutcome};
 
-        let endpoint = micold_core::endpoint::Endpoint {
-            socket_path: std::path::PathBuf::from("/tmp/x.sock"),
-            lock_path: std::path::PathBuf::from("/tmp/x.lock"),
-        };
         let profile = SandboxProfile {
             survive_logout: true,
             ..SandboxProfile::default()
         };
         let sandbox = Placement::resolve(PlacementKind::LocalSandbox, &profile);
 
-        // The sandbox answers on every platform (FR-014b) and never runs `systemctl`. If the save
-        // resolved the host mechanism instead, this would be `Unsupported` off Linux.
-        assert_eq!(enable_for(&sandbox, &endpoint), SurvivalOutcome::Enabled);
+        // The sandbox answers on every platform (FR-014b), and since feature 028 it is the only
+        // placement that answers at all: resolving the host placement here would be `Unsupported`
+        // everywhere, not just off Linux. There is no endpoint to pass any more either — the
+        // mechanism that needed one to stop a manager-hosted daemon is what 028 removed.
+        assert_eq!(enable_for(&sandbox), SurvivalOutcome::Enabled);
         assert_eq!(
-            disable_for(&sandbox, &endpoint),
+            disable_for(&sandbox),
             SurvivalOutcome::PendingSandboxRestart
         );
     }
