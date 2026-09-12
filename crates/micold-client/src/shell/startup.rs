@@ -160,6 +160,11 @@ fn boot() -> (App, Task<Message>) {
         .map(|store| store.load().settings.daemon.placement)
         .unwrap_or_default();
     let sandbox_state = micold_client::features::sandbox::Sandbox::for_placement(placement);
+    // What the note under the select reports, and what a later save compares against to decide
+    // whether it is moving the service at all (BUG-003, FR-032a/FR-035b). Seeded from the same
+    // resolved placement the connection is about to dial, not from the file — an accepted
+    // fallback (FR-035a) moves this without touching what the file says.
+    core.settings.placement_in_force = placement;
     let sandbox_profile = caps
         .settings()
         .map(|store| store.load().settings.daemon.sandbox)

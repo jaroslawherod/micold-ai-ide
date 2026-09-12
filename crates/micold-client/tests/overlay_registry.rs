@@ -44,6 +44,8 @@ use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session;
 use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::settings::Msg as SettingsMsg;
+use micold_client::features::settings::PendingPlacementChange;
 use micold_client::features::sidebar;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
@@ -54,6 +56,7 @@ use micold_client::features::project::RenameDraft;
 use micold_client::features::worktree::WorktreeRenameDraft;
 use micold_client::overlay::registry::{self, Probe};
 use micold_core::overlay::{Layer, Trigger};
+use micold_core::sandbox::placement::PlacementKind;
 use micold_core::selector::Selector;
 use micold_core::session::SessionId;
 
@@ -128,6 +131,19 @@ fn dialogs() -> Vec<Dialog> {
             id: "confirm_forget_project",
             cancel: Message::Project(ProjectMsg::ForgetCancelled),
             open: |state| state.project.forget_target = Some(PathBuf::from("/p")),
+        },
+        // Settings itself is not here and will not be — it is a view (FR-026). This is the one
+        // question it asks before applying a change that ends processes (BUG-003, FR-032), and a
+        // question with no way past it but an answer is exactly what this registry is a list of.
+        Dialog {
+            id: "confirm_placement",
+            cancel: Message::Settings(SettingsMsg::PlacementChangeCancelled),
+            open: |state| {
+                state.settings.pending_placement = Some(PendingPlacementChange {
+                    from: PlacementKind::HostProcess,
+                    to: PlacementKind::LocalSandbox,
+                })
+            },
         },
     ]
 }
@@ -221,22 +237,24 @@ fn every_dialog_is_in_the_list() {
     // The compile-time half of this went with the enum: an exhaustive `match` used to make a
     // dialog added without an expectation a build error. Nothing about a registration line is
     // exhaustive, so the hold is now arithmetic — this list against the registry's own count of
-    // dialogs. A ninth dialog registered without a row here fails on the second assertion, and
-    // the eighteen states this file covers stay eighteen.
+    // dialogs. A tenth dialog registered without a row here fails on the second assertion, and
+    // the twenty states this file covers stay twenty.
     //
-    // Nine until feature 027. Settings was the largest of them and is no longer a dialog at all —
-    // it is a view (FR-026), so it neither floats nor takes Escape, and the count going *down* is
-    // this file noticing that rather than a row being lost.
+    // Nine, then eight, then nine again. Settings was the largest of the original nine and is no
+    // longer a dialog at all — it is a view (FR-026), so it neither floats nor takes Escape. The
+    // count coming back up is not that decision reversed: `confirm_placement` is the question the
+    // view asks before it moves where sessions run (BUG-003, FR-032), which floats over the view
+    // and does take Escape.
     assert_eq!(
         dialogs().len(),
-        8,
-        "the dialog list has drifted. Add the new dialog here, or the eighteen states this file is \
-         meant to cover are no longer eighteen"
+        9,
+        "the dialog list has drifted. Add the new dialog here, or the twenty states this file is \
+         meant to cover are no longer twenty"
     );
     assert_eq!(
         every_state().len(),
-        18,
-        "eight dialogs plus nothing open, each with the filter panel open and closed"
+        20,
+        "nine dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()
@@ -615,7 +633,7 @@ fn a_dialog_draws_from_its_own_state() {
     // paired with looks for state a different dialog owns.
     //
     // Driven through the reducer rather than by assigning fields, so the live state is the one the
-    // application actually produces. Seven of the nine dialogs can be opened that way. The project
+    // application actually produces. Eight of the nine dialogs can be opened that way. The project
     // selector's listing and a session's record are established by the binary, not the pure core,
     // so a `State` built here has neither and the view would correctly return `None` — they are
     // covered by `every_dialog_is_registered_with_a_view` above and by their own feature tests.
@@ -673,6 +691,12 @@ fn a_dialog_draws_from_its_own_state() {
             s.update(Message::Project(ProjectMsg::ForgetRequested(
                 std::path::PathBuf::from("/p"),
             )))
+        }),
+        ("confirm_placement", |s| {
+            s.update(Message::Settings(SettingsMsg::PlacementChangeRequested {
+                from: PlacementKind::HostProcess,
+                to: PlacementKind::LocalSandbox,
+            }))
         }),
     ];
 

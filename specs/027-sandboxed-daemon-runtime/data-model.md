@@ -177,7 +177,7 @@ pub struct ProjectMount {
 - M-4 (R9): the set is fixed at creation. Changing the registered projects marks the sandbox stale
   and surfaces an explicit restart; nothing restarts on its own.
 
-## 7. `SandboxState` — the lifecycle (FR-032 … FR-036, SC-004)
+## 7. `SandboxState` — the lifecycle (FR-034 – FR-036, SC-004)
 
 ```text
              ┌──────────────┐
@@ -203,7 +203,7 @@ pub struct ProjectMount {
 ```
 
 **Rules.**
-- S-1 (SC-004, FR-032): `Acquiring` reports continuous progress. It is the only state that may last
+- S-1 (SC-004): `Acquiring` reports continuous progress. It is the only state that may last
   minutes, and it is the first thing a new user sees — silence here reads as a hang.
 - S-2 (FR-035, FR-035a): no edge leaves `Failed` for a working unsandboxed daemon without an explicit
   per-occurrence user action. There is no automatic path out of this state.
@@ -224,4 +224,12 @@ pub struct ProjectMount {
 | `NetworkPosture` | FR-017, FR-018 | [container-runtime](./contracts/container-runtime.md) |
 | `RuntimeCapabilities` | FR-020, FR-022, SC-009 | [container-runtime](./contracts/container-runtime.md) |
 | `MountSet` | FR-006 – FR-011 | [container-runtime](./contracts/container-runtime.md) |
-| `SandboxState` | FR-032 – FR-036, SC-004 | — (client-side; covered by quickstart Part B) |
+| `SandboxState` | FR-034 – FR-036, SC-004 | — (client-side; covered by quickstart Part B) |
+| Placement *change* | FR-032, FR-032a–b, FR-033, FR-033a | — (client-side; Phase 16) |
+
+**Bugfix**: 2026-09-03 — BUG-003. §7's heading, rule S-1 and the `SandboxState` row all claimed a
+requirement range starting at FR-032. The lifecycle requirements are FR-034 – FR-036; FR-032 and
+FR-033 govern *changing a setting*, belong to the settings surface, and were implemented by nothing
+because this table said they were covered. S-1's own citation was the tell — it named FR-032 for
+continuous progress alongside SC-004, which is the requirement that actually says it. The corrected
+rows are above; FR-033 had been cited nowhere at all and now has a row of its own.

@@ -4,6 +4,7 @@ pub(crate) mod about;
 pub mod cdk;
 pub(crate) mod confirm_delete;
 pub(crate) mod confirm_forget;
+pub(crate) mod confirm_placement;
 pub(crate) mod confirm_session_remove;
 mod focus;
 /// The component library. `pub(crate)` rather than private to `ui`, so the component showcase
@@ -270,6 +271,7 @@ pub fn view<'a>(
             settings_view::view(
                 draft,
                 env_include_outcome,
+                state.settings.placement_in_force,
                 state.session.available_providers.as_ref(),
                 state.window.focused_field,
                 state.settings.settings_rail_collapsed,

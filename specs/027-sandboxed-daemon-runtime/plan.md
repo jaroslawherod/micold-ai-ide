@@ -344,6 +344,40 @@ The approach:
   caller, so one control covers both placements and reports `Unsupported` where a placement cannot
   offer it (FR-014d).
 
+### Choosing a placement has to move the daemon (FR-032, FR-032a–b, FR-033, FR-033a)
+
+The settings form has always been a draft applied on Save, and every field in it is a *value* — the
+save writes them and, for the two the daemon owns, sends them on. The placement is not a value. It
+is where the process runs, and writing it to a file changes nothing until something restarts. Nobody
+noticed, because `data-model.md` §7 had claimed FR-032 and FR-033 for `SandboxState`, so the two
+requirements that say "confirm, then restart" produced no task and the control shipped with
+supporting text — "Takes effect the next time the application starts" — that recorded the gap
+instead of raising it.
+
+The approach:
+
+- **The save is the moment, and only a change is an event.** `on_settings_saved` already has this
+  shape once, in `survival_step`: read the stored value before the write, act only on a difference.
+  The placement gets the same treatment rather than a second idiom, and for the same reason — the
+  step is not idempotent, so re-running it on a save that changed the scrollback limit would drop
+  every live session for nothing.
+- **The confirmation is a gate on the whole save, not on one field.** FR-032b makes declining mean
+  *nothing was written*, which keeps the form's one existing promise: Save applies the draft, Cancel
+  discards it. A save that applied four fields and quietly dropped the fifth is the failure class
+  BUG-001 was, and it is not worth reintroducing to spare the user a second press.
+- **Applying it is an assignment, not new machinery.** `daemon::connection` is
+  `Subscription::run_with(placement, …)`, so the placement *is* the subscription's identity —
+  assigning `app.placement` tears the connection down and re-dials. Two callers already rely on it
+  (`RestartRequested`, `FallbackAccepted`). The one thing missing is the `BootPlan`, which
+  `startup.rs` builds only when the *stored* placement is already sandboxed; a user switching in has
+  none, so the save path has to construct it from the settings it just validated.
+- **The section stops asserting what is not true.** The note under the select reads the draft, so it
+  says "Currently in a container." over a host process from the moment of selection. It reads the
+  live placement instead (FR-035b), and the select's supporting text stops promising a deferred
+  effect that FR-033a no longer permits.
+
+**Bugfix**: 2026-09-03 — BUG-003. Section added; nothing above it changed. See `bugs/BUG-003.md`.
+
 ## Complexity Tracking
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |

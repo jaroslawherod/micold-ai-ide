@@ -1019,6 +1019,7 @@ pub(crate) mod tests {
     use micold_client::features::sandbox::Msg as SandboxMsg;
     use micold_client::features::settings::Msg as SettingsMsg;
     use micold_client::features::settings::{EnvironmentDraft, SettingsDraft, TerminalDraft};
+    use micold_core::sandbox::placement::PlacementKind;
     use micold_core::session::AiCli;
     // These tests drive whole messages through `update_inner`, which is this file's dispatcher, so
     // they stay here even though what they assert about is the daemon's: they are tests of the
@@ -2627,6 +2628,197 @@ pub(crate) mod tests {
             "the local field still updates"
         );
         assert!(app.pending_ops.is_empty(), "nothing was queued to send");
+    }
+
+    // --- BUG-003 (T162, FR-032a/FR-032b/FR-033a): a saved placement has to move the service -----
+
+    /// A `App` with the Settings view open on a valid draft that chooses `chosen`, the service
+    /// running where `in_force` says, and **no settings store** — the last so that "the save wrote
+    /// nothing" is a claim about this process rather than about the developer's own
+    /// `settings.json`. `Capabilities::settings` is documented as absent when no data directory
+    /// resolves, so this is a configuration the shell already has to handle.
+    fn app_saving_a_placement(in_force: PlacementKind, chosen: PlacementKind) -> App {
+        let mut app = base_app();
+        app.caps = Capabilities::real().without_settings();
+        app.placement.kind = in_force;
+        app.core.settings.placement_in_force = in_force;
+        app.core.settings.settings_draft = Some(SettingsDraft {
+            terminal: TerminalDraft {
+                scrollback_lines: "20000".into(),
+            },
+            // A default `EnvironmentDraft` holds an *empty* timeout, which `validate` rejects —
+            // and a save that never validates would pass the assertions below for the wrong
+            // reason, reporting "nothing was applied" about a form that was simply never saved.
+            environment: EnvironmentDraft {
+                enabled: false,
+                script_path: String::new(),
+                timeout_secs: "5".into(),
+                default_ai_cli: AiCli::ClaudeCode,
+            },
+            daemon: micold_client::features::settings::DaemonDraft {
+                placement: chosen,
+                ..Default::default()
+            },
+            ..SettingsDraft::default()
+        });
+        app
+    }
+
+    /// FR-032a, FR-032b. The confirmation gates the *whole* save: until it is answered nothing is
+    /// applied — not the placement, not the scrollback the user changed in another section, and
+    /// nothing is sent to the daemon. The bug this replaces applied all of it and asked nothing.
+    #[test]
+    fn saving_a_changed_placement_applies_nothing_until_it_is_confirmed() {
+        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app =
+            app_saving_a_placement(PlacementKind::HostProcess, PlacementKind::LocalSandbox);
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+        assert_eq!(
+            app.core.settings.pending_placement,
+            Some(micold_client::features::settings::PendingPlacementChange {
+                from: PlacementKind::HostProcess,
+                to: PlacementKind::LocalSandbox,
+            }),
+            "the save has to raise the confirmation FR-032 asks for"
+        );
+        assert_eq!(
+            app.placement.kind,
+            PlacementKind::HostProcess,
+            "the connection was re-dialled in the new placement before the user answered"
+        );
+        assert_eq!(
+            app.scrollback_lines,
+            micold_core::settings::DEFAULT_SCROLLBACK_LINES,
+            "the rest of the save was applied while the question was still open (FR-032b)"
+        );
+        assert!(
+            rx.try_recv().is_err(),
+            "the daemon was told about a save the user has not agreed to"
+        );
+        assert!(
+            app.core.settings.settings_draft.is_some(),
+            "the view closed behind the dialog, taking the draft with it"
+        );
+    }
+
+    /// FR-033a. Confirming applies the change to the *running* application: the placement the
+    /// connection subscription dials from moves, the sandbox goes back to the start of its
+    /// lifecycle, and the bring-up plan a container needs is built from the settings just saved.
+    /// Without the plan there is nothing to restart — which is why re-sending `RestartRequested`
+    /// could never have fixed this on its own.
+    #[test]
+    fn confirming_a_placement_change_moves_the_running_service() {
+        let mut app =
+            app_saving_a_placement(PlacementKind::HostProcess, PlacementKind::LocalSandbox);
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+        let _ = update_inner(
+            &mut app,
+            Message::Settings(SettingsMsg::PlacementChangeConfirmed),
+        );
+
+        assert_eq!(
+            app.placement.kind,
+            PlacementKind::LocalSandbox,
+            "`daemon::connection` dials from `app.placement`, and its identity is what tears the \
+             old connection down — leaving it is the whole of BUG-003 (FR-033a)"
+        );
+        assert_eq!(
+            app.core.settings.placement_in_force,
+            PlacementKind::LocalSandbox,
+            "the note under the select reports this, so it has to follow the move (FR-035b)"
+        );
+        assert!(
+            app.sandbox_boot.is_some(),
+            "a container placement with no boot plan cannot be brought up or restarted (R9)"
+        );
+        assert_eq!(
+            app.scrollback_lines, 20_000,
+            "confirming performs the save that was deferred, not just the move"
+        );
+        assert!(
+            app.core.settings.settings_draft.is_none(),
+            "the save went through, so the view closes as it does for any other save"
+        );
+    }
+
+    /// The way back out. Moving to the host has no bring-up of its own — the connection actor
+    /// spawns a host process when it cannot reach one — so the plan is dropped rather than kept:
+    /// a stale plan is what `check_alive` would go on polling a container nobody asked for.
+    #[test]
+    fn confirming_the_move_back_to_the_host_drops_the_container_plan() {
+        let mut app =
+            app_saving_a_placement(PlacementKind::LocalSandbox, PlacementKind::HostProcess);
+        app.sandbox_boot = Some(crate::shell::sandbox::BootPlan {
+            profile: Default::default(),
+            state_dir: PathBuf::from("/tmp/state"),
+            projects: Vec::new(),
+        });
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+        let _ = update_inner(
+            &mut app,
+            Message::Settings(SettingsMsg::PlacementChangeConfirmed),
+        );
+
+        assert_eq!(app.placement.kind, PlacementKind::HostProcess);
+        assert!(
+            app.sandbox_boot.is_none(),
+            "the plan for a container this app is no longer running outlived the move"
+        );
+        assert_eq!(
+            app.sandbox.state,
+            micold_core::sandbox::lifecycle::SandboxState::Disabled,
+            "the sandbox banner still describes a container that is not where sessions run"
+        );
+    }
+
+    /// FR-032b at the shell: declining leaves the process exactly as it was, with the draft intact
+    /// so the user can change their mind about the one field they were asked about.
+    #[test]
+    fn declining_the_confirmation_leaves_the_process_untouched() {
+        let mut app =
+            app_saving_a_placement(PlacementKind::HostProcess, PlacementKind::LocalSandbox);
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+        let _ = update_inner(
+            &mut app,
+            Message::Settings(SettingsMsg::PlacementChangeCancelled),
+        );
+
+        assert_eq!(app.placement.kind, PlacementKind::HostProcess);
+        assert_eq!(
+            app.scrollback_lines,
+            micold_core::settings::DEFAULT_SCROLLBACK_LINES,
+            "a declined save applied part of itself anyway (FR-032b)"
+        );
+        assert!(app.core.settings.settings_draft.is_some());
+    }
+
+    /// FR-032a. A save that leaves the placement where it is must not ask, and must not restart
+    /// anything — it is the ordinary save every other setting goes through.
+    #[test]
+    fn a_save_that_keeps_the_placement_neither_asks_nor_restarts() {
+        let mut app =
+            app_saving_a_placement(PlacementKind::HostProcess, PlacementKind::HostProcess);
+
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+        assert!(
+            app.core.settings.pending_placement.is_none(),
+            "saving a scrollback size put a dialog about the session service on screen"
+        );
+        assert_eq!(
+            app.scrollback_lines, 20_000,
+            "the save went straight through"
+        );
+        assert!(
+            app.core.settings.settings_draft.is_none(),
+            "the view closes, as it does for any save that needs nothing confirmed"
+        );
     }
 
     /// T100: a fresh connect (or reconnect) must adopt the daemon's authoritative env-include

@@ -598,8 +598,25 @@ without the user having chosen that for the occasion.
   Linux, macOS, and Windows.
 - **FR-032**: A setting whose change requires the service to restart MUST say so before the change
   is applied, and the restart MUST require explicit confirmation.
+- **FR-032a**: That confirmation MUST be asked when the change is *saved*, and only when the saved
+  value actually differs from the stored one. A save that leaves the setting where it was MUST NOT
+  ask, and choosing a value and then cancelling the form MUST NOT ask — nothing was applied.
+- **FR-032b**: Declining the confirmation MUST leave the entire save unapplied: no field of the form
+  is written, the surface stays open, and the draft keeps every edit the user had made. No part of a
+  declined save may be applied silently.
 - **FR-033**: Switching placement while sessions are running MUST warn that running processes are
   stopped and sessions become resumable, and MUST require explicit confirmation.
+- **FR-033a**: Confirming MUST apply the change to the running application — the service is stopped
+  and brought back up in the newly chosen placement, without the user restarting the application for
+  their choice to take effect. A placement that is stored but not in force is precisely the state
+  FR-035b exists to make impossible.
+
+**Bugfix**: 2026-09-03 — BUG-003. FR-032a, FR-032b and FR-033a added. FR-032 and FR-033 were
+correct and unimplemented: `data-model.md` §7 had absorbed them into `SandboxState`'s requirement
+range, so no task was generated for either and choosing "In a container" wrote the setting and did
+nothing else. The three additions settle what FR-032 and FR-033 left open — when the confirmation is
+asked, what declining costs, and that confirming acts now rather than at the next launch. See
+`bugs/BUG-003.md`.
 
 #### Failure handling
 

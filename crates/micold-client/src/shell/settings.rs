@@ -1,6 +1,6 @@
 //! The effectful half of the settings feature: shape B (feature 028, contract M2).
 //!
-//! `features/settings.rs` holds every settings transition, and all of them are pure. Three
+//! `features/settings.rs` holds every settings transition, and all of them are pure. Four
 //! additionally need something done at the I/O boundary — `settings.json` written, or the values
 //! the shell owns read back into the freshly opened draft — and an `iced::Task` is what says so.
 //! That is the line M2 draws: an arm belongs here when it must return a `Task`, and in the feature
@@ -21,12 +21,16 @@ use crate::App;
 /// This feature's effectful entry point: one arm in `main.rs` routes here (contract M2).
 ///
 /// The `pure` arm is not a fallback that might be wrong — it is every transition other than the
-/// three named above, each of which finishes in the reducer. They reach `State::update` through the same wrapper variant they arrived
+/// four named above, each of which finishes in the reducer. They reach `State::update` through the same wrapper variant they arrived
 /// under, so the pure path is identical whether or not the shell was in the way.
 pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     match msg {
         Msg::Opened => persist::on_settings_opened(app),
         Msg::Saved => persist::on_settings_saved(app),
+        // BUG-003, FR-033a. The fourth: confirming a placement change performs the save the
+        // question deferred *and* moves the running service, both of which are effects.
+        // Declining is not here, because declining does nothing but close the question.
+        Msg::PlacementChangeConfirmed => persist::on_placement_change_confirmed(app),
         // The theme variant does not bind, so `msg` is still whole to re-wrap:
         // `on_theme_changed` applies it through the reducer and then persists.
         Msg::ThemePreferenceChanged(_) => persist::on_theme_changed(app, Message::Settings(msg)),
