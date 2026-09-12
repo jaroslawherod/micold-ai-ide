@@ -248,6 +248,55 @@ fn an_osc_title_becomes_the_live_session_title_and_a_spinner_means_working() {
 }
 
 #[test]
+fn the_observed_title_is_handed_back_for_recording_exactly_once() {
+    // Feature 029, contract C9/C10. Before it, `drain_signals` swallowed the title into
+    // `LiveSession::last_title` — un-persisted by its own doc comment — and `overlay_live_summaries`
+    // painted it over the catalog's label on the way out. The name was observed, projected, and
+    // never recorded, which is the whole of the bug.
+    //
+    // `drain_signals` still does not write anything: it is lock-only and runs on the async
+    // supervisor task, where blocking I/O does not belong (module invariant, research R2). It hands
+    // the changes back instead, and the supervisor persists them in its blocking hop. This test is
+    // the seam between those two halves, and it is the one that can be asserted without a catalog.
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
+    let state = DaemonState::new(catalog_with_session(
+        project.path(),
+        store.path(),
+        AiCli::ClaudeCode,
+    ));
+    let session = register_emitter(&state, id, r"\033]0;\342\240\213 Fixing the parser\007");
+
+    let mut observed: Vec<(SessionId, String)> = Vec::new();
+    let landed = wait_until(Duration::from_secs(5), || {
+        observed.extend(state.drain_signals().names);
+        !observed.is_empty()
+    });
+    assert!(landed, "the observed title must be handed back to the caller");
+    assert_eq!(
+        observed,
+        vec![(id, "Fixing the parser".to_string())],
+        "the value handed back is the *stripped* title — exactly what the row displays, so the \
+         record and the screen cannot diverge by construction (research R1). The raw title would \
+         write a spinner glyph into the catalog and make the persisted name flicker between glyph \
+         frames, turning a once-per-conversation write into a once-per-tick one"
+    );
+
+    // C10: reported once. The supervisor ticks every 250ms for the life of the session, and the
+    // title outlives the change — so a drain that re-reported an unchanged title would rewrite the
+    // file holding every one of that project's session records four times a second.
+    for _ in 0..3 {
+        assert!(
+            state.drain_signals().names.is_empty(),
+            "a title that has not changed is not a change"
+        );
+    }
+
+    session.kill().expect("kill");
+}
+
+#[test]
 fn a_spinner_never_moves_a_session_out_of_awaiting_input() {
     // H1a end-to-end: once a hook says AwaitingInput, later spinner evidence cannot revert it to
     // Working — terminal evidence is monotone toward Working *only from Unknown*.
