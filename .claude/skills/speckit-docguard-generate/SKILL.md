@@ -3,9 +3,13 @@ name: speckit-docguard-generate
 description: Reverse-engineer canonical documentation from existing codebase
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
-  author: github-spec-kit
-  source: docguard:commands/generate.md
+  author: Ricardo Accioly
+  source: extension:docguard
+user-invocable: true
+disable-model-invocation: false
 ---
+
+# Docguard Generate Skill
 
 # DocGuard Generate
 

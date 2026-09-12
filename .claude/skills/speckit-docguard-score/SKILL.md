@@ -3,9 +3,13 @@ name: speckit-docguard-score
 description: Calculate CDD maturity score with multi-signal quality breakdown
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
-  author: github-spec-kit
-  source: docguard:commands/score.md
+  author: Ricardo Accioly
+  source: extension:docguard
+user-invocable: true
+disable-model-invocation: false
 ---
+
+# Docguard Score Skill
 
 # DocGuard Score
 

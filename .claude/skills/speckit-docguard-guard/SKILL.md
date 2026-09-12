@@ -3,9 +3,13 @@ name: speckit-docguard-guard
 description: Run the full quality gate with severity triage and actionable remediation
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
-  author: github-spec-kit
-  source: docguard:commands/guard.md
+  author: Ricardo Accioly
+  source: extension:docguard
+user-invocable: true
+disable-model-invocation: false
 ---
+
+# Docguard Guard Skill
 
 # DocGuard Guard
 

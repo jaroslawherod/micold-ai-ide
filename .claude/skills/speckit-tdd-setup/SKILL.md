@@ -1,11 +1,17 @@
 ---
 name: speckit-tdd-setup
-description: Detect the repository's test stack and write .specify/memory/tdd-profile.md with the exact verified commands the loop needs (single test, full suite, coverage, mutation), plus the TDD principle to add to the project constitution
+description: Detect the repository's test stack and write .specify/memory/tdd-profile.md
+  with the exact verified commands the loop needs (single test, full suite, coverage,
+  mutation), plus the TDD principle to add to the project constitution
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
-  author: github-spec-kit
-  source: tdd:commands/speckit.tdd.setup.md
+  author: d0whc3r
+  source: extension:tdd
+user-invocable: true
+disable-model-invocation: false
 ---
+
+# Tdd Setup Skill
 
 # TDD Setup
 
