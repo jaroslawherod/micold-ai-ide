@@ -140,10 +140,11 @@ impl IdleWindow {
 /// Not a user setting. It is read once at startup and never surfaced in the UI: see [`IDLE_WINDOW`]
 /// for why the window is not configurable, and note that nothing here changes that — this overrides
 /// the window for a *process the tooling started*, not for the user's own service.
-pub const IDLE_STOP_ENV: &str = "MICOLD_IDLE_STOP";
-
-/// The value that turns the idle stop off entirely.
-pub const IDLE_STOP_OFF: &str = "off";
+///
+/// Defined in the core and re-exported here: the daemon reads this variable, but the two places
+/// that write it — the sandbox's `create` argv and the test harnesses — are both outside the
+/// daemon and cannot depend on it. What lives here is the *meaning* of a value, below.
+pub use micold_core::spawn::{IDLE_STOP_ENV, IDLE_STOP_OFF};
 
 /// The idle rule this process should run, read from the environment once at startup.
 ///

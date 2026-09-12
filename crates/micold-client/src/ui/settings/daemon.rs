@@ -303,8 +303,12 @@ pub fn view<'a>(
         .on_input(|v| Message::Settings(SettingsMsg::ImagePathChanged(v)))
         .on_submit(Message::Settings(SettingsMsg::Saved));
 
+    // Feature 028: "after I sign out" was the whole of what this did when the only thing that could
+    // end the service was a logout. The service now also stops itself after 30 continuous minutes
+    // with nothing connected, and this opt-in is the one thing that suppresses that too — so the
+    // label has to name both, before the choice is made rather than after it (FR-022).
     let survive = Checkbox::new(
-        "Keep sessions running after I sign out",
+        "Keep the service running when I'm signed out or away",
         draft.daemon.profile.survive_logout,
         roles,
     )
@@ -445,8 +449,8 @@ fn survival_support(placement: PlacementKind) -> (&'static str, bool) {
         // across logout and reboot, on all three platforms — so this is the one that always works
         // (FR-014b). It is applied at container creation, which is why it names the next start.
         PlacementKind::LocalSandbox => (
-            "The container is created with a restart policy, so this takes effect the next time \
-             the sandbox starts.",
+            "The container is created with a restart policy, and is not stopped for being unused, \
+             so this takes effect the next time the sandbox starts.",
             false,
         ),
         // Feature 028: the application is the only thing that starts a session service (lifecycle
@@ -454,9 +458,9 @@ fn survival_support(placement: PlacementKind) -> (&'static str, bool) {
         // are still safe — they come back resumable — which is why this says what is lost rather
         // than only that something is.
         PlacementKind::HostProcess => (
-            "A service running directly on this computer can't outlive signing out. Your sessions \
-             are kept and come back resumable; run the service in a container to keep them \
-             running through a sign-out.",
+            "A service running directly on this computer can't outlive signing out, and stops \
+             itself after 30 minutes with no window connected. Your sessions are kept and come \
+             back resumable; run the service in a container to keep them running.",
             true,
         ),
     }

@@ -421,6 +421,13 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
     // — actually tests. A harness that hardcoded `--user` would pass that box on podman by not
     // using podman's answer to it.
     args.extend(dialect().identity_args(uid, gid));
+    // The opt-in's other half (feature 028, FR-022). From `argv::idle_stop_value` rather than
+    // spelled here, for the reason `restart_policy` is read above: a harness carrying its own copy
+    // of the decision would go on passing after the application stopped making it.
+    if let Some(value) = micold_core::sandbox::argv::idle_stop_value(spec.survive_logout) {
+        args.push("-e".to_string());
+        args.push(format!("{}={value}", micold_core::spawn::IDLE_STOP_ENV));
+    }
     args.extend(spec.extra.iter().cloned());
     args.push(IMAGE.to_string());
 

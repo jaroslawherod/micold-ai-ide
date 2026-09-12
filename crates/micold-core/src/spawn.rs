@@ -24,6 +24,23 @@ use crate::endpoint::Endpoint;
 /// development builds where the binary is not beside the client.
 pub const DAEMON_BIN_ENV: &str = "MICOLD_DAEMON_BIN";
 
+/// Environment variable naming the idle rule a daemon should run (feature 028, FR-019/FR-022).
+///
+/// Here rather than in the daemon, which is where it is *read*, because the two places that
+/// **write** it are both outside the daemon: the sandbox's `create` argv (`sandbox::argv`) and the
+/// test harnesses that shorten the window. A constant owned by the reader would have to be spelled
+/// by hand at every writer, and a variable whose name is spelled in four places is a variable that
+/// eventually disagrees with itself.
+///
+/// `micold_daemon::idle` re-exports it and owns the parsing — the meaning of a value is the
+/// reader's business, the spelling of the name is shared.
+pub const IDLE_STOP_ENV: &str = "MICOLD_IDLE_STOP";
+
+/// The one [`IDLE_STOP_ENV`] value that turns the idle stop off entirely.
+///
+/// Every other value is a window, so this is the only one a writer outside the daemon ever needs.
+pub const IDLE_STOP_OFF: &str = "off";
+
 /// The daemon executable name.
 const DAEMON_BIN: &str = if cfg!(windows) {
     "micold-daemon.exe"
