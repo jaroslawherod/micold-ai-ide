@@ -22,7 +22,9 @@ use crate::app::Message;
 use crate::features::sandbox::SandboxLimit;
 use crate::features::session::CliAvailability;
 use crate::features::settings::Msg as SettingsMsg;
-use crate::features::settings::{missing_cli_notice, SettingsDraft, SettingsSection};
+use crate::features::settings::{
+    missing_cli_notice, placement_note, SettingsDraft, SettingsSection,
+};
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{Checkbox, Select, TextField};
@@ -234,6 +236,7 @@ fn limit<'a>(
 /// The Session service page.
 pub fn view<'a>(
     draft: &'a SettingsDraft,
+    in_force: PlacementKind,
     availability: Option<&'a CliAvailability>,
     focused: Option<FieldId>,
     roles: Roles,
@@ -247,8 +250,7 @@ pub fn view<'a>(
         |chosen: Named<PlacementKind>| Message::Settings(SettingsMsg::PlacementChanged(chosen.0)),
         roles,
     )
-    .label("Where sessions run")
-    .supporting("Takes effect the next time the application starts");
+    .label("Where sessions run");
 
     let runtime = Select::new(
         RUNTIMES,
@@ -311,13 +313,11 @@ pub fn view<'a>(
 
     let mut controls: Vec<Element<'a, Message>> = vec![
         placement.into(),
-        note(
-            format!(
-                "Currently {}.",
-                name_of(PLACEMENTS, draft.daemon.placement).to_lowercase()
-            ),
-            roles,
-        ),
+        // The placement in force, not the draft's (BUG-003, FR-035b). Built from the draft, this
+        // line changed the instant the select did and so said "currently in a container" about a
+        // container that did not exist — the note that was meant to report the live placement was
+        // instead a second rendering of the choice directly above it.
+        note(placement_note(in_force), roles),
         group("Container", roles),
         runtime.into(),
         image_kind.into(),

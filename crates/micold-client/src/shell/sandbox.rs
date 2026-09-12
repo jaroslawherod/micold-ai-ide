@@ -365,6 +365,11 @@ pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
                     // FR-035b exists to prevent.
                     app.placement.kind =
                         micold_core::sandbox::placement::PlacementKind::LocalSandbox;
+                    app.core.update(Message::Settings(
+                        micold_client::features::settings::Msg::PlacementMoved(
+                            micold_core::sandbox::placement::PlacementKind::LocalSandbox,
+                        ),
+                    ));
                     boot(plan)
                 }
                 _ => iced::Task::none(),
@@ -384,6 +389,14 @@ pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
                 if app.sandbox.accept_fallback(offer) {
                     app.placement.kind =
                         micold_core::sandbox::placement::PlacementKind::HostProcess;
+                    // And tell the form, which reports where sessions run *now* rather than what
+                    // the file says (FR-035b, BUG-003). This is the case that makes the two
+                    // differ: the settings still say container, and the host is what is running.
+                    app.core.update(Message::Settings(
+                        micold_client::features::settings::Msg::PlacementMoved(
+                            micold_core::sandbox::placement::PlacementKind::HostProcess,
+                        ),
+                    ));
                 }
             }
             iced::Task::none()

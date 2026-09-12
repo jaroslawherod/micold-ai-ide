@@ -40,10 +40,12 @@ use iced::Task;
 
 use micold_client::app::Message;
 use micold_core::protocol::messages::ClientMsg;
-use micold_core::sandbox::placement::Placement;
-use micold_core::settings::{Settings, SettingsStore};
+use micold_core::sandbox::placement::{Placement, PlacementKind};
+use micold_core::settings::{DaemonConfig, Settings, SettingsStore};
 
-use micold_client::features::settings::SettingsDraft;
+use micold_client::features::settings::{
+    placement_step, PlacementStep, SettingsDraft, ValidSettings,
+};
 
 use crate::shell::daemon_sync::PendingOp;
 use crate::shell::env_include::{default_resolution_cwd, refresh_env_include};
@@ -180,10 +182,52 @@ pub fn on_settings_opened(app: &mut App) -> Task<Message> {
 /// rejection now has to name the *section* holding the field it is about, and this function has no
 /// business knowing which section a field is in — see [`SettingsDraft::validate`].
 pub fn on_settings_saved(app: &mut App) -> Task<Message> {
-    let Some(draft) = app.core.settings.settings_draft.clone() else {
+    let Some(valid) = validated_draft(app) else {
         return Task::none();
     };
 
+    // BUG-003, FR-032a. Where sessions run is the one field on this form whose application ends
+    // processes, so a save that moves it asks first and applies *nothing* until it is answered —
+    // the placement least of all, but the scrollback beside it too (FR-032b). Every other save
+    // goes straight through, which is what `Leave` is.
+    match placement_step(app.core.settings.placement_in_force, valid.daemon.placement) {
+        PlacementStep::Leave => apply_save(app, valid),
+        PlacementStep::Confirm { from, to } => {
+            app.core
+                .update(Message::Settings(SettingsMsg::PlacementChangeRequested {
+                    from,
+                    to,
+                }));
+            Task::none()
+        }
+    }
+}
+
+/// The draft as validated settings, or `None` with the rejection already reported on the draft.
+///
+/// Split out of [`on_settings_saved`] because the save now has two entry points — the Save button,
+/// and the confirmation that defers it — and both have to reject an invalid form the same way.
+fn validated_draft(app: &mut App) -> Option<ValidSettings> {
+    let draft = app.core.settings.settings_draft.clone()?;
+    match draft.validate() {
+        Ok(valid) => Some(valid),
+        Err(error) => {
+            if let Some(d) = app.core.settings.settings_draft.as_mut() {
+                d.report(error);
+            }
+            None
+        }
+    }
+}
+
+/// Write the settings and apply everything in them that this process holds a copy of.
+///
+/// This is [`on_settings_saved`]'s body as it stood before BUG-003, unchanged except for being
+/// callable twice: once for a save that changes nothing about the placement, and once more when a
+/// deferred one is confirmed. It deliberately knows nothing about the placement — moving the
+/// running service is [`apply_placement`]'s job, and keeping the two apart is what lets a declined
+/// confirmation leave *neither* of them done.
+fn apply_save(app: &mut App, valid: ValidSettings) -> Task<Message> {
     // Read before the write, because the decision below is about a *change*: see
     // [`survival_step`]. `unwrap_or_default` treats "no settings file" as "never opted in", which
     // is what a machine with no settings file is.
@@ -192,16 +236,6 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
         .settings()
         .map(|store| store.load().settings.daemon.sandbox.survive_logout)
         .unwrap_or_default();
-
-    let valid = match draft.validate() {
-        Ok(valid) => valid,
-        Err(error) => {
-            if let Some(d) = app.core.settings.settings_draft.as_mut() {
-                d.report(error);
-            }
-            return Task::none();
-        }
-    };
 
     app.core.settings.theme_pref = valid.theme;
     app.scrollback_lines = valid.scrollback_lines;
@@ -287,6 +321,78 @@ pub fn survival_step(before: bool, after: bool) -> SurvivalStep {
         (false, true) => SurvivalStep::Enable,
         (true, false) => SurvivalStep::Disable,
         _ => SurvivalStep::Leave,
+    }
+}
+
+/// The confirmation was accepted: perform the save it was holding, and move the service (FR-033a).
+///
+/// Both, in that order, and in one `Task::batch` — the file is what the next launch reads, so a
+/// bring-up that fails must not lose the choice that asked for it, which is the same argument
+/// [`apply_save`] makes about logout survival.
+pub fn on_placement_change_confirmed(app: &mut App) -> Task<Message> {
+    let Some(change) = app.core.settings.pending_placement else {
+        return Task::none();
+    };
+    let Some(valid) = validated_draft(app) else {
+        // Unreachable in practice — the draft validated once already to raise the question — but
+        // "the form went invalid underneath the dialog" must not leave the question standing.
+        app.core
+            .update(Message::Settings(SettingsMsg::PlacementChangeConfirmed));
+        return Task::none();
+    };
+
+    let daemon = valid.daemon.clone();
+    // `apply_save` closes the view, which drops the draft *and* the pending question with it.
+    let saved = apply_save(app, valid);
+    Task::batch([saved, apply_placement(app, change.to, &daemon)])
+}
+
+/// Move the running service to `kind` (FR-033a, FR-035b; BUG-003).
+///
+/// The four things that have to move together, and the reason each is here:
+///
+/// - `app.placement.kind`, because `daemon::connection` dials from it and its hash is the
+///   subscription's identity — assigning it is what tears the old connection down and dials the
+///   new one. This alone is what the bug was missing.
+/// - `app.sandbox`, back to the start of the lifecycle for the new placement, so the banner stops
+///   describing a container that is no longer where sessions run.
+/// - `app.sandbox_boot`, built for a container placement and *dropped* for the host one — a stale
+///   plan is what `check_alive` would go on polling a container nobody asked for.
+/// - the outgoing container itself, stopped, because nothing else will: the client that started it
+///   is the client walking away from it.
+fn apply_placement(app: &mut App, kind: PlacementKind, daemon: &DaemonConfig) -> Task<Message> {
+    let leaving = app.sandbox_boot.take();
+
+    app.placement.kind = kind;
+    app.placement.strict_fingerprint = daemon.sandbox.image.refuses_fingerprint_mismatch();
+    app.sandbox = micold_client::features::sandbox::Sandbox::for_placement(kind);
+    app.core
+        .update(Message::Settings(SettingsMsg::PlacementMoved(kind)));
+
+    let stop_old = match &leaving {
+        Some(plan) => crate::shell::sandbox::stop(plan),
+        None => Task::none(),
+    };
+
+    match kind {
+        PlacementKind::LocalSandbox => {
+            let plan = crate::shell::sandbox::BootPlan {
+                profile: daemon.sandbox.clone(),
+                state_dir: app.placement.state_dir.clone(),
+                projects: app
+                    .core
+                    .workspace
+                    .projects
+                    .iter()
+                    .map(|p| p.path.clone())
+                    .collect(),
+            };
+            app.sandbox_boot = Some(plan.clone());
+            Task::batch([stop_old, crate::shell::sandbox::boot(plan)])
+        }
+        // Nothing to bring up: the connection actor spawns a host process itself when it cannot
+        // reach one, which is the path every non-sandboxed launch already takes.
+        PlacementKind::HostProcess => stop_old,
     }
 }
 

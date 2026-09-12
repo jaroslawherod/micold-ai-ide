@@ -29,6 +29,7 @@ use crate::ui::settings::{appearance, daemon, environment, terminal};
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
+use micold_core::sandbox::placement::PlacementKind;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
 
@@ -42,6 +43,9 @@ const SHARING: &str = "Sharing";
 pub fn view<'a>(
     draft: &'a SettingsDraft,
     env_include_outcome: &'a EnvIncludeOutcome,
+    // Where sessions run **now**, which is not always what the draft or the file says — the
+    // Session service section reports it (FR-035b, BUG-003).
+    in_force: PlacementKind,
     availability: Option<&'a CliAvailability>,
     focused: Option<FieldId>,
     rail_collapsed: bool,
@@ -90,7 +94,7 @@ pub fn view<'a>(
         SettingsSection::Environment => {
             environment::view(draft, env_include_outcome, availability, focused, r)
         }
-        SettingsSection::Daemon => daemon::view(draft, availability, focused, r),
+        SettingsSection::Daemon => daemon::view(draft, in_force, availability, focused, r),
     };
 
     // Scrolled, and only the page is: the rail and the actions stay where the user left them while

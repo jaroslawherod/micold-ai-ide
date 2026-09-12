@@ -135,6 +135,18 @@ impl Capabilities {
         self
     }
 
+    /// The same capabilities, minus the settings file.
+    ///
+    /// A narrowing like [`Self::without_local_git`], and the configuration
+    /// [`Self::settings`] already documents as reachable: no data directory resolved. Tests of the
+    /// save path use it so that asserting "this save wrote nothing" is a claim about the process
+    /// under test rather than about the developer's own `settings.json`.
+    #[cfg(test)]
+    pub(crate) fn without_settings(mut self) -> Self {
+        self.settings = None;
+        self
+    }
+
     /// The project catalog, or `None` when no data directory could be resolved.
     pub fn projects(&self) -> Option<&(dyn ProjectStore + Send + Sync)> {
         self.projects.as_deref()

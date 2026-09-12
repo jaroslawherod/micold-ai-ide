@@ -186,6 +186,12 @@ check both themes at the supported window sizes.
 - [X] T068 [P] [US3] Move the terminal settings into `crates/micold-client/src/ui/settings/terminal.rs`
 - [X] T069 [P] [US3] Move the environment-include settings into `crates/micold-client/src/ui/settings/environment.rs`
 - [X] T070 [US3] Build the daemon section in `crates/micold-client/src/ui/settings/daemon.rs` — placement, runtime, image, and the sandbox controls promoted out of T042's temporary home (FR-027)
+      — ⚠️ **Scope note (BUG-003)**: this built the control that sets the placement; nothing was
+      ever written that made the value act. FR-032 and FR-033 are absent from this task's
+      requirement list because `data-model.md` §7 had claimed them for `SandboxState`, so the
+      section saves the choice and the daemon never moves. **Not reopened** — the control is
+      correct against FR-027, and the missing work is work that was never scheduled, not work that
+      drifted. It is Phase 17.
 - [X] T071 [US3] Grow `SettingsDraft` to hold per-section drafts with validation beside the type in `crates/micold-client/src/features/settings.rs` (US3 scenarios 2 and 3)
 - [X] T072 [US3] Render each active credential opt-in individually while it is active, in `crates/micold-client/src/ui/settings/daemon.rs` (FR-004c, N-2)
 - [X] T073 [US3] Route the view into the shell and remove `crates/micold-client/src/ui/settings_form.rs`'s modal, updating `crates/micold-client/src/ui/mod.rs`'s `view` signature
@@ -910,6 +916,77 @@ code is what drifted. **Clarified, not added**: FR-023c gains a note that a set 
 answered yet is not an empty set, and 026 FR-006 the same on its own side — the reading that let the
 drift look correct. **One task reopened**: T144. See `bugs/BUG-002.md`.
 
+## Phase 17: Bugfix BUG-003 — choosing "In a container" saved the choice and did nothing else
+
+**Goal**: Make the placement select move the daemon. Set **Where sessions run** to *In a container*,
+press Save, and today the view closes, the note reads "Currently in a container.", and the session
+service is still the host process it was — every session unconfined, nothing said. The next launch
+does come up sandboxed, which is why this survived: it is not broken forever, only for as long as
+the user believes they are contained and are not.
+
+FR-032 and FR-033 said to confirm and restart. Neither produced a task, because `data-model.md` §7
+had folded them into `SandboxState`'s requirement range. FR-032a, FR-032b and FR-033a settle what
+they left open.
+
+### Tests for BUG-003 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T159 [BUG-003] *(test)* `crates/micold-client/tests/saving_a_placement_moves_the_daemon.rs`:
+      a save whose draft placement differs from the store's asks for confirmation and applies
+      **nothing** before it is answered — not the placement, and not the other fields either
+      (FR-032, FR-032a). Confirmed red against the current reducer, where the save writes every
+      field and asks nothing.
+      **Written in two files, not one.** T159–T162 name a single integration test, and half of what
+      they assert is unreachable from one: `App`, `shell::persist` and `app.placement` live in the
+      **binary**, so `tests/*.rs` cannot see them. The pure half (what the reducer does with a
+      pending change) is the file named above; the shell half (T162) is in `main.rs`'s
+      `#[cfg(test)] mod tests`, beside the other `update_inner` tests. Splitting on the crate
+      boundary rather than writing the lot as binary tests keeps the rules that *are* pure testable
+      without a `Task` runtime, which is the same division M2 draws in the code.
+- [X] T160 [BUG-003] *(test)* Same file — a save that leaves the placement where it was asks
+      nothing and behaves exactly as it does today, and choosing a placement then pressing Cancel
+      asks nothing (FR-032a). This is the rule that keeps the fix from becoming a modal in front of
+      every Save; it mirrors `persist.rs::survival_step`'s "act on a change, and only on a change",
+      which is why the two are asserted together.
+- [X] T161 [BUG-003] *(test)* Same file — declining leaves the store byte-for-byte unchanged, the
+      settings surface open, and the draft holding every edit the user had made, the placement
+      included (FR-032b). The one that would catch a fix which saves the other four fields and
+      silently drops the fifth — the failure class BUG-001 was.
+- [X] T162 [BUG-003] *(test)* `crates/micold-client/src/main.rs` (`mod tests`, not the file above —
+      see T159) — confirming moves `app.placement`, and yields the bring-up
+      task rather than deferring to the next launch (FR-033a). Asserted through the boot plan the
+      save must construct, since a user switching *into* the sandbox has none from `startup.rs`;
+      without that the fix would be an assignment that dials a port nothing is listening on.
+- [X] T163 [BUG-003] *(test)* [P] `crates/micold-client/tests/settings_reports_the_live_placement.rs`:
+      the note under the select renders the placement **in force**, not the draft's, so it cannot
+      read "Currently in a container." over a host process (FR-035b). A separate file because it is
+      a view property and needs none of the save path.
+
+### Implementation for BUG-003
+
+- [X] T164 [BUG-003] `crates/micold-client/src/ui/confirm_placement.rs` and its `SurfaceId` in
+      `features/settings.rs` — the modal, following the `confirm_*.rs` family's shape
+      (`FloatingSurface` + `Registered`, `material::dialog::fields`/`actions`). It names the
+      placement being moved to, that the service restarts, and — when sessions are running — how
+      many stop and that they become resumable (FR-032, FR-033).
+- [X] T165 [BUG-003] `shell/persist.rs::on_settings_saved` — read the stored placement before the
+      write, alongside the survival opt-in that already does this; on a difference, raise the
+      confirmation and return without writing. Split the applying half into a
+      `on_placement_change_confirmed` that performs the save it deferred, assigns `app.placement`,
+      builds the `BootPlan` from the validated settings, and returns `shell::sandbox::boot` — the
+      third caller of the mechanism `RestartRequested` and `FallbackAccepted` already use
+      (FR-032a, FR-032b, FR-033a).
+- [X] T166 [BUG-003] `crates/micold-client/src/ui/settings/daemon.rs` — the note reads the live
+      placement, and the select's supporting text stops saying "Takes effect the next time the
+      application starts". That string was an accurate description of the code and an undeclared
+      narrowing of FR-032, recorded where nobody would read it as a gap; FR-033a no longer permits
+      what it promises (FR-035b).
+
+**Bugfix**: 2026-09-03 — BUG-003. **Requirements added**: FR-032a, FR-032b, FR-033a — see `spec.md`.
+**Design corrected**: `data-model.md` §7's requirement range, which is what swallowed FR-032/FR-033;
+`plan.md` gained the increment. **No task reopened**: T070 built the control it was asked for and is
+annotated in place, because the defect is a task that was never written rather than one that
+drifted. See `bugs/BUG-003.md`.
+
 ---
 
 ## Parallel Opportunities
@@ -949,6 +1026,11 @@ record.
 
 **Phase 16**: none. T158 is one moved line and T157 must fail against the code before it moves, so
 the two are strictly ordered.
+
+**Phase 17**: T159–T161 are one file and sequential within it. T162 is a *different* file — the
+binary's own `mod tests`, because `App`, `shell::persist` and `app.placement` are not reachable from
+`tests/*.rs` — so it is parallel with the three, as is T163. T164 and T166 touch disjoint modules
+and are parallel; T165 needs T164's message to exist before it can raise anything.
 
 ## Implementation Strategy
 

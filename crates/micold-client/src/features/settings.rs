@@ -52,6 +52,9 @@ use std::path::PathBuf;
 
 use crate::features::session::{AvailabilitySource, CliAvailability};
 use crate::features::window::FieldId;
+use crate::overlay::registry::Registered;
+use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use micold_core::overlay::Layer;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::RuntimeCapabilities;
 use micold_core::sandbox::{
@@ -81,6 +84,106 @@ pub struct State {
     pub system_scheme: SystemScheme,
     /// How the app chooses its theme (persisted); defaults to following the OS (FR-005).
     pub theme_pref: ThemePreference,
+    /// Where sessions are running **now** (FR-035b; BUG-003).
+    ///
+    /// Not the draft's `daemon.placement`, which is what the user is *choosing*, and not the
+    /// stored one either: after an accepted fallback (FR-035a) the file says container and the
+    /// service is on the host, and the honest answer to "where do my sessions run" is the host.
+    /// Seeded at boot from the placement the shell resolved and moved only when a save actually
+    /// moves the service, so a Cancel cannot revert it — reverting it would mean the note lying
+    /// about a container that is still running.
+    pub placement_in_force: PlacementKind,
+    /// The placement change the user is being asked to confirm, while the question is open
+    /// (FR-032; BUG-003). `None` the rest of the time, which is what closes the dialog.
+    pub pending_placement: Option<PendingPlacementChange>,
+}
+
+/// A placement change that has been asked about and not yet answered (FR-032).
+///
+/// Carries both ends because the dialog names both: "sessions will move from the host to a
+/// container" is answerable, "the placement will change" is not. `from` is the placement in force
+/// rather than the stored one for the same reason [`State::placement_in_force`] exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PendingPlacementChange {
+    /// Where sessions run now.
+    pub from: PlacementKind,
+    /// Where this save would move them.
+    pub to: PlacementKind,
+}
+
+/// What a save has to do about where the service runs (FR-032a, FR-033a; BUG-003).
+///
+/// The shape is deliberately `survival_step`'s: that decision — arrange for sessions to outlive a
+/// logout, or don't — is the other setting in this form whose value has to be *acted on* rather
+/// than written, and it already established the rule this one needs. Act on a change, and only on
+/// a change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlacementStep {
+    /// The save leaves sessions where they are. Write it and move nothing.
+    Leave,
+    /// The save moves the service. Ask first, and write nothing until the answer comes back.
+    Confirm {
+        /// Where sessions run now.
+        from: PlacementKind,
+        /// Where this save would move them.
+        to: PlacementKind,
+    },
+}
+
+/// Whether saving `saved` moves a service currently running at `in_force` (FR-032a).
+///
+/// Pure, and the whole of "only when it actually differs": a user who opens Settings, changes a
+/// scrollback size and presses Save must not be asked about the session service, and a user who
+/// re-selects the placement they already have has not asked for a restart either.
+pub fn placement_step(in_force: PlacementKind, saved: PlacementKind) -> PlacementStep {
+    if in_force == saved {
+        PlacementStep::Leave
+    } else {
+        PlacementStep::Confirm {
+            from: in_force,
+            to: saved,
+        }
+    }
+}
+
+/// The line under the placement select: where sessions run **now** (FR-035b).
+///
+/// It takes the placement in force and nothing else, and that signature is the fix. The note used
+/// to read the draft — the same value the select directly above it already shows — so the instant
+/// a user chose *In a container* it told them they were currently in one, about a service still
+/// running on the host. A control cannot report the state of the world by echoing the question.
+/// What the confirmation tells the user they are about to lose (FR-033).
+///
+/// Pure and here rather than inside the dialog's view, because it is the only part of that dialog
+/// anyone can be wrong about: the count, its plural, and whether a move with nothing running still
+/// has something to warn about. A view returning an `Element` can be looked at; a `String` can be
+/// asserted.
+///
+/// `live_sessions` is how many sessions the application currently knows are running — all of them,
+/// across every project, because the service that hosts them is one process and the move stops it.
+pub fn placement_move_consequence(
+    from: PlacementKind,
+    to: PlacementKind,
+    live_sessions: usize,
+) -> String {
+    let ends = match live_sessions {
+        // Nothing running, so nothing is lost, and saying "0 sessions stop" would be a warning
+        // about an absence — the kind that teaches people to click through dialogs unread.
+        0 => String::new(),
+        1 => " Your 1 session stops and becomes resumable.".to_string(),
+        n => format!(" Your {n} sessions stop and become resumable."),
+    };
+
+    format!(
+        "Sessions run {} now. Saving stops the session service and starts it again {}.{ends} Your \
+         projects and their history are untouched.",
+        from.label().to_lowercase(),
+        to.label().to_lowercase(),
+    )
+}
+
+pub fn placement_note(in_force: PlacementKind) -> String {
+    format!("Currently {}.", in_force.label().to_lowercase())
 }
 
 /// One page of the Settings view (FR-026).
@@ -683,6 +786,32 @@ pub enum Msg {
     PidLimitChanged(String),
     /// The sandbox's writable-storage limit changed, in MiB as typed (feature 027, FR-015).
     StorageLimitChanged(String),
+    /// Saving would move sessions, so the user is asked first (feature 027, FR-032; BUG-003).
+    ///
+    /// Raised by the shell rather than by a control: whether a save is a *change* is a comparison
+    /// against the placement in force, and the save path is the only thing holding both sides of
+    /// it. Everything about it is pure from here on.
+    PlacementChangeRequested {
+        /// Where sessions run now.
+        from: PlacementKind,
+        /// Where the save would move them.
+        to: PlacementKind,
+    },
+    /// The user agreed to move the service (feature 027, FR-033a; BUG-003). The shell performs the
+    /// deferred save and restarts the service in the new placement.
+    PlacementChangeConfirmed,
+    /// The user declined the move, or dismissed the question (FR-032b; BUG-003).
+    ///
+    /// The whole save goes with it: the surface stays open and the draft keeps every edit, because
+    /// a declined restart is not a declined form.
+    PlacementChangeCancelled,
+    /// The service is now running here (FR-035b; BUG-003).
+    ///
+    /// Reported by the shell after a move it has actually performed — the save path, and the
+    /// accepted fallback of FR-035a, which moves sessions to the host without any save at all.
+    /// Both have to reach the same field, which is why this is a message rather than an assignment
+    /// inside the one of them that happened to be written first.
+    PlacementMoved(PlacementKind),
     /// Save the Settings form (validated + persisted by the shell) (FR-020, FR-021).
     Saved,
     /// Dismiss the Settings form without saving (Cancel or Esc).
@@ -721,6 +850,10 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::MemoryLimitChanged(text) => memory_limit_changed(state, text),
         Msg::PidLimitChanged(text) => pid_limit_changed(state, text),
         Msg::StorageLimitChanged(text) => storage_limit_changed(state, text),
+        Msg::PlacementChangeRequested { from, to } => placement_change_requested(state, from, to),
+        Msg::PlacementChangeConfirmed => placement_change_confirmed(state),
+        Msg::PlacementChangeCancelled => placement_change_cancelled(state),
+        Msg::PlacementMoved(kind) => placement_in_force_changed(state, kind),
         Msg::Saved => saved(state),
         Msg::Cancelled => cancelled(state),
     }
@@ -927,13 +1060,98 @@ fn edit(state: &mut crate::app::State, change: impl FnOnce(&mut SettingsDraft)) 
 /// The form was saved (feature 006).
 ///
 /// Validation and persistence happen in the shell; the reducer closes the view.
+///
+/// The pending question goes with the draft. It cannot normally outlive one — a save that asks
+/// does not reach here until the answer comes back — but a question about a form that no longer
+/// exists is a dialog with nothing behind it, and leaving it representable is how it would appear.
 pub fn saved(state: &mut crate::app::State) {
     state.settings.settings_draft = None;
+    state.settings.pending_placement = None;
 }
 
 /// The form was dismissed without saving.
 pub fn cancelled(state: &mut crate::app::State) {
     state.settings.settings_draft = None;
+    state.settings.pending_placement = None;
+}
+
+// --- Moving the service the form is about (BUG-003 — FR-032, FR-032b, FR-033a, FR-035b) ---
+
+/// The save wants to move sessions; ask before anything is applied (FR-032).
+///
+/// Nothing else happens here, and that is the requirement rather than an omission: FR-032b makes
+/// the confirmation a gate on the *whole* save, so the draft is untouched, the view stays open
+/// behind the dialog, and not one field has been written when this returns.
+pub fn placement_change_requested(
+    state: &mut crate::app::State,
+    from: PlacementKind,
+    to: PlacementKind,
+) {
+    state.settings.pending_placement = Some(PendingPlacementChange { from, to });
+}
+
+/// The user agreed to the move (FR-033a).
+///
+/// The reducer's half is to stop asking. Performing the deferred save and restarting the service
+/// in the new placement is an effect, so it belongs to `shell/persist.rs`, which reads the pending
+/// change before dispatching this.
+pub fn placement_change_confirmed(state: &mut crate::app::State) {
+    state.settings.pending_placement = None;
+}
+
+/// The user declined the move (FR-032b).
+///
+/// Only the question is dropped. The draft is deliberately *not* reverted to the placement in
+/// force: the user chose a placement and then declined to apply it now, which is a decision to
+/// reconsider rather than an edit to undo, and silently resetting the select would leave them
+/// looking at a form that disagrees with what they just did.
+pub fn placement_change_cancelled(state: &mut crate::app::State) {
+    state.settings.pending_placement = None;
+}
+
+/// The service is now running in `kind` (FR-035b).
+///
+/// Reported by the shell once a move has actually been applied — not when it is chosen, and not
+/// when it is saved. Everything that tells the user where their sessions are reads this.
+pub fn placement_in_force_changed(state: &mut crate::app::State, kind: PlacementKind) {
+    state.settings.placement_in_force = kind;
+}
+
+/// The confirm-move dialog, as a floating surface (FR-032; BUG-003).
+///
+/// The first surface this feature registers since Settings stopped being one (FR-026). That is not
+/// a reversal: Settings is a *view* because it is a destination the user navigates to, and this is
+/// a dialog because it is a question about an action already taken, with no way past it but an
+/// answer. Being a registered surface is what puts it above the view in the z-order and gives
+/// Escape somewhere to go that is not "close the form".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfirmPlacementDialog;
+
+impl FloatingSurface for ConfirmPlacementDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("confirm_placement")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        // Dismissing is declining, and declining leaves the whole save unapplied (FR-032b) — so
+        // the scrim and Escape both reach the same reducer the Cancel button does, and none of the
+        // three can leave a half-applied save behind.
+        DismissalRules::for_layer(Layer::Dialog)
+            .cancelled_by(crate::app::Message::Settings(Msg::PlacementChangeCancelled))
+    }
+}
+
+impl Registered for ConfirmPlacementDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .settings
+            .pending_placement
+            .map(|_| ConfirmPlacementDialog)
+    }
 }
 
 // --- Where a CLI is missing, and what to say about it (feature 027, FR-023b) ---
