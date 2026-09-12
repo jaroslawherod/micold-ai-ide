@@ -677,6 +677,17 @@ plus a new Edge Case and SC-011a. See `bugs/BUG-009.md`.
 - **FR-037**: On Linux, the packaged installation MAY additionally register the service with the
   platform's user service manager; the service MUST work identically whether launched by that manager
   or spawned directly by a client, from a single binary.
+
+  **Superseded**: 2026-08-31 — feature `028-client-managed-daemon` turned this `MAY` into a
+  `MUST NOT`. Installing the application registers no service-manager entry (`028` FR-002) and the
+  service cannot be socket-activated (`028` FR-004), because the application is the only thing that
+  ever starts one. `packaging/micold-daemon.socket` and `packaging/micold-daemon.service` — the two
+  files this requirement's evidence named, shipped by T076 — were deleted with that change, so a
+  reader following the old citation finds nothing. What survives is FR-037's second half, and it is
+  now the whole of it: one binary, launched the one way, behaving identically in every placement.
+  Gated from this side by `micold-client/tests/deb_ships_no_service_units.rs` (no unit reaches the
+  package, by destination or by source) and `micold-daemon/tests/no_socket_activation.rs` (the
+  daemon cannot adopt an inherited listener, and the crate that would let it is not declared).
 - **FR-038**: Surviving user logout MUST be documented as supported on Linux via an explicit,
   user-enabled setting, and explicitly unsupported on macOS and Windows. The setting MUST NOT be
   enabled silently by installation.
