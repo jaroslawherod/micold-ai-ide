@@ -783,11 +783,6 @@ pub fn on_connected(
     app.env_include_script_path = settings.env_include_script_path;
     app.env_include_timeout_secs = settings.env_include_timeout_secs;
     app.core.session.default_ai_cli = settings.default_ai_cli;
-    // ...and ask the same authority which CLIs it can actually run (feature 027, FR-023c). Here
-    // rather than only on the named events below, because a reconnect is the one moment the answer
-    // can have changed without the user doing anything: a restarted sandbox may be a *different*
-    // image, and the set the previous connection reported describes a container that is gone.
-    ask_cli_availability(app);
     app.env_include_cache.clear();
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);
@@ -820,11 +815,20 @@ pub fn on_connected(
     // Attach to the active project and view its active session so the daemon starts
     // streaming grid frames for it (FR-011/FR-016).
     //
-    // `app.daemon` is assigned before the sends, not after, because `view_and_start` below
-    // reads it (BUG-002). Nothing between here and there can observe the difference: no
-    // message is dispatched and no frame is drawn inside this arm.
+    // `app.daemon` is assigned before the sends, not after, because they read it: `view_and_start`
+    // below (`010` BUG-002) and `ask_cli_availability` (`027` BUG-002). Nothing between here and
+    // there can observe the difference: no message is dispatched and no frame is drawn inside this
+    // arm. A send placed *above* this line is not an ordering nicety — `ask_cli_availability`
+    // takes its own disconnected early-return and the request is silently never made, which is the
+    // bug that put this sentence in the plural.
     let project = app.core.workspace.active_project().map(|p| p.path.clone());
     app.daemon = Some(outbox);
+    // Ask the authority whose settings were just adopted above which CLIs it can actually run
+    // (feature 027, FR-023c). Here rather than only on the named events elsewhere — Settings
+    // opening and the override menu opening — because a reconnect is the one moment the answer
+    // can have changed without the user doing anything: a restarted sandbox may be a *different*
+    // image, and the set the previous connection reported describes a container that is gone.
+    ask_cli_availability(app);
     if let (Some(project), Some(daemon)) = (project, app.daemon.clone()) {
         daemon.send(ClientMsg::Attach {
             project: project.clone(),

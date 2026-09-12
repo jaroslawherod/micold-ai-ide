@@ -377,6 +377,14 @@ The missing CLI is either absent or clearly marked unavailable, and cannot be ch
   and bar labels. When fewer than two CLIs are available there is nothing to choose between, so the override
   control MUST be absent rather than present-and-empty.
 
+  **Bugfix**: 2026-08-28 — [027 BUG-002](../027-sandboxed-daemon-runtime/bugs/BUG-002.md).
+  Clarified: "fewer than two CLIs are available" is a statement about what the application has been
+  *told*, not about what it has not asked. Feature 027 FR-023c made the set an answer from the
+  session service rather than a local `PATH` walk, and therefore something that has a moment before
+  it exists; the client read that moment as "fewer than two" and dropped the override control for
+  the whole run. Absent is correct for a known set of one. For an unknown set the requirement says
+  nothing, and the application MUST NOT decide it by silence — it MUST have asked.
+
 **Running**
 
 - **FR-007**: Starting a session MUST launch the CLI that session records, in the session's own

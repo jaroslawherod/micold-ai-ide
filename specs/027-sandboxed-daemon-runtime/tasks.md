@@ -704,13 +704,17 @@ That is why the fix is a protocol pair and a gate, not a better probe.
 - [x] T143 [US3] `micold-daemon/src/server.rs`: answer the request from `available_here()`. Four
       lines, and the whole of FR-023c: the process that will spawn the CLI is the process that says
       whether it is there.
-- [x] T144 [US3] `micold-client`: delete `Capabilities::available_providers()`; change
+- [X] ⚠️ **Was reopened (BUG-002), closed again** T144 [US3] `micold-client`: delete `Capabilities::available_providers()`; change
       `State::available_providers` to `Option<CliAvailability>`; ask on connect and on the two named
       events research R11 already required (Settings opening, the override menu opening); fill the
       field from the reply, **stamping it** with what it describes as it arrives. The stamp is read
       from the sandbox's own state rather than the configured placement, because those come apart in
       the one case that matters — after FR-035a's "run without it for now" the placement still says
       the user wanted a container and the thing answering is a host process.
+      **Reopened 2026-08-28 (BUG-002)**: three of the four halves landed. The connect-time ask did
+      not — `on_connected` calls `ask_cli_availability` above the line that installs the outbox, so
+      the call takes its own disconnected early-return every time and no request goes out. Closed
+      again 2026-08-28 by T157/T158.
 - [x] T145 [US3] `features/settings.rs::missing_cli_notice`, rendered in `ui/settings/environment.rs`
       under the CLI picker and in `ui/settings/daemon.rs` under the image reference — FR-023b's two
       points of choice, and not session start. It names the image the service was **started from**,
@@ -860,6 +864,54 @@ Recorded in `evidence/first-run-end-to-end.md`; it belongs to 010.
 
 **Requirements closed**: FR-024.
 
+## Phase 16: Bugfix BUG-002 — the connect-time availability ask never went out
+
+**Goal**: Make T144's first half real. The client asks the service which AI CLIs it can run at three
+moments; two of them work. The third — the connection itself — is a call placed 37 lines above the
+assignment it depends on, so it returns without sending and `State::available_providers` stays
+`None` for the whole run unless the user happens to open Settings. `None` is read as the empty set
+by everything that decides what to offer, so the sidebar's override chevron is absent (026 FR-004,
+FR-006) and an unavailable default starts instead of offering (026 FR-002).
+
+### Tests for BUG-002 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T157 [BUG-002] `crates/micold-client/src/main.rs::tests::connecting_asks_which_clis_the_service_can_run`:
+      drive `Msg::Connected` with an outbox whose receiver the test holds, and assert
+      `ClientMsg::AiCliAvailabilityRequest` arrives on **that** connection's channel. Behavioural,
+      not textual, because that is the whole lesson of this bug:
+      `cli_availability_comes_from_the_service.rs` asserts the three spellings appear under `shell/`
+      and they do — a dead call site spells identically to a live one, which is why a source scan
+      watched this ship. Second assertion in the same test: after the reply is folded in,
+      `start_affordance_offers_a_choice()` is true for a two-CLI answer, so the gate covers the
+      symptom and not only the send. Confirm both red against the unfixed `on_connected`.
+      **Landed in `src/main.rs`'s test module, not `tests/`** as this task first said: `App` is a
+      type of the *binary* crate — an integration test under `tests/` links `micold_client`, the
+      lib, and cannot name it. The `connect(app, catalog) -> Vec<ClientMsg>` fixture the assertion
+      needs was already there. A third assertion was added after the first red run: the connection
+      must send `ClientMsg::Attach` too. Without it the fixture passed for a second reason — it sent
+      *nothing at all*, so an `Outbox` that dropped every message would have failed the test
+      identically to the bug. With an active project the red run reads
+      `[Attach, SetViewedSession]` — the outbox demonstrably working, and the availability request
+      demonstrably absent.
+
+### Implementation for BUG-002
+
+- [X] T158 [BUG-002] `shell/daemon_sync.rs::on_connected`: move `ask_cli_availability(app)` below
+      `app.daemon = Some(outbox)`. The comment already standing at that assignment — "`app.daemon`
+      is assigned before the sends, not after, because `view_and_start` below reads it" — states the
+      rule this call was breaking; extend it to name the availability ask as the second reader, so
+      the next send added above the line is recognised as the same mistake. Done: the ask now sits
+      immediately below the assignment and the comment names both readers and says what a send
+      placed above the line actually does — returns silently, rather than merely arriving late.
+
+**Bugfix**: 2026-08-28 — BUG-002. **No requirement added**: FR-023c is correct and the plan states
+the intended behaviour ("asks on connect and again whenever a surface that offers a CLI opens"); the
+code is what drifted. **Clarified, not added**: FR-023c gains a note that a set which has not been
+answered yet is not an empty set, and 026 FR-006 the same on its own side — the reading that let the
+drift look correct. **One task reopened**: T144. See `bugs/BUG-002.md`.
+
+---
+
 ## Parallel Opportunities
 
 **Phase 1**: T002, T003, T005, T006 in parallel after T001.
@@ -894,6 +946,9 @@ those two run.
 what T150 writes — and T152/T153 are steps and edges within T151's job graph rather than separate
 work. T155 follows everything, because a release that has not run yet is the one thing it cannot
 record.
+
+**Phase 16**: none. T158 is one moved line and T157 must fail against the code before it moves, so
+the two are strictly ordered.
 
 ## Implementation Strategy
 

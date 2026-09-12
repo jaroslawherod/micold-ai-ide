@@ -1506,6 +1506,57 @@ pub(crate) mod tests {
         );
     }
 
+    /// BUG-002: connecting is one of the three moments the client asks which AI CLIs the service
+    /// can run (027 FR-023c, T144) — and the only one the user does not trigger by hand.
+    ///
+    /// It asked into a handle it had not stored yet. `ask_cli_availability` returns early when
+    /// `app.daemon` is `None`, which it is on a first connect and — since `on_disconnected` clears
+    /// it — on every reconnect after, so the request was never sent. `available_providers` then
+    /// stayed `None` for the whole run, and `None` is read as the empty set by everything that
+    /// decides what to *offer*: no override chevron on the sidebar row (026 FR-004, FR-006), and a
+    /// default that is not installed started instead of offering the CLIs that are (026 FR-002).
+    /// Opening Settings was the only thing that could repair it, because the other two ask sites
+    /// are that view and the menu the missing chevron opens.
+    ///
+    /// Two assertions, because either alone passes while wrong: the send is what broke, the
+    /// chevron is why anyone noticed. Neither is visible to
+    /// `tests/cli_availability_comes_from_the_service.rs`, which scans source text — a dead call
+    /// site spells identically to a live one, which is how this shipped through Phase 13.
+    #[test]
+    fn connecting_asks_which_clis_the_service_can_run() {
+        let mut app = base_app();
+        // An active project, so the connection sends *something* either way. Without it the
+        // assertion below is also satisfied by an outbox nothing can reach, which would pass
+        // against a broken `Outbox` as readily as against the bug.
+        app.core.workspace.active = Some(PathBuf::from("/repo/demo"));
+        let sent = connect(&mut app, snapshot_with("/repo/demo", Vec::new()));
+        assert!(
+            sent.iter().any(|m| matches!(m, ClientMsg::Attach { .. })),
+            "fixture check: the connection's outbox must be reaching this test at all"
+        );
+
+        assert!(
+            sent.iter()
+                .any(|m| matches!(m, ClientMsg::AiCliAvailabilityRequest { .. })),
+            "connecting must ask the service which AI CLIs it can run (FR-023c): a reconnect may \
+             be to a different sandbox, and the previous connection's answer describes a container \
+             that is gone. Sent instead: {sent:?}"
+        );
+
+        let _ = update_inner(
+            &mut app,
+            Message::Connection(ConnectionMsg::Event(DaemonMsg::AiCliAvailability {
+                req: 0,
+                available: vec![AiCli::ClaudeCode, AiCli::Copilot],
+            })),
+        );
+        assert!(
+            app.core.session.start_affordance_offers_a_choice(),
+            "with two CLIs reported, the sidebar row's override chevron must exist (026 FR-006) — \
+             the answer arriving is the whole point of asking for it"
+        );
+    }
+
     /// With nothing remembered, a launch starts nothing at all (FR-007, SC-005a).
     ///
     /// The overview is a legitimate place to land, and landing there must stay free of side effects:

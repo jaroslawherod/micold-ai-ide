@@ -291,6 +291,14 @@ The approach:
   the feature was deleted rather than moved. `Capabilities::available_providers` is gone and its
   assertions moved to `micold-core/tests/available_here.rs` unchanged: what they claimed never
   depended on who was asking.
+
+  **Bugfix**: 2026-08-28 — [BUG-002](./bugs/BUG-002.md). The two halves are not two halves of a
+  sufficient gate, which this bullet implied. Both are scans over source text, and text is exactly
+  what a request that is never sent still has: `on_connected` asked above the line that installs the
+  outbox, so the call returned through its own disconnected guard and the gate saw the spelling and
+  passed. The bullet above it states the intended behaviour correctly — "asks on connect and again
+  whenever a surface that offers a CLI opens" — and that sentence had no test. It has one now
+  (T157), and it is behavioural: connect, then read the channel.
 - **The set is stamped with what it is an answer about, at the moment it arrives.**
   `CliAvailability { available, source }` pairs the list with `AvailabilitySource::{ThisComputer,
   Image(reference)}`, so FR-023b's sentence can name the image without a second lookup that could

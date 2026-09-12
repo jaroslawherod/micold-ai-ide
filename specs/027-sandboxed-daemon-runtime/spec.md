@@ -533,6 +533,15 @@ without the user having chosen that for the occasion.
 - **FR-023c**: Whether an AI CLI is available MUST be determined where sessions run — inside the
   sandbox under sandboxed placement, on the host under host placement. The application MUST NOT
   answer it from the client's own environment when those differ.
+
+  **Bugfix**: 2026-08-28 — [BUG-002](./bugs/BUG-002.md). Clarified, because the requirement said
+  where the answer comes from and nothing about when the application has one. Determining it where
+  sessions run means *obtaining* it for every connection to the service — a reconnect may be to a
+  different sandbox, and a set carried over from the previous one describes a container that is
+  gone. Until an answer has arrived, the application MUST distinguish "not answered yet" from
+  "answered: none": the first is a question still open and MUST NOT be rendered as a finding about
+  what is installed. Treating them alike is what made the missing connect-time request invisible —
+  a client that never asked looked exactly like a machine with one CLI on it.
 - **FR-024**: The default image MUST be published and versioned with the application release and
   acquired automatically, so a first run requires no manual image preparation.
 - **FR-024a**: The application MUST support acquiring the image without reaching the publishing
