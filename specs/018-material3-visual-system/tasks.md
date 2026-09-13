@@ -1680,6 +1680,18 @@ FR-004b now names: a narrowed host where one exists, a moved tone where it does 
 
 **Red record (T172)** — `every_pair_still_meets_aa_with_its_state_layer_composited` failed with the pin emptied: `Dark / inverse_primary/inverse_surface: 4.37 < 4.5`. The chip's pair did not appear, because T172 already measures it on its new host; its red is BUG-011's own 4.47:1.
 
-**Pass record (T175)** — 2026-09-13: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace` 2798 passed, 0 failed. `style_snapshot` regenerated: 13 lines, all `host.snackbar` and `button.*@snackbar[*]`, dark `on_fill` `(103,80,164)` → `(79,55,138)` — primary tone 40 → 30, and nothing else. Not checked on a rendered frame.
+**Pass record (T175)** — 2026-09-13: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace` 2798 passed, 0 failed. `style_snapshot` regenerated: 13 lines, all `host.snackbar` and `button.*@snackbar[*]`, dark `on_fill` `(103,80,164)` → `(79,55,138)` — primary tone 40 → 30, and nothing else.
+
+**Rendered-frame record (T175)** — 2026-09-13, the `micold-showcase` gallery in the dark scheme on
+Xvfb + lavapipe (the `visual-pass` skill), not on a real display; pixels sampled from full-resolution
+frames. The active neutral `ToggleChip` fills `(43,41,45)` with its label at `(202,196,207)` — 8.44:1
+— and held pressed its fill is `(59,57,61)`, exactly §5's 10% of the label over the fill: 6.69:1,
+the figure the tokens predict. The snackbar's `Dismiss` draws `(79,55,138)`, primary tone 30, on
+`(230,225,230)`: 7.25:1. The chip still reads as selected against its outlined inactive neighbour.
+Crops: [`evidence/BUG-011-dark-chip-and-snackbar-action.png`](evidence/BUG-011-dark-chip-and-snackbar-action.png)
+(red: chip row at rest; blue: active chip held; green: the action). **Not** a pass for `Dismiss`
+pressed: a held press there composited 19%, not 10% — the focus a click hands the button stacks its
+own layer on the pressed one. That is a separate defect with its own report, BUG-013; this bug's
+tone is right on the frame.
 
 **Bugfix**: 2026-09-13 — BUG-011 added Phase 24 (T172–T175). **No task is reopened.** T160 and T165 found these two pairs and are complete as written; the pin they left was the failing-check form of an undecided remedy.

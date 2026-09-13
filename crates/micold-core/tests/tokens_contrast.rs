@@ -375,9 +375,10 @@ fn every_pair_still_meets_aa_with_its_state_layer_composited() {
         unknown.is_empty(),
         "{} pair(s) clear AA at rest and fail once the state layer is composited:\n{}\n\nA state \
          layer is the content colour over the container (§5), so it always moves the background \
-         toward the foreground: proving a pair at rest does not prove it. The remedy FR-004b names \
-         is to narrow the host — the pair leaves §1.3's enumeration and the container takes a fill \
-         that passes — not to retune the ramp, which is checked-in Material data (§1.1).",
+         toward the foreground: proving a pair at rest does not prove it. FR-004b's remedy is to \
+         narrow the host — the pair leaves §1.3's enumeration and the container takes a fill that \
+         passes. Only where the role has no other host does its tone move, within its ramp and in \
+         the failing scheme; the ramp itself is checked-in Material data (§1.1) and never moves.",
         unknown.len(),
         unknown.join("\n")
     );
@@ -393,9 +394,9 @@ fn every_pair_still_meets_aa_with_its_state_layer_composited() {
             ),
             None => panic!(
                 "{scheme} / {name} now clears AA composited, and is still pinned as a known miss \
-                 at {expected:.2}. Delete its row from `UNDER_AA_COMPOSITED` and close BUG-011's \
-                 corresponding entry — a pin that outlives its defect is the stale scope note this \
-                 test exists to prevent."
+                 at {expected:.2}. Delete its row from `UNDER_AA_COMPOSITED` and close the bug report \
+                 it belongs to — a pin that outlives its defect is the stale scope note this test \
+                 exists to prevent."
             ),
         }
     }
