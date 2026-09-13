@@ -1,6 +1,35 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.6.0 → 1.6.1
+Bump rationale: PATCH — the Documentation gate obliges exactly what it obliged before. What
+  changes is that the gate now names the check that enforces it, the declaration that check
+  reads, and the label that waives it. Nothing is newly required and nothing newly permitted,
+  so this is a clarification rather than a material expansion.
+
+  The amendment exists because the Documentation gate was the only one of its three siblings
+  left standing on its wording alone. The TDD gate names `.gitattributes`/`micold-docs` and
+  `crates/micold-core/tests/documentation_is_not_read.rs`; the Cross-platform gate defers to
+  it by reference; the Documentation gate named nothing, so "user-facing changes MUST update
+  the user guide" was a rule a reviewer had to remember. Feature 028 built the missing
+  enforcer (`scripts/check-user-guide-updated.sh`, two steps in `ci.yml`'s `docs` job and 38
+  cases of its own), and 1.6.0's own report closed by asking for exactly this: "Any future
+  widening of the declaration SHOULD arrive with the same kind of check." The declaration was
+  widened — `.gitattributes` gained `micold-user-facing` and `micold-user-guide` — and the
+  check arrived with it. Recording it here is what keeps the gate's authority and the
+  pipeline's behaviour the same document.
+
+Modified in 1.6.1:
+  - Development Workflow & Quality Gates, Documentation gate — gains an "enforcer" sub-bullet
+    naming `scripts/check-user-guide-updated.sh`, the two `.gitattributes` attributes it reads,
+    its fail-closed behaviour, and the `docs-not-needed` label.
+  - Templates: ✅ no template carries the Documentation gate's mechanism, so none required a
+    matching edit.
+
+  Principle VII is deliberately untouched. It states the obligation; the gate states how the
+  obligation is checked — the same division 1.6.0 drew between Principle VI and the TDD gate.
+
+Prior report (1.5.0 → 1.6.0):
 Version change: 1.5.0 → 1.6.0
 Bump rationale: MINOR — the all-three-platform CI mandate gains one narrowly-scoped,
   explicitly-named exemption: a change whose every touched path is declared documentation MAY skip
@@ -445,6 +474,16 @@ every call site — which itself removes a common excuse to fork a bespoke widge
 - **Documentation gate**: User-facing changes MUST update the user guide/docs in the same
   pull request, and the docs build MUST pass in CI. This gate operationalizes
   Principle VII.
+  - **The enforcer.** The gate is mechanical, not a reviewer's recollection:
+    `scripts/check-user-guide-updated.sh` blocks a pull request whose title declares a feature
+    and whose diff touches a declared user-facing path without touching the user guide. Both
+    sides of that comparison are declarations in the same single list the TDD gate's exemption
+    uses (`.gitattributes`, attributes `micold-user-facing` and `micold-user-guide`), so the
+    check hard-codes no paths and widening either side is an edit to the declaration rather
+    than to the script. Every path the check cannot decide — a missing title, an unresolvable
+    ref, no merge base — blocks rather than passes. The escape hatch is the `docs-not-needed`
+    label, which records the reviewer's judgement in the pull request instead of leaving it
+    unstated.
 - **Review gate**: Every change MUST be reviewed before merge. Added complexity MUST be
   justified against these principles; unjustified complexity is grounds for rejection.
 - **Component-reuse gate**: A change that introduces a duplicate or one-off widget instead
@@ -476,4 +515,4 @@ convention, or habit conflicts with it, this constitution prevails.
   principles. Complexity that violates a principle MUST be either removed or explicitly
   justified and recorded.
 
-**Version**: 1.6.0 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-08-10
+**Version**: 1.6.1 | **Ratified**: 2026-07-13 | **Last Amended**: 2026-09-13
