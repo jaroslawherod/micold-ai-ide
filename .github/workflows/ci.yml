@@ -29,7 +29,7 @@ jobs:
       docs_only: ${{ steps.verdict.outputs.docs_only }}
       reason: ${{ steps.verdict.outputs.reason }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the classification is against the merge base, not the last commit
       - name: Classify
@@ -92,7 +92,7 @@ jobs:
     if: needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -128,7 +128,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install iced system dependencies (Linux)
@@ -309,7 +309,7 @@ jobs:
     if: needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Runtime version
@@ -400,7 +400,7 @@ jobs:
     if: needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # needs history to diff against the base ref
       # The gate's own cases, before the gate runs. They existed and nothing ran them, which is how
@@ -425,7 +425,7 @@ jobs:
     name: docs check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the user-guide gate below compares against the merge base
       - name: Required user-guide docs exist
