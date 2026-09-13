@@ -333,7 +333,16 @@ impl Workspace {
     /// folder vanishing under the project being worked in is not a reason to drop the working
     /// space out from under its sessions.
     pub fn release_unavailable_active(&mut self) -> Option<PathBuf> {
-        None
+        let active = self.active.as_ref()?;
+        let unavailable = self
+            .projects
+            .iter()
+            .any(|p| &p.path == active && p.availability == Availability::Unavailable);
+        if unavailable {
+            self.active.take()
+        } else {
+            None
+        }
     }
 
     /// The path a folder the user chose should be known by (FR-012, 002 BUG-002).
