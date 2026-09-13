@@ -175,6 +175,26 @@ gui-gated layer in `src/main.rs` and `src/ui/**`.
   `#[cfg(test)] mod tests` in `main.rs`, alongside the existing `reconcile_catalog` tests),
   confirmed red without the fix and green with it. Per FR-011 (missing).
 
+## Phase 8: Bugfix BUG-002/003 — Close on Pick, Rescan on Open
+
+**Purpose**: An accepted switcher selection closes the panel (FR-005, contract "Panel closes.");
+opening the switcher rescans availability (FR-008, acceptance scenario US3-3). See plan.md
+"Bugfix: closing the panel and rescanning on open".
+
+- [ ] T036 [P] [US2] Failing tests (BUG-002): `picking_a_project_in_the_switcher_closes_it` and
+  `a_refused_pick_leaves_the_switcher_open` in `crates/micold-client/src/shell/workspace.rs`.
+- [ ] T037 [US2] `on_known_project_reopened` closes the switcher on an accepted switch only
+  (depends on T036).
+- [ ] T038 [P] [US3] Failing tests (BUG-003): `opening_the_switcher_marks_a_folder_that_has_gone_unavailable`
+  and `opening_the_switcher_clears_the_badge_of_a_folder_that_came_back` in
+  `crates/micold-client/src/shell/workspace.rs`; `SwitcherToggled` routed to the shell handler
+  `on_switcher_toggled`.
+- [ ] T039 [US3] `on_switcher_toggled` runs `Workspace::refresh_availability` when the panel opens
+  (depends on T038).
+
+**Bugfix**: 2026-09-13 — BUG-002/BUG-003 Added Phase 8 (T036–T039). See `bugs/BUG-002.md`,
+`bugs/BUG-003.md`.
+
 ---
 
 ## Dependencies & Execution Order

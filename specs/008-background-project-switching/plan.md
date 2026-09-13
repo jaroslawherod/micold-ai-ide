@@ -103,3 +103,17 @@ docs/                    # user-guide update (Principle VII)
 ## Complexity Tracking
 
 > No constitutional violations. Section intentionally empty.
+
+## Bugfix: closing the panel and rescanning on open (BUG-002/003, 2026-09-13)
+
+**Close on pick (BUG-002)**: `on_known_project_reopened` clears `switcher_open` inside the accepted
+switch only. The body's "Known projects" list sends the same message with no panel open, where
+clearing an already-false flag is a no-op; a refused selection keeps the panel up so its new
+unavailable badge is seen.
+
+**Scan on open (BUG-003)**: `Message::Project(ProjectMsg::SwitcherToggled)` is routed to a shell
+handler, `shell::workspace::on_switcher_toggled`, which runs the reducer toggle and then
+`Workspace::refresh_availability` when the panel has just opened. The scan needs the scanner
+capability, which the render-free reducer does not hold, hence the shell seam. It is bounded work
+over the catalog (one `exists` per known project) and runs only on the transition to open. It never
+releases the active project (002 BUG-004 keeps that to launch).
