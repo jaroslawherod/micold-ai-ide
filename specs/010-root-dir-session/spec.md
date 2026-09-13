@@ -83,7 +83,7 @@ A user wants more than one session running in the project root at the same time 
 - What happens when the project is closed and reopened (or the app restarts)? Root sessions should be restored the same way existing worktree sessions are restored, so users don't lose in-progress root session work.
 - What happens when the currently checked-out branch in the project root changes (e.g., via a root session running `git checkout`) while other root or worktree sessions are open? All root sessions share the single project-root checkout, so a branch change in one root session's shell affects the working directory contents seen by all other root sessions for that project — this is expected behavior of working directly in the root, not a defect, and should not be silently prevented.
 - What happens when a root session is closed? It should be removed from the session list the same way a worktree session is, without affecting the project root directory itself or any worktrees.
-- What happens if the project root directory becomes unavailable (e.g., deleted or unmounted) while a root session is running? The session should surface a failure/disconnected state consistent with how a worktree session behaves if its directory disappears.
+- What happens if the project root directory becomes unavailable (e.g., deleted or unmounted) while a root session is running? The session should surface a failure/disconnected state consistent with how a worktree session behaves if its directory disappears. (Bugfix BUG-001: both surfaced nothing and sat at `starting…`; FR-012 now requires a failed state with a readable reason.)
 
 ## Requirements *(mandatory)*
 
@@ -100,6 +100,7 @@ A user wants more than one session running in the project root at the same time 
 - **FR-009**: Root sessions MUST persist across application restarts in the same manner as existing worktree-bound sessions.
 - **FR-010**: The sidebar MUST show, on hover, a tooltip for every entry in the worktree/session location list — including the "Default" entry — displaying that entry's location expressed relative to the project (e.g., the project root itself for "Default", or the relative directory path for a worktree).
 - **FR-011**: The "Default" entry MUST NOT be affected by the sidebar's tag-filter panel (feature 009) — it MUST remain visible regardless of which tag filters are active, since type/issue/status tags are derived from worktree branch naming and do not apply to the project root.
+- **FR-012** (bugfix BUG-001, 2026-09-13): When a session — Default or worktree — cannot start because its working directory does not exist, the system MUST settle that session in a failed state carrying a reason the user can read, naming the missing directory, and MUST report it to every connected client. It MUST NOT remain `starting…`. A later successful start clears the failure. Such a failure spends no crash-loop restart budget: no process ever existed.
 
 ### Key Entities
 
@@ -116,6 +117,7 @@ A user wants more than one session running in the project root at the same time 
 - **SC-004**: After this feature ships, all existing worktree-creation and worktree-session workflows continue to pass their existing acceptance checks with zero regressions.
 - **SC-005**: A project supports at least two simultaneous root sessions with no observed interference between them (e.g., closing one does not affect the other).
 - **SC-006**: Users can determine the on-disk location of any sidebar entry — the "Default" entry or any worktree — relative to the project, without leaving the sidebar or starting a session.
+- **SC-007** (bugfix BUG-001): In 100% of attempts to start a session whose working directory has been removed or renamed away, the session is reported as failed with a reason naming the directory within one start attempt — never left at `starting…`.
 
 ## Assumptions
 
@@ -125,3 +127,7 @@ A user wants more than one session running in the project root at the same time 
 - Root sessions run with the same permissions and command execution model as worktree sessions; no new security or sandboxing model is introduced by this feature.
 - Because a root session shares the project's single checkout (unlike an isolated worktree), users are expected to understand that actions affecting the working tree (e.g., changing branches) are visible to all root sessions of that project — this is treated as inherent to working in the root, not something the feature needs to prevent.
 - **Dependency**: This feature directly conflicts with the current wording of constitution Principle III ("Native Worktree Integration"), which states every session MUST map to a git worktree. Before this feature proceeds to `/speckit-plan`, Principle III MUST be amended (via `/speckit-constitution`) to explicitly carve out project-root sessions as a sanctioned non-worktree exception. This spec is written assuming that amendment will be made; it is a blocking prerequisite, not an implementation detail.
+
+**Bugfix**: 2026-09-13 — BUG-001 A session started in a directory that no longer exists sat at
+`starting…` forever: the daemon refused the spawn and recorded no reason, so nothing moved the
+session off its optimistic state. FR-012 and SC-007 added; edge case annotated.

@@ -118,3 +118,17 @@ No Constitution Check violations. The one non-PASS item (VII. Documentation Firs
 is a pending task-sequencing requirement, not a deviation being requested — tasks.md
 schedules the `docs/user-guide/worktrees-and-sessions.md` update in the same change that
 ships the Default entry point, satisfying the gate rather than justifying skipping it.
+
+**Bugfix**: 2026-09-13 — BUG-001 Updated from bugfix patch. `DaemonState::start_session` already
+records a readable reason in its runtime `start_failures` overlay for the two refusals it detects
+itself (feature 026: a CLI not installed, a conversation gone), and `spawn_session_start` already
+broadcasts the catalog on any start error, so the wire snapshot reads `Failed { reason, attempts: 0 }`
+and the client announces it. A **spawn** refusal — `ensure_cwd_exists` (`010` BUG-012) or a PTY/fork
+error — returned through `?` without a reason, so the broadcast carried the same `Starting` as
+before. Design: record a reason for every spawn refusal in the same overlay, worded for a user
+("This session's folder no longer exists: <path>…") rather than the log's register. The
+`SessionCreate` reply stays `OperationOk { SessionCreated }`: the session *was* created — its row
+exists and the client selects it by that reply — and the failure is a fact about the session that
+every client must see, which is what the catalog carries. No wire or contract change. No
+constitution impact.
+
