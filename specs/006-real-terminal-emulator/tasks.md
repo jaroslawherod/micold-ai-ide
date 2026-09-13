@@ -155,7 +155,7 @@ header affordance → focus returns to the app, session keeps running; Esc while
 
 - [X] T023 [US3] Implement `route_key` in `src/app.rs` (or `src/keymap.rs`) to pass T022.
 - [X] T024 [US3] Gate app keyboard handling in `src/ui/mod.rs::subscription`: when `state.terminal_focused`, return `Subscription::none()` for key handling so app shortcuts/Esc are not consumed while the terminal owns the keyboard; otherwise keep the existing overlay Esc behavior (FR-009).
-- [ ] T025 [US3] ⚠️ Reopened — Implement focus release in `src/app.rs`/`src/ui`: handle `Message::TerminalFocusReleased` (reserved chord from `keymap`, click-outside via a surrounding `mouse_area`, and a header "release focus" affordance) → set `terminal_focused = false`; render a visible focus indicator/ring in `TerminalPane::draw`; ~~`SessionSelected`~~/close/project-switch clear focus (FR-010, FR-011). *(Bugfix BUG-001: the `SessionSelected` clause is superseded — selecting a session now auto-focuses its terminal, see T050. Session close and project switch still clear focus.)* *(Reopened — BUG-005: the release half shipped, the "visible focus indicator/ring in `TerminalPane::draw`" half did not — `draw` never read `focused`. Completed by T069–T070.)*
+- [x] T025 [US3] Implement focus release in `src/app.rs`/`src/ui`: handle `Message::TerminalFocusReleased` (reserved chord from `keymap`, click-outside via a surrounding `mouse_area`, and a header "release focus" affordance) → set `terminal_focused = false`; render a visible focus indicator/ring in `TerminalPane::draw`; ~~`SessionSelected`~~/close/project-switch clear focus (FR-010, FR-011). *(Bugfix BUG-001: the `SessionSelected` clause is superseded — selecting a session now auto-focuses its terminal, see T050. Session close and project switch still clear focus.)* *(Reopened — BUG-005: the release half shipped, the "visible focus indicator/ring in `TerminalPane::draw`" half did not — `draw` never read `focused`. Completed by T069–T070, 2026-09-13.)*
 - [X] T026 [US3] Enforce write-gating + isolation in `src/main.rs`: apply `TermAction::Write`/`Paste` only when the displayed session is `SessionLifecycle::Running` (drop otherwise, no buffering) and only to the displayed session's runtime; show the session status label in the pane header for non-Running states (FR-012, FR-012a).
 - [X] T027 [US3] Document focus behavior (how to focus, the reserved release chord, click-outside, that shortcuts propagate only when focused, non-Running input is discarded) in `docs/user-guide/worktrees-and-sessions.md` (Principle VII).
 
@@ -456,11 +456,11 @@ live in `src/ui/material/terminal_pane.rs`; each is test-first (Red commit, then
 
 ### BUG-005 — the focused terminal has no visual indication (FR-010, FR-010b)
 
-- [ ] T069 [BUG-005] Failing test in `src/ui/material/terminal_pane.rs`: rasterise the pane through
+- [x] T069 [BUG-005] Failing test in `src/ui/material/terminal_pane.rs`: rasterise the pane through
   the headless tiny-skia renderer focused and unfocused, in light and dark; the pane's edge pixels are
   the scheme's `secondary` when focused and the terminal background when not, and the character
   area's measured `(cols, rows)` is identical in both.
-- [ ] T070 [BUG-005] Draw the 018 focus indicator in `TerminalPane::draw` from `self.focused`: a
+- [x] T070 [BUG-005] Draw the 018 focus indicator in `TerminalPane::draw` from `self.focused`: a
   `state::FOCUS_RING_WIDTH` outline in `TermPalette::accent()`, which becomes the scheme's `secondary`
   (was `primary`). Reserve the ring's width as a gutter on every side at every focus state — cell
   origin in `draw`, `grid_at`, and `GridSizeReporter`'s measurement — so focus never resizes the
