@@ -219,6 +219,12 @@ fn copy_paste_action(key: &Key, mods: Mods) -> Option<KeyOutput> {
     }
 }
 
+/// The bytes a paste of `text` sends to the process (FR-013d).
+pub fn paste_bytes(text: &str, bracketed: bool) -> Vec<u8> {
+    let _ = bracketed;
+    text.as_bytes().to_vec()
+}
+
 /// The control byte for `Ctrl+<char>`, or `None` if the char has no control encoding.
 /// `Ctrl+A`..`Ctrl+Z` → `0x01`..`0x1a` (so `Ctrl+U` == `0x15`, fixing iced_term's `0x51` bug).
 fn ctrl_byte(c: char) -> Option<u8> {
