@@ -5,12 +5,23 @@
 use crate::app::{Message, State};
 use crate::features::project::Msg as ProjectMsg;
 use crate::icons::{icon_role, Icon, IconSurface};
-use crate::ui::material::{self, Button, Glyph, IconLabel, SurfaceKind, Text, TypeRole};
+use crate::ui::cdk;
+use crate::ui::material::{
+    self, Button, Ellipsized, Glyph, IconLabel, SurfaceKind, Text, TypeRole,
+};
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 use micold_core::project::Availability;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
+
+/// The narrowest a known-project row's identity half — markers, name, git badge — may be while the
+/// actions share its line. Below it the actions move to the line beneath (BUG-002, FR-016).
+///
+/// Enough for the two markers, the badge and a name of about fifteen characters beside them. The
+/// row decides for itself, so an unavailable row, whose "Unavailable" button is the widest of the
+/// three reopen labels, reaches the breakpoint a little before its siblings do.
+const ROW_LEAD_MIN: f32 = 240.0;
 
 /// Render the shell body for the current workspace state.
 pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
@@ -114,29 +125,41 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
                     project.path.clone(),
                 )));
 
-            let mut entry = row![].spacing(spacing::SM).align_y(Alignment::Center);
+            // The identity half of the row: markers, the name, the git badge. The name is one line
+            // that elides — it used to be a `Text` that wrapped into a second line the row cut off
+            // and then shrank to nothing (BUG-002).
+            let mut lead = row![].spacing(spacing::SM).align_y(Alignment::Center);
             if is_active {
-                entry =
-                    entry.push(Glyph::new(Icon::ActiveMarker, TypeRole::Body, r).tint(badge_tint));
+                lead =
+                    lead.push(Glyph::new(Icon::ActiveMarker, TypeRole::Body, r).tint(badge_tint));
             }
             if !available {
-                entry =
-                    entry.push(Glyph::new(Icon::Unavailable, TypeRole::Body, r).tint(error_tint));
+                lead = lead.push(Glyph::new(Icon::Unavailable, TypeRole::Body, r).tint(error_tint));
             }
-            entry = entry.push(
-                Text::new(project.display_name.clone(), TypeRole::Body, r).width(Length::Fill),
-            );
+            lead = lead.push(Ellipsized::at_role(
+                project.display_name.clone(),
+                TypeRole::Body,
+                r.on_surface,
+            ));
 
             // Git repositories carry a "git" badge in the known list too (FR-006).
             if project.is_git_repo {
-                entry = entry.push(
+                lead = lead.push(
                     IconLabel::new(Icon::Git, "git", TypeRole::Label, r)
                         .tint(badge_tint)
                         .muted(),
                 );
             }
 
-            let entry = entry.push(reopen).push(rename).push(forget);
+            // The actions keep their labels at every width (FR-012): below the breakpoint they
+            // move to a line of their own, and a line too narrow even for that wraps between them.
+            let actions = row![reopen, rename, forget]
+                .spacing(spacing::SM)
+                .align_y(Alignment::Center)
+                .wrap();
+            let entry = cdk::reflow::Reflow::new(lead, actions)
+                .spacing(spacing::SM)
+                .lead_min(ROW_LEAD_MIN);
             list = list.push(
                 material::Surface::new(entry, SurfaceKind::ListItem, r)
                     .padding(spacing::MD)
