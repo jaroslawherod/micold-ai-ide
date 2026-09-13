@@ -1,0 +1,5 @@
+{"type":"session","version":3,"id":"ffffffff-ffff-4fff-8fff-ffffffffffff","timestamp":"2026-09-12T08:15:04.123Z","cwd":"/fixture/worktree","parentSession":null}
+{"type":"message","id":"11111111-0001-4000-8000-000000000001","parentId":null,"timestamp":"2026-09-12T08:15:20.004Z","message":{"role":"user","content":[{"type":"text","text":"Rename the encoder and update its callers"}]}}
+{"type":"session_info","id":"11111111-0001-4000-8000-000000000002","parentId":"11111111-0001-4000-8000-000000000001","timestamp":"2026-09-12T08:15:21.880Z","name":"Rename the encoder"}
+{"type":"message","id":"11111111-0001-4000-8000-000000000003","parentId":"11111111-0001-4000-8000-000000000002","timestamp":"2026-09-12T08:15:29.517Z","message":{"role":"assistant","content":[{"type":"text","text":"The encoder lives in src/provider.rs; renaming it touches three callers."}]}}
+{"type":"session_info","id":"11111111-0001-4000-8000-000000000004","parentId":"11111111-0001-4000-8000-000000000003","timestamp":"2026-09-12T08:16:02.311Z","name":"Rename the encoder and its callers"}

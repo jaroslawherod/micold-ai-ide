@@ -503,3 +503,135 @@ fn an_event_log_append_pushes_the_new_badge_to_connected_clients() {
 
     session.kill().expect("kill");
 }
+
+/// A private `PI_CODING_AGENT_DIR` for the duration of one test, under the same lock as
+/// [`CopilotHome`]: both are process-global, and the two must never be held at once.
+struct PiHome {
+    dir: tempfile::TempDir,
+    _guard: MutexGuard<'static, ()>,
+}
+
+impl PiHome {
+    fn new() -> Self {
+        let guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("PI_CODING_AGENT_DIR", dir.path());
+        Self { dir, _guard: guard }
+    }
+
+    fn path(&self) -> &std::path::Path {
+        self.dir.path()
+    }
+}
+
+impl Drop for PiHome {
+    fn drop(&mut self) {
+        std::env::remove_var("PI_CODING_AGENT_DIR");
+    }
+}
+
+#[test]
+fn a_pi_activity_log_moves_the_badge_through_the_unchanged_machine() {
+    // Feature 029, T037 (SC-005). The component's log is read by the tail `copilot` already uses and
+    // fed to the same `Activity` machine; what is new is only where the log is and how a line maps.
+    // So this drives the log **alone** — a `cat` sink, no title traffic — and watches the badge.
+    let home = PiHome::new();
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
+
+    let provider = AiCli::Pi.provider();
+    let ActivitySource::Extension { log } =
+        provider.activity_source(home.path(), project.path(), id.0)
+    else {
+        panic!("a Pi session's activity arrives through its component's log");
+    };
+    // Deliberately *not* created: the daemon creates the log's directory itself, because at spawn
+    // nothing has written there yet. Only the directory is the daemon's; the file is the component's to start.
+
+    let state = Arc::new(DaemonState::new(catalog_with_session(
+        project.path(),
+        store.path(),
+        AiCli::Pi,
+    )));
+    let session = register_cat(&state, id);
+    state.open_event_log_tail(id);
+    assert!(
+        log.parent().is_some_and(|dir| dir.is_dir()),
+        "opening the tail prepared the directory the component will write into"
+    );
+    assert_eq!(summary_of(&state, id).activity, ActivitySignal::Unknown);
+
+    let append = |kind: &str| {
+        use std::io::Write as _;
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log)
+            .unwrap();
+        writeln!(f, r#"{{"type":"{kind}","at":"2026-09-13T10:00:00.000Z"}}"#).unwrap();
+    };
+
+    append("turn_start");
+    assert!(
+        wait_until(Duration::from_secs(10), || summary_of(&state, id).activity
+            == ActivitySignal::Working),
+        "turn_start must reach the machine and read as working"
+    );
+
+    append("tool_execution_end");
+    append("agent_settled");
+    assert!(
+        wait_until(Duration::from_secs(10), || summary_of(&state, id).activity
+            == ActivitySignal::AwaitingInput),
+        "agent_settled must put the session on its user"
+    );
+
+    session.kill().expect("kill");
+}
+
+#[test]
+fn with_the_component_declined_a_pi_session_is_not_watched_and_reads_unknown() {
+    // Feature 029, T045 (FR-012e, FR-012f). The provider still reports `Extension` — it is pure and
+    // knows nothing of the switch — so the daemon is the one place that declines, and it declines
+    // by not opening a tail. A line in the log is then not evidence the session produced, and the
+    // badge stays `Unknown` rather than moving on something nobody asked to be reported.
+    let home = PiHome::new();
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
+
+    let ActivitySource::Extension { log } =
+        AiCli::Pi
+            .provider()
+            .activity_source(home.path(), project.path(), id.0)
+    else {
+        panic!("the provider reports the same source whatever the switch says");
+    };
+
+    let state = Arc::new(DaemonState::new(catalog_with_session(
+        project.path(),
+        store.path(),
+        AiCli::Pi,
+    )));
+    state
+        .set_pi_activity_component(false)
+        .expect("the switch persists");
+    let session = register_cat(&state, id);
+    state.open_event_log_tail(id);
+
+    std::fs::create_dir_all(log.parent().unwrap()).unwrap();
+    std::fs::write(
+        &log,
+        "{\"type\":\"turn_start\",\"at\":\"2026-09-13T10:00:00.000Z\"}\n",
+    )
+    .unwrap();
+    std::thread::sleep(Duration::from_millis(750));
+    assert_eq!(
+        summary_of(&state, id).activity,
+        ActivitySignal::Unknown,
+        "no tail was opened, so nothing moved the badge"
+    );
+
+    session.kill().expect("kill");
+}

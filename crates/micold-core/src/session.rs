@@ -58,6 +58,10 @@ pub enum AiCli {
     ClaudeCode,
     /// GitHub's `copilot` CLI.
     Copilot,
+    /// The `pi` coding agent (feature 029, FR-002). Third rather than special: it is a member of
+    /// this list and nothing else, which is what keeps the supported set enumerated once
+    /// (FR-021).
+    Pi,
 }
 
 impl AiCli {
@@ -65,7 +69,7 @@ impl AiCli {
     ///
     /// The UI's menus are built from this, so the order is not incidental — it is what the user
     /// sees. Kept sorted, so this and any `BTreeSet<AiCli>` agree.
-    pub const ALL: [AiCli; 2] = [AiCli::ClaudeCode, AiCli::Copilot];
+    pub const ALL: [AiCli; 3] = [AiCli::ClaudeCode, AiCli::Copilot, AiCli::Pi];
 }
 
 /// The sidebar label for a session — extracted from `claude`, never user-entered (FR-011a).
@@ -131,6 +135,16 @@ pub enum SessionLifecycle {
 
 /// The maximum consecutive auto-restarts before giving up (FR-022a crash-loop guard).
 pub const MAX_RESTART_ATTEMPTS: u8 = 3;
+
+/// How long a respawned process has to stay up before its restart counts as *recovered*, clearing
+/// the crash-loop counter (FR-022a's "within a short interval", `005` BUG-004).
+///
+/// A respawn that exits sooner is a further failed restart, however long it managed to live, so a
+/// CLI that fails a second into its own startup still reaches the guard — and crashes further
+/// apart than this never accumulate. Ten seconds covers the failures the guard exists for (a bad
+/// `--resume`, a missing credential) with margin on a loaded machine; the cost is that a session
+/// that genuinely recovered reads `restarting…` for that long before `running`.
+pub const RESTART_STABLE_AFTER: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// What the backend should do after a process exit (FR-022/022a).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

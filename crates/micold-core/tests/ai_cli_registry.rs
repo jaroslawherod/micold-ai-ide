@@ -48,7 +48,7 @@ fn it_is_copy_eq_hash_and_ord() {
 fn iterating_the_variants_is_deterministic_and_complete() {
     // The list the menus are built from. Asserting the exact sequence rather than the length is
     // the point: this is the order the user sees, and `ALL` is the only thing that decides it.
-    assert_eq!(AiCli::ALL, [AiCli::ClaudeCode, AiCli::Copilot]);
+    assert_eq!(AiCli::ALL, [AiCli::ClaudeCode, AiCli::Copilot, AiCli::Pi]);
 
     // And it is every variant, not a list someone forgot to extend when a third CLI landed —
     // which a length assertion alone would not catch, since a duplicated entry has the same
@@ -68,4 +68,35 @@ fn iterating_the_variants_is_deterministic_and_complete() {
     // and the Settings form the other.
     let sorted: Vec<AiCli> = distinct.into_iter().collect();
     assert_eq!(sorted.as_slice(), AiCli::ALL.as_slice());
+}
+
+#[test]
+fn a_third_cli_is_one_more_member_of_the_same_list() {
+    // Feature 029, T003. Pi arrives as a member of `ALL` and nothing else: no second enumeration
+    // of the supported CLIs exists to fall out of step with this one (FR-021), so a menu, a
+    // settings select and a sandbox image check all gain it from here.
+    assert!(AiCli::ALL.contains(&AiCli::Pi));
+    assert_eq!(AiCli::ALL.len(), 3);
+
+    // And it does not displace the default. A user who has never chosen a CLI still gets
+    // `claude`, and every session written before this feature still reads back as one (FR-002).
+    assert_eq!(AiCli::default(), AiCli::ClaudeCode);
+    assert_ne!(AiCli::default(), AiCli::Pi);
+}
+
+#[test]
+fn every_variant_round_trips_its_persisted_name() {
+    // The persisted form is what a session record and a settings file carry, so it is a
+    // compatibility surface: renaming a variant silently orphans every session written under the
+    // old name. Pinning all three here makes that a failing test rather than a support ticket.
+    for (which, persisted) in [
+        (AiCli::ClaudeCode, "\"ClaudeCode\""),
+        (AiCli::Copilot, "\"Copilot\""),
+        (AiCli::Pi, "\"Pi\""),
+    ] {
+        let json = serde_json::to_string(&which).expect("serialize");
+        assert_eq!(json, persisted, "{which:?} is persisted as {persisted}");
+        let back: AiCli = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back, which);
+    }
 }

@@ -406,3 +406,83 @@ fn forget_drops_provenance_and_the_migration_marker_for_that_path() {
         "and so does the marker — re-opening the folder is a fresh project that migrates again"
     );
 }
+
+/// 002 BUG-004: a catalog restored from disk whose last-active project's folder is gone.
+fn restored_with_active(active: &str, scanner: &FakeFolderScanner) -> Workspace {
+    use micold_core::store::{JsonFileStore, ProjectStore};
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+    let mut ws = Workspace::empty();
+    ws.open_or_activate(PathBuf::from("/here"), &plain());
+    ws.open_or_activate(PathBuf::from(active), &plain());
+    store.save(&ws).unwrap();
+
+    let mut restored = store.load().workspace;
+    restored.refresh_availability(scanner);
+    restored
+}
+
+/// FR-023 on the restore path: the application must not leave active a project the user could not
+/// have activated themselves.
+#[test]
+fn a_restored_active_project_whose_folder_is_gone_is_released() {
+    let mut ws = restored_with_active("/gone", &FakeFolderScanner::new().with_missing("/gone"));
+
+    assert_eq!(
+        ws.release_unavailable_active(),
+        Some(PathBuf::from("/gone")),
+        "the caller is told which project it was, so it can say so"
+    );
+    assert_eq!(ws.active, None);
+    assert_eq!(ws.projects.len(), 2, "released, not forgotten");
+}
+
+#[test]
+fn a_restored_active_project_that_is_still_there_stays_active() {
+    let mut ws = restored_with_active("/gone", &FakeFolderScanner::new());
+
+    assert_eq!(ws.release_unavailable_active(), None);
+    assert_eq!(ws.active, Some(PathBuf::from("/gone")));
+}
+
+/// Refreshing availability stays a pure observation. The switcher rescans while the app runs (008
+/// BUG-003), and a scan that dropped the project the user is working in would end their session
+/// view mid-task without the detach a real switch performs.
+#[test]
+fn refreshing_availability_alone_does_not_release_the_active_project() {
+    let ws = restored_with_active("/gone", &FakeFolderScanner::new().with_missing("/gone"));
+    assert_eq!(ws.active, Some(PathBuf::from("/gone")));
+}
+
+/// A stand-in for the filesystem's symlink resolution: everything under `/link` is really under
+/// `/real`, and every other path is already resolved.
+fn link_to_real(path: &Path) -> PathBuf {
+    match path.strip_prefix("/link") {
+        Ok(rest) => Path::new("/real").join(rest),
+        Err(_) => path.to_path_buf(),
+    }
+}
+
+/// 002 BUG-002: a folder chosen through a symlink is known by the path git will report for it.
+#[test]
+fn a_chosen_folder_is_identified_by_its_resolved_path() {
+    let ws = Workspace::empty();
+    assert_eq!(
+        ws.identity_for(Path::new("/link/repo"), &link_to_real),
+        PathBuf::from("/real/repo"),
+        "git records the repository and its worktrees by the resolved path, so that is the identity"
+    );
+}
+
+/// …and opening the real folder of a project the catalog knows by its symlink activates that
+/// project, not a second one (FR-012).
+#[test]
+fn a_project_known_by_its_symlink_is_found_by_its_real_path() {
+    let mut ws = Workspace::empty();
+    ws.open_or_activate(PathBuf::from("/link/repo"), &plain());
+
+    let identity = ws.identity_for(Path::new("/real/repo"), &link_to_real);
+    assert_eq!(identity, PathBuf::from("/link/repo"));
+    ws.open_or_activate(identity, &plain());
+    assert_eq!(ws.projects.len(), 1, "no duplicate for another spelling");
+}

@@ -32,6 +32,11 @@
 //! appearance change and is the point of the change — a disabled field was previously drawn
 //! identically to an editable one, so a resource limit the container runtime cannot enforce looked
 //! like one you could type into. Nothing else in the fixture differs.
+//!
+//! **Regenerated a third time, for 006 BUG-005 (T070).** One line added per scheme,
+//! `terminal.focus_ring`: the focused terminal's outline, which had never been drawn. It records
+//! the 018 focus ring — `secondary` at `FOCUS_RING_WIDTH` — so the colour cannot drift back to the
+//! `primary` the palette used to carry. No existing line differs.
 
 use std::fmt::Write as _;
 
@@ -266,6 +271,17 @@ fn render_all() -> String {
             .unwrap();
         }
 
+        // --- Terminal focus ring (006 BUG-005) --------------------------------
+        // Drawn by `TerminalPane::draw` from the palette rather than resolved by a style function,
+        // so it would otherwise be the one focus indicator no gate records.
+        writeln!(
+            s,
+            "terminal.focus_ring = {:?} width={}",
+            crate::ui::terminal::TermPalette::from_scheme(scheme).accent(),
+            tokens::state::FOCUS_RING_WIDTH
+        )
+        .unwrap();
+
         writeln!(s).unwrap();
     }
     out
@@ -330,6 +346,7 @@ fn snapshot_covers_both_schemes_and_every_component() {
         "container.dialog",
         "container.notification[error]",
         "text.muted",
+        "terminal.focus_ring",
     ] {
         assert!(
             s.contains(probe),

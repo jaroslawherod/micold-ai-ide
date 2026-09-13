@@ -210,3 +210,39 @@ fn the_settings_select_and_the_start_list_name_the_same_clis() {
         "…and they agree on a CLI that is actually offered, not merely on an empty pair of lists"
     );
 }
+
+/// Feature 029, T031 (FR-001, FR-001a, SC-004a): Pi is offered on both surfaces as "Pi Coding
+/// Agent", and neither ever paints its command name.
+///
+/// Both halves again: with `pi` installed the name appears on each surface, and with it missing
+/// the start list does not offer it. `pi` is asserted absent as a whole painted string, because a
+/// two-letter command is a substring of too many words to test any other way — and a list row
+/// reading exactly `pi` is the leak this guards.
+#[test]
+fn pi_is_offered_by_its_display_name_on_both_surfaces() {
+    let available = [AiCli::ClaudeCode, AiCli::Pi];
+    let display = AiCli::Pi.provider().display_name();
+    assert_eq!(display, "Pi Coding Agent");
+
+    let settings = painted(&settings_state(&available), Some(SETTINGS_SELECT));
+    let start = painted(&start_menu_state(&available), None);
+    for (surface, drawn) in [
+        ("the Settings select", &settings),
+        ("the start list", &start),
+    ] {
+        assert!(
+            drawn.iter().any(|s| s == display),
+            "{surface} must offer Pi by its display name — painted: {drawn:?}"
+        );
+        assert!(
+            !drawn.iter().any(|s| s == AiCli::Pi.provider().command()),
+            "{surface} names Pi by its command, the row register — painted: {drawn:?}"
+        );
+    }
+
+    let without = painted(&start_menu_state(&[AiCli::ClaudeCode]), None);
+    assert!(
+        !without.iter().any(|s| s == display),
+        "…and the start list does not offer Pi when `pi` is not installed — painted: {without:?}"
+    );
+}

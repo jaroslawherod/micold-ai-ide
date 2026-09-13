@@ -124,6 +124,7 @@ impl Catalog {
             env_include_script_path: self.settings.env_include_script_path.clone(),
             env_include_timeout_secs: self.settings.env_include_timeout_secs,
             default_ai_cli: self.settings.default_ai_cli,
+            pi_activity_component: self.settings.pi_activity_component,
         }
     }
 
@@ -261,6 +262,7 @@ impl Catalog {
                 on_disk.env_include_script_path = self.settings.env_include_script_path.clone();
                 on_disk.env_include_timeout_secs = self.settings.env_include_timeout_secs;
                 on_disk.default_ai_cli = self.settings.default_ai_cli;
+                on_disk.pi_activity_component = self.settings.pi_activity_component;
             });
             // T162: the line that was missing when BUG-025 had to be attributed from the bytes on
             // disk. Written for a refused write too — a save that did not happen is exactly the
@@ -309,6 +311,20 @@ impl Catalog {
     /// uninstalled CLI is the requirement, not an oversight (FR-004, research R11).
     pub fn set_default_ai_cli(&mut self, which: AiCli) -> io::Result<()> {
         self.settings.default_ai_cli = which;
+        self.persist_service_settings()
+    }
+
+    /// Whether a Pi session is started with this application's activity component loaded
+    /// (feature 029, FR-012e). Service-owned for the same reason as the default CLI: the spawn
+    /// reads it, and the spawn is here.
+    pub fn pi_activity_component(&self) -> bool {
+        self.settings.pi_activity_component
+    }
+
+    /// Turn the Pi activity component on or off, persisting atomically (feature 029, FR-012e).
+    /// Applies to the next Pi session started; a running one keeps what it was launched with.
+    pub fn set_pi_activity_component(&mut self, on: bool) -> io::Result<()> {
+        self.settings.pi_activity_component = on;
         self.persist_service_settings()
     }
 
@@ -606,6 +622,23 @@ impl Catalog {
         self.persist()
     }
 
+    /// Make an already-known project the active one and persist it as `last_active` (FR-010, 002
+    /// BUG-003). `Ok(false)` — nothing changed, nothing written — for a path that is not a known
+    /// project or whose folder is gone: availability is rescanned first, so the catalog never comes
+    /// to name as last active a project the next launch could not open (FR-023).
+    pub fn activate_project(
+        &mut self,
+        path: &Path,
+        scanner: &dyn FolderScanner,
+    ) -> io::Result<bool> {
+        self.workspace.refresh_availability(scanner);
+        if !self.workspace.activate(path) {
+            return Ok(false);
+        }
+        self.persist()?;
+        Ok(true)
+    }
+
     /// Forget a known project entirely, returning its session ids (so the caller stops any live
     /// processes) and persisting (T053, feature 014 FR-003). Unlike a worktree/session *delete*, a
     /// forgotten project is dropped, not archived — re-adding it is a fresh open, so there is no
@@ -711,7 +744,8 @@ impl Catalog {
     }
 
     /// Mark a session `Running` **iff** it is currently `Restarting` — a respawned process that has
-    /// stayed up since the last supervision observation is now healthy, which resets the crash-loop
+    /// stayed up for `RESTART_STABLE_AFTER` is now healthy (the caller checks the window, `005`
+    /// BUG-004), which resets the crash-loop
     /// counter (closes the L5 gap: crashes far apart no longer accumulate toward `Failed`). Returns
     /// the owning project when it transitioned, for a `CatalogChanged` broadcast. A no-op for every
     /// other lifecycle, so it never resurrects `Idle`/`Failed` or re-announces a steady `Running`.

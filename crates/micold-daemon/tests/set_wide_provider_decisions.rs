@@ -130,6 +130,13 @@ impl ProviderStores {
                     .join(session.id.0.to_string()),
                 "events.jsonl".to_string(),
             ),
+            // Deliberately not exhaustive by name. Every arm here is a second copy of a layout
+            // that lives in `provider.rs`, and the scenario mixes two CLIs, not all of them; a
+            // catch-all keeps this probe from becoming a place a new provider has to be registered
+            // (FR-019). Reaching it means the scenario was extended without its layout.
+            other => unimplemented!(
+                "this probe fabricates only the layouts its scenario uses; {other} is not one"
+            ),
         };
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join(file), "{}\n").unwrap();

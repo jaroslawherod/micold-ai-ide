@@ -1278,3 +1278,64 @@ fn a_shell_session_starts_with_no_ai_cli_installed_at_all() {
 
     live.kill().expect("kill");
 }
+
+/// Starting a session whose working directory has been renamed away reports it, and the report
+/// names the directory (`010` BUG-001, FR-012).
+///
+/// Before this, the spawn was refused at `ensure_cwd_exists` and the refusal returned with no
+/// reason recorded. `spawn_session_start` broadcast the catalog, as it does for every failed start,
+/// and the catalog still said `Starting` — the state the record was created in — so the row sat at
+/// `starting…` for as long as anyone watched, with the one fact that explained it thrown away.
+///
+/// A shell session, so no AI CLI needs to be on `PATH`: the refusal is in the spawn both modes
+/// share, and this is the Default entry quickstart step 11 renames out from under.
+#[test]
+fn starting_a_session_whose_directory_is_gone_reports_failed_with_the_directory() {
+    let parent = tempfile::tempdir().unwrap();
+    let project = parent.path().join("r10");
+    std::fs::create_dir(&project).unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(0x5E55));
+    let state = DaemonState::new(catalog_with_shell_session(&project, store.path()));
+
+    // `mv r10 r10-moved`, outside the application.
+    let moved = parent.path().join("r10-moved");
+    std::fs::rename(&project, &moved).unwrap();
+
+    let result = state.start_session(id, micold_core::terminal::LaunchMode::Fresh);
+
+    assert!(result.is_err(), "there is no directory to start in");
+    assert!(
+        state.live_session(id).is_none(),
+        "and nothing was spawned — not against `$HOME`, and not an empty terminal"
+    );
+    let WireLifecycle::Failed { reason, attempts } = reported_lifecycle(&state, id) else {
+        panic!(
+            "a start that can never succeed must not be reported as one still under way: a client \
+             renders this as `starting…`, forever. Got {:?}",
+            reported_lifecycle(&state, id)
+        );
+    };
+    assert!(
+        reason.contains(&project.display().to_string()),
+        "the reason names the directory that is gone, so the user knows what to restore; got \
+         {reason:?}"
+    );
+    assert_eq!(
+        attempts, 0,
+        "no process ever existed, so no crash-loop budget was spent"
+    );
+
+    // Put it back: the next start succeeds, and the failure no longer describes the session.
+    std::fs::rename(&moved, &project).unwrap();
+    state
+        .start_session(id, micold_core::terminal::LaunchMode::Resume)
+        .expect("the directory is back");
+    let live = state.live_session(id).expect("registered");
+    assert_eq!(
+        reported_lifecycle(&state, id),
+        WireLifecycle::Running,
+        "a start that succeeds clears the recorded failure"
+    );
+    live.kill().expect("kill");
+}

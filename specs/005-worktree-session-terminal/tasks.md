@@ -479,3 +479,24 @@ could have its old sessions resurrected. Added T079: fix + regression test
   `TODO(T053): archive the durable record...` and truly never calls `archive_session` either —
   but the client never sends either message (`SessionCloseRequested`/`SessionRemoveConfirmed`
   both send `SessionDelete` instead), so this path currently affects no live requirement.
+
+## Phase 9: Bugfix BUG-004 — the crash-loop guard counts slow failures
+
+**Bugfix**: 2026-09-13 — BUG-004 Updated from bugfix patch. The guard's counter was reset by
+liveness at the next supervision tick, so only restarts dying within 250 ms ever accumulated.
+FR-022a clarified (restart stability window). See `bugs/BUG-004.md`.
+
+- [x] T082 [US3] Failing test (Red): a respawn that stays up past one supervision tick but exits
+  inside the stability window still advances the crash-loop counter and reaches `Failed` — driven
+  with injected clock readings, not sleeps, against a real respawned shell that lives about a
+  second, in `crates/micold-daemon/tests/supervision_slow_crash_loop.rs` (its own binary: it sets
+  `SHELL`). Per FR-022a.
+- [x] T083 [US3] Fix (Green): add `RESTART_STABLE_AFTER` to `crates/micold-core/src/session.rs`;
+  record the respawn reading on the live session in `crates/micold-daemon/src/state.rs` and gate
+  the survivor reset (`mark_running_if_restarting`) on the window having elapsed; split the tick
+  into `supervise_exited_sessions` → `supervise_exited_sessions_at(now)`. Per FR-022a.
+- [x] T084 [US3] Keep the L5 half: update `a_restart_that_survives_resets_to_running` in
+  `crates/micold-daemon/tests/supervision_restart.rs` so a respawn is still `Restarting` one tick
+  later and `Running` once the window has passed — crashes further apart than the window must not
+  accumulate. Correct the doc comments that describe the reset as "one tick". Per FR-022a.
+

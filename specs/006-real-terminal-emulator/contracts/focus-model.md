@@ -79,6 +79,12 @@ focused session's `RuntimeTerminal` — never a background session (FR-012).
   from when focus was acquired only by an explicit click and lost by clicking outside, where an
   always-visible way out was a real safety valve; feature 023 replaced both halves of that model, so
   the reserved chord now carries FR-011's guarantee alone. The focus indicator is unchanged.)*
+  *(Bugfix BUG-005: the indicator was specified here but never drawn. Its form is now fixed by
+  FR-010b — the 018 focus indicator, a `state::FOCUS_RING_WIDTH` (3dp) outline in the scheme's
+  `secondary` role, drawn by `TerminalPane::draw` in a gutter the pane reserves at every focus state,
+  so focus changes neither the process's size nor any layout node. No state-layer tint: a 10% wash
+  over the whole character area would shift the terminal background and the ANSI palette's contrast
+  against it.)*
 - Tests: `route_key` truth table (focused vs not, each `KeyOutput`), incl. `ReleaseFocus` never
   producing PTY bytes; write-gating asserted at the reducer/binary seam using the 005 session
   lifecycle fake.

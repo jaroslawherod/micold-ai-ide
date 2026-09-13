@@ -1,0 +1,3 @@
+{"type":"session","version":3,"id":"ffffffff-ffff-4fff-8fff-ffffffffffff","timestamp":"2026-09-12T09:02:11.008Z","cwd":"/fixture/worktree","parentSession":null}
+{"type":"message","id":"22222222-0002-4000-8000-000000000001","parentId":null,"timestamp":"2026-09-12T09:02:40.771Z","message":{"role":"user","content":"Why does the sidebar show two rows for one worktree?"}}
+{"type":"message","id":"22222222-0002-4000-8000-000000000002","parentId":"22222222-0002-4000-8000-000000000001","timestamp":"2026-09-12T09:02:55.204Z","message":{"role":"assistant","content":[{"type":"text","text":"Because each row is one conversation, not one directory."}]}}

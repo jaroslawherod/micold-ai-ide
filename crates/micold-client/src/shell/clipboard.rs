@@ -26,6 +26,7 @@ use micold_client::app::Message;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::Outcome;
+use micold_client::keymap;
 use micold_client::selection;
 
 use crate::App;
@@ -74,13 +75,18 @@ pub fn on_copy_requested(app: &mut App) -> Task<Message> {
 
 /// Paste the system clipboard into the displayed session's PTY (FR-013). The read is async;
 /// its result flows back through `TerminalBytes`, which honours the Running write-gate.
+///
+/// Bracketed like the chord and middle-click (FR-013d, BUG-006). Whether to bracket is read now,
+/// when the user chose Paste, not when the clipboard answers: that is the mode the user saw.
 pub fn on_paste_requested(app: &mut App) -> Task<Message> {
     app.core
         .update(Message::Session(SessionMsg::TerminalContextMenuClosed));
-    iced::clipboard::read().map(|c| {
-        Message::Session(SessionMsg::TerminalBytes(
-            c.unwrap_or_default().into_bytes(),
-        ))
+    let bracketed = app.attached_grid().is_some_and(|g| g.bracketed_paste());
+    iced::clipboard::read().map(move |c| {
+        Message::Session(SessionMsg::TerminalBytes(keymap::paste_bytes(
+            &c.unwrap_or_default(),
+            bracketed,
+        )))
     })
 }
 

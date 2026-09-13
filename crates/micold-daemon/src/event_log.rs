@@ -1,10 +1,12 @@
 //! Tailing a provider's own append-only event log (feature 026, T064 — FR-018, FR-019).
 //!
-//! One [`EventLogTail`] per **supervised** session whose provider reports
-//! `ActivitySource::EventLog` — today, every Copilot session the daemon started. It is woken by the
-//! platform's change notification and by nothing else, reads only the bytes appended since it last
-//! looked, and maps each line through [`crate::activity::copilot_event`] into the same
-//! `ActivityEvent` vocabulary feature 010's hook receiver already feeds the state machine.
+//! One [`EventLogTail`] per **supervised** session whose provider reports a log to read —
+//! `ActivitySource::EventLog` for Copilot's own `events.jsonl`, and `ActivitySource::Extension` for
+//! the log Pi's activity component writes (feature 029). It is woken by the platform's change
+//! notification and by nothing else, reads only the bytes appended since it last looked, and maps
+//! each line through the provider's mapper — [`crate::activity::copilot_event`] or
+//! [`crate::activity::pi_event`] — into the same `ActivityEvent` vocabulary feature 010's hook
+//! receiver already feeds the state machine.
 //!
 //! # No timer of ours (FR-019)
 //!
@@ -40,7 +42,10 @@ use std::time::Duration;
 
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 
-use crate::activity::{copilot_event, ActivityEvent};
+use crate::activity::ActivityEvent;
+
+/// Maps one log line to an event, or `None` to skip it. One per log vocabulary.
+pub type LineMapper = fn(&str) -> Option<ActivityEvent>;
 
 /// The cap on the watch crate's own poll fallback, used only where a platform offers no native
 /// change notification. Native backends push and never consult it.
@@ -64,7 +69,8 @@ impl Drop for EventLogTail {
 }
 
 impl EventLogTail {
-    /// Watch `path`'s directory and deliver each newly appended, recognised line to `on_event`.
+    /// Watch `path`'s directory and deliver each newly appended line that `map` recognises to
+    /// `on_event`.
     ///
     /// `on_event` runs on the watcher's own thread, so it must not block: the daemon's callback
     /// takes the state lock briefly — `note_activity`, then a `broadcast_catalog` only when the
@@ -77,6 +83,7 @@ impl EventLogTail {
     /// ever had before landing on the present one.
     pub fn open(
         path: PathBuf,
+        map: LineMapper,
         on_event: impl Fn(ActivityEvent) + Send + 'static,
     ) -> notify::Result<Self> {
         let stopped = Arc::new(AtomicBool::new(false));
@@ -94,7 +101,7 @@ impl EventLogTail {
                 if flag.load(Ordering::Relaxed) || result.is_err() {
                     return;
                 }
-                for event in read_appended(&target, &mut offset) {
+                for event in read_appended(&target, &mut offset, map) {
                     on_event(event);
                 }
             },
@@ -121,7 +128,7 @@ fn current_len(path: &Path) -> u64 {
 /// A file that has **shrunk** since the last read is treated as a new file and read from the start:
 /// that means the session was reset or the log rotated, and holding the old offset would skip
 /// everything until the log grew past it again.
-fn read_appended(path: &Path, offset: &mut u64) -> Vec<ActivityEvent> {
+fn read_appended(path: &Path, offset: &mut u64, map: LineMapper) -> Vec<ActivityEvent> {
     let len = current_len(path);
     if len < *offset {
         *offset = 0;
@@ -146,13 +153,13 @@ fn read_appended(path: &Path, offset: &mut u64) -> Vec<ActivityEvent> {
         None => return Vec::new(),
     };
     *offset += complete.len() as u64;
-    complete.lines().filter_map(copilot_event).collect()
+    complete.lines().filter_map(map).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::activity::HookKind;
+    use crate::activity::{copilot_event, HookKind};
 
     #[test]
     fn only_the_bytes_appended_since_the_last_look_are_read() {
@@ -161,11 +168,11 @@ mod tests {
         std::fs::write(&log, "{\"type\":\"user.message\",\"data\":{}}\n").unwrap();
 
         let mut offset = 0;
-        let first = read_appended(&log, &mut offset);
+        let first = read_appended(&log, &mut offset, copilot_event);
         assert_eq!(first, vec![ActivityEvent::Hook(HookKind::UserPromptSubmit)]);
 
         // Nothing new: no work, no re-delivery. This is what makes a quiet session cost nothing.
-        assert!(read_appended(&log, &mut offset).is_empty());
+        assert!(read_appended(&log, &mut offset, copilot_event).is_empty());
 
         std::fs::write(
             &log,
@@ -173,7 +180,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            read_appended(&log, &mut offset),
+            read_appended(&log, &mut offset, copilot_event),
             vec![ActivityEvent::Hook(HookKind::Stop)],
             "only the new line, not the whole file again"
         );
@@ -188,12 +195,12 @@ mod tests {
         std::fs::write(&log, "{\"type\":\"user.mess").unwrap();
 
         let mut offset = 0;
-        assert!(read_appended(&log, &mut offset).is_empty());
+        assert!(read_appended(&log, &mut offset, copilot_event).is_empty());
         assert_eq!(offset, 0, "nothing was consumed");
 
         std::fs::write(&log, "{\"type\":\"user.message\",\"data\":{}}\n").unwrap();
         assert_eq!(
-            read_appended(&log, &mut offset),
+            read_appended(&log, &mut offset, copilot_event),
             vec![ActivityEvent::Hook(HookKind::UserPromptSubmit)]
         );
     }
@@ -204,7 +211,9 @@ mod tests {
         // `events.jsonl` is created on the first user message, not at session start.
         let dir = tempfile::tempdir().unwrap();
         let mut offset = 0;
-        assert!(read_appended(&dir.path().join("events.jsonl"), &mut offset).is_empty());
+        assert!(
+            read_appended(&dir.path().join("events.jsonl"), &mut offset, copilot_event).is_empty()
+        );
         assert_eq!(current_len(&dir.path().join("nope")), 0);
     }
 
@@ -214,11 +223,11 @@ mod tests {
         let log = dir.path().join("events.jsonl");
         std::fs::write(&log, "{\"type\":\"assistant.turn_end\",\"data\":{}}\n").unwrap();
         let mut offset = 0;
-        assert_eq!(read_appended(&log, &mut offset).len(), 1);
+        assert_eq!(read_appended(&log, &mut offset, copilot_event).len(), 1);
 
         std::fs::write(&log, "{\"type\":\"user.message\",\"data\":{}}\n").unwrap();
         assert_eq!(
-            read_appended(&log, &mut offset),
+            read_appended(&log, &mut offset, copilot_event),
             vec![ActivityEvent::Hook(HookKind::UserPromptSubmit)],
             "a shorter file is a new file; keeping the old offset would skip everything until it \
              grew past it again"

@@ -139,6 +139,13 @@ pub(crate) fn on_folder_chosen(app: &mut App, path: PathBuf) -> Task<Message> {
         });
         return Task::none();
     };
+    // Know the folder by the path git will report for it, so its worktrees belong to it (002
+    // BUG-002, FR-012). Only here, where this client's filesystem is the daemon's: over the wire
+    // the path is the daemon's to interpret, and `worktree::discover` copes with either spelling.
+    let path = app
+        .core
+        .workspace
+        .identity_for(&path, &micold_core::fs_scan::resolve_path);
     if !git.is_repo_root(&path) {
         app.core.update(Message::Project(ProjectMsg::OpenRefused(
             NOT_A_REPOSITORY.to_string(),
@@ -214,6 +221,11 @@ pub(crate) fn on_known_project_reopened(app: &mut App, path: PathBuf) -> Task<Me
     // background and restore the target project's foreground (feature 008, BS-1/BS-3).
     let previous = app.core.workspace.active.clone();
     if let Some(arrival) = app.core.switch_active(&path) {
+        // The top-bar switcher closes on an accepted pick ("Panel closes.", 008 BUG-002). Only
+        // then: a refused pick is what raises the row's unavailable badge, and the panel stays up
+        // so the user sees it. The body's "Known projects" list sends the same message with the
+        // panel already closed, where this changes nothing.
+        app.core.project.switcher_open = false;
         micold_client::app::drain(arrival, |o| micold_client::app::interpret(&mut app.core, o));
         let outcomes = app
             .core
@@ -222,8 +234,37 @@ pub(crate) fn on_known_project_reopened(app: &mut App, path: PathBuf) -> Task<Me
             micold_client::app::interpret(&mut app.core, o)
         });
         crate::log_foreground_choice(app, &path);
-        // Already a known project (no ProjectAdd); just move the daemon attachment.
+        // Already a known project (no ProjectAdd): move the daemon attachment, and tell the
+        // catalog's single writer this is now the last-active project, or the next launch restores
+        // whichever project was last opened by browsing (002 BUG-003, FR-010/FR-011). Without a
+        // connection there is nobody to tell; the switch itself stands, as it always has.
         switch_daemon_attachment(app, previous, &path);
+        if app.daemon.is_some() {
+            let activated = path.clone();
+            send_op(app, PendingOp::ProjectActivate, move |req| {
+                ClientMsg::ProjectActivate {
+                    req,
+                    path: activated,
+                }
+            });
+        }
+    }
+    Task::none()
+}
+
+/// The top-bar project switcher was toggled (feature 008, FR-008; 008 BUG-003).
+///
+/// Opening it rescans every known project's folder, because its rows show availability and
+/// acceptance scenario 3 asks for that "when the user opens the switcher". Until this scan the flag
+/// was recomputed only at launch and on a reopen, so a moved folder looked selectable until pressed,
+/// and a restored one stayed disabled — with no press left to clear it — until a relaunch. A shell
+/// handler rather than the reducer alone because the scan needs the scanner capability. It only
+/// observes: the active project is never released here (002 BUG-004 keeps that to launch).
+pub(crate) fn on_switcher_toggled(app: &mut App) -> Task<Message> {
+    app.core
+        .update(Message::Project(ProjectMsg::SwitcherToggled));
+    if app.core.project.switcher_open {
+        app.core.workspace.refresh_availability(app.caps.scanner());
     }
     Task::none()
 }
@@ -233,7 +274,7 @@ mod tests {
     use super::*;
     use crate::tests::base_app;
     use micold_core::fs_scan::FakeFolderScanner;
-    use micold_core::project::FolderEntry;
+    use micold_core::project::{Availability, FolderEntry};
     use micold_core::protocol::messages::{DaemonMsg, OperationResult};
 
     /// A client with no local git and a daemon to ask (feature 027, research R2 part 2) — the
@@ -467,5 +508,161 @@ mod tests {
             Message::Project(ProjectMsg::SelectorListingFailed(_)) => {}
             other => panic!("expected a reported failure, got {other:?}"),
         }
+    }
+
+    /// A real, committed git repository at `dir`.
+    #[cfg(unix)]
+    fn init_repo(dir: &Path) {
+        std::fs::create_dir_all(dir).unwrap();
+        for args in [
+            &["init", "-q"][..],
+            &["config", "user.email", "t@t.test"],
+            &["config", "user.name", "T"],
+            &["commit", "-q", "--allow-empty", "-m", "init"],
+        ] {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(dir)
+                .args(args)
+                .output()
+                .expect("git runs");
+            assert!(out.status.success(), "git {args:?} failed");
+        }
+    }
+
+    /// 002 BUG-002: a repository chosen through a symlink opens under the path git reports for it,
+    /// so its worktrees — which git records by that path — belong to it.
+    #[cfg(unix)]
+    #[test]
+    fn choosing_a_symlink_to_a_repository_opens_it_by_its_resolved_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let real = std::fs::canonicalize(tmp.path()).unwrap().join("real");
+        init_repo(&real);
+        let link = tmp.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        let mut app = base_app();
+        let _ = on_folder_chosen(&mut app, link);
+
+        assert_eq!(app.core.workspace.active.as_deref(), Some(real.as_path()));
+        assert_eq!(app.core.workspace.projects.len(), 1);
+    }
+
+    /// A client connected to a daemon, knowing two projects whose folders exist, with `b` active.
+    fn connected_with_two_projects(
+        a: &Path,
+        b: &Path,
+    ) -> (
+        App,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) {
+        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = base_app();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        let scanner = FakeFolderScanner::new();
+        app.core
+            .workspace
+            .open_or_activate(a.to_path_buf(), &scanner);
+        app.core
+            .workspace
+            .open_or_activate(b.to_path_buf(), &scanner);
+        (app, rx)
+    }
+
+    /// 002 BUG-003: reopening a known project tells the catalog's single writer which project is
+    /// now active — or `last_active` keeps naming the last one opened by browsing (FR-010/FR-011).
+    #[test]
+    fn reopening_a_known_project_records_it_as_the_active_one() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        let (mut app, mut rx) = connected_with_two_projects(a.path(), b.path());
+
+        let _ = on_known_project_reopened(&mut app, a.path().to_path_buf());
+
+        let mut activated = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            if let ClientMsg::ProjectActivate { path, .. } = msg {
+                activated.push(path);
+            }
+        }
+        assert_eq!(activated, vec![a.path().to_path_buf()]);
+    }
+
+    /// 008 BUG-002: picking a project in the top-bar switcher closes it
+    /// (`contracts/project-switcher-ui.md`: "Panel closes."). SC-002 budgets two interactions,
+    /// open and select; a panel left over the view makes it three.
+    #[test]
+    fn picking_a_project_in_the_switcher_closes_it() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        let (mut app, _rx) = connected_with_two_projects(a.path(), b.path());
+        app.core.project.switcher_open = true;
+
+        let _ = on_known_project_reopened(&mut app, a.path().to_path_buf());
+
+        assert_eq!(app.core.workspace.active.as_deref(), Some(a.path()));
+        assert!(
+            !app.core.project.switcher_open,
+            "the panel closes on a switch"
+        );
+    }
+
+    /// …but not when the pick is refused. The press is what reveals the row's unavailable badge,
+    /// and closing the panel would hide the one thing that explains why nothing happened.
+    #[test]
+    fn a_refused_pick_leaves_the_switcher_open() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        let gone = a.path().join("gone");
+        std::fs::create_dir(&gone).unwrap();
+        let (mut app, _rx) = connected_with_two_projects(&gone, b.path());
+        std::fs::remove_dir(&gone).unwrap();
+        app.core.project.switcher_open = true;
+
+        let _ = on_known_project_reopened(&mut app, gone);
+
+        assert_eq!(app.core.workspace.active.as_deref(), Some(b.path()));
+        assert!(app.core.project.switcher_open);
+    }
+
+    /// 008 BUG-003: opening the switcher is when a moved folder gets its unavailable badge
+    /// (acceptance scenario 3: "When the user opens the switcher") — not the press on its row.
+    #[test]
+    fn opening_the_switcher_marks_a_folder_that_has_gone_unavailable() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        let gone = a.path().join("gone");
+        std::fs::create_dir(&gone).unwrap();
+        let (mut app, _rx) = connected_with_two_projects(&gone, b.path());
+        std::fs::remove_dir(&gone).unwrap();
+
+        let _ = on_switcher_toggled(&mut app);
+
+        assert!(app.core.project.switcher_open);
+        let row = app
+            .core
+            .workspace
+            .projects
+            .iter()
+            .find(|p| p.path == gone)
+            .unwrap();
+        assert_eq!(row.availability, Availability::Unavailable);
+    }
+
+    /// …and the scan is also what lets a restored folder recover: an unavailable row carries no
+    /// message, so nothing else could ever clear the flag while the application runs.
+    #[test]
+    fn opening_the_switcher_clears_the_badge_of_a_folder_that_came_back() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        let (mut app, _rx) = connected_with_two_projects(a.path(), b.path());
+        app.core.workspace.projects[0].availability = Availability::Unavailable;
+
+        let _ = on_switcher_toggled(&mut app);
+
+        assert_eq!(
+            app.core.workspace.projects[0].availability,
+            Availability::Available
+        );
     }
 }

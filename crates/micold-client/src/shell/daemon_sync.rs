@@ -113,6 +113,8 @@ pub enum PendingOp {
     /// restart.
     WorktreeClaim(String),
     ProjectAdd,
+    /// A `ProjectActivate` (002 BUG-003): a known project reopened, recorded as last active.
+    ProjectActivate,
     ProjectRemove,
     ProjectRename,
     /// A `SettingsSet` (FR-012a/FR-012b, BUG-003/T100): the service echoes the persisted result
@@ -143,6 +145,7 @@ impl PendingOp {
             }
             PendingOp::WorktreeRefresh => "refresh the worktree list".into(),
             PendingOp::ProjectAdd => "add the project".into(),
+            PendingOp::ProjectActivate => "record the active project".into(),
             PendingOp::ProjectRemove => "remove the project".into(),
             PendingOp::ProjectRename => "rename the project".into(),
             PendingOp::SettingsSet => "update the settings".into(),
@@ -430,6 +433,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // `Welcome` below (feature 026, FR-003). The client's own write is a courtesy
             // to the next boot; this is the value in force.
             app.core.session.default_ai_cli = settings.default_ai_cli;
+            app.core.session.pi_activity_component = settings.pi_activity_component;
             app.env_include_cache.clear();
             let cwd = default_resolution_cwd(&app.core);
             refresh_env_include(app, &cwd);
@@ -828,6 +832,7 @@ pub fn on_connected(
     app.env_include_script_path = settings.env_include_script_path;
     app.env_include_timeout_secs = settings.env_include_timeout_secs;
     app.core.session.default_ai_cli = settings.default_ai_cli;
+    app.core.session.pi_activity_component = settings.pi_activity_component;
     app.env_include_cache.clear();
     let cwd = default_resolution_cwd(&app.core);
     refresh_env_include(app, &cwd);

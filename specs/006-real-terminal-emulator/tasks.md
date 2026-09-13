@@ -155,7 +155,7 @@ header affordance → focus returns to the app, session keeps running; Esc while
 
 - [X] T023 [US3] Implement `route_key` in `src/app.rs` (or `src/keymap.rs`) to pass T022.
 - [X] T024 [US3] Gate app keyboard handling in `src/ui/mod.rs::subscription`: when `state.terminal_focused`, return `Subscription::none()` for key handling so app shortcuts/Esc are not consumed while the terminal owns the keyboard; otherwise keep the existing overlay Esc behavior (FR-009).
-- [X] T025 [US3] Implement focus release in `src/app.rs`/`src/ui`: handle `Message::TerminalFocusReleased` (reserved chord from `keymap`, click-outside via a surrounding `mouse_area`, and a header "release focus" affordance) → set `terminal_focused = false`; render a visible focus indicator/ring in `TerminalPane::draw`; ~~`SessionSelected`~~/close/project-switch clear focus (FR-010, FR-011). *(Bugfix BUG-001: the `SessionSelected` clause is superseded — selecting a session now auto-focuses its terminal, see T050. Session close and project switch still clear focus.)*
+- [x] T025 [US3] Implement focus release in `src/app.rs`/`src/ui`: handle `Message::TerminalFocusReleased` (reserved chord from `keymap`, click-outside via a surrounding `mouse_area`, and a header "release focus" affordance) → set `terminal_focused = false`; render a visible focus indicator/ring in `TerminalPane::draw`; ~~`SessionSelected`~~/close/project-switch clear focus (FR-010, FR-011). *(Bugfix BUG-001: the `SessionSelected` clause is superseded — selecting a session now auto-focuses its terminal, see T050. Session close and project switch still clear focus.)* *(Reopened — BUG-005: the release half shipped, the "visible focus indicator/ring in `TerminalPane::draw`" half did not — `draw` never read `focused`. Completed by T069–T070, 2026-09-13.)*
 - [X] T026 [US3] Enforce write-gating + isolation in `src/main.rs`: apply `TermAction::Write`/`Paste` only when the displayed session is `SessionLifecycle::Running` (drop otherwise, no buffering) and only to the displayed session's runtime; show the session status label in the pane header for non-Running states (FR-012, FR-012a).
 - [X] T027 [US3] Document focus behavior (how to focus, the reserved release chord, click-outside, that shortcuts propagate only when focused, non-Running input is discarded) in `docs/user-guide/worktrees-and-sessions.md` (Principle VII).
 
@@ -440,6 +440,60 @@ start, because the measurement lived in a widget that is not mounted until a ses
 arrives. `contracts/terminal-render-input.md`'s auto-resize rule now names the area — not the pane —
 as the reporter, and records that the send-before-start ordering is best-effort while the service's
 retention rule is the load-bearing half.
+
+## Phase 13: Bugfix BUG-004, BUG-005, BUG-006 — the three clauses the 2026-08-25 pass found unmet
+
+**Purpose**: Close the quickstart failures recorded in `evidence/gui-pass-2026-08-25.md`. All three
+live in `src/ui/material/terminal_pane.rs`; each is test-first (Red commit, then Green).
+
+### BUG-004 — a copy chord with nothing selected wipes the clipboard (FR-013c)
+
+- [x] T067 [BUG-004] Failing test in `src/ui/material/terminal_pane.rs` (`mod tests`): dispatch the
+  platform copy chord to a focused pane with no selection through a recording `Clipboard`, and assert
+  no write happened; with a selection, assert exactly one write of the selected text.
+- [x] T068 [BUG-004] In `KeyRouting::Copy`, write to the clipboard only when `selectable_content()`
+  is non-empty; the chord is still captured either way, so it never reaches the process (FR-013c).
+
+### BUG-005 — the focused terminal has no visual indication (FR-010, FR-010b)
+
+- [x] T069 [BUG-005] Failing test in `src/ui/material/terminal_pane.rs`: rasterise the pane through
+  the headless tiny-skia renderer focused and unfocused, in light and dark; the pane's edge pixels are
+  the scheme's `secondary` when focused and the terminal background when not, and the character
+  area's measured `(cols, rows)` is identical in both.
+- [x] T070 [BUG-005] Draw the 018 focus indicator in `TerminalPane::draw` from `self.focused`: a
+  `state::FOCUS_RING_WIDTH` outline in `TermPalette::accent()`, which becomes the scheme's `secondary`
+  (was `primary`). Reserve the ring's width as a gutter on every side at every focus state — cell
+  origin in `draw`, `grid_at`, and `GridSizeReporter`'s measurement — so focus never resizes the
+  process and the ring never covers the first column. Draw-only: no layout node or bar child depends
+  on focus (023 bar stability). Delete the "no border is drawn" note; pin the ring colour per scheme
+  in `style_snapshot` and regenerate the fixture. Re-ticks T025.
+
+### BUG-006 — paste is not bracketed (FR-013d)
+
+- [x] T071 [BUG-006] Failing tests: a pure `keymap::paste_bytes(text, bracketed)` in
+  `tests/keymap.rs` (mode clear → bytes unchanged; mode set → `ESC[200~ text ESC[201~`; an embedded
+  `ESC[201~` — including one reassembled by removing another — never survives inside the block), and
+  a widget test in `terminal_pane.rs` that the paste chord and middle-click publish bracketed bytes
+  when the grid's mode has `BRACKETED_PASTE` and raw bytes when it does not.
+- [x] T072 [BUG-006] Implement `keymap::paste_bytes` and `GridCache::bracketed_paste()`, and route
+  all three paste paths through them: the chord and middle-click in `TerminalPane::update`, and the
+  context menu's `shell::clipboard::on_paste_requested` (which reads the mode when the paste is
+  requested, before the asynchronous clipboard read).
+
+### Visual pass
+
+- [x] T073 [BUG-004] [BUG-005] [BUG-006] Visual pass on a private Xvfb display (the `visual-pass`
+  skill): focused vs unfocused terminal in light and dark, plus the copy and paste behaviours where
+  reachable. Record under `evidence/`. *(Passed 2026-09-13 — showcase and real app, both schemes, all
+  three paste paths plus the unbracketed complement: `evidence/bugfix-pass-2026-09-13.md`.)*
+
+**Checkpoint**: Copy with nothing selected is a no-op; the focused terminal shows the design system's
+focus outline in both schemes without resizing the process; a multi-line paste into a
+bracketed-paste process waits at the prompt instead of running.
+
+**Bugfix**: 2026-09-13 — BUG-004, BUG-005, BUG-006 Updated from bugfix patch. T025 reopened (its
+focus-indicator clause was ticked but never drawn — BUG-005). Added Phase 13 (T067–T073). No task was
+ever generated for bracketed paste (it lived in an assumption), so BUG-006 adds rather than reopens.
 
 ---
 

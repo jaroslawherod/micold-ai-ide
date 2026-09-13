@@ -202,7 +202,7 @@ scene_start() {
   # accident of the capture machine; FR-011b says a publication may not have those. Installing all
   # of them makes the affordance the same everywhere, and makes a host that happens to have a real
   # one on `PATH` change nothing, since it is already in the set.
-  for cli in claude copilot; do
+  for cli in claude copilot pi; do
     ln -sf "$scene_site/capture/stub-cli.sh" "$scene_stub/$cli"
   done
   PATH="$scene_stub:$PATH"

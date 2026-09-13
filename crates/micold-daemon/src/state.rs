@@ -7,6 +7,7 @@
 
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
+use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -20,9 +21,10 @@ use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, DaemonMsg, DaemonSettings,
     RefusalReason, SessionProcess, SessionSummary, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
+use micold_core::provider::ActivitySource;
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
-    TerminalMode,
+    TerminalMode, RESTART_STABLE_AFTER,
 };
 use micold_core::terminal::{LaunchMode, LaunchSpec};
 use micold_core::worktree::{self, Worktree};
@@ -200,9 +202,38 @@ struct LiveSession {
     /// Dropping the `LiveSession` drops this, which unregisters the watch. That is the whole
     /// teardown: there is no timer to cancel, because there is no timer.
     event_log: Option<crate::event_log::EventLogTail>,
+    /// When supervision last respawned this session's primary after a crash, or `None` if it has
+    /// not. A `Restarting` session counts as recovered only once its respawn has stayed up for
+    /// [`RESTART_STABLE_AFTER`] from this reading (`005` BUG-004, FR-022a).
+    respawned_at: Option<micold_core::clock::Uptime>,
 }
 
 /// Build a fresh [`Proc`] around a spawned PTY, with a session-lived framer.
+/// The variable Pi's activity component reads to find its log (feature 029, contracts/pi-cli.md).
+const PI_ACTIVITY_LOG_VAR: &str = "MICOLD_PI_ACTIVITY_LOG";
+
+/// The component itself, compiled into this binary so it travels with the session service
+/// wherever that runs — host or sandbox — and adds nothing an image has to carry (FR-012a,
+/// FR-017a). Its full extent is that one file (FR-012b).
+const PI_ACTIVITY_COMPONENT: &str = include_str!("../assets/pi-activity.ts");
+
+/// Write the component into the service's own data directory and return its path, for `pi -e`.
+///
+/// Rewritten on every Pi launch, and only when the bytes differ, so a daemon upgrade replaces what
+/// an older one left behind and an unchanged file is not touched. It never goes near Pi's own
+/// extension directories, so a `pi` run outside this application does not load it (FR-012a).
+fn materialise_pi_activity_component() -> io::Result<PathBuf> {
+    let dir = directories::ProjectDirs::from("", "", "micold-ai-ide")
+        .map(|dirs| dirs.data_dir().join("pi"))
+        .unwrap_or_else(|| std::env::temp_dir().join("micold-daemon-pi"));
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join("pi-activity.ts");
+    if std::fs::read(&path).ok().as_deref() != Some(PI_ACTIVITY_COMPONENT.as_bytes()) {
+        std::fs::write(&path, PI_ACTIVITY_COMPONENT)?;
+    }
+    Ok(path)
+}
+
 fn new_proc(pty: Arc<PtySession>, id: SessionId) -> Proc {
     Proc {
         pty,
@@ -313,30 +344,70 @@ impl DaemonState {
         let _ = self.hooks.set(receiver);
     }
 
-    /// Prepare a session's activity-hook `--settings` file, if the hook receiver is running. Returns
-    /// `None` when hooks are unavailable (tests, or a bind failure) or when writing the file fails —
-    /// the caller then spawns without hooks and activity stays `Unknown` (H1), never wrong. Blocking
-    /// (a small file write); the AI-CLI spawn path is already off the async runtime.
+    /// The launch arguments — and, for Pi, the environment — that wire a session's activity
+    /// reporting, keyed on the provider's [`ActivitySource`]. Returns no arguments when there is
+    /// nothing to wire or preparing it failed; the caller then spawns without it and activity stays
+    /// `Unknown` (H1), never wrong. Blocking (small file writes); the AI-CLI spawn path is already
+    /// off the async runtime.
     ///
-    /// Only for a provider whose [`micold_core::provider::ActivitySource`] is `Hooks`
-    /// (feature 026, T016a): the file is `claude`'s mechanism — a port and a per-session bearer
-    /// token in a `--settings` JSON — and `copilot` has no flag to hand it to. Producing it
-    /// unconditionally for every `TerminalMode::AiCli` session, as this path did before, spawns a
-    /// Copilot session with an argument it does not understand.
-    fn hook_settings_file_for(&self, id: SessionId, spec: &LaunchSpec) -> Option<PathBuf> {
-        use micold_core::provider::ActivitySource;
+    /// - `Hooks` → `--settings <file>`, if the hook receiver is running (tests or a bind failure
+    ///   leave it absent). The file is `claude`'s mechanism — a port and a per-session bearer token
+    ///   in a `--settings` JSON — and `copilot` has no flag to hand it to (feature 026, T016a).
+    /// - `Extension { log }` → `-e <component>` and `MICOLD_PI_ACTIVITY_LOG=<log>` (feature 029,
+    ///   FR-012a), unless the user declined the component (FR-012e).
+    /// - `EventLog` → nothing: Copilot writes its own log, and the tail reads it.
+    fn activity_launch_for(&self, id: SessionId, spec: &mut LaunchSpec) -> Vec<OsString> {
         let provider = spec.provider.provider();
-        // The source is derived from a config dir the provider may not be able to resolve. The
-        // question here is only *which mechanism*, and `Hooks` carries no payload, so an
-        // unresolvable directory is not a reason to skip the file — ask with what is available.
-        let config_dir = provider.config_dir().unwrap_or_default();
-        if !matches!(
-            provider.activity_source(&config_dir, &spec.cwd, spec.session_id),
-            ActivitySource::Hooks
-        ) {
-            return None;
+        // The source is derived from a config dir the provider may not be able to resolve. For
+        // `Hooks` the question is only *which mechanism* — it carries no payload — so an
+        // unresolvable directory is not a reason to skip the file; ask with what is available.
+        let config_dir = provider.config_dir();
+        let source = provider.activity_source(
+            config_dir.as_deref().unwrap_or(Path::new("")),
+            &spec.cwd,
+            spec.session_id,
+        );
+        match source {
+            ActivitySource::Hooks => self
+                .hook_settings_file(id)
+                .map(|path| vec!["--settings".into(), path.into_os_string()])
+                .unwrap_or_default(),
+            // Pi (feature 029). Everything here is best-effort in the same way the hook file is: a
+            // failure costs the badge, which reads `Unknown`, and never the start (FR-012d).
+            ActivitySource::Extension { log } => {
+                // Declined (FR-012e): no `-e`, no variable, and `open_event_log_tail` opens no
+                // watch. The session is otherwise identical, and nothing reports it as a fault.
+                if !self.lock().catalog.pi_activity_component() {
+                    return Vec::new();
+                }
+                // A log under an empty base would land relative to the session's cwd.
+                if config_dir.is_none() {
+                    return Vec::new();
+                }
+                let Some(log_var) = log.to_str() else {
+                    tracing::warn!(session = %id.0, "Pi activity log path is not UTF-8; activity will be Unknown");
+                    return Vec::new();
+                };
+                if let Some(parent) = log.parent() {
+                    if let Err(err) = std::fs::create_dir_all(parent) {
+                        tracing::warn!(session = %id.0, %err, "could not create the Pi activity log directory; activity will be Unknown");
+                        return Vec::new();
+                    }
+                }
+                match materialise_pi_activity_component() {
+                    Ok(component) => {
+                        spec.env
+                            .push((PI_ACTIVITY_LOG_VAR.to_string(), log_var.to_string()));
+                        vec!["-e".into(), component.into_os_string()]
+                    }
+                    Err(err) => {
+                        tracing::warn!(session = %id.0, %err, "could not write the Pi activity component; activity will be Unknown");
+                        Vec::new()
+                    }
+                }
+            }
+            ActivitySource::EventLog { .. } | ActivitySource::None => Vec::new(),
         }
-        self.hook_settings_file(id)
     }
 
     fn hook_settings_file(&self, id: SessionId) -> Option<PathBuf> {
@@ -389,6 +460,30 @@ impl DaemonState {
             .env_include_cache
             .insert(cwd.to_path_buf(), merged.clone());
         merged
+    }
+
+    /// The environment an **AI-CLI** launch runs in: the session's resolved environment
+    /// ([`Self::env_include_vars_for`]) with the provider's own [`AiCliProvider::launch_env`]
+    /// merged in (feature 029, FR-020).
+    ///
+    /// Asked of every provider, never of one by name. Two of the three answer with nothing, and
+    /// that is the point: the alternative was a `match` on which CLI a session runs at the spawn
+    /// site, which is precisely the conditional the provider seam exists to remove (FR-019).
+    ///
+    /// **The session's own environment wins.** A provider's pair is added only where the resolved
+    /// environment does not already carry that name, so a user who sets one of these in their
+    /// environment-include script keeps it. That is the trait's own contract — a provider may not
+    /// use `launch_env` to reach past settings that belong to the user (FR-007) — and it costs
+    /// nothing in practice: nobody sets `PI_OFFLINE` by accident, and someone who sets it
+    /// deliberately means it.
+    fn ai_cli_env_for(&self, cwd: &Path, provider: AiCli) -> Vec<(String, String)> {
+        let mut env = self.env_include_vars_for(cwd);
+        for (name, value) in provider.provider().launch_env() {
+            if !env.iter().any(|(existing, _)| *existing == name) {
+                env.push((name, value));
+            }
+        }
+        env
     }
 
     /// Invalidate the cached environment-include resolution for one directory (BUG-003) — called
@@ -757,6 +852,18 @@ impl DaemonState {
         Ok(())
     }
 
+    /// Turn the Pi activity component on or off and push `SettingsChanged` to every client
+    /// (feature 029, FR-012e).
+    pub fn set_pi_activity_component(&self, on: bool) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_pi_activity_component(on)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
     /// Set any of the three environment-include settings and push `SettingsChanged` to every
     /// client (FR-012b, FR-011). Invalidates every cached per-directory resolution (T098/BUG-003):
     /// each cached directory's snapshot was resolved under the now-stale configuration.
@@ -1099,6 +1206,14 @@ impl DaemonState {
             .add_project(path, &micold_core::fs_scan::StdFolderScanner::new())
     }
 
+    /// Record a known project as the active one (002 BUG-003). `Ok(false)` when the path is not a
+    /// known project or its folder is unavailable; nothing is persisted then.
+    pub fn activate_project(&self, path: &Path) -> io::Result<bool> {
+        self.lock()
+            .catalog
+            .activate_project(path, &micold_core::fs_scan::StdFolderScanner::new())
+    }
+
     /// Forget a known project, dropping its discovery cache and returning its live primaries so the
     /// caller can `kill()` them outside the lock (T053, feature 014). A no-op for an unknown path.
     pub fn forget_project(&self, path: &Path) -> io::Result<Vec<Arc<PtySession>>> {
@@ -1364,25 +1479,51 @@ impl DaemonState {
             }
         }
 
-        let env = self.env_include_vars_for(&plan.cwd);
         let size = self.desired_size(id);
-        let session = match plan.mode {
+        let cwd = plan.cwd.clone();
+        let spawned = match plan.mode {
             TerminalMode::AiCli => {
-                let spec = LaunchSpec {
-                    cwd: plan.cwd,
+                let mut spec = LaunchSpec {
+                    cwd: plan.cwd.clone(),
                     session_id: id.0,
                     provider: plan.provider,
                     mode: launch,
-                    env,
+                    env: self.ai_cli_env_for(&plan.cwd, plan.provider),
                 };
                 // The hook settings file follows the provider's `activity_source`, not the terminal
                 // mode: it is `claude`'s mechanism, and `copilot` has no `--settings` flag to hand
                 // it to (feature 026, T016a).
-                let settings = self.hook_settings_file_for(id, &spec);
-                PtySession::spawn_ai_cli(id, &spec, plan.scrollback, size, settings.as_deref())?
+                let activity = self.activity_launch_for(id, &mut spec);
+                PtySession::spawn_ai_cli(id, &spec, plan.scrollback, size, &activity)
             }
-            TerminalMode::Regular => {
-                PtySession::spawn_shell(id, &plan.cwd, &env, plan.scrollback, size)?
+            TerminalMode::Regular => PtySession::spawn_shell(
+                id,
+                &plan.cwd,
+                &self.env_include_vars_for(&plan.cwd),
+                plan.scrollback,
+                size,
+            ),
+        };
+        // A refused spawn is recorded like the refusals above (`010` BUG-001, FR-012). Returned
+        // bare, it left the record in the state it was created in, so the catalog broadcast that
+        // follows every failed start said `starting…` for good. The one refusal a user causes from
+        // outside the application — the session's folder renamed or deleted — gets a sentence that
+        // names it; anything else is passed through, since it is still better read than lost.
+        let session = match spawned {
+            Ok(session) => session,
+            Err(err) => {
+                let reason = if err.kind() == io::ErrorKind::NotFound && !cwd.is_dir() {
+                    format!(
+                        "This session's folder no longer exists: {}. Restore it, or close this \
+                         session.",
+                        cwd.display()
+                    )
+                } else {
+                    format!("Couldn't start this session: {err}")
+                };
+                tracing::warn!(session = %id.0, error = %err, "session spawn refused; not starting");
+                self.lock().start_failures.insert(id, reason.clone());
+                return Err(io::Error::new(err.kind(), reason));
             }
         };
         // Session-start event with the launch reason (FR-045). No terminal content — id + mode only.
@@ -1428,6 +1569,7 @@ impl DaemonState {
                 activity: Activity::new(),
                 last_title: None,
                 event_log: None,
+                respawned_at: None,
             },
         );
         // A fresh FSM starts at `Unknown`, so a retained `Ended` from the previous run would be
@@ -1456,8 +1598,6 @@ impl DaemonState {
     /// **Blocking** (it resolves a config directory and registers a watch), so the caller runs it
     /// off the async runtime, alongside the spawn it follows.
     pub fn open_event_log_tail(self: &Arc<Self>, id: SessionId) {
-        use micold_core::provider::ActivitySource;
-
         // The provider and cwd from the record, under the lock and nothing more.
         let Some((provider, cwd)) = ({
             let inner = self.lock();
@@ -1480,13 +1620,23 @@ impl DaemonState {
         let Some(config_dir) = provider.config_dir() else {
             return;
         };
-        let ActivitySource::EventLog { path } = provider.activity_source(&config_dir, &cwd, id.0)
-        else {
-            return;
-        };
+        // Each log-shaped source brings its own vocabulary. Pi's log is written by the component
+        // this daemon injects at spawn (feature 029, FR-012c); with that component declined
+        // (FR-012e) nothing writes it, so no watch is opened and the badge stays `Unknown`.
+        let (path, map): (PathBuf, crate::event_log::LineMapper) =
+            match provider.activity_source(&config_dir, &cwd, id.0) {
+                ActivitySource::EventLog { path } => (path, crate::activity::copilot_event),
+                ActivitySource::Extension { log } => {
+                    if !self.lock().catalog.pi_activity_component() {
+                        return;
+                    }
+                    (log, crate::activity::pi_event)
+                }
+                ActivitySource::Hooks | ActivitySource::None => return,
+            };
 
         let state = Arc::clone(self);
-        match crate::event_log::EventLogTail::open(path, move |event| {
+        match crate::event_log::EventLogTail::open(path, map, move |event| {
             // A direct push, not a queued one: the badge moves as the line lands, and SC-005's
             // one-second budget is spent on the platform's notification latency rather than on a
             // cadence of ours.
@@ -1542,6 +1692,13 @@ impl DaemonState {
     /// the distinct projects whose catalog lifecycle changed, so the caller broadcasts one
     /// `CatalogChanged` per affected project.
     pub fn supervise_exited_sessions(&self) -> Vec<PathBuf> {
+        self.supervise_exited_sessions_at(micold_core::clock::now())
+    }
+
+    /// [`Self::supervise_exited_sessions`] with the tick's clock reading supplied, so the restart
+    /// stability window (`RESTART_STABLE_AFTER`, `005` BUG-004) is tested with injected readings
+    /// rather than ten-second sleeps. Every reading within one daemon must come from the same clock.
+    pub fn supervise_exited_sessions_at(&self, now: micold_core::clock::Uptime) -> Vec<PathBuf> {
         // Phase 1 — under the lock: classify exits, apply the policy, gather the follow-up work.
         let scrollback;
         let mut changed: Vec<PathBuf> = Vec::new();
@@ -1552,16 +1709,15 @@ impl DaemonState {
             scrollback = inner.catalog.settings_wire().scrollback_lines;
             // Partition live primaries into those that have exited and those still alive. The alive
             // set is captured *before* this tick's respawns, so a process respawned this tick is not
-            // in it — that is what lets a genuine survivor (alive since the previous tick) reset while
-            // a crash-looping respawn keeps advancing toward `Failed`.
+            // in it; each carries the reading of its last respawn, for the survivor check below.
             let mut exited: Vec<(SessionId, ExitOutcome)> = Vec::new();
-            let mut alive: Vec<SessionId> = Vec::new();
+            let mut alive: Vec<(SessionId, Option<micold_core::clock::Uptime>)> = Vec::new();
             for (id, live) in &inner.sessions {
                 let Some(proc) = live.procs.get(&SessionProcess::Primary) else {
                     continue;
                 };
                 if proc.pty.is_alive() {
-                    alive.push(*id);
+                    alive.push((*id, live.respawned_at));
                 } else {
                     // A reaped-but-unclassifiable exit is treated as a crash so supervision still
                     // runs rather than the session lingering as a dead-but-alive entry.
@@ -1622,10 +1778,18 @@ impl DaemonState {
                     changed.push(project.to_path_buf());
                 }
             }
-            // Survivors: a session still alive while marked `Restarting` has stayed up since its
-            // respawn (at least one tick ago) — it is healthy now, so reset it to `Running`, which
-            // clears the crash-loop counter (closes the L5 gap).
-            for id in alive {
+            // Survivors: a session still alive while marked `Restarting` is healthy again once its
+            // respawn has stayed up for `RESTART_STABLE_AFTER` — reset it to `Running`, which clears
+            // the crash-loop counter (closes the L5 gap). Not sooner: a respawn seen alive one tick
+            // after spawning can still be a CLI failing a second into its startup, and resetting it
+            // then restarted that forever (`005` BUG-004). A session never respawned has nothing to
+            // wait out.
+            for (id, respawned_at) in alive {
+                let stable =
+                    respawned_at.is_none_or(|at| now.saturating_sub(at) >= RESTART_STABLE_AFTER);
+                if !stable {
+                    continue;
+                }
                 if let Some(project) = inner.catalog.mark_running_if_restarting(id) {
                     tracing::info!(session = %id.0, reason = "restart survived", "session recovered; running");
                     changed.push(project.to_path_buf());
@@ -1638,7 +1802,7 @@ impl DaemonState {
         }
         // Phase 3 — off the lock: respawn restart-eligible sessions.
         for (id, cwd, mode, provider) in to_respawn {
-            self.respawn_primary(id, cwd, mode, provider, scrollback);
+            self.respawn_primary(id, cwd, mode, provider, scrollback, now);
         }
         changed.sort();
         changed.dedup();
@@ -1731,33 +1895,40 @@ impl DaemonState {
         mode: TerminalMode,
         provider: AiCli,
         scrollback: usize,
+        now: micold_core::clock::Uptime,
     ) {
-        let env = self.env_include_vars_for(&cwd);
         // The viewer's pane did not change size because the process died — come back at the size the
         // session was last given, not at the seed (FR-020a, `006` SC-011).
         let size = self.desired_size(id);
         let spawned = match mode {
             TerminalMode::AiCli => {
-                let spec = LaunchSpec {
+                let mut spec = LaunchSpec {
+                    env: self.ai_cli_env_for(&cwd, provider),
                     cwd,
                     session_id: id.0,
                     provider,
                     mode: LaunchMode::Resume,
-                    env,
                 };
-                let settings = self.hook_settings_file_for(id, &spec);
-                PtySession::spawn_ai_cli(id, &spec, scrollback, size, settings.as_deref())
+                let activity = self.activity_launch_for(id, &mut spec);
+                PtySession::spawn_ai_cli(id, &spec, scrollback, size, &activity)
             }
-            TerminalMode::Regular => PtySession::spawn_shell(id, &cwd, &env, scrollback, size),
+            TerminalMode::Regular => PtySession::spawn_shell(
+                id,
+                &cwd,
+                &self.env_include_vars_for(&cwd),
+                scrollback,
+                size,
+            ),
         };
         match spawned {
             Ok(session) => {
                 // Swap in the fresh process; the old (dead) one is dropped off the lock. The session
                 // stays `Restarting { attempts }` (set by the policy) — it is NOT reset to `Running`
                 // here, so a process that crashes again right after respawn keeps advancing the
-                // crash-loop counter toward `Failed`. The counter has no time window (L5 caveat):
-                // only an explicit healthy signal (a future attach/first-output path) resets it.
-                let _old = self.swap_primary(id, session);
+                // crash-loop counter toward `Failed`. `now` is recorded as the respawn's reading:
+                // the tick resets the counter only once the process has outlived
+                // `RESTART_STABLE_AFTER` from it (`005` BUG-004).
+                let _old = self.swap_primary(id, session, now);
             }
             Err(_) => {
                 // Couldn't even respawn. Leave the dead primary in the registry: the next tick sees
@@ -1771,7 +1942,12 @@ impl DaemonState {
     /// Replace a session's `Primary` process with `session`, returning the displaced [`Proc`] so the
     /// caller drops it **off** the lock. If the session vanished meanwhile (closed concurrently), the
     /// freshly-spawned process is torn down off the lock instead of leaking.
-    fn swap_primary(&self, id: SessionId, session: PtySession) -> Option<Proc> {
+    fn swap_primary(
+        &self,
+        id: SessionId,
+        session: PtySession,
+        respawned_at: micold_core::clock::Uptime,
+    ) -> Option<Proc> {
         let pty = Arc::new(session);
         let mut inner = self.lock();
         let Some(live) = inner.sessions.get_mut(&id) else {
@@ -1779,6 +1955,7 @@ impl DaemonState {
             // `pty` drops here, now that the lock is released: its Drop kills + joins off-lock.
             return None;
         };
+        live.respawned_at = Some(respawned_at);
         let old = live
             .procs
             .insert(SessionProcess::Primary, new_proc(pty, id));
@@ -1940,6 +2117,7 @@ impl DaemonState {
                         last_title: None,
                         // A shell-only session has no AI CLI, so there is nothing to tail.
                         event_log: None,
+                        respawned_at: None,
                     },
                 );
             }

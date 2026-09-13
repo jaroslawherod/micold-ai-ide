@@ -178,6 +178,13 @@ impl GridCache {
         self.mode
     }
 
+    /// Whether the process has enabled bracketed paste (`DECSET 2004`), so a paste into it must
+    /// be wrapped (FR-013d).
+    pub fn bracketed_paste(&self) -> bool {
+        alacritty_terminal::term::TermMode::from_bits_truncate(self.mode)
+            .contains(alacritty_terminal::term::TermMode::BRACKETED_PASTE)
+    }
+
     /// The last-applied per-session frame sequence.
     pub fn seq(&self) -> u64 {
         self.seq
@@ -757,6 +764,31 @@ mod tests {
         assert!(
             cache.line(LineId(80)).is_none(),
             "a line below oldest_available is dropped"
+        );
+    }
+
+    // --- `006` BUG-006: whether a paste must be bracketed ---------------------------------------
+
+    #[test]
+    fn bracketed_paste_follows_the_last_applied_mode() {
+        use alacritty_terminal::term::TermMode;
+        let mut cache = GridCache::new();
+        assert!(!cache.bracketed_paste(), "no frame yet, no bracketing");
+
+        let mut on = frame(1, 1, true, 0, 2);
+        on.mode = (TermMode::BRACKETED_PASTE | TermMode::SHOW_CURSOR).bits();
+        cache.apply(&on);
+        assert!(
+            cache.bracketed_paste(),
+            "the process enabled DECSET 2004 (FR-013d)"
+        );
+
+        let mut off = frame(2, 1, false, 0, 2);
+        off.mode = TermMode::SHOW_CURSOR.bits();
+        cache.apply(&off);
+        assert!(
+            !cache.bracketed_paste(),
+            "and disabling it again takes effect"
         );
     }
 }

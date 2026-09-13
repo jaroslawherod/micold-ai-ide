@@ -31,6 +31,7 @@ use iced::{
     Theme,
 };
 use micold_core::protocol::grid::{LineId, WireColor, WireStyle};
+use micold_core::tokens::state::FOCUS_RING_WIDTH;
 
 /// Reports the terminal area's size in *cells* to the app, whatever is currently drawn in it
 /// (BUG-003, FR-014a).
@@ -111,8 +112,10 @@ where
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        let bounds = layout.bounds();
-        let grid = CellMetrics::new(TERM_FONT_SIZE).grid_size(bounds.width, bounds.height);
+        // The character area, not the whole rectangle: the pane keeps a focus-ring gutter on every
+        // side at every focus state (FR-010b), so that is the size the process is given.
+        let content = content_bounds(layout.bounds());
+        let grid = CellMetrics::new(TERM_FONT_SIZE).grid_size(content.width, content.height);
         let state = tree.state.downcast_mut::<ReporterState>();
         if grid != state.last_grid {
             state.last_grid = grid;
@@ -231,7 +234,23 @@ struct PaneState {
     scroll_residual: f32,
 }
 
-/// The grid cell (col, line) under a cursor position within `bounds`.
+/// The pane's character area: `bounds` less a gutter of the 018 focus ring's width on every side
+/// (FR-010b, BUG-005).
+///
+/// Reserved whether or not the pane is focused. Drawn over the cells, the ring would clip the first
+/// and last columns; inset only while focused, the character area — and with it the size reported
+/// to the process — would change every time focus moved, reflowing the shell's output.
+pub(crate) fn content_bounds(bounds: Rectangle) -> Rectangle {
+    let inset = FOCUS_RING_WIDTH;
+    Rectangle {
+        x: bounds.x + inset,
+        y: bounds.y + inset,
+        width: (bounds.width - 2.0 * inset).max(0.0),
+        height: (bounds.height - 2.0 * inset).max(0.0),
+    }
+}
+
+/// The grid cell (col, line) under a cursor position within the character area `bounds`.
 fn grid_at(pos: Point, bounds: Rectangle, metrics: CellMetrics) -> (u16, u16) {
     let col = ((pos.x - bounds.x) / metrics.width).floor().max(0.0) as u16;
     let line = ((pos.y - bounds.y) / metrics.height).floor().max(0.0) as u16;
@@ -469,7 +488,8 @@ impl<'a> TerminalPane<'a> {
         self
     }
 
-    /// Mark the pane focused (routes keyboard input to it; no border is drawn for this).
+    /// Mark the pane focused: keyboard input is routed to it, and it draws the 018 focus ring
+    /// (FR-010, FR-010b).
     pub fn focused(mut self, focused: bool) -> Self {
         self.focused = focused;
         self
@@ -575,6 +595,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
         _viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
+        let content = content_bounds(bounds);
         let metrics = CellMetrics::new(TERM_FONT_SIZE);
         let default_bg = self.palette.background();
 
@@ -599,7 +620,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 // The absolute line shown at this viewport row (accounting for scrollback). A line
                 // the cache has not (yet) received renders blank.
                 let line_id = self.line_at_row(row);
-                let y = bounds.y + (row as f32) * metrics.height;
+                let y = content.y + (row as f32) * metrics.height;
                 let Some(cached) = self.grid.line(line_id) else {
                     continue;
                 };
@@ -613,7 +634,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 }
 
                 for (col, ch) in cached.text.chars().enumerate() {
-                    let x = bounds.x + (col as f32) * metrics.width;
+                    let x = content.x + (col as f32) * metrics.width;
                     let style = styles.get(col).copied().unwrap_or(DEFAULT_STYLE);
                     let flags = Flags::from_bits_truncate(style.flags);
                     // The cursor is anchored to an absolute `LineId`, so it draws only when its line
@@ -694,26 +715,49 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             // history so it stays out of the way during a live session (FR-016).
             let screen_lines = self.grid.rows() as usize;
             if let Some(sb) = scrollbar_metrics(
-                bounds.height,
+                content.height,
                 screen_lines,
                 self.history_size(),
                 display_offset,
             ) {
                 let fg = self.palette.foreground();
-                let track_x = bounds.x + bounds.width - SCROLLBAR_WIDTH;
+                let track_x = content.x + content.width - SCROLLBAR_WIDTH;
                 frame.fill_rectangle(
-                    iced::Point::new(track_x, bounds.y),
-                    Size::new(SCROLLBAR_WIDTH, bounds.height),
+                    iced::Point::new(track_x, content.y),
+                    Size::new(SCROLLBAR_WIDTH, content.height),
                     Color { a: 0.08, ..fg },
                 );
                 let pad = 2.0;
                 let thumb_w = SCROLLBAR_WIDTH - pad * 2.0;
                 let thumb = Path::rounded_rectangle(
-                    iced::Point::new(track_x + pad, bounds.y + sb.thumb_top),
+                    iced::Point::new(track_x + pad, content.y + sb.thumb_top),
                     Size::new(thumb_w, sb.thumb_height),
                     (thumb_w / 2.0).into(),
                 );
                 frame.fill(&thumb, Color { a: 0.5, ..fg });
+            }
+
+            // The focus indicator (FR-010, FR-010b, BUG-005): the 018 focus ring — `secondary`,
+            // `FOCUS_RING_WIDTH` — filling the gutter `content_bounds` keeps on every side. Drawn
+            // here and only here, so focus changes what is painted and never what is laid out: the
+            // bar below keeps its children (feature 023) and the process keeps its size.
+            if self.focused {
+                let ring = self.palette.accent();
+                let w = FOCUS_RING_WIDTH;
+                for (origin, size) in [
+                    (bounds.position(), Size::new(bounds.width, w)),
+                    (
+                        iced::Point::new(bounds.x, bounds.y + bounds.height - w),
+                        Size::new(bounds.width, w),
+                    ),
+                    (bounds.position(), Size::new(w, bounds.height)),
+                    (
+                        iced::Point::new(bounds.x + bounds.width - w, bounds.y),
+                        Size::new(w, bounds.height),
+                    ),
+                ] {
+                    frame.fill_rectangle(origin, size, ring);
+                }
             }
         }
 
@@ -733,6 +777,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
     ) {
         let state = tree.state.downcast_mut::<PaneState>();
         let bounds = layout.bounds();
+        // Presses anywhere on the pane — its focus gutter included — belong to it; cells and the
+        // scrollbar are located inside the gutter, where `draw` puts them (FR-010b).
+        let content = content_bounds(bounds);
         let metrics = CellMetrics::new(TERM_FONT_SIZE);
 
         // The visible grid size is reported by [`GridSizeReporter`], which wraps the terminal area
@@ -764,12 +811,12 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                     if let Some(pos) = cursor.position() {
                         let over_strip = cursor.is_over(bounds)
-                            && pos.x >= bounds.x + bounds.width - SCROLLBAR_WIDTH;
+                            && pos.x >= content.x + content.width - SCROLLBAR_WIDTH;
                         if over_strip {
                             if let Some(sb) =
-                                scrollbar_metrics(bounds.height, screen_lines, history, offset)
+                                scrollbar_metrics(content.height, screen_lines, history, offset)
                             {
-                                let thumb_y0 = bounds.y + sb.thumb_top;
+                                let thumb_y0 = content.y + sb.thumb_top;
                                 let thumb_y1 = thumb_y0 + sb.thumb_height;
                                 if (thumb_y0..thumb_y1).contains(&pos.y) {
                                     // Grab the thumb; remember where within it we grabbed.
@@ -795,9 +842,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     if state.scrollbar_grab.is_some() =>
                 {
                     let grab_dy = state.scrollbar_grab.unwrap_or(0.0);
-                    let thumb_top = position.y - bounds.y - grab_dy;
+                    let thumb_top = position.y - content.y - grab_dy;
                     let target =
-                        offset_for_thumb_top(bounds.height, screen_lines, history, thumb_top);
+                        offset_for_thumb_top(content.height, screen_lines, history, thumb_top);
                     // Publish an absolute target, not a relative delta: several CursorMoved events
                     // are batched before the app update runs, so relative deltas computed against
                     // the pre-batch offset would accumulate and jump the view (drag flicker).
@@ -831,7 +878,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 }
                 let focused_now = self.focused || grants;
                 let pos = cursor.position().unwrap_or_default();
-                let (col, line) = grid_at(pos, bounds, metrics);
+                let (col, line) = grid_at(pos, content, metrics);
                 let shift = state.modifiers.shift();
                 if press_routing(focused_now, self.mouse_mode(), shift) == PressRouting::MouseReport
                 {
@@ -863,7 +910,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             Event::Mouse(mouse::Event::CursorMoved { position })
                 if state.reporting_button.is_some() =>
             {
-                let (col, line) = grid_at(*position, bounds, metrics);
+                let (col, line) = grid_at(*position, content, metrics);
                 let button = state.reporting_button.unwrap_or(0);
                 if self.mouse_motion_mode() && state.reported_cell != Some((col, line)) {
                     if let Some(seq) = self.mouse_report_bytes(
@@ -887,7 +934,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 let button = state.reporting_button.take().unwrap_or(0);
                 state.reported_cell = None;
                 let pos = cursor.position().unwrap_or_default();
-                let (col, line) = grid_at(pos, bounds, metrics);
+                let (col, line) = grid_at(pos, content, metrics);
                 if let Some(seq) = self.mouse_report_bytes(
                     button,
                     col,
@@ -901,7 +948,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 return;
             }
             Event::Mouse(mouse::Event::CursorMoved { position }) if state.dragging => {
-                let (col, line) = grid_at(*position, bounds, metrics);
+                let (col, line) = grid_at(*position, content, metrics);
                 shell.publish(Message::Session(SessionMsg::TerminalSelectUpdate {
                     col,
                     line,
@@ -929,7 +976,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 let shift = state.modifiers.shift();
                 if self.mouse_mode() && !shift {
                     let (col, line) =
-                        grid_at(cursor.position().unwrap_or_default(), bounds, metrics);
+                        grid_at(cursor.position().unwrap_or_default(), content, metrics);
                     if let Some(seq) =
                         self.mouse_report_bytes(1, col, line, true, to_keymap_mods(state.modifiers))
                     {
@@ -939,7 +986,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     state.reported_cell = Some((col, line));
                 } else if let Some(pasted) = clipboard.read(ClipboardKind::Standard) {
                     shell.publish(Message::Session(SessionMsg::TerminalBytes(
-                        pasted.into_bytes(),
+                        keymap::paste_bytes(&pasted, self.grid.bracketed_paste()),
                     )));
                 }
                 shell.capture_event();
@@ -963,7 +1010,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 let shift = state.modifiers.shift();
                 if press_routing(focused_now, self.mouse_mode(), shift) == PressRouting::MouseReport
                 {
-                    let (col, line) = grid_at(pos, bounds, metrics);
+                    let (col, line) = grid_at(pos, content, metrics);
                     if let Some(seq) =
                         self.mouse_report_bytes(2, col, line, true, to_keymap_mods(state.modifiers))
                     {
@@ -992,7 +1039,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     WheelRouting::MouseReport { button, count } => {
                         let (col, line) = cursor
                             .position()
-                            .map(|p| grid_at(p, bounds, metrics))
+                            .map(|p| grid_at(p, content, metrics))
                             .unwrap_or((0, 0));
                         let km = to_keymap_mods(state.modifiers);
                         for _ in 0..count {
@@ -1052,13 +1099,19 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     shell.capture_event();
                 }
                 KeyRouting::Copy => {
-                    clipboard.write(ClipboardKind::Standard, self.selectable_content());
+                    // Nothing selected, nothing to copy: the chord is still the terminal's, but the
+                    // clipboard keeps whatever the user put there (FR-013c, BUG-004) — the same rule
+                    // the release that ends a drag already follows.
+                    let selected = self.selectable_content();
+                    if !selected.is_empty() {
+                        clipboard.write(ClipboardKind::Standard, selected);
+                    }
                     shell.capture_event();
                 }
                 KeyRouting::Paste => {
                     if let Some(pasted) = clipboard.read(ClipboardKind::Standard) {
                         shell.publish(Message::Session(SessionMsg::TerminalBytes(
-                            pasted.into_bytes(),
+                            keymap::paste_bytes(&pasted, self.grid.bracketed_paste()),
                         )));
                     }
                     shell.capture_event();
@@ -1201,7 +1254,7 @@ mod tests {
 
         /// Poll a future known to be immediately ready — the tiny-skia headless constructor does
         /// no I/O, so one poll suffices and no executor has to be pulled in.
-        fn block_on<F: std::future::Future>(f: F) -> F::Output {
+        pub(super) fn block_on<F: std::future::Future>(f: F) -> F::Output {
             let mut f = Box::pin(f);
             let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
             loop {
@@ -1215,7 +1268,7 @@ mod tests {
         /// `Some("tiny-skia")` is load-bearing: `iced_wgpu`'s `Headless::new` returns `None` on its
         /// first line when the hint is not `"wgpu"`, so the CPU rasteriser is picked without a GPU
         /// ever being probed.
-        fn headless() -> Renderer {
+        pub(super) fn headless() -> Renderer {
             block_on(<Renderer as Headless>::new(
                 iced::Font::DEFAULT,
                 iced::Pixels(16.0),
@@ -1321,6 +1374,460 @@ mod tests {
                     .any(|m| matches!(m, Message::Session(SessionMsg::TerminalFocused))),
                 "a press inside an unfocused pane takes the keyboard (FR-008b): {published:?}"
             );
+        }
+    }
+
+    // --- Copy and paste gestures against a real clipboard (BUG-004, BUG-006) ---
+    //
+    // `clipboard::Null` reads nothing and forgets every write, so the defects both bugs are about —
+    // a write that should not happen, bytes that should have been wrapped — were invisible to the
+    // `presses` apparatus above. This drives the same real `update` through a clipboard that
+    // remembers.
+
+    mod clipboard_gestures {
+        use super::*;
+        use iced::advanced::widget::Tree;
+        use iced::advanced::{layout::Limits, Layout, Shell};
+        use iced::keyboard::key::{NativeCode, Physical};
+        use micold_core::protocol::grid::{
+            GridFrame, StyleRun, WireCursor, WireCursorShape, WireLine,
+        };
+        use micold_core::session::SessionId;
+
+        const WINDOW: Size = Size::new(1200.0, 800.0);
+        const INSIDE: Point = Point::new(400.0, 300.0);
+        /// The text the user copied somewhere else before touching the terminal.
+        const PRIOR: &str = "copied from the browser";
+
+        /// A clipboard that remembers what it holds and every write made to it.
+        struct RecordingClipboard {
+            contents: Option<String>,
+            writes: Vec<String>,
+        }
+
+        impl RecordingClipboard {
+            fn holding(text: &str) -> Self {
+                Self {
+                    contents: Some(text.to_string()),
+                    writes: Vec::new(),
+                }
+            }
+        }
+
+        impl Clipboard for RecordingClipboard {
+            fn read(&self, _kind: ClipboardKind) -> Option<String> {
+                self.contents.clone()
+            }
+
+            fn write(&mut self, _kind: ClipboardKind, contents: String) {
+                self.writes.push(contents.clone());
+                self.contents = Some(contents);
+            }
+        }
+
+        /// A three-row grid whose top line reads `hello world`, with the given terminal mode bits.
+        fn grid(mode: u32) -> GridCache {
+            let text = "hello world";
+            let mut cache = GridCache::default();
+            cache.apply(&GridFrame {
+                session: SessionId::new(),
+                seq: 1,
+                generation: 1,
+                full: true,
+                viewport_top: LineId(0),
+                oldest_available: LineId(0),
+                cols: 20,
+                rows: 3,
+                cursor: WireCursor {
+                    line: LineId(0),
+                    col: 0,
+                    shape: WireCursorShape::Block,
+                    visible: false,
+                    blinking: false,
+                },
+                styles: vec![DEFAULT_STYLE],
+                hyperlinks: Vec::new(),
+                lines: vec![WireLine {
+                    id: LineId(0),
+                    text: text.to_string(),
+                    runs: vec![StyleRun {
+                        len: text.len() as u16,
+                        style: 0,
+                    }],
+                    extras: Vec::new(),
+                    wrapped: false,
+                }],
+                mode,
+                input_serial: None,
+            });
+            cache
+        }
+
+        /// The platform's copy (`"c"`) or paste (`"v"`) chord (FR-013).
+        fn chord(c: &str) -> Event {
+            #[cfg(target_os = "macos")]
+            let modifiers = keyboard::Modifiers::LOGO;
+            #[cfg(not(target_os = "macos"))]
+            let modifiers = keyboard::Modifiers::CTRL | keyboard::Modifiers::SHIFT;
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                key: keyboard::Key::Character(c.into()),
+                modified_key: keyboard::Key::Character(c.to_uppercase().into()),
+                physical_key: Physical::Unidentified(NativeCode::Unidentified),
+                location: keyboard::Location::Standard,
+                modifiers,
+                text: None,
+                repeat: false,
+            })
+        }
+
+        fn middle_click() -> Event {
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle))
+        }
+
+        /// Dispatch `event` into a focused pane over `grid`; return what it published.
+        fn dispatch(
+            grid: &GridCache,
+            selection: Option<&Selection>,
+            event: Event,
+            clipboard: &mut RecordingClipboard,
+        ) -> Vec<Message> {
+            let renderer = super::presses::headless();
+            let mut element: Element<'_, Message> = TerminalPane::new(
+                grid,
+                TermPalette::from_scheme(micold_core::theme::ColorScheme::Dark),
+            )
+            .selection(selection)
+            .focused(true)
+            .into();
+            let mut tree = Tree::new(&element);
+            let node = element.as_widget_mut().layout(
+                &mut tree,
+                &renderer,
+                &Limits::new(Size::ZERO, WINDOW),
+            );
+            let mut messages = Vec::new();
+            let mut shell = Shell::new(&mut messages);
+            element.as_widget_mut().update(
+                &mut tree,
+                &event,
+                Layout::new(&node),
+                mouse::Cursor::Available(INSIDE),
+                &renderer,
+                clipboard,
+                &mut shell,
+                &Rectangle::with_size(WINDOW),
+            );
+            messages
+        }
+
+        fn bytes_sent(published: &[Message]) -> Vec<Vec<u8>> {
+            published
+                .iter()
+                .filter_map(|m| match m {
+                    Message::Session(SessionMsg::TerminalBytes(b)) => Some(b.clone()),
+                    _ => None,
+                })
+                .collect()
+        }
+
+        // BUG-004 (FR-013c).
+
+        #[test]
+        fn a_copy_chord_with_nothing_selected_leaves_the_clipboard_untouched() {
+            let grid = grid(0);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            let published = dispatch(&grid, None, chord("c"), &mut clipboard);
+
+            assert!(
+                clipboard.writes.is_empty(),
+                "a copy with nothing selected wrote {:?} to the clipboard, destroying what the \
+                 user had copied (FR-013c, BUG-004)",
+                clipboard.writes
+            );
+            assert_eq!(clipboard.contents.as_deref(), Some(PRIOR));
+            assert!(
+                bytes_sent(&published).is_empty(),
+                "the copy chord belongs to the terminal, selection or none (FR-013)"
+            );
+        }
+
+        #[test]
+        fn a_copy_chord_with_a_selection_copies_exactly_that_text() {
+            // The complement, so the test above cannot pass by the chord having stopped copying.
+            let grid = grid(0);
+            let selection = Selection::start(
+                crate::selection::Anchor::new(LineId(0), 0),
+                crate::selection::SelectGranularity::Line,
+                |id| grid.line(id).map(|l| l.text.clone()),
+            );
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            dispatch(&grid, Some(&selection), chord("c"), &mut clipboard);
+
+            assert_eq!(clipboard.writes, vec!["hello world".to_string()]);
+        }
+
+        // BUG-006 (FR-013d).
+
+        const BRACKETED_PASTE: u32 = TermMode::BRACKETED_PASTE.bits();
+        const TWO_LINES: &str = "echo AAA\necho BBB\n";
+
+        fn bracketed(text: &str) -> Vec<u8> {
+            [b"\x1b[200~".as_slice(), text.as_bytes(), b"\x1b[201~"].concat()
+        }
+
+        #[test]
+        fn a_paste_chord_into_a_bracketed_paste_process_is_one_bracketed_block() {
+            let grid = grid(BRACKETED_PASTE);
+            let mut clipboard = RecordingClipboard::holding(TWO_LINES);
+
+            let published = dispatch(&grid, None, chord("v"), &mut clipboard);
+
+            assert_eq!(
+                bytes_sent(&published),
+                vec![bracketed(TWO_LINES)],
+                "the process enabled bracketed paste, so the paste must arrive wrapped — raw, \
+                 every embedded newline is an Enter (FR-013d, BUG-006)"
+            );
+        }
+
+        #[test]
+        fn a_middle_click_paste_into_a_bracketed_paste_process_is_one_bracketed_block() {
+            let grid = grid(BRACKETED_PASTE);
+            let mut clipboard = RecordingClipboard::holding(TWO_LINES);
+
+            let published = dispatch(&grid, None, middle_click(), &mut clipboard);
+
+            assert_eq!(bytes_sent(&published), vec![bracketed(TWO_LINES)]);
+        }
+
+        #[test]
+        fn a_pasted_end_marker_cannot_close_the_block_early() {
+            let grid = grid(BRACKETED_PASTE);
+            let mut clipboard = RecordingClipboard::holding("safe\x1b[201~rm -rf ~\n");
+
+            let published = dispatch(&grid, None, chord("v"), &mut clipboard);
+
+            assert_eq!(
+                bytes_sent(&published),
+                vec![bracketed("saferm -rf ~\n")],
+                "an end marker inside the clipboard would end the block and run the rest as \
+                 keystrokes (FR-013d)"
+            );
+        }
+
+        #[test]
+        fn without_bracketed_paste_both_gestures_deliver_the_text_unchanged() {
+            let grid = grid(0);
+            for event in [chord("v"), middle_click()] {
+                let mut clipboard = RecordingClipboard::holding(TWO_LINES);
+                let published = dispatch(&grid, None, event.clone(), &mut clipboard);
+                assert_eq!(
+                    bytes_sent(&published),
+                    vec![TWO_LINES.as_bytes().to_vec()],
+                    "{event:?}: a process that did not ask for bracketing gets the bytes as pasted"
+                );
+            }
+        }
+    }
+
+    // --- The focus indicator (BUG-005, FR-010 / FR-010b) ---
+    //
+    // Layout gates cannot see this — the ring lives only in `draw` — so the pane is rasterised on
+    // the CPU and its pixels read back.
+
+    mod focus_indicator {
+        use super::*;
+        use iced::advanced::renderer::{Headless, Style};
+        use iced::advanced::widget::Tree;
+        use iced::advanced::{layout::Limits, Layout, Shell};
+        use micold_core::protocol::grid::{
+            GridFrame, StyleRun, WireCursor, WireCursorShape, WireLine,
+        };
+        use micold_core::session::SessionId;
+        use micold_core::theme::ColorScheme;
+        use micold_core::tokens;
+
+        const W: u32 = 240;
+        const H: u32 = 120;
+
+        /// The top-left cells painted solid red, so where the character area begins is visible.
+        const RED: WireStyle = WireStyle {
+            fg: WireColor::Named(NamedColor::Foreground as u16),
+            bg: WireColor::Rgb(255, 0, 0),
+            flags: 0,
+            underline_color: None,
+        };
+
+        fn grid() -> GridCache {
+            let mut cache = GridCache::default();
+            cache.apply(&GridFrame {
+                session: SessionId::new(),
+                seq: 1,
+                generation: 1,
+                full: true,
+                viewport_top: LineId(0),
+                oldest_available: LineId(0),
+                cols: 20,
+                rows: 3,
+                cursor: WireCursor {
+                    line: LineId(0),
+                    col: 0,
+                    shape: WireCursorShape::Block,
+                    visible: false,
+                    blinking: false,
+                },
+                styles: vec![RED],
+                hyperlinks: Vec::new(),
+                lines: vec![WireLine {
+                    id: LineId(0),
+                    text: "    ".to_string(),
+                    runs: vec![StyleRun { len: 4, style: 0 }],
+                    extras: Vec::new(),
+                    wrapped: false,
+                }],
+                mode: 0,
+                input_serial: None,
+            });
+            cache
+        }
+
+        /// RGBA of the pane rendered at `W`×`H`, in `scheme`, focused or not.
+        fn render(scheme: ColorScheme, focused: bool) -> Vec<u8> {
+            let mut renderer = super::presses::headless();
+            let grid = grid();
+            let mut element: Element<'_, Message> =
+                TerminalPane::new(&grid, TermPalette::from_scheme(scheme))
+                    .focused(focused)
+                    .into();
+            let size = Size::new(W as f32, H as f32);
+            let mut tree = Tree::new(&element);
+            let node = element.as_widget_mut().layout(
+                &mut tree,
+                &renderer,
+                &Limits::new(Size::ZERO, size),
+            );
+            let viewport = Rectangle::with_size(size);
+            iced::advanced::Renderer::reset(&mut renderer, viewport);
+            element.as_widget().draw(
+                &tree,
+                &mut renderer,
+                &Theme::Dark,
+                &Style::default(),
+                Layout::new(&node),
+                mouse::Cursor::Unavailable,
+                &viewport,
+            );
+            renderer.screenshot(Size::new(W, H), 1.0, Color::BLACK)
+        }
+
+        fn at(pixels: &[u8], x: u32, y: u32) -> [u8; 3] {
+            let i = ((y * W + x) * 4) as usize;
+            [pixels[i], pixels[i + 1], pixels[i + 2]]
+        }
+
+        fn rgb(c: tokens::Rgb) -> [u8; 3] {
+            [c.r, c.g, c.b]
+        }
+
+        fn close(a: [u8; 3], b: [u8; 3]) -> bool {
+            a.iter().zip(b).all(|(x, y)| x.abs_diff(y) <= 2)
+        }
+
+        /// One point on each edge, one pixel in — inside a 3dp ring wherever it is drawn.
+        const EDGES: [(u32, u32); 4] = [(W / 2, 1), (W / 2, H - 2), (W - 2, H / 2), (1, H / 2)];
+
+        #[test]
+        fn a_focused_pane_is_outlined_in_secondary_and_an_unfocused_one_is_not() {
+            for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+                let r = tokens::roles(scheme);
+                let focused = render(scheme, true);
+                let unfocused = render(scheme, false);
+                for (x, y) in EDGES {
+                    assert!(
+                        close(at(&focused, x, y), rgb(r.secondary)),
+                        "{scheme:?}: focused pane at ({x},{y}) is {:?}, not the 018 focus \
+                         indicator's secondary {:?} (FR-010b, BUG-005)",
+                        at(&focused, x, y),
+                        rgb(r.secondary)
+                    );
+                    assert!(
+                        close(at(&unfocused, x, y), rgb(r.surface)),
+                        "{scheme:?}: unfocused pane at ({x},{y}) is {:?}, not the terminal \
+                         background {:?} — the indicator must be absent without focus",
+                        at(&unfocused, x, y),
+                        rgb(r.surface)
+                    );
+                }
+            }
+        }
+
+        #[test]
+        fn the_ring_sits_in_a_gutter_reserved_at_every_focus_state() {
+            // Column 0 starts inside the ring's width whether or not the pane is focused. Drawn over
+            // the cells, the ring would clip the first column; inset only while focused, the
+            // character area — and so the process's size — would change with focus.
+            let inset = tokens::state::FOCUS_RING_WIDTH as u32;
+            for focused in [false, true] {
+                let pixels = render(ColorScheme::Dark, focused);
+                assert!(
+                    !close(at(&pixels, 1, inset + 4), [255, 0, 0]),
+                    "focused={focused}: the first cell's paint reaches the pane's edge, so there \
+                     is no gutter for the focus ring (FR-010b)"
+                );
+                assert!(
+                    close(at(&pixels, inset + 1, inset + 4), [255, 0, 0]),
+                    "focused={focused}: the first cell does not start just inside the gutter"
+                );
+            }
+        }
+
+        #[test]
+        fn the_reported_size_is_the_character_area_inside_the_gutter() {
+            // 100 cells of 7.8px plus 2px of slack: measured edge to edge this is 100 columns, the
+            // last of which would sit under the ring; inside the gutter it is 99.
+            let metrics = CellMetrics::new(TERM_FONT_SIZE);
+            let inset = tokens::state::FOCUS_RING_WIDTH;
+            let size = Size::new(metrics.width * 100.0 + 2.0, metrics.height * 30.0 + 2.0);
+            let renderer = super::presses::headless();
+            let grid = GridCache::default();
+            let mut element: Element<'_, Message> = GridSizeReporter::new(TerminalPane::new(
+                &grid,
+                TermPalette::from_scheme(ColorScheme::Dark),
+            ))
+            .into();
+            let mut tree = Tree::new(&element);
+            let node =
+                element
+                    .as_widget_mut()
+                    .layout(&mut tree, &renderer, &Limits::new(size, size));
+            let mut messages = Vec::new();
+            let mut shell = Shell::new(&mut messages);
+            element.as_widget_mut().update(
+                &mut tree,
+                &Event::Window(iced::window::Event::RedrawRequested(
+                    std::time::Instant::now(),
+                )),
+                Layout::new(&node),
+                mouse::Cursor::Unavailable,
+                &renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(size),
+            );
+            let reported = messages.iter().find_map(|m| match m {
+                Message::Session(SessionMsg::TerminalResized { cols, rows }) => {
+                    Some((*cols, *rows))
+                }
+                _ => None,
+            });
+            assert_eq!(
+                reported,
+                Some(metrics.grid_size(size.width - 2.0 * inset, size.height - 2.0 * inset)),
+                "the process must be sized to the character area inside the focus gutter (FR-010b)"
+            );
+            assert_eq!(reported, Some((99, 29)));
         }
     }
 

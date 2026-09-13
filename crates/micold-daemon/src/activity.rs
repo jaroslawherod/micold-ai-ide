@@ -199,6 +199,41 @@ pub fn copilot_event(line: &str) -> Option<ActivityEvent> {
     }
 }
 
+// ---------------------------------------------------------------------------------------
+// Pi's activity component → the same vocabulary (feature 029, T043 — FR-012c)
+// ---------------------------------------------------------------------------------------
+
+/// Map one line of the log `assets/pi-activity.ts` writes to an [`ActivityEvent`], or `None` to
+/// ignore it.
+///
+/// Pi reports busy/idle only to code loaded into its own process, so this vocabulary is ours: the
+/// component appends `{"type":"<event>","at":"<rfc3339>"}` using Pi's own event names, and this is
+/// the other half of that contract (`contracts/pi-cli.md`). A sibling of [`copilot_event`] rather
+/// than a branch inside it — the two logs share no names, and a shared mapper would let one
+/// provider's vocabulary match the other's lines.
+///
+/// `session_shutdown` carries no reason, so the ending is reported with a neutral one. As with
+/// Copilot, everything unknown — a type Pi added, a non-string `type`, junk — yields `None` and
+/// never ends the tail.
+pub fn pi_event(line: &str) -> Option<ActivityEvent> {
+    let line = line.trim();
+    if line.is_empty() {
+        return None;
+    }
+    let value: serde_json::Value = serde_json::from_str(line).ok()?;
+    match value.get("type")?.as_str()? {
+        "turn_start" => Some(ActivityEvent::Hook(HookKind::UserPromptSubmit)),
+        "agent_start" | "tool_execution_start" => Some(ActivityEvent::Hook(HookKind::PreToolUse)),
+        // The turn continues; mapped so the vocabulary is visibly complete.
+        "tool_execution_end" => Some(ActivityEvent::Hook(HookKind::PostToolUse)),
+        "agent_settled" | "turn_end" => Some(ActivityEvent::Hook(HookKind::Stop)),
+        "session_shutdown" => Some(ActivityEvent::Ended {
+            reason: "session ended".to_string(),
+        }),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

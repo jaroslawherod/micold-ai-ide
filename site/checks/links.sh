@@ -86,6 +86,8 @@ if [ "${#pages[@]}" -eq 0 ]; then
   exit 2
 fi
 
+root="$(cd "$dir" && pwd -P)"
+
 # `--root-dir` is what a root-relative href resolves against: the site's own root, not the
 # filesystem's. Without it `/user-guide/settings.html` is looked for at `/user-guide/settings.html`
 # on this machine, which is nobody's page.
@@ -93,10 +95,31 @@ fi
   --offline \
   --include-fragments \
   --no-progress \
-  --root-dir "$(cd "$dir" && pwd)" \
+  --root-dir "$root" \
   ${exclude[@]+"${exclude[@]}"} \
   -- "${pages[@]}"
 status=$?
+
+# A link that resolves is not yet a link that works: the published site is this directory and
+# nothing beside it. `../../specs/…` from a page under `docs/` finds a real file in the repository,
+# so lychee passes it, and the site serves a 404 in its place -- which is how two such links in
+# `macos-packaging.md` passed every merge and failed a release's publication instead. So every file
+# a page links to must also lie under the checked directory. A reference to something elsewhere in
+# the repository belongs in a code span, or as a link to it on GitHub.
+escapes=0
+for page in "${pages[@]}"; do
+  while IFS= read -r target; do
+    case "$target" in
+      "file://$root" | "file://$root/"* | "file://$root#"*) ;;
+      file://*)
+        printf 'links: %s links outside %s, which is not published: %s\n' \
+          "$page" "$dir" "${target#file://}" >&2
+        escapes=$((escapes + 1))
+        ;;
+    esac
+  done < <("$lychee" --offline --dump --root-dir "$root" -- "$page" 2>/dev/null)
+done
+[ "$escapes" -gt 0 ] && [ "$status" -eq 0 ] && status=1
 
 if [ "$status" -eq 0 ]; then
   printf 'links: %d %s page(s) under %s -- every internal link and fragment resolves\n' \

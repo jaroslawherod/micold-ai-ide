@@ -286,3 +286,34 @@ fn activity_comes_from_the_hook_receiver_and_carries_no_path() {
         ActivitySource::Hooks
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// T005 (feature 029) — a per-launch environment is a seam capability
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn every_provider_answers_what_a_launch_needs_in_the_environment() {
+    // Pi's offline posture (research R9) is three environment variables set per launch. The
+    // daemon builds a session's environment from one shared derivation with no per-provider slot,
+    // so before this method the only way to set them was to ask "is this session Pi?" at spawn —
+    // the conditional on which CLI a session runs that FR-019/FR-020 forbid by name.
+    //
+    // Asking every provider instead costs the two existing ones one honest empty answer each,
+    // which is the assertion below. It is worth writing down rather than leaving implied: an
+    // implementation that returned `claude`'s or Copilot's own variables here would change what
+    // those two CLIs see in their environment, and this feature must not.
+    for which in [AiCli::ClaudeCode, AiCli::Copilot] {
+        assert!(
+            which.provider().launch_env().is_empty(),
+            "{which:?} asks for nothing in the environment and must keep asking for nothing"
+        );
+    }
+}
+
+#[test]
+fn the_launch_environment_is_a_property_of_the_provider_not_of_a_session() {
+    // No session id, no working directory, no mode: the answer is the same for every launch of
+    // this CLI. That is what lets the daemon merge it in one place for all three providers.
+    let port: &dyn AiCliProvider = &ClaudeProvider;
+    assert_eq!(port.launch_env(), Vec::new());
+}

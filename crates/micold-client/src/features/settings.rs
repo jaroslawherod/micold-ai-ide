@@ -285,6 +285,10 @@ pub struct EnvironmentDraft {
     /// governs — "what each session inherits before the agent starts" — and which agent starts is
     /// the first thing in that sentence.
     pub default_ai_cli: AiCli,
+    /// Whether a Pi session is started with this application's activity component loaded
+    /// (feature 029, FR-012e). One application-wide switch — there is no per-project or
+    /// per-session form of it. Holds the value only; the default-on comes from `Settings`.
+    pub pi_activity_component: bool,
 }
 
 /// The Session service section's fields (feature 027, FR-028).
@@ -358,6 +362,8 @@ pub struct ValidSettings {
     pub env_include_timeout_secs: u64,
     /// Environment.
     pub default_ai_cli: AiCli,
+    /// Environment.
+    pub pi_activity_component: bool,
     /// Session service.
     pub daemon: DaemonConfig,
 }
@@ -372,6 +378,7 @@ impl ValidSettings {
             env_include_script_path: self.env_include_script_path,
             env_include_timeout_secs: self.env_include_timeout_secs,
             default_ai_cli: self.default_ai_cli,
+            pi_activity_component: self.pi_activity_component,
             daemon: self.daemon,
         }
     }
@@ -473,6 +480,7 @@ impl SettingsDraft {
             env_include_script_path: self.environment.script_path.clone(),
             env_include_timeout_secs,
             default_ai_cli: self.environment.default_ai_cli,
+            pi_activity_component: self.environment.pi_activity_component,
             daemon: DaemonConfig {
                 placement: self.daemon.placement,
                 sandbox: profile,
@@ -643,6 +651,7 @@ impl SettingsDraft {
                 script_path: settings.env_include_script_path.clone(),
                 timeout_secs: settings.env_include_timeout_secs.to_string(),
                 default_ai_cli: settings.default_ai_cli,
+                pi_activity_component: settings.pi_activity_component,
             },
             daemon: DaemonDraft {
                 placement: settings.daemon.placement,
@@ -757,6 +766,8 @@ pub enum Msg {
     EnvIncludeTimeoutChanged(String),
     /// The Settings **Default AI CLI** select changed (feature 026, FR-003).
     DefaultAiCliChanged(AiCli),
+    /// The Settings **Pi activity component** switch was toggled (feature 029, FR-012e).
+    PiActivityComponentToggled(bool),
     /// Where the session service runs (feature 027, FR-001).
     PlacementChanged(PlacementKind),
     /// Which container runtime drives the sandbox (feature 027, FR-021).
@@ -838,6 +849,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::EnvIncludePathChanged(text) => env_include_path_changed(state, text),
         Msg::EnvIncludeTimeoutChanged(text) => env_include_timeout_changed(state, text),
         Msg::DefaultAiCliChanged(which) => default_ai_cli_changed(state, which),
+        Msg::PiActivityComponentToggled(on) => pi_activity_component_toggled(state, on),
         Msg::PlacementChanged(placement) => placement_changed(state, placement),
         Msg::RuntimeChanged(runtime) => runtime_changed(state, runtime),
         Msg::ImageKindChanged(kind) => image_kind_changed(state, kind),
@@ -960,6 +972,11 @@ pub fn env_include_timeout_changed(state: &mut crate::app::State, text: String) 
 /// Environment: the **Default AI CLI** select changed (feature 026, FR-003).
 pub fn default_ai_cli_changed(state: &mut crate::app::State, which: AiCli) {
     edit(state, |draft| draft.environment.default_ai_cli = which);
+}
+
+/// Environment: the **Pi activity component** switch was toggled (feature 029, FR-012e).
+pub fn pi_activity_component_toggled(state: &mut crate::app::State, on: bool) {
+    edit(state, |draft| draft.environment.pi_activity_component = on);
 }
 
 /// Session service: where sessions run (feature 027, FR-001).

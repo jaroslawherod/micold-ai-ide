@@ -303,6 +303,16 @@ pub enum ClientMsg {
         /// Project path.
         path: PathBuf,
     },
+    /// Record that a project already in the catalog is now the active one, so it is the project
+    /// the next launch restores (002 FR-010/FR-011, BUG-003). Refused as `NotFound` when the path
+    /// is unknown or its folder is unavailable — the catalog never names such a project as last
+    /// active (FR-023).
+    ProjectActivate {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        path: PathBuf,
+    },
     /// Remove a project from the catalog.
     ProjectRemove {
         /// Correlation id.
@@ -493,6 +503,9 @@ pub enum ClientMsg {
         env_include_timeout_secs: Option<u64>,
         /// New default AI CLI, or `None` to leave unchanged (feature 026, FR-003).
         default_ai_cli: Option<AiCli>,
+        /// Load Pi's activity component into new Pi sessions, or `None` to leave unchanged
+        /// (feature 029, FR-012e).
+        pi_activity_component: Option<bool>,
     },
 
     // --- AI CLIs ---
@@ -985,6 +998,9 @@ pub struct DaemonSettings {
     /// so a client-written field is reverted by the next unrelated settings change. That is
     /// already true of `theme`; this preference must not inherit it.
     pub default_ai_cli: AiCli,
+    /// Whether a Pi session is started with this application's activity component loaded
+    /// (feature 029, FR-012e). Service-owned like the default CLI, because the spawn reads it.
+    pub pi_activity_component: bool,
 }
 
 /// The result payload of a successful mutating request.

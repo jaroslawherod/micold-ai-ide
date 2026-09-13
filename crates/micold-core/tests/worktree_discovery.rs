@@ -264,3 +264,99 @@ branch refs/heads/fix/olx
         "and nothing on disk was renamed to make room (FR-028)"
     );
 }
+
+/// 002 BUG-002: a project opened through a symlink. Git records every worktree by its resolved
+/// path, so a root spelled through the link matched none of them and every row came back
+/// `Invalid`. Real git and a real symlink, because the defect is the disagreement between the two.
+#[cfg(unix)]
+mod through_a_symlink {
+    use micold_core::git::GitCli;
+    use micold_core::worktree::{
+        branch_candidates, discover, BlockReason, ProvenanceView, WorktreeStatus,
+    };
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .expect("git runs");
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// `<tmp>/real` holding one worktree under `.claude/worktrees/`, and `<tmp>/link` pointing at
+    /// it. Returns the link and the branch the main checkout is on.
+    fn linked_repo(tmp: &Path) -> (PathBuf, String) {
+        let real = tmp.join("real");
+        std::fs::create_dir_all(&real).unwrap();
+        git(&real, &["init", "-q"]);
+        git(&real, &["config", "user.email", "t@t.test"]);
+        git(&real, &["config", "user.name", "T"]);
+        std::fs::write(real.join("tracked.txt"), "x").unwrap();
+        git(&real, &["add", "."]);
+        git(&real, &["commit", "-qm", "init"]);
+        let main = git(&real, &["branch", "--show-current"]);
+        git(
+            &real,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "feat/x",
+                ".claude/worktrees/feat-x",
+            ],
+        );
+        let link = tmp.join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        (link, main)
+    }
+
+    #[test]
+    fn a_worktree_of_a_project_opened_through_a_symlink_is_valid() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (link, _) = linked_repo(tmp.path());
+
+        let listed = discover(&GitCli::new(), &link, &[]);
+
+        assert_eq!(listed.len(), 1, "one worktree, listed once: {listed:?}");
+        assert_eq!(listed[0].dir_name, "feat-x");
+        assert_eq!(
+            listed[0].status,
+            WorktreeStatus::Valid,
+            "git registers it and its folder is there — a symlinked project path must not make \
+             it an orphan"
+        );
+        assert_eq!(listed[0].branch.as_deref(), Some("feat/x"));
+    }
+
+    #[test]
+    fn a_branch_held_in_a_project_opened_through_a_symlink_names_the_right_holder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (link, main) = linked_repo(tmp.path());
+
+        let candidates =
+            branch_candidates(&GitCli::new(), &link, &[], &ProvenanceView::none()).unwrap();
+        let reason = |name: &str| {
+            candidates
+                .iter()
+                .find(|c| c.name == name)
+                .and_then(|c| c.blocked_by.clone())
+        };
+
+        assert_eq!(reason(&main), Some(BlockReason::CheckedOutInProjectRoot));
+        assert!(
+            matches!(reason("feat/x"), Some(BlockReason::CheckedOutAt { .. })),
+            "the worktree is the app's own, not one outside the app: {:?}",
+            reason("feat/x")
+        );
+    }
+}

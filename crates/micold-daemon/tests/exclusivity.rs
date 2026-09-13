@@ -254,3 +254,241 @@ async fn two_clients_on_two_projects_do_not_interfere() {
         other => panic!("B expected Attached, got {other:?}"),
     }
 }
+
+// -------------------------------------------------------------------------------------------
+// Feature 029, T018 (FR-006a) — one conversation, one session.
+//
+// The tests above are about *project* exclusivity between windows. This is the other exclusivity
+// the daemon owes, at the other granularity: two of the application's own sessions must never run
+// on one AI-CLI conversation.
+//
+// It is written on Pi because Pi is the CLI this feature adds, but nothing in it is Pi-specific,
+// and that is the point worth recording. The application addresses a conversation by its *own*
+// session id — Pi's `--session-id`, `claude`'s `--session-id`, Copilot's directory name — so "a
+// conversation another of my sessions already has running" and "this session is already live" are
+// the same statement, and the registry answers it without a probe or a lock. Research R2 leans on
+// exactly that: Pi takes no lock and leaves no marker, so FR-006b's inferred check is unanswerable
+// and FR-006c's silence applies — but FR-006a is unaffected, because this case is *known*.
+//
+// So what is asserted here is the absence of a second process, not the presence of a sentence.
+// There is no new refusal message to check for: a second open of a live conversation is the
+// idempotent no-op `start_session` already performs, and the session that holds it is the row the
+// user is already looking at. The sentence FR-006a describes belongs to the discovery path (US4),
+// where a conversation the application is already running must not be offered as a new session at
+// all.
+// -------------------------------------------------------------------------------------------
+
+#[cfg(unix)]
+mod one_conversation_one_session {
+    use super::*;
+
+    use std::collections::BTreeMap;
+    use std::path::{Path, PathBuf};
+
+    use micold_core::project::{Availability, Project};
+    use micold_core::session::{
+        AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+    };
+    use micold_core::settings::JsonFileSettingsStore;
+    use micold_core::store::{JsonFileStore, ProjectStore};
+    use micold_core::workspace::Workspace;
+    use uuid::Uuid;
+
+    fn session_id() -> SessionId {
+        SessionId::from_uuid(Uuid::from_u128(0x9_1_0_1_8))
+    }
+
+    /// A `pi` on `PATH` that records every launch and then stays up until its terminal closes.
+    ///
+    /// Staying up is the whole apparatus: the property is "no *second* process", which can only be
+    /// observed while the first one is still running. It blocks on stdin rather than sleeping, so
+    /// closing the PTY ends it — a test that left a timer running would leak a process past its
+    /// own failure. And it records to a file rather than being counted some other way, because a
+    /// second spawn is a fact about the operating system, not about the daemon's bookkeeping.
+    struct PiInstalled {
+        previous_path: Option<std::ffi::OsString>,
+        launches: PathBuf,
+        _bin: tempfile::TempDir,
+    }
+
+    impl PiInstalled {
+        fn new() -> Self {
+            use std::os::unix::fs::PermissionsExt;
+
+            let bin = tempfile::tempdir().unwrap();
+            let launches = bin.path().join("launches");
+            let command = bin.path().join(AiCli::Pi.provider().command());
+            std::fs::write(
+                &command,
+                format!(
+                    "#!/bin/sh\necho \"$@\" >> {}\ncat > /dev/null\n",
+                    launches.display()
+                ),
+            )
+            .unwrap();
+            std::fs::set_permissions(&command, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+            let previous_path = std::env::var_os("PATH");
+            let mut dirs = vec![bin.path().to_path_buf()];
+            dirs.extend(previous_path.iter().flat_map(std::env::split_paths));
+            std::env::set_var("PATH", std::env::join_paths(dirs).unwrap());
+
+            let installed = Self {
+                previous_path,
+                launches,
+                _bin: bin,
+            };
+            assert!(
+                AiCli::Pi.provider().is_available(),
+                "the guard has to actually put {} on `PATH`, or nothing is ever spawned and the \
+                 count below is trivially satisfied",
+                AiCli::Pi.provider().command()
+            );
+            installed
+        }
+
+        /// How many `pi` processes have been started so far.
+        fn launch_count(&self) -> usize {
+            std::fs::read_to_string(&self.launches)
+                .map(|body| body.lines().count())
+                .unwrap_or(0)
+        }
+    }
+
+    impl Drop for PiInstalled {
+        fn drop(&mut self) {
+            match self.previous_path.take() {
+                Some(value) => std::env::set_var("PATH", value),
+                None => std::env::remove_var("PATH"),
+            }
+        }
+    }
+
+    /// A catalog holding one Pi session at the project root.
+    fn catalog_with_pi_session(project_dir: &Path, store_dir: &Path) -> Catalog {
+        let mut sessions = BTreeMap::new();
+        sessions.insert(
+            project_dir.to_path_buf(),
+            vec![Session::restored(
+                session_id(),
+                SessionLocation::Default,
+                SessionLabel::Named("Refactor the parser".into()),
+                TerminalMode::AiCli,
+                AiCli::Pi,
+            )],
+        );
+        let projects_path = store_dir.join("projects.json");
+        JsonFileStore::at(projects_path.clone())
+            .save(&Workspace {
+                projects: vec![Project::new(
+                    project_dir.to_path_buf(),
+                    true,
+                    Availability::Available,
+                )],
+                active: Some(project_dir.to_path_buf()),
+                sessions,
+                worktree_names: BTreeMap::new(),
+                ..Default::default()
+            })
+            .unwrap();
+        Catalog::load(
+            Box::new(JsonFileStore::at(projects_path)),
+            Box::new(JsonFileSettingsStore::at(store_dir.join("settings.json"))),
+        )
+    }
+
+    /// Wait until the session is live, or give up. The start is dispatched to a task, so the reply
+    /// to `SessionStart` does not mean the spawn has landed.
+    async fn wait_for_live(
+        state: &Arc<DaemonState>,
+        id: SessionId,
+    ) -> Arc<micold_daemon::supervisor::PtySession> {
+        for _ in 0..200 {
+            if let Some(pty) = state.live_session(id) {
+                return pty;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+        panic!("the first start never came up, so there is no held conversation to collide with");
+    }
+
+    /// Opening a Pi conversation one of the application's own sessions already holds starts no
+    /// second process, and leaves the first one holding it (FR-006a).
+    #[tokio::test]
+    async fn a_second_open_of_a_held_pi_conversation_starts_nothing() {
+        let pi = PiInstalled::new();
+        let project = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = Arc::new(DaemonState::new(catalog_with_pi_session(
+            project.path(),
+            store.path(),
+        )));
+
+        // Window A opens the conversation.
+        let mut a = connect(&state, "window-A").await;
+        a.send(Frame::Control(ClientMsg::SessionStart {
+            session: session_id(),
+        }))
+        .await
+        .unwrap();
+        let held = wait_for_live(&state, session_id()).await;
+        assert_eq!(
+            pi.launch_count(),
+            1,
+            "exactly one `pi` for one conversation"
+        );
+
+        // Window B asks for the same conversation. It never attaches to the project — the
+        // guarantee is about the conversation, not about who is asking, and a client that was
+        // refused the project could otherwise still reach this.
+        let mut b = connect(&state, "window-B").await;
+        b.send(Frame::Control(ClientMsg::SessionStart {
+            session: session_id(),
+        }))
+        .await
+        .unwrap();
+
+        // Round-trip a keepalive so the second start has certainly been processed; asserting
+        // immediately would pass against a daemon that simply had not got to it yet.
+        b.send(Frame::Control(ClientMsg::Ping { nonce: 18 }))
+            .await
+            .unwrap();
+        loop {
+            match b.next().await.unwrap().unwrap() {
+                Frame::Control(DaemonMsg::Pong { nonce }) => {
+                    assert_eq!(nonce, 18);
+                    break;
+                }
+                _ => continue,
+            }
+        }
+        // The start is dispatched to a task, so give a second spawn every chance to happen before
+        // concluding that it did not.
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+
+        assert_eq!(
+            pi.launch_count(),
+            1,
+            "a second `pi` on one conversation would have both processes appending to the same \
+             transcript, which is the corruption FR-006a exists to prevent"
+        );
+        let still = state
+            .live_session(session_id())
+            .expect("and the conversation is still held");
+        assert!(
+            Arc::ptr_eq(&held, &still),
+            "by the same process: displacing the first would be the other way of running two \
+             sessions on one conversation, with the first one's terminal left orphaned"
+        );
+
+        let rows: usize = state
+            .sessions_for(project.path())
+            .iter()
+            .filter(|s| s.id == session_id())
+            .count();
+        assert_eq!(
+            rows, 1,
+            "and no second session row was invented for a conversation that already has one"
+        );
+    }
+}

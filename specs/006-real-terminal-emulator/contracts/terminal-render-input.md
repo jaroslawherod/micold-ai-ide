@@ -54,8 +54,13 @@ Canvas render over `content.grid.display_iter()`:
   through to the app. (FR-009)
 - **Keyboard** (focused): build `KeyInput` from the iced event; `keymap::encode(input, mode)`:
   - `ReleaseFocus` → publish `Message::TerminalFocusReleased`.
-  - `Copy` → `clipboard.write(term.selectable_content())`.
-  - `Paste` → publish `TerminalAction(Paste(clipboard.read()))`.
+  - `Copy` → `clipboard.write(term.selectable_content())`. *(Bugfix BUG-004: only when that text is
+    non-empty — a copy with nothing selected leaves the clipboard untouched, FR-013c. The chord is
+    captured either way.)*
+  - `Paste` → publish `TerminalAction(Paste(clipboard.read()))`. *(Bugfix BUG-006: the bytes are
+    `keymap::paste_bytes(text, grid.bracketed_paste())` — wrapped in `ESC[200~`…`ESC[201~` with any
+    pasted `ESC[201~` removed when the process enabled bracketed paste, unchanged otherwise. The same
+    helper serves middle-click paste and the context menu's Paste, FR-013d.)*
   - `Bytes(b)` → publish `TerminalAction(Write(b))`.
   - `Ignore` → `Status::Ignored`.
 - **Mouse** (focused, cursor in bounds):

@@ -116,6 +116,39 @@ pub fn run() -> iced::Result {
         .run()
 }
 
+/// Load the known projects and the last-active one, as they stand on disk right now.
+///
+/// A function of its own so the restore can be tested without a window or the user's data
+/// directory (002 BUG-004).
+fn restore_catalog(
+    core: &mut State,
+    store: &dyn micold_core::store::ProjectStore,
+    scanner: &dyn micold_core::fs_scan::FolderScanner,
+) {
+    core.workspace = store.load().workspace;
+    core.workspace.refresh_availability(scanner);
+    // FR-023 binds the restore as much as a click: a last-active project whose folder has gone
+    // since the last run is not opened. It stays known, marked unavailable, and the user is told
+    // which one it was — otherwise the launch lands on an empty state with no explanation
+    // (002 BUG-004).
+    if let Some(gone) = core.workspace.release_unavailable_active() {
+        let name = core
+            .workspace
+            .projects
+            .iter()
+            .find(|p| p.path == gone)
+            .map(|p| p.display_name.clone())
+            .unwrap_or_default();
+        core.notify_error(format!(
+            "Couldn't reopen \"{name}\": its folder {} is unavailable.",
+            gone.display()
+        ));
+    }
+    // Drop any leftover empty sessions so a restart never resumes a nonexistent
+    // conversation (bug fix; see spec Clarifications 2026-07-16).
+    prune_empty_sessions(&mut core.workspace);
+}
+
 fn boot() -> (App, Task<Message>) {
     // The single assembly point (FR-018). Everything below takes what it needs from `caps`.
     //
@@ -137,11 +170,7 @@ fn boot() -> (App, Task<Message>) {
         micold_core::install_location::current(),
     )));
     if let Some(store) = caps.projects() {
-        core.workspace = store.load().workspace;
-        core.workspace.refresh_availability(caps.scanner());
-        // Drop any leftover empty sessions so a restart never resumes a nonexistent
-        // conversation (bug fix; see spec Clarifications 2026-07-16).
-        prune_empty_sessions(&mut core.workspace);
+        restore_catalog(&mut core, store, caps.scanner());
     }
     let mut scrollback_lines = micold_core::settings::DEFAULT_SCROLLBACK_LINES;
     let mut env_include_enabled = micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED;
@@ -163,6 +192,7 @@ fn boot() -> (App, Task<Message>) {
         // is here so the first frame has the user's own default rather than `ClaudeCode` (feature
         // 026, FR-003).
         core.session.default_ai_cli = loaded.default_ai_cli;
+        core.session.pi_activity_component = loaded.pi_activity_component;
     }
     // The availability set is *not* filled here any more (feature 027, FR-023c). It used to be,
     // from this process's own `PATH` — which is the host's, and under the sandboxed placement the
@@ -330,7 +360,64 @@ fn boot() -> (App, Task<Message>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{window_settings, MIN_WINDOW_SIZE};
+    use super::{restore_catalog, window_settings, MIN_WINDOW_SIZE};
+    use micold_client::app::State;
+    use micold_core::fs_scan::FakeFolderScanner;
+    use micold_core::project::{Availability, Project};
+    use micold_core::store::FakeProjectStore;
+    use micold_core::workspace::Workspace;
+    use std::path::PathBuf;
+
+    /// Two known projects, `/gone` the last active.
+    fn last_active_is_gone() -> FakeProjectStore {
+        FakeProjectStore::loaded(Workspace {
+            projects: vec![
+                Project::new(PathBuf::from("/gone"), true, Availability::Available),
+                Project::new(PathBuf::from("/here"), true, Availability::Available),
+            ],
+            active: Some(PathBuf::from("/gone")),
+            ..Default::default()
+        })
+    }
+
+    /// 002 BUG-004: a launch does not open into a project whose folder has gone since the last
+    /// run (FR-023). It lands on the empty state with the project still known, and says why.
+    #[test]
+    fn a_last_active_project_whose_folder_is_gone_is_not_opened_at_launch() {
+        let mut core = State::default();
+        restore_catalog(
+            &mut core,
+            &last_active_is_gone(),
+            &FakeFolderScanner::new().with_missing("/gone"),
+        );
+
+        assert_eq!(core.workspace.active, None, "FR-023: never activate it");
+        assert_eq!(
+            core.workspace.projects.len(),
+            2,
+            "it is still a known project"
+        );
+        let notice = core
+            .notifications
+            .queue
+            .visible()
+            .map(|n| n.message.clone())
+            .unwrap_or_default();
+        assert!(
+            notice.contains("/gone") && notice.contains("unavailable"),
+            "the unavailability is communicated, naming the project and its folder: {notice:?}"
+        );
+    }
+
+    /// …and one that is still there is restored exactly as before.
+    #[test]
+    fn a_last_active_project_that_is_still_there_is_restored() {
+        let mut core = State::default();
+        restore_catalog(&mut core, &last_active_is_gone(), &FakeFolderScanner::new());
+
+        assert_eq!(core.workspace.active, Some(PathBuf::from("/gone")));
+        assert!(core.notifications.queue.visible().is_none());
+    }
 
     /// The window has a narrowest supported size, and it is the one the documentation names.
     ///

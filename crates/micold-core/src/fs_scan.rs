@@ -26,7 +26,7 @@
 
 use crate::project::FolderEntry;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Read-only inspection of a folder: the two questions the workspace asks about a path.
 pub trait FolderScanner {
@@ -101,13 +101,50 @@ impl FolderScanner for StdFolderScanner {
     }
 }
 
+/// `path` with every symbolic link on it resolved — the spelling git itself reports (002 BUG-002).
+///
+/// `git worktree list` prints real paths. A project opened through a symlink (`~/src/foo` →
+/// `/mnt/data/foo`, a symlinked home, `/tmp` on macOS) is spelled differently from everything git
+/// says about it, so a `==` between the two never matches — which is how every worktree of such a
+/// project came to be listed as an orphan. Resolving once, where a path enters, is what lets the
+/// comparisons downstream stay plain equality.
+///
+/// A path that cannot be resolved — gone, unreadable — comes back lexically normalized rather than
+/// as an error: the callers are deciding what to *call* a folder, and a missing folder still needs
+/// a name ([`crate::project::canonicalize_best_effort`]).
+///
+/// On Windows `canonicalize` answers in the verbatim `\\?\C:\…` form, which nothing else in the
+/// application uses; a verbatim *disk* path is given back its ordinary `C:\…` spelling,
+/// and any other verbatim form (a UNC share) falls back to the lexical path instead of leaking it.
+pub fn resolve_path(path: &Path) -> PathBuf {
+    use std::path::{Component, Prefix};
+    let Ok(resolved) = std::fs::canonicalize(path) else {
+        return crate::project::canonicalize_best_effort(path);
+    };
+    let mut components = resolved.components();
+    match components.next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::VerbatimDisk(letter) => {
+                let mut plain =
+                    PathBuf::from(format!("{}:{}", letter as char, std::path::MAIN_SEPARATOR));
+                plain.extend(components.filter(|c| !matches!(c, Component::RootDir)));
+                plain
+            }
+            Prefix::Verbatim(_) | Prefix::VerbatimUNC(..) => {
+                crate::project::canonicalize_best_effort(path)
+            }
+            _ => resolved,
+        },
+        _ => resolved,
+    }
+}
+
 // ---------------------------------------------------------------------------------------
 // In-memory fake for unit tests. Public (not `#[cfg(test)]`) so integration tests in
 // `tests/` can share it, matching `FakeGit` (FR-019). Pure — no filesystem, deterministic.
 // ---------------------------------------------------------------------------------------
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
 use std::sync::Mutex;
 
 /// An in-memory [`FolderScanner`] + [`FolderBrowser`] for tests.

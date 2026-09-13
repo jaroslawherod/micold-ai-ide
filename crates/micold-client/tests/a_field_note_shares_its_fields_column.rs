@@ -40,7 +40,7 @@ const IMAGE_SUPPORTING: &str = "A digest or an exact tag; a moving tag cannot be
 fn settings_showing(section: SettingsSection, source: AvailabilitySource) -> State {
     let mut state = State::default();
     state.session.available_providers = Some(CliAvailability {
-        // Claude Code present, Copilot missing — so there is a notice to look at, and the
+        // Claude Code present, Copilot and Pi missing — so there is a notice to look at, and the
         // select still has an option, which is the ordinary case rather than an empty form.
         available: vec![AiCli::ClaudeCode],
         source,
@@ -95,7 +95,8 @@ fn the_missing_cli_notice_lines_up_with_the_select_it_is_about() {
     ));
 
     let supporting = x_of(&painted, CLI_SUPPORTING);
-    let notice = x_of(&painted, "isn't installed on this computer");
+    // "isn't" or "aren't", depending on how many CLIs are missing; the column is the same.
+    let notice = x_of(&painted, "installed on this computer");
 
     assert!(
         (notice - supporting).abs() <= TOLERANCE,

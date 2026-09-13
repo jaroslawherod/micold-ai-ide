@@ -607,6 +607,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Project(ProjectMsg::Reopened(path)) => {
             shell::workspace::on_known_project_reopened(app, path)
         }
+        Message::Project(ProjectMsg::SwitcherToggled) => shell::workspace::on_switcher_toggled(app),
         Message::Project(ProjectMsg::RenameConfirmed) => {
             shell::daemon_sync::on_rename_confirmed(app)
         }
@@ -1290,6 +1291,7 @@ pub(crate) mod tests {
             env_include_script_path: String::new(),
             env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
             default_ai_cli: AiCli::ClaudeCode,
+            pi_activity_component: true,
         }
     }
 
@@ -2581,6 +2583,7 @@ pub(crate) mod tests {
                 script_path: "/tmp/does-not-exist.sh".into(),
                 timeout_secs: "15".into(),
                 default_ai_cli: AiCli::Copilot,
+                pi_activity_component: true,
             },
             ..SettingsDraft::default()
         });
@@ -2627,6 +2630,7 @@ pub(crate) mod tests {
                 script_path: String::new(),
                 timeout_secs: "15".into(),
                 default_ai_cli: AiCli::ClaudeCode,
+                pi_activity_component: true,
             },
             ..SettingsDraft::default()
         });
@@ -2664,6 +2668,7 @@ pub(crate) mod tests {
                 script_path: String::new(),
                 timeout_secs: "5".into(),
                 default_ai_cli: AiCli::ClaudeCode,
+                pi_activity_component: true,
             },
             daemon: micold_client::features::settings::DaemonDraft {
                 placement: chosen,
@@ -2854,6 +2859,7 @@ pub(crate) mod tests {
                     env_include_enabled: false,
                     env_include_script_path: "/authoritative/from-daemon.sh".into(),
                     env_include_timeout_secs: 30,
+                    pi_activity_component: true,
                 },
             }),
         );
@@ -2883,6 +2889,7 @@ pub(crate) mod tests {
                     env_include_enabled: false,
                     env_include_script_path: "/tmp/after.sh".into(),
                     env_include_timeout_secs: 45,
+                    pi_activity_component: true,
                 },
             })),
         );

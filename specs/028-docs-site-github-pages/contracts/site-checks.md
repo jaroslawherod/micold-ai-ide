@@ -35,6 +35,10 @@ entry has empty `alt`.
 **Reads** `docs/**/*.md`. Runs lychee restricted to internal links and fragments.
 
 **Fails when** a link between documentation pages does not resolve, or a fragment names no heading.
+**Also fails when** a link resolves only outside `docs/` — to `specs/`, say. The file is real, so the
+link resolves in the repository, but the site publishes `docs/` alone and serves a 404 in its place.
+Two such links in `macos-packaging.md` passed every merge and failed the 0.13.1 publication instead.
+The same rule applies to `--built`, against the built directory.
 External links are not fetched — a publication must not fail because someone else's site is down.
 
 **Covers** FR-021.

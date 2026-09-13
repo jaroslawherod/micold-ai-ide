@@ -389,6 +389,40 @@ pub struct WorktreeRecord {
     pub prunable: bool,
 }
 
+/// `git worktree list` records for `repo`, spelled the way `repo` is spelled (002 BUG-002).
+///
+/// Git prints every worktree by its resolved path — symlinks followed. A project the catalog knows
+/// by a symlink (`~/src/foo` → `/mnt/data/foo`) is therefore spelled differently from everything
+/// git says about it, and every `==` downstream — "is this the project checkout", "is this under
+/// `.claude/worktrees`", "is the target directory taken" — misses. The records for the project
+/// checkout and for the managed worktrees root are given back under `repo`'s spelling; anything
+/// else (a worktree the user included from elsewhere) is left exactly as git reported it.
+///
+/// A no-op when `repo` is already resolved, which is every project opened since identity became
+/// the resolved path — this is what keeps older catalog entries, and projects added over the
+/// no-local-git route whose paths the client cannot resolve, classifying correctly.
+fn spelled_under(records: Vec<WorktreeRecord>, repo: &Path) -> Vec<WorktreeRecord> {
+    let resolved = crate::fs_scan::resolve_path(repo);
+    if resolved == repo {
+        return records;
+    }
+    let resolved_root = worktrees_root(&resolved);
+    let root = worktrees_root(repo);
+    records
+        .into_iter()
+        .map(|mut rec| {
+            if rec.path == resolved {
+                rec.path = repo.to_path_buf();
+            } else if rec.path.parent() == Some(resolved_root.as_path()) {
+                if let Some(name) = rec.path.file_name() {
+                    rec.path = root.join(name);
+                }
+            }
+            rec
+        })
+        .collect()
+}
+
 /// Parse `git worktree list --porcelain` output (FR-018). Pure — records are blank-line
 /// separated `worktree <path>` / `branch refs/heads/<name>` / `prunable <reason>` blocks.
 pub fn parse_worktrees(porcelain: &str) -> Vec<WorktreeRecord> {
@@ -913,7 +947,7 @@ pub fn preflight(
     provenance: &ProvenanceView<'_>,
 ) -> io::Result<BranchSituation> {
     let porcelain = git.worktree_list_porcelain(repo)?;
-    let records = parse_worktrees(&porcelain);
+    let records = spelled_under(parse_worktrees(&porcelain), repo);
 
     // 1. Directory first: no branch choice could resolve it (FR-022).
     if target_exists || records.iter().any(|r| r.path == target_path) {
@@ -977,7 +1011,8 @@ pub fn branch_candidates(
 ) -> io::Result<Vec<BranchCandidate>> {
     let refs = git.list_branch_refs(repo)?;
     let porcelain = git.worktree_list_porcelain(repo)?;
-    let held = checked_out_branches(&parse_worktrees(&porcelain), repo, included, provenance);
+    let records = spelled_under(parse_worktrees(&porcelain), repo);
+    let held = checked_out_branches(&records, repo, included, provenance);
 
     let mut candidates = parse_branch_refs(&refs);
     for candidate in &mut candidates {
@@ -1002,7 +1037,7 @@ pub fn branch_candidates(
 /// asked for from one they have never heard of.
 pub fn discover(git: &dyn Git, repo: &Path, included: &[PathBuf]) -> Vec<Worktree> {
     let porcelain = git.worktree_list_porcelain(repo).unwrap_or_default();
-    let records = parse_worktrees(&porcelain);
+    let records = spelled_under(parse_worktrees(&porcelain), repo);
     let root = worktrees_root(repo);
     let on_disk = list_dir_names(&root);
     reconcile(&records, &root, included, &on_disk, &|p| p.exists())

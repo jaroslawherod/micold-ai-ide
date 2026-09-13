@@ -70,6 +70,27 @@ pub enum ActivitySource {
         /// The log to tail.
         path: PathBuf,
     },
+    /// The provider reports busy/idle **only to code loaded into its own process**, so the
+    /// daemon supplies that code at launch and tails the append-only log it writes here
+    /// (`pi` — feature 029, FR-012a).
+    ///
+    /// **This one carries its path, and `Hooks` does not, for a reason worth keeping straight.**
+    /// `Hooks` is payload-free because the daemon *chooses* what it hands the provider: a port
+    /// picked at daemon start and a per-session token, neither of which a pure
+    /// `(config_dir, cwd, id)` derivation in this crate can see. Here the opposite holds — the log
+    /// path is the provider's own arithmetic over exactly those three values, and the daemon is
+    /// told where it is rather than deciding. What the daemon still supplies is the component
+    /// itself and the spawn wiring that points it at this path.
+    ///
+    /// It is a distinct variant rather than a reuse of [`ActivitySource::EventLog`] because the
+    /// difference is work at spawn: `EventLog` means "the provider writes a log we can find", and
+    /// a session whose log nobody was asked to write would be tailed forever with nothing in it.
+    /// Keying that work off `EventLog` would fire it for `copilot` too, and keying it off which
+    /// CLI a session runs is the conditional FR-019/FR-020 forbid.
+    Extension {
+        /// The log the supplied component appends to, and the daemon tails.
+        log: PathBuf,
+    },
     /// This provider reports nothing; the signal stays `Unknown`.
     None,
 }
@@ -116,6 +137,20 @@ pub trait AiCliProvider {
     /// determined — callers treat that as "uncertain", never as "absent".
     fn config_dir(&self) -> Option<PathBuf>;
 
+    /// Environment variables this CLI's launches need, merged into the session's environment by
+    /// the daemon (feature 029, FR-020).
+    ///
+    /// A property of the provider, not of a session: no id, no working directory, no mode, so the
+    /// daemon merges one answer for every launch of that CLI in one place. Most providers need
+    /// nothing and say so by returning an empty vector — which is the point of asking all of them.
+    /// The alternative was a `match` on which CLI a session runs at the spawn site, and a
+    /// conditional on the provider's *name* rather than on its answers is what this seam exists to
+    /// avoid.
+    ///
+    /// It does not replace or override what the user's own environment supplies; it is merged with
+    /// it, and a provider must not use it to reach settings that belong to the user (FR-007).
+    fn launch_env(&self) -> Vec<(String, String)>;
+
     // --- conversation storage ---
 
     /// Every session id this provider has recorded for `cwd` (FR-014).
@@ -161,9 +196,11 @@ impl AiCli {
     pub fn provider(self) -> &'static dyn AiCliProvider {
         static CLAUDE: ClaudeProvider = ClaudeProvider;
         static COPILOT: CopilotProvider = CopilotProvider;
+        static PI: PiProvider = PiProvider;
         match self {
             AiCli::ClaudeCode => &CLAUDE,
             AiCli::Copilot => &COPILOT,
+            AiCli::Pi => &PI,
         }
     }
 }
@@ -343,6 +380,12 @@ impl AiCliProvider for ClaudeProvider {
             }
         }
         directories::UserDirs::new().map(|d| d.home_dir().join(".claude"))
+    }
+
+    fn launch_env(&self) -> Vec<(String, String)> {
+        // Nothing. `claude` is configured by its own files and by the user's environment, and this
+        // application adds neither.
+        Vec::new()
     }
 
     fn recorded_session_ids(&self, config_dir: &Path, cwd: &Path) -> Vec<Uuid> {
@@ -542,6 +585,12 @@ impl AiCliProvider for CopilotProvider {
         directories::UserDirs::new().map(|d| d.home_dir().join(".copilot"))
     }
 
+    fn launch_env(&self) -> Vec<(String, String)> {
+        // Nothing. Copilot's one deliberate restraint — `--no-remote` — is a launch *argument*,
+        // where it is visible in the command line the user can read back.
+        Vec::new()
+    }
+
     fn recorded_session_ids(&self, config_dir: &Path, cwd: &Path) -> Vec<Uuid> {
         // Copilot's per-working-directory index — the same file its own session picker reads, so it
         // is as authoritative as anything on disk. One file read per location, against a scan of
@@ -623,6 +672,318 @@ impl AiCliProvider for CopilotProvider {
 }
 
 // ---------------------------------------------------------------------------------------
+// Pi
+// ---------------------------------------------------------------------------------------
+
+/// The `pi` coding agent (`@earendil-works/pi-coding-agent`). Verified against 0.85.1 (feature
+/// 029, research R1-R12). See `specs/029-pi-cli-provider/contracts/pi-cli.md`.
+///
+/// The third provider, and the first the seam was not designed around — which is the feature's
+/// second purpose. Everything Pi needs that `claude` and `copilot` did not is expressed as an
+/// answer this trait already asks every provider for, except one: activity, which is why
+/// [`ActivitySource::Extension`] exists.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PiProvider;
+
+impl PiProvider {
+    /// Environment variable relocating Pi's whole base directory (documented as "Override the
+    /// config directory"). Empty is treated as absent, matching the other two providers.
+    const CONFIG_DIR_ENV: &'static str = "PI_CODING_AGENT_DIR";
+
+    /// Pi's per-working-directory encoding: the absolute path with its leading separator stripped
+    /// and every `/`, `\` and `:` turned into `-`, wrapped in `--`…`--`. For `/home/u/proj/wt`
+    /// that is `--home-u-proj-wt--`. Pure, no I/O.
+    ///
+    /// The `:` is not decoration — it is what makes a Windows path (`C:\Users\u\proj`) encode to
+    /// something without a drive separator in it. One encoder for all three platforms, which is why
+    /// there is no `cfg` arm anywhere in this provider (Principle VI).
+    fn encoded_cwd(cwd: &Path) -> String {
+        let raw = cwd.to_string_lossy();
+        let trimmed = raw
+            .strip_prefix('/')
+            .or_else(|| raw.strip_prefix('\\'))
+            .unwrap_or(&raw);
+        let body: String = trimmed
+            .chars()
+            .map(|c| {
+                if matches!(c, '/' | '\\' | ':') {
+                    '-'
+                } else {
+                    c
+                }
+            })
+            .collect();
+        format!("--{body}--")
+    }
+
+    /// `<base>/sessions/--<encoded cwd>--/` — every conversation Pi has recorded for `cwd`. Pure,
+    /// no I/O.
+    fn session_dir(&self, config_dir: &Path, cwd: &Path) -> PathBuf {
+        config_dir.join("sessions").join(Self::encoded_cwd(cwd))
+    }
+
+    /// How much of a conversation a label is worth reading (FR-011, SC-006b). A name set at
+    /// startup, and the first user message by definition, sit well inside it; a `/name` hours into
+    /// a long conversation does not, and the row falls back rather than paying for the whole file.
+    const TITLE_BUDGET_BYTES: u64 = 64 * 1024;
+
+    /// A conversation's file in the store: `(session id, path)` for every `<timestamp>_<id>.jsonl`
+    /// in `cwd`'s directory. The id is the part after the *first* underscore — the timestamp Pi
+    /// writes carries `-` separators and no underscore. Nothing is opened: a listing is the cost.
+    fn conversations(&self, config_dir: &Path, cwd: &Path) -> Vec<(String, PathBuf)> {
+        let Ok(entries) = std::fs::read_dir(self.session_dir(config_dir, cwd)) else {
+            return Vec::new();
+        };
+        entries
+            .flatten()
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
+            .filter_map(|entry| {
+                let path = entry.path();
+                if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+                    return None;
+                }
+                let (_timestamp, id) = path.file_stem()?.to_str()?.split_once('_')?;
+                Some((id.to_string(), path))
+            })
+            .collect()
+    }
+
+    /// `<session dir>/<session-id>.archived` — beside the conversation, and filtered out of every
+    /// listing (ours and Pi's) because it is not `.jsonl`.
+    fn archived_marker_path(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> PathBuf {
+        self.session_dir(config_dir, cwd)
+            .join(format!("{session_id}.archived"))
+    }
+
+    /// Resolve a label from a bounded prefix of a conversation: the latest non-empty
+    /// `session_info` name, else the first user message's text. The last line is dropped unless
+    /// the prefix ended on a newline, so a line still being appended is never read half-written.
+    fn parse_title(prefix: &[u8]) -> Option<String> {
+        let complete = &prefix[..prefix.iter().rposition(|byte| *byte == b'\n')?];
+        let mut name = None;
+        let mut first_message = None;
+        for line in complete.split(|byte| *byte == b'\n') {
+            let Ok(entry) = serde_json::from_slice::<serde_json::Value>(line) else {
+                continue;
+            };
+            match entry.get("type").and_then(|kind| kind.as_str()) {
+                Some("session_info") => {
+                    if let Some(named) = entry
+                        .get("name")
+                        .and_then(|value| value.as_str())
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                    {
+                        name = Some(named.to_string());
+                    }
+                }
+                Some("message") if first_message.is_none() => {
+                    let message = entry.get("message");
+                    if message
+                        .and_then(|m| m.get("role"))
+                        .and_then(|role| role.as_str())
+                        != Some("user")
+                    {
+                        continue;
+                    }
+                    first_message = message
+                        .and_then(|m| m.get("content"))
+                        .and_then(Self::message_text);
+                }
+                _ => {}
+            }
+        }
+        name.or(first_message)
+    }
+
+    /// A message's text, whichever of Pi's two content shapes it uses: a bare string, or an array
+    /// of parts of which only `text` parts carry words. Whitespace is collapsed, because a row
+    /// label is one line.
+    fn message_text(content: &serde_json::Value) -> Option<String> {
+        let raw = match content {
+            serde_json::Value::String(text) => text.clone(),
+            serde_json::Value::Array(parts) => parts
+                .iter()
+                .filter(|part| part.get("type").and_then(|kind| kind.as_str()) == Some("text"))
+                .filter_map(|part| part.get("text").and_then(|text| text.as_str()))
+                .collect::<Vec<_>>()
+                .join(" "),
+            _ => return None,
+        };
+        let collapsed = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+        (!collapsed.is_empty()).then_some(collapsed)
+    }
+
+    /// The conversation file for `(cwd, session_id)`, if one is there.
+    ///
+    /// A *listing*, not a path derivation, and that is forced by the layout: the filename is
+    /// `<timestamp>_<session-id>.jsonl` and the timestamp is the creation time, which nobody
+    /// holding the id can reconstruct. So the id is read back out of each name — the part after
+    /// the **first** underscore, which is what keeps Pi's own `-`-separated timestamp form
+    /// unambiguous — and compared.
+    ///
+    /// Best-effort at every step: a missing or unreadable directory yields `None`, never an error.
+    /// One directory listing, no file opened (FR-015).
+    fn conversation_path(
+        &self,
+        config_dir: &Path,
+        cwd: &Path,
+        session_id: Uuid,
+    ) -> Option<PathBuf> {
+        let wanted = session_id.to_string();
+        self.conversations(config_dir, cwd)
+            .into_iter()
+            .find_map(|(id, path)| (id == wanted).then_some(path))
+    }
+}
+
+impl AiCliProvider for PiProvider {
+    fn id(&self) -> AiCli {
+        AiCli::Pi
+    }
+
+    fn display_name(&self) -> &'static str {
+        "Pi Coding Agent"
+    }
+
+    fn command(&self) -> &'static str {
+        "pi"
+    }
+
+    fn is_available(&self) -> bool {
+        // A `PATH` resolution, like the other two: no spawn, no `--version` read, no minimum
+        // version gate (FR-003, FR-003a). What is installed is what the user gets, and a failure
+        // names the version rather than pre-empting it.
+        resolves_on_path(self.command())
+    }
+
+    fn launch_args(&self, session_id: Uuid, _mode: LaunchMode) -> Vec<String> {
+        // **One vector for both modes**, and Pi is the first provider for which that is true.
+        // `--session-id` is documented as "Use exact project session ID, creating it if missing":
+        // Pi looks the id up among the conversations recorded for this cwd, opens it if found, and
+        // otherwise creates one carrying that id. So "start" and "resume" are the same request,
+        // and `mode` genuinely has nothing to say. It stays in the signature because the seam is
+        // shared — `claude` and `copilot` both need it.
+        //
+        // Not passed, each deliberately:
+        //
+        // - `--name` / `-n`: Pi's conversation name is the user's, and is what the sidebar reads
+        //   (FR-005a, FR-011). Writing an identity into it would put a UUID on every row this
+        //   application started.
+        // - `--no-session`: the conversation must persist in Pi's own store, so a bare `pi` can
+        //   resume it outside this application (FR-005a).
+        // - `--session-dir`: relocating the store is exactly what FR-005a forbids.
+        // - `--continue`, `--resume`, `--session`: Pi rejects each in combination with
+        //   `--session-id`, and each addresses a conversation by something other than its id.
+        // - `-p` / `--print`: a non-interactive run, which is not what a session terminal is.
+        //
+        // See `specs/029-pi-cli-provider/contracts/pi-cli.md` §"Launch" and §"Not used".
+        vec!["--session-id".to_string(), session_id.to_string()]
+    }
+
+    fn config_dir(&self) -> Option<PathBuf> {
+        // Home-relative on every platform, Windows included: Pi is a JavaScript bundle with no
+        // per-platform resolver, and its default is `homedir()` joined with `.pi/agent` on all
+        // three. No `%APPDATA%`/`%LOCALAPPDATA%` divergence to encode, so no `cfg` arm
+        // (research R8, Principle VI).
+        //
+        // `PI_CODING_AGENT_SESSION_DIR` also exists and relocates the *session store* independently
+        // of this directory. It is deliberately not consulted: honouring it would mean the
+        // application and the user's own `pi` could disagree about where a conversation lives, and
+        // the store this reads has to be the one `--session-id` writes (contract, §Known
+        // limitations).
+        if let Ok(dir) = std::env::var(Self::CONFIG_DIR_ENV) {
+            if !dir.is_empty() {
+                return Some(PathBuf::from(dir));
+            }
+        }
+        directories::UserDirs::new().map(|d| d.home_dir().join(".pi").join("agent"))
+    }
+
+    fn launch_env(&self) -> Vec<(String, String)> {
+        // Pi's documented startup does three things this application will not do on the user's
+        // behalf: check for an update, ask `pi.dev` for the current version, and report
+        // install/update telemetry. All three are off per launch (research R9, Principle IV) — the
+        // same judgement that made `--no-remote` deliberate for `copilot`, expressed as environment
+        // because that is the control surface Pi offers for it.
+        //
+        // Per-launch, not configuration: nothing in the user's `~/.pi` is touched (FR-007) and
+        // their own `pi` is unaffected. Model traffic is untouched too — that is the user's own
+        // configured provider, and the reason they started the session.
+        vec![
+            ("PI_OFFLINE".to_string(), "1".to_string()),
+            ("PI_SKIP_VERSION_CHECK".to_string(), "1".to_string()),
+            ("PI_TELEMETRY".to_string(), "0".to_string()),
+        ]
+    }
+
+    fn recorded_session_ids(&self, config_dir: &Path, cwd: &Path) -> Vec<Uuid> {
+        // One listing per location, no file opened (FR-015). A conversation Pi started on its own
+        // carries a UUIDv7 and ours a v4; both parse and both are listed. An id a user chose by
+        // hand that is not a UUID cannot become an application session id, so it is skipped
+        // rather than guessed at. Parentage is never read: a fork is listed like any other file.
+        self.conversations(config_dir, cwd)
+            .into_iter()
+            .filter_map(|(id, _path)| id.parse::<Uuid>().ok())
+            .collect()
+    }
+
+    fn has_recorded_conversation(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> bool {
+        // Pi writes the file, header line included, at session *creation* — so unlike `copilot`'s
+        // lazily-created `events.jsonl` there is no "started but never used" window to account for.
+        // Presence of the file is the whole answer (contract, §"Recorded-conversation detection").
+        self.conversation_path(config_dir, cwd, session_id)
+            .is_some()
+    }
+
+    fn read_title(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> Option<String> {
+        // A bounded prefix, not the whole file (contract, §"Session label extraction"). Pi's own
+        // picker streams every line of every conversation; doing that here would make opening a
+        // busy project cost the total bytes of its history, which FR-011's bound exists to refuse.
+        // The name is therefore best-effort by construction, and the first-message fallback exact.
+        use std::io::Read;
+        let path = self.conversation_path(config_dir, cwd, session_id)?;
+        let mut prefix = Vec::new();
+        std::fs::File::open(path)
+            .ok()?
+            .take(Self::TITLE_BUDGET_BYTES)
+            .read_to_end(&mut prefix)
+            .ok()?;
+        Self::parse_title(&prefix)
+    }
+
+    fn mark_archived(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> io::Result<()> {
+        // An empty sentinel beside the conversation — never a deletion or a truncation. The store
+        // is shared with the user's own `pi`, and closing a row here is not permission to remove
+        // their history from it (FR-016).
+        let path = self.archived_marker_path(config_dir, cwd, session_id);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, "")
+    }
+
+    fn is_archived(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> bool {
+        self.archived_marker_path(config_dir, cwd, session_id)
+            .exists()
+    }
+
+    fn activity_source(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> ActivitySource {
+        // Pi reports busy/idle only to code loaded into its own process, so the source names the
+        // log that code writes and the daemon supplies the code at spawn. Beside `sessions/`, never
+        // inside it, so neither our listing nor Pi's can mistake it for a conversation.
+        //
+        // Pure: whether the component is actually loaded (FR-012e) is the daemon's decision at
+        // spawn, and this answers the same either way.
+        ActivitySource::Extension {
+            log: config_dir
+                .join("micold-activity")
+                .join(format!("{session_id}.jsonl")),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------
 // In-memory fake for unit tests. Public (not `#[cfg(test)]`) so integration tests in
 // `tests/` can share it, matching `FakeGit` (FR-019, feature 021 T048). Pure — no process,
 // no conversation record on disk.
@@ -639,7 +1000,7 @@ use std::collections::BTreeMap;
 /// hardcoding one CLI, and asks it with the right id and mode. So the fake answers with a
 /// distinctive command name and logs every `launch_args` call.
 ///
-/// Since feature 026 the trait has **no defaults**, so this type implements all twelve methods.
+/// Since feature 026 the trait has **no defaults**, so this type implements every method on it.
 /// That is deliberate and not merely mechanical: the four it used to inherit
 /// (`has_recorded_conversation`, `read_title`, `mark_archived`, `is_archived`) all reached the real
 /// filesystem, which is the one thing a fake exists to avoid — a fake that inherited them would
@@ -759,6 +1120,10 @@ impl AiCliProvider for FakeAiCliProvider {
 
     fn config_dir(&self) -> Option<PathBuf> {
         self.inner.borrow().config_dir.clone()
+    }
+
+    fn launch_env(&self) -> Vec<(String, String)> {
+        Vec::new()
     }
 
     fn recorded_session_ids(&self, _config_dir: &Path, cwd: &Path) -> Vec<Uuid> {

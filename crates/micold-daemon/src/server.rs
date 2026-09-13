@@ -884,6 +884,7 @@ where
                 env_include_script_path,
                 env_include_timeout_secs,
                 default_ai_cli,
+                pi_activity_component,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),
@@ -905,6 +906,10 @@ where
                 })
                 .and_then(|()| match default_ai_cli {
                     Some(which) => state.set_default_ai_cli(which),
+                    None => Ok(()),
+                })
+                .and_then(|()| match pi_activity_component {
+                    Some(on) => state.set_pi_activity_component(on),
                     None => Ok(()),
                 });
                 match result {
@@ -1603,6 +1608,22 @@ where
                     send_ack(state, id, req);
                 }
                 Err(e) => send_io_error(state, id, req, "failed to add the project", &e),
+            },
+            // No broadcast: a client never takes its active project from the snapshot's
+            // `last_active` — each keeps its own — so nothing any client renders has changed. What
+            // changed is what the next launch restores (002 BUG-003).
+            ClientMsg::ProjectActivate { req, path } => match state.activate_project(&path) {
+                Ok(true) => send_ack(state, id, req),
+                Ok(false) => state.send(
+                    id,
+                    DaemonMsg::OperationError {
+                        req,
+                        kind: ErrorKind::NotFound,
+                        message: "that project is not known or its folder is unavailable".into(),
+                        detail: Some(path.display().to_string()),
+                    },
+                ),
+                Err(e) => send_io_error(state, id, req, "failed to record the active project", &e),
             },
             ClientMsg::ProjectRemove { req, path } => match state.forget_project(&path) {
                 Ok(ptys) => {

@@ -734,6 +734,124 @@ async fn project_add_makes_it_discoverable() {
     );
 }
 
+/// Two known projects persisted to `store_dir`, `active` the last-active one.
+fn catalog_with_two_projects(a: &Path, b: &Path, active: &Path, store_dir: &Path) -> Catalog {
+    let workspace = Workspace {
+        projects: vec![
+            Project::new(a.to_path_buf(), true, Availability::Available),
+            Project::new(b.to_path_buf(), true, Availability::Available),
+        ],
+        active: Some(active.to_path_buf()),
+        ..Default::default()
+    };
+    let projects_path = store_dir.join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&workspace)
+        .unwrap();
+    Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(store_dir.join("settings.json"))),
+    )
+}
+
+/// What `projects.json` in `store_dir` names as the project to restore.
+fn persisted_last_active(store_dir: &Path) -> Option<std::path::PathBuf> {
+    JsonFileStore::at(store_dir.join("projects.json"))
+        .load()
+        .workspace
+        .active
+}
+
+/// 002 BUG-003: reopening a known project reaches the catalog, so the next launch restores the
+/// project the user was last working in rather than the one they last browsed to (FR-010/FR-011).
+#[tokio::test]
+async fn project_activate_records_the_last_active_project() {
+    let a = tempfile::tempdir().unwrap();
+    let b = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_two_projects(
+        a.path(),
+        b.path(),
+        b.path(),
+        store.path(),
+    )));
+    let mut client = connect(&state).await;
+
+    client
+        .send(Frame::Control(ClientMsg::ProjectActivate {
+            req: 12,
+            path: a.path().to_path_buf(),
+        }))
+        .await
+        .unwrap();
+    let reply = expect_control(&mut client, |m| {
+        matches!(
+            m,
+            DaemonMsg::OperationOk { req: 12, .. } | DaemonMsg::OperationError { req: 12, .. }
+        )
+    })
+    .await;
+
+    assert!(
+        matches!(
+            reply,
+            DaemonMsg::OperationOk {
+                result: OperationResult::Ack,
+                ..
+            }
+        ),
+        "got {reply:?}"
+    );
+    assert_eq!(
+        persisted_last_active(store.path()).as_deref(),
+        Some(a.path()),
+        "the project reopened from the list is the one the next launch restores"
+    );
+}
+
+/// …and never one whose folder is gone: the catalog does not come to name an unavailable project as
+/// last active (FR-023, 002 BUG-004).
+#[tokio::test]
+async fn project_activate_refuses_a_project_whose_folder_is_gone() {
+    let a = tempfile::tempdir().unwrap();
+    let b = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let gone = a.path().join("gone");
+    std::fs::create_dir(&gone).unwrap();
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_two_projects(
+        &gone,
+        b.path(),
+        b.path(),
+        store.path(),
+    )));
+    std::fs::remove_dir(&gone).unwrap();
+    let mut client = connect(&state).await;
+
+    client
+        .send(Frame::Control(ClientMsg::ProjectActivate {
+            req: 13,
+            path: gone.clone(),
+        }))
+        .await
+        .unwrap();
+    let reply = expect_control(&mut client, |m| {
+        matches!(
+            m,
+            DaemonMsg::OperationOk { req: 13, .. } | DaemonMsg::OperationError { req: 13, .. }
+        )
+    })
+    .await;
+
+    match reply {
+        DaemonMsg::OperationError { kind, .. } => assert_eq!(kind, ErrorKind::NotFound),
+        other => panic!("expected the activation to be refused, got {other:?}"),
+    }
+    assert_eq!(
+        persisted_last_active(store.path()).as_deref(),
+        Some(b.path())
+    );
+}
+
 #[tokio::test]
 async fn project_rename_rejects_blank_name() {
     let project = tempfile::tempdir().unwrap();

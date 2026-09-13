@@ -94,6 +94,10 @@ Expected: all pass. Key assertions to look for (see `data-model.md` Validation r
   first time these eleven steps and both checks were run. Steps 1–10, the visual/asset check and
   the documentation check pass; **step 11 fails** (`bugs/BUG-001.md`). Evidence and images:
   `evidence/T029-manual-validation.md`.
+- **2026-09-13, Linux, headless** (Xvfb + lavapipe): step 11 only, re-run against the BUG-001 fix.
+  **Passes.** The session shows `failed` with a reason naming the missing folder, and returns to
+  `running` once the folder is restored and restart is pressed. Evidence:
+  `evidence/T033-step11-rerun.md`.
 - **macOS and Windows**: never run.
 
 Two prerequisites the steps above do not state, both learned the hard way:
@@ -103,5 +107,7 @@ Two prerequisites the steps above do not state, both learned the hard way:
   correct restart looks like broken persistence. Send one real message before quitting — and note
   that a `claude` launched from inside another Claude Code session writes no transcript at all
   unless `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1` is in the app's environment.
-- **Step 11 is known to fail** as of the run above. Expect `starting…` forever rather than the
-  failure state the step asks for; do not spend time looking for the error message.
+- **Step 11's failure takes a few seconds to appear.** Before refusing a folder that no longer
+  exists, the daemon can sit waiting for `env_include` resolution in that folder to time out (10 s
+  by default; observed on Linux). Wait for it before judging the step. The expected result is `failed` with "This
+  session's folder no longer exists: …", not `starting…`, which was BUG-001 (fixed 2026-09-13).
