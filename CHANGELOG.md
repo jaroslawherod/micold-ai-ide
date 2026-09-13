@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.13.1](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.13.0...micold-ai-ide-v0.13.1) (2026-09-13)
+
+
+### Bug Fixes
+
+* **028:** record the demonstration worktrees as the application's ([afb08a4](https://github.com/jaroslawherod/micold-ai-ide/commit/afb08a47f8ad6a251ac2d52d0140d4e981233d93))
+
+
+### Build & CI
+
+* bring the jobs main added since onto the same pinned actions ([e045a41](https://github.com/jaroslawherod/micold-ai-ide/commit/e045a417677e7ae8b2ac44f8a82e488c87cee117))
+* move the site's page checks to Node 24, the current LTS ([c4b4c7e](https://github.com/jaroslawherod/micold-ai-ide/commit/c4b4c7e48a48aee6421d01793f15b40699829a5a))
+* pin ci.yml's actions to full commit SHAs ([45046a4](https://github.com/jaroslawherod/micold-ai-ide/commit/45046a4476e729dd7220bb0668a7f1234eac3562))
+* **sandbox:** base the image on Node 24, the current LTS ([2221cfb](https://github.com/jaroslawherod/micold-ai-ide/commit/2221cfba1d6a459fce43b54580946808c9651564))
+* update GitHub Actions to their latest releases ([1df84c1](https://github.com/jaroslawherod/micold-ai-ide/commit/1df84c118e9c391930c7e8f72206223b11e74f26))
+
 ## [0.13.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.12.1...micold-ai-ide-v0.13.0) (2026-09-13)
 
 
