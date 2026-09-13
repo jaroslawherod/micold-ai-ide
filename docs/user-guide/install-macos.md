@@ -169,9 +169,9 @@ survive logout there.
 
 The reason is that macOS ends what your login session was running when that session ends, and there
 is no way for an ordinary application to opt out of that — the mechanisms that exist for it need
-privileges this application does not ask for and would not be right to ask for. On Linux there is an
-unprivileged equivalent (`systemd` user lingering) and the application offers it; on macOS there
-honestly is not one, so it does not pretend otherwise.
+privileges this application does not ask for and would not be right to ask for, so it does not
+pretend otherwise. Nor does it on any other platform: a session service running directly on your
+computer does not outlive a logout on Linux or Windows either.
 
 What that means in practice: log out or restart, and the shells your sessions were running are gone.
 The sessions themselves are not. They come back listed as interrupted, with their history, and one
@@ -180,8 +180,8 @@ click resumes each one.
 If you need more than that, run the session service in a container instead of on the computer — the
 setting is in **Settings › Session service**. The container runtime keeps it going across logout and
 reboot, because the runtime is itself a service the system already keeps running. See
-[the session service guide](../daemon.md#surviving-logout-user-story-7) for what that placement
-changes.
+[the session service guide](../daemon.md#surviving-logout-run-the-service-in-a-container) for
+what that placement changes.
 
 ## Updating to a new version
 
