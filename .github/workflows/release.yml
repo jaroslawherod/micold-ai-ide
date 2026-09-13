@@ -3,7 +3,7 @@ name: release
 # Release automation:
 #  1. release-please watches `main` and opens/maintains a release PR from Conventional Commits,
 #     bumping the Cargo version + Cargo.lock and updating CHANGELOG.md (embedded in the app).
-#  2. When that PR is merged, release-please creates a DRAFT GitHub release + tag; the `deb` job
+#  2. When that PR is merged, release-please creates a DRAFT GitHub release and its tag; the `deb` job
 #     builds a .deb natively on amd64 and arm64 runners and attaches them to the draft (drafts
 #     are mutable, so this works even with immutable releases enabled); the `image` jobs build and
 #     push the sandbox image for the same two architectures; the `publish` job then flips the draft
@@ -42,6 +42,15 @@ name: release
 # only record of it was a commit message. Specifying the list at all means specifying all of it —
 # release-please replaces the defaults rather than merging with them, so every type above is listed
 # explicitly, including the ones that were already hidden.
+#
+# Why `force-tag-creation` is set (same reason): `draft: true` alone creates the release but not its
+# git tag -- GitHub only creates a draft's tag when the draft is published, which here is the
+# `publish` job, minutes later. The same release-please invocation that creates the release then
+# builds the next release PR, looks for the release it just cut by that tag, cannot find it, and
+# walks back 500 commits instead. Merging 0.13.0 and 0.13.1 each opened a release PR that way, listing
+# every commit since the project began (980 and 207 of them) under a minor bump. It stayed wrong
+# until an unrelated push re-ran release-please after `publish`, and merging it in that window would
+# have released the whole history again. Creating the tag with the draft closes the window.
 
 on:
   push:
