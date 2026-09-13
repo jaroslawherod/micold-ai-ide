@@ -17,6 +17,10 @@ holding it and marks the field — press **Cancel**, or Esc, to leave without sa
 
 <!-- media: settings-view-light -->
 
+Everything you save lands in one file on this computer — see [Where settings are
+stored](#where-settings-are-stored) for the path, and for what the app does when that file can't be
+read.
+
 ## Appearance
 
 **Theme** — follow the system, or pin light or dark. Following the system switches with it while
@@ -151,6 +155,66 @@ something is being shared.
 
 ### Sessions
 
-- **Keep sessions running after I sign out** — sessions outlive your sign-out. In a container this
-  is honoured on Linux, macOS and Windows alike; the host-process placement manages it only on
-  Linux.
+- **Keep the service running when I'm signed out or away** — off by default. It answers one
+  question, and changes two things.
+
+  With it **off** (the default), the service stops when you sign out, and it also stops itself after
+  30 continuous minutes with nothing connected. Reopening the application starts a fresh one; a
+  session that was running comes back *resumable* rather than lost. See [when the service stops
+  itself](../daemon.md#it-stops-itself-when-nobody-has-used-it-for-30-minutes).
+
+  With it **on**, and only in a container: the sandbox is created with a restart policy the runtime
+  honours on Linux, macOS and Windows alike, **and** the idle stop does not apply to it — a service
+  you asked to keep running is not one to stop for being unused. Because both are fixed when the
+  container is created, changing this marks the running sandbox as out of date and takes effect the
+  next time it starts. See [keeping the sandbox
+  running](sandboxed-daemon.md#keeping-the-sandbox-running).
+
+  A service running **directly on this computer** cannot honour it on any platform — the app is the
+  only thing that starts one, and nothing it starts outlives the session it was started from. The
+  control says so rather than accepting a choice it cannot keep. Your sessions are still kept and
+  come back resumable; only the running processes inside them stop.
+
+## Where settings are stored
+
+Everything on this page is saved to a single file on your own computer — nothing is sent anywhere:
+
+| Platform | File |
+| --- | --- |
+| Linux | `~/.local/share/micold-ai-ide/settings.json` (or under `$XDG_DATA_HOME`) |
+| macOS | `~/Library/Application Support/micold-ai-ide/settings.json` |
+| Windows | `%APPDATA%\micold-ai-ide\data\settings.json` |
+
+The file survives restarts and package upgrades. You can read it, and you can copy it to another
+machine, but you don't have to edit it by hand — Settings writes every value it holds.
+
+### If your settings can't be read
+
+Two things can go wrong with that file, and the app tells you about both rather than quietly
+starting over. Neither one throws your settings away.
+
+**"Your settings could not be read, so defaults are in use."** — shown when the app starts. The
+file was there but the app couldn't make sense of it, so it opened with the defaults rather than
+refusing to start. If the file was unreadable because its contents were damaged, the message also
+names where the original was kept:
+
+> Your settings could not be read, so defaults are in use. The unreadable file was kept as
+> `…/settings.json.bak`.
+
+That `.bak` file is the damaged original, untouched. Open it in any text editor to read the values
+back out — your container image reference, your startup script path, whatever you'd rather not type
+again — then set them in Settings and press **Save**. Once you save, the app writes a fresh
+`settings.json` and the message stops appearing. If you don't need anything out of the `.bak`,
+you can delete it.
+
+**"Couldn't save your settings: the settings file could not be read, and saving now would replace
+it with defaults."** — shown when you press **Save**. Here the file is still on disk and still
+intact; the app just couldn't read it this time, usually because the file's permissions or its
+folder changed underneath it. Saving would have written the defaults over a perfectly good file, so
+the save is refused instead. Your change is not lost — it's still in the form, and the values on
+disk are still the ones you set earlier.
+
+To clear it: check that the file listed above exists and that your user account can read and write
+it, then press **Save** again. Every settings write — successful or refused — is recorded in the
+log, so a save you can't explain has a line to point at (see [Finding the logs and recent
+errors](../daemon.md#finding-the-logs-and-recent-errors)).

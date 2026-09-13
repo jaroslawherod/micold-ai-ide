@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-07
 
-**Status**: Complete 2026-08-25 — all 65 tasks run, including the four that sat blocked on "eyes at a
+**Status**: Closed 2026-08-25 — all 65 tasks run, including the four that sat blocked on "eyes at a
 display". `gst-launch-1.0 ximagesrc` records the X server at a sustained 60 fps, which turns a
 transition into a frame count and settles §B2 without a person watching: both pickers **grow in**
 and settle (select 14 frames, type-ahead ~5), and a reversal resumes rather than snapping. The one

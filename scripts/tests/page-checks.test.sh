@@ -33,10 +33,10 @@ fail() {
 # alike from the outside.
 node_cmd=(node)
 if ! command -v node >/dev/null 2>&1; then
-  if command -v mise >/dev/null 2>&1 && mise exec node@20 -- node --version >/dev/null 2>&1; then
-    node_cmd=(mise exec node@20 -- node)
+  if command -v mise >/dev/null 2>&1 && mise exec node@24 -- node --version >/dev/null 2>&1; then
+    node_cmd=(mise exec node@24 -- node)
   else
-    printf 'skip  the rendered-page checks (no Node 20)\n'
+    printf 'skip  the rendered-page checks (no Node 24)\n'
     exit 0
   fi
 fi

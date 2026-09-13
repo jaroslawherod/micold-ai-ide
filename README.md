@@ -51,6 +51,7 @@ own build.
 
 The sources are here, and are what a pull request edits — the site is built from them, never the
 other way round: [`docs/README.md`](docs/README.md), including
+[installing on macOS](docs/user-guide/install-macos.md),
 [the session service](docs/daemon.md) and
 [running it in a container](docs/user-guide/sandboxed-daemon.md).
 How the site is built and published: [`docs/development/docs-site.md`](docs/development/docs-site.md).
@@ -61,7 +62,15 @@ Changes: [`CHANGELOG.md`](CHANGELOG.md)
 
 Releases are automated with [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/). Each release publishes Debian
-packages (`.deb`) for `amd64` and `arm64`, and republishes the documentation site above.
+packages (`.deb`) for `amd64` and `arm64`, a macOS disk image
+(`MicoldAIIDE-<version>-universal.dmg`) that runs natively on both Apple silicon and Intel Macs,
+and republishes the documentation site above.
+
+**Downloading the macOS build?** Its first launch is blocked: macOS says it *"could not verify"* the
+application, because the project has no Apple Developer account to sign it with. This is expected.
+Click **Done**, then open **System Settings › Privacy & Security** and click **Open Anyway**. That
+is the whole thing — once, in System Settings, no terminal — and every launch afterwards is silent.
+[Installing on macOS](docs/user-guide/install-macos.md) walks through it.
 
 ## License
 

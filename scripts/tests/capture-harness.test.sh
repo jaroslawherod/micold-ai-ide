@@ -78,8 +78,8 @@ fi
 
 echo
 echo "== the demonstration project =="
-if site/capture/demo-project.sh "$work/demo-a" > "$work/demo.log" 2>&1 \
-  && site/capture/demo-project.sh "$work/demo-b" >> "$work/demo.log" 2>&1; then
+if site/capture/demo-project.sh "$work/demo-a" --state "$work/demo-a-state" > "$work/demo.log" 2>&1 \
+  && site/capture/demo-project.sh "$work/demo-b" --state "$work/demo-b-state" >> "$work/demo.log" 2>&1; then
   pass "demo-project.sh builds a project"
 
   if git -C "$work/demo-a" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -95,6 +95,24 @@ if site/capture/demo-project.sh "$work/demo-a" > "$work/demo.log" 2>&1 \
   else
     fail "commit metadata is fixed" "two runs differ"
   fi
+
+  # Feature 029 lists a worktree under `.claude/worktrees/` only if the application holds a record
+  # of having created it; anything else is presumed an assistant's and hidden. `git worktree add`
+  # leaves no such record, so a demonstration project without one opens to "No worktrees yet" and
+  # every scene that starts a session from a worktree row fails. The record lives in the project's
+  # own state file beside the catalogue, whose name the store derives from the project path -- so
+  # this looks in every one of them rather than guessing which. `--state` above pins where they
+  # are: the display section exports an `XDG_DATA_HOME` of its own, which the script would prefer.
+  state_files="$work/demo-a-state/micold-ai-ide/projects"
+  for wt in feat-AF-114-route-planner fix-AF-121-telemetry-drift docs-AF-118-operations-guide; do
+    if cat "$state_files"/*.json 2>/dev/null |
+      jq -se --arg wt "$wt" 'any(.[]; (.created_worktrees // []) | index($wt))' >/dev/null; then
+      pass "the application holds a record of creating $wt, so the sidebar lists it"
+    else
+      fail "the application holds a record of creating $wt, so the sidebar lists it" \
+        "no created_worktrees entry under $state_files"
+    fi
+  done
 
   # `$HOME` is the giveaway that matters: a screenshot of a window whose title bar or sidebar shows
   # /home/<someone> ships that name to everyone who reads the page.

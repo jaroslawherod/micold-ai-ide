@@ -13,7 +13,7 @@ pub mod catalog;
 pub mod event_log;
 pub mod framer;
 pub mod hooks;
-pub mod lifecycle;
+pub mod idle;
 pub mod logging;
 pub mod platform;
 pub mod progress;

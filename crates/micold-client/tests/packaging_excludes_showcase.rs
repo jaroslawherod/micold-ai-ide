@@ -13,12 +13,30 @@
 //! The rule is a function over its inputs, and two tests drive it against deliberately-broken
 //! manifests. Without those, this file would be a gate nobody had ever seen fail — which is the
 //! failure mode the whole feature exists to remove.
+//!
+//! # The macOS bundle (feature 028, FR-006)
+//!
+//! `scripts/macos-bundle.sh` composes `Contents/MacOS/` from a directory `cargo build` fills, and
+//! that directory holds three binaries: the two that ship and the showcase. So the same
+//! requirement arrives in a second shape, with a second way to get it wrong — a glob. `cp
+//! "$BIN_DIR"/* "$CONTENTS/MacOS/"` is shorter, obviously correct-looking, and ships the showcase
+//! to every macOS user.
+//!
+//! Three rules, for the three ways the bundle can be wrong: it must not name the showcase, it must
+//! name both binaries that ship (a bundle missing `micold-daemon` opens a window and then fails
+//! every session, because `daemon_binary()` looks for a sibling of `current_exe()`), and it must
+//! not glob into `Contents/MacOS/`. The third is the one that cannot be spotted by reading the
+//! produced bundle: a glob over a directory that happens to hold two files looks exactly like an
+//! explicit copy.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 /// The showcase binary's name, as `Cargo.toml` declares it.
 const SHOWCASE_BIN: &str = "micold-showcase";
+
+/// The binaries the macOS bundle ships, and the only ones (contracts/bundle-layout.md).
+const BUNDLED_BINS: &[&str] = &["micold-ai-ide", "micold-daemon"];
 
 fn repo_root() -> PathBuf {
     // tests/ -> crates/micold-client -> crates -> repo root
@@ -35,6 +53,10 @@ fn manifest_path() -> PathBuf {
 
 fn desktop_path() -> PathBuf {
     repo_root().join("packaging/micold-ai-ide.desktop")
+}
+
+fn macos_bundle_path() -> PathBuf {
+    repo_root().join("scripts/macos-bundle.sh")
 }
 
 /// The `[package.metadata.deb] assets` list, verbatim, or `None` when the section is absent.
@@ -102,6 +124,58 @@ fn violations(manifest: &str, desktop: &str, bin: &str) -> Vec<Violation> {
         out.push(Violation(format!(
             "packaging/micold-ai-ide.desktop names `{bin}` — the desktop entry launches the \
              application, never the showcase (FR-018)"
+        )));
+    }
+
+    out
+}
+
+/// Lines of a shell script that are not wholly a comment.
+///
+/// The rules below are about what the script *does*, and this file's own reasoning is written in
+/// that script's comments — so a comment explaining why globbing is forbidden must not read as a
+/// glob.
+fn shell_code(script: &str) -> impl Iterator<Item = &str> {
+    script
+        .lines()
+        .filter(|line| !line.trim_start().starts_with('#'))
+}
+
+/// The macOS half of the same requirement (FR-006).
+fn macos_violations(script: &str, showcase: &str, shipped: &[&str]) -> Vec<Violation> {
+    let mut out = Vec::new();
+
+    if shell_code(script).any(|line| line.contains(showcase)) {
+        out.push(Violation(format!(
+            "scripts/macos-bundle.sh names `{showcase}` outside a comment — the showcase is a \
+             development tool and MUST NOT reach an end user through an installation (FR-006)"
+        )));
+    }
+
+    for bin in shipped {
+        if !shell_code(script).any(|line| line.contains(bin)) {
+            out.push(Violation(format!(
+                "scripts/macos-bundle.sh never names `{bin}`, so it cannot be copying it \
+                 explicitly. `Contents/MacOS/` must hold exactly the shipped binaries: a missing \
+                 `micold-daemon` leaves `daemon_binary()` looking for a sibling that is not there, \
+                 and every session fails to start while the window opens normally"
+            )));
+        }
+    }
+
+    // A glob is how the showcase gets in without anyone naming it. Two shapes reach
+    // `Contents/MacOS/`: a wildcard on the destination side, and one on the source directory the
+    // binaries are copied from.
+    let globs: Vec<_> = shell_code(script)
+        .filter(|line| line.contains('*') && (line.contains("MacOS") || line.contains("BIN_DIR")))
+        .map(str::trim)
+        .collect();
+    if !globs.is_empty() {
+        out.push(Violation(format!(
+            "scripts/macos-bundle.sh copies into `Contents/MacOS/` with a wildcard:\n      {}\n    \
+             `cargo build` puts the showcase in the same directory as the two binaries that ship, \
+             so a glob ships it. The copy list stays explicit, one name at a time (FR-006)",
+            globs.join("\n      "),
         )));
     }
 
@@ -254,6 +328,108 @@ fn both_packaging_artifacts_exist() {
         "{} not found — if packaging moved, this file's paths must move with it, or the exclusion \
          goes unchecked",
         desktop_path().display()
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// The macOS bundle (feature 028)
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn the_macos_bundle_contains_no_showcase() {
+    let script = fs::read_to_string(macos_bundle_path()).expect("read the macOS bundle script");
+
+    let found = macos_violations(&script, SHOWCASE_BIN, BUNDLED_BINS);
+    assert!(
+        found.is_empty(),
+        "the showcase would be bundled, or the bundle would be incomplete (FR-006):\n{}",
+        found
+            .iter()
+            .map(|v| format!("  {}", v.0))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
+/// A script shaped like the real one, reduced to the lines the rules look at.
+const HEALTHY_BUNDLE_SCRIPT: &str = r#"
+BINARIES=("micold-daemon" "micold-ai-ide")
+for bin in "${BINARIES[@]}"; do
+  cp "$BIN_DIR/$bin" "$CONTENTS/MacOS/$bin"
+done
+"#;
+
+#[test]
+fn the_healthy_bundle_script_passes() {
+    assert_eq!(
+        macos_violations(HEALTHY_BUNDLE_SCRIPT, SHOWCASE_BIN, BUNDLED_BINS),
+        vec![]
+    );
+}
+
+#[test]
+fn a_bundle_script_that_names_the_showcase_fails() {
+    let shipping =
+        format!("{HEALTHY_BUNDLE_SCRIPT}cp \"$BIN_DIR/micold-showcase\" \"$CONTENTS/MacOS/\"\n");
+    let found = macos_violations(&shipping, SHOWCASE_BIN, BUNDLED_BINS);
+    assert_eq!(
+        found.len(),
+        1,
+        "expected exactly one violation, got {found:?}"
+    );
+    assert!(
+        found[0].0.contains(SHOWCASE_BIN),
+        "the failure must name the binary: {}",
+        found[0].0
+    );
+}
+
+#[test]
+fn a_bundle_script_that_globs_fails() {
+    let globbing = "cp \"$BIN_DIR\"/* \"$CONTENTS/MacOS/\"\n";
+    let found = macos_violations(globbing, SHOWCASE_BIN, BUNDLED_BINS);
+    // The glob, plus both binaries no longer being named — which is exactly what a glob costs.
+    assert!(
+        found.iter().any(|v| v.0.contains("wildcard")),
+        "a wildcard copy into Contents/MacOS must fail: {found:?}"
+    );
+}
+
+#[test]
+fn a_bundle_script_that_drops_the_daemon_fails() {
+    let partial = "cp \"$BIN_DIR/micold-ai-ide\" \"$CONTENTS/MacOS/micold-ai-ide\"\n";
+    let found = macos_violations(partial, SHOWCASE_BIN, BUNDLED_BINS);
+    assert_eq!(
+        found.len(),
+        1,
+        "expected exactly one violation, got {found:?}"
+    );
+    assert!(
+        found[0].0.contains("micold-daemon"),
+        "the failure must name the missing binary: {}",
+        found[0].0
+    );
+}
+
+/// A comment may explain the glob rule without tripping it — otherwise the only way to document
+/// the reasoning would be to move it out of the file it is about.
+#[test]
+fn a_comment_is_not_a_glob() {
+    let commented =
+        format!("# never: cp \"$BIN_DIR\"/* \"$CONTENTS/MacOS/\"\n{HEALTHY_BUNDLE_SCRIPT}");
+    assert_eq!(
+        macos_violations(&commented, SHOWCASE_BIN, BUNDLED_BINS),
+        vec![]
+    );
+}
+
+#[test]
+fn the_macos_bundle_script_exists() {
+    assert!(
+        macos_bundle_path().is_file(),
+        "{} not found — if packaging moved, this file's paths must move with it, or the exclusion \
+         goes unchecked",
+        macos_bundle_path().display()
     );
 }
 

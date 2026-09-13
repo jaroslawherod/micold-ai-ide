@@ -56,3 +56,66 @@ specs/**      micold-docs
 # exists to catch would be the one edit it never sees. Must stay after `specs/**`, which sets the
 # attribute.
 /specs/027-sandboxed-daemon-runtime/quickstart.md -micold-docs
+
+# Read by a test, for the same reason one file up: feature 028's Part A is a list of *commands*, and
+# `quickstart_a_runs_everywhere.rs` checks that each `mise run` task exists and that each
+# `cargo test` filter selects at least one test. A filter that selects nothing exits 0 and prints
+# `test result: ok`, so a stale line here is a validation step that validates nothing -- and if the
+# file stayed documentation, the edit that introduced it would skip the pipeline. Must stay after
+# `specs/**`, which sets the attribute.
+/specs/028-client-managed-daemon/quickstart.md -micold-docs
+
+# Same reason, feature 028: `crates/micold-core/tests/macos_package_gate.rs` compares §B of this
+# quickstart against the macOS packaging step in `ci.yml`, so the file is a test input rather than
+# prose. Must stay after `specs/**`, which sets the attribute.
+/specs/028-macos-package/quickstart.md -micold-docs
+
+# Read by a test, so a test input rather than documentation: this page states the macOS version
+# floor, and `crates/micold-core/tests/macos_minimum_version.rs` holds it equal to the
+# `LSMinimumSystemVersion` the operating system enforces. If it stayed documentation, moving the
+# floor in the prose would skip the whole pipeline -- so the one edit the gate exists to catch
+# would be the one edit it never sees. Must stay after `docs/**`, which sets the attribute.
+/docs/user-guide/install-macos.md -micold-docs
+
+# Read by a test, so a test input rather than documentation: `docs/daemon.md`, this page and
+# `crates/micold-core/src/logout_survival.rs` are the three places that answer "what happens when I
+# log out?" on macOS, and `crates/micold-core/tests/macos_logout_claims_agree.rs` requires the same
+# sentence in all three (feature 028, FR-032). The user guide above is already carved out for the
+# version floor; this is the same argument for the other page. Must stay after `docs/**`, which
+# sets the attribute.
+/docs/daemon.md -micold-docs
+
+# The download-page trust notice, appended to a release's body before it is published (feature
+# 028, SC-001). It is prose about the download, read only by the `publish` job at release time --
+# nothing in the build, the suite or the package opens it. Listed explicitly because `/*.md`
+# above matches the repository root only.
+/.github/release-notice-macos.md micold-docs
+# What a user can see, and what documents it (Constitution Principle VII).
+#
+# `micold-user-facing` marks the paths whose change a reader of the user guide could notice;
+# `micold-user-guide` marks the prose that documents them. One consumer reads both, through the
+# same `git check-attr` matcher:
+#   - scripts/check-user-guide-updated.sh  (did this change touch a screen without the guide)
+#
+# Pinned by scripts/tests/check-user-guide-updated.test.sh. `set` means yes; both `unset` and
+# `unspecified` mean no, so a path is not user-facing until declared otherwise -- the same default
+# the documentation set above uses, and for the same reason: the rule must fire on the paths
+# somebody thought about, not on everything that happens to be new.
+#
+# The scope is deliberately the client's screens and the behaviours they trigger, not every path a
+# user could eventually feel. A gate that demanded a user-guide edit for a refactor would be
+# labelled away within a week and stop protecting anything; one that fires on the sidebar, the
+# settings pages and the session and worktree flows is one nobody argues with. Widen it when a
+# change slips through, not in anticipation.
+
+crates/micold-client/src/ui/**       micold-user-facing
+crates/micold-client/src/features/** micold-user-facing
+
+# The component library underneath those screens is developer-facing: Principle VII is satisfied
+# for it by docs/development/component-library.md, which feature 020 established (its FR-024).
+# A ripple timing or a token tweak changes pixels without changing anything the guide says. Must
+# stay after `ui/**`, which sets the attribute -- the last matching line wins.
+crates/micold-client/src/ui/material/** -micold-user-facing
+crates/micold-client/src/ui/cdk/**      -micold-user-facing
+
+docs/user-guide/** micold-user-guide

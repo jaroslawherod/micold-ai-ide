@@ -31,7 +31,7 @@ use tokio::sync::mpsc;
 use crate::activity::{Activity, ActivityEvent};
 use crate::catalog::Catalog;
 use crate::framer::Framer;
-use crate::lifecycle::Lifecycle;
+use crate::idle::Presence;
 use crate::supervision::{ExitOutcome, SupervisionAction};
 use crate::supervisor::PtySession;
 
@@ -42,7 +42,16 @@ pub type ClientId = u64;
 pub struct DaemonState {
     inner: Mutex<Inner>,
     next_id: AtomicU64,
-    lifecycle: Lifecycle,
+    /// The connection count the idle rule reads (feature 028, data-model G1).
+    ///
+    /// Its own mutex rather than a field on `Inner`, because it is read on a timer by the idle
+    /// tick and taken on every connect and disconnect, while `Inner` is the lock a multi-minute
+    /// git operation can be holding. Sharing one would make "is anyone connected?" wait on
+    /// whatever the session catalogue is doing.
+    ///
+    /// A mutex rather than the two atomics the retired `Lifecycle` used, because the count and its
+    /// armed deadline have to move together — see [`Presence`].
+    presence: Mutex<Presence>,
     /// The diagnostics handle (log location, runtime level reload, recent-errors ring), set once at
     /// startup by `server::run`. Absent for tests and the ephemeral catalog, which don't init logging.
     diagnostics: std::sync::OnceLock<crate::logging::Logging>,
@@ -266,7 +275,9 @@ impl DaemonState {
                 sizes: HashMap::new(),
             }),
             next_id: AtomicU64::new(1),
-            lifecycle: Lifecycle::new(),
+            // Armed from construction: a daemon spawned by a client that dies before handshaking
+            // must not outlive the machine (G1).
+            presence: Mutex::new(Presence::new(micold_core::clock::now())),
             diagnostics: std::sync::OnceLock::new(),
             hooks: std::sync::OnceLock::new(),
             auth_token: std::sync::OnceLock::new(),
@@ -277,9 +288,12 @@ impl DaemonState {
         self.inner.lock().expect("daemon state mutex poisoned")
     }
 
-    /// The lifecycle counters (FR-002).
-    pub fn lifecycle(&self) -> &Lifecycle {
-        &self.lifecycle
+    /// A snapshot of who is connected, for the idle rule and for tests (data-model G1).
+    ///
+    /// By value, and `Presence` is `Copy`: the rule is a pure function of a snapshot, so handing
+    /// out a reference into the lock would let a caller hold it across an evaluation for no gain.
+    pub fn presence(&self) -> Presence {
+        *self.presence.lock().expect("presence mutex poisoned")
     }
 
     /// Record the diagnostics handle at startup so the `LogLocation`/`RecentErrors`/`SetLogLevel`
@@ -548,7 +562,10 @@ impl DaemonState {
                 viewed: HashMap::new(),
             },
         );
-        self.lifecycle.client_connected();
+        self.presence
+            .lock()
+            .expect("presence mutex poisoned")
+            .client_connected();
         (id, rx)
     }
 
@@ -560,7 +577,10 @@ impl DaemonState {
             inner.clients.remove(&id);
             inner.attachments.retain(|_, att| att.client != id);
         }
-        self.lifecycle.client_disconnected();
+        self.presence
+            .lock()
+            .expect("presence mutex poisoned")
+            .client_disconnected(micold_core::clock::now());
     }
 
     /// Release every attachment `id` holds, without deregistering it (FR-025a, BUG-009, T121).
@@ -1180,6 +1200,47 @@ impl DaemonState {
                     None => false,
                 }
             })
+    }
+
+    /// Phase one of the idle unwind: make every live session durable as `InterruptedResumable`
+    /// (feature 028, data-model G5, lifecycle contract §3.11). Returns how many records changed.
+    ///
+    /// **Runs before [`Self::take_live_sessions`], and that order is the whole point.** The record
+    /// has to be true of a daemon that is already gone, so it reaches disk while the processes it
+    /// describes are still running — a stop interrupted between the two phases then leaves a
+    /// resumable session and an orphaned process tree, which is recoverable, rather than a record
+    /// claiming `Running` with nothing behind it, which is not.
+    ///
+    /// Sessions are *marked*, never resumed (FR-006b/c): the next start presents them as resumable
+    /// and waits for the user to ask.
+    pub fn mark_live_sessions_interrupted(&self) -> usize {
+        let mut inner = self.lock();
+        let ids: Vec<SessionId> = inner.sessions.keys().copied().collect();
+        match inner.catalog.mark_sessions_interrupted(&ids) {
+            Ok(marked) => marked,
+            Err(err) => {
+                // Logged, not propagated. The daemon is stopping either way; failing the unwind
+                // here would skip the process teardown below it and leave the tree orphaned, which
+                // is strictly worse than a stale record the next start will reconcile.
+                tracing::error!(%err, "could not persist sessions as interrupted-resumable");
+                0
+            }
+        }
+    }
+
+    /// Phase two of the idle unwind: drop the live session table, returning how many were dropped.
+    ///
+    /// Dropping is the teardown. Each [`LiveSession`] owns its `PtySession`, whose `Drop`
+    /// terminates the process tree (`supervisor.rs`), so there is no kill loop here and no way for
+    /// one to drift out of step with the normal close path.
+    ///
+    /// Taken out of the lock before being dropped, so the (possibly slow) process teardown does not
+    /// happen with the state lock held.
+    pub fn take_live_sessions(&self) -> usize {
+        let sessions = std::mem::take(&mut self.lock().sessions);
+        let count = sessions.len();
+        drop(sessions);
+        count
     }
 
     /// The (non-archived) session summaries for a project, from durable state. Used to build the
@@ -2039,8 +2100,14 @@ impl DaemonState {
     }
 
     /// The number of currently connected clients (test/observability).
+    ///
+    /// Reads [`Self::presence`] rather than the length of the client table, so that this and the
+    /// idle rule cannot disagree (feature 028, lifecycle contract §2.5: *exactly one* presence
+    /// count). The table's length tracked the same two transitions and so agreed by construction —
+    /// but two things that agree by construction drift the moment one of them grows a third
+    /// mutator, and the drift would show up as a daemon stopping with a window open.
     pub fn client_count(&self) -> usize {
-        self.lock().clients.len()
+        self.presence().connected()
     }
 
     /// Whether `project` currently has an attachment (test/observability).

@@ -273,3 +273,104 @@ fn a_copilot_session_survives_a_daemon_restart_on_the_cli_it_was_started_on() {
          converge on one CLI on the way through the store"
     );
 }
+
+/// T031 [US2] — the service still outlives client exit now that nothing external keeps it alive
+/// (FR-006, lifecycle contract §2.4).
+///
+/// This property is not new: it is feature 010's promise, and it held before because a systemd unit
+/// owned the process. Feature 028 removed that owner, so the property now rests entirely on the
+/// daemon's own structure — the sessions live in `DaemonState`, and a connection ending touches
+/// only the connection. A regression here would be silent in the worst way: sessions would survive
+/// every test that never disconnects a client, and die in front of the user who closes a window.
+///
+/// The other half of §2.4 is asserted alongside it: the last client leaving arms the idle window
+/// rather than stopping anything. Closing the window starts a thirty-minute clock; it does not end
+/// a session, and the session is still there to be reattached long after the client is gone.
+#[tokio::test]
+async fn a_session_outlives_the_client_that_was_connected_when_it_started() {
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use futures_util::{SinkExt, StreamExt};
+    use micold_core::project::{Availability, Project};
+    use micold_core::protocol::codec::{ClientCodec, Frame};
+    use micold_core::protocol::messages::{ClientInstance, ClientMsg, DaemonMsg};
+    use micold_core::protocol::version::{
+        BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
+    };
+    use micold_core::session::AiCli;
+    use micold_core::settings::JsonFileSettingsStore;
+    use micold_core::store::{JsonFileStore, ProjectStore};
+    use micold_core::workspace::Workspace;
+    use micold_daemon::catalog::Catalog;
+    use micold_daemon::state::DaemonState;
+    use tokio_util::codec::Framed;
+
+    let project = PathBuf::from("/repo/alpha");
+    let store = tempfile::tempdir().unwrap();
+    let projects_path = store.path().join("projects.json");
+    JsonFileStore::at(projects_path.clone())
+        .save(&Workspace {
+            projects: vec![Project::new(project.clone(), true, Availability::Available)],
+            active: Some(project.clone()),
+            sessions: BTreeMap::new(),
+            worktree_names: BTreeMap::new(),
+            ..Default::default()
+        })
+        .unwrap();
+    let state = Arc::new(DaemonState::new(Catalog::load(
+        Box::new(JsonFileStore::at(projects_path)),
+        Box::new(JsonFileSettingsStore::at(
+            store.path().join("settings.json"),
+        )),
+    )));
+
+    // A client connects through the real accept path…
+    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
+    tokio::spawn(micold_daemon::server::serve_connection(
+        Arc::clone(&state),
+        server_io,
+    ));
+    let mut client = Framed::new(client_io, ClientCodec::new());
+    client
+        .send(Frame::Control(ClientMsg::Hello {
+            protocol_version: PROTOCOL_VERSION,
+            schema_hash: SCHEMA_HASH,
+            client_build: "client-a".into(),
+            client_instance: ClientInstance::current(),
+            client_package_version: PACKAGE_VERSION.into(),
+            auth_token: None,
+            client_fingerprint: BUILD_FINGERPRINT.into(),
+            require_fingerprint_match: false,
+        }))
+        .await
+        .unwrap();
+    match client.next().await.unwrap().unwrap() {
+        Frame::Control(DaemonMsg::Welcome { .. }) => {}
+        other => panic!("expected Welcome, got {other:?}"),
+    }
+
+    // …and a session exists while it is connected.
+    let session = state
+        .create_session(&project, "feat-x", AiCli::ClaudeCode)
+        .expect("create must succeed");
+    assert!(state.sessions_for(&project).iter().any(|s| s.id == session));
+
+    // The window closes — no goodbye, the way a quit or a crash looks from here.
+    drop(client);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while state.client_count() != 0 && Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert_eq!(state.client_count(), 0, "the client never went away");
+
+    assert!(
+        state.sessions_for(&project).iter().any(|s| s.id == session),
+        "the session died with the client that was connected when it started"
+    );
+    assert!(
+        state.presence().alone_since().is_some(),
+        "the last client leaving must arm the idle window — that is what replaced the unit file"
+    );
+}

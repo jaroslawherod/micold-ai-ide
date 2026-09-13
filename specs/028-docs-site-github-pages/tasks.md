@@ -120,7 +120,7 @@ the published release actually contains.
 - [X] T033 [US1] Add the phone layout to `site/theme/css/site.css`: no horizontal scrolling at 360 px, images fitted to the viewport, the table of contents collapsing to a control (FR-025)
 - [X] T034 [US1] Generate the licences page in `site/stage.sh` from `/LICENSE`, `assets/fonts/LICENSE`, `assets/fonts/LICENSE-Roboto-OFL.txt` and `assets/fonts/PROVENANCE.md`, and add its entry to `docs/SUMMARY.md` (FR-008, FR-031)
 - [X] T035 [US1] Implement `site/checks/page-checks.mjs` with three of its five assertions — axe-core WCAG 2.2 AA over every page in both schemes, the home page's first-viewport facts, and the off-origin scan over `<img>`/`<link>`/`<script>`/`<source>`/CSS `url()` (T024, T025 green)
-- [ ] T036 [US1] Link the site from the repository: add it to the root `README.md`, and set the repository's website field with `gh repo edit --homepage https://jaroslawherod.github.io/micold-ai-ide/` (FR-008a)
+- [X] T036 [US1] Link the site from the repository: add it to the root `README.md`, and set the repository's website field with `gh repo edit --homepage https://jaroslawherod.github.io/micold-ai-ide/` (FR-008a)
 - [X] T037 [US1] Run `site/build.sh` end to end locally and walk quickstart A5 and A7 — the home page's capture is produced, and the media contains no personal path, no real project name and no window but the application's own (FR-013, SC-010)
 
 **Checkpoint**: The site has a front door with a real screenshot of the application on it, in the
@@ -190,7 +190,7 @@ fails on it while the three-platform matrix stays skipped.
 - [X] T060 [US4] Add the three pre-merge checks as **steps inside the existing `docs` job** of `.github/workflows/ci.yml` — `page-set.sh`, `media-references.sh`, `links.sh --sources` — adding no job, so `ci-complete`'s `needs:` and the required `ci complete` check name are untouched (FR-021, FR-022, FR-023, FR-020)
 - [X] T061 [US4] Assert the documentation-only skip survives: `git check-attr micold-docs site/media.toml site/checks/page-set.sh` reports the paths as code, `scripts/tests/documentation-set.test.sh` still passes, and `scripts/classify-change.sh` on a docs-only diff still classifies it as documentation (FR-020, quickstart A1)
 - [X] T062 [US4] Write `docs/development/docs-site.md` — how a publication works, what each check catches, how to trigger a republish, and why the trigger is a reusable workflow rather than a release event — and add its `docs/SUMMARY.md` entry (Principle VII)
-- [ ] T063 [US4] Enable GitHub Pages on the repository with source **GitHub Actions** (a repository setting, outside this change; until the first successful publication the address serves GitHub's own 404, which is the "unpublished" edge case)
+- [X] T063 [US4] Enable GitHub Pages on the repository with source **GitHub Actions** (a repository setting, outside this change; until the first successful publication the address serves GitHub's own 404, which is the "unpublished" edge case)
 - [ ] T064 [US4] Run `pages.yml` via `workflow_dispatch` against an existing tag and confirm the site deploys, then break a check deliberately and confirm the run fails with the previous site still reachable (quickstart A9; FR-017, FR-018, FR-020a)
 
 **Checkpoint**: The site publishes itself on release, republishes on demand, and a documentation
@@ -241,18 +241,19 @@ and no video bytes were requested until a play control was pressed.
 
 ---
 
-## Deferred — needs the upstream repository
+## Deferred — needs the live repository and a reader
 
-Four tasks act on `jaroslawherod/micold-ai-ide` itself rather than on this tree, and this checkout's
-remote is not that repository. They are left unchecked rather than reported as done:
+Two tasks are still open, and a source tree alone cannot complete either one:
 
-- **T036 (second half)** — `gh repo edit --homepage`. The `README.md` half is done; the website
-  field is a repository setting.
-- **T063** — enabling Pages with source **GitHub Actions**. A repository setting, and the
-  prerequisite for everything below it.
-- **T064** — a `workflow_dispatch` publication, and the deliberate failure that proves the previous
-  site stays up. This is quickstart A9, so T081 carries A1–A8 only.
-- **T082** — Part B, the reader's judgement, which is run against the published site.
+- **T064 (second half)** — the deliberate failure that proves the previous site stays up. The first
+  half is done: `pages.yml` run `34681141769` (`workflow_dispatch` on `main`) published the site.
+  The remaining half is quickstart A9, carried forward as T084, so T081 carries A1–A8 only.
+- **T082** — Part B, the reader's judgement, run against the published site. T085 names the pass
+  record it writes.
+
+T036's website field and T063's Pages source were deferred here too, on the belief that this
+checkout's remote was not the upstream repository. It is. Both settings are in place and both tasks
+are ticked.
 
 ---
 
@@ -357,15 +358,10 @@ links, guide captures), one on US4 (checks and workflows). US3 joins once `stage
 - `docs/install.md`'s `docs/SUMMARY.md` entry was written in T027, not T013, and `docs/SUMMARY.md`
   also carries a `[Licences](licences.md)` entry (T034) for a page that exists only in the staging
   tree. `page-set.sh` (T054) has to know that generated page, or it will call it a missing file.
-- T036's second half is not done and cannot be done from here: `gh repo edit --homepage` would set
-  the field on `jaroslawherod/micold-ai-ide`, which is what `origin` points at, while every URL in
-  this feature names `jaroslawherod/micold-ai-ide` — the repository the workspace `Cargo.toml`
-  declares and the one plan.md targets. That repository is not reachable with the credentials here.
-  Whoever administers it runs:
-  `gh repo edit jaroslawherod/micold-ai-ide --homepage https://jaroslawherod.github.io/micold-ai-ide/`
-  If the site is instead published from the fork, the address changes to
-  `https://jaroslawherod.github.io/micold-ai-ide/` and has to be replaced in `site/book.toml`,
-  `site/stage.sh`, `docs/install.md`, `docs/README.md`, `README.md` and the publication workflow.
+- T036's second half was once recorded here as impossible from this checkout, on the belief that
+  `origin` was a fork without access to the upstream repository. `origin` is
+  `jaroslawherod/micold-ai-ide`, the repository every URL in this feature names, and its website
+  field is set to `https://jaroslawherod.github.io/micold-ai-ide/`.
 - T037's walk of quickstart A5/A7 failed on the first run and cost three fixes to the capture
   harness, all of them in the frame rather than in the check: `scene_shot` grabbed the whole root
   window, so every still carried a black margin down two sides (it now crops to the window's own
@@ -377,3 +373,8 @@ links, guide captures), one on US4 (checks and workflows). US3 joins once `stage
   so the window showed "No worktrees yet" where `media.toml`'s alt text promised a worktree sidebar
   (`demo-project.sh` now creates three, named the way `naming.rs` derives them).
 
+## Phase 8: Convergence
+
+- [ ] T084 [US4] Break a check deliberately on a `workflow_dispatch` run of `.github/workflows/pages.yml` and confirm the run fails while the previously published site stays reachable, completing the second half of T064 (quickstart A9) per FR-018, FR-017, FR-020a (missing)
+- [ ] T085 Run [quickstart.md](./quickstart.md) Part B (B1-B5) against <https://jaroslawherod.github.io/micold-ai-ide/> and write the judgement halves of SC-001 and SC-006 into a pass record at `specs/028-docs-site-github-pages/evidence/quickstart-b.md`, matching the evidence convention of `specs/027-sandboxed-daemon-runtime/` and `specs/028-client-managed-daemon/`, so T082's "pass record" names an actual file per FR-023a (missing)
+- [X] T086 Narrow the "Deferred — needs the upstream repository" section of this file to the tasks still genuinely open — T036 and T063 are now `- [X]` and merged, so the section contradicts the checkboxes above it (contradicts)

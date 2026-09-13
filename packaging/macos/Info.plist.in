@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template for `micold-ai-ide.app/Contents/Info.plist`.
+
+  `scripts/macos-bundle.sh` substitutes @VERSION@ with the workspace version read from
+  `cargo metadata`, so the plist, the release tag, and the About dialog cannot disagree
+  (FR-003). An unsubstituted token surviving substitution fails the build rather than shipping.
+
+  Two keys are load-bearing beyond their own value:
+
+  * `CFBundleIdentifier` is what macOS keys permission grants on. Changing it makes every user
+    re-answer every prompt, so it is chosen once and then left alone.
+  * `LSMinimumSystemVersion` is the version floor, enforced by LaunchServices rather than left to
+    the user to check (FR-004). It is recorded here and nowhere else;
+    `crates/micold-core/tests/macos_minimum_version.rs` holds it to the floor stated in
+    `docs/user-guide/install-macos.md`.
+
+  The five `NS*UsageDescription` strings are shown inside the system's own permission prompt.
+  They are written for the person reading the prompt, not for us: each says what the application
+  wants to do and why, in one sentence. `crates/micold-core/tests/macos_permission_strings.rs`
+  holds this list to the `ProtectedLocation` variants the application can classify; a location
+  with no string here produces a message telling the user to grant something macOS never offers.
+
+  `LSUIElement` is deliberately absent: this is a normal windowed application, not an agent.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.cumulocity-iot.micold-ai-ide</string>
+	<key>CFBundleName</key>
+	<string>Micold AI IDE</string>
+	<key>CFBundleDisplayName</key>
+	<string>Micold AI IDE</string>
+	<key>CFBundleExecutable</key>
+	<string>micold-ai-ide</string>
+	<key>CFBundleIconFile</key>
+	<string>icon</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@VERSION@</string>
+	<key>CFBundleVersion</key>
+	<string>@VERSION@</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>15.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Micold AI IDE needs access to your Documents folder to open projects you keep there.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>Micold AI IDE needs access to your Desktop to open projects you keep there.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Micold AI IDE needs access to your Downloads folder to open projects you have just cloned or unpacked.</string>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>Micold AI IDE needs access to removable drives to open projects stored on an external disk or USB drive.</string>
+	<key>NSNetworkVolumesUsageDescription</key>
+	<string>Micold AI IDE needs access to network volumes to open projects stored on a shared or mounted network drive.</string>
+</dict>
+</plist>

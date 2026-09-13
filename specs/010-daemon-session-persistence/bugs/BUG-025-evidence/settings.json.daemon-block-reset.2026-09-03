@@ -1,0 +1,29 @@
+{
+  "daemon": {
+    "placement": "host_process",
+    "sandbox": {
+      "budget": {
+        "cpus_milli": null,
+        "memory_bytes": null,
+        "pids": null,
+        "storage_bytes": null
+      },
+      "credentials": [],
+      "image": {
+        "kind": "registry",
+        "path": null,
+        "reference": "ghcr.io/jaroslawherod/micold-daemon:0.12.1"
+      },
+      "network": "no_outbound",
+      "runtime": "docker",
+      "survive_logout": false
+    }
+  },
+  "default_ai_cli": "Copilot",
+  "env_include_enabled": false,
+  "env_include_script_path": "/tmp/does-not-exist.sh",
+  "env_include_timeout_secs": 15,
+  "scrollback_lines": 20000,
+  "settings_version": 4,
+  "theme": "follow_system"
+}

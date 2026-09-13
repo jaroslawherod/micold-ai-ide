@@ -125,6 +125,17 @@ fn boot() -> (App, Task<Message>) {
     // the placement is known and before anything asks git a question.
     let mut caps = Capabilities::real();
     let mut core = State::default();
+    // Feature 028 (FR-019): before anything else is loaded, where is this executable running from?
+    // Asked here because `current_exe()` is a syscall and this is the boundary; the verdict is a
+    // value from there on, and what to do about it is `features/window.rs`'s decision. First,
+    // because a copy that is going to disappear should not be loading the user's projects into
+    // itself on the way to saying so.
+    //
+    // Through the root rather than by calling the reducer directly: boot is a caller like any
+    // other, and `feature_registration_cost.rs` holds every caller but `app.rs` to that.
+    core.update(Message::Window(WindowMsg::InstallLocationReported(
+        micold_core::install_location::current(),
+    )));
     if let Some(store) = caps.projects() {
         core.workspace = store.load().workspace;
         core.workspace.refresh_availability(caps.scanner());
@@ -137,7 +148,12 @@ fn boot() -> (App, Task<Message>) {
     let mut env_include_script_path = Settings::default().env_include_script_path;
     let mut env_include_timeout_secs = micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS;
     if let Some(store) = caps.settings() {
-        let loaded = store.load().settings;
+        let outcome = store.load();
+        // T158/BUG-025: the one place a settings recovery becomes visible. Every other reader of
+        // this store discarded the status, which is why a corrupted file looked like a fresh
+        // install for eight days.
+        crate::shell::persist::notify_settings_recovery(store, outcome.status, &mut core);
+        let loaded = outcome.settings;
         core.settings.theme_pref = loaded.theme;
         scrollback_lines = loaded.scrollback_lines;
         env_include_enabled = loaded.env_include_enabled;

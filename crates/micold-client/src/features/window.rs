@@ -40,18 +40,23 @@
 //!
 //! # The vocabulary this feature declares
 //!
-//! Two transitions in [`Msg`] — `FieldFocusChanged` and `Resized` — routed by [`update`], which is
-//! pure (data-model.md §1.1 shape A). Both are reports from the windowing system rather than choices,
-//! so neither needs an effect back: the binary matches nothing here a second time.
+//! Three transitions in [`Msg`] — `FieldFocusChanged`, `Resized` and `InstallLocationReported` —
+//! routed by [`update`], which is pure (data-model.md §1.1 shape A). All three are reports rather
+//! than choices, so none needs an effect back: the binary matches nothing here a second time. The
+//! third (feature 028) is a report about the application rather than about the window, and it is
+//! here for the same reason the other two are: it is transient, nobody chose it, and the window is
+//! what it decides.
 //!
 //! The third arm this module was named for, `CursorMoved`, is gone rather than nested; the reason is
 //! the paragraph above about 018 BUG-008.
 //!
 //! # The state this feature remembers (feature 028, contract S1)
 //!
-//! Two fields in [`State`], reached as `state.window`: `window_size`, the last size the windowing
-//! system reported, and `focused_field`, which application field holds the keyboard — `None` when
-//! none does, which is the state a terminal needs before it can take input.
+//! Three fields in [`State`], reached as `state.window`: `window_size`, the last size the windowing
+//! system reported; `focused_field`, which application field holds the keyboard — `None` when
+//! none does, which is the state a terminal needs before it can take input; and `install_location`
+//! (feature 028), where this copy is running from, which decides whether there is a session UI to
+//! show at all.
 //!
 //! Both keep the names they had flat on the root (T030). `window.window_size` stutters and is kept
 //! anyway: `window.size` would read as a geometry accessor on a window handle rather than as the
@@ -61,6 +66,8 @@
 //! `focused_field` is written from more than this feature, which is why
 //! [`Outcome::FieldFocusCleared`](crate::features::Outcome) exists — the session clears it by
 //! reporting rather than by reaching in (T067a-9).
+
+use micold_core::install_location::InstallLocation;
 
 /// What this feature remembers (feature 028, contract S1).
 ///
@@ -76,6 +83,14 @@ pub struct State {
     /// Last known window size in pixels (feature 015), used to clamp a context menu so it cannot
     /// open off-screen. `(0, 0)` means "not reported yet", which disables clamping. Transient.
     pub window_size: (u16, u16),
+    /// Where this copy of the application is running from, answered once at boot (feature 028,
+    /// FR-019).
+    ///
+    /// Transient like the other two, and reported rather than chosen — which is what puts it in
+    /// this feature: `current_exe()` is the windowing system's question turned on the application
+    /// itself. Defaults to [`InstallLocation::Installed`], the answer that lets the application
+    /// start, so a state built before anyone asked is not a state that refuses to run.
+    pub install_location: InstallLocation,
 }
 
 /// Which text field holds the keyboard, when one does (BUG-003).
@@ -151,6 +166,15 @@ pub enum Msg {
         /// The window's new height, in logical pixels.
         height: u16,
     },
+    /// Where the executable was found, answered once at boot (feature 028, FR-019).
+    ///
+    /// Sent by the binary rather than by a gesture: `current_exe()` is a syscall, so the question
+    /// belongs at the I/O boundary and the verdict is a value from there on. It arrives as a
+    /// message like every other report because the root is the only thing that drives a feature --
+    /// a second driver is a second place that has to learn about every feature added after it.
+    ///
+    /// There is no variant that clears it. See [`install_location_reported`].
+    InstallLocationReported(InstallLocation),
 }
 
 /// This feature's whole reducer surface: one entry point, shape A (contract M2).
@@ -160,6 +184,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
     match msg {
         Msg::FieldFocusChanged(field, focused) => field_focus_changed(state, field, focused),
         Msg::Resized { width, height } => resized(state, width, height),
+        Msg::InstallLocationReported(location) => install_location_reported(state, location),
     }
     Vec::new()
 }
@@ -193,7 +218,33 @@ pub fn resized(state: &mut crate::app::State, width: u16, height: u16) {
     state.window.window_size = (width, height);
 }
 
+/// Where this executable is running from, as the boot path found it (feature 028, FR-019).
+///
+/// The syscall (`current_exe()`) stays at the shell boundary and the verdict arrives here as a
+/// value, which is what lets this be a reducer: the interesting behaviour is not reading the path
+/// but what the window is then allowed to show, and that is decided here and tested without a
+/// window.
+///
+/// Written once, at boot. There is no message that clears it and no gesture that dismisses the
+/// screen it produces -- see [`crate::app::State::install_blocked`].
+pub fn install_location_reported(state: &mut crate::app::State, location: InstallLocation) {
+    state.window.install_location = location;
+}
+
 impl crate::app::State {
+    /// Whether the application must show the install-me screen instead of the session UI.
+    ///
+    /// The whole of FR-019's "MUST NOT run in a way that looks installed" is this one question,
+    /// asked in one place. A copy running from a mounted image or a translocated path is going to
+    /// disappear, taking whatever was done in it; a warning the user can dismiss is a warning the
+    /// user learns to dismiss, so there is no message that turns this off.
+    ///
+    /// On the root rather than on [`State`] for the reason `clear_for_dialog` is: every caller
+    /// holds the root, and `state.install_blocked()` is the question they are asking.
+    pub fn install_blocked(&self) -> bool {
+        !self.window.install_location.is_installed()
+    }
+
     /// Callers must invoke it **before** setting up the dialog they are opening — otherwise it
     /// closes the one they just prepared. The eight call sites that did it the other way round
     /// were reordered at T037.

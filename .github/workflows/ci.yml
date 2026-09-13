@@ -29,7 +29,7 @@ jobs:
       docs_only: ${{ steps.verdict.outputs.docs_only }}
       reason: ${{ steps.verdict.outputs.reason }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # the classification is against the merge base, not the last commit
       - name: Classify
@@ -92,11 +92,11 @@ jobs:
     if: needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: rustfmt
         run: cargo fmt --all -- --check
       # FR-040: the render-free core must lint clean on its own (no iced/PTY in scope).
@@ -128,9 +128,9 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Install iced system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -161,6 +161,70 @@ jobs:
       # Ensure the full workspace (client GUI binary + daemon) compiles on every platform.
       - name: Build (workspace)
         run: cargo build --workspace
+      # Feature 028 (FR-036): the packaging gate. The bundle is composed from the binaries the
+      # step above just produced -- no second checkout, no second compile -- signed ad-hoc, and
+      # then actually launched. Composition alone would not catch the failure that matters: the
+      # client resolves the daemon as a *sibling of `current_exe()`*, so a bundle that puts the two
+      # binaries anywhere but together looks perfectly healthy and can never start a session. The
+      # endpoint appearing is that constraint asserting itself.
+      #
+      # This lives in the `test` job rather than a job of its own so that `ci-complete` (and
+      # `ci_gate_covers_every_job.rs`) need no edit; see research R12. `specs/028-macos-package/
+      # quickstart.md` §B states what it does, and `micold-core/tests/macos_package_gate.rs` holds
+      # the two descriptions together.
+      #
+      # Carried risk, research R12 contingency (b): whether a GitHub runner can give iced a drawing
+      # surface at all. A window-surface failure says nothing about packaging -- the bundle loaded,
+      # dyld resolved, the plist parsed -- so it is reported and treated as a pass. Every other way
+      # of dying still fails, which keeps the escape hatch narrow: a missing library, a rejected
+      # signature and a bundle whose daemon is not beside its client all look nothing like it.
+      - name: Package and launch the macOS bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          scripts/macos-bundle.sh --bin-dir target/debug --out target/macos
+
+          app="target/macos/micold-ai-ide.app"
+          log="$RUNNER_TEMP/launch.log"
+          sock="$HOME/.micold/run/d.sock"
+
+          "$app/Contents/MacOS/micold-ai-ide" > "$log" 2>&1 &
+          pid=$!
+
+          # Whichever comes first: the endpoint appears, or the process is gone. Twenty seconds is
+          # for a cold runner spawning a daemon, not for a hang -- a healthy launch takes one.
+          for _ in $(seq 1 20); do
+            [ -S "$sock" ] && break
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+          done
+
+          if kill -0 "$pid" 2>/dev/null && [ -S "$sock" ]; then
+            echo "Bundle launched; daemon endpoint $sock appeared."
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            exit 0
+          fi
+
+          echo "--- launch log ---"
+          cat "$log" || true
+          echo "------------------"
+
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+
+          # Research R12 contingency (b). Matched against the log rather than the exit status,
+          # because iced reports a surface failure and a missing library through the same code.
+          if grep -Eqi "GraphicsCreationFailed|no suitable graphics adapter|surface|wgpu|NoAvailablePixelFormat" "$log"; then
+            echo "The runner could not give iced a drawing surface. Treating as a pass: the"
+            echo "bundle loaded and the executable ran, which is what this step packages-tests."
+            exit 0
+          fi
+
+          echo "The bundled application did not start, and not for want of a drawing surface."
+          exit 1
       # Feature 020's gates, the 017 gates it widened, BUG-001's, feature 021's architecture guards,
       # and feature 027's two client-side §A gates. These read source text, one `const` slice and a
       # reducer — they open no window — so they run wherever the crate compiles, and this step is the authoritative list of them. Path
@@ -245,9 +309,9 @@ jobs:
     if: needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Runtime version
         run: docker version --format '{{.Server.Version}}' && docker info --format '{{.Driver}}'
       # Every test behind `sandbox-real-runtime` starts from `micold-daemon:dev`, the image a
@@ -336,7 +400,7 @@ jobs:
     if: needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # needs history to diff against the base ref
       # The gate's own cases, before the gate runs. They existed and nothing ran them, which is how
@@ -361,7 +425,9 @@ jobs:
     name: docs check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the user-guide gate below compares against the merge base
       - name: Required user-guide docs exist
         run: |
           test -f docs/user-guide/help-about.md
@@ -371,6 +437,7 @@ jobs:
           test -f docs/user-guide/sandboxed-daemon.md
           test -f docs/user-guide/worktrees-and-sessions.md
           test -f docs/user-guide/icons.md
+          test -f docs/user-guide/install-macos.md
       # Principle VII for a developer-facing capability: feature 020's showcase is documented for
       # developers rather than in the user guide (its FR-024), and the doc ships in the same change.
       - name: Required developer docs exist
@@ -381,6 +448,41 @@ jobs:
           # Feature 023 is developer-facing, so Principle VII is satisfied here rather than in the
           # user guide. This check runs on documentation-only changes too -- which is the point.
           test -f docs/development/ci-pipeline.md
+          # Feature 028: how the macOS artifact is produced, how to reproduce it without any Apple
+          # account, and what a Developer ID would change. A packaging process nobody but CI can
+          # run is one nobody can fix (FR-033).
+          test -f docs/development/macos-packaging.md
+
+      # Constitution Principle VII, the half that was not mechanical. "Every user-facing feature
+      # MUST ship with corresponding user-guide documentation in the same change" was enforced by
+      # the docs *build* passing and by review noticing -- and review is what skips it when the
+      # diff is long and the feature works. The rule lives in `scripts/check-user-guide-updated.sh`
+      # and the path declaration in `.gitattributes`, so this workflow carries none of it.
+      #
+      # In this job rather than one of its own, deliberately: a new job would have to be added to
+      # `ci-complete`'s `needs:` AND to the required-check name in the default branch's ruleset,
+      # which lives outside this repository. `docs` also already runs unconditionally, which is
+      # what a gate about documentation needs.
+      #
+      # The check's own cases run FIRST, as they do for the criteria gate below -- the
+      # assertion-freeze gate shipped with cases that existed and nothing ran, and this ordering is
+      # how that stops repeating.
+      - name: The user-guide gate's own cases
+        run: scripts/tests/check-user-guide-updated.test.sh
+      - name: A user-facing feature updates the user guide
+        # Pull requests only: this is a pre-merge gate, and the label that waives it lives on a
+        # pull request. A push to main has already been through it.
+        if: github.event_name == 'pull_request'
+        env:
+          # Passed as environment rather than interpolated into the script: a title is arbitrary
+          # text somebody types, and `${{ }}` inside `run:` would put it in the shell's mouth.
+          CHANGE_TITLE: ${{ github.event.pull_request.title }}
+          DOCS_NOT_NEEDED: ${{ contains(github.event.pull_request.labels.*.name, 'docs-not-needed') }}
+        run: |
+          # fetch-depth: 0 does NOT create `origin/<base>` -- the same trap the classify and
+          # assertions jobs fetch explicitly to avoid.
+          git fetch --quiet origin "${{ github.base_ref }}"
+          scripts/check-user-guide-updated.sh "origin/${{ github.base_ref }}" HEAD
 
       # Feature 010, BUG-008. A success criterion that names no observable cannot be checked by
       # anyone who is not standing at the machine, so it is skipped -- and CI stays green while it

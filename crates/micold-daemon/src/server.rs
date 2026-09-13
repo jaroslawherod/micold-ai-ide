@@ -1,6 +1,7 @@
 //! Daemon startup + accept loop + per-connection routing (protocol.md §2/§4, plan W2, T020/T022).
 //!
-//! Resolves the endpoint, runs the single-instance sequence (or adopts a systemd socket), then serves
+//! Resolves the endpoint and runs the single-instance sequence — the only way a listener is ever
+//! bound, since feature 028 removed socket activation (lifecycle contract §1.3) — then serves
 //! each accepted connection through the shared [`DaemonState`]: strict handshake, then attach/detach,
 //! viewed-session, keepalive, and settings routing, with catalog/settings changes pushed to every
 //! connected client. Grid streaming and the mutating RPCs layer on in Phase 3 / T053.
@@ -29,6 +30,7 @@ use tokio_util::codec::Framed;
 
 use crate::catalog::Catalog;
 use crate::hooks;
+use crate::idle::{self, StopReason};
 use crate::logging;
 use crate::progress::ProgressThrottle;
 use crate::singleton::{self, Acquisition};
@@ -68,18 +70,34 @@ async fn serve_tcp(state: Arc<DaemonState>, addr: &str) -> io::Result<()> {
     })?;
     tracing::info!(addr = %addr, "listening (sandboxed)");
 
+    // The same rule as the host process, over a different transport (FR-018). A container whose
+    // daemon has nobody connected is a container burning a machine's memory for nobody; because the
+    // daemon is PID 1 there, returning from here is what makes the container exit.
+    let idle = idle_watch(Arc::clone(&state));
+    tokio::pin!(idle);
+
     loop {
-        let (conn, _peer) = listener.accept().await?;
-        // Terminal traffic is small and latency-sensitive; Nagle would coalesce a keystroke with
-        // whatever came next and show up to the user as input lag.
-        let _ = conn.set_nodelay(true);
-        let state = Arc::clone(&state);
-        tokio::spawn(async move {
-            if let Err(e) = serve_connection(state, conn).await {
-                tracing::warn!(error = %e, "connection ended with an error");
+        tokio::select! {
+            accepted = listener.accept() => {
+                let (conn, _peer) = accepted?;
+                // Terminal traffic is small and latency-sensitive; Nagle would coalesce a keystroke
+                // with whatever came next and show up to the user as input lag.
+                let _ = conn.set_nodelay(true);
+                let state = Arc::clone(&state);
+                tokio::spawn(async move {
+                    if let Err(e) = serve_connection(state, conn).await {
+                        tracing::warn!(error = %e, "connection ended with an error");
+                    }
+                });
             }
-        });
+            _ = &mut idle => break,
+        }
     }
+
+    // Stop accepting first (we are out of the loop), then unwind (G5 steps 1, 3, 4). The listener
+    // drops as this function returns.
+    unwind(&state, StopReason::Idle).await;
+    Ok(())
 }
 
 /// Adopt the authentication token, if this daemon was started with one (feature 027, research R1).
@@ -111,7 +129,11 @@ fn adopt_auth_token(state: &DaemonState) -> io::Result<()> {
     Ok(())
 }
 
-/// Run the daemon: adopt a systemd socket if present, else acquire the endpoint, then accept.
+/// Run the daemon: resolve the endpoint, acquire it as the single instance, then accept.
+///
+/// One bind path, deliberately. Feature 028 removed the socket-activation branch that used to come
+/// first (lifecycle contract §1.3): the application is the only thing that starts a service, so a
+/// listener handed to us on fd 3 by a service manager has no defined behaviour and no way in.
 pub async fn run() -> io::Result<()> {
     // Diagnostics first, so even a failed bind is recorded (FR-045).
     let logging = logging::init()?;
@@ -180,13 +202,6 @@ pub async fn run() -> io::Result<()> {
         return serve_tcp(state, &addr).await;
     }
 
-    // systemd socket activation (Linux, opportunistic — MUST NOT be required; protocol.md §2).
-    #[cfg(target_os = "linux")]
-    if let Some(listener) = systemd_listener()? {
-        tracing::info!("adopted systemd-activated socket");
-        return serve_unix(state, listener).await;
-    }
-
     let endpoint = endpoint::resolve().inspect_err(|e| {
         tracing::error!(error = %e, "could not resolve the endpoint to bind");
     })?;
@@ -250,55 +265,136 @@ fn spawn_supervisor(state: Arc<DaemonState>) {
     });
 }
 
-/// Adopt an `LISTEN_FDS`-provided Unix socket, if this process is the intended recipient.
-/// `set_nonblocking(true)` is mandatory — systemd does not guarantee it (protocol.md §2).
-#[cfg(target_os = "linux")]
-fn systemd_listener() -> io::Result<Option<tokio::net::UnixListener>> {
-    let mut fds = listenfd::ListenFd::from_env();
-    match fds.take_unix_listener(0) {
-        Ok(Some(std_listener)) => {
-            std_listener.set_nonblocking(true)?;
-            Ok(Some(tokio::net::UnixListener::from_std(std_listener)?))
-        }
-        Ok(None) => Ok(None),
-        Err(e) => Err(io::Error::other(e)),
-    }
-}
-
-/// Accept loop over the single-instance interprocess listener.
+/// Accept loop over the single-instance interprocess listener, ending when the idle window expires.
+///
+/// `bound` is taken **by value** so that dropping it is the last thing that happens here: it owns
+/// the socket file and the `flock`, and that lock is the liveness beacon `singleton::acquire` tests
+/// (data-model G5 step 5). Releasing it before the sessions are down would let a client that starts
+/// during the unwind bind the endpoint while this daemon still holds process trees — two daemons,
+/// one endpoint, which is the failure the singleton exists to prevent.
 async fn serve_interprocess(
     state: Arc<DaemonState>,
     bound: singleton::BoundListener,
 ) -> io::Result<()> {
     use interprocess::local_socket::traits::tokio::Listener as _;
+    let idle = idle_watch(Arc::clone(&state));
+    tokio::pin!(idle);
     loop {
-        let conn = bound.listener.accept().await?;
-        let state = Arc::clone(&state);
-        tokio::spawn(async move {
-            if let Err(e) = serve_connection(state, conn).await {
-                tracing::warn!(error = %e, "connection ended with an error");
+        tokio::select! {
+            accepted = bound.listener.accept() => {
+                let conn = accepted?;
+                let state = Arc::clone(&state);
+                tokio::spawn(async move {
+                    if let Err(e) = serve_connection(state, conn).await {
+                        tracing::warn!(error = %e, "connection ended with an error");
+                    }
+                });
             }
-        });
+            _ = &mut idle => break,
+        }
+    }
+
+    // Out of the loop: nothing is being accepted any more (G5 step 2). Steps 1, 3 and 4 follow;
+    // step 5 is `bound` dropping as this returns, and step 6 is the return itself.
+    unwind(&state, StopReason::Idle).await;
+    Ok(())
+}
+
+/// How often the idle rule is evaluated, at most.
+///
+/// A ticker rather than one 30-minute sleep, and this is the reason: a timer armed for half an hour
+/// across a laptop suspend fires whenever the runtime decides it should, and the rule is written
+/// against a suspend-inclusive clock precisely so that suspended time counts (research R3). Waking
+/// every 30 s and asking the question again makes the answer prompt after a resume and bounds the
+/// overshoot at one tick, which is what SC-004 measures.
+///
+/// The cap is a maximum, not the interval: a shortened window (tests, [`idle::IDLE_STOP_ENV`]) ticks
+/// on a fraction of itself instead, so a 300 ms window is still evaluated several times.
+const IDLE_TICK_CAP: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The idle watch: a future that completes once the window has expired, and never otherwise.
+///
+/// A future the accept loop `select!`s on rather than a task that signals one, because what has to
+/// be atomic is *stopping accepting*: the loop leaves at the moment the rule fires, with no instant
+/// in which a client could attach to a daemon that has already decided to go. Nothing is spawned and
+/// nothing is signalled, so there is no channel to leak and no "the watcher died" case to reason
+/// about — the rule is evaluated by the same task that would otherwise be accepting.
+///
+/// A `None` window (`MICOLD_IDLE_STOP=off`, the survive-logout sandbox) parks forever on
+/// [`std::future::pending`], which is precisely "this daemon has no idle rule": the `select!` arm
+/// exists and can never be taken.
+fn idle_watch(state: Arc<DaemonState>) -> impl std::future::Future<Output = ()> + Send {
+    let configured = idle::configured_window();
+    async move {
+        let Some(window) = configured else {
+            tracing::info!("the idle stop is disabled; this daemon runs until it is asked to stop");
+            return std::future::pending().await;
+        };
+        tracing::info!(window = ?window.window(), "idle stop armed");
+        // A quarter of the window, capped at [`IDLE_TICK_CAP`]: 30 s for the real rule (which is
+        // what bounds the overshoot at one tick), and a fraction of a shortened one so tests still
+        // get several evaluations. The floor only ever applies to a window small enough that a
+        // quarter of it would round to nothing.
+        let interval = (window.window() / 4)
+            .min(IDLE_TICK_CAP)
+            .max(IDLE_TICK_FLOOR);
+        let mut ticker = tokio::time::interval(interval);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            ticker.tick().await;
+            if window.expired(&state.presence(), micold_core::clock::now()) {
+                return;
+            }
+        }
     }
 }
 
-/// Accept loop over a systemd-activated Unix listener.
-#[cfg(target_os = "linux")]
-async fn serve_unix(state: Arc<DaemonState>, listener: tokio::net::UnixListener) -> io::Result<()> {
-    loop {
-        let (conn, _addr) = listener.accept().await?;
-        let state = Arc::clone(&state);
-        tokio::spawn(async move {
-            if let Err(e) = serve_connection(state, conn).await {
-                tracing::warn!(error = %e, "connection ended with an error");
-            }
-        });
-    }
+/// The shortest window the ticker will divide down from, so a misconfigured value cannot produce a
+/// zero-length interval (which `tokio::time::interval` panics on).
+const IDLE_TICK_FLOOR: std::time::Duration = std::time::Duration::from_millis(40);
+
+/// The ordered unwind (data-model G5 steps 1, 3 and 4; lifecycle contract §3.11).
+///
+/// The order is the contract, and the reason is what an *interrupted* stop leaves behind. Marking
+/// the sessions first means a daemon killed halfway through this leaves records that are true of a
+/// daemon that is gone; killing first would leave the daemon briefly describing sessions as
+/// `Running` with nothing behind them.
+///
+/// Dropping the session table is the teardown — `PtySession::Drop` terminates each process tree —
+/// so it is blocking, and runs on a blocking thread rather than on the runtime.
+async fn unwind(state: &Arc<DaemonState>, reason: StopReason) {
+    // Step 1: say why, before doing anything. This line is the only record of *which* way out this
+    // was; absent it, an idle stop and a crash look identical in the log (data-model G4).
+    //
+    // The reason is spelled out in words as well as carried in the field, because of who reads it:
+    // someone who left work running, came back to a machine where the service is gone, and opened
+    // the log to find out what happened (FR-024, contract §6.19). `reason=Idle` answers that only
+    // for a reader who knows this enum.
+    let why = match reason {
+        StopReason::Idle => "stopping: nothing has been connected for the whole idle window",
+        StopReason::Requested => "stopping: something asked this service to stop",
+    };
+    tracing::info!(reason = ?reason, "{why}");
+
+    let worker = Arc::clone(state);
+    let (marked, dropped) = tokio::task::spawn_blocking(move || {
+        let marked = worker.mark_live_sessions_interrupted(); // step 3
+        let dropped = worker.take_live_sessions(); // step 4
+        (marked, dropped)
+    })
+    .await
+    .unwrap_or((0, 0));
+
+    tracing::info!(
+        sessions_marked = marked,
+        sessions_stopped = dropped,
+        "sessions handed off as interrupted-resumable"
+    );
 }
 
 /// Serve one connection: handshake, register, then route messages until the client hangs up.
 ///
-/// Generic over the stream so the interprocess path, the systemd path, and tests share one
+/// Generic over the stream so the interprocess path, the loopback TCP path and tests share one
 /// implementation.
 pub async fn serve_connection<S>(state: Arc<DaemonState>, stream: S) -> io::Result<()>
 where
@@ -401,6 +497,12 @@ where
     let result = route(&state, id, &mut incoming).await;
 
     // Cleanup: releasing the client drops its sender, which ends the writer task.
+    //
+    // Unconditional, and that is what makes the presence count honest (feature 028, T033, lifecycle
+    // contract §2.6). `route` has exactly three ways out — `Goodbye`, EOF, and a codec error — and
+    // the last two are what a crashed or `SIGKILL`ed client looks like from here. Because this runs
+    // after all three rather than on the clean one, a client that vanishes is counted gone as soon
+    // as its socket closes, with no keepalive to wait for (research R6).
     tracing::info!(client = id, "client disconnected");
     state.deregister(id);
     let _ = writer.await;

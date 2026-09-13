@@ -5,8 +5,10 @@ is separate from the app window. The window (the *client*) is a thin viewer: it 
 and sends your keystrokes, but it does not own the running process. That separation is what makes
 the guarantees below possible.
 
-You never start the daemon yourself. The first time the app needs it, it launches one automatically
-and it keeps running in the background afterward.
+You never start the daemon yourself. The first time the app needs it, it launches one automatically,
+and it keeps running in the background afterward — through closing and reopening windows, and for as
+long as you keep using the app. When nobody has been connected for half an hour it stops itself; the
+next thing you open starts a new one. Both halves are described below.
 
 ## What survives, and what doesn't (User Story 1)
 
@@ -19,7 +21,8 @@ interpreted screen it has produced. Both live in the daemon, so:
 | **The app window crashes** | Same — the sessions are in a different process, untouched. |
 | **Rebuild / reinstall the app and relaunch** | The new window reconnects to the *same* daemon and finds every session where it left off. |
 | **Reopen a session after any of the above** | You get the **current** screen immediately (a snapshot, not a replay), with scrollback covering the whole time you were away. |
-| **Log out / end your login session** (Linux) | This is the one thing that can stop the daemon; see [Surviving logout](#surviving-logout-user-story-7) (User Story 7). |
+| **Log out / end your login session** | This stops a daemon running directly on your computer, and its sessions become interrupted-resumable. To keep sessions across a logout, run the service [in a container](user-guide/sandboxed-daemon.md#keeping-the-sandbox-running). |
+| **Walk away for half an hour** | With no window connected for 30 continuous minutes the daemon stops itself, and its sessions become interrupted-resumable. Reopening the app starts a fresh one — see [below](#it-stops-itself-when-nobody-has-used-it-for-30-minutes). |
 
 Concretely, if you start a long-running build or an AI CLI session that is working through a task,
 close the window, and come back ten minutes later, the session is still `Running`, the screen shows
@@ -56,6 +59,54 @@ keeps reopening a busy session fast regardless of how long it ran unattended.
   a reboot (the processes are gone); when you next launch the app, it starts a fresh daemon.
 - The daemon persists the *catalog* (your projects, worktrees, and session identities) to disk, so
   those reappear after a reboot — but a session's live process and its on-screen scrollback do not.
+
+## It stops itself when nobody has used it for 30 minutes
+
+The service outlives your windows, but not indefinitely. **If no window has been connected for 30
+continuous minutes, it stops itself.** Nothing you do brings it back manually — the next time you
+open the app, it starts a fresh one, the same way it started the first.
+
+What the timer measures is deliberately narrow: **whether any window is connected, and nothing else.**
+
+- Closing your last window starts the clock. Opening a window — any window, on any project — stops
+  it, and closing that one starts it over from zero.
+- **A session that is still running does not hold the service up.** This is the part worth knowing:
+  leave an agent working and close the window, come back an hour later, and the service will have
+  stopped. It is not a bug and it is not lost work — see below.
+- Time your machine spends asleep counts. A laptop closed for the night comes back to a service that
+  has already stopped, rather than one that stops half an hour after you wake it.
+
+### What happens to a session that was running
+
+Before anything is shut down, every live session is recorded as **interrupted-resumable** — the same
+state described under [interrupted-resumable sessions](#interrupted-resumable-sessions-after-any-service-restart)
+further down, and reached by the same path an ordinary service restart takes. Opening the session resumes the conversation where it left off.
+
+Nothing is auto-resumed when the next service starts. An agent brought back with nobody watching it
+is worse than a service that stopped, so the resume is always a deliberate action of yours.
+
+### Why 30 minutes, and why it is not a setting
+
+A background service running for nobody costs memory and battery on a machine you have walked away
+from. Thirty minutes is long enough that stepping out for coffee, or closing a window to open another,
+never costs you a restart; short enough that an overnight machine is not hosting an idle service until
+morning.
+
+It is not configurable, and that is a deliberate omission rather than a missing feature: the value
+answers "how long should this machine keep a service running for nobody?", which is not a question
+you have the information to answer better than the default — and every answer anyone would pick is
+this one. Restarting is cheap and automatic, so nothing is lost by picking the shorter side.
+
+The one place the answer differs is a service running **in a container**, where the container runtime
+owns the process lifetime; see [running the session service in a container](user-guide/sandboxed-daemon.md).
+
+### If you click just as it is stopping
+
+You can catch the service at the exact moment it decides to go. The app handles this itself: a
+connection that fails because the service is on its way out is retried a second later, and on the
+direct placement that retry starts a fresh service. You may briefly see the reconnecting banner. You
+will not see an error for it — an error only appears if the problem outlasts that retry, which means
+it is a real one.
 
 ## Attaching, driving, and the activity badges (User Story 2)
 
@@ -290,9 +341,9 @@ agent to do anything without you asking.**
 When something misbehaves, the overflow menu's **"Session service diagnostics"** asks the service two
 things and shows the answers:
 
-- **Where it logs.** Depending on how it was started, the service logs to the systemd journal, to your
-  terminal, or to a size-capped rotating file under your user data directory — the diagnostic tells
-  you which, and the file path when it's a file.
+- **Where it logs.** Depending on how it was started, the service logs to your terminal or to a
+  size-capped rotating file under your user data directory — the diagnostic tells you which, and the
+  file path when it's a file.
 - **Its recent errors.** A short list of the most recent warnings and errors the service recorded, so
   you can see what went wrong without hunting through a log file.
 
@@ -300,49 +351,53 @@ Logs never contain terminal output or anything you typed — sessions are refere
 state only, so credentials and code in a session are never written to a log. Total log size is
 hard-capped, so the log can't grow without bound even if the service runs for weeks.
 
-## Surviving logout (User Story 7)
+## Surviving logout: run the service in a container
 
-Closing the window always leaves your sessions running (that is the whole point of the daemon). But a
-full **logout** is different: by default the system tears down everything you were running when your
-login session ends, the daemon included. Making sessions survive a logout is:
+Closing the window always leaves your sessions running — that is the whole point of the daemon. A
+full **logout** is different: when your login session ends, the system tears down what you were
+running, and a session service running *directly on your computer* goes with it. Its sessions are
+not lost; they come back as **interrupted-resumable** the next time you open the app, exactly as
+after any other service restart (see [Interrupted-resumable sessions](#interrupted-resumable-sessions-after-any-service-restart)).
 
-- **Supported on Linux**, via one explicit, user-enabled setting (below). It is **never turned on for
-  you** — not by installation, not silently.
-- **Not supported on macOS or Windows** *for a service running directly on your computer*. There is
-  no unprivileged equivalent, so the app does not pretend to offer one. On those platforms sessions
-  survive closing the window but not logging out.
-- **Supported everywhere when the service runs in a container** — see
-  [Where the service runs](#where-the-service-runs-feature-027) below. Not a second mechanism
-  bolted on: it is the container runtime's own restart policy, and the runtime is a service the
-  platform already keeps running across logout and reboot.
+**A service running directly on your computer does not survive logout, on any platform.** The app
+does not offer to make it. Settings → Session service still has a *Keep sessions running after I
+sign out* checkbox, but it is the **container's** setting: with the direct placement selected the
+control says plainly that it cannot be honoured there, rather than quietly doing nothing.
 
-### Enabling it (Linux)
+On macOS, sessions survive closing the window but not logging out when the session service runs
+directly on your computer; running it in a container is the supported way to survive logout
+there. That sentence is the one `docs/user-guide/install-macos.md` and
+`crates/micold-core/src/logout_survival.rs` also carry, held equal by
+`crates/micold-core/tests/macos_logout_claims_agree.rs`.
 
-The app does it for you: open the overflow menu and choose **"Keep sessions after logout."** That
-runs, in your own session, the two steps that matter:
+### What to do instead
 
-1. `loginctl enable-linger` — lets your user manager (and anything it runs) keep going after you log
-   out.
-2. `systemctl --user enable --now micold-daemon.socket` — moves the session service under that
-   lingering user manager, so it is no longer tied to your login session.
+Run the session service **in a container**. A container runtime is a service the platform already
+keeps running across logout and reboot, so a sandbox with its keep-running setting on comes back on
+its own — on Linux, macOS and Windows alike. Turn it on in Settings → Session service; see
+[Running the session service in a container](user-guide/sandboxed-daemon.md) for what it can and
+cannot see, which runtimes work, and what to do when it will not start.
 
-If you prefer to do it by hand, run those two commands yourself, in that order.
+That is the supported way to keep sessions across a logout, and the only one.
 
-> **Order matters — it is not retroactive.** Enabling linger does **not** rescue a service that is
-> *already* running inside your login session; that process stays put and still dies at logout. You
-> must enable linger **first**, then (re)start the service under the user manager. The menu action
-> does exactly this — it enables linger, stops the session-bound service, and restarts it under the
-> lingering manager — which is why using it is simpler than hand-rolling the commands.
+### Why the direct placement no longer offers it
 
-If enabling linger is refused (some hardened systems restrict it via policy), the app tells you rather
-than silently pretending it worked; ask your administrator to enable lingering for your account.
+An earlier release did offer it on Linux, through a menu item that registered the service with your
+own `systemd --user` manager (`loginctl enable-linger`, then a socket unit). That registration made
+the *service manager* a second thing that could start the daemon — which is exactly what this
+release removes: the app is now the only thing that ever starts a session service. A promise that
+depended on the registration could not outlive it.
+
+If you enabled that option on a previous release, there is nothing to undo by hand. The upgrade
+removes the unit files, and the app clears the leftover per-user enablement the first time you open
+it, without asking.
 
 ### How it is packaged
 
-The systemd **user** units ship with the app (in `/usr/lib/systemd/user/`) but are **inert until you
-enable them** — installation touches no per-user manager. The service is the same single binary
-whether the user manager socket-activates it or a window spawns it directly, so nothing behaves
-differently based on how it started.
+Installing the app leaves **no** service-manager artefact behind: no systemd unit, no launch agent,
+no login item, no scheduled task. It installs two executables, the desktop entry, the icons and the
+documentation, and starts nothing. The list of registered user services on your machine is the same
+after installing as it was before.
 
 ## Where the service runs (feature 027)
 

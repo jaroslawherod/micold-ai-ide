@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the hardened runtime, applied by `scripts/macos-bundle.sh` when it ad-hoc signs
+  the bundle on macOS.
+
+  Deliberately empty. The application reads and writes files the user points it at, spawns
+  processes, and talks to a unix socket under $HOME, none of which the hardened runtime restricts.
+  It is not sandboxed, so no `com.apple.security.*` grant is required, and adding one that is not
+  needed only widens what a future signature vouches for.
+
+  This file is the seam for FR-017: adopting a Developer ID certificate and notarization edits
+  this file (plus the signing identity in `scripts/macos-bundle.sh`) rather than restructuring the
+  bundle. Notarization additionally requires an Apple account and a repository secret, which
+  FR-016 forbids today; see `docs/development/macos-packaging.md`.
+-->
+<plist version="1.0">
+<dict/>
+</plist>
