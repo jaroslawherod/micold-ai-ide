@@ -17,7 +17,7 @@ scripts/windows-installer.sh [--arch x64|arm64] [--out-dir DIR]
 
 | Input | Source |
 |---|---|
-| Binaries | `cargo build --release --locked -p micold-client --bin micold-ai-ide -p micold-daemon --target <triple>` via `scripts/build-lock.sh` |
+| Binaries | `cargo build --release --locked -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon --target <triple>` via `scripts/build-lock.sh` |
 | Version | Read from `[workspace.package] version` in `Cargo.toml`; passed as `iscc /DAppVersion=<v> /DArch=<arch> /DBinDir=<dir>` |
 | Compiler | `iscc.exe` located via `ISCC` env, then `%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe`, then PATH. Missing: the task fails with a message naming the Inno Setup download. It never installs it silently. |
 

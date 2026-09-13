@@ -150,13 +150,14 @@ run_script "$d" -- --arch x64 --out-dir "$out_rel"
 expect_args "resolves a relative --out-dir before handing it to iscc" iscc "/O$ROOT/$out_rel "
 rm -rf "$d"
 
-# Exactly the app and the daemon, never the showcase binary built from the same crate (FR-002).
+# Exactly the app and the daemon, never the showcase binary built from the same crate (FR-002). Each
+# needs its own --bin: cargo applies a --bin filter to every -p, so the daemon's must be named too.
 for pair in x64:x86_64-pc-windows-msvc arm64:aarch64-pc-windows-msvc; do
   arch="${pair%%:*}" triple="${pair#*:}"
   d="$(new_stubs "$WINDOWS_UNAME")"
   run_script "$d" -- --arch "$arch" --out-dir "$d/out"
   expect_args "builds the app and the daemon for $triple" cargo \
-    "build --release --locked -p micold-client --bin micold-ai-ide -p micold-daemon --target $triple"
+    "build --release --locked -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon --target $triple"
   rm -rf "$d"
 done
 

@@ -117,7 +117,7 @@ description: "Task list for feature 030: Windows installation package"
   - any further hit T013 reports
 - [X] T023 [U19] R7, making T015 pass: in `crates/micold-daemon/src/main.rs`, on `Err(e)` also append `micold-daemon: fatal: {e}` to the daemon log path. Resolve that path through the same function `logging` uses, which already exists as `micold_daemon::logging::default_log_path()` (`logging.rs:241`). Then `eprintln!` and exit 1 as today.
 - [ ] T024 [U20] R7 (GUI glue, Principle I exception): add `#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]` to `crates/micold-daemon/src/main.rs` and `crates/micold-client/src/main.rs`. Hold `let _running = micold_core::process::announce_running();` as the first statement of both `main`s, for the process lifetime.
-- [ ] T025 [U20] E6.1: in `.github/workflows/ci.yml` job `test`, add the step `Release exes are GUI-subsystem (Windows)` with `if: runner.os == 'Windows'` and `shell: pwsh`. It runs `cargo build --release -p micold-client --bin micold-ai-ide -p micold-daemon`. For each of `micold-ai-ide.exe` and `micold-daemon.exe` it reads the PE `e_lfanew` at 0x3C and the `Subsystem` u16 at `e_lfanew + 0x5C`, and asserts it is `2`.
+- [ ] T025 [U20] E6.1: in `.github/workflows/ci.yml` job `test`, add the step `Release exes are GUI-subsystem (Windows)` with `if: runner.os == 'Windows'` and `shell: pwsh`. It runs `cargo build --release -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon`. For each of `micold-ai-ide.exe` and `micold-daemon.exe` it reads the PE `e_lfanew` at 0x3C and the `Subsystem` u16 at `e_lfanew + 0x5C`, and asserts it is `2`.
 - [ ] T026 [U22] [U23] [U24] [U25] [U26] FR-025: un-gate the files the contract names as required:
   - `crates/micold-daemon/tests/autospawn.rs`
   - `crates/micold-daemon/tests/stream_view.rs`
@@ -171,7 +171,7 @@ description: "Task list for feature 030: Windows installation package"
   - the resolved version equals `Cargo.toml`'s `[workspace.package] version`;
   - the `iscc` invocation carries `/DAppVersion=<v> /DArch=<arch> /DBinDir=<dir>`;
   - with no `iscc` found, the error names the Inno Setup download URL;
-  - cargo is invoked as `--release --locked -p micold-client --bin micold-ai-ide -p micold-daemon --target <triple>`.
+  - cargo is invoked as `--release --locked -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon --target <triple>`.
 
   Wire it into the `.github/workflows/ci.yml` step that loops over `scripts/tests/*.test.sh`, if it is not already globbed.
 - [ ] T033 [P] [US1] [A1] [A2] [A3] [A4] FR-018 / I1, I2, I7: create `scripts/windows-install-smoke.sh <setup.exe>`, written first as assertions only. It runs, in order:

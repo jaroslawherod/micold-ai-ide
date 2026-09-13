@@ -477,3 +477,11 @@ failed before the implementation.
 - green: the test's own `TARGET_DIR` is resolved from `$ROOT` when relative, the rule U65 set -> 15 cases, 0 failures both with and without `CARGO_TARGET_DIR=target`; every shell suite passes under `CARGO_TARGET_DIR=target`.
 - notes: a test change, not a weakening. U46 took `--print-target-dir` verbatim, which is only right when that path is absolute; the local shared dir always was, so cycle 53 missed it.
 - commit: see the follow-up commit
+
+## Cycle 56: correct U48, the daemon's bin must be named too
+
+- test: `scripts/tests/windows-installer.test.sh` "builds the app and the daemon for <triple>" (U48)
+- red: PR #314's fourth CI run (3f532f1c), `package + smoke (windows-11-arm)`: `Error on line 60 in C:\a\micold-ai-ide\micold-ai-ide\packaging\windows\micold-ai-ide.iss: Source file "C:\a\micold-ai-ide\micold-ai-ide\target\aarch64-pc-windows-msvc\release\micold-daemon.exe" does not exist.` (line 59, `micold-ai-ide.exe`, was found). With the expectation corrected, `scripts/tests/windows-installer.test.sh` -> `FAIL  builds the app and the daemon for x86_64-pc-windows-msvc` ... `got: build --release --locked -p micold-client --bin micold-ai-ide -p micold-daemon --target x86_64-pc-windows-msvc` -> 2 failures.
+- green: `--bin micold-daemon` added to the script's cargo invocation -> 15 cases, 0 failures; every shell suite passes, also under `CARGO_TARGET_DIR=target`.
+- notes: a test change, not a weakening. cargo applies a `--bin` filter to every selected package, so `-p micold-daemon` without its own `--bin` built no exe; `.claude/skills/visual-pass/SKILL.md` already records this. U48, the contract and T025's command are corrected to match.
+- commit: see the follow-up commit

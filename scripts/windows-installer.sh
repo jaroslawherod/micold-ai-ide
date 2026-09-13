@@ -100,8 +100,9 @@ winpath() {
 }
 
 # Exactly the app and the daemon: the client crate also builds the showcase binary (FR-002, FR-012).
+# cargo applies a --bin filter to every -p, so the daemon's bin is named as well or it is not built.
 "$root/scripts/build-lock.sh" cargo build --release --locked \
-	-p micold-client --bin micold-ai-ide -p micold-daemon --target "$triple"
+	-p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon --target "$triple"
 
 out_dir="$(absolute "${out_dir:-$target_dir/windows-installer}")"
 mkdir -p "$out_dir"
