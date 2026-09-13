@@ -4,7 +4,12 @@
 
 **Created**: 2026-07-26
 
-**Status**: Closed
+**Status**: Closed 2026-09-13 — implemented and shipped in PR #73 (merged 2026-08-07); all 197 tasks
+in [tasks.md](./tasks.md) are done, and all twelve bugs in [bugs/](./bugs/) are fixed, the last two
+being BUG-012 in PR #293 and BUG-011 in PR #297 (both merged 2026-09-13). The manual passes closed on
+2026-08-07. Later bugfix passes ran on Xvfb with lavapipe, not a real GPU; they record as unrun the
+mid-flight look of the panel fade and the terminal tab strip's instance menu. Cross-platform parity
+rests on CI (T075).
 
 **Input**: User description: "Rebuild the application's visual layer so it reads unmistakably as a Material 3 (Material You) application, rather than a generic flat desktop app that merely borrows Material's color names and icon font."
 
