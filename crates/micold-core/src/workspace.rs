@@ -324,6 +324,19 @@ impl Workspace {
             .unwrap_or(0)
     }
 
+    /// The path a folder the user chose should be known by (FR-012, 002 BUG-002).
+    ///
+    /// `resolve` is the filesystem's answer to "where is this, really" — in the binary
+    /// [`crate::fs_scan::resolve_path`], which follows symlinks. The chosen folder is identified by
+    /// that resolved path, because that is how git records the repository and every worktree in
+    /// it. A project already in the catalog under another spelling of the same folder — one opened
+    /// through a symlink before identity was resolved — keeps its stored path, so opening the
+    /// folder again activates that entry rather than adding a second one.
+    pub fn identity_for(&self, chosen: &Path, resolve: &dyn Fn(&Path) -> PathBuf) -> PathBuf {
+        let _ = resolve;
+        canonicalize_best_effort(chosen)
+    }
+
     /// Activate a known project by path, replacing any previous active project.
     ///
     /// Rejected (returns `false`, leaving the current active unchanged) if the path is

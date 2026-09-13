@@ -406,3 +406,36 @@ fn forget_drops_provenance_and_the_migration_marker_for_that_path() {
         "and so does the marker — re-opening the folder is a fresh project that migrates again"
     );
 }
+
+/// A stand-in for the filesystem's symlink resolution: everything under `/link` is really under
+/// `/real`, and every other path is already resolved.
+fn link_to_real(path: &Path) -> PathBuf {
+    match path.strip_prefix("/link") {
+        Ok(rest) => Path::new("/real").join(rest),
+        Err(_) => path.to_path_buf(),
+    }
+}
+
+/// 002 BUG-002: a folder chosen through a symlink is known by the path git will report for it.
+#[test]
+fn a_chosen_folder_is_identified_by_its_resolved_path() {
+    let ws = Workspace::empty();
+    assert_eq!(
+        ws.identity_for(Path::new("/link/repo"), &link_to_real),
+        PathBuf::from("/real/repo"),
+        "git records the repository and its worktrees by the resolved path, so that is the identity"
+    );
+}
+
+/// …and opening the real folder of a project the catalog knows by its symlink activates that
+/// project, not a second one (FR-012).
+#[test]
+fn a_project_known_by_its_symlink_is_found_by_its_real_path() {
+    let mut ws = Workspace::empty();
+    ws.open_or_activate(PathBuf::from("/link/repo"), &plain());
+
+    let identity = ws.identity_for(Path::new("/real/repo"), &link_to_real);
+    assert_eq!(identity, PathBuf::from("/link/repo"));
+    ws.open_or_activate(identity, &plain());
+    assert_eq!(ws.projects.len(), 1, "no duplicate for another spelling");
+}
