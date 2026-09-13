@@ -183,7 +183,7 @@ pub use terminal_pane::GridSizeReporter;
 pub use terminal_pane::TerminalPane;
 pub use text::{Text, TypeRole, ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES};
 pub use text_field::TextField;
-pub use toggle_chip::{chip_label, ToggleChip};
+pub use toggle_chip::{chip_label, chip_neutral_accent, ToggleChip};
 pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};
 pub use typeahead::Typeahead;

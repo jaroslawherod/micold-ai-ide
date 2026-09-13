@@ -46,7 +46,7 @@ pub struct ToggleChip<M> {
 
 impl<M> ToggleChip<M> {
     /// A chip showing `label`, emitting `on_press` when pressed, themed by `roles`. Inactive by
-    /// default, with the neutral `surface_variant`/`on_surface_variant` accent.
+    /// default, with the [`chip_neutral_accent`].
     pub fn new(label: impl Into<String>, on_press: M, roles: Roles) -> Self {
         Self {
             label: label.into(),
@@ -81,19 +81,27 @@ impl<M> ToggleChip<M> {
     }
 
     /// The `(fill, on_fill)` pair used while active — e.g. a worktree type's tag color. Defaults
-    /// to the neutral surface-variant pair.
+    /// to [`chip_neutral_accent`].
     pub fn accent(mut self, fill: Rgb, on_fill: Rgb) -> Self {
         self.accent = Some((fill, on_fill));
         self
     }
 }
 
+/// The `(fill, on_fill)` a chip with no accent of its own takes while active: a neutral fill with
+/// the muted `on_surface_variant` label.
+///
+/// The fill is `surface_container_high`. It was `surface_variant`, which clears AA at rest and
+/// fails it pressed in the dark scheme — the label drawn at 10% over the fill measured 4.47:1 — and
+/// FR-004b's remedy for a pair like that is to move the host, not the label (BUG-011).
+pub fn chip_neutral_accent(r: Roles) -> (Rgb, Rgb) {
+    (r.surface_container_high, r.on_surface_variant)
+}
+
 impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
     fn from(chip: ToggleChip<M>) -> Self {
         let r = chip.roles;
-        let (fill, on) = chip
-            .accent
-            .unwrap_or((r.surface_variant, r.on_surface_variant));
+        let (fill, on) = chip.accent.unwrap_or_else(|| chip_neutral_accent(r));
         // The ripple takes a token role rather than a resolved colour, so keep the `Rgb` before
         // these are shadowed by their `Color` forms.
         let ripple_tint = if chip.active {
@@ -175,5 +183,27 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
         // A filter chip is pressed like anything else, so it ripples like anything else (FR-024c),
         // in its own text colour: the accent when on, the muted role when off.
         super::Ripple::new(chip_button, ripple_tint, shape::FULL).into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use micold_core::theme::ColorScheme;
+    use micold_core::tokens::{contrast, over, roles};
+
+    /// An active neutral chip's label clears AA with the press layer — its own colour at
+    /// `state::PRESSED` — composited over its fill, in both schemes (FR-004b, BUG-011).
+    #[test]
+    fn a_neutral_chip_label_clears_aa_pressed() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let (fill, on) = chip_neutral_accent(roles(scheme));
+            let pressed = over(on, state::PRESSED as f64, fill);
+            let ratio = contrast(on, pressed);
+            assert!(
+                ratio >= 4.5,
+                "{scheme:?}: a neutral chip's label measures {ratio:.2}:1 pressed, below AA"
+            );
+        }
     }
 }

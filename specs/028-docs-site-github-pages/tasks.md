@@ -191,7 +191,7 @@ fails on it while the three-platform matrix stays skipped.
 - [X] T061 [US4] Assert the documentation-only skip survives: `git check-attr micold-docs site/media.toml site/checks/page-set.sh` reports the paths as code, `scripts/tests/documentation-set.test.sh` still passes, and `scripts/classify-change.sh` on a docs-only diff still classifies it as documentation (FR-020, quickstart A1)
 - [X] T062 [US4] Write `docs/development/docs-site.md` — how a publication works, what each check catches, how to trigger a republish, and why the trigger is a reusable workflow rather than a release event — and add its `docs/SUMMARY.md` entry (Principle VII)
 - [X] T063 [US4] Enable GitHub Pages on the repository with source **GitHub Actions** (a repository setting, outside this change; until the first successful publication the address serves GitHub's own 404, which is the "unpublished" edge case)
-- [ ] T064 [US4] Run `pages.yml` via `workflow_dispatch` against an existing tag and confirm the site deploys, then break a check deliberately and confirm the run fails with the previous site still reachable (quickstart A9; FR-017, FR-018, FR-020a)
+- [X] T064 [US4] Run `pages.yml` via `workflow_dispatch` against an existing tag and confirm the site deploys, then break a check deliberately and confirm the run fails with the previous site still reachable (quickstart A9; FR-017, FR-018, FR-020a)
 
 **Checkpoint**: The site publishes itself on release, republishes on demand, and a documentation
 mistake is caught at review rather than at publication.
@@ -243,17 +243,17 @@ and no video bytes were requested until a play control was pressed.
 
 ## Deferred — needs the live repository and a reader
 
-Two tasks are still open, and a source tree alone cannot complete either one:
+One task is still open, and a source tree alone cannot complete it:
 
-- **T064 (second half)** — the deliberate failure that proves the previous site stays up. The first
-  half is done: `pages.yml` run `34681141769` (`workflow_dispatch` on `main`) published the site.
-  The remaining half is quickstart A9, carried forward as T084, so T081 carries A1–A8 only.
 - **T082** — Part B, the reader's judgement, run against the published site. T085 names the pass
   record it writes.
 
 T036's website field and T063's Pages source were deferred here too, on the belief that this
 checkout's remote was not the upstream repository. It is. Both settings are in place and both tasks
 are ticked.
+
+T064 was deferred here as well. Its first half was `pages.yml` run `34681141769`; its second,
+quickstart A9, was carried forward as T084 and is now done (run `34754847522`).
 
 ---
 
@@ -375,6 +375,6 @@ links, guide captures), one on US4 (checks and workflows). US3 joins once `stage
 
 ## Phase 8: Convergence
 
-- [ ] T084 [US4] Break a check deliberately on a `workflow_dispatch` run of `.github/workflows/pages.yml` and confirm the run fails while the previously published site stays reachable, completing the second half of T064 (quickstart A9) per FR-018, FR-017, FR-020a (missing)
+- [X] T084 [US4] Break a check deliberately on a `workflow_dispatch` run of `.github/workflows/pages.yml` and confirm the run fails while the previously published site stays reachable, completing the second half of T064 (quickstart A9) per FR-018, FR-017, FR-020a (missing) — run `34754847522` failed at the internal link check with deploy skipped and the live site byte-identical; see [evidence/t084-deliberate-failure.md](./evidence/t084-deliberate-failure.md)
 - [ ] T085 Run [quickstart.md](./quickstart.md) Part B (B1-B5) against <https://jaroslawherod.github.io/micold-ai-ide/> and write the judgement halves of SC-001 and SC-006 into a pass record at `specs/028-docs-site-github-pages/evidence/quickstart-b.md`, matching the evidence convention of `specs/027-sandboxed-daemon-runtime/` and `specs/028-client-managed-daemon/`, so T082's "pass record" names an actual file per FR-023a (missing)
 - [X] T086 Narrow the "Deferred — needs the upstream repository" section of this file to the tasks still genuinely open — T036 and T063 are now `- [X]` and merged, so the section contradicts the checkboxes above it (contradicts)
