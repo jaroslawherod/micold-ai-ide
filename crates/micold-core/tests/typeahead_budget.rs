@@ -175,3 +175,86 @@ fn the_worst_case_query_really_does_reach_every_tier() {
          measurement is of something cheaper than the worst case"
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// Which build the budget is measured in (BUG-003)
+// ---------------------------------------------------------------------------------------------
+
+/// This file's own source, for the two checks below that hold its shape rather than its numbers.
+const SOURCE: &str = include_str!("typeahead_budget.rs");
+
+/// The attribute every frame-budget measurement carries, and the command that runs them.
+const RELEASE_ONLY: &str = "#[cfg_attr(debug_assertions, ignore";
+const RELEASE_COMMAND: &str = "cargo test --release -p micold-core --test typeahead_budget";
+
+/// The names of the `#[test]` functions in this file whose body checks against [`BUDGET_MS`], each
+/// with the attribute lines written above it.
+fn budget_tests() -> Vec<(String, String)> {
+    let lines: Vec<&str> = SOURCE.lines().collect();
+    let mut out = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        let Some(name) = line
+            .strip_prefix("fn ")
+            .and_then(|rest| rest.split_once('('))
+            .map(|(name, _)| name)
+        else {
+            continue;
+        };
+        let body: String = lines[i..]
+            .iter()
+            .take_while(|l| **l != "}")
+            .copied()
+            .collect::<Vec<_>>()
+            .join("\n");
+        let attributes: Vec<&str> = lines[..i]
+            .iter()
+            .rev()
+            .take_while(|l| l.starts_with("#["))
+            .copied()
+            .collect();
+        let is_test = attributes.iter().any(|a| *a == "#[test]");
+        if is_test && body.contains("took < BUDGET_MS") {
+            out.push((name.to_string(), attributes.join("\n")));
+        }
+    }
+    out
+}
+
+/// SC-002 is a promise about the build a user runs, and the 16 ms in it is that build's number. A
+/// debug build measured against it has a margin nobody stated — and the margin was zero the day
+/// this was found, when the worst case read 16.37 ms on a loaded machine. So a budget test does not
+/// run in a debug build at all, the way 027's start-time measurement refuses one.
+#[test]
+fn every_frame_budget_measurement_is_release_only() {
+    let tests = budget_tests();
+    assert!(
+        tests.len() >= 4,
+        "the scan found {} budget tests, fewer than the four this file has — the check has stopped \
+         seeing them",
+        tests.len()
+    );
+    for (name, attributes) in tests {
+        assert!(
+            attributes.contains(RELEASE_ONLY),
+            "`{name}` checks a measurement against the release frame budget, so it must be skipped \
+             in a debug build (`{RELEASE_ONLY} = \"…\")]`) — a debug build's time is not SC-002's \
+             number (BUG-003)"
+        );
+    }
+}
+
+/// A release-only test that nothing runs in release measures nothing. The workspace suite is a
+/// debug build, so CI has to run this file with `--release` in a step of its own.
+#[test]
+fn ci_runs_the_frame_budget_in_a_release_build() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.github/workflows/ci.yml");
+    let workflow = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    assert!(
+        workflow
+            .lines()
+            .any(|l| l.trim_start().trim_start_matches("run: ") == RELEASE_COMMAND),
+        "`.github/workflows/ci.yml` must run `{RELEASE_COMMAND}`, or SC-002 is measured in no \
+         build at all (BUG-003)"
+    );
+}
