@@ -155,7 +155,9 @@ Idle ─────────────► Starting ───────�
 - **Close/stop** (FR-015a): terminate the process, remove the session (and its persisted
   record) → gone from the sidebar.
 - **Crash** (FR-022): `Running → Restarting{attempts+1} → Starting` via `claude --resume <id>`;
-  after the guard limit within a short window → `Failed` (FR-022a).
+  after the guard limit within a short window → `Failed` (FR-022a). A respawn resets the count
+  (`Restarting → Running`) only after it has stayed up for `RESTART_STABLE_AFTER` (10 s); one that
+  exits sooner counts as a further failed restart (bugfix BUG-004).
 - **Project close/switch** (FR-023): all of that project's sessions `Running/Starting → Idle`
   (processes stopped, records preserved). Reopen (FR-023a) restores them `Idle` and resumes on
   reopen; the crash-loop auto-restart does NOT apply to intentional stops.

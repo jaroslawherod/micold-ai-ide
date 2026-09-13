@@ -163,3 +163,16 @@ sidebar rendering when the store is intact; it is not authoritative. No constitu
 extends the existing `AiCliProvider` trait (bugfix BUG-002) with two more best-effort methods,
 mirroring `has_recorded_conversation`'s existing file-existence-check shape; no new trait, no
 change to the pure core's testability (Principle I).
+
+**Bugfix**: 2026-09-13 — BUG-004 Updated from bugfix patch. The daemon's supervision tick reset the
+crash-loop counter (`Catalog::mark_running_if_restarting`) for any respawn still alive one tick
+later, so FR-022a's "within a short interval" was never measured. Design: the respawn's time is
+recorded on the live session (`micold_core::clock::Uptime`, the daemon's existing suspend-inclusive
+clock), and the survivor reset fires only once `RESTART_STABLE_AFTER` (10 s, `micold-core`
+`session.rs`, beside `MAX_RESTART_ATTEMPTS`) has elapsed since it. The tick takes its reading as a
+parameter (`supervise_exited_sessions_at`) so the window is tested with injected readings rather
+than sleeps. Window length chosen as the smallest bound that comfortably covers a CLI failing
+inside its own startup (a bad `--resume`, a missing credential: about a second to a few), while a
+genuinely recovered session reads `restarting…` for at most ten seconds. No constitution impact —
+the rule stays one pure comparison over readings; the core FSM (`on_unexpected_exit`) is unchanged.
+
