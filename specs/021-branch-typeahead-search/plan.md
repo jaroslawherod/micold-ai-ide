@@ -244,3 +244,9 @@ work, and it delivered the half its task named.
 ## Complexity Tracking
 
 No constitutional violation requires justification. Left empty deliberately.
+
+**Bugfix**: 2026-09-13 — BUG-003 Updated from bugfix patch: the 16 ms budget risk above is held by a
+**release-build** test. `typeahead_budget.rs`'s measurements are ignored in a debug build and refuse
+one if forced, and CI runs `cargo test --release -p micold-core --test typeahead_budget` as its own
+step after the workspace suite. The workspace suite is a debug build, so without that step SC-002
+would be measured in no build at all.
