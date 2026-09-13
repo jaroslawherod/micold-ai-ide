@@ -32,6 +32,7 @@
 //! than against the machine the suite happens to run on.
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 /// The units a previous release shipped and the removed opt-in could have enabled.
 ///
@@ -127,7 +128,7 @@ pub fn disable_legacy_units() {
         return;
     };
     let _ = migrate(&dir, |args| {
-        let output = std::process::Command::new("systemctl")
+        let output = micold_core::process::no_window(&mut Command::new("systemctl"))
             .args(args)
             .output()
             .map_err(|e| format!("could not run systemctl: {e}"))?;

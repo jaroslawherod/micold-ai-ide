@@ -20,6 +20,7 @@
 //! it, and `idle.rs`'s own unit tests assert the real constant is thirty minutes (T006) — so the
 //! number that ships is pinned in one place and no test pays for it.
 
+// unix-only: probes daemon liveness with `libc::kill(pid, 0)`; pending Windows triage (030 T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;
