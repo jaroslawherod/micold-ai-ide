@@ -155,7 +155,12 @@ fn every_action_keeps_its_label_and_stays_on_its_card() {
     for &(width, what) in WIDTHS {
         let painted = painted_at(&state, width);
         // Two available rows and one unavailable; every row has Rename and Forget.
-        for (label, rows) in [("Open", 2), ("Unavailable", 1), ("Rename", 3), ("Forget", 3)] {
+        for (label, rows) in [
+            ("Open", 2),
+            ("Unavailable", 1),
+            ("Rename", 3),
+            ("Forget", 3),
+        ] {
             let drawn: Vec<_> = painted.iter().filter(|t| t.content == label).collect();
             assert_eq!(
                 drawn.len(),

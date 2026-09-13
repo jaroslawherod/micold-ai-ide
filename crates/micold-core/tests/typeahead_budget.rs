@@ -237,7 +237,7 @@ fn budget_tests() -> Vec<(String, String)> {
             .take_while(|l| l.starts_with("#["))
             .copied()
             .collect();
-        let is_test = attributes.iter().any(|a| *a == "#[test]");
+        let is_test = attributes.contains(&"#[test]");
         if is_test && body.contains("took < BUDGET_MS") {
             out.push((name.to_string(), attributes.join("\n")));
         }
