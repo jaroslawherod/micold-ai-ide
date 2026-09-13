@@ -6,6 +6,7 @@
 //!
 //! This is a genuine two-process test: it runs the real `micold-daemon` binary that Cargo built.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::path::PathBuf;

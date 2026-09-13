@@ -6,6 +6,7 @@
 //! fired. These gates drive the real supervision tick over a real process and read the signal off
 //! the snapshot the daemon actually publishes.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

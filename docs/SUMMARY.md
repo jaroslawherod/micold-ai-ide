@@ -8,6 +8,7 @@
 
 # User guide
 
+- [Installing on Windows](user-guide/install-windows.md)
 - [Help & About](user-guide/help-about.md)
 - [Opening a project](user-guide/project-selection.md)
 - [Appearance & theming](user-guide/appearance-theming.md)

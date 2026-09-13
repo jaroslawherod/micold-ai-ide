@@ -2,6 +2,7 @@
 //! instances; exactly one is *attached* (streamed + driven) at a time, and `SessionId`-addressed
 //! input routes to the attached one (data-model §Session, contracts/shell-instance-lifecycle.md).
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

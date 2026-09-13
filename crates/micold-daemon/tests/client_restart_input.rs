@@ -21,6 +21,7 @@
 //! discarded" — the thing a person checks by typing. (That applied bytes then reach the PTY is
 //! `drive_loop.rs`'s job; this test is about the ordering contract across the restart.)
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

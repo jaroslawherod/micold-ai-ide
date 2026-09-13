@@ -4,6 +4,7 @@
 //! replaces the old in-memory `SessionRouter` byte-routing approximation (removed in T030) with an
 //! end-to-end check against two real VT sessions.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::time::{Duration, Instant};

@@ -15,6 +15,7 @@
 //! proves the framer's arithmetic; only a real child writing as fast as it can proves the tick
 //! survives contact with a process that never pauses.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::path::PathBuf;

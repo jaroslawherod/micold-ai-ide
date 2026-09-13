@@ -21,6 +21,7 @@
 //! `micold-daemon` dev-depends on `micold-client` (see the manifest; not a cycle — the client never
 //! depends on the daemon), which is what lets one test hold both ends.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

@@ -5,6 +5,7 @@
 //! Uses a Regular (shell) session so the test spawns the platform shell — no `claude` binary needed.
 //! The AI-CLI spawn path is compile-covered by the same `start_session` code.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

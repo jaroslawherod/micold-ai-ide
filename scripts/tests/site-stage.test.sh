@@ -209,6 +209,37 @@ else
   fail "the failure names the file" "$(tail -3 "$fixture/missing-asset.log")"
 fi
 
+# The Windows guide links one setup exe per architecture (feature 030, FR-017). A release whose arm64
+# leg failed carries only one of them, and staging must refuse rather than publish a dead arm64 link.
+cat > "$fixture/docs/user-guide/install-windows.md" <<'MD'
+# Installing on Windows
+
+[x64](https://github.com/jaroslawherod/micold-ai-ide/releases/download/{{MICOLD_TAG}}/micold-ai-ide-{{MICOLD_VERSION}}-x64-setup.exe)
+[ARM64](https://github.com/jaroslawherod/micold-ai-ide/releases/download/{{MICOLD_TAG}}/micold-ai-ide-{{MICOLD_VERSION}}-arm64-setup.exe)
+MD
+
+if MICOLD_RELEASE_ASSETS="micold-client_9.9.9-1_amd64.deb micold-ai-ide-9.9.9-x64-setup.exe" \
+   "$STAGE" --docs "$fixture/docs" --media-manifest "$fixture/media.toml" \
+   --out "$fixture/out" --version 9.9.9 --tag v9.9.9 > "$fixture/missing-setup.log" 2>&1; then
+  fail "a Windows guide linking a setup exe the release lacks fails the stage" "stage.sh exited 0"
+else
+  pass "a Windows guide linking a setup exe the release lacks fails the stage"
+fi
+if grep -qF "micold-ai-ide-9.9.9-arm64-setup.exe" "$fixture/missing-setup.log"; then
+  pass "the failure names the missing setup exe"
+else
+  fail "the failure names the missing setup exe" "$(tail -3 "$fixture/missing-setup.log")"
+fi
+
+if MICOLD_RELEASE_ASSETS="micold-client_9.9.9-1_amd64.deb micold-ai-ide-9.9.9-x64-setup.exe micold-ai-ide-9.9.9-arm64-setup.exe" \
+   "$STAGE" --docs "$fixture/docs" --media-manifest "$fixture/media.toml" \
+   --out "$fixture/out" --version 9.9.9 --tag v9.9.9 > "$fixture/both-setups.log" 2>&1; then
+  pass "a Windows guide linking both setup exes the release carries stages"
+else
+  fail "a Windows guide linking both setup exes the release carries stages" "$(tail -3 "$fixture/both-setups.log")"
+fi
+rm "$fixture/docs/user-guide/install-windows.md"
+
 # A link into a *different* tag's downloads is the other half of the same mistake: it points at a
 # real file, and at the wrong release -- so a reader on the current version's page downloads an old
 # one and nothing tells either of them.

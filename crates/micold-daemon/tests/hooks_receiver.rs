@@ -6,6 +6,7 @@
 //! (head/path/token/event) are unit-tested inside `hooks.rs`; this proves the wiring — bind → POST →
 //! the session's projected activity signal.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

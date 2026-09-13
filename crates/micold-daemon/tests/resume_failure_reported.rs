@@ -15,6 +15,7 @@
 //! snapshot is drained before the start is sent — so a `CatalogChanged` arriving after
 //! `SessionStart` came from the start.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

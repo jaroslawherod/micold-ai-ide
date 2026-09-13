@@ -24,6 +24,7 @@ pub mod naming;
 pub mod notify;
 pub mod os_theme;
 pub mod overlay;
+pub mod process;
 pub mod project;
 pub mod protocol;
 pub mod provider;

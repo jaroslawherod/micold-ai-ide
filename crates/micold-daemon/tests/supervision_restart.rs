@@ -6,6 +6,7 @@
 //! counter and respawns it. The crash-loop *give-up* case lives in `supervision_giveup.rs` (it needs
 //! a crashing shell, so it owns its own test binary to keep `SHELL` isolated).
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

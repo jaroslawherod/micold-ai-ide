@@ -361,6 +361,7 @@ fn baseline_env(cwd: &Path, budget: Duration) -> Option<HashMap<String, String>>
     // subprocesses from the same directory keeps this branch structurally parallel and immune to
     // any such quirk.
     let mut cmd = Command::new("powershell.exe");
+    crate::process::no_window(&mut cmd);
     cmd.current_dir(cwd);
     cmd.arg("-NoProfile").arg("-Command").arg(
         "[System.Environment]::GetEnvironmentVariables().GetEnumerator() | ForEach-Object { \
@@ -385,6 +386,7 @@ fn attempt_env(path: &Path, cwd: &Path, timeout: Duration) -> RunOutcome {
         path.display()
     );
     let mut cmd = Command::new("powershell.exe");
+    crate::process::no_window(&mut cmd);
     cmd.current_dir(cwd);
     cmd.arg("-NoProfile").arg("-Command").arg(script);
     run_bounded(cmd, timeout)

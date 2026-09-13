@@ -1,0 +1,387 @@
+# Cycle Log: Windows Installation Package
+
+Append only. Newest last. Every entry's `red` block is the evidence that the test existed and
+failed before the implementation.
+
+## Baseline
+
+- suite: `mise run test` -> 2793 passed, 0 failed, 2 ignored (181 s including build-lock wait)
+- commit: `61cc0318`
+- recorded: cycle 0, before any change
+
+## Cycle 1: U21 a Unix-gated daemon test file with no stated reason is reported
+
+- test: `crates/micold-core/tests/daemon_tests_gate_with_reason.rs::unix_gated_daemon_test_files_state_a_reason` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test daemon_tests_gate_with_reason unix_gated_daemon_test_files_state_a_reason -- --exact`
+  -> `these daemon test files are compiled out on Windows with no stated reason, so the Windows CI leg silently skips them: ["activity_ended.rs", "activity_pipeline.rs", "autospawn.rs", ...` (1 failed)
+- green: a `// unix-only: pending Windows triage (030 T026/T027)` line above each of the 26 `#![cfg(unix)]` lines in `crates/micold-daemon/tests/` (T005). Same command -> 1 passed
+- refactor: none needed
+- commit: uncommitted (the session commits only when the user asks)
+
+## Cycle 2: U7 acquiring after the previous listener is dropped returns `Bound`
+
+- test: `crates/micold-daemon/tests/daemon_singleton.rs::acquire_after_drop_rebinds` (new). The file's whole-file `#![cfg(unix)]` was removed, a per-platform `test_endpoint` was added (a unique `\\.\pipe\Micold.Test.*` name on Windows), and only `a_stale_socket_from_a_crash_is_reclaimed` stays `#[cfg(unix)]` with a `// unix-only:` reason (T009).
+- red: none on this host. The Unix implementation already satisfies it; `cargo test -p micold-daemon --test daemon_singleton acquire_after_drop_rebinds -- --exact` -> 1 passed on the first run. The intended red is the Windows leg, where `acquire` opens `temp_dir()` as a file and fails; that run is pending the push in T028.
+- deliberate mutant 1: removing both socket unlinks in `singleton.rs` still passed, because `interprocess` reclaims the socket name on listener drop. That mutant does not violate the behaviour.
+- deliberate mutant 2: `std::mem::forget(self._lock.try_clone())` in `BoundListener::drop` (the endpoint lock outlives the daemon) hung the test. The test was then bounded with `REBIND_BUDGET` (5 s), and the same mutant gave
+  `acquire after drop must not wait on the previous daemon's endpoint: Elapsed(())` (1 failed, 5.00s). `singleton.rs` was restored from a byte copy; `git diff` on it is empty.
+- green: `cargo test -p micold-daemon --test daemon_singleton` -> 4 passed
+- refactor: the timeout was added to the test, as above
+- commit: uncommitted
+
+## Cycle 3: U6 two simultaneous starters converge on one `Bound`
+
+- test: `crates/micold-daemon/tests/daemon_singleton.rs::two_simultaneous_starters_converge_on_one_daemon` (existing, now compiled on every platform by cycle 2's un-gating)
+- red: none on this host; it is an existing passing Unix test. It is credited on Unix. Its Windows run is pending the push in T028.
+- green: `cargo test -p micold-daemon --test daemon_singleton` -> 4 passed
+- refactor: none
+- commit: uncommitted
+
+## Cycle 4: U8 while the real daemon runs, `lock_path` holds its pid followed by a newline
+
+- test: `crates/micold-daemon/tests/daemon_stop.rs::pid_record_lifecycle` (new file, all platforms, no gate). Spawns the real `micold-daemon` with an isolated `HOME`/`XDG_*` (Unix) and kills only that child on drop. Cases share a `tokio::sync::Mutex`, because the resolver reads process env and Windows has one endpoint.
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test daemon_stop pid_record_lifecycle -- --exact` -> `running 1 test`, then
+  `assertion \`left == right\` failed: lock_path must hold the running daemon's pid followed by a newline` with `left: "1283350"` and `right: "1283350\n"` (1 failed)
+- green: `server.rs` writes `format!("{}\n", std::process::id())` (T018, partly). Same command -> 1 passed
+- refactor: none
+- notes: the case name is the contract's (E4.1), but it covers only the write half. The removal half is U9, which is BLOCKED (see cycle 6's notes). Full suite deferred to a batched run before the next report.
+- commit: uncommitted
+
+## Cycle 5: U12 `stop_running_daemon` with a pid record for a non-live endpoint returns `Ok(false)`
+
+- test: `crates/micold-core/src/spawn.rs::tests::stale_pid_record_is_ignored` (new). The record holds `0x7FFF_FFF0`, above every pid ceiling, so a wrong answer signals nobody.
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib spawn::tests::stale_pid_record_is_ignored -- --exact` -> `running 1 test`, then
+  `a pid record whose endpoint is not live is a leftover, not a daemon to stop; got Ok(true)` (1 failed)
+- green: `running_daemon_pid` returns `None` unless a synchronous `interprocess` connect to `socket_path` succeeds (T019, partly). Same command -> 1 passed
+- refactor: none
+- notes: this test was written while cycle 4's first build waited on another worktree's build lock. It was not run, and no implementation was touched, until cycle 4 was green.
+- commit: uncommitted
+
+## Cycle 6: U10 `stop_running_daemon` on a live daemon returns `Ok(true)` and the endpoint refuses within 5 s
+
+- test: `crates/micold-daemon/tests/daemon_stop.rs::stop_running_daemon_ends_endpoint` (new)
+- red: none on this host. The Unix `SIGTERM` path already satisfies it; the same single-test command -> 1 passed on the first run. The intended red is the Windows leg, where `terminate_daemon` returns `Unsupported`; that run is pending the push.
+- deliberate mutant: the Unix `libc::kill` replaced by `0` (the stop is reported but never sent) ->
+  `the endpoint still accepts connections 5s after the stop` (1 failed, 5.09s). `spawn.rs` was restored from a byte copy; `cmp` reports it identical.
+- green: same command -> 1 passed
+- refactor: none
+- notes, U9 BLOCKED: "removed on clean exit" has no clean exit to observe. `serve_interprocess` returns only on an accept error, and the only stops are `SIGTERM` (no handler, so the default action) and `TerminateProcess`. A removal guard would be dead code on both platforms. On Unix `lock_path` is also the `flock` file, and unlinking a held lock file lets a second daemon lock a new inode while the first still runs. The stale-record case (U12) already makes a leftover record harmless. Needs a decision: drop U9 and the "removes on clean exit" wording in E4.1, `data-model.md` and R4, or add a shutdown path to the daemon.
+- commit: uncommitted
+
+## Cycle 7: U15 on Unix, a command passed through `no_window` spawns and exits 0
+
+- test: `crates/micold-core/src/process.rs::tests::no_window_is_noop_elsewhere` (new). `process.rs` was created with `todo!()` bodies for `no_window` and `announce_running`, and declared in `lib.rs` (T014).
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib process::tests::no_window_is_noop_elsewhere -- --exact` -> `running 1 test`, then
+  `panicked at crates/micold-core/src/process.rs:15:5: not yet implemented` (1 failed)
+- green: the `#[cfg(not(windows))]` `no_window` returns the command unchanged. The Windows arm stays `todo!()` for U14. Same command -> 1 passed
+- refactor: none
+- notes: the red is the stub's panic, not an assertion. A pass-through function has no wrong value to assert against short of the stub. The `tokio::process::Command` twin in T014 is not added: no source uses `tokio::process`, and the workspace `tokio` has no `process` feature, so the twin would need a feature change for no caller.
+- commit: uncommitted
+
+## Cycle 8: U18 a background spawn that can run on Windows and skips `no_window` is reported
+
+- test: `crates/micold-core/tests/background_spawns_hide_console.rs::every_background_spawn_hides_its_console` (new). Exempts functions gated `cfg(unix)`, `cfg(not(windows))`, `cfg(target_os = "linux")` or `cfg(target_os = "macos")`, and allowlists `spawn.rs` `spawn_detached_daemon` with its reason. The allowlist entry must name a real spawn.
+- red: `scripts/build-lock.sh cargo test -p micold-core --test background_spawns_hide_console every_background_spawn_hides_its_console -- --exact` -> `running 1 test`, then the offenders
+  `env_include.rs:363 (in baseline_env)`, `env_include.rs:387 (in attempt_env)`, `git.rs:114 (in run_git)`, `git.rs:160 (in branch_exists)`, `git.rs:308 (in submodule_update_init_recursive)`, `sandbox/exec.rs:102 (in run)`, `sandbox/exec.rs:121 (in run_streaming)` (1 failed). These are exactly the sites T013 predicted. `env_include.rs:323` (`bash`, `cfg(not(windows))`) and `logout_survival.rs:195` (`cfg(target_os = "linux")`) were correctly exempt.
+- green: the seven spawns go through `micold_core::process::no_window` (T022). Same command -> 1 passed. `cargo check --target x86_64-pc-windows-msvc -p micold-core --tests` is clean.
+- refactor: none
+- notes, U14 deviation: routing real spawns through a `todo!()` Windows arm would have broken every Windows `git` call. So the Windows test `process::tests::no_window_sets_flag` was written first and compile-checked against the stub, which failed with `E0425 cannot find value CREATE_NO_WINDOW`. That is a compile error, not a red. The Windows arm (`creation_flags(CREATE_NO_WINDOW)`) was then implemented. U14's red was never observed and its green is unobserved until the Windows CI leg runs, so U14 stays BLOCKED on that run. Treat it as test-after.
+- commit: uncommitted
+
+## Cycle 9: U19 a daemon that fails at startup exits non-zero and logs a `fatal:` line
+
+- test: `crates/micold-daemon/tests/fatal_startup_is_logged.rs::fatal_startup_error_reaches_the_log_file` (new). Runs the real binary detached (stdio null, no `JOURNAL_STREAM`, so the file sink) with `MICOLD_LISTEN_ADDR=not-an-addr`.
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test fatal_startup_is_logged fatal_startup_error_reaches_the_log_file -- --exact` -> `running 1 test`, `the log at /tmp/.tmppTVWQb/data/micold-ai-ide/micold-daemon.log must record the fatal startup error` (the log held only `ERROR ... failed to bind the sandbox listener addr=not-an-addr error=invalid socket address`). The non-zero exit assertion already held.
+- green: `crates/micold-daemon/src/main.rs` appends `micold-daemon: fatal: {e}` to `logging::default_log_path()` before the existing `eprintln!` and exit 1 (T023). Same command -> 1 passed.
+- refactor: none
+- notes: the full suite was run once before this cycle, covering cycles 4–8: `mise run test` -> 2800 passed, 0 failed, 2 ignored. The full run for this cycle is batched with the next ones. The Windows run of this test writes to the real user log (the data dir takes no env input); that run is on the CI leg.
+- commit: uncommitted
+
+## Cycle 10: U27 `windows_violations` reports a `[Files]` `Source:` containing `*` or `?`
+
+- test: `crates/micold-client/tests/packaging_excludes_showcase.rs::a_windows_installer_with_a_wildcard_source_fails` (new, with `HEALTHY_ISS`, `WINDOWS_SHIPPED` and a `windows_violations` stub returning `Vec::new()`)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test packaging_excludes_showcase a_windows_installer_with_a_wildcard_source_fails -- --exact` -> `running 1 test`, `a wildcard \`Source:\` must be reported by value, got []`
+- green: `iss_file_sources` collects `[Files]` `Source:` values, skipping `;` comment lines. `windows_violations` reports any value containing `*` or `?`. Same command -> 1 passed.
+- refactor: none
+- notes: the U19 test file was written while the full suite held the build lock, and was not run until the suite finished.
+- commit: uncommitted
+
+## Cycle 11: U28 `windows_violations` reports a `[Files]` source naming `micold-showcase`
+
+- test: `crates/micold-client/tests/packaging_excludes_showcase.rs::a_windows_installer_that_ships_the_showcase_fails` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test packaging_excludes_showcase a_windows_installer_that_ships_the_showcase_fails -- --exact` -> `running 1 test`, `a \`Source:\` naming the showcase must be reported, got []`
+- green: sources for which `names_showcase` holds (the existing Debian-side predicate) are reported. Same command -> 1 passed.
+- refactor: none
+- commit: uncommitted
+
+## Cycle 12: U29 `windows_violations` reports a `[Files]` section that lacks `micold-daemon.exe`
+
+- test: `crates/micold-client/tests/packaging_excludes_showcase.rs::a_windows_installer_without_the_daemon_fails` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test packaging_excludes_showcase a_windows_installer_without_the_daemon_fails -- --exact` -> `running 1 test`, `an installer that does not ship the daemon must be reported, got []`
+- green: every name in `shipped` must be the basename of some source, split on `\\` or `/`. Same command -> 1 passed.
+- refactor: none
+- notes: T029 also says "fails on any basename other than the two". No behavior on the list covered that, so it was appended as U60 rather than implemented here. A5 (the real `.iss`) waits for T035.
+- commit: uncommitted
+
+## Cycle 13: U60 `windows_violations` reports a source whose basename is not one of the two shipped exes
+
+- test: `crates/micold-client/tests/packaging_excludes_showcase.rs::a_windows_installer_that_ships_an_unlisted_file_fails` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test packaging_excludes_showcase a_windows_installer_that_ships_an_unlisted_file_fails -- --exact` -> `running 1 test`, `a \`Source:\` outside the shipped set must be reported, got []`
+- green: a third arm reports a source whose `basename` is not in `shipped`. The per-source checks became an `else if` chain (showcase, then wildcard, then unlisted), so each source gives one violation, and U27/U28 still find theirs. Same command -> 1 passed. The whole file -> 12 passed.
+- refactor: the basename split was extracted into `fn basename`, shared with the missing-binary check.
+- commit: uncommitted
+
+## Cycle 14: A5 the committed `.iss` passes `windows_violations` and ships exactly the two exes
+
+- test: `crates/micold-client/tests/packaging_excludes_showcase.rs::the_windows_installer_contains_no_showcase` (new; reads `packaging/windows/micold-ai-ide.iss`)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test packaging_excludes_showcase the_windows_installer_contains_no_showcase -- --exact`. With no file it failed on `read .../micold-ai-ide.iss: No such file or directory (os error 2)`, which is not an assertion red. With a stub `.iss` (header comments, `[Setup]`, `AppName=`) it failed on the assertion `packaging/windows/micold-ai-ide.iss does not ship \`micold-ai-ide.exe\`` (and the same for `micold-daemon.exe`).
+- green: added `[Files]` with the two `{#BinDir}\` entries from the contract. Same command -> 1 passed.
+- refactor: none
+- notes: the `.iss` is being grown one directive per behavior (U30–U42). The directives no behavior covers (icons, `[Run]`, `DefaultDirName`, …) stay with T035 in `/speckit-implement`.
+- commit: uncommitted
+
+## Cycle 15: U30 `PrivilegesRequired=lowest` and no `PrivilegesRequiredOverridesAllowed`
+
+- test: `crates/micold-core/tests/windows_installer_is_per_user.rs::installs_without_elevation` (new file; `directive_values` scans `Name=Value` lines, skipping `;` comments)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test windows_installer_is_per_user installs_without_elevation -- --exact` -> `running 1 test`, `the installer must run as the signed-in user, with no UAC prompt (FR-004)` `left: []` `right: ["lowest"]`
+- green: `PrivilegesRequired=lowest` in `[Setup]`. Same command -> 1 passed.
+- refactor: none
+- notes: the absence assertion held from the start. Mutant: inserting `PrivilegesRequiredOverridesAllowed=dialog` gave `the user must never be offered an all-users (elevated) install (FR-004)` `left: ["dialog"]`. The file was restored from a copy, and cmp confirmed it.
+- commit: uncommitted
+
+## Cycle 16: U31 `AppId` is exactly the pinned GUID
+
+- test: `crates/micold-core/tests/windows_installer_is_per_user.rs::app_id_is_pinned`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test windows_installer_is_per_user app_id_is_pinned -- --exact` -> `running 1 test`, `AppId is pinned forever ...` `left: []` `right: ["{{1B19A6AC-4C91-4033-88EA-F7F283127C8A}"]`
+- green: added `AppId={{1B19A6AC-4C91-4033-88EA-F7F283127C8A}`. Same command -> 1 passed.
+- refactor: none
+- commit: uncommitted
+
+## Cycle 17: U33 `RestartApplications=no`
+
+- test: `crates/micold-core/tests/windows_installer_is_per_user.rs::never_relaunches_the_app`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test windows_installer_is_per_user never_relaunches_the_app -- --exact` -> `running 1 test`, `setup must not relaunch the app it closed ...` `left: []` `right: ["no"]`
+- green: added `RestartApplications=no`. Same command -> 1 passed.
+- refactor: none
+- commit: uncommitted
+
+## Cycle 18: U32 no `[Registry]` section
+
+- test: `crates/micold-core/tests/windows_installer_is_per_user.rs::writes_no_registry_entries`
+- red: none. The test passed on its first run, because the script has no `[Registry]` section, and an absence rule has nothing to implement. Mutant: appending a `[Registry]` HKCU Run-key entry gave `the installer must not write registry values of its own ... found ["[Registry]"]`. Restored from a copy, and cmp confirmed it.
+- green: n/a (no production change)
+- refactor: none
+- commit: uncommitted
+
+## Cycle 19: U34 no `SignTool` directive
+
+- test: `crates/micold-core/tests/windows_installer_is_per_user.rs::is_not_signed`
+- red: none, for the same reason as cycle 18. Mutant: inserting `SignTool=signtool` gave `left: ["signtool"]` (1 failed). Restored from a copy, and cmp confirmed it.
+- green: n/a
+- refactor: none
+- commit: uncommitted
+
+## Cycle 20: U35 `ArchitecturesAllowed` follows `{#Arch}`
+
+- test: `crates/micold-core/tests/windows_installer_is_per_user.rs::architecture_follows_the_arch_define`. `preprocess(script, arch)` evaluates the script's `#if Arch == ".."`/`#elif`/`#else`/`#endif`/`#ifndef`/`#error` and panics on any other condition. Covers x64 and arm64, plus `ArchitecturesInstallIn64BitMode` (contract table).
+- red: `scripts/build-lock.sh cargo test -p micold-core --test windows_installer_is_per_user architecture_follows_the_arch_define -- --exact` -> `running 1 test`, `/DArch=x64 must allow exactly \`x64compatible and not arm64\` ...` `left: []`
+- green: added the `#if Arch == "x64"` / `#elif Arch == "arm64"` / `#else #error` block. The whole file -> 6 passed.
+- refactor: none
+- notes: the red stopped at the x64 case, so the arm64 case was never seen failing on its own. Its values were added in the same green.
+- commit: uncommitted
+
+## Cycle 21: U36 `AppVersion`/`VersionInfoVersion` are `{#AppVersion}`, and there is no literal semver
+
+- test: `crates/micold-core/tests/windows_installer_version_is_injected.rs::version_is_the_injected_define` (new file)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test windows_installer_version_is_injected version_is_the_injected_define -- --exact` -> `running 1 test`, `AppVersion must be \`{#AppVersion}\`, passed by the build from Cargo.toml (FR-013)` `left: []` `right: ["{#AppVersion}"]`
+- green: added `AppVersion={#AppVersion}` and `VersionInfoVersion={#AppVersion}`. Same command -> 1 passed.
+- refactor: none
+- notes: the no-semver half passed before green. Mutant: inserting `AppVerName=Micold AI IDE 0.4.1` gave `the .iss must not spell out a version ...` `left: ["0.4.1"]`. Restored from a copy, and cmp confirmed it -> 1 passed.
+- commit: uncommitted
+
+## Cycle 22: U37 `OutputBaseFilename=micold-ai-ide-{#AppVersion}-{#Arch}-setup`
+
+- test: `crates/micold-core/tests/windows_installer_version_is_injected.rs::setup_file_name_carries_version_and_arch`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test windows_installer_version_is_injected setup_file_name_carries_version_and_arch -- --exact` -> `running 1 test`, `the setup exe must be named for its version and architecture ...` `left: []` `right: ["micold-ai-ide-{#AppVersion}-{#Arch}-setup"]`
+- green: added the directive. Both installer test files -> 6 passed, 2 passed.
+- refactor: none. `iss_path`/`iss`/`directive_values` now repeat across two test files; each integration test is its own crate and the repo has no shared tests module, so they stay.
+- commit: uncommitted
+
+## Cycle 23: U38 `AppMutex` equals the app's mutex name
+
+- test: `crates/micold-core/tests/windows_installer_in_use.rs::app_mutex_matches_the_running_app` (new file). It compares against `micold_core::process::APP_MUTEX_NAME`, not a second literal, so the two cannot drift.
+- red: `scripts/build-lock.sh cargo test -p micold-core --test windows_installer_in_use app_mutex_matches_the_running_app -- --exact` -> `running 1 test`, `setup detects a running app only through the mutex the app holds (FR-009)` `left: []` `right: ["Local\\MicoldAIIDE"]`
+- green: `AppMutex=Local\MicoldAIIDE` in `[Setup]`. Same command -> 1 passed.
+- refactor: none
+- notes: the test needs a symbol to resolve, so `pub const APP_MUTEX_NAME: &str = "Local\\MicoldAIIDE"` was added to `process.rs` before the red. `announce_running` is still `todo!()` (U16/U17 are Windows-only and blocked on CI).
+- commit: uncommitted
+
+## Cycle 24: U39 `CloseApplications=force`
+
+- test: `crates/micold-core/tests/windows_installer_in_use.rs::closes_the_app_window_when_the_user_continues`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test windows_installer_in_use closes_the_app_window_when_the_user_continues -- --exact` -> `running 1 test`, `setup must close a still-open app window through Restart Manager ...` `left: []` `right: ["force"]`
+- green: added the directive. The file -> 2 passed.
+- refactor: none
+- commit: uncommitted
+
+## Cycle 25: U40 `PrepareToInstall` and `InitializeUninstall` call `StopDaemon`
+
+- test: `crates/micold-core/tests/windows_installer_in_use.rs::install_and_uninstall_stop_the_daemon_first`. `code_section` strips `//` comments; `routine_body` runs from the header to the first unindented `end;`.
+- red: `scripts/build-lock.sh cargo test -p micold-core --test windows_installer_in_use install_and_uninstall_stop_the_daemon_first -- --exact` -> `running 1 test`, `[Code] must define \`PrepareToInstall\` (FR-009, FR-023)`
+- green: added a `[Code]` section with `StopDaemon` (the pid record, then a PowerShell image-checked `Stop-Process` with a 5 s wait; with no record, `taskkill` scoped to the user), `PrepareToInstall` and `InitializeUninstall`, per T044. The three installer test files -> 3, 6 and 2 passed; `packaging_excludes_showcase` -> 13 passed.
+- refactor: none
+- notes: the test only pins the call graph. Whether `StopDaemon` compiles in ISCC and actually stops a daemon is verified only by the Windows smoke (A6–A9, T043/T045), which is blocked on a CI push. Mutant: replacing `Error := StopDaemon();` with `Error := '';` gave `\`InitializeUninstall\` must call \`StopDaemon\` ...` (1 failed). Restored from a copy, and cmp confirmed it.
+- commit: uncommitted
+
+## Cycle 26: U41 `[UninstallDelete]` is exactly the runtime dir
+
+- test: `crates/micold-core/tests/windows_installer_in_use.rs::uninstall_removes_only_the_runtime_dir`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test windows_installer_in_use uninstall_removes_only_the_runtime_dir -- --exact` -> `running 1 test`, `uninstall must remove the daemon's runtime dir and nothing else of the user's (FR-007)` `left: []`
+- green: added `[UninstallDelete]` with `Type: filesandordirs; Name: "{localappdata}\micold-ai-ide\run"`. in_use -> 4 passed, per_user -> 6 passed.
+- refactor: none
+- commit: uncommitted
+
+## Cycle 27: U42 no delete entry names user data
+
+- test: `crates/micold-core/tests/windows_installer_in_use.rs::never_deletes_user_data`
+- red: none. It passed on its first run, because an absence rule has nothing to implement.
+  - Mutant 1: adding `Type: filesandordirs; Name: "{localappdata}\micold-ai-ide\data"` under `[UninstallDelete]` gave `[UninstallDelete] must not delete the user's settings or session data (FR-007); found [...]`.
+  - Mutant 2: adding an `[InstallDelete]` `{userappdata}\micold-ai-ide` entry gave `[InstallDelete] must not delete ...`.
+  - Both were restored from a copy, and cmp confirmed it -> 1 passed.
+- green: n/a
+- refactor: none
+- notes: added U61 (the ready page states "Running sessions will be stopped."). It is in the contract's `[Code]` bullets and T044, but had no behavior.
+- commit: uncommitted
+
+## Cycle 28: U61 the ready page says "Running sessions will be stopped."
+
+- test: `crates/micold-core/tests/windows_installer_in_use.rs::ready_page_says_sessions_will_stop`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test windows_installer_in_use ready_page_says_sessions_will_stop -- --exact` -> `running 1 test`, `[Code] must define \`UpdateReadyMemo\` to add the notice to the ready page (FR-009)`
+- green: added `UpdateReadyMemo`, which rebuilds the standard memo and appends the notice. in_use -> 6 passed, per_user -> 6, version -> 2.
+- refactor: the first green built the memo from a Pascal array literal. That assignment form is not certain to compile in Pascal Script, so it became plain `if`s. Re-run -> all green.
+- notes: like U40, ISCC compilation is proven only on the Windows CI leg.
+- commit: uncommitted
+
+## Cycle 29: U43 refuses to run off Windows
+
+- test: `scripts/tests/windows-installer.test.sh`, case "refuses to run off Windows" (new suite). `uname`, `cargo` and `iscc` are stubbed on PATH, and the stubs record their args in a temp dir. `MICOLD_NO_BUILD_LOCK=1`. It is already covered by the CI `scripts/tests/*.test.sh` glob.
+- red: `scripts/tests/windows-installer.test.sh` (a shell suite has no single-case filter; it runs the whole file, which then held 1 case) -> `FAIL  refuses to run off Windows` / `want a non-zero exit on uname Linux, got 0`. It ran against a stub `scripts/windows-installer.sh` (`exit 0`), because a missing script is not a valid red.
+- green: a `uname -s` case accepting `MINGW*|MSYS*|CYGWIN*`, and otherwise `the Windows installer is built on Windows` with exit 1 -> 1 case, 0 failures.
+- refactor: the case's inline checks became `expect_refusal`. Mutant: the `*)` arm renamed to `NOPE)` gave `FAIL ... want a non-zero exit, got 0`. Restored -> 0 failures.
+- commit: uncommitted
+
+## Cycle 30: U44 `--arch` other than x64/arm64 is rejected
+
+- test: `scripts/tests/windows-installer.test.sh`, cases "rejects --arch 'x86' / 'aarch64' / 'ARM64' / ''" (also: cargo not run)
+- red: `scripts/tests/windows-installer.test.sh` -> `FAIL  rejects --arch 'x86'` `want a non-zero exit, got 0` (4 failures of 5)
+- green: argument parsing (`--arch`, `--out-dir`; the default arch comes from `PROCESSOR_ARCHITECTURE`), and the arch maps to a triple, otherwise `--arch must be x64 or arm64` with exit 2 -> 5 cases, 0 failures.
+- refactor: none
+- commit: uncommitted
+
+## Cycle 31: U45 iscc gets `/DAppVersion=` from `[workspace.package] version`
+
+- test: `scripts/tests/windows-installer.test.sh`, case "passes the workspace version to iscc". The suite reads the version itself (`0.12.1`). `expect_args` was added.
+- red: `scripts/tests/windows-installer.test.sh` -> `FAIL  passes the workspace version to iscc` `want iscc arguments containing \`/DAppVersion=0.12.1 \`, got: <not invoked>`
+- green: a sed-read version, `iscc="${ISCC:-iscc}"`, and `"$iscc" /DAppVersion= /DArch= /O<out> <iss>` -> 6 cases, 0 failures.
+- refactor: none
+- notes: the green also passed `/DArch`, a step ahead of U46. The U46 entry has its mutant. Mutant: `/DAppVersion=0.0.0` gave `FAIL ... got: /DAppVersion=0.0.0 ...`. Restored, and cmp confirmed it.
+- commit: uncommitted
+
+## Cycle 32: U46 `/DArch=<arch>` and `/DBinDir=<target>/<triple>/release`
+
+- test: `scripts/tests/windows-installer.test.sh`, cases "passes /DArch=x64|arm64 to iscc" and "points iscc at the <triple> release binaries". The target dir comes from `scripts/build-lock.sh --print-target-dir`.
+- red: `scripts/tests/windows-installer.test.sh` -> `FAIL  points iscc at the x86_64-pc-windows-msvc release binaries` `want ... /DBinDir=/home/jaro/workspaces/micold-ai-ide/target-shared/x86_64-pc-windows-msvc/release `. That is 2 failures; the `/DArch` cases passed from cycle 31.
+- green: `bin_dir="$target_dir/$triple/release"` passed as `/DBinDir`. The paths go through `winpath` (`cygpath -w` when present), and iscc runs under `MSYS2_ARG_CONV_EXCL='*'` so Git Bash does not rewrite `/D` switches -> 10 cases, 0 failures.
+- refactor: none
+- notes: `/DArch` passed on its first run. Mutant: hard-coding `/DArch=x64` gave `FAIL  passes /DArch=arm64 to iscc`. Restored, and cmp confirmed it. The `cygpath`/MSYS behavior is proven only on the Windows CI leg.
+- commit: uncommitted
+
+## Cycle 33: U47 no iscc -> the error names the Inno Setup download
+
+- test: `scripts/tests/windows-installer.test.sh`, case "names the Inno Setup download when no iscc is found" (with the stub removed, `ISCC=`, and cargo not run)
+- red: `scripts/tests/windows-installer.test.sh` -> `FAIL  names the Inno Setup download when no iscc is found` `want output containing \`https://jrsoftware.org/isdl.php\`, got: ... line 82: iscc: command not found`
+- green: resolve `$ISCC`, then `${ProgramFiles(x86)}/Inno Setup 6/ISCC.exe`, then PATH; otherwise the message names `https://jrsoftware.org/isdl.php`, with exit 1 -> 11 cases, 0 failures.
+- refactor: none
+- commit: uncommitted
+
+## Cycle 34: U48 the cargo invocation
+
+- test: `scripts/tests/windows-installer.test.sh`, cases "builds the app and the daemon for <triple>" (x64, arm64)
+- red: `scripts/tests/windows-installer.test.sh` -> `FAIL  builds the app and the daemon for x86_64-pc-windows-msvc` `want cargo arguments containing \`build --release --locked -p micold-client --bin micold-ai-ide -p micold-daemon --target x86_64-pc-windows-msvc\`, got: <not invoked>`
+- green: `scripts/build-lock.sh cargo build --release --locked -p micold-client --bin micold-ai-ide -p micold-daemon --target $triple`, run after iscc is resolved. The default out-dir is `<target>/windows-installer`, and the output path is printed -> 13 cases, 0 failures.
+- refactor: none
+- notes: Mutant: dropping `--bin micold-ai-ide` gave 2 failures. Restored, and cmp confirmed it. shellcheck is not installed here, so it was not run.
+- commit: uncommitted
+
+## Session note: main not integrated
+
+- PR #284 (028) merged; `origin/main` is 35 commits ahead, and HEAD has no commits of its own. Six uncommitted files overlap main's changes, plus `.specify/memory/tdd-profile.md`. Fast-forwarding and 3-way-merging the uncommitted work was refused by the permission classifier, so nothing was integrated.
+- Deferred until main is in: U51, A10, A11 and U57 (`release.yml`: main adds the macOS job, the notice step and `release_publishes_complete_sets.rs`), the T054 `ci.yml` docs-job line (main edits the same lines), and the T037 mise task (main edits `mise.toml`).
+
+## Cycle 35: U53 the release notice names the arches, the SmartScreen steps and the guide
+
+- test: `crates/micold-core/tests/release_notice_windows.rs::notice_names_arches_smartscreen_steps_and_guide`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test release_notice_windows notice_names_arches_smartscreen_steps_and_guide -- --exact` -> `running 1 test` ... `missing ["x64", "ARM64", "More info", "Run anyway", "install-windows"]`. The notice file existed but was empty.
+- green: `.github/release-notice-windows.md`, 3 non-empty lines: which setup exe to pick, **More info** then **Run anyway**, and a link to the install-windows guide -> 1 passed.
+- refactor: none
+- commit: uncommitted
+
+## Cycle 36: U52 the release notice is at most 5 non-empty lines
+
+- test: `crates/micold-core/tests/release_notice_windows.rs::notice_is_at_most_five_lines`
+- red: none. It passed on its first run, because cycle 35's notice was already 3 lines.
+- mutant: appending 3 lines to the notice gave `must stay within 5 non-empty lines (FR-010); it has 6`. Restored with cp, and cmp confirmed it.
+- refactor: none
+- notes: test-after relative to the notice text, with the mutant as evidence.
+- commit: uncommitted
+
+## Cycle 37: A12 site staging fails on a setup exe the release lacks
+
+- test: `scripts/tests/site-stage.test.sh`, cases "a Windows guide linking a setup exe the release lacks fails the stage" and "the failure names the missing setup exe". The fixture's `install-windows.md` links both exes, but `MICOLD_RELEASE_ASSETS` lacks arm64.
+- red: none. It passed on its first run: `site/stage.sh` already scans every staged page (028).
+- mutant: in `site/stage.sh`, turning the membership case into `*) ;;` gave `FAIL  a Windows guide linking a setup exe the release lacks fails the stage` and `FAIL  the failure names the missing setup exe`. Restored, and cmp confirmed it.
+- green: no source change (T052 needed none); the page is in `docs/SUMMARY.md`, and `site/checks/page-set.sh` passes with 18 pages.
+- commit: uncommitted
+
+## Cycle 38: U54 site staging passes with both setup exes present
+
+- test: `scripts/tests/site-stage.test.sh`, case "a Windows guide linking both setup exes the release carries stages"
+- red: none. It passed on its first run (existing behavior).
+- mutant: `file="${link##*-}"` gave `FAIL  a Windows guide linking both setup exes the release carries stages` / `release v9.9.9 does not carry setup.exe`. Restored, and cmp confirmed it.
+- commit: uncommitted
+
+## Cycle 39: U58 the Windows guide has the lifecycle headings
+
+- test: `crates/micold-core/tests/install_guide_windows.rs::windows_guide_has_the_lifecycle_headings`
+- red: `... --test install_guide_windows windows_guide_has_the_lifecycle_headings -- --exact` -> `running 1 test` ... `missing ["Download", "Install", "Upgrading", "Removing", "Limits"], found ["Installing on Windows"]`. The page held only its title.
+- green: `docs/user-guide/install-windows.md` gets Before you start, Download, Install, Upgrading, Removing (with What uninstall keeps), and Limits (unsupported architecture only). This covers T041 and T046 -> 1 passed.
+- commit: uncommitted
+
+## Cycle 40: U59 the guide names SmartScreen, Smart App Control and building from source
+
+- test: `crates/micold-core/tests/install_guide_windows.rs::windows_guide_names_smartscreen_and_smart_app_control`
+- red: `... windows_guide_names_smartscreen_and_smart_app_control -- --exact` -> `running 1 test` ... `missing ["Smart App Control", "from source"]`
+- green: the Limits section gets bullets for Smart App Control (no per-app override; build from source) and for AppLocker/WDAC -> 2 passed.
+- notes: `from source` is asserted with U59 because it is the Smart App Control workaround T054 lists.
+- commit: uncommitted
+
+## Cycle 41: A15 the Limits section says sessions end at logout, except in the container
+
+- test: `crates/micold-core/tests/install_guide_windows.rs::windows_guide_limits_say_sessions_end_at_logout`
+- red: `... windows_guide_limits_say_sessions_end_at_logout -- --exact` -> `running 1 test` ... `must say sessions do not survive logging out ... mentioning \`logging out\``
+- green: Limits bullets for logging out (linking `sandboxed-daemon.md` and `../daemon.md`) and for one service per account -> 3 passed.
+- commit: uncommitted
+
+## Cycle 42: A14 install.md no longer says Windows has no package
+
+- test: `crates/micold-core/tests/install_guide_windows.rs::install_page_no_longer_says_windows_has_no_package`
+- red: `... install_page_no_longer_says_windows_has_no_package -- --exact` -> `running 1 test` ... `still says ["no packaged build for macOS or Windows"]`
+- green: `docs/install.md` "macOS and Windows" becomes `## Windows` (download table, SmartScreen steps, guide link), `## macOS` (the "no packaged build" wording narrowed to macOS; 028 did not change this page) and `## Build from source` -> 4 passed. `site/checks/links.sh --sources` passes, including the `#build-from-source` fragment.
+- commit: uncommitted
+
+## Cycle 43: U56 install.md links the Windows guide
+
+- test: `crates/micold-core/tests/install_guide_windows.rs::install_page_links_the_windows_guide`
+- red: none. It passed on its first run (the link was written in cycle 42).
+- mutant: changing the link to `(user-guide/install-macos.md)` gave `must link the Windows guide as \`(user-guide/install-windows.md)\``. Restored, and cmp confirmed it.
+- commit: uncommitted

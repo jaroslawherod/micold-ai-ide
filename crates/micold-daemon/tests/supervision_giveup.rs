@@ -4,6 +4,7 @@
 //! every *respawn* also crashes — the only way to exercise the give-up path end to end. A separate
 //! binary keeps that process-global env off every other test.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;
