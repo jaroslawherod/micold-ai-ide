@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.14.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.13.1...micold-ai-ide-v0.14.0) (2026-09-13)
+
+
+### Features
+
+* **029:** run Pi as a third AI CLI beside Claude Code and Copilot ([10c5787](https://github.com/jaroslawherod/micold-ai-ide/commit/10c5787dea6ac3bf7a9a6149539bb7ba49c11f8c))
+
+
+### Bug Fixes
+
+* **005:** count a respawn as recovered only after a stability window (BUG-004) ([0235573](https://github.com/jaroslawherod/micold-ai-ide/commit/023557339bff4e5294ab32d8a0970e6f7c9ce1e1))
+* **010:** report a start refused over a missing folder as failed (BUG-001) ([7245e5c](https://github.com/jaroslawherod/micold-ai-ide/commit/7245e5cb04afd42a15bd7dfda5f1f7bddea46ded))
+* **018:** clear AA with the press layer on the snackbar action and untyped chip (BUG-011) ([0b6ab61](https://github.com/jaroslawherod/micold-ai-ide/commit/0b6ab6144401da2ad0941b93aebcd901419e5249))
+* **029:** the capture scenes stub pi as well ([3607ba8](https://github.com/jaroslawherod/micold-ai-ide/commit/3607ba8ef5d4f2428a2adc04b5ce60ab43bce626))
+
 ## [0.13.1](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.13.0...micold-ai-ide-v0.13.1) (2026-09-13)
 
 
