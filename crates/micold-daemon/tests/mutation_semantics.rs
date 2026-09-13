@@ -1026,14 +1026,15 @@ async fn attach_prunes_empty_sessions_but_keeps_live_ones() {
     let store = tempfile::tempdir().unwrap();
 
     // Two Default (shell) sessions: `live` will be started (excluded from pruning); `empty` stays
-    // idle with no recorded conversation → a prune candidate.
+    // idle with no recorded conversation → a prune candidate. Both are unnamed: a named session had
+    // a conversation and is never pruned (feature 029, FR-008).
     let live = SessionId::from_uuid(Uuid::from_u128(0xA11E));
     let empty = SessionId::from_uuid(Uuid::from_u128(0xE111));
     let mk = |id| {
         Session::restored(
             id,
             SessionLocation::Default,
-            SessionLabel::Named("S".into()),
+            SessionLabel::Pending,
             TerminalMode::Regular,
             AiCli::ClaudeCode,
         )

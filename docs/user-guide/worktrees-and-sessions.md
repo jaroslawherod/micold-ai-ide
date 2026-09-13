@@ -503,8 +503,10 @@ not have to open a session to find out which one it is — the list you come bac
 as the list you left, so you can pick the session you want by its name alone.
 
 **"New session" means the conversation has no name yet**, not that the app hasn't finished loading.
-A session you created and never talked to reads "New session" for as long as that is true, and
-keeps reading it across restarts.
+A session you created and never talked to reads "New session" for as long as that is true. It does
+not wait around unnamed, though: with no conversation in it there is nothing to come back to, so the
+next time the project is opened while nothing is running it, the row is tidied away. A session that
+was named keeps its row, even if the CLI later clears out that conversation's records.
 
 **The newest name wins.** If the conversation moves on and the CLI re-titles it, the row follows,
 and that newer name is the one that comes back next time. Names are per session: re-titling one
