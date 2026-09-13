@@ -31,6 +31,7 @@ use iced::{
     Theme,
 };
 use micold_core::protocol::grid::{LineId, WireColor, WireStyle};
+use micold_core::tokens::state::FOCUS_RING_WIDTH;
 
 /// Reports the terminal area's size in *cells* to the app, whatever is currently drawn in it
 /// (BUG-003, FR-014a).
@@ -111,8 +112,10 @@ where
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        let bounds = layout.bounds();
-        let grid = CellMetrics::new(TERM_FONT_SIZE).grid_size(bounds.width, bounds.height);
+        // The character area, not the whole rectangle: the pane keeps a focus-ring gutter on every
+        // side at every focus state (FR-010b), so that is the size the process is given.
+        let content = content_bounds(layout.bounds());
+        let grid = CellMetrics::new(TERM_FONT_SIZE).grid_size(content.width, content.height);
         let state = tree.state.downcast_mut::<ReporterState>();
         if grid != state.last_grid {
             state.last_grid = grid;
@@ -231,7 +234,23 @@ struct PaneState {
     scroll_residual: f32,
 }
 
-/// The grid cell (col, line) under a cursor position within `bounds`.
+/// The pane's character area: `bounds` less a gutter of the 018 focus ring's width on every side
+/// (FR-010b, BUG-005).
+///
+/// Reserved whether or not the pane is focused. Drawn over the cells, the ring would clip the first
+/// and last columns; inset only while focused, the character area — and with it the size reported
+/// to the process — would change every time focus moved, reflowing the shell's output.
+pub(crate) fn content_bounds(bounds: Rectangle) -> Rectangle {
+    let inset = FOCUS_RING_WIDTH;
+    Rectangle {
+        x: bounds.x + inset,
+        y: bounds.y + inset,
+        width: (bounds.width - 2.0 * inset).max(0.0),
+        height: (bounds.height - 2.0 * inset).max(0.0),
+    }
+}
+
+/// The grid cell (col, line) under a cursor position within the character area `bounds`.
 fn grid_at(pos: Point, bounds: Rectangle, metrics: CellMetrics) -> (u16, u16) {
     let col = ((pos.x - bounds.x) / metrics.width).floor().max(0.0) as u16;
     let line = ((pos.y - bounds.y) / metrics.height).floor().max(0.0) as u16;
@@ -469,7 +488,8 @@ impl<'a> TerminalPane<'a> {
         self
     }
 
-    /// Mark the pane focused (routes keyboard input to it; no border is drawn for this).
+    /// Mark the pane focused: keyboard input is routed to it, and it draws the 018 focus ring
+    /// (FR-010, FR-010b).
     pub fn focused(mut self, focused: bool) -> Self {
         self.focused = focused;
         self
@@ -575,6 +595,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
         _viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
+        let content = content_bounds(bounds);
         let metrics = CellMetrics::new(TERM_FONT_SIZE);
         let default_bg = self.palette.background();
 
@@ -599,7 +620,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 // The absolute line shown at this viewport row (accounting for scrollback). A line
                 // the cache has not (yet) received renders blank.
                 let line_id = self.line_at_row(row);
-                let y = bounds.y + (row as f32) * metrics.height;
+                let y = content.y + (row as f32) * metrics.height;
                 let Some(cached) = self.grid.line(line_id) else {
                     continue;
                 };
@@ -613,7 +634,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 }
 
                 for (col, ch) in cached.text.chars().enumerate() {
-                    let x = bounds.x + (col as f32) * metrics.width;
+                    let x = content.x + (col as f32) * metrics.width;
                     let style = styles.get(col).copied().unwrap_or(DEFAULT_STYLE);
                     let flags = Flags::from_bits_truncate(style.flags);
                     // The cursor is anchored to an absolute `LineId`, so it draws only when its line
@@ -694,26 +715,49 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             // history so it stays out of the way during a live session (FR-016).
             let screen_lines = self.grid.rows() as usize;
             if let Some(sb) = scrollbar_metrics(
-                bounds.height,
+                content.height,
                 screen_lines,
                 self.history_size(),
                 display_offset,
             ) {
                 let fg = self.palette.foreground();
-                let track_x = bounds.x + bounds.width - SCROLLBAR_WIDTH;
+                let track_x = content.x + content.width - SCROLLBAR_WIDTH;
                 frame.fill_rectangle(
-                    iced::Point::new(track_x, bounds.y),
-                    Size::new(SCROLLBAR_WIDTH, bounds.height),
+                    iced::Point::new(track_x, content.y),
+                    Size::new(SCROLLBAR_WIDTH, content.height),
                     Color { a: 0.08, ..fg },
                 );
                 let pad = 2.0;
                 let thumb_w = SCROLLBAR_WIDTH - pad * 2.0;
                 let thumb = Path::rounded_rectangle(
-                    iced::Point::new(track_x + pad, bounds.y + sb.thumb_top),
+                    iced::Point::new(track_x + pad, content.y + sb.thumb_top),
                     Size::new(thumb_w, sb.thumb_height),
                     (thumb_w / 2.0).into(),
                 );
                 frame.fill(&thumb, Color { a: 0.5, ..fg });
+            }
+
+            // The focus indicator (FR-010, FR-010b, BUG-005): the 018 focus ring — `secondary`,
+            // `FOCUS_RING_WIDTH` — filling the gutter `content_bounds` keeps on every side. Drawn
+            // here and only here, so focus changes what is painted and never what is laid out: the
+            // bar below keeps its children (feature 023) and the process keeps its size.
+            if self.focused {
+                let ring = self.palette.accent();
+                let w = FOCUS_RING_WIDTH;
+                for (origin, size) in [
+                    (bounds.position(), Size::new(bounds.width, w)),
+                    (
+                        iced::Point::new(bounds.x, bounds.y + bounds.height - w),
+                        Size::new(bounds.width, w),
+                    ),
+                    (bounds.position(), Size::new(w, bounds.height)),
+                    (
+                        iced::Point::new(bounds.x + bounds.width - w, bounds.y),
+                        Size::new(w, bounds.height),
+                    ),
+                ] {
+                    frame.fill_rectangle(origin, size, ring);
+                }
             }
         }
 
@@ -733,6 +777,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
     ) {
         let state = tree.state.downcast_mut::<PaneState>();
         let bounds = layout.bounds();
+        // Presses anywhere on the pane — its focus gutter included — belong to it; cells and the
+        // scrollbar are located inside the gutter, where `draw` puts them (FR-010b).
+        let content = content_bounds(bounds);
         let metrics = CellMetrics::new(TERM_FONT_SIZE);
 
         // The visible grid size is reported by [`GridSizeReporter`], which wraps the terminal area
@@ -764,12 +811,12 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                     if let Some(pos) = cursor.position() {
                         let over_strip = cursor.is_over(bounds)
-                            && pos.x >= bounds.x + bounds.width - SCROLLBAR_WIDTH;
+                            && pos.x >= content.x + content.width - SCROLLBAR_WIDTH;
                         if over_strip {
                             if let Some(sb) =
-                                scrollbar_metrics(bounds.height, screen_lines, history, offset)
+                                scrollbar_metrics(content.height, screen_lines, history, offset)
                             {
-                                let thumb_y0 = bounds.y + sb.thumb_top;
+                                let thumb_y0 = content.y + sb.thumb_top;
                                 let thumb_y1 = thumb_y0 + sb.thumb_height;
                                 if (thumb_y0..thumb_y1).contains(&pos.y) {
                                     // Grab the thumb; remember where within it we grabbed.
@@ -795,9 +842,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     if state.scrollbar_grab.is_some() =>
                 {
                     let grab_dy = state.scrollbar_grab.unwrap_or(0.0);
-                    let thumb_top = position.y - bounds.y - grab_dy;
+                    let thumb_top = position.y - content.y - grab_dy;
                     let target =
-                        offset_for_thumb_top(bounds.height, screen_lines, history, thumb_top);
+                        offset_for_thumb_top(content.height, screen_lines, history, thumb_top);
                     // Publish an absolute target, not a relative delta: several CursorMoved events
                     // are batched before the app update runs, so relative deltas computed against
                     // the pre-batch offset would accumulate and jump the view (drag flicker).
@@ -831,7 +878,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 }
                 let focused_now = self.focused || grants;
                 let pos = cursor.position().unwrap_or_default();
-                let (col, line) = grid_at(pos, bounds, metrics);
+                let (col, line) = grid_at(pos, content, metrics);
                 let shift = state.modifiers.shift();
                 if press_routing(focused_now, self.mouse_mode(), shift) == PressRouting::MouseReport
                 {
@@ -863,7 +910,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             Event::Mouse(mouse::Event::CursorMoved { position })
                 if state.reporting_button.is_some() =>
             {
-                let (col, line) = grid_at(*position, bounds, metrics);
+                let (col, line) = grid_at(*position, content, metrics);
                 let button = state.reporting_button.unwrap_or(0);
                 if self.mouse_motion_mode() && state.reported_cell != Some((col, line)) {
                     if let Some(seq) = self.mouse_report_bytes(
@@ -887,7 +934,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 let button = state.reporting_button.take().unwrap_or(0);
                 state.reported_cell = None;
                 let pos = cursor.position().unwrap_or_default();
-                let (col, line) = grid_at(pos, bounds, metrics);
+                let (col, line) = grid_at(pos, content, metrics);
                 if let Some(seq) = self.mouse_report_bytes(
                     button,
                     col,
@@ -901,7 +948,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 return;
             }
             Event::Mouse(mouse::Event::CursorMoved { position }) if state.dragging => {
-                let (col, line) = grid_at(*position, bounds, metrics);
+                let (col, line) = grid_at(*position, content, metrics);
                 shell.publish(Message::Session(SessionMsg::TerminalSelectUpdate {
                     col,
                     line,
@@ -929,7 +976,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 let shift = state.modifiers.shift();
                 if self.mouse_mode() && !shift {
                     let (col, line) =
-                        grid_at(cursor.position().unwrap_or_default(), bounds, metrics);
+                        grid_at(cursor.position().unwrap_or_default(), content, metrics);
                     if let Some(seq) =
                         self.mouse_report_bytes(1, col, line, true, to_keymap_mods(state.modifiers))
                     {
@@ -963,7 +1010,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 let shift = state.modifiers.shift();
                 if press_routing(focused_now, self.mouse_mode(), shift) == PressRouting::MouseReport
                 {
-                    let (col, line) = grid_at(pos, bounds, metrics);
+                    let (col, line) = grid_at(pos, content, metrics);
                     if let Some(seq) =
                         self.mouse_report_bytes(2, col, line, true, to_keymap_mods(state.modifiers))
                     {
@@ -992,7 +1039,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     WheelRouting::MouseReport { button, count } => {
                         let (col, line) = cursor
                             .position()
-                            .map(|p| grid_at(p, bounds, metrics))
+                            .map(|p| grid_at(p, content, metrics))
                             .unwrap_or((0, 0));
                         let km = to_keymap_mods(state.modifiers);
                         for _ in 0..count {
@@ -1656,10 +1703,11 @@ mod tests {
                     .into();
             let size = Size::new(W as f32, H as f32);
             let mut tree = Tree::new(&element);
-            let node =
-                element
-                    .as_widget_mut()
-                    .layout(&mut tree, &renderer, &Limits::new(Size::ZERO, size));
+            let node = element.as_widget_mut().layout(
+                &mut tree,
+                &renderer,
+                &Limits::new(Size::ZERO, size),
+            );
             let viewport = Rectangle::with_size(size);
             iced::advanced::Renderer::reset(&mut renderer, viewport);
             element.as_widget().draw(
@@ -1750,9 +1798,10 @@ mod tests {
             ))
             .into();
             let mut tree = Tree::new(&element);
-            let node = element
-                .as_widget_mut()
-                .layout(&mut tree, &renderer, &Limits::new(size, size));
+            let node =
+                element
+                    .as_widget_mut()
+                    .layout(&mut tree, &renderer, &Limits::new(size, size));
             let mut messages = Vec::new();
             let mut shell = Shell::new(&mut messages);
             element.as_widget_mut().update(
