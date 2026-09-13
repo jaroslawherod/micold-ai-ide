@@ -939,7 +939,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     state.reported_cell = Some((col, line));
                 } else if let Some(pasted) = clipboard.read(ClipboardKind::Standard) {
                     shell.publish(Message::Session(SessionMsg::TerminalBytes(
-                        pasted.into_bytes(),
+                        keymap::paste_bytes(&pasted, self.grid.bracketed_paste()),
                     )));
                 }
                 shell.capture_event();
@@ -1064,7 +1064,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 KeyRouting::Paste => {
                     if let Some(pasted) = clipboard.read(ClipboardKind::Standard) {
                         shell.publish(Message::Session(SessionMsg::TerminalBytes(
-                            pasted.into_bytes(),
+                            keymap::paste_bytes(&pasted, self.grid.bracketed_paste()),
                         )));
                     }
                     shell.capture_event();
