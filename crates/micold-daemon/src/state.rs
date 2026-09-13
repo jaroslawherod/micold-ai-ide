@@ -24,7 +24,7 @@ use micold_core::protocol::messages::{
 use micold_core::provider::ActivitySource;
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
-    TerminalMode,
+    TerminalMode, RESTART_STABLE_AFTER,
 };
 use micold_core::terminal::{LaunchMode, LaunchSpec};
 use micold_core::worktree::{self, Worktree};
@@ -202,6 +202,10 @@ struct LiveSession {
     /// Dropping the `LiveSession` drops this, which unregisters the watch. That is the whole
     /// teardown: there is no timer to cancel, because there is no timer.
     event_log: Option<crate::event_log::EventLogTail>,
+    /// When supervision last respawned this session's primary after a crash, or `None` if it has
+    /// not. A `Restarting` session counts as recovered only once its respawn has stayed up for
+    /// [`RESTART_STABLE_AFTER`] from this reading (`005` BUG-004, FR-022a).
+    respawned_at: Option<micold_core::clock::Uptime>,
 }
 
 /// Build a fresh [`Proc`] around a spawned PTY, with a session-lived framer.
@@ -1534,6 +1538,7 @@ impl DaemonState {
                 activity: Activity::new(),
                 last_title: None,
                 event_log: None,
+                respawned_at: None,
             },
         );
         // A fresh FSM starts at `Unknown`, so a retained `Ended` from the previous run would be
@@ -1663,7 +1668,6 @@ impl DaemonState {
     /// stability window (`RESTART_STABLE_AFTER`, `005` BUG-004) is tested with injected readings
     /// rather than ten-second sleeps. Every reading within one daemon must come from the same clock.
     pub fn supervise_exited_sessions_at(&self, now: micold_core::clock::Uptime) -> Vec<PathBuf> {
-        let _ = now;
         // Phase 1 — under the lock: classify exits, apply the policy, gather the follow-up work.
         let scrollback;
         let mut changed: Vec<PathBuf> = Vec::new();
@@ -1674,16 +1678,15 @@ impl DaemonState {
             scrollback = inner.catalog.settings_wire().scrollback_lines;
             // Partition live primaries into those that have exited and those still alive. The alive
             // set is captured *before* this tick's respawns, so a process respawned this tick is not
-            // in it — that is what lets a genuine survivor (alive since the previous tick) reset while
-            // a crash-looping respawn keeps advancing toward `Failed`.
+            // in it; each carries the reading of its last respawn, for the survivor check below.
             let mut exited: Vec<(SessionId, ExitOutcome)> = Vec::new();
-            let mut alive: Vec<SessionId> = Vec::new();
+            let mut alive: Vec<(SessionId, Option<micold_core::clock::Uptime>)> = Vec::new();
             for (id, live) in &inner.sessions {
                 let Some(proc) = live.procs.get(&SessionProcess::Primary) else {
                     continue;
                 };
                 if proc.pty.is_alive() {
-                    alive.push(*id);
+                    alive.push((*id, live.respawned_at));
                 } else {
                     // A reaped-but-unclassifiable exit is treated as a crash so supervision still
                     // runs rather than the session lingering as a dead-but-alive entry.
@@ -1744,10 +1747,18 @@ impl DaemonState {
                     changed.push(project.to_path_buf());
                 }
             }
-            // Survivors: a session still alive while marked `Restarting` has stayed up since its
-            // respawn (at least one tick ago) — it is healthy now, so reset it to `Running`, which
-            // clears the crash-loop counter (closes the L5 gap).
-            for id in alive {
+            // Survivors: a session still alive while marked `Restarting` is healthy again once its
+            // respawn has stayed up for `RESTART_STABLE_AFTER` — reset it to `Running`, which clears
+            // the crash-loop counter (closes the L5 gap). Not sooner: a respawn seen alive one tick
+            // after spawning can still be a CLI failing a second into its startup, and resetting it
+            // then restarted that forever (`005` BUG-004). A session never respawned has nothing to
+            // wait out.
+            for (id, respawned_at) in alive {
+                let stable =
+                    respawned_at.is_none_or(|at| now.saturating_sub(at) >= RESTART_STABLE_AFTER);
+                if !stable {
+                    continue;
+                }
                 if let Some(project) = inner.catalog.mark_running_if_restarting(id) {
                     tracing::info!(session = %id.0, reason = "restart survived", "session recovered; running");
                     changed.push(project.to_path_buf());
@@ -1760,7 +1771,7 @@ impl DaemonState {
         }
         // Phase 3 — off the lock: respawn restart-eligible sessions.
         for (id, cwd, mode, provider) in to_respawn {
-            self.respawn_primary(id, cwd, mode, provider, scrollback);
+            self.respawn_primary(id, cwd, mode, provider, scrollback, now);
         }
         changed.sort();
         changed.dedup();
@@ -1853,6 +1864,7 @@ impl DaemonState {
         mode: TerminalMode,
         provider: AiCli,
         scrollback: usize,
+        now: micold_core::clock::Uptime,
     ) {
         // The viewer's pane did not change size because the process died — come back at the size the
         // session was last given, not at the seed (FR-020a, `006` SC-011).
@@ -1882,9 +1894,10 @@ impl DaemonState {
                 // Swap in the fresh process; the old (dead) one is dropped off the lock. The session
                 // stays `Restarting { attempts }` (set by the policy) — it is NOT reset to `Running`
                 // here, so a process that crashes again right after respawn keeps advancing the
-                // crash-loop counter toward `Failed`. The counter has no time window (L5 caveat):
-                // only an explicit healthy signal (a future attach/first-output path) resets it.
-                let _old = self.swap_primary(id, session);
+                // crash-loop counter toward `Failed`. `now` is recorded as the respawn's reading:
+                // the tick resets the counter only once the process has outlived
+                // `RESTART_STABLE_AFTER` from it (`005` BUG-004).
+                let _old = self.swap_primary(id, session, now);
             }
             Err(_) => {
                 // Couldn't even respawn. Leave the dead primary in the registry: the next tick sees
@@ -1898,7 +1911,12 @@ impl DaemonState {
     /// Replace a session's `Primary` process with `session`, returning the displaced [`Proc`] so the
     /// caller drops it **off** the lock. If the session vanished meanwhile (closed concurrently), the
     /// freshly-spawned process is torn down off the lock instead of leaking.
-    fn swap_primary(&self, id: SessionId, session: PtySession) -> Option<Proc> {
+    fn swap_primary(
+        &self,
+        id: SessionId,
+        session: PtySession,
+        respawned_at: micold_core::clock::Uptime,
+    ) -> Option<Proc> {
         let pty = Arc::new(session);
         let mut inner = self.lock();
         let Some(live) = inner.sessions.get_mut(&id) else {
@@ -1906,6 +1924,7 @@ impl DaemonState {
             // `pty` drops here, now that the lock is released: its Drop kills + joins off-lock.
             return None;
         };
+        live.respawned_at = Some(respawned_at);
         let old = live
             .procs
             .insert(SessionProcess::Primary, new_proc(pty, id));
@@ -2067,6 +2086,7 @@ impl DaemonState {
                         last_title: None,
                         // A shell-only session has no AI CLI, so there is nothing to tail.
                         event_log: None,
+                        respawned_at: None,
                     },
                 );
             }

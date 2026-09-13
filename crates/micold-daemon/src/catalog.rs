@@ -727,7 +727,8 @@ impl Catalog {
     }
 
     /// Mark a session `Running` **iff** it is currently `Restarting` — a respawned process that has
-    /// stayed up since the last supervision observation is now healthy, which resets the crash-loop
+    /// stayed up for `RESTART_STABLE_AFTER` is now healthy (the caller checks the window, `005`
+    /// BUG-004), which resets the crash-loop
     /// counter (closes the L5 gap: crashes far apart no longer accumulate toward `Failed`). Returns
     /// the owning project when it transitioned, for a `CatalogChanged` broadcast. A no-op for every
     /// other lifecycle, so it never resurrects `Idle`/`Failed` or re-announces a steady `Running`.
