@@ -33,6 +33,7 @@ die() {
   exit 1
 }
 
+root="$(cd "$(dirname "$0")/../.." && pwd -P)"
 dir=""
 state="${XDG_DATA_HOME:-}"
 active=1
@@ -290,6 +291,17 @@ ${last_active}  "projects": [
   ]
 }
 EOF
+
+# The worktrees above were made with `git worktree add`, and feature 029 lists a worktree under
+# `.claude/worktrees/` only when the application holds a record of having created it -- anything
+# else is presumed an assistant's and hidden, and the sidebar reads "No worktrees yet". The record is
+# what creating them through the application would have left, so it is written here, by the store's
+# own code: it lives in a per-project file whose name the store derives from the project path, which
+# is not a rule to copy into a shell script.
+"$root/scripts/build-lock.sh" cargo run --quiet -p micold-core --bin micold-demo-provenance -- \
+  "$catalog_dir/projects.json" "$dir" \
+  feat-AF-114-route-planner fix-AF-121-telemetry-drift docs-AF-118-operations-guide ||
+  die "could not record the demonstration worktrees as the application's"
 
 printf 'demo-project.sh: %s (catalogue in %s%s)\n' "$dir" "$catalog_dir" \
   "$([ "$active" -eq 1 ] || printf ', no active project')" >&2
