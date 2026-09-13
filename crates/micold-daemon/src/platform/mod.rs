@@ -9,7 +9,11 @@
 //! It is a value rather than a free function because Windows needs one: a job object has to be
 //! created and the child put in it *at spawn*, before the child has started anything worth reaping,
 //! and the job is then held for the life of the session. Unix derives everything from the pid at
-//! teardown time, so its value is just the pid.
+//! teardown time, so its value is just the pid — held only until the child is reaped, because after
+//! that the pid is free for the kernel to give to someone else.
+//!
+//! [`PtySession`](crate::supervisor::PtySession) keeps it under the same lock as the child, so the
+//! reap and the forgetting are one step and a teardown can never signal between them.
 
 #[cfg(unix)]
 mod unix;
@@ -32,6 +36,9 @@ impl ProcessTree {
     pub fn adopt(_pid: u32) -> Self {
         Self
     }
+
+    /// Nothing to forget.
+    pub fn leader_reaped(&mut self) {}
 
     /// Nothing beyond the direct child to terminate.
     pub fn terminate(&self) {}
