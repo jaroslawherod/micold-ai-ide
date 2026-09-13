@@ -136,6 +136,16 @@ pub enum SessionLifecycle {
 /// The maximum consecutive auto-restarts before giving up (FR-022a crash-loop guard).
 pub const MAX_RESTART_ATTEMPTS: u8 = 3;
 
+/// How long a respawned process has to stay up before its restart counts as *recovered*, clearing
+/// the crash-loop counter (FR-022a's "within a short interval", `005` BUG-004).
+///
+/// A respawn that exits sooner is a further failed restart, however long it managed to live, so a
+/// CLI that fails a second into its own startup still reaches the guard — and crashes further
+/// apart than this never accumulate. Ten seconds covers the failures the guard exists for (a bad
+/// `--resume`, a missing credential) with margin on a loaded machine; the cost is that a session
+/// that genuinely recovered reads `restarting…` for that long before `running`.
+pub const RESTART_STABLE_AFTER: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// What the backend should do after a process exit (FR-022/022a).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RestartDecision {

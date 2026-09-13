@@ -1656,6 +1656,14 @@ impl DaemonState {
     /// the distinct projects whose catalog lifecycle changed, so the caller broadcasts one
     /// `CatalogChanged` per affected project.
     pub fn supervise_exited_sessions(&self) -> Vec<PathBuf> {
+        self.supervise_exited_sessions_at(micold_core::clock::now())
+    }
+
+    /// [`Self::supervise_exited_sessions`] with the tick's clock reading supplied, so the restart
+    /// stability window (`RESTART_STABLE_AFTER`, `005` BUG-004) is tested with injected readings
+    /// rather than ten-second sleeps. Every reading within one daemon must come from the same clock.
+    pub fn supervise_exited_sessions_at(&self, now: micold_core::clock::Uptime) -> Vec<PathBuf> {
+        let _ = now;
         // Phase 1 — under the lock: classify exits, apply the policy, gather the follow-up work.
         let scrollback;
         let mut changed: Vec<PathBuf> = Vec::new();
