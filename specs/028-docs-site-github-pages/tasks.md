@@ -241,18 +241,19 @@ and no video bytes were requested until a play control was pressed.
 
 ---
 
-## Deferred — needs the upstream repository
+## Deferred — needs the live repository and a reader
 
-Four tasks act on `jaroslawherod/micold-ai-ide` itself rather than on this tree, and this checkout's
-remote is not that repository. They are left unchecked rather than reported as done:
+Two tasks are still open, and a source tree alone cannot complete either one:
 
-- **T036 (second half)** — `gh repo edit --homepage`. The `README.md` half is done; the website
-  field is a repository setting.
-- **T063** — enabling Pages with source **GitHub Actions**. A repository setting, and the
-  prerequisite for everything below it.
-- **T064** — a `workflow_dispatch` publication, and the deliberate failure that proves the previous
-  site stays up. This is quickstart A9, so T081 carries A1–A8 only.
-- **T082** — Part B, the reader's judgement, which is run against the published site.
+- **T064 (second half)** — the deliberate failure that proves the previous site stays up. The first
+  half is done: `pages.yml` run `34681141769` (`workflow_dispatch` on `main`) published the site.
+  The remaining half is quickstart A9, carried forward as T084, so T081 carries A1–A8 only.
+- **T082** — Part B, the reader's judgement, run against the published site. T085 names the pass
+  record it writes.
+
+T036's website field and T063's Pages source were deferred here too, on the belief that this
+checkout's remote was not the upstream repository. It is. Both settings are in place and both tasks
+are ticked.
 
 ---
 
@@ -357,15 +358,10 @@ links, guide captures), one on US4 (checks and workflows). US3 joins once `stage
 - `docs/install.md`'s `docs/SUMMARY.md` entry was written in T027, not T013, and `docs/SUMMARY.md`
   also carries a `[Licences](licences.md)` entry (T034) for a page that exists only in the staging
   tree. `page-set.sh` (T054) has to know that generated page, or it will call it a missing file.
-- T036's second half is not done and cannot be done from here: `gh repo edit --homepage` would set
-  the field on `jaroslawherod/micold-ai-ide`, which is what `origin` points at, while every URL in
-  this feature names `jaroslawherod/micold-ai-ide` — the repository the workspace `Cargo.toml`
-  declares and the one plan.md targets. That repository is not reachable with the credentials here.
-  Whoever administers it runs:
-  `gh repo edit jaroslawherod/micold-ai-ide --homepage https://jaroslawherod.github.io/micold-ai-ide/`
-  If the site is instead published from the fork, the address changes to
-  `https://jaroslawherod.github.io/micold-ai-ide/` and has to be replaced in `site/book.toml`,
-  `site/stage.sh`, `docs/install.md`, `docs/README.md`, `README.md` and the publication workflow.
+- T036's second half was once recorded here as impossible from this checkout, on the belief that
+  `origin` was a fork without access to the upstream repository. `origin` is
+  `jaroslawherod/micold-ai-ide`, the repository every URL in this feature names, and its website
+  field is set to `https://jaroslawherod.github.io/micold-ai-ide/`.
 - T037's walk of quickstart A5/A7 failed on the first run and cost three fixes to the capture
   harness, all of them in the frame rather than in the check: `scene_shot` grabbed the whole root
   window, so every still carried a black margin down two sides (it now crops to the window's own
@@ -381,4 +377,4 @@ links, guide captures), one on US4 (checks and workflows). US3 joins once `stage
 
 - [ ] T084 [US4] Break a check deliberately on a `workflow_dispatch` run of `.github/workflows/pages.yml` and confirm the run fails while the previously published site stays reachable, completing the second half of T064 (quickstart A9) per FR-018, FR-017, FR-020a (missing)
 - [ ] T085 Run [quickstart.md](./quickstart.md) Part B (B1-B5) against <https://jaroslawherod.github.io/micold-ai-ide/> and write the judgement halves of SC-001 and SC-006 into a pass record at `specs/028-docs-site-github-pages/evidence/quickstart-b.md`, matching the evidence convention of `specs/027-sandboxed-daemon-runtime/` and `specs/028-client-managed-daemon/`, so T082's "pass record" names an actual file per FR-023a (missing)
-- [ ] T086 Narrow the "Deferred — needs the upstream repository" section of this file to the tasks still genuinely open — T036 and T063 are now `- [X]` and merged, so the section contradicts the checkboxes above it (contradicts)
+- [X] T086 Narrow the "Deferred — needs the upstream repository" section of this file to the tasks still genuinely open — T036 and T063 are now `- [X]` and merged, so the section contradicts the checkboxes above it (contradicts)
