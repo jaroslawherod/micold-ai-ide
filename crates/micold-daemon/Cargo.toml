@@ -54,6 +54,11 @@ portable-pty = { workspace = true }
 # Ownership/mode verification for the `/tmp` endpoint fallback (protocol.md §1, FR-030).
 libc = { workspace = true }
 
+# The per-session job object that reaps a session's process tree (`src/platform/windows.rs`,
+# FR-036). `tests/windows_process_tree.rs` uses it too, to watch those processes by handle.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 uuid = { workspace = true }

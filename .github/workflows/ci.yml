@@ -289,6 +289,15 @@ jobs:
             --test features_worktree \
             --test features_worktree_form \
             --test anatomy_call_sites
+      # Feature 010's T144 (BUG-008). The daemon's PTY tests are Unix-only and run in the Linux
+      # full-workspace step below, so without this step no Windows runner ever started a session:
+      # job-object process-tree teardown, the `0x03` interrupt through ConPTY, `portable-pty`'s
+      # inverted Windows `kill()` result and the ConPTY teardown order were all built here and
+      # exercised nowhere. The target is `#![cfg(windows)]`, so it is conditioned rather than listed
+      # in the all-platform step, where it would pass on the other two by compiling to nothing.
+      - name: Test (daemon Windows process supervision)
+        if: runner.os == 'Windows'
+        run: cargo test -p micold-daemon --test windows_process_tree
       # Run the client + daemon test suites where the iced system deps are present.
       - name: Test (full workspace)
         if: runner.os == 'Linux'
