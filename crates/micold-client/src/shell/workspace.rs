@@ -506,4 +506,40 @@ mod tests {
         assert_eq!(app.core.workspace.active.as_deref(), Some(real.as_path()));
         assert_eq!(app.core.workspace.projects.len(), 1);
     }
+
+    /// A client connected to a daemon, knowing two projects whose folders exist, with `b` active.
+    fn connected_with_two_projects(
+        a: &Path,
+        b: &Path,
+    ) -> (
+        App,
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+    ) {
+        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+        let mut app = base_app();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        let scanner = FakeFolderScanner::new();
+        app.core.workspace.open_or_activate(a.to_path_buf(), &scanner);
+        app.core.workspace.open_or_activate(b.to_path_buf(), &scanner);
+        (app, rx)
+    }
+
+    /// 002 BUG-003: reopening a known project tells the catalog's single writer which project is
+    /// now active — or `last_active` keeps naming the last one opened by browsing (FR-010/FR-011).
+    #[test]
+    fn reopening_a_known_project_records_it_as_the_active_one() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        let (mut app, mut rx) = connected_with_two_projects(a.path(), b.path());
+
+        let _ = on_known_project_reopened(&mut app, a.path().to_path_buf());
+
+        let mut activated = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            if let ClientMsg::ProjectActivate { path, .. } = msg {
+                activated.push(path);
+            }
+        }
+        assert_eq!(activated, vec![a.path().to_path_buf()]);
+    }
 }

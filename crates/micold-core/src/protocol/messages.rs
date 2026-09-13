@@ -303,6 +303,16 @@ pub enum ClientMsg {
         /// Project path.
         path: PathBuf,
     },
+    /// Record that a project already in the catalog is now the active one, so it is the project
+    /// the next launch restores (002 FR-010/FR-011, BUG-003). Refused as `NotFound` when the path
+    /// is unknown or its folder is unavailable — the catalog never names such a project as last
+    /// active (FR-023).
+    ProjectActivate {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        path: PathBuf,
+    },
     /// Remove a project from the catalog.
     ProjectRemove {
         /// Correlation id.

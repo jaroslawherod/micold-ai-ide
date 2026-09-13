@@ -111,6 +111,10 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             req: 1,
             path: PathBuf::from("/a"),
         },
+        ClientMsg::ProjectActivate {
+            req: 1,
+            path: PathBuf::from("/a"),
+        },
         ClientMsg::ProjectRemove {
             req: 2,
             path: PathBuf::from("/a"),
