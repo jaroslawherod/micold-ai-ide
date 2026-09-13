@@ -4,7 +4,7 @@ uv = "latest"
 # The documentation site's accessibility check runs axe-core in a real browser (feature 028): the
 # rules it implements -- rendered contrast, focus visibility, reachable names -- are properties of a
 # rendered page, not of markup, so there is nothing in the Rust toolchain that could take its place.
-node = "20"
+node = "24"
 
 # The clips are encoded from captured frames (feature 028). ffmpeg is the one publication
 # prerequisite with no Rust or npm equivalent, and installing it needs root on most distributions —

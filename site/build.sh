@@ -132,12 +132,12 @@ missing=0
 
 # `page-checks.mjs` is a Node program with a `#!/usr/bin/env node` line, and Node is not a thing this
 # repository otherwise needs: CI installs it for the docs job, and a developer machine has it through
-# mise (`node = "20"` in mise.toml). Running this script straight from a shell is the case in
+# mise (`node = "24"` in mise.toml). Running this script straight from a shell is the case in
 # between -- mise has installed Node but has not put it on PATH -- so the directory is added here
 # rather than letting the check die with `env: node: No such file or directory`, which says nothing
 # about what to do next.
 if ! command -v node >/dev/null 2>&1 && command -v mise >/dev/null 2>&1; then
-  node_bin="$(mise where node@20 2>/dev/null || true)/bin"
+  node_bin="$(mise where node@24 2>/dev/null || true)/bin"
   [ -x "$node_bin/node" ] && PATH="$node_bin:$PATH" && export PATH
 fi
 
