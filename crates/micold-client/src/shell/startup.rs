@@ -127,6 +127,23 @@ fn restore_catalog(
 ) {
     core.workspace = store.load().workspace;
     core.workspace.refresh_availability(scanner);
+    // FR-023 binds the restore as much as a click: a last-active project whose folder has gone
+    // since the last run is not opened. It stays known, marked unavailable, and the user is told
+    // which one it was — otherwise the launch lands on an empty state with no explanation
+    // (002 BUG-004).
+    if let Some(gone) = core.workspace.release_unavailable_active() {
+        let name = core
+            .workspace
+            .projects
+            .iter()
+            .find(|p| p.path == gone)
+            .map(|p| p.display_name.clone())
+            .unwrap_or_default();
+        core.notify_error(format!(
+            "Couldn't reopen \"{name}\": its folder {} is unavailable.",
+            gone.display()
+        ));
+    }
     // Drop any leftover empty sessions so a restart never resumes a nonexistent
     // conversation (bug fix; see spec Clarifications 2026-07-16).
     prune_empty_sessions(&mut core.workspace);
