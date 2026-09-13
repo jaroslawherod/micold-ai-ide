@@ -50,8 +50,9 @@ upgrading, removing, and what the package cannot do — including PCs where Smar
 
 ## macOS
 
-**There is no packaged build for macOS yet.** The application itself runs there — the code has no
-Linux-only path, and the tests run on all three platforms — but on macOS you build it yourself.
+Each release carries one disk image, `MicoldAIIDE-<version>-universal.dmg`, that runs natively on both
+Apple silicon and Intel Macs with macOS 15 or later. [Installing on macOS](user-guide/install-macos.md)
+covers downloading, installing, and the permissions macOS asks about.
 
 ## Build from source
 

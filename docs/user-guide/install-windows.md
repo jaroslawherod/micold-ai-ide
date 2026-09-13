@@ -87,6 +87,9 @@ they live wherever you cloned them.
   of Windows stops the session service and every session with it. The one exception is running the
   service in a container ([Running the session service in a container](sandboxed-daemon.md)); see
   [The Micold session daemon](../daemon.md) for why.
+- **The service stops after 30 minutes with no window open.** A session still working does not keep
+  it up; its sessions are kept as resumable, and opening the app starts a fresh service
+  ([It stops itself when nobody has used it for 30 minutes](../daemon.md#it-stops-itself-when-nobody-has-used-it-for-30-minutes)).
 - **One service per account.** Each Windows account that uses Micold AI IDE runs its own session
   service, and no other account on the PC can connect to it.
 - **Unsupported architecture.** Each installer runs only on its own architecture; on any other PC it
