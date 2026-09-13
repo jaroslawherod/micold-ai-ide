@@ -244,7 +244,17 @@ pub fn dialog(r: Roles) -> impl Fn(&Theme) -> container::Style {
 /// a rounded corner would cut a notch out of the window rather than round a floating card. The tone
 /// is the part that carries the hierarchy, and it is applied.
 pub fn sidebar_surface(r: Roles) -> impl Fn(&Theme) -> container::Style {
-    elevated(r, elevation::CARD, shape::NONE)
+    elevated(r, SIDEBAR_LEVEL, shape::NONE)
+}
+
+/// The sidebar's elevation, named once so everything painted inside the panel takes its tone.
+const SIDEBAR_LEVEL: u8 = elevation::CARD;
+
+/// The sidebar panel's fill, for parts of the panel drawn as raw quads rather than as a container —
+/// the resize handle's grab zone. Read from [`SIDEBAR_LEVEL`], so it moves when the panel does
+/// (BUG-012).
+pub fn sidebar_fill(r: Roles) -> Color {
+    color(r.elevation_surface(SIDEBAR_LEVEL))
 }
 
 /// The app bar at rest — elevation 0, so the `surface` tone and no shadow (§4).
