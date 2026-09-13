@@ -253,9 +253,19 @@ pub(crate) fn on_known_project_reopened(app: &mut App, path: PathBuf) -> Task<Me
 }
 
 /// The top-bar project switcher was toggled (feature 008, FR-008; 008 BUG-003).
+///
+/// Opening it rescans every known project's folder, because its rows show availability and
+/// acceptance scenario 3 asks for that "when the user opens the switcher". Until this scan the flag
+/// was recomputed only at launch and on a reopen, so a moved folder looked selectable until pressed,
+/// and a restored one stayed disabled — with no press left to clear it — until a relaunch. A shell
+/// handler rather than the reducer alone because the scan needs the scanner capability. It only
+/// observes: the active project is never released here (002 BUG-004 keeps that to launch).
 pub(crate) fn on_switcher_toggled(app: &mut App) -> Task<Message> {
     app.core
         .update(Message::Project(ProjectMsg::SwitcherToggled));
+    if app.core.project.switcher_open {
+        app.core.workspace.refresh_availability(app.caps.scanner());
+    }
     Task::none()
 }
 
