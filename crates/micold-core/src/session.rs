@@ -58,6 +58,10 @@ pub enum AiCli {
     ClaudeCode,
     /// GitHub's `copilot` CLI.
     Copilot,
+    /// The `pi` coding agent (feature 029, FR-002). Third rather than special: it is a member of
+    /// this list and nothing else, which is what keeps the supported set enumerated once
+    /// (FR-021).
+    Pi,
 }
 
 impl AiCli {
@@ -65,7 +69,7 @@ impl AiCli {
     ///
     /// The UI's menus are built from this, so the order is not incidental — it is what the user
     /// sees. Kept sorted, so this and any `BTreeSet<AiCli>` agree.
-    pub const ALL: [AiCli; 2] = [AiCli::ClaudeCode, AiCli::Copilot];
+    pub const ALL: [AiCli; 3] = [AiCli::ClaudeCode, AiCli::Copilot, AiCli::Pi];
 }
 
 /// The sidebar label for a session — extracted from `claude`, never user-entered (FR-011a).

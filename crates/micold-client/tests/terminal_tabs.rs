@@ -281,3 +281,28 @@ fn the_marks_slot_is_reserved_rather_than_pushed_when_stopped() {
         }
     }
 }
+
+/// Feature 029, T033 (FR-010, SC-004a): the pinned AI tab reads the session's CLI from `command()`,
+/// so a Pi session's tab says `pi` without the bar knowing Pi exists.
+///
+/// Source-level for the reason the rest of this file is: a literal, or `display_name()`, renders a
+/// perfectly plausible tab — "claude" on a Pi session, or "Pi Coding Agent" squeezed into a label
+/// slot — and no value test of the strip can tell that from the right answer.
+#[test]
+fn the_ai_tab_names_the_cli_from_the_provider_and_never_a_literal() {
+    let ai = ai_tab_body(&terminal_source());
+    assert!(
+        ai.contains(".provider().command()"),
+        "the AI tab's label must come from the session's provider, in the command register"
+    );
+    assert!(
+        !ai.contains("display_name()"),
+        "a tab is a label in a width budget; the menu register does not belong in it"
+    );
+    for literal in ["\"pi\"", "\"claude\"", "\"copilot\""] {
+        assert!(
+            !ai.contains(literal),
+            "the AI tab names a CLI by literal ({literal}), so every other CLI's session wears it"
+        );
+    }
+}

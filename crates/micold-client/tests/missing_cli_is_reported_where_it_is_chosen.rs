@@ -59,7 +59,7 @@ fn an_image_with_every_cli_says_nothing_either() {
 
 #[test]
 fn an_image_missing_one_names_it_the_image_and_the_obligation() {
-    let notice = missing_cli_notice(Some(&in_image(&[AiCli::ClaudeCode])))
+    let notice = missing_cli_notice(Some(&in_image(&[AiCli::ClaudeCode, AiCli::Pi])))
         .expect("an image without Copilot has something to report");
 
     // The CLI, by the name a menu would show it under — the same register the picker beside this
@@ -90,10 +90,12 @@ fn an_image_missing_one_names_it_the_image_and_the_obligation() {
         );
     }
     // And it does not name a CLI that *is* there.
-    assert!(
-        !notice.contains(AiCli::ClaudeCode.provider().display_name()),
-        "the notice names a CLI the image provides: {notice}"
-    );
+    for present in [AiCli::ClaudeCode, AiCli::Pi] {
+        assert!(
+            !notice.contains(present.provider().display_name()),
+            "the notice names a CLI the image provides: {notice}"
+        );
+    }
 }
 
 #[test]
@@ -110,7 +112,7 @@ fn an_image_with_no_cli_at_all_names_every_one() {
     }
     assert!(
         notice.contains(" and "),
-        "two missing CLIs read as a sentence, not a comma list: {notice}"
+        "several missing CLIs read as a sentence, not a comma list: {notice}"
     );
 }
 
@@ -119,7 +121,7 @@ fn the_host_placement_gets_a_different_sentence_and_no_image() {
     // FR-023c's other half. With the service on this computer there is no image, and telling the
     // user to fix one would send them to a machine that does not exist. The remedy is installing
     // the CLI, so the sentence is about this computer.
-    let notice = missing_cli_notice(Some(&on_host(&[AiCli::ClaudeCode])))
+    let notice = missing_cli_notice(Some(&on_host(&[AiCli::ClaudeCode, AiCli::Pi])))
         .expect("a host without Copilot has something to report");
 
     assert!(
@@ -142,9 +144,44 @@ fn one_missing_cli_and_two_agree_with_their_verbs() {
     // Sentence-level, and worth a line: the notice appears in a settings form beside the control
     // it is about, and "GitHub Copilot aren't in …" is the kind of thing that makes a user trust
     // the rest of the page less.
-    let one = missing_cli_notice(Some(&in_image(&[AiCli::ClaudeCode]))).unwrap();
+    let one = missing_cli_notice(Some(&in_image(&[AiCli::ClaudeCode, AiCli::Pi]))).unwrap();
     let both = missing_cli_notice(Some(&in_image(&[]))).unwrap();
 
     assert!(one.contains("isn't"), "singular: {one}");
     assert!(both.contains("aren't"), "plural: {both}");
+}
+
+#[test]
+fn a_missing_pi_is_named_as_pi_coding_agent_and_never_as_its_command() {
+    // Feature 029, T032 (FR-001a). The same sentence the other two get, in the menu register: the
+    // select beside it lists "Pi Coding Agent", so that is the string the user matches it against.
+    // `pi` in a sentence is a two-letter word that reads as a typo.
+    for availability in [
+        in_image(&[AiCli::ClaudeCode, AiCli::Copilot]),
+        on_host(&[AiCli::ClaudeCode, AiCli::Copilot]),
+    ] {
+        let notice = missing_cli_notice(Some(&availability))
+            .expect("a place without pi has something to report");
+        assert!(
+            notice.starts_with("Pi Coding Agent isn't"),
+            "the notice names Pi by its display name, singular: {notice}"
+        );
+        assert!(
+            !notice.contains(" pi "),
+            "…and not by its command: {notice}"
+        );
+    }
+}
+
+#[test]
+fn a_missing_pi_is_a_presence_fact_with_no_version_in_it() {
+    // FR-003a. Availability is the presence check every provider gets, so nothing was spawned to
+    // decide Pi is missing and there is no version to report. A number here would be one the
+    // application invented — the version belongs to the failure of an *installed* `pi`, where it
+    // was read, not to the notice that it is absent.
+    let notice = missing_cli_notice(Some(&on_host(&[AiCli::ClaudeCode, AiCli::Copilot]))).unwrap();
+    assert!(
+        !notice.chars().any(|c| c.is_ascii_digit()),
+        "a missing CLI has no version to name: {notice}"
+    );
 }

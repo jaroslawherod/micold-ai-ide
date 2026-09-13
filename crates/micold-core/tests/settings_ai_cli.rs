@@ -140,3 +140,60 @@ fn a_default_naming_an_uninstalled_cli_is_kept_not_rewritten() {
     );
     assert_eq!(second.scrollback_lines, 5_000);
 }
+
+// ---------------------------------------------------------------------------------------
+// Feature 029, T038 — the switch that declines Pi's activity component (FR-012e)
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn the_pi_activity_component_is_supplied_by_default() {
+    // On by default, so a Pi session's badge works without the user configuring anything.
+    assert!(Settings::default().pi_activity_component);
+}
+
+#[test]
+fn declining_the_pi_activity_component_survives_a_save_and_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(&dir);
+    store
+        .save(&Settings {
+            pi_activity_component: false,
+            default_ai_cli: AiCli::Pi,
+            ..Settings::default()
+        })
+        .unwrap();
+
+    let loaded = store.load();
+    assert_eq!(loaded.status, LoadStatus::Loaded);
+    assert!(!loaded.settings.pi_activity_component);
+    assert_eq!(
+        loaded.settings.default_ai_cli,
+        AiCli::Pi,
+        "the switch and the default CLI are held side by side and neither disturbs the other"
+    );
+}
+
+#[test]
+fn a_settings_file_written_before_the_switch_existed_loads_with_it_on() {
+    // Absent means on. Written by hand at the previous shape, for the reason the Claude Code case
+    // above is: constructing it through `Settings` would write the key and prove nothing.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("settings.json"),
+        r#"{
+            "settings_version": 4,
+            "theme": "follow_system",
+            "scrollback_lines": 20000,
+            "env_include_enabled": true,
+            "env_include_script_path": "/home/u/.bashrc",
+            "env_include_timeout_secs": 10,
+            "default_ai_cli": "Copilot"
+        }"#,
+    )
+    .unwrap();
+
+    let loaded = store(&dir).load();
+    assert_eq!(loaded.status, LoadStatus::Loaded);
+    assert!(loaded.settings.pi_activity_component);
+    assert_eq!(loaded.settings.default_ai_cli, AiCli::Copilot);
+}

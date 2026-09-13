@@ -1,0 +1,7 @@
+{"type":"session","version":3,"id":"ffffffff-ffff-4fff-8fff-ffffffffffff","timestamp":"2026-09-12T10:05:12.410Z","cwd":"/fixture/worktree","parentSession":null}
+this line is not JSON at all
+
+{"type":"model_select","id":"33333333-0003-4000-8000-000000000001","parentId":null,"timestamp":"2026-09-12T10:05:13.002Z","model":"a-model-we-do-not-read"}
+{"type":"session_info","id":"33333333-0003-4000-8000-000000000002","parentId":null,"timestamp":"2026-09-12T10:05:14.118Z","name":""}
+{"type":"session_info","id":"33333333-0003-4000-8000-000000000003","parentId":null,"timestamp":"2026-09-12T10:05:15.240Z","name":"   "}
+{"type":"message","id":"33333333-0003-4000-8000-000000000004","parentId":null,"timestamp":"2026-09-12T10:05:31.660Z","message":{"role":"user","content":[{"type":"text","text":"Where does the encoder live?"}]}}

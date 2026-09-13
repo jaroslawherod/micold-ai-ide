@@ -266,13 +266,16 @@ fn the_settings_select_names_clis_the_human_readable_way() {
         .into_iter()
         .map(|which| which.provider().display_name())
         .collect();
-    assert_eq!(names, vec!["Claude Code", "GitHub Copilot"]);
+    assert_eq!(
+        names,
+        vec!["Claude Code", "GitHub Copilot", "Pi Coding Agent"]
+    );
 
     let commands: Vec<&str> = AiCli::ALL
         .into_iter()
         .map(|which| which.provider().command())
         .collect();
-    assert_eq!(commands, vec!["claude", "copilot"]);
+    assert_eq!(commands, vec!["claude", "copilot", "pi"]);
     assert!(
         names.iter().zip(&commands).all(|(name, cmd)| name != cmd),
         "the two registers are distinct strings for every provider, so a leak in either direction \
@@ -288,4 +291,56 @@ fn a_failure_message_names_the_cli_the_human_readable_way() {
     let message = format!("{} isn't installed.", missing.display_name());
     assert_eq!(message, "GitHub Copilot isn't installed.");
     assert!(!message.contains("copilot "), "not the command name");
+}
+
+// ---------------------------------------------------------------------------------------
+// The Pi activity component switch (feature 029, T039 — FR-012e, FR-012f, SC-005a)
+// ---------------------------------------------------------------------------------------
+
+use micold_core::settings::Settings;
+
+#[test]
+fn the_pi_activity_switch_is_one_application_wide_setting_on_by_default() {
+    // One row, in one section, seeded from the one stored value. There is no per-project or
+    // per-session form to fall back to, so what the stored settings say is what the form shows.
+    let draft = SettingsDraft::from_settings(&Settings::default());
+    assert!(
+        draft.environment.pi_activity_component,
+        "the component is loaded unless the user declines it"
+    );
+
+    // And the stored form has exactly one key for it, at the top level: a copy nested under a
+    // project, a session or the service profile would be a second switch disagreeing with this one.
+    let stored = serde_json::to_value(Settings::default()).unwrap();
+    fn keys_naming_pi(value: &serde_json::Value, path: &str, found: &mut Vec<String>) {
+        if let serde_json::Value::Object(map) = value {
+            for (key, child) in map {
+                let here = format!("{path}/{key}");
+                if key.contains("pi_activity") {
+                    found.push(here.clone());
+                }
+                keys_naming_pi(child, &here, found);
+            }
+        }
+    }
+    let mut found = Vec::new();
+    keys_naming_pi(&stored, "", &mut found);
+    assert_eq!(found, vec!["/pi_activity_component".to_string()]);
+}
+
+#[test]
+fn turning_the_pi_activity_switch_off_is_a_choice_not_a_fault() {
+    // FR-012f: declining the component leaves the badge unknown, and that is the expected result.
+    // So the form treats it like any other preference — no rejection, no error, and the value
+    // reaches what Save writes.
+    let mut draft = valid();
+    draft.show(SettingsSection::Environment);
+    draft.environment.pi_activity_component = false;
+
+    assert!(draft.error.is_none());
+    let saved = draft
+        .validate()
+        .expect("an off switch is a valid setting")
+        .into_settings();
+    assert!(!saved.pi_activity_component);
 }

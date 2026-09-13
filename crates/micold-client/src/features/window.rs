@@ -133,6 +133,8 @@ pub enum FieldId {
     SettingsCredential(micold_core::sandbox::CredentialShare),
     /// Settings: the "keep sessions running after I sign out" checkbox (feature 027).
     SettingsSurviveLogout,
+    /// Settings: the "report Pi activity" checkbox (feature 029, FR-012e).
+    SettingsPiActivityComponent,
     /// Settings: the sandbox's processor limit, in cores (feature 027, FR-012).
     SettingsCpuLimit,
     /// Settings: the sandbox's memory limit, in MiB (feature 027, FR-013).

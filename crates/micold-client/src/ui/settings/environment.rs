@@ -29,6 +29,7 @@ pub const SETTINGS: &[(&str, &str)] = &[
     ("env_include_script_path", "EnvIncludePathChanged"),
     ("env_include_timeout_secs", "EnvIncludeTimeoutChanged"),
     ("default_ai_cli", "DefaultAiCliChanged"),
+    ("pi_activity_component", "PiActivityComponentToggled"),
 ];
 
 /// The failure category and its diagnostic for the most recent resolution attempt, or `None` when
@@ -116,7 +117,23 @@ pub fn view<'a>(
     // select's own supporting line sits in. See `field_note`.
     let cli = field_note(default_ai_cli, missing_cli_notice(availability), roles);
 
-    let mut controls: Vec<Element<'a, Message>> = vec![cli];
+    // FR-012e: one application-wide switch, beside the default-CLI choice it is held with. Its
+    // label says what it does rather than naming a fault, and turning it off is not one (FR-012f):
+    // a Pi session started without it runs normally and its badge reads unknown.
+    let pi_activity = Checkbox::new(
+        "Show activity for Pi sessions",
+        draft.environment.pi_activity_component,
+        roles,
+    )
+    .track_focus(FieldId::SettingsPiActivityComponent, focused)
+    .on_toggle(|v| Message::Settings(SettingsMsg::PiActivityComponentToggled(v)));
+    let pi_activity = field_note(
+        pi_activity,
+        Some("Loads a small reporter of this app into each new Pi session. Off: the badge reads unknown."),
+        roles,
+    );
+
+    let mut controls: Vec<Element<'a, Message>> = vec![cli, pi_activity];
     controls.extend([enabled.into(), path.into(), timeout.into()]);
 
     if let Some((label, diagnostic)) = failure(outcome) {

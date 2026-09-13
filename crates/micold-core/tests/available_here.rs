@@ -131,7 +131,10 @@ fn the_offer_is_exactly_what_is_installed_now() {
     path.uninstall(AiCli::ClaudeCode.provider().command());
     assert_eq!(
         available_here(),
-        vec![AiCli::Copilot],
+        AiCli::ALL
+            .into_iter()
+            .filter(|which| *which != AiCli::ClaudeCode)
+            .collect::<Vec<_>>(),
         "uninstalling must shrink the offer; anything memoised would still list it"
     );
 

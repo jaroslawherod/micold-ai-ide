@@ -27,6 +27,7 @@
 
 use std::path::PathBuf;
 
+use micold_core::fs_scan::StdFolderScanner;
 use micold_core::session::AiCli;
 use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::JsonFileStore;
@@ -151,4 +152,64 @@ fn a_client_written_theme_survives_a_service_owned_change() {
         AiCli::ClaudeCode,
         "and the service-owned preference is untouched by the same operation"
     );
+}
+
+#[test]
+fn a_session_started_on_the_third_cli_records_it_and_keeps_it_across_a_restart() {
+    // Feature 029, T016 (FR-008, SC-002). The preference decides which CLI a session *starts* on;
+    // what the session then carries is its own, and it is what a resume reads. So the two halves
+    // are asserted separately: the record taken at creation, and the record found again by a
+    // daemon that booted afresh.
+    //
+    // Pi rather than Copilot on purpose. A provider added after the persisted form was fixed is
+    // where a serde round-trip would break quietly — the session would come back on whatever
+    // `AiCli::default()` is, which is a different CLI's conversation store, and the row would look
+    // plausible while resuming nothing.
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path().join("project");
+    let store = JsonFileSettingsStore::at(dir.path().join("settings.json"));
+    store
+        .save(&Settings {
+            default_ai_cli: AiCli::Pi,
+            ..Settings::default()
+        })
+        .unwrap();
+
+    let mut catalog = catalog_at(dir.path());
+    let chosen = catalog.settings_wire().default_ai_cli;
+    assert_eq!(
+        chosen,
+        AiCli::Pi,
+        "the daemon adopted the persisted default"
+    );
+
+    // Sessions are persisted per *known* project, so an unregistered path would round-trip
+    // nothing and fail below for a reason that has nothing to do with the CLI.
+    std::fs::create_dir_all(&project).unwrap();
+    catalog.add_project(&project, &StdFolderScanner).unwrap();
+
+    let id = catalog.create_session(&project, "", chosen).unwrap();
+    assert_eq!(
+        catalog
+            .sessions_for(&project)
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.provider),
+        Some(AiCli::Pi),
+        "the session records the CLI it was started on"
+    );
+
+    // A whole new daemon over the same files — the only test of persistence that means anything.
+    drop(catalog);
+    let restarted = catalog_at(dir.path());
+    assert_eq!(
+        restarted
+            .sessions_for(&project)
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.provider),
+        Some(AiCli::Pi),
+        "and still records it after a restart, so a resume reaches Pi's own store"
+    );
+    assert_eq!(restarted.settings_wire().default_ai_cli, AiCli::Pi);
 }

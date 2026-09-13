@@ -12,7 +12,7 @@ holding it and marks the field — press **Cancel**, or Esc, to leave without sa
 | --- | --- |
 | [Appearance](#appearance) | The theme |
 | [Terminal](#terminal) | The embedded terminal's scrollback limit |
-| [Environment](#environment) | Which AI CLI a session runs, and the script sourced before it starts |
+| [Environment](#environment) | Which AI CLI a session runs, whether Pi sessions report activity, and the script sourced before it starts |
 | [Session service](#session-service) | Where sessions run, and what that service can reach |
 
 <!-- media: settings-view-light -->
@@ -60,6 +60,31 @@ it.** That is deliberate. A CLI can be missing for a moment — a `PATH` that ha
 upgrade in progress — and silently rewriting your preference would lose a choice you made without
 saying so. The setting stays as you left it, and when you start a session the app tells you what is
 missing and offers the CLIs that are available instead of substituting one.
+
+### Show activity for Pi sessions
+
+On by default. Pi has no built-in way to tell another program whether it is working or waiting
+for you, so when you start a Pi session the app loads **a small component of its own into that
+Pi process** to report it. That is what drives the session's working/idle badge.
+
+What the component does, and all of what it does:
+
+- It writes one line to a file the app watches each time Pi starts or finishes a turn, starts or
+  finishes a tool, settles, or quits. Each line is the event's name and a timestamp — nothing
+  else.
+- It **never reads or transmits your conversation**: no prompts, replies, file contents or tool
+  arguments, and it makes no network connection.
+- It is loaded only into Pi sessions this app starts. It is not installed into Pi's own extension
+  folders, so running `pi` yourself outside the app does not load it.
+
+Pi gives every extension it loads **full permissions on your system** — the same as Pi itself.
+The component uses none of that beyond appending to its one file, but if you would rather Pi load
+nothing from this app, turn **Show activity for Pi sessions** off. Sessions started after that run
+plain `pi`, and their badge reads **unknown**. That is the expected result of turning it off, not a
+fault: the session works exactly as before, the app just has no way to see whether Pi is busy.
+
+It is one setting for the whole app — there is no per-project or per-session copy — and it applies
+to Pi sessions started after you save. Claude Code and Copilot sessions are unaffected either way.
 
 ### The environment a session starts in
 

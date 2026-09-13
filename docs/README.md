@@ -35,7 +35,7 @@ follows describes the version you are reading it from (constitution, Principle V
   the rest, and how to claim one you made yourself),
   creating worktrees (on a new branch, or by searching for one that already exists locally or on
   a remote),
-  and running AI CLI sessions (`claude` or `copilot`) in the embedded terminal
+  and running AI CLI sessions (`claude`, `copilot` or `pi` — Pi Coding Agent) in the embedded terminal
   (colored real-terminal rendering, interactive keyboard/mouse input, focus, resize, scrollback,
   and toggling a session's terminal to one or more independent plain-shell instances scoped to
   its worktree, switchable and individually closeable/restartable).
