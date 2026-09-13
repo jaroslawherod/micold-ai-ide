@@ -302,6 +302,24 @@ independently usable, and closing one does not affect the other.
 
 ---
 
+## Phase 7: Bugfix BUG-001 — a start refused for a missing directory says so
+
+**Bugfix**: 2026-09-13 — BUG-001 Updated from bugfix patch. FR-012/SC-007 added. See
+`bugs/BUG-001.md`.
+
+- [ ] T031 Failing test (Red): starting a session whose working directory has been removed returns
+      an error, spawns nothing, and the snapshot a client receives reports
+      `Failed { reason, attempts: 0 }` with a reason naming the directory — in
+      `crates/micold-daemon/tests/session_start.rs`. Per FR-012.
+- [ ] T032 Fix (Green): in `DaemonState::start_session` (`crates/micold-daemon/src/state.rs`),
+      record a user-readable reason in `start_failures` for any spawn refusal before returning it
+      (a missing working directory gets its own sentence). Per FR-012.
+- [ ] T033 Re-run `quickstart.md` step 11 headlessly (`visual-pass`) against a pinned build of this
+      fix: the session shows failed with the reason instead of `starting…`. Record under
+      `evidence/`. Per SC-007.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
