@@ -40,11 +40,13 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
+use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::index::{Column, Line};
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::messages::{ActivitySignal, SessionSummary};
+use micold_core::protocol::messages::{ActivitySignal, SessionProcess, SessionSummary};
 use micold_core::provider::ActivitySource;
 use micold_core::session::{
-    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, ShellInstanceId, TerminalMode,
 };
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
@@ -57,6 +59,20 @@ use portable_pty::CommandBuilder;
 use uuid::Uuid;
 
 const SESSION_U128: u128 = 0x5E55;
+
+fn visible_text(session: &PtySession) -> String {
+    let term = session.term().lock();
+    let grid = term.grid();
+    let (cols, rows) = (grid.columns(), grid.screen_lines());
+    let mut out = String::new();
+    for line in 0..rows {
+        for col in 0..cols {
+            out.push(grid[Line(line as i32)][Column(col)].c);
+        }
+        out.push('\n');
+    }
+    out
+}
 
 fn wait_until(timeout: Duration, mut cond: impl FnMut() -> bool) -> bool {
     let deadline = Instant::now() + timeout;
@@ -77,12 +93,22 @@ fn catalog_with_session(
     store_dir: &std::path::Path,
     cli: AiCli,
 ) -> Catalog {
+    catalog_with_session_in_mode(project_dir, store_dir, cli, TerminalMode::AiCli)
+}
+
+/// [`catalog_with_session`], with the session's terminal mode chosen by the caller.
+fn catalog_with_session_in_mode(
+    project_dir: &std::path::Path,
+    store_dir: &std::path::Path,
+    cli: AiCli,
+    mode: TerminalMode,
+) -> Catalog {
     let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
     let session = Session::restored(
         id,
         SessionLocation::Default,
         SessionLabel::Pending,
-        TerminalMode::AiCli,
+        mode,
         cli,
     );
     let mut sessions = BTreeMap::new();
@@ -295,6 +321,151 @@ fn the_observed_title_is_handed_back_for_recording_exactly_once() {
             "a title that has not changed is not a change"
         );
     }
+
+    session.kill().expect("kill");
+}
+
+#[test]
+fn an_ai_clis_own_startup_title_is_not_a_name() {
+    // Feature 029, T025 (FR-004, US3/AC2). Both CLIs title the terminal with their own product name
+    // before any conversation exists — observed 2026-09-13 against `claude` 2.1.270 (`"✳ Claude
+    // Code"`) and `copilot` (`"GitHub Copilot"`). That is not the session's name: recording it
+    // would show "Claude Code" on a session that has never been named, after every restart, and
+    // `recover_session_names` would then skip the session as already `Named` (contract C15) and
+    // never find the real one.
+    //
+    // The real title follows the placeholder, so the test cannot pass by observing nothing.
+    for (cli, placeholder) in [
+        (AiCli::ClaudeCode, r"\342\234\263 Claude Code"),
+        (AiCli::Copilot, "GitHub Copilot"),
+    ] {
+        let project = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
+        let state = DaemonState::new(catalog_with_session(project.path(), store.path(), cli));
+        let session = register_emitter(
+            &state,
+            id,
+            &format!(r"\033]0;{placeholder}\007'; sleep 0.5; printf '\033]0;Fixing the parser\007"),
+        );
+
+        let mut observed: Vec<(SessionId, String)> = Vec::new();
+        let mut shown: Vec<SessionLabel> = Vec::new();
+        let landed = wait_until(Duration::from_secs(5), || {
+            observed.extend(state.drain_signals().names);
+            shown.push(summary_of(&state, id).title);
+            observed.iter().any(|(_, name)| name == "Fixing the parser")
+        });
+        assert!(landed, "{cli:?}: the conversation's title must still land");
+        assert_eq!(
+            observed,
+            vec![(id, "Fixing the parser".to_string())],
+            "{cli:?}: the CLI's startup title must never be handed back for recording"
+        );
+        assert!(
+            shown.iter().all(|t| matches!(t, SessionLabel::Pending)
+                || *t == SessionLabel::Named("Fixing the parser".into())),
+            "{cli:?}: an unnamed session reads \"New session\" until it has a name, got {shown:?}"
+        );
+
+        session.kill().expect("kill");
+    }
+}
+
+#[test]
+fn a_shell_tabs_title_never_becomes_the_sessions_name() {
+    // Feature 029, T026 (FR-011). A session's name is its conversation's. A shell tab opened on
+    // that session is a different process with its own title — bash's default `PS1` sets
+    // `"user@host: ~/dir"` under the `TERM=xterm-256color` the daemon exports — and attaching it
+    // must not record that over the name, where it would survive every restart.
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
+    let state = DaemonState::new(catalog_with_session(
+        project.path(),
+        store.path(),
+        AiCli::ClaudeCode,
+    ));
+    let primary = register_emitter(&state, id, r"\033]0;\342\240\213 Fixing the parser\007");
+
+    let mut observed: Vec<(SessionId, String)> = Vec::new();
+    assert!(
+        wait_until(Duration::from_secs(5), || {
+            observed.extend(state.drain_signals().names);
+            !observed.is_empty()
+        }),
+        "precondition: the conversation's title lands"
+    );
+
+    let instance = ShellInstanceId(1);
+    state.open_shell(id, instance).expect("open a shell tab");
+    let (shell, _) = state
+        .attach_process(id, SessionProcess::Shell(instance))
+        .expect("attach the shell tab");
+    // The echoed input line holds `t026_$((1+1))`; only the *output* holds `t026_2`, so seeing it
+    // proves the title escape before it was written by the shell rather than merely typed.
+    state.session_input(
+        id,
+        0,
+        b"printf '\\033]0;user@host: ~/proj\\007'; echo t026_$((1+1))\n",
+    );
+    let ran = wait_until(Duration::from_secs(5), || {
+        observed.extend(state.drain_signals().names);
+        visible_text(&shell).contains("t026_2")
+    });
+    assert!(ran, "precondition: the shell tab emitted its title");
+    // One more tick after the output, so a drain that would pick the title up has had its chance.
+    std::thread::sleep(Duration::from_millis(100));
+    observed.extend(state.drain_signals().names);
+
+    assert_eq!(
+        observed,
+        vec![(id, "Fixing the parser".to_string())],
+        "only the AI CLI's title is the session's name"
+    );
+    assert_eq!(
+        summary_of(&state, id).title,
+        SessionLabel::Named("Fixing the parser".into())
+    );
+
+    for p in state.remove_session(id) {
+        let _ = p.kill();
+    }
+    drop(primary);
+}
+
+#[test]
+fn a_regular_terminal_sessions_shell_title_is_not_a_name() {
+    // Feature 029, T026 (FR-011). A Regular Terminal session's primary process *is* a shell, so
+    // "only the primary" is not enough on its own: there is no conversation to take a name from.
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
+    let state = DaemonState::new(catalog_with_session_in_mode(
+        project.path(),
+        store.path(),
+        AiCli::ClaudeCode,
+        TerminalMode::Regular,
+    ));
+    // The title, then a spinner-titled marker: the spinner is activity evidence whatever the mode,
+    // so `Working` proves the emitter's output was drained.
+    let session = register_emitter(
+        &state,
+        id,
+        r"\033]0;user@host: ~/proj\007'; sleep 0.3; printf '\033]0;\342\240\213 building\007",
+    );
+
+    let mut observed: Vec<(SessionId, String)> = Vec::new();
+    let drained = wait_until(Duration::from_secs(5), || {
+        observed.extend(state.drain_signals().names);
+        summary_of(&state, id).activity == ActivitySignal::Working
+    });
+    assert!(drained, "precondition: the emitter's output was drained");
+    assert!(
+        observed.is_empty(),
+        "a shell's title is not a session name, got {observed:?}"
+    );
+    assert_eq!(summary_of(&state, id).title, SessionLabel::Pending);
 
     session.kill().expect("kill");
 }
