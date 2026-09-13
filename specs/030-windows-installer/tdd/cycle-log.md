@@ -469,3 +469,11 @@ failed before the implementation.
 - green: `out_dir` goes through the same `absolute` helper -> 15 cases, 0 failures.
 - notes: not yet observed on CI, where compile stopped at cycle 53's error before `/O` mattered. Without it, `--out-dir dist` would put the setup exe beside the `.iss`, and the smoke's `dist/*-setup.exe` would name a file that does not exist.
 - commit: see the follow-up commit
+
+## Cycle 55: correct U46's expectation for a relative target dir
+
+- test: `scripts/tests/windows-installer.test.sh` "points iscc at the <triple> release binaries" (U46)
+- red: PR #314's third CI run (5bc16f1c), `fmt + clippy` shell suites, where `CARGO_TARGET_DIR: target`: `FAIL` ... `want iscc arguments containing \`/DBinDir=target/aarch64-pc-windows-msvc/release \`, got: ... /DBinDir=/home/runner/work/micold-ai-ide/micold-ai-ide/target/aarch64-pc-windows-msvc/release`. Locally with `CARGO_TARGET_DIR=target scripts/tests/windows-installer.test.sh` -> 2 failures.
+- green: the test's own `TARGET_DIR` is resolved from `$ROOT` when relative, the rule U65 set -> 15 cases, 0 failures both with and without `CARGO_TARGET_DIR=target`; every shell suite passes under `CARGO_TARGET_DIR=target`.
+- notes: a test change, not a weakening. U46 took `--print-target-dir` verbatim, which is only right when that path is absolute; the local shared dir always was, so cycle 53 missed it.
+- commit: see the follow-up commit

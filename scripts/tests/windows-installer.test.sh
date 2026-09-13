@@ -117,7 +117,13 @@ expect_args "passes the workspace version to iscc" iscc "/DAppVersion=$WORKSPACE
 rm -rf "$d"
 
 # The shared target dir the build compiles into; the script must point iscc at its release output.
+# Resolved from $ROOT, where run_script runs the script, since CI's `CARGO_TARGET_DIR: target` is
+# relative and iscc needs it absolute.
 TARGET_DIR="$(cd "$ROOT" && scripts/build-lock.sh --print-target-dir)"
+case "$TARGET_DIR" in
+/*) ;;
+*) TARGET_DIR="$ROOT/$TARGET_DIR" ;;
+esac
 
 for pair in x64:x86_64-pc-windows-msvc arm64:aarch64-pc-windows-msvc; do
   arch="${pair%%:*}" triple="${pair#*:}"
