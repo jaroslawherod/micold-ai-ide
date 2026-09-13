@@ -175,6 +175,12 @@ These tests already exist and pass on Unix. On Windows they are compiled out tod
 | U62 | On a non-Windows `uname`, the smoke exits 1 with `the Windows installer is smoke-tested on Windows`, before touching anything | FR-018 | example | any | DONE | `scripts/tests/windows-install-smoke.test.sh` "refuses to run off Windows" (added in cycle 48 from T033: the smoke installs a real exe) |
 | U63 | Anything but exactly one existing setup executable exits 2: none or two give the usage line, and a path that does not exist (an unmatched `dist/*-setup.exe` glob) names it | FR-018 | example | any | DONE | `scripts/tests/windows-install-smoke.test.sh` "refuses to run without a setup executable", "refuses more than one setup executable", "names a setup executable that does not exist" (added in cycle 49) |
 
+### `scripts/build-lock.sh`, tested by `scripts/tests/build-lock.test.sh`
+
+| id  | behavior | traces | kind | where | state | test |
+| --- | --- | --- | --- | --- | --- | --- |
+| U64 | With no `flock` on `PATH`, the wrapper runs the command without the repo-wide lock and exits with its status | FR-016 | example | any | DONE | `scripts/tests/build-lock.test.sh` "runs the command unlocked when flock is missing" (added in cycle 52: the first CI run of `windows-installer.sh` exited 127 in Git Bash) |
+
 ### `.github/workflows/ci.yml`
 
 | id  | behavior | traces | kind | where | state | test |

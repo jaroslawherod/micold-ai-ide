@@ -439,3 +439,18 @@ failed before the implementation.
 - green: `ci-complete.needs` gains `windows-arm64-package`, with `WINARM`, `check windows-arm64 "$WINARM"` and a summary row -> 3 passed.
 - notes: T038's x64 step in `test` and T039's job both exist, but T033/T038/T039 carry A1-A4, which stay PENDING until T040 observes the Windows legs.
 - commit: uncommitted
+
+## Cycle 51: guard over main's new unix-gated daemon tests
+
+- test: `crates/micold-core/tests/daemon_tests_gate_with_reason.rs::unix_gated_daemon_test_files_state_a_reason`
+- red: PR #314's first CI run on every OS, then locally after merging `origin/main` (b94a6d8f): `... --test daemon_tests_gate_with_reason` -> `running 1 test` ... `compiled out on Windows with no stated reason ... ["pi_launch_wiring.rs", "supervision_slow_crash_loop.rs"]`
+- green: a truthful `// unix-only:` line above each gate (both write a `#!/bin/sh` script made executable with `PermissionsExt`) -> 1 passed.
+- notes: the files came from main (features 029 and 005), not from this branch; the guard is 030's.
+- commit: see the merge follow-up commit
+
+## Cycle 52: U64 build-lock.sh runs without flock
+
+- test: `scripts/tests/build-lock.test.sh` "runs the command unlocked when flock is missing"
+- red: `scripts/tests/build-lock.test.sh` -> `want exit 3 (the command's), got 127; output: .../build-lock.sh: line 84: flock: command not found`. The same exit 127 ended `windows-arm64-package` in PR #314's first CI run.
+- green: when `flock` is not on `PATH`, the wrapper says so and runs the command unlocked -> 1 case, 0 failures; every shell suite passes and a locked `scripts/build-lock.sh true` still runs.
+- commit: see the merge follow-up commit

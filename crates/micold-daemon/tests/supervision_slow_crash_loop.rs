@@ -14,6 +14,7 @@
 //!
 //! Its own binary: it points `SHELL` at a script that fails slowly, and that is process-global.
 
+// unix-only: points `SHELL` at a `#!/bin/sh` script made executable with `PermissionsExt`; pending Windows triage (030 T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

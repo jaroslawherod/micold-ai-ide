@@ -70,6 +70,13 @@ if [ "$print_target_dir" -eq 1 ]; then
 	exit 0
 fi
 
+# Git Bash on Windows has no flock. The lock only protects many worktrees on one machine, and
+# cargo's own target-directory lock still applies without it.
+if [ "$want_lock" -eq 1 ] && ! command -v flock >/dev/null 2>&1; then
+	echo "${0##*/}: no flock on this host, running without the repo-wide lock" >&2
+	want_lock=0
+fi
+
 if [ "$want_lock" -eq 0 ]; then
 	exec "$@"
 fi
