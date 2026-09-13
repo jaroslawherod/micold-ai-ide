@@ -14,9 +14,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use alacritty_terminal::grid::Dimensions;
+use micold_core::clock::Uptime;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::WireLifecycle;
-use micold_core::session::{AiCli, Session, SessionId, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLocation, TerminalMode, RESTART_STABLE_AFTER,
+};
 use micold_core::settings::FakeSettingsStore;
 use micold_core::store::FakeProjectStore;
 use micold_core::workspace::Workspace;
@@ -121,30 +124,51 @@ fn an_unattended_crash_triggers_a_restart() {
 }
 
 #[test]
-fn a_restart_that_survives_resets_to_running() {
+fn a_restart_that_survives_the_stability_window_resets_to_running() {
     // Closes the L5 gap: a respawned process that stays up must return to Running (clearing the
-    // crash-loop counter), not read as Restarting forever.
+    // crash-loop counter), not read as Restarting forever — so crashes far apart never accumulate.
+    // But only once it has stayed up for the window (`005` BUG-004): surviving a single tick is not
+    // recovery, or a process that fails a second in restarts forever. Readings are injected; the
+    // window is ten seconds and this is about the readings, not about sleeping through it.
     let project = tempfile::tempdir().unwrap();
     let (state, id) = state_with_regular_session(project.path());
 
-    // Crash once → the next tick respawns the platform shell, which stays alive on its PTY.
+    // Crash once → the tick respawns the platform shell, which stays alive on its PTY.
     let handle = state.register_session(PtySession::spawn(id, sh("exit 1"), 100, None).unwrap());
     wait_dead(&handle);
-    state.supervise_exited_sessions();
+    let respawned_at = Uptime::from_nanos(1_000_000_000_000);
+    state.supervise_exited_sessions_at(respawned_at);
     assert_eq!(
         lifecycle(&state, project.path(), id),
         Some(WireLifecycle::Restarting { attempts: 1 }),
-        "the tick that respawns does not itself reset — the survivor is only proven next tick"
+        "the tick that respawns does not itself reset"
     );
     assert!(state.live_session(id).is_some_and(|p| p.is_alive()));
 
-    // A later tick sees the respawn still alive → resets it to Running (crash-loop counter cleared).
-    state.supervise_exited_sessions();
+    // One tick later it is alive, and not yet proven.
+    state.supervise_exited_sessions_at(later(respawned_at, Duration::from_millis(250)));
+    assert_eq!(
+        lifecycle(&state, project.path(), id),
+        Some(WireLifecycle::Restarting { attempts: 1 }),
+        "a respawn alive for one tick is still inside the stability window"
+    );
+
+    // Still alive once the window has passed → Running, crash-loop counter cleared.
+    state.supervise_exited_sessions_at(later(respawned_at, RESTART_STABLE_AFTER));
     assert_eq!(
         lifecycle(&state, project.path(), id),
         Some(WireLifecycle::Running),
-        "a restart that survives a supervision tick is healthy again"
+        "a restart that survives the stability window is healthy again"
     );
+
+    if let Some(live) = state.live_session(id) {
+        live.kill().expect("kill");
+    }
+}
+
+fn later(reading: Uptime, by: Duration) -> Uptime {
+    let nanos = reading.saturating_sub(Uptime::from_nanos(0)) + by;
+    Uptime::from_nanos(nanos.as_nanos() as u64)
 }
 
 /// BUG-003 (`006-real-terminal-emulator` FR-014a, `010` FR-020a/SC-023): a crash respawn must come
