@@ -730,17 +730,21 @@ impl Catalog {
         Ok(owner)
     }
 
-    /// The non-archived sessions of `project` as `(id, cwd)` pairs — the candidates for empty-session
+    /// The non-archived, unnamed sessions of `project` as `(id, cwd)` pairs — the candidates for empty-session
     /// pruning (T056). Already-archived sessions are skipped (never revived or re-counted — the
     /// anti-resurrection invariant, main `93a0a08`). The caller checks each cwd for a recorded AI-CLI
     /// conversation off the state lock, then archives the ones with none via `archive_session_ids`.
+    ///
+    /// A `Named` session is never a candidate (feature 029, FR-008): it had a conversation, so it is
+    /// not empty, and the AI CLI deleting its transcript must not take the row and its name off the
+    /// list.
     pub fn prunable_session_cwds(&self, project: &Path) -> Vec<(SessionId, PathBuf, AiCli)> {
         self.workspace
             .sessions
             .get(project)
             .map(|list| {
                 list.iter()
-                    .filter(|s| !s.archived)
+                    .filter(|s| !s.archived && matches!(s.label, SessionLabel::Pending))
                     // Each candidate carries its own provider (feature 026): the caller decides
                     // whether to *archive* it, and one hoisted provider judging a mixed set is how
                     // every session of the other CLI comes to look empty.
