@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.13.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.12.1...micold-ai-ide-v0.13.0) (2026-09-13)
+
+
+### Features
+
+* **027:** reach the users the namespace correction could not (FR-024) ([851af34](https://github.com/jaroslawherod/micold-ai-ide/commit/851af342b047636507fbe221825395495f958828))
+* **028:** a published documentation site, with the application in it ([#268](https://github.com/jaroslawherod/micold-ai-ide/issues/268)) ([841c32c](https://github.com/jaroslawherod/micold-ai-ide/commit/841c32c4f84b45db6bd5f94ef8e69d2e2a5c3c06))
+* **028:** keeping the service running is the one thing that turns the idle stop off (US4) ([3a45148](https://github.com/jaroslawherod/micold-ai-ide/commit/3a45148fa3b84cbdfa81dffa2dfdb2164f39c1d5))
+* **028:** package Micold AI IDE for macOS ([#284](https://github.com/jaroslawherod/micold-ai-ide/issues/284)) ([b53e344](https://github.com/jaroslawherod/micold-ai-ide/commit/b53e3449bd3c2ee78103003c71b8b7b85ad28111))
+* **028:** the app is the only thing that starts a session service (US1) ([735c4b5](https://github.com/jaroslawherod/micold-ai-ide/commit/735c4b574597aefac61bcb78e6ea7327ea29b789))
+* **028:** the log says which way out this was (US5, T060-T064) ([eed1e31](https://github.com/jaroslawherod/micold-ai-ide/commit/eed1e3196a77efe642e46fff669e4bf9af4762db))
+* **028:** the presence count the idle rule reads, fed by the real accept loop (US2, Phase 2) ([857e3cf](https://github.com/jaroslawherod/micold-ai-ide/commit/857e3cfaa3e1d29aabc3f3ae52210a8ecd2c23dc))
+* **028:** the service stops itself after 30 idle minutes (US3, and the docs US5 owes) ([13efdb7](https://github.com/jaroslawherod/micold-ai-ide/commit/13efdb7267968c97a18e63ca704ca8f7a9b95078))
+* **029:** ask for the worktree list instead of leaving the project ([8bfa0e1](https://github.com/jaroslawherod/micold-ai-ide/commit/8bfa0e103d2ba573afefcf23ebcac22e7bdc6cb8))
+* **029:** record the worktrees the app creates, and classify on the record ([61cc031](https://github.com/jaroslawherod/micold-ai-ide/commit/61cc0318d0de6ea750a19d641023f245c27fba5b))
+* **029:** the tooltip leads with the name the row could not show ([c6e48de](https://github.com/jaroslawherod/micold-ai-ide/commit/c6e48ded0638a387fb74c7e52f3473da996f74c6))
+
+
+### Bug Fixes
+
+* **010:** stop two writers from destroying settings.json (BUG-025) ([d3986fc](https://github.com/jaroslawherod/micold-ai-ide/commit/d3986fc9cd2a0773660e3333b2bcb7a6a2e31b47))
+* **018:** paint the sidebar's resize grab zone in the sidebar's tone (BUG-012) ([9217805](https://github.com/jaroslawherod/micold-ai-ide/commit/92178054687b6764b19ad4890d09ba337ec39543))
+* **027:** make the placement select move the daemon (BUG-003) ([07bc441](https://github.com/jaroslawherod/micold-ai-ide/commit/07bc44158630ae92a21d139544a0d20301a692af))
+* **027:** the connect-time CLI availability ask never went out (BUG-002) ([49d0502](https://github.com/jaroslawherod/micold-ai-ide/commit/49d05026129b2b17dcf4d34a805586089499e5db))
+* **028:** keep the branch's own resolution of the two files the rebase mangled ([55aa2f5](https://github.com/jaroslawherod/micold-ai-ide/commit/55aa2f5b389e6742cca526cf135d82e85158ed72))
+* **028:** make the Pages publication pipeline run on a runner ([#278](https://github.com/jaroslawherod/micold-ai-ide/issues/278)) ([cd6aa91](https://github.com/jaroslawherod/micold-ai-ide/commit/cd6aa911a7ae529ea560f4184d5c643bf4493115))
+* **028:** the macOS arm of the new clock never compiled ([cacb0a0](https://github.com/jaroslawherod/micold-ai-ide/commit/cacb0a0bde421aa2e30613c70ba6c13430db56ce))
+* **028:** the Settings page still promised systemd would keep the service alive (T028a) ([a3f1bb1](https://github.com/jaroslawherod/micold-ai-ide/commit/a3f1bb17458fc965b27676959d4ca1832137aee4))
+
+
+### Build & CI
+
+* block a user-facing feature that leaves the user guide behind ([468ab53](https://github.com/jaroslawherod/micold-ai-ide/commit/468ab539a5a39f782cbe05a580d60985d8f98995))
+
 ## [0.12.1](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.12.0...micold-ai-ide-v0.12.1) (2026-08-27)
 
 
