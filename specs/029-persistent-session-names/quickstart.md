@@ -206,3 +206,51 @@ not the emitting.
   than caught frame-by-frame: with the CLI emitting nothing at all and no session started, a name on
   screen has no other source than the record. A screenshot pipeline cannot reliably sample the first
   paint after attach, which is the frame that claim is about.
+
+### The real-CLI re-run (2026-09-13)
+
+Task T027, after the convergence fixes T025 and T026. The 2026-09-12 pass above drove a stand-in; this
+one drove the real `claude` 2.1.270.
+
+**Platform.** Xvfb `:81` with lavapipe (`WGPU_BACKEND=vulkan`), not a real display. The pair was built
+from `fccb5a31` and pinned out of `target-shared`, and it connected (`client attached to daemon`). It
+ran with a private `XDG_RUNTIME_DIR`/`XDG_DATA_HOME` and a throwaway git project. `claude` used the
+default `~/.claude` config, with every `CLAUDE*`/`ANTHROPIC*` variable removed from its environment so
+it behaved as a top-level session. With them inherited it reported "Transcript saving is off" and
+wrote no transcripts.
+
+**What the real CLI emits.** Probed under `script` with `TERM=xterm-256color`: `claude` titles its
+terminal `✳ Claude Code` as soon as it starts, before anything is asked, and `copilot` titles it
+`GitHub Copilot`. Before T025 the daemon recorded that placeholder as the session's name. Bash's
+default prompt titles the terminal `user@host: dir`, which a shell tab (T026) would have recorded.
+
+**Results.**
+
+- **A startup title is not a name (FR-004, SC-006).** A new session left at `claude`'s welcome screen
+  read "New session", and its `title` was `null` on disk while the CLI was running.
+- **A real name is recorded (FR-001).** Given one prompt ("In one sentence, what is a git worktree?"),
+  `claude` named session `78461383` "Git worktree explanation". The row, the bottom bar and the state
+  file all showed that name. The busy/idle indicator was lit on the row while the CLI worked, which
+  the stand-in pass could not show.
+- **A shell tab does not rename the session (FR-011).** A shell tab opened on that session showed its
+  `user@host:/tmp` prompt after `cd /tmp && pwd`. The row and the bar still read "Git worktree
+  explanation", and the file was unchanged. See `evidence/T027-shell-tab-keeps-the-name.png`.
+- **B1 with the real CLI.** A second session `858d5bf5` was created and left untouched, and it read
+  "New session". Then the client and daemon were both stopped by PID, `last_session` was removed from
+  the state file, and the app was relaunched from cold. With no session started and no `claude`
+  process running, the Default row read "Git worktree explanation", so the name came from the record.
+  Opening the session resumed `claude`, which put its `✳ Claude Code` title back up, and the row kept
+  its name. `evidence/T027-never-named-then-restart.png` stacks three crops: before the restart (red),
+  after it with nothing running (blue), and after resuming (green).
+
+**Not covered, and not marked passed.**
+
+- **A never-named session across a restart.** On relaunch `858d5bf5` and the first unprompted session
+  were archived, not shown as "New session", because `prune_empty_sessions` archives any session
+  without a transcript that nothing is running. That behaviour predates this feature. A session that
+  is never named therefore cannot survive a restart to be looked at. Its "New session" label was
+  verified only while it was live, and by the automated `a_regular_terminal_sessions_shell_title_is_not_a_name`
+  and `an_ai_clis_own_startup_title_is_not_a_name` tests.
+- **Copilot through the UI.** Only its startup title was probed. The Copilot branch of T025 is covered
+  by the automated test, not by this pass.
+- **Worktree rows**, for the same reason as the pass above: the project has none.
