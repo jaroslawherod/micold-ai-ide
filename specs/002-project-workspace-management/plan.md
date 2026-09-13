@@ -142,9 +142,15 @@ behavioural gain.
 **Last active (BUG-003)**: a new correlated `ClientMsg::ProjectActivate { req, path }` carries a
 reopen to the daemon, the catalog's single writer. The daemon refreshes availability, calls
 `Workspace::activate` — the FR-023 guard — and persists only when it accepts; an unknown or
-unavailable path is refused as `NotFound`. `PROTOCOL_VERSION` 10 → 11.
+unavailable path is refused as `NotFound`. `PROTOCOL_VERSION` 11 → 12.
 
 **Launch restore (BUG-004)**: boot calls `Workspace::release_unavailable_active` after
 `refresh_availability` and raises an error notification naming the project and its folder.
 Kept out of `refresh_availability` itself on purpose: feature 008's switcher now rescans while the
 application runs (008 BUG-003), and a scan must not drop the project being worked in.
+
+**Bugfix**: 2026-09-13 — BUG-002 Updated from bugfix patch
+
+**Bugfix**: 2026-09-13 — BUG-003 Updated from bugfix patch
+
+**Bugfix**: 2026-09-13 — BUG-004 Updated from bugfix patch

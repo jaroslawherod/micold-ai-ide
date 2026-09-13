@@ -117,3 +117,7 @@ handler, `shell::workspace::on_switcher_toggled`, which runs the reducer toggle 
 capability, which the render-free reducer does not hold, hence the shell seam. It is bounded work
 over the catalog (one `exists` per known project) and runs only on the transition to open. It never
 releases the active project (002 BUG-004 keeps that to launch).
+
+**Bugfix**: 2026-09-13 — BUG-002 Updated from bugfix patch
+
+**Bugfix**: 2026-09-13 — BUG-003 Updated from bugfix patch

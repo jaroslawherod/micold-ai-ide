@@ -372,38 +372,38 @@ reopening a known project records it as last active (FR-010); a launch never ope
 last-active project whose folder is gone (FR-023). See plan.md "Bugfix: symlinks, last-active,
 and the launch restore".
 
-- [ ] T056 [P] Failing tests (BUG-002): `through_a_symlink::*` in
+- [x] T056 [P] Failing tests (BUG-002): `through_a_symlink::*` in
   `crates/micold-core/tests/worktree_discovery.rs` (real git: `discover` and `branch_candidates`
   on a symlinked project path), `a_chosen_folder_is_identified_by_its_resolved_path` +
   `a_project_known_by_its_symlink_is_found_by_its_real_path` in
   `crates/micold-core/tests/workspace.rs`, and
   `choosing_a_symlink_to_a_repository_opens_it_by_its_resolved_path` in
   `crates/micold-client/src/shell/workspace.rs`.
-- [ ] T057 Add `fs_scan::resolve_path` and `Workspace::identity_for`; `on_folder_chosen` opens a
+- [x] T057 Add `fs_scan::resolve_path` and `Workspace::identity_for`; `on_folder_chosen` opens a
   chosen folder under that identity (depends on T056).
-- [ ] T058 Re-spell git's worktree records under the project path in `worktree::discover`,
+- [x] T058 Re-spell git's worktree records under the project path in `worktree::discover`,
   `preflight` and `branch_candidates`, so a project stored through a symlink classifies its
   worktrees correctly (depends on T056).
-- [ ] T059 [P] Failing tests (BUG-003): `project_activate_records_the_last_active_project` +
+- [x] T059 [P] Failing tests (BUG-003): `project_activate_records_the_last_active_project` +
   `project_activate_refuses_a_project_whose_folder_is_gone` in
   `crates/micold-daemon/tests/mutation_semantics.rs`, and
   `reopening_a_known_project_records_it_as_the_active_one` in
   `crates/micold-client/src/shell/workspace.rs`; `ClientMsg::ProjectActivate` added to the
-  protocol (`PROTOCOL_VERSION` 11) with a round-trip sample.
-- [ ] T060 Daemon: `Catalog::activate_project` refreshes availability, activates through
+  protocol (`PROTOCOL_VERSION` 12) with a round-trip sample.
+- [x] T060 Daemon: `Catalog::activate_project` refreshes availability, activates through
   `Workspace::activate` and persists only when accepted; the server answers `Ack`, or
   `NotFound` for an unknown or unavailable path (depends on T059).
-- [ ] T061 Client: `on_known_project_reopened` sends `ProjectActivate` after an accepted switch
+- [x] T061 Client: `on_known_project_reopened` sends `ProjectActivate` after an accepted switch
   (depends on T059, T060).
-- [ ] T062 [P] Failing tests (BUG-004): `a_restored_active_project_whose_folder_is_gone_is_released`,
+- [x] T062 [P] Failing tests (BUG-004): `a_restored_active_project_whose_folder_is_gone_is_released`,
   `a_restored_active_project_that_is_still_there_stays_active` and
   `refreshing_availability_alone_does_not_release_the_active_project` in
   `crates/micold-core/tests/workspace.rs`;
   `a_last_active_project_whose_folder_is_gone_is_not_opened_at_launch` +
   `a_last_active_project_that_is_still_there_is_restored` in
   `crates/micold-client/src/shell/startup.rs`.
-- [ ] T063 Implement `Workspace::release_unavailable_active` (depends on T062).
-- [ ] T064 Boot's `restore_catalog` releases an unavailable last-active project and tells the user
+- [x] T063 Implement `Workspace::release_unavailable_active` (depends on T062).
+- [x] T064 Boot's `restore_catalog` releases an unavailable last-active project and tells the user
   which project could not be reopened (depends on T063).
 
 **Bugfix**: 2026-09-13 — BUG-002/BUG-003/BUG-004 Added Phase 10 (T056–T064). See
