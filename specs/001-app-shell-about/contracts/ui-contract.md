@@ -45,7 +45,7 @@ The dialog MUST display all four fields, all visible on first open without scrol
 | Application name | Exactly `Micold AI IDE` | FR-006 |
 | Version | From build/package metadata (not hardcoded) | FR-007 |
 | License | Project's OSI-approved license name | FR-008 |
-| Description | One-line app description | FR-009 |
+| Description | One-line app description: the application's user-facing copy (the first sentence of the client's `extended-description`), never a crate's Cargo `description` *(BUG-001)* | FR-009 |
 
 - Any field whose metadata source is empty displays a clearly-labeled fallback
   (e.g., `unknown`), never a blank (FR-016).

@@ -14,7 +14,7 @@ from compile-time sources; never mutated at runtime.
 | `name` | `const APP_NAME = "Micold AI IDE"` | Fixed literal; MUST equal "Micold AI IDE" (FR-006). |
 | `version` | `env!("CARGO_PKG_VERSION")` | From `Cargo.toml`; never hardcoded (FR-007). Always non-empty for a Cargo build. |
 | `license` | `env!("CARGO_PKG_LICENSE")` | From `Cargo.toml` `license`. If empty → display fallback (FR-008, FR-016). |
-| `description` | `env!("CARGO_PKG_DESCRIPTION")` | From `Cargo.toml` `description`. One line. If empty → display fallback (FR-009, FR-016). |
+| `description` | ~~`env!("CARGO_PKG_DESCRIPTION")`~~ `APP_DESCRIPTION` in `micold-client` | ~~From `Cargo.toml` `description`.~~ The first sentence of the client's `[package.metadata.deb] extended-description`, held as a constant in the client and checked against the manifest by `tests/about_description.rs` (BUG-001 — a crate's `description` is maintainer copy, and `env!` in `micold-core` read the core's). One line. If empty → display fallback (FR-009, FR-016). |
 
 **Validation / display rules**:
 - A metadata string that is empty (`""`) is treated as "unavailable" and rendered as a

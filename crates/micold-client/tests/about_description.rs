@@ -39,9 +39,7 @@ fn manifest_string(manifest: &str, key: &str) -> String {
 /// second sentence about session CLIs that belongs in a package listing, not an identity box.
 fn application_description() -> String {
     let extended = manifest_string(include_str!("../Cargo.toml"), "extended-description");
-    let end = extended
-        .find(". ")
-        .map_or(extended.len(), |i| i + 1);
+    let end = extended.find(". ").map_or(extended.len(), |i| i + 1);
     extended[..end].to_string()
 }
 
@@ -74,6 +72,29 @@ fn about_paints_the_applications_own_description() {
         painted.iter().any(|t| t == &expected),
         "the About dialog must describe the application as its package listing does — \
          {expected:?}; painted: {painted:?}"
+    );
+}
+
+/// Version and license are workspace-wide, so they read the same from any crate — but they are now
+/// resolved in the client, so the client is where they are held (FR-007, FR-008, SC-003).
+#[test]
+fn about_paints_the_applications_version_and_license() {
+    let root = include_str!("../../../Cargo.toml");
+    let painted = painted_about();
+    for expected in [
+        format!("Version {}", env!("CARGO_PKG_VERSION")),
+        format!("License: {}", manifest_string(root, "license")),
+    ] {
+        assert!(
+            painted.iter().any(|t| t == &expected),
+            "the About dialog must paint {expected:?}; painted: {painted:?}"
+        );
+    }
+    assert!(
+        painted
+            .iter()
+            .any(|t| t == &format!("Version {}", manifest_string(root, "version"))),
+        "the painted version must be the workspace's packaged version"
     );
 }
 
