@@ -187,12 +187,26 @@ fn text_pairs(r: &Roles) -> Vec<Pair> {
         // `BUTTON` and not `ROW`, and that is read from the widget rather than assumed from §5's
         // table: `toggle_chip` draws `hover` and `pressed` only, and expresses *on* by swapping the
         // fill instead of holding a `selected` layer. So its heaviest is 10%.
+        //
+        // Its fill is `surface_container_high`, not `surface_variant`: on `surface_variant` the
+        // muted label measured 4.47:1 pressed in the dark scheme, and FR-004b narrows the host
+        // rather than the label (BUG-011).
+        Pair::new(
+            "untyped_chip: on_surface_variant/surface_container_high",
+            r.on_surface_variant,
+            r.surface_container_high,
+            r.on_surface_variant,
+            BUTTON,
+        ),
+        // `on_surface_variant` on `surface_variant` stays a pair for content nothing presses — a
+        // badge's glyph, a secondary line on a static fill. It carries no layer, and §1.3 permits
+        // it there and only there (BUG-011).
         Pair::new(
             "on_surface_variant/surface_variant",
             r.on_surface_variant,
             r.surface_variant,
             r.on_surface_variant,
-            BUTTON,
+            NONE,
         ),
     ];
 
@@ -316,19 +330,13 @@ fn dark_scheme_meets_aa_on_every_text_pair() {
 /// as soon as the measurement moves by more than a hundredth. That shape is deliberate: BUG-010
 /// existed because its predecessor recorded an excluded class in a module doc, and a doc comment
 /// reports nothing when the exclusion stops being true (plan.md, "a gate's recorded scope is a claim
-/// about the rest"). Both rows below are filed as BUG-011, which is where the remedy is decided —
-/// each needs a role change with a visible cost, and neither is BUG-010's to make.
-const UNDER_AA_COMPOSITED: [(&str, &str, f64); 2] = [
-    // The snackbar's `Dismiss`, pressed. `inverse_primary` on `inverse_surface` is 4.99:1 at rest;
-    // FR-004b's usual remedy does not reach it, because a snackbar has exactly one fill. The figure
-    // is 4.37 and not the 4.34 or 4.40 a hand calculation gives, because §5's opacities are `f32`
-    // and one channel here lands on a rounding boundary — which is itself the argument for reading
-    // the constant rather than restating it.
-    ("Dark", "inverse_primary/inverse_surface", 4.37),
-    // The untyped `ToggleChip`, selected. 5.48:1 at rest, and here the remedy *does* reach: a
-    // neutral chip can take a different neutral fill, as the `Info` banner just did.
-    ("Dark", "on_surface_variant/surface_variant", 4.47),
-];
+/// about the rest").
+///
+/// Empty since BUG-011, which closed the two rows it held: the snackbar's `Dismiss` (dark
+/// `inverse_primary` moved from tone 40 to 30, 4.37 → 6.21:1 pressed) and the untyped filter chip
+/// (its fill moved from `surface_variant` to `surface_container_high`, 4.47 → 6.69:1 pressed). The
+/// constant stays so that the next pair to land here is a deliberate, reviewed row.
+const UNDER_AA_COMPOSITED: [(&str, &str, f64); 0] = [];
 
 /// §1.3's pairs, measured the way a user meets them: with the heaviest state layer the element can
 /// carry drawn over the container (FR-004b).

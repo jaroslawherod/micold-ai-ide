@@ -324,7 +324,10 @@ pub const DARK: Roles = Roles {
     outline_variant: palette::NEUTRAL_VARIANT.at(30),
     inverse_surface: palette::NEUTRAL.at(90),
     inverse_on_surface: palette::NEUTRAL.at(20),
-    inverse_primary: palette::PRIMARY.at(40),
+    // Tone 30, not Material's baseline 40. At 40 the snackbar's action measured 4.37:1 on
+    // `inverse_surface` with its press layer composited, and a snackbar has no other fill to move
+    // to — so FR-004b moves this role's tone instead: 7.25:1 at rest, 6.21:1 pressed (BUG-011).
+    inverse_primary: palette::PRIMARY.at(30),
     scrim: palette::NEUTRAL.at(0),
     shadow: palette::NEUTRAL.at(0),
 
