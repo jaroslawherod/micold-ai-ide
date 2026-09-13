@@ -204,6 +204,7 @@ pub fn on_settings_opened(app: &mut App) -> Task<Message> {
         env_include_timeout_secs: app.env_include_timeout_secs,
         daemon,
         default_ai_cli: app.core.session.default_ai_cli,
+        pi_activity_component: app.core.session.pi_activity_component,
     };
     let mut draft = SettingsDraft::from_settings(&current);
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the
@@ -288,6 +289,7 @@ fn apply_save(app: &mut App, valid: ValidSettings) -> Task<Message> {
     // Deliberately **not** re-checked against availability here either -- a default naming a CLI
     // that has since been uninstalled is kept, not repaired (feature 026, research R11).
     app.core.session.default_ai_cli = valid.default_ai_cli;
+    app.core.session.pi_activity_component = valid.pi_activity_component;
 
     let settings = valid.into_settings();
     if let Some(store) = app.caps.settings() {
@@ -320,6 +322,7 @@ fn apply_save(app: &mut App, valid: ValidSettings) -> Task<Message> {
             env_include_script_path: Some(settings.env_include_script_path.clone()),
             env_include_timeout_secs: Some(settings.env_include_timeout_secs),
             default_ai_cli: Some(settings.default_ai_cli),
+            pi_activity_component: Some(settings.pi_activity_component),
         });
         app.pending_ops.insert(req, PendingOp::SettingsSet);
     }
@@ -660,6 +663,14 @@ mod tests {
                 config.join("session-state").join(session.id.0.to_string()),
                 "events.jsonl".to_string(),
             ),
+            // Deliberately not exhaustive by name. This helper fabricates another vendor's
+            // storage, so every arm it carries is a second copy of a layout that lives in
+            // `provider.rs` — and the scenarios above exercise two CLIs, not all of them. A
+            // catch-all keeps this probe from becoming the place a new provider has to be
+            // registered (FR-019); reaching it means a scenario was extended without its layout.
+            other => unimplemented!(
+                "this probe fabricates only the layouts its scenarios use; {other} is not one"
+            ),
         };
         std::fs::create_dir_all(&dir).expect("conversation directory");
         std::fs::write(dir.join(file), "{}\n").expect("conversation record");
@@ -682,6 +693,7 @@ mod tests {
             env_include_timeout_secs: 42,
             daemon: Default::default(),
             default_ai_cli: AiCli::Copilot,
+            pi_activity_component: false,
         };
         let store = FakeSettingsStore::loaded(stored.clone());
         let mut core = State {

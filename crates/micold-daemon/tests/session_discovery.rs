@@ -50,7 +50,8 @@ fn project_for(scenario: &str) -> PathBuf {
     PathBuf::from(format!("/repo/{scenario}"))
 }
 
-/// Two scratch provider stores, with `CLAUDE_CONFIG_DIR` and `COPILOT_HOME` pointed at them.
+/// Scratch provider stores, with `CLAUDE_CONFIG_DIR`, `COPILOT_HOME` and `PI_CODING_AGENT_DIR`
+/// pointed at them.
 ///
 /// Both are process-global and Rust runs tests on threads, so **every scenario in this file lives
 /// inside one `#[test]` function** — the arrangement `session_archive_durable_marker.rs` already
@@ -64,6 +65,7 @@ struct ProviderStores {
     _base: tempfile::TempDir,
     claude: PathBuf,
     copilot: PathBuf,
+    pi: PathBuf,
 }
 
 impl ProviderStores {
@@ -71,12 +73,15 @@ impl ProviderStores {
         let base = tempfile::tempdir().unwrap();
         let claude = base.path().join("claude");
         let copilot = base.path().join("copilot");
+        let pi = base.path().join("pi");
         std::env::set_var("CLAUDE_CONFIG_DIR", &claude);
         std::env::set_var("COPILOT_HOME", &copilot);
+        std::env::set_var("PI_CODING_AGENT_DIR", &pi);
         Self {
             _base: base,
             claude,
             copilot,
+            pi,
         }
     }
 
@@ -120,12 +125,37 @@ impl ProviderStores {
             std::fs::write(dir.join("events.jsonl"), "{}\n").unwrap();
         }
     }
+
+    /// Record a Pi conversation for `cwd`, as `pi` itself files it: one
+    /// `<timestamp>_<id>.jsonl` in the cwd's `--encoded--` directory (contracts/pi-cli.md).
+    fn pi_conversation(&self, cwd: &Path, id: Uuid) {
+        let path = cwd.to_string_lossy();
+        let encoded: String = path
+            .trim_start_matches(['/', '\\'])
+            .chars()
+            .map(|c| {
+                if matches!(c, '/' | '\\' | ':') {
+                    '-'
+                } else {
+                    c
+                }
+            })
+            .collect();
+        let dir = self.pi.join("sessions").join(format!("--{encoded}--"));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("2026-09-13T10-00-00-000Z_{id}.jsonl")),
+            format!("{{\"type\":\"session\",\"id\":\"{id}\"}}\n"),
+        )
+        .unwrap();
+    }
 }
 
 impl Drop for ProviderStores {
     fn drop(&mut self) {
         std::env::remove_var("CLAUDE_CONFIG_DIR");
         std::env::remove_var("COPILOT_HOME");
+        std::env::remove_var("PI_CODING_AGENT_DIR");
     }
 }
 
@@ -218,6 +248,50 @@ fn discovery_finds_what_the_clis_recorded_and_nothing_else() {
             "discovery runs on every open, not only the first"
         );
         assert_eq!(recorded(&state, &project).len(), 3);
+    }
+
+    // --- A Pi conversation had outside the application is listed as a Pi session (feature 029) ---
+    {
+        // T051 (FR-015, SC-006b). The same entry point, the third store: nothing in discovery
+        // names Pi, so this is the test that the loop over providers reaches it at all. A Pi id is
+        // a UUIDv7 when Pi chose it, which is the case for every conversation found this way.
+        let project = project_for("pi");
+        let cwd = SessionLocation::Default.cwd(&project);
+        let first = Uuid::parse_str("01920000-0000-7000-8000-000000000001").unwrap();
+        stores.pi_conversation(&cwd, first);
+
+        let data_dir = tempfile::tempdir().unwrap();
+        let state = state_with(data_dir.path(), &project, Vec::new());
+
+        assert_eq!(state.discover_external_sessions(&project), 1);
+        assert_eq!(
+            recorded(&state, &project),
+            vec![(SessionId::from_uuid(first), AiCli::Pi)],
+            "the id came back as a session of the CLI whose store it was found in"
+        );
+
+        // A reopen adds nothing, and a conversation started between opens is surfaced.
+        assert_eq!(state.discover_external_sessions(&project), 0);
+        let later = Uuid::parse_str("01920000-0000-7000-8000-000000000002").unwrap();
+        stores.pi_conversation(&cwd, later);
+        assert_eq!(
+            state.discover_external_sessions(&project),
+            1,
+            "discovery runs on every open, not only the first"
+        );
+
+        // The cost is one listing per location. Conversations whose ids are already known are
+        // subtracted before anything else, so planting a marker for a known one changes nothing —
+        // the same ordering the Copilot scenario below pins, reached through Pi's store.
+        micold_core::provider::AiCliProvider::mark_archived(
+            AiCli::Pi.provider(),
+            &stores.pi,
+            &cwd,
+            first,
+        )
+        .unwrap();
+        assert_eq!(state.discover_external_sessions(&project), 0);
+        assert_eq!(recorded(&state, &project).len(), 2);
     }
 
     // --- A closed session stays closed, on the durable marker alone ---

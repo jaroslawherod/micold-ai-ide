@@ -41,7 +41,11 @@
 /// attach, create, delete, include, exclude or project-add. One variant is the feature's whole wire
 /// delta, so unlike 026/027 there was nothing to batch — but the same rule applies, and a second
 /// bump here would fail `tests/schema_hash.rs`.
-pub const PROTOCOL_VERSION: u32 = 10;
+/// Bumped 10 → 11 for feature 029's Pi provider, in one edit: `AiCli::Pi` is a new variant every
+/// frame that carries a provider can hold, and `DaemonSettings` / `ClientMsg::SettingsSet` gain
+/// `pi_activity_component` (FR-012e). An older peer would fail to decode either. It developed
+/// against 10 while `WorktreeRefresh` took that number here, so both cannot be 10.
+pub const PROTOCOL_VERSION: u32 = 11;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

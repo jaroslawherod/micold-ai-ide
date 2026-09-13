@@ -119,7 +119,7 @@ impl PtySession {
         spec: &LaunchSpec,
         scrollback_lines: usize,
         initial_size: Option<(u16, u16)>,
-        settings_file: Option<&std::path::Path>,
+        activity_args: &[std::ffi::OsString],
     ) -> io::Result<Self> {
         ensure_cwd_exists(&spec.cwd)?;
         let mut cmd = CommandBuilder::new(spec.provider.provider().command());
@@ -130,13 +130,13 @@ impl PtySession {
         for arg in launch_args(spec) {
             cmd.arg(arg);
         }
-        // A per-session `--settings` file wires the activity hooks without touching user config
-        // (contracts/hooks.md §Configuration, T046). Absent when the hook receiver did not start —
-        // and absent for a provider whose activity source is not `Hooks`, which is the caller's
-        // decision (`DaemonState::hook_settings_file_for`), not this function's.
-        if let Some(path) = settings_file {
-            cmd.arg("--settings");
-            cmd.arg(path);
+        // Whatever wires this session's activity reporting, appended after the launch arguments:
+        // `claude`'s per-session `--settings` file (contracts/hooks.md §Configuration, T046), or
+        // Pi's `-e <component>` (feature 029, FR-012a). Empty when there is nothing to wire — no
+        // hook receiver, a declined component, or a provider that needs neither. Which it is was
+        // the caller's decision (`DaemonState::activity_launch_for`), not this function's.
+        for arg in activity_args {
+            cmd.arg(arg);
         }
         Self::spawn(id, cmd, scrollback_lines, initial_size)
     }

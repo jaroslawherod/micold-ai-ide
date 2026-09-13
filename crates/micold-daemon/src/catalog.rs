@@ -124,6 +124,7 @@ impl Catalog {
             env_include_script_path: self.settings.env_include_script_path.clone(),
             env_include_timeout_secs: self.settings.env_include_timeout_secs,
             default_ai_cli: self.settings.default_ai_cli,
+            pi_activity_component: self.settings.pi_activity_component,
         }
     }
 
@@ -261,6 +262,7 @@ impl Catalog {
                 on_disk.env_include_script_path = self.settings.env_include_script_path.clone();
                 on_disk.env_include_timeout_secs = self.settings.env_include_timeout_secs;
                 on_disk.default_ai_cli = self.settings.default_ai_cli;
+                on_disk.pi_activity_component = self.settings.pi_activity_component;
             });
             // T162: the line that was missing when BUG-025 had to be attributed from the bytes on
             // disk. Written for a refused write too — a save that did not happen is exactly the
@@ -309,6 +311,20 @@ impl Catalog {
     /// uninstalled CLI is the requirement, not an oversight (FR-004, research R11).
     pub fn set_default_ai_cli(&mut self, which: AiCli) -> io::Result<()> {
         self.settings.default_ai_cli = which;
+        self.persist_service_settings()
+    }
+
+    /// Whether a Pi session is started with this application's activity component loaded
+    /// (feature 029, FR-012e). Service-owned for the same reason as the default CLI: the spawn
+    /// reads it, and the spawn is here.
+    pub fn pi_activity_component(&self) -> bool {
+        self.settings.pi_activity_component
+    }
+
+    /// Turn the Pi activity component on or off, persisting atomically (feature 029, FR-012e).
+    /// Applies to the next Pi session started; a running one keeps what it was launched with.
+    pub fn set_pi_activity_component(&mut self, on: bool) -> io::Result<()> {
+        self.settings.pi_activity_component = on;
         self.persist_service_settings()
     }
 

@@ -1,0 +1,4 @@
+{"type":"session","version":3,"id":"ffffffff-ffff-4fff-8fff-ffffffffffff","timestamp":"2026-09-12T12:00:00.000Z","cwd":"/fixture/worktree","parentSession":null}
+{"type":"message","id":"55555555-0005-4000-8000-000000000001","parentId":null,"timestamp":"2026-09-12T12:00:31.442Z","message":{"role":"user","content":[{"type":"text","text":"Explain the provider seam"}]}}
+{"type":"micold_fixture_padding","id":"55555555-0005-4000-8000-000000000002","parentId":null,"timestamp":"2026-09-12T12:01:00.000Z"}
+{"type":"session_info","id":"55555555-0005-4000-8000-000000000003","parentId":null,"timestamp":"2026-09-12T18:44:09.120Z","name":"A name set hours into the conversation"}

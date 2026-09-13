@@ -373,3 +373,70 @@ fn the_token_never_appears_in_the_written_file() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// T006 (feature 029) — a third CLI does not disturb the document
+// ---------------------------------------------------------------------------------------
+
+use micold_core::session::AiCli;
+
+#[test]
+fn a_settings_file_written_before_pi_existed_loads_unchanged() {
+    // FR-002, SC-003. Written by hand at the shape the two-CLI version wrote — a real
+    // `default_ai_cli` key naming one of the two CLIs that existed then — because that is the
+    // file this release has to open. `settings_version` does not move for a new enum member, so
+    // a document written by the previous version is not an older schema and must not be treated
+    // as one.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("settings.json"),
+        r#"{
+            "settings_version": 4,
+            "theme": "dark",
+            "scrollback_lines": 12000,
+            "env_include_enabled": true,
+            "env_include_script_path": "/home/u/.bashrc",
+            "env_include_timeout_secs": 10,
+            "default_ai_cli": "Copilot"
+        }"#,
+    )
+    .unwrap();
+
+    let outcome = JsonFileSettingsStore::at(dir.path().join("settings.json")).load();
+
+    assert_eq!(
+        outcome.status,
+        LoadStatus::Loaded,
+        "a document written before Pi existed is a current document, not a recovered one"
+    );
+    assert_eq!(outcome.settings.default_ai_cli, AiCli::Copilot);
+    assert_eq!(outcome.settings.theme, ThemePreference::Dark);
+    assert_eq!(
+        outcome.settings.scrollback_lines, 12_000,
+        "and nothing else in it moved — the new member is a value the field can hold, not a \
+         change to the field"
+    );
+}
+
+#[test]
+fn the_default_cli_round_trips_the_third_choice() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = JsonFileSettingsStore::at(dir.path().join("settings.json"));
+
+    store
+        .save(&Settings {
+            default_ai_cli: AiCli::Pi,
+            ..Settings::default()
+        })
+        .unwrap();
+
+    assert_eq!(store.load().settings.default_ai_cli, AiCli::Pi);
+
+    // And it is written under the name the enum persists, so a file this version writes is one a
+    // human can read and an older version can be told about.
+    let raw = std::fs::read_to_string(dir.path().join("settings.json")).unwrap();
+    assert!(
+        raw.contains("\"default_ai_cli\": \"Pi\""),
+        "the document should name the choice plainly:\n{raw}"
+    );
+}

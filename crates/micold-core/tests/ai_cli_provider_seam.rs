@@ -191,6 +191,12 @@ struct MinimalProvider {
     conversations: RefCell<BTreeMap<Uuid, String>>,
     /// Sessions marked archived.
     archived: RefCell<BTreeSet<Uuid>>,
+    /// What this provider needs in a session's environment. Its own, like everything else here:
+    /// the seam asks each provider rather than the daemon deciding per CLI (feature 029, FR-020).
+    env: Vec<(String, String)>,
+    /// When set, this provider reports activity only through a component the application supplies
+    /// at launch, and this is the directory the component's log goes under (feature 029, FR-012a).
+    component_logs: Option<PathBuf>,
 }
 
 impl MinimalProvider {
@@ -203,7 +209,19 @@ impl MinimalProvider {
             available: true,
             conversations: RefCell::new(BTreeMap::new()),
             archived: RefCell::new(BTreeSet::new()),
+            env: Vec::new(),
+            component_logs: None,
         }
+    }
+
+    fn with_env(mut self, key: &str, value: &str) -> Self {
+        self.env.push((key.to_string(), value.to_string()));
+        self
+    }
+
+    fn with_component_logs(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.component_logs = Some(dir.into());
+        self
     }
 
     fn with_conversation(self, id: Uuid, title: &str) -> Self {
@@ -233,6 +251,9 @@ impl AiCliProvider for MinimalProvider {
     fn config_dir(&self) -> Option<PathBuf> {
         Some(self.root.clone())
     }
+    fn launch_env(&self) -> Vec<(String, String)> {
+        self.env.clone()
+    }
     fn recorded_session_ids(&self, _config_dir: &Path, _cwd: &Path) -> Vec<Uuid> {
         // Keyed by id alone — this storage has no per-working-directory container at all, so
         // nothing about either real layout can have been assumed for it.
@@ -254,8 +275,13 @@ impl AiCliProvider for MinimalProvider {
     fn activity_source(&self, _config_dir: &Path, _cwd: &Path, id: Uuid) -> ActivitySource {
         // Its own arithmetic, from its own root — not `claude`'s per-cwd directory and not
         // Copilot's `session-state/<uuid>/`.
-        ActivitySource::EventLog {
-            path: self.root.join(format!("{id}.log")),
+        match &self.component_logs {
+            Some(dir) => ActivitySource::Extension {
+                log: dir.join(format!("{id}.jsonl")),
+            },
+            None => ActivitySource::EventLog {
+                path: self.root.join(format!("{id}.log")),
+            },
         }
     }
 }
@@ -323,12 +349,16 @@ fn the_seam_is_object_safe_and_holds_both_real_providers_and_a_fake() {
     let ports: Vec<&dyn AiCliProvider> = vec![
         AiCli::ClaudeCode.provider(),
         AiCli::Copilot.provider(),
+        AiCli::Pi.provider(),
         &fake,
         &minimal,
     ];
 
     let names: Vec<&str> = ports.iter().map(|p| p.command()).collect();
-    assert_eq!(names, vec!["claude", "copilot", "fake-ai-cli", "minimal"]);
+    assert_eq!(
+        names,
+        vec!["claude", "copilot", "pi", "fake-ai-cli", "minimal"]
+    );
 }
 
 #[test]
@@ -343,4 +373,69 @@ fn every_registered_name_resolves_to_a_provider_that_answers_with_that_name() {
             "`AiCli::provider` returned an implementation that identifies as something else"
         );
     }
+}
+
+// ---------------------------------------------------------------------------------------
+// T004 (feature 029) — the seam grew a variant, and it grew it for everyone
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn a_provider_can_report_that_its_activity_comes_from_a_component_we_supply() {
+    // FR-020 landing as written. Pi reports busy/idle only to code loaded into its own process,
+    // which obliges the daemon to do two things at spawn — materialise that code and point it at a
+    // log — that `EventLog` does not imply and that must not fire for Copilot. So the seam gains a
+    // variant rather than the daemon gaining a conditional, and the variant belongs to the seam:
+    // this test proves it by having a provider that is not Pi return it.
+    let logs = PathBuf::from("/minimal/component-logs");
+    let id = Uuid::from_u128(9);
+    let provider = MinimalProvider::new("/minimal").with_component_logs(&logs);
+    let port: &dyn AiCliProvider = &provider;
+
+    let source = port.activity_source(Path::new("/minimal"), Path::new("/anywhere"), id);
+
+    assert_eq!(
+        source,
+        ActivitySource::Extension {
+            log: logs.join(format!("{id}.jsonl"))
+        },
+        "the provider derived the log path; the daemon does not choose it"
+    );
+    assert_ne!(
+        source,
+        ActivitySource::EventLog {
+            path: logs.join(format!("{id}.jsonl"))
+        },
+        "and it is a distinct variant from `EventLog`, not a relabelling of it — the same path \
+         under the other variant would tell the daemon to tail a log nobody is writing"
+    );
+
+    // A consumer matches it the way it matches every other variant: exhaustively, by shape.
+    let tailed = match source {
+        ActivitySource::Extension { log } => Some(log),
+        ActivitySource::EventLog { path } => Some(path),
+        ActivitySource::Hooks | ActivitySource::None => None,
+    };
+    assert_eq!(tailed, Some(logs.join(format!("{id}.jsonl"))));
+}
+
+#[test]
+fn a_provider_that_needs_nothing_in_the_environment_says_so_in_the_same_place() {
+    // The other half of the same argument (T005, FR-020). A per-launch environment is a question
+    // the seam asks every provider, so "nothing" is an answer a provider gives rather than the
+    // absence of a branch somewhere in the daemon.
+    let quiet = MinimalProvider::new("/minimal");
+    assert!(quiet.launch_env().is_empty());
+
+    let offline = MinimalProvider::new("/minimal")
+        .with_env("MINIMAL_OFFLINE", "1")
+        .with_env("MINIMAL_TELEMETRY", "0");
+    let port: &dyn AiCliProvider = &offline;
+    assert_eq!(
+        port.launch_env(),
+        vec![
+            ("MINIMAL_OFFLINE".to_string(), "1".to_string()),
+            ("MINIMAL_TELEMETRY".to_string(), "0".to_string()),
+        ],
+        "in the order the provider gave them"
+    );
 }

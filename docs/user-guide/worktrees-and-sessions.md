@@ -493,8 +493,8 @@ placeholder is shown.
 
 ## Choosing which AI CLI a session runs
 
-A session runs one AI coding CLI — Claude Code or GitHub Copilot — and which one is decided when
-the session is created.
+A session runs one AI coding CLI — Claude Code, GitHub Copilot or Pi Coding Agent — and which one is
+decided when the session is created.
 
 - **Press the start-session action** and you get the CLI set as your
   [Default AI CLI](./settings.md#default-ai-cli), in one press, exactly as before.
@@ -509,21 +509,21 @@ the session is created.
   since opening the app is in it.
 
 **The choice is fixed for the session's lifetime.** There is no way to switch a running session to
-the other CLI, and nothing switches it for you — not changing your default, not restarting the app,
-not restarting your machine. A session is a conversation with one tool, and the two tools keep their
-conversations in different places.
+another CLI, and nothing switches it for you — not changing your default, not restarting the app,
+not restarting your machine. A session is a conversation with one tool, and each tool keeps its
+conversations in its own place.
 
 **Two sessions in the same worktree can run different CLIs at once.** They do not interfere: each
 has its own process, its own terminal, its own conversation record, and its own title.
 
 ### What the sidebar shows
 
-Each session row carries a short text label naming its CLI — `claude` or `copilot`. It is text, not
+Each session row carries a short text label naming its CLI — `claude`, `copilot` or `pi`. It is text, not
 a colour or an icon alone, so it reads the same way for everyone and survives a narrow sidebar: if
 the row runs out of room the *title* is what shortens, never the CLI label.
 
 Open a session and its terminal bar names the CLI too — on the AI tab at the bottom-right, beside
-its sparkle, reading `claude` or `copilot` — so you can tell what you are talking to without going
+its sparkle, reading `claude`, `copilot` or `pi` — so you can tell what you are talking to without going
 back to the sidebar. It is there whichever pane the session is showing.
 
 The busy/idle indicator works the same way for both CLIs — same shape, same states, no "less
@@ -531,7 +531,7 @@ certain" variant for one of them.
 
 ### Sessions you started outside this app
 
-If you run `claude` or `copilot` yourself in a worktree, this app finds that conversation the next
+If you run `claude`, `copilot` or `pi` yourself in a worktree, this app finds that conversation the next
 time you open the project and lists it as a session of that CLI. This happens on **every** open, not
 just the first, so a conversation you start while the project is open shows up when you come back
 to it.
@@ -543,6 +543,41 @@ Two things worth knowing about discovered sessions:
 - **A discovered session shows no busy/idle indicator until you start it here.** The app is not
   supervising it, so it makes no claim about what it is doing — it reads as unknown rather than
   guessing at idle. Select it and start it and it becomes an ordinary session, indicator included.
+  (For Pi, the indicator also needs
+  [Show activity for Pi sessions](./settings.md#show-activity-for-pi-sessions) on; with it off, a Pi
+  session reads unknown by design.)
+
+### Sessions on Pi
+
+Pick **Pi Coding Agent** from the chevron beside the start-session action, or set it as your
+[Default AI CLI](./settings.md#default-ai-cli). It is offered once `pi` is on your `PATH`; the
+sidebar and the terminal bar label its sessions `pi`.
+
+A few things about a Pi session are worth knowing:
+
+- **Its conversation lives in Pi's own store**, not in this app — under `~/.pi/agent/sessions/`, or
+  under `$PI_CODING_AGENT_DIR` if you set it. The app never moves or copies it. That means it is
+  yours outside the app too: run `pi --resume` in the same worktree and pick it, or pass
+  `pi --session-id <id>`, and you are in the same conversation the app shows.
+- **It starts offline.** The app launches `pi` with its update check, version request and telemetry
+  turned off (`PI_OFFLINE=1`, `PI_SKIP_VERSION_CHECK=1`, `PI_TELEMETRY=0`). If you set any of these
+  yourself, your value is used.
+- **Nothing in your Pi configuration is changed** — not your settings, not your models, not your
+  extensions.
+- **If the conversation was deleted from Pi's store**, resuming the session does not quietly start a
+  new one: the terminal says Pi no longer has this conversation, and you can close the session or
+  start a new one.
+
+#### When a conversation is already in use
+
+The app never runs two of its own sessions on one conversation: a session *is* its conversation, so
+opening one that is already running shows you the running one and starts nothing.
+
+What it cannot know is whether **you** have the same conversation open in a `pi` you started
+yourself. Where a CLI leaves a sign that a conversation is live, the app warns you before starting
+and lets you go ahead — the warning is advice, not a lock, and it can be wrong in both directions.
+Pi leaves no such sign, so **on Pi that warning never appears**. The app says nothing rather than
+guess; if you do run the same conversation in two places at once, both write to it.
 
 ### When a CLI isn't installed
 
@@ -621,7 +656,7 @@ You keep control of the panel:
   keeps the sessions; reopening the project restores them and resumes the same conversations.
   **Switching** to another project does not stop them — see below.
 
-> Requires the session's CLI — `claude` or `copilot` — on your `PATH`. If it is missing, starting
+> Requires the session's CLI — `claude`, `copilot` or `pi` — on your `PATH`. If it is missing, starting
 > the session reports which one could not be found.
 
 ## Switching to a regular terminal
@@ -629,8 +664,8 @@ You keep control of the panel:
 Each session's terminal can also run a plain shell instead of the AI CLI — useful for running git
 commands, scripts, or anything else scoped to that session's worktree without leaving the app.
 
-- The **tab strip** in the terminal's bottom bar is how you move between the AI CLI (`claude` or
-  `copilot`) and a plain shell: press the AI tab at the right-hand end to talk to the CLI, press a
+- The **tab strip** in the terminal's bottom bar is how you move between the AI CLI (`claude`,
+  `copilot` or `pi`) and a plain shell: press the AI tab at the right-hand end to talk to the CLI, press a
   numbered tab to get a shell. The marked tab is the one the pane is showing, so the strip is the
   single place to check which process your keystrokes are going to — it names where each press
   takes you rather than just saying "the other one".

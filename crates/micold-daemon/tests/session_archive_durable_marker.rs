@@ -6,16 +6,15 @@
 //! own `SessionCloseRequested`/`SessionRemoveConfirmed` comments claimed it happened, but the
 //! daemon-side code never actually called `AiCliProvider::mark_archived`.
 //!
-//! `CLAUDE_CONFIG_DIR` and `COPILOT_HOME` are process-global env vars, read by
-//! `ClaudeProvider::config_dir()` and `CopilotProvider::config_dir()` respectively. All four
-//! scenarios below share one `#[test]` function (rather than one each) so they run sequentially
+//! `CLAUDE_CONFIG_DIR`, `COPILOT_HOME` and `PI_CODING_AGENT_DIR` are process-global env vars, read
+//! by each provider's `config_dir()`. All five scenarios below share one `#[test]` function (rather than one each) so they run sequentially
 //! within this binary and never race each other over those globals.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use micold_core::project::{Availability, Project};
-use micold_core::provider::{AiCliProvider, ClaudeProvider, CopilotProvider};
+use micold_core::provider::{AiCliProvider, ClaudeProvider, CopilotProvider, PiProvider};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
@@ -94,6 +93,8 @@ fn archiving_a_session_always_writes_the_durable_provider_marker() {
     // `CopilotProvider::config_dir()` would otherwise resolve to the developer's own `~/.copilot`.
     std::env::set_var("CLAUDE_CONFIG_DIR", config.path());
     std::env::set_var("COPILOT_HOME", copilot_home.path());
+    let pi_home = tempfile::tempdir().unwrap();
+    std::env::set_var("PI_CODING_AGENT_DIR", pi_home.path());
 
     // --- Scenario 1: Catalog::archive_session (the Close/Remove RPC path, FR-015a/FR-015c) ---
     {
@@ -214,4 +215,86 @@ fn archiving_a_session_always_writes_the_durable_provider_marker() {
              free if a stray marker landed there under a different name"
         );
     }
+
+    // --- Scenario 5: a closed **Pi** session stays closed after our own store is lost ---
+    //
+    // Feature 029, T052 (FR-016). The marker is the whole defence against resurrection, so the
+    // assertion that matters is the one after the catalog is gone: a brand-new daemon over an
+    // empty data directory, with Pi's conversation file still on disk, must not hand the session
+    // back. Pi writes that file at creation, so unlike Copilot there is no window in which the
+    // conversation is closed but not yet recorded — the scenario is the ordinary one.
+    {
+        let project_path = PathBuf::from("/repo/epsilon");
+        let session_id = SessionId::from_uuid(Uuid::from_u128(0x5));
+        let cwd = SessionLocation::Default.cwd(&project_path);
+
+        let encoded: String = cwd
+            .to_string_lossy()
+            .trim_start_matches(['/', '\\'])
+            .chars()
+            .map(|c| {
+                if matches!(c, '/' | '\\' | ':') {
+                    '-'
+                } else {
+                    c
+                }
+            })
+            .collect();
+        let conversations = pi_home
+            .path()
+            .join("sessions")
+            .join(format!("--{encoded}--"));
+        std::fs::create_dir_all(&conversations).unwrap();
+        std::fs::write(
+            conversations.join(format!("2026-09-13T10-00-00-000Z_{}.jsonl", session_id.0)),
+            "{\"type\":\"session\"}\n",
+        )
+        .unwrap();
+
+        {
+            let data_dir = tempfile::tempdir().unwrap();
+            let mut catalog = catalog_with_session(
+                data_dir.path(),
+                &project_path,
+                session_id,
+                SessionLocation::Default,
+                AiCli::Pi,
+            );
+            catalog.archive_session(session_id).unwrap();
+            assert!(
+                PiProvider.is_archived(pi_home.path(), &cwd, session_id.0),
+                "closing a Pi session must write its durable marker into Pi's own store"
+            );
+            // `data_dir` drops here: the application's own record of the close is gone.
+        }
+
+        let fresh = tempfile::tempdir().unwrap();
+        let workspace = Workspace {
+            projects: vec![Project::new(
+                project_path.clone(),
+                true,
+                Availability::Available,
+            )],
+            active: Some(project_path.clone()),
+            ..Default::default()
+        };
+        JsonFileStore::at(fresh.path().join("projects.json"))
+            .save(&workspace)
+            .unwrap();
+        let state = micold_daemon::state::DaemonState::new(Catalog::load(
+            Box::new(JsonFileStore::at(fresh.path().join("projects.json"))),
+            Box::new(JsonFileSettingsStore::at(
+                fresh.path().join("settings.json"),
+            )),
+        ));
+
+        assert_eq!(
+            state.discover_external_sessions(&project_path),
+            0,
+            "the conversation is still in Pi's store, and the marker alone keeps it closed"
+        );
+        assert!(state.sessions_for(&project_path).is_empty());
+    }
+
+    std::env::remove_var("PI_CODING_AGENT_DIR");
 }

@@ -207,6 +207,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             env_include_script_path: Some("/custom/rc".into()),
             env_include_timeout_secs: Some(20),
             default_ai_cli: Some(AiCli::Copilot),
+            pi_activity_component: Some(false),
         },
         // And the "leave it unchanged" form, which is what every settings save that is not about
         // the AI CLI sends.
@@ -217,6 +218,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             env_include_script_path: None,
             env_include_timeout_secs: None,
             default_ai_cli: None,
+            pi_activity_component: None,
         },
         ClientMsg::LogLocationRequest { req: 10 },
         ClientMsg::RecentErrorsRequest { req: 11, limit: 20 },
@@ -330,6 +332,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 env_include_script_path: "/home/user/.bashrc".into(),
                 env_include_timeout_secs: 10,
                 default_ai_cli: AiCli::ClaudeCode,
+                pi_activity_component: true,
             },
         },
         DaemonMsg::Refused {
@@ -385,7 +388,8 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 env_include_enabled: false,
                 env_include_script_path: String::new(),
                 env_include_timeout_secs: 5,
-                default_ai_cli: AiCli::Copilot,
+                default_ai_cli: AiCli::Pi,
+                pi_activity_component: false,
             },
         },
         DaemonMsg::SessionTitleChanged {

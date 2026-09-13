@@ -366,9 +366,13 @@ fn a_quiet_session_costs_nothing_between_appends() {
 
     let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let sink = std::sync::Arc::clone(&seen);
-    let _tail = micold_daemon::event_log::EventLogTail::open(log.clone(), move |event| {
-        sink.lock().unwrap().push(event);
-    })
+    let _tail = micold_daemon::event_log::EventLogTail::open(
+        log.clone(),
+        micold_daemon::activity::copilot_event,
+        move |event| {
+            sink.lock().unwrap().push(event);
+        },
+    )
     .expect("watch opens");
 
     // The tail starts at the file's current end, so the history already there is not replayed —

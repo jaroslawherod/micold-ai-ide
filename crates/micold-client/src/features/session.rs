@@ -167,6 +167,11 @@ pub struct State {
     /// Service-owned: this mirrors what the daemon reported in `DaemonSettings`, and is written
     /// only from a `SettingsChanged` or the boot-time settings load.
     pub default_ai_cli: AiCli,
+    /// Whether new Pi sessions load this application's activity component (feature 029, FR-012e).
+    ///
+    /// Service-owned and mirrored exactly like [`Self::default_ai_cli`]: written only from the
+    /// daemon's settings or the boot-time settings load.
+    pub pi_activity_component: bool,
     /// The start failure already reported to the user for each session, by the sentence reported
     /// (feature 026, FR-010, T088).
     ///

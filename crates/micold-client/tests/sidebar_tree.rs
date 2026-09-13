@@ -1117,3 +1117,33 @@ fn nothing_is_marked_when_no_session_is_current() {
          otherwise (FR-002, FR-013)"
     );
 }
+
+#[test]
+fn a_pi_session_joins_its_worktree_and_labels_its_row_by_command_name() {
+    // Feature 029, T033 (FR-009, FR-010, SC-004, SC-004a). A Pi session is a row like any other:
+    // it joins its worktree by `dir_name` with nothing in the tree knowing which CLI it runs, and
+    // its short label is `pi` — `command()`, the row register — never "Pi Coding Agent", which is
+    // a menu entry and does not belong in a row's width budget.
+    let mut state = state_with_active_project();
+    let pi = Session::start_new(SessionLocation::Worktree("feat-b".to_string()), AiCli::Pi);
+    let pi_id = pi.id;
+    state
+        .workspace
+        .sessions
+        .get_mut(&PathBuf::from("/repo"))
+        .unwrap()
+        .push(pi);
+
+    let tree = state.worktree_tree();
+    let feat_b = tree
+        .iter()
+        .find(|n| n.worktree.dir_name == "feat-b")
+        .unwrap();
+    assert_eq!(feat_b.sessions.len(), 1);
+    let row = &feat_b.sessions[0];
+    assert_eq!(row.id, pi_id);
+
+    let label = row.provider.provider().command();
+    assert_eq!(label, "pi");
+    assert_ne!(label, row.provider.provider().display_name());
+}

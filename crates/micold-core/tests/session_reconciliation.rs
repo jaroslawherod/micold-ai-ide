@@ -450,3 +450,84 @@ fn a_colliding_id_resolves_by_the_persisted_provider_and_never_by_disk() {
         "and nothing else about the known session was re-derived either"
     );
 }
+
+/// Every path under `root`, recursively — the Pi store before and after a pass.
+fn tree_of(root: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path.clone());
+            }
+            out.push(path);
+        }
+    }
+    out.sort();
+    out
+}
+
+#[test]
+fn a_discovered_pi_session_reads_unknown_and_touches_nothing() {
+    // Feature 029, T053 (FR-013, FR-014, SC-006). A Pi conversation found on disk is a row, not a
+    // running process: nothing loaded the activity component into it, so there is no signal to
+    // read and the honest badge is `Unknown` — not idle, which would claim the application knows
+    // Pi is waiting, and not working.
+    //
+    // And finding it costs nothing afterwards. The pass lists the directory and reads a bounded
+    // label prefix; it creates no activity log, no directory to watch, and no file of any kind in
+    // Pi's store, so there is nothing for a watcher or a timer to have been attached to.
+    let pi_home = tempdir().unwrap();
+    let repo = PathBuf::from("/repo");
+    let cwd = SessionLocation::Default.cwd(&repo);
+    let encoded: String = cwd
+        .to_string_lossy()
+        .trim_start_matches(['/', '\\'])
+        .chars()
+        .map(|c| {
+            if matches!(c, '/' | '\\' | ':') {
+                '-'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let dir = pi_home
+        .path()
+        .join("sessions")
+        .join(format!("--{encoded}--"));
+    std::fs::create_dir_all(&dir).unwrap();
+    let id = Uuid::parse_str("01920000-0000-7000-8000-00000000abcd").unwrap();
+    std::fs::write(
+        dir.join(format!("2026-09-13T10-00-00-000Z_{id}.jsonl")),
+        "{\"type\":\"session\"}\n",
+    )
+    .unwrap();
+    let before = tree_of(pi_home.path());
+
+    let mut ws = Workspace::empty();
+    reconcile(
+        &mut ws,
+        &repo,
+        &Stores::from([(AiCli::Pi, pi_home.path().to_path_buf())]),
+        &[SessionLocation::Default],
+    );
+
+    let sessions = ws.sessions.get(&repo).expect("the conversation is listed");
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].provider, AiCli::Pi);
+    assert_eq!(
+        sessions[0].activity,
+        micold_core::protocol::messages::ActivitySignal::Unknown,
+        "an unsupervised session has no activity signal, and says so"
+    );
+    assert_eq!(
+        tree_of(pi_home.path()),
+        before,
+        "discovery wrote nothing into Pi's store — no activity log, nothing to observe"
+    );
+}

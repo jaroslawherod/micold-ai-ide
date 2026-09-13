@@ -163,6 +163,7 @@ fn boot() -> (App, Task<Message>) {
         // is here so the first frame has the user's own default rather than `ClaudeCode` (feature
         // 026, FR-003).
         core.session.default_ai_cli = loaded.default_ai_cli;
+        core.session.pi_activity_component = loaded.pi_activity_component;
     }
     // The availability set is *not* filled here any more (feature 027, FR-023c). It used to be,
     // from this process's own `PATH` — which is the host's, and under the sandboxed placement the

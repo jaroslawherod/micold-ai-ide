@@ -7,6 +7,7 @@
 
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
+use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -20,6 +21,7 @@ use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, DaemonMsg, DaemonSettings,
     RefusalReason, SessionProcess, SessionSummary, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
+use micold_core::provider::ActivitySource;
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
     TerminalMode,
@@ -203,6 +205,31 @@ struct LiveSession {
 }
 
 /// Build a fresh [`Proc`] around a spawned PTY, with a session-lived framer.
+/// The variable Pi's activity component reads to find its log (feature 029, contracts/pi-cli.md).
+const PI_ACTIVITY_LOG_VAR: &str = "MICOLD_PI_ACTIVITY_LOG";
+
+/// The component itself, compiled into this binary so it travels with the session service
+/// wherever that runs — host or sandbox — and adds nothing an image has to carry (FR-012a,
+/// FR-017a). Its full extent is that one file (FR-012b).
+const PI_ACTIVITY_COMPONENT: &str = include_str!("../assets/pi-activity.ts");
+
+/// Write the component into the service's own data directory and return its path, for `pi -e`.
+///
+/// Rewritten on every Pi launch, and only when the bytes differ, so a daemon upgrade replaces what
+/// an older one left behind and an unchanged file is not touched. It never goes near Pi's own
+/// extension directories, so a `pi` run outside this application does not load it (FR-012a).
+fn materialise_pi_activity_component() -> io::Result<PathBuf> {
+    let dir = directories::ProjectDirs::from("", "", "micold-ai-ide")
+        .map(|dirs| dirs.data_dir().join("pi"))
+        .unwrap_or_else(|| std::env::temp_dir().join("micold-daemon-pi"));
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join("pi-activity.ts");
+    if std::fs::read(&path).ok().as_deref() != Some(PI_ACTIVITY_COMPONENT.as_bytes()) {
+        std::fs::write(&path, PI_ACTIVITY_COMPONENT)?;
+    }
+    Ok(path)
+}
+
 fn new_proc(pty: Arc<PtySession>, id: SessionId) -> Proc {
     Proc {
         pty,
@@ -313,30 +340,70 @@ impl DaemonState {
         let _ = self.hooks.set(receiver);
     }
 
-    /// Prepare a session's activity-hook `--settings` file, if the hook receiver is running. Returns
-    /// `None` when hooks are unavailable (tests, or a bind failure) or when writing the file fails —
-    /// the caller then spawns without hooks and activity stays `Unknown` (H1), never wrong. Blocking
-    /// (a small file write); the AI-CLI spawn path is already off the async runtime.
+    /// The launch arguments — and, for Pi, the environment — that wire a session's activity
+    /// reporting, keyed on the provider's [`ActivitySource`]. Returns no arguments when there is
+    /// nothing to wire or preparing it failed; the caller then spawns without it and activity stays
+    /// `Unknown` (H1), never wrong. Blocking (small file writes); the AI-CLI spawn path is already
+    /// off the async runtime.
     ///
-    /// Only for a provider whose [`micold_core::provider::ActivitySource`] is `Hooks`
-    /// (feature 026, T016a): the file is `claude`'s mechanism — a port and a per-session bearer
-    /// token in a `--settings` JSON — and `copilot` has no flag to hand it to. Producing it
-    /// unconditionally for every `TerminalMode::AiCli` session, as this path did before, spawns a
-    /// Copilot session with an argument it does not understand.
-    fn hook_settings_file_for(&self, id: SessionId, spec: &LaunchSpec) -> Option<PathBuf> {
-        use micold_core::provider::ActivitySource;
+    /// - `Hooks` → `--settings <file>`, if the hook receiver is running (tests or a bind failure
+    ///   leave it absent). The file is `claude`'s mechanism — a port and a per-session bearer token
+    ///   in a `--settings` JSON — and `copilot` has no flag to hand it to (feature 026, T016a).
+    /// - `Extension { log }` → `-e <component>` and `MICOLD_PI_ACTIVITY_LOG=<log>` (feature 029,
+    ///   FR-012a), unless the user declined the component (FR-012e).
+    /// - `EventLog` → nothing: Copilot writes its own log, and the tail reads it.
+    fn activity_launch_for(&self, id: SessionId, spec: &mut LaunchSpec) -> Vec<OsString> {
         let provider = spec.provider.provider();
-        // The source is derived from a config dir the provider may not be able to resolve. The
-        // question here is only *which mechanism*, and `Hooks` carries no payload, so an
-        // unresolvable directory is not a reason to skip the file — ask with what is available.
-        let config_dir = provider.config_dir().unwrap_or_default();
-        if !matches!(
-            provider.activity_source(&config_dir, &spec.cwd, spec.session_id),
-            ActivitySource::Hooks
-        ) {
-            return None;
+        // The source is derived from a config dir the provider may not be able to resolve. For
+        // `Hooks` the question is only *which mechanism* — it carries no payload — so an
+        // unresolvable directory is not a reason to skip the file; ask with what is available.
+        let config_dir = provider.config_dir();
+        let source = provider.activity_source(
+            config_dir.as_deref().unwrap_or(Path::new("")),
+            &spec.cwd,
+            spec.session_id,
+        );
+        match source {
+            ActivitySource::Hooks => self
+                .hook_settings_file(id)
+                .map(|path| vec!["--settings".into(), path.into_os_string()])
+                .unwrap_or_default(),
+            // Pi (feature 029). Everything here is best-effort in the same way the hook file is: a
+            // failure costs the badge, which reads `Unknown`, and never the start (FR-012d).
+            ActivitySource::Extension { log } => {
+                // Declined (FR-012e): no `-e`, no variable, and `open_event_log_tail` opens no
+                // watch. The session is otherwise identical, and nothing reports it as a fault.
+                if !self.lock().catalog.pi_activity_component() {
+                    return Vec::new();
+                }
+                // A log under an empty base would land relative to the session's cwd.
+                if config_dir.is_none() {
+                    return Vec::new();
+                }
+                let Some(log_var) = log.to_str() else {
+                    tracing::warn!(session = %id.0, "Pi activity log path is not UTF-8; activity will be Unknown");
+                    return Vec::new();
+                };
+                if let Some(parent) = log.parent() {
+                    if let Err(err) = std::fs::create_dir_all(parent) {
+                        tracing::warn!(session = %id.0, %err, "could not create the Pi activity log directory; activity will be Unknown");
+                        return Vec::new();
+                    }
+                }
+                match materialise_pi_activity_component() {
+                    Ok(component) => {
+                        spec.env
+                            .push((PI_ACTIVITY_LOG_VAR.to_string(), log_var.to_string()));
+                        vec!["-e".into(), component.into_os_string()]
+                    }
+                    Err(err) => {
+                        tracing::warn!(session = %id.0, %err, "could not write the Pi activity component; activity will be Unknown");
+                        Vec::new()
+                    }
+                }
+            }
+            ActivitySource::EventLog { .. } | ActivitySource::None => Vec::new(),
         }
-        self.hook_settings_file(id)
     }
 
     fn hook_settings_file(&self, id: SessionId) -> Option<PathBuf> {
@@ -389,6 +456,30 @@ impl DaemonState {
             .env_include_cache
             .insert(cwd.to_path_buf(), merged.clone());
         merged
+    }
+
+    /// The environment an **AI-CLI** launch runs in: the session's resolved environment
+    /// ([`Self::env_include_vars_for`]) with the provider's own [`AiCliProvider::launch_env`]
+    /// merged in (feature 029, FR-020).
+    ///
+    /// Asked of every provider, never of one by name. Two of the three answer with nothing, and
+    /// that is the point: the alternative was a `match` on which CLI a session runs at the spawn
+    /// site, which is precisely the conditional the provider seam exists to remove (FR-019).
+    ///
+    /// **The session's own environment wins.** A provider's pair is added only where the resolved
+    /// environment does not already carry that name, so a user who sets one of these in their
+    /// environment-include script keeps it. That is the trait's own contract — a provider may not
+    /// use `launch_env` to reach past settings that belong to the user (FR-007) — and it costs
+    /// nothing in practice: nobody sets `PI_OFFLINE` by accident, and someone who sets it
+    /// deliberately means it.
+    fn ai_cli_env_for(&self, cwd: &Path, provider: AiCli) -> Vec<(String, String)> {
+        let mut env = self.env_include_vars_for(cwd);
+        for (name, value) in provider.provider().launch_env() {
+            if !env.iter().any(|(existing, _)| *existing == name) {
+                env.push((name, value));
+            }
+        }
+        env
     }
 
     /// Invalidate the cached environment-include resolution for one directory (BUG-003) — called
@@ -751,6 +842,18 @@ impl DaemonState {
         let settings = {
             let mut inner = self.lock();
             inner.catalog.set_default_ai_cli(which)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
+    /// Turn the Pi activity component on or off and push `SettingsChanged` to every client
+    /// (feature 029, FR-012e).
+    pub fn set_pi_activity_component(&self, on: bool) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_pi_activity_component(on)?;
             inner.catalog.settings_wire()
         };
         self.broadcast(DaemonMsg::SettingsChanged { settings });
@@ -1364,26 +1467,29 @@ impl DaemonState {
             }
         }
 
-        let env = self.env_include_vars_for(&plan.cwd);
         let size = self.desired_size(id);
         let session = match plan.mode {
             TerminalMode::AiCli => {
-                let spec = LaunchSpec {
-                    cwd: plan.cwd,
+                let mut spec = LaunchSpec {
+                    cwd: plan.cwd.clone(),
                     session_id: id.0,
                     provider: plan.provider,
                     mode: launch,
-                    env,
+                    env: self.ai_cli_env_for(&plan.cwd, plan.provider),
                 };
                 // The hook settings file follows the provider's `activity_source`, not the terminal
                 // mode: it is `claude`'s mechanism, and `copilot` has no `--settings` flag to hand
                 // it to (feature 026, T016a).
-                let settings = self.hook_settings_file_for(id, &spec);
-                PtySession::spawn_ai_cli(id, &spec, plan.scrollback, size, settings.as_deref())?
+                let activity = self.activity_launch_for(id, &mut spec);
+                PtySession::spawn_ai_cli(id, &spec, plan.scrollback, size, &activity)?
             }
-            TerminalMode::Regular => {
-                PtySession::spawn_shell(id, &plan.cwd, &env, plan.scrollback, size)?
-            }
+            TerminalMode::Regular => PtySession::spawn_shell(
+                id,
+                &plan.cwd,
+                &self.env_include_vars_for(&plan.cwd),
+                plan.scrollback,
+                size,
+            )?,
         };
         // Session-start event with the launch reason (FR-045). No terminal content — id + mode only.
         tracing::info!(session = %id.0, mode = ?plan.mode, ?launch, "session started");
@@ -1456,8 +1562,6 @@ impl DaemonState {
     /// **Blocking** (it resolves a config directory and registers a watch), so the caller runs it
     /// off the async runtime, alongside the spawn it follows.
     pub fn open_event_log_tail(self: &Arc<Self>, id: SessionId) {
-        use micold_core::provider::ActivitySource;
-
         // The provider and cwd from the record, under the lock and nothing more.
         let Some((provider, cwd)) = ({
             let inner = self.lock();
@@ -1480,13 +1584,23 @@ impl DaemonState {
         let Some(config_dir) = provider.config_dir() else {
             return;
         };
-        let ActivitySource::EventLog { path } = provider.activity_source(&config_dir, &cwd, id.0)
-        else {
-            return;
-        };
+        // Each log-shaped source brings its own vocabulary. Pi's log is written by the component
+        // this daemon injects at spawn (feature 029, FR-012c); with that component declined
+        // (FR-012e) nothing writes it, so no watch is opened and the badge stays `Unknown`.
+        let (path, map): (PathBuf, crate::event_log::LineMapper) =
+            match provider.activity_source(&config_dir, &cwd, id.0) {
+                ActivitySource::EventLog { path } => (path, crate::activity::copilot_event),
+                ActivitySource::Extension { log } => {
+                    if !self.lock().catalog.pi_activity_component() {
+                        return;
+                    }
+                    (log, crate::activity::pi_event)
+                }
+                ActivitySource::Hooks | ActivitySource::None => return,
+            };
 
         let state = Arc::clone(self);
-        match crate::event_log::EventLogTail::open(path, move |event| {
+        match crate::event_log::EventLogTail::open(path, map, move |event| {
             // A direct push, not a queued one: the badge moves as the line lands, and SC-005's
             // one-second budget is spent on the platform's notification latency rather than on a
             // cadence of ours.
@@ -1732,23 +1846,28 @@ impl DaemonState {
         provider: AiCli,
         scrollback: usize,
     ) {
-        let env = self.env_include_vars_for(&cwd);
         // The viewer's pane did not change size because the process died — come back at the size the
         // session was last given, not at the seed (FR-020a, `006` SC-011).
         let size = self.desired_size(id);
         let spawned = match mode {
             TerminalMode::AiCli => {
-                let spec = LaunchSpec {
+                let mut spec = LaunchSpec {
+                    env: self.ai_cli_env_for(&cwd, provider),
                     cwd,
                     session_id: id.0,
                     provider,
                     mode: LaunchMode::Resume,
-                    env,
                 };
-                let settings = self.hook_settings_file_for(id, &spec);
-                PtySession::spawn_ai_cli(id, &spec, scrollback, size, settings.as_deref())
+                let activity = self.activity_launch_for(id, &mut spec);
+                PtySession::spawn_ai_cli(id, &spec, scrollback, size, &activity)
             }
-            TerminalMode::Regular => PtySession::spawn_shell(id, &cwd, &env, scrollback, size),
+            TerminalMode::Regular => PtySession::spawn_shell(
+                id,
+                &cwd,
+                &self.env_include_vars_for(&cwd),
+                scrollback,
+                size,
+            ),
         };
         match spawned {
             Ok(session) => {

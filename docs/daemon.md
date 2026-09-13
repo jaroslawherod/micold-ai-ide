@@ -12,7 +12,7 @@ next thing you open starts a new one. Both halves are described below.
 
 ## What survives, and what doesn't (User Story 1)
 
-A session is a running process (your AI CLI — `claude` or `copilot` — or a shell) plus the
+A session is a running process (your AI CLI — `claude`, `copilot` or `pi` — or a shell) plus the
 interpreted screen it has produced. Both live in the daemon, so:
 
 | You do this | What happens to your sessions |
@@ -431,8 +431,9 @@ to a loopback port. What replaces it is a shared secret, generated per sandbox s
 and bind-mounted read-only into the container. The guarantee moves from "you cannot reach it" to "you
 cannot answer for it", and the filesystem permission is still what enforces it. This is why the wire
 protocol grew an authenticated handshake — version 6 when the sandbox landed, version 7 after the
-repository-root query the container placement also needed (below), and version 9 today, after a
-window became nameable on the wire so it could stop displacing itself.
+repository-root query the container placement also needed (below), version 9 after a window became
+nameable on the wire so it could stop displacing itself, and version 10 today, after Pi joined the
+AI CLIs a frame can name.
 
 ### The lifecycle
 

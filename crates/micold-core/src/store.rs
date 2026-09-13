@@ -155,16 +155,23 @@ struct StoredSession {
 /// Serde-mapped mirror of [`AiCli`] (feature 026), kept separate for the same reason
 /// [`StoredTerminalMode`] is: the persisted spelling stays free to diverge from the in-memory one.
 ///
-/// **Deliberately without `#[serde(other)]`.** Forward compatibility with a future third CLI is
-/// the obvious thing to want here, and it is the wrong thing: falling back means starting the
-/// *wrong CLI* in the user's worktree. An unknown value is a load error for that project file, and
-/// the store's existing malformed-file recovery already covers it — declining to load is the safer
-/// failure.
+/// **Deliberately without `#[serde(other)]`.** Forward compatibility with a CLI this build does not
+/// know is the obvious thing to want here, and it is the wrong thing: falling back means starting
+/// the *wrong CLI* in the user's worktree. An unknown value is a load error for that project file,
+/// and the store's existing malformed-file recovery already covers it — declining to load is the
+/// safer failure.
+///
+/// `Pi` joined in feature 029, and the absence of `#[serde(other)]` is what made that addition
+/// safe in the direction that matters: a file written by a newer build refuses to load on an older
+/// one rather than silently reading Pi as `claude` and running the wrong agent in the worktree.
+/// Still additive and still defaulted, so no `schema_version` bump — every session written before
+/// Pi existed reads back exactly as it did (FR-002, FR-021).
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 enum StoredAiCli {
     #[default]
     ClaudeCode,
     Copilot,
+    Pi,
 }
 
 impl From<AiCli> for StoredAiCli {
@@ -172,6 +179,7 @@ impl From<AiCli> for StoredAiCli {
         match which {
             AiCli::ClaudeCode => StoredAiCli::ClaudeCode,
             AiCli::Copilot => StoredAiCli::Copilot,
+            AiCli::Pi => StoredAiCli::Pi,
         }
     }
 }
@@ -181,6 +189,7 @@ impl From<StoredAiCli> for AiCli {
         match which {
             StoredAiCli::ClaudeCode => AiCli::ClaudeCode,
             StoredAiCli::Copilot => AiCli::Copilot,
+            StoredAiCli::Pi => AiCli::Pi,
         }
     }
 }

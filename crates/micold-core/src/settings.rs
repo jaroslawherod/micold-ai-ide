@@ -133,6 +133,20 @@ pub struct Settings {
     /// (research R11).
     #[serde(default)]
     pub default_ai_cli: AiCli,
+    /// Whether a Pi session is started with this application's activity component loaded into it
+    /// (feature 029, FR-012e). On by default, so the badge works unconfigured.
+    ///
+    /// Application-wide on purpose: the component does not vary by project or session, so neither
+    /// does the decision about it. Off, Pi launches without it and the badge reads `Unknown` — the
+    /// user's choice, not a fault (FR-012f). Service-owned beside `default_ai_cli`, because the
+    /// service is what spawns the session and so the only side that acts on it.
+    #[serde(default = "default_pi_activity_component")]
+    pub pi_activity_component: bool,
+}
+
+/// The switch's default when a file predates it: on (FR-012e).
+fn default_pi_activity_component() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -145,6 +159,7 @@ impl Default for Settings {
             env_include_timeout_secs: DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
             daemon: DaemonConfig::default(),
             default_ai_cli: AiCli::default(),
+            pi_activity_component: default_pi_activity_component(),
         }
     }
 }
@@ -329,6 +344,10 @@ struct StoredSettings {
     /// number for the same reason: a bump would cost a migration path to express a default.
     #[serde(default)]
     default_ai_cli: AiCli,
+    /// Missing in pre-029 files → on, the requirement's default (FR-012e). Additive and defaulted,
+    /// so `settings_version` does not move for it either.
+    #[serde(default = "default_pi_activity_component")]
+    pi_activity_component: bool,
 }
 
 impl StoredSettings {
@@ -342,6 +361,7 @@ impl StoredSettings {
             env_include_timeout_secs: settings.env_include_timeout_secs,
             daemon: settings.daemon.clone(),
             default_ai_cli: settings.default_ai_cli,
+            pi_activity_component: settings.pi_activity_component,
         }
     }
 
@@ -369,6 +389,7 @@ impl StoredSettings {
             // there is no invalid value to repair — only a CLI that may not be installed today,
             // which is the user's choice to keep (research R11).
             default_ai_cli: self.default_ai_cli,
+            pi_activity_component: self.pi_activity_component,
         }
     }
 }

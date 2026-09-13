@@ -153,3 +153,31 @@ fn closing_the_list_again_says_nothing() {
     );
     assert_eq!(state.notifications.queue.visible(), None);
 }
+
+#[test]
+fn an_unavailable_pi_default_is_named_as_pi_coding_agent() {
+    // Feature 029, T032 (FR-001a). The same press, the same sentence, the third CLI: nothing about
+    // it is Pi-specific, which is the point — the name comes from the provider, so a new CLI gets
+    // the explanation without the reducer learning its name.
+    let mut state = state_with(AiCli::Pi, &[AiCli::ClaudeCode, AiCli::Copilot]);
+
+    open(&mut state, Some(AiCli::Pi));
+
+    let message = state
+        .notifications
+        .queue
+        .visible()
+        .expect("the user pressed start on an uninstalled Pi default and got a menu")
+        .message
+        .clone();
+    assert_eq!(
+        message,
+        "Pi Coding Agent isn't installed. Install it, or start this session on another AI CLI."
+    );
+    assert!(
+        !message
+            .split(|c: char| !c.is_alphanumeric())
+            .any(|word| word == AiCli::Pi.provider().command()),
+        "a sentence, not a shell error: {message}"
+    );
+}
