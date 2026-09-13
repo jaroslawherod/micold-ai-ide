@@ -101,6 +101,10 @@ const SHARED: &[(&str, &str)] = &[(
 /// the window is, whether the Settings rail is collapsed to its icons, and whether this copy is
 /// installed at all — which refuses to start a session, so it cannot belong to the screen that
 /// says so.
+///
+/// `project.switcher_open` was here and left when the rule stopped reaching it: the shell closes
+/// the switcher on an accepted pick and rescans availability when it opens (`008` BUG-002/BUG-003),
+/// so it has a reader outside its feature and its view.
 const COMPONENT_LOCAL: &[(&str, &str)] = &[
     (
         "help.about_open",
@@ -116,11 +120,6 @@ const COMPONENT_LOCAL: &[(&str, &str)] = &[
         "project.menu_open",
         "tests/switcher_forget_menu.rs::the_menu_anchors_at_the_press_point — whose menu is open \
          and where it was opened from is application state (018 FR-029d)",
-    ),
-    (
-        "project.switcher_open",
-        "tests/project_switcher.rs::toggling_switcher_opens_and_closes_it — the switcher and the \
-         help menu close each other, which neither component can decide alone",
     ),
     (
         "session.menu_open",

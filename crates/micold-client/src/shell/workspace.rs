@@ -221,6 +221,11 @@ pub(crate) fn on_known_project_reopened(app: &mut App, path: PathBuf) -> Task<Me
     // background and restore the target project's foreground (feature 008, BS-1/BS-3).
     let previous = app.core.workspace.active.clone();
     if let Some(arrival) = app.core.switch_active(&path) {
+        // The top-bar switcher closes on an accepted pick ("Panel closes.", 008 BUG-002). Only
+        // then: a refused pick is what raises the row's unavailable badge, and the panel stays up
+        // so the user sees it. The body's "Known projects" list sends the same message with the
+        // panel already closed, where this changes nothing.
+        app.core.project.switcher_open = false;
         micold_client::app::drain(arrival, |o| micold_client::app::interpret(&mut app.core, o));
         let outcomes = app
             .core
