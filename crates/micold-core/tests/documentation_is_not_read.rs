@@ -142,6 +142,9 @@ fn resolve(root: &Path, source: &Path, literal: &str) -> Option<String> {
         let Ok(real) = candidate.canonicalize() else {
             continue;
         };
+        if !exists_with_exact_case(&candidate) {
+            continue;
+        }
         let Ok(rel) = real.strip_prefix(root) else {
             continue; // outside the repository entirely
         };
@@ -149,6 +152,30 @@ fn resolve(root: &Path, source: &Path, literal: &str) -> Option<String> {
         return Some(rel.to_string_lossy().replace('\\', "/"));
     }
     None
+}
+
+/// Whether every named component of `path` exists spelled exactly as written.
+///
+/// `canonicalize` succeeds on macOS's and Windows's case-insensitive filesystems for a literal
+/// that differs from the file only in case — a Cargo.toml key `"license"` resolves to `LICENSE`
+/// there and nowhere else, so the gate failed on one platform only. A read with the wrong case
+/// would break on Linux anyway, so it is not a read this gate needs to catch.
+fn exists_with_exact_case(path: &Path) -> bool {
+    let mut dir = PathBuf::new();
+    for component in path.components() {
+        if let std::path::Component::Normal(name) = component {
+            if !dir.as_os_str().is_empty() {
+                let Ok(entries) = fs::read_dir(&dir) else {
+                    return false;
+                };
+                if !entries.flatten().any(|e| e.file_name() == name) {
+                    return false;
+                }
+            }
+        }
+        dir.push(component);
+    }
+    true
 }
 
 /// Ask the one matcher, in one call, which of these paths are declared documentation.
