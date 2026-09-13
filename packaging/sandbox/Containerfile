@@ -18,17 +18,17 @@
 # target and linker that are not assumed present here, so it is left for when publishing is set up —
 # at which point the base image stops mattering rather than merely being newer.
 #
-# `node:22-trixie-slim` rather than `debian:trixie-slim`, because FR-023a puts the AI CLIs in this
+# `node:24-trixie-slim` rather than `debian:trixie-slim`, because FR-023a puts the AI CLIs in this
 # image and both are npm-distributed Node programs. Two constraints pick this exact tag and nothing
 # looser:
 #
-#   - **22, not the distribution's Node.** Trixie ships Node 20, and `@anthropic-ai/claude-code`
+#   - **24, not the distribution's Node.** Trixie ships Node 20, and `@anthropic-ai/claude-code`
 #     declares `engines: node >=22.0.0`. `apt-get install nodejs` would build an image whose default
-#     AI CLI refuses to run.
-#   - **trixie, not the default slim.** `node:22-slim` is *bookworm* — glibc 2.36, the exact version
+#     AI CLI refuses to run. 24 rather than the 22 that floor allows because it is the current LTS.
+#   - **trixie, not the default slim.** `node:24-slim` is *bookworm* — glibc 2.36, the exact version
 #     the paragraph above is about. Taking it would reintroduce the failure that comment exists to
 #     prevent, while looking like a smaller change than switching distributions.
-FROM docker.io/library/node:22-trixie-slim AS runtime-base
+FROM docker.io/library/node:24-trixie-slim AS runtime-base
 
 # Session tooling. `git` is not optional: the daemon runs it for worktree management, and feature
 # 027's whole path-identity decision (research R2) exists because it does.
