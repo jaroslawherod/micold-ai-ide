@@ -73,9 +73,13 @@ as you left them. See
 
 If a project's folder has been deleted, moved, or renamed on disk since you added it, Micold
 does not crash. The project stays in the list but is clearly marked **(unavailable)**, and
-its **Open** button is disabled — you cannot activate a folder that is no longer there. If
-you later restore the folder, restart Micold (or reopen it) and the project becomes
-available again.
+its **Open** button is disabled — you cannot activate a folder that is no longer there. Micold checks
+every known project's folder when it starts and again each time you open the project switcher, so
+a folder you move away or restore while Micold is running is marked (or cleared) the next time you
+open the switcher.
+
+If the project you had open last time is the one whose folder is gone, Micold starts with no
+project open rather than opening it, and a notification names the project and the missing folder.
 
 ## Git repositories
 
