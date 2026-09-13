@@ -4,9 +4,9 @@ How `MicoldAIIDE-<version>-universal.dmg` is produced, how to reproduce it on yo
 what would change if the project ever obtained a Developer ID.
 
 The normative descriptions live with the feature that introduced this:
-[`specs/028-macos-package/contracts/bundle-layout.md`](../../specs/028-macos-package/contracts/bundle-layout.md)
+[`specs/028-macos-package/contracts/bundle-layout.md`](https://github.com/jaroslawherod/micold-ai-ide/blob/main/specs/028-macos-package/contracts/bundle-layout.md)
 for what is inside the application, and
-[`release-artifacts.md`](../../specs/028-macos-package/contracts/release-artifacts.md) for the job
+[`release-artifacts.md`](https://github.com/jaroslawherod/micold-ai-ide/blob/main/specs/028-macos-package/contracts/release-artifacts.md) for the job
 graph. This page is the working explanation of both.
 
 ## The two producers
