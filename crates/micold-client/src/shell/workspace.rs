@@ -542,4 +542,38 @@ mod tests {
         }
         assert_eq!(activated, vec![a.path().to_path_buf()]);
     }
+
+    /// 008 BUG-002: picking a project in the top-bar switcher closes it
+    /// (`contracts/project-switcher-ui.md`: "Panel closes."). SC-002 budgets two interactions,
+    /// open and select; a panel left over the view makes it three.
+    #[test]
+    fn picking_a_project_in_the_switcher_closes_it() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        let (mut app, _rx) = connected_with_two_projects(a.path(), b.path());
+        app.core.project.switcher_open = true;
+
+        let _ = on_known_project_reopened(&mut app, a.path().to_path_buf());
+
+        assert_eq!(app.core.workspace.active.as_deref(), Some(a.path()));
+        assert!(!app.core.project.switcher_open, "the panel closes on a switch");
+    }
+
+    /// …but not when the pick is refused. The press is what reveals the row's unavailable badge,
+    /// and closing the panel would hide the one thing that explains why nothing happened.
+    #[test]
+    fn a_refused_pick_leaves_the_switcher_open() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        let gone = a.path().join("gone");
+        std::fs::create_dir(&gone).unwrap();
+        let (mut app, _rx) = connected_with_two_projects(&gone, b.path());
+        std::fs::remove_dir(&gone).unwrap();
+        app.core.project.switcher_open = true;
+
+        let _ = on_known_project_reopened(&mut app, gone);
+
+        assert_eq!(app.core.workspace.active.as_deref(), Some(b.path()));
+        assert!(app.core.project.switcher_open);
+    }
 }
