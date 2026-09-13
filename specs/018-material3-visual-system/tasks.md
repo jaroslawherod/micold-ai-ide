@@ -1646,3 +1646,20 @@ not account for §5. The work missing here was never a task: no artifact said a 
 own state layer, and the one sentence that would have caught the `Info` banner anyway ("`primary` may
 be drawn on `surface_variant`") was prose that contradicted the table beside it, which no check reads.
 
+## Phase 23: BUG-012 — the sidebar's resize handle painted its grab zone in the window's tone
+
+**Goal**: the sidebar is one tone up to its rule. The grab zone inside `ResizeHandle` and the panel
+under `style::sidebar_surface` read the same colour from one place, so a later change to the panel's
+level carries the handle with it.
+
+- [X] T169 Failing test first: in `crates/micold-client/src/ui/material/resize_handle.rs`, assert the handle's grab-zone fill equals `style::sidebar_surface`'s background in both schemes. Red today on `surface` vs `surface_container` (FR-015, FR-016)
+
+- [X] T170 Give the sidebar's fill one source in `style.rs` and read it from both `sidebar_surface` and `ResizeHandle::draw`; correct the handle's comment that calls `surface` "the panel's own surface colour". T169 goes green (FR-015)
+
+- [X] T171 Confirm on a real frame that the sidebar is one tone from its left edge to the rule, dark scheme, and record the sampled colours here
+
+**Red record (T169)** — `the_grab_zone_is_the_sidebar_tone` failed on the unfixed handle, light scheme first: grab zone `(0.992, 0.973, 0.992)` = `surface`, panel `(0.973, 0.949, 0.969)` = `surface_container`. Green after T170, with the client's 360 lib tests and clippy.
+
+**Pass record (T171)** — 2026-09-13, Xvfb + lavapipe on a private display, not a real GPU; client and daemon built and pinned together from this branch, a project seeded through `projects.json`, theme `dark`, 1×. Sampling one row across the sidebar's edge: `(28,27,30)` from x=0 to 304 — panel *and* grab zone — then the rule `(73,69,78)` at 305 and the main area `(20,19,22)` from 306. The reported frame had a 10px `(20,19,22)` band before the rule at 2×. Light scheme not captured; T169 asserts both.
+
+**Bugfix**: 2026-09-13 — BUG-012 added Phase 23 (T169–T171). **No task is reopened.** T001 asserts every elevated *style function* returns its level's tone and is complete as written; the handle fills a raw quad in `draw` and was never in its reach.

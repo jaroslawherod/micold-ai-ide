@@ -176,8 +176,8 @@ where
         let bounds = layout.bounds();
         let lit = tree.state.downcast_ref::<State>().hover.value();
 
-        // The grab zone is painted in the panel's own surface colour and sits on the left, so it
-        // reads as part of the panel rather than as a gap beside it.
+        // The grab zone sits on the left and is painted in the panel's own fill, so it reads as part
+        // of the panel rather than as a gap beside it.
         renderer.fill_quad(
             renderer::Quad {
                 bounds: Rectangle {
@@ -186,7 +186,7 @@ where
                 },
                 ..renderer::Quad::default()
             },
-            style::color(self.roles.surface),
+            grab_fill(self.roles),
         );
 
         // The rule sits flush against the content on the right, and brightens toward the accent as
@@ -211,6 +211,14 @@ where
             },
         );
     }
+}
+
+/// The grab zone's fill: the sidebar panel's, read from the same place the panel reads it.
+///
+/// It was `roles.surface` — the panel's tone before §4 raised it to `CARD` — and nothing moved it
+/// when the panel moved, so the sidebar ended 5dp short of its rule in the window's tone (BUG-012).
+fn grab_fill(roles: Roles) -> iced::Color {
+    style::sidebar_fill(roles)
 }
 
 /// What an incoming event means to a handle that is, or is not, currently being dragged.
@@ -273,6 +281,22 @@ mod tests {
         Event::Mouse(mouse::Event::CursorMoved {
             position: Point::new(x, 0.0),
         })
+    }
+
+    /// The grab zone is inside the sidebar's edge, so it is the sidebar's tone — in both schemes,
+    /// since the dark scheme is where the tonal step carries the depth (FR-015, FR-016, BUG-012).
+    #[test]
+    fn the_grab_zone_is_the_sidebar_tone() {
+        use micold_core::theme::ColorScheme;
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let r = micold_core::tokens::roles(scheme);
+            let panel = style::sidebar_surface(r)(&style::theme(scheme));
+            assert_eq!(
+                Some(iced::Background::Color(grab_fill(r))),
+                panel.background,
+                "{scheme:?}: the grab zone and the sidebar panel must be one tone"
+            );
+        }
     }
 
     #[test]
