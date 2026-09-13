@@ -110,3 +110,5 @@ foundations that subsequent features reuse rather than recreate.
 ## Complexity Tracking
 
 > No constitution violations. Section intentionally empty.
+
+**Bugfix**: 2026-09-13 — BUG-001: `metadata.rs` keeps the pure `AppMetadata::resolve` and the `APP_NAME` constant, but no longer reads Cargo metadata itself. The client resolves its identity (`ui::about::metadata`) from its own `env!`s and an `APP_DESCRIPTION` constant, because `env!` expands where it is written and the core crate is not the application. No other design changes.

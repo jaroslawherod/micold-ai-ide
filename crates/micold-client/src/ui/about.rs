@@ -10,6 +10,28 @@ use micold_core::metadata::AppMetadata;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self};
 
+/// The application's one-line description (FR-009): the first sentence of this crate's packaged
+/// `extended-description`, which is the copy written for a user.
+///
+/// A constant rather than `env!("CARGO_PKG_DESCRIPTION")`, because every crate's `description` —
+/// this one's included — is written for the people who maintain the crate. `tests/about_description.rs`
+/// holds it against the manifest, so the two cannot drift apart (BUG-001).
+const APP_DESCRIPTION: &str = "A local-first, AI-assisted desktop IDE for managing git worktrees \
+                               and AI coding sessions in an embedded terminal.";
+
+/// The running application's identity, resolved **here**, in the application's own crate.
+///
+/// `env!` expands where it is written. Written in `micold-core` it read `micold-core`'s manifest,
+/// and the About dialog described the library to its users (BUG-001); written here it reads the
+/// client's. Version and license are workspace-wide, so they were right before only by luck.
+pub(crate) fn metadata() -> AppMetadata {
+    AppMetadata::resolve(
+        env!("CARGO_PKG_VERSION"),
+        env!("CARGO_PKG_LICENSE"),
+        APP_DESCRIPTION,
+    )
+}
+
 /// The About dialog as the dialog body; `ui::view` wraps it in the shared
 /// [`Modal`](crate::ui::material::Modal) transition.
 ///
@@ -19,7 +41,7 @@ use micold_core::tokens::{self};
 /// surface (FR-009, FR-024).
 pub fn modal<'a>(scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
-    let meta = AppMetadata::from_env();
+    let meta = metadata();
 
     // The About box's single action is the last line of its column rather than a row of its own,
     // so it takes §7.4's body-to-actions gap the same way a two-button dialog does.

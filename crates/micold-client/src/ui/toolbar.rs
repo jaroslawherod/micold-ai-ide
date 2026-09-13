@@ -24,7 +24,7 @@ use crate::features::settings::Msg as SettingsMsg;
 use crate::icons::Icon;
 use crate::ui::material::{Button, MenuItem, MenuTrigger, Toolbar};
 use iced::Element;
-use micold_core::metadata::AppMetadata;
+use micold_core::metadata::APP_NAME;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens;
 
@@ -59,7 +59,7 @@ pub fn overflow_items(_state: &State) -> Vec<MenuItem<Message>> {
 /// are floated as overlays by `ui::view`, so opening either never reflows the bar.
 pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
-    let meta = AppMetadata::from_env();
+
     // The switcher names the project it will switch away from, so it is a **labelled** button, and
     // it is the shared one: `Button::text` with §7.3's leading-icon slot (018 FR-029c). It used to
     // assemble that shape itself — its own `button`, its own style, its own ripple, and
@@ -76,7 +76,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .leading(Icon::OpenProject)
         .on_press(Message::Project(ProjectMsg::SwitcherToggled));
     let menu = MenuTrigger::new(Icon::Menu, Message::Help(HelpMsg::MenuToggled), r);
-    Toolbar::new(meta.name, r)
+    Toolbar::new(APP_NAME, r)
         // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from
         // the sidebar's offset rather than stored, so nothing else can set it.
         .elevated(state.app_bar_elevated())
