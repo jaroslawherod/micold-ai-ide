@@ -448,10 +448,10 @@ live in `src/ui/material/terminal_pane.rs`; each is test-first (Red commit, then
 
 ### BUG-004 — a copy chord with nothing selected wipes the clipboard (FR-013c)
 
-- [ ] T067 [BUG-004] Failing test in `src/ui/material/terminal_pane.rs` (`mod tests`): dispatch the
+- [x] T067 [BUG-004] Failing test in `src/ui/material/terminal_pane.rs` (`mod tests`): dispatch the
   platform copy chord to a focused pane with no selection through a recording `Clipboard`, and assert
   no write happened; with a selection, assert exactly one write of the selected text.
-- [ ] T068 [BUG-004] In `KeyRouting::Copy`, write to the clipboard only when `selectable_content()`
+- [x] T068 [BUG-004] In `KeyRouting::Copy`, write to the clipboard only when `selectable_content()`
   is non-empty; the chord is still captured either way, so it never reaches the process (FR-013c).
 
 ### BUG-005 — the focused terminal has no visual indication (FR-010, FR-010b)

@@ -1052,7 +1052,13 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     shell.capture_event();
                 }
                 KeyRouting::Copy => {
-                    clipboard.write(ClipboardKind::Standard, self.selectable_content());
+                    // Nothing selected, nothing to copy: the chord is still the terminal's, but the
+                    // clipboard keeps whatever the user put there (FR-013c, BUG-004) — the same rule
+                    // the release that ends a drag already follows.
+                    let selected = self.selectable_content();
+                    if !selected.is_empty() {
+                        clipboard.write(ClipboardKind::Standard, selected);
+                    }
                     shell.capture_event();
                 }
                 KeyRouting::Paste => {
