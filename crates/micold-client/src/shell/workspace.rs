@@ -229,8 +229,20 @@ pub(crate) fn on_known_project_reopened(app: &mut App, path: PathBuf) -> Task<Me
             micold_client::app::interpret(&mut app.core, o)
         });
         crate::log_foreground_choice(app, &path);
-        // Already a known project (no ProjectAdd); just move the daemon attachment.
+        // Already a known project (no ProjectAdd): move the daemon attachment, and tell the
+        // catalog's single writer this is now the last-active project, or the next launch restores
+        // whichever project was last opened by browsing (002 BUG-003, FR-010/FR-011). Without a
+        // connection there is nobody to tell; the switch itself stands, as it always has.
         switch_daemon_attachment(app, previous, &path);
+        if app.daemon.is_some() {
+            let activated = path.clone();
+            send_op(app, PendingOp::ProjectActivate, move |req| {
+                ClientMsg::ProjectActivate {
+                    req,
+                    path: activated,
+                }
+            });
+        }
     }
     Task::none()
 }

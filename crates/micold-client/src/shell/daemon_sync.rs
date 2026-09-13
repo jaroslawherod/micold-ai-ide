@@ -113,6 +113,8 @@ pub enum PendingOp {
     /// restart.
     WorktreeClaim(String),
     ProjectAdd,
+    /// A `ProjectActivate` (002 BUG-003): a known project reopened, recorded as last active.
+    ProjectActivate,
     ProjectRemove,
     ProjectRename,
     /// A `SettingsSet` (FR-012a/FR-012b, BUG-003/T100): the service echoes the persisted result
@@ -143,6 +145,7 @@ impl PendingOp {
             }
             PendingOp::WorktreeRefresh => "refresh the worktree list".into(),
             PendingOp::ProjectAdd => "add the project".into(),
+            PendingOp::ProjectActivate => "record the active project".into(),
             PendingOp::ProjectRemove => "remove the project".into(),
             PendingOp::ProjectRename => "rename the project".into(),
             PendingOp::SettingsSet => "update the settings".into(),

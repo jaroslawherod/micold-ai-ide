@@ -622,6 +622,23 @@ impl Catalog {
         self.persist()
     }
 
+    /// Make an already-known project the active one and persist it as `last_active` (FR-010, 002
+    /// BUG-003). `Ok(false)` — nothing changed, nothing written — for a path that is not a known
+    /// project or whose folder is gone: availability is rescanned first, so the catalog never comes
+    /// to name as last active a project the next launch could not open (FR-023).
+    pub fn activate_project(
+        &mut self,
+        path: &Path,
+        scanner: &dyn FolderScanner,
+    ) -> io::Result<bool> {
+        self.workspace.refresh_availability(scanner);
+        if !self.workspace.activate(path) {
+            return Ok(false);
+        }
+        self.persist()?;
+        Ok(true)
+    }
+
     /// Forget a known project entirely, returning its session ids (so the caller stops any live
     /// processes) and persisting (T053, feature 014 FR-003). Unlike a worktree/session *delete*, a
     /// forgotten project is dropped, not archived — re-adding it is a fresh open, so there is no
