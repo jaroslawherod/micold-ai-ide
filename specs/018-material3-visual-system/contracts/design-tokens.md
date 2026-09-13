@@ -79,9 +79,14 @@ The single normative table. Light and dark columns are tone values on the named 
 | `outline_variant`             | neutral_variant  | 80         | 30        |
 | `inverse_surface`             | neutral          | 20         | 90        |
 | `inverse_on_surface`          | neutral          | 95         | 20        |
-| `inverse_primary`             | primary          | 80         | 40        |
+| `inverse_primary`             | primary          | 80         | **30**    |
 | `scrim`                       | neutral          | 0          | 0         |
 | `shadow`                      | neutral          | 0          | 0         |
+
+The dark `inverse_primary` departs from Material's baseline (tone 40). At 40 it is 4.99:1 on
+`inverse_surface` at rest and 4.37:1 with a pressed layer composited, and it has no other host to move
+to — so FR-004b's second remedy applies: the role's tone moves, the ramp does not. Tone 30 is the
+nearest stop that passes: 7.25:1 at rest, 6.21:1 pressed (BUG-011).
 
 `scrim` and `shadow` are pure black in both schemes; their visible strength comes from the alpha at
 which they are drawn (§4, §7), not from a tone difference.
@@ -105,7 +110,7 @@ pair that passes comfortably at rest.)*
 |---------------------------|------------------------------------------------------------------------------------------------------------------------|
 | `on_background`           | `background`                                                                                                            |
 | `on_surface`              | `surface`, `surface_dim`, `surface_bright`, `surface_container_lowest`, `surface_container_low`, `surface_container`, `surface_container_high`, `surface_container_highest` |
-| `on_surface_variant`      | `surface_variant`, and every `surface_container_*` level                                                                 |
+| `on_surface_variant`      | every `surface_container_*` level; `surface_variant` **only for content nothing presses** — a badge's glyph, static secondary text. A control drawing `on_surface_variant` MUST NOT stand on `surface_variant`: 4.47:1 pressed in the dark scheme (FR-004b, BUG-011) |
 | `on_primary`              | `primary`                                                                                                               |
 | `on_primary_container`    | `primary_container`                                                                                                     |
 | `on_secondary`            | `secondary`                                                                                                             |
@@ -695,6 +700,7 @@ panel and the copy predates it.
 | Label alignment | centred within the height; centred within the padded width (FR-030a) |
 | Icon size       | 18                                                        |
 | Unselected      | transparent container, 1dp `outline`, `on_surface_variant`|
+| Selected, untyped filter | `surface_container_high` fill, `on_surface_variant` label — not `surface_variant`, which fails FR-004b pressed (BUG-011) |
 | Selected        | `secondary_container` fill, `on_secondary_container` label |
 | Worktree tag    | per-type fill and its paired text tone (§1.4), `label_small` in the sidebar |
 | States          | full state-layer set (§5), AA preserved under each (FR-024) |

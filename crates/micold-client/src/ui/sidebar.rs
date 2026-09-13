@@ -286,7 +286,7 @@ fn filter_chip(filter: TagFilter, active: bool, r: Roles) -> Element<'static, Me
     let (fill, on) = match filter {
         TagFilter::Type(t) => r.type_tag(t),
         TagFilter::HasIssue => r.issue_tag(),
-        TagFilter::Untyped => (r.surface_variant, r.on_surface_variant),
+        TagFilter::Untyped => material::chip_neutral_accent(r),
     };
     ToggleChip::new(
         filter_label(filter),

@@ -1663,3 +1663,23 @@ level carries the handle with it.
 **Pass record (T171)** — 2026-09-13, Xvfb + lavapipe on a private display, not a real GPU; client and daemon built and pinned together from this branch, a project seeded through `projects.json`, theme `dark`, 1×. Sampling one row across the sidebar's edge: `(28,27,30)` from x=0 to 304 — panel *and* grab zone — then the rule `(73,69,78)` at 305 and the main area `(20,19,22)` from 306. The reported frame had a 10px `(20,19,22)` band before the rule at 2×. Light scheme not captured; T169 asserts both.
 
 **Bugfix**: 2026-09-13 — BUG-012 added Phase 23 (T169–T171). **No task is reopened.** T001 asserts every elevated *style function* returns its level's tone and is complete as written; the handle fills a raw quad in `draw` and was never in its reach.
+
+## Phase 24: BUG-011 — two pairs that clear AA at rest and fail it pressed
+
+**Goal**: `UNDER_AA_COMPOSITED` is empty. The snackbar's `Dismiss` and the sidebar's untyped filter
+chip both clear AA with their heaviest state layer composited, in both schemes, by the two remedies
+FR-004b now names: a narrowed host where one exists, a moved tone where it does not.
+
+- [X] T172 Failing test first: in `crates/micold-core/tests/tokens_contrast.rs`, empty `UNDER_AA_COMPOSITED`, measure the untyped chip on `surface_container_high`, and keep `on_surface_variant` on `surface_variant` as a layerless pair. Red today on the dark `inverse_primary/inverse_surface` pair (FR-004b, SC-008h)
+
+- [X] T173 Move the dark scheme's `inverse_primary` from `PRIMARY.at(40)` to `PRIMARY.at(30)` in `crates/micold-core/src/tokens/mod.rs`, with a comment at the assignment saying why it departs from Material's baseline. T172 goes green on that pair (FR-004b). *(The comments in `style.rs` and `snackbar.rs` describe the role's purpose, not its tone, and stay true.)*
+
+- [X] T174 Give `ToggleChip`'s neutral default, and the sidebar's `TagFilter::Untyped` accent, the `surface_container_high` fill; update `toggle_chip.rs`'s doc comments. T172 goes green (FR-004b, §7.6). *(One source: both read `chip_neutral_accent`, and `a_neutral_chip_label_clears_aa_pressed` measures the widget's own pair in both schemes, since T172 measures a named pair the chip could drift away from.)*
+
+- [X] T175 Run the workspace gate (fmt, clippy, `cargo test --workspace`), regenerating any style or token snapshot that records the moved values, and record the result here
+
+**Red record (T172)** — `every_pair_still_meets_aa_with_its_state_layer_composited` failed with the pin emptied: `Dark / inverse_primary/inverse_surface: 4.37 < 4.5`. The chip's pair did not appear, because T172 already measures it on its new host; its red is BUG-011's own 4.47:1.
+
+**Pass record (T175)** — 2026-09-13: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace` 2798 passed, 0 failed. `style_snapshot` regenerated: 13 lines, all `host.snackbar` and `button.*@snackbar[*]`, dark `on_fill` `(103,80,164)` → `(79,55,138)` — primary tone 40 → 30, and nothing else. Not checked on a rendered frame.
+
+**Bugfix**: 2026-09-13 — BUG-011 added Phase 24 (T172–T175). **No task is reopened.** T160 and T165 found these two pairs and are complete as written; the pin they left was the failing-check form of an undecided remedy.
