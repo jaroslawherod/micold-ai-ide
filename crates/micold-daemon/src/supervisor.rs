@@ -122,12 +122,41 @@ struct Supervised {
     /// group on Unix, a job object on Windows (FR-036). Adopted at spawn, because a job has to
     /// exist before the child starts the processes it should contain.
     tree: crate::platform::ProcessTree,
+    /// Whether the child has been reaped. After that nothing may signal its pid — including
+    /// `portable-pty`'s own `Child::kill`, which on Unix sends `SIGHUP` to the pid without asking
+    /// whether it has already been waited on.
+    reaped: bool,
 }
 
 impl Supervised {
+    /// The child's exit status if it has exited, `None` while it runs. On Unix an exited child is
+    /// left unreaped, so teardown can still reach what it left running (see
+    /// [`crate::platform::ProcessTree::exit_status`]).
+    fn exit_status(&mut self) -> io::Result<Option<portable_pty::ExitStatus>> {
+        let status = self.tree.exit_status(self.child.as_mut());
+        if status.is_err() {
+            self.reaped();
+        }
+        status
+    }
+
+    /// End the child's whole tree, then the child, and reap it. Does nothing to a child already
+    /// reaped but the tree teardown, which forgets a reaped Unix child's group and on Windows still
+    /// ends whatever is left in the job.
+    fn terminate(&mut self) -> io::Result<()> {
+        self.tree.terminate();
+        if !self.reaped {
+            self.child.kill()?;
+            let _ = self.child.wait();
+            self.reaped();
+        }
+        Ok(())
+    }
+
     /// The child has been waited on — or can no longer be, which is treated the same way: a pid
     /// that cannot be vouched for is not one to signal.
     fn reaped(&mut self) {
+        self.reaped = true;
         self.tree.leader_reaped();
     }
 }
@@ -281,7 +310,11 @@ impl PtySession {
         Ok(Self {
             id,
             term,
-            child: Mutex::new(Supervised { child, tree }),
+            child: Mutex::new(Supervised {
+                child,
+                tree,
+                reaped: false,
+            }),
             master: Mutex::new(Some(pair.master)),
             writer,
             signals,
@@ -350,22 +383,23 @@ impl PtySession {
         Ok(())
     }
 
-    /// Whether the child is still running, via a non-blocking `try_wait` reap. Authoritative for
+    /// Whether the child is still running, via a non-blocking exit check. Authoritative for
     /// liveness (the reader-thread EOF flag is only a hint — a child can close stdout yet linger).
     /// On observing the child gone, caches its exit success bit for [`Self::exit_outcome`].
+    ///
+    /// It does not reap on Unix: the exited child stays a zombie until [`Self::kill`], so the
+    /// descendants it left running are still reachable then (FR-036).
     pub fn is_alive(&self) -> bool {
         match self.child.lock() {
-            Ok(mut supervised) => match supervised.child.try_wait() {
+            Ok(mut supervised) => match supervised.exit_status() {
                 Ok(Some(status)) => {
-                    supervised.reaped();
                     self.cache_exit(ExitOutcome::from_status(&status));
                     false
                 }
                 Ok(None) => true,
-                // A reap error means we can no longer track the child; treat it as gone (a crash,
-                // so supervision can react) rather than pretend it is alive forever.
+                // An error means we can no longer track the child; treat it as gone (a crash, so
+                // supervision can react) rather than pretend it is alive forever.
                 Err(_) => {
-                    supervised.reaped();
                     self.cache_exit(ExitOutcome::crashed("could not be reaped"));
                     false
                 }
@@ -410,21 +444,18 @@ impl PtySession {
     ///
     /// On Windows `child.kill()` is `portable-pty`'s, whose killer reports `TerminateProcess`
     /// inverted (research R3.4). `Child::kill` discards that result in 0.9.0, which is the only
-    /// reason the `?` below is sound there; `tests/windows_process_tree.rs` pins both halves — `Ok`,
+    /// reason the `?` in [`Supervised::terminate`] is sound there; `tests/windows_process_tree.rs` pins both halves — `Ok`,
     /// and the process really gone — so an upgrade that starts propagating it fails a test rather
     /// than every session close.
     ///
     /// The tree is terminated under the child's lock, so it cannot be racing a reap that would free
     /// the pid it signals through. A second `kill()` — the drop after a session close — finds the
-    /// child reaped and signals nothing.
+    /// child reaped and signals nothing through its pid.
     pub fn kill(&self) -> io::Result<()> {
-        if let Ok(mut supervised) = self.child.lock() {
-            supervised.tree.terminate();
-            supervised.child.kill()?;
-            let _ = supervised.child.wait();
-            supervised.reaped();
+        match self.child.lock() {
+            Ok(mut supervised) => supervised.terminate(),
+            Err(_) => Ok(()),
         }
-        Ok(())
     }
 }
 
@@ -554,22 +585,25 @@ mod tests {
         let _ = s.kill();
     }
 
-    /// Once a liveness check has reaped the child, its pid belongs to the kernel again and can be
-    /// handed to an unrelated process — which, as a group leader, would have its whole group
-    /// `SIGKILL`ed by the session's later teardown. So nothing may be left to signal.
+    /// A liveness check that sees the child exited must not reap it: reaping is what frees the pid,
+    /// and the pid is the only way teardown can still reach the child's group — the descendants it
+    /// left running. Unreaped, the child is a zombie holding that pid, so no other process can be
+    /// given it and signalling through it stays sound until teardown reaps.
+    #[test]
+    fn a_child_seen_exited_by_a_liveness_check_keeps_its_pid_until_teardown() {
+        let s = PtySession::spawn(SessionId::new(), sh("exit 0"), 100, None).unwrap();
+        wait_for_exit(&s);
+        assert!(!s.is_alive(), "a later liveness check still sees the exit");
+        assert_eq!(signalled_pid(&s), s.pid());
+    }
+
+    /// Once teardown has reaped the child, its pid belongs to the kernel again and can be handed to
+    /// an unrelated process — which, as a group leader, would have its whole group `SIGKILL`ed by the
+    /// session's drop, which kills again. So nothing may be left to signal.
     ///
     /// Reuse itself cannot be provoked here: pids are allocated cyclically up to `pid_max`, and
     /// forcing a particular one needs `CAP_SYS_ADMIN` in a pid namespace. What this pins is the
     /// precondition — no pid is retained past the reap — without which reuse is only a matter of load.
-    #[test]
-    fn a_child_reaped_by_a_liveness_check_leaves_no_pid_to_signal() {
-        let s = PtySession::spawn(SessionId::new(), sh("exit 0"), 100, None).unwrap();
-        wait_for_exit(&s);
-        assert_eq!(signalled_pid(&s), None);
-    }
-
-    /// The same after `kill()` reaps it — the common path, because every session close is a
-    /// `kill()` followed by the session's drop, which kills again.
     #[test]
     fn a_child_reaped_by_kill_leaves_no_pid_to_signal() {
         let s = PtySession::spawn(SessionId::new(), sh("sleep 300"), 100, None).unwrap();
@@ -577,15 +611,23 @@ mod tests {
         assert_eq!(signalled_pid(&s), None);
     }
 
-    /// FR-036 / T061: tearing down a session reaps its whole process group, not just the direct
-    /// child — a backgrounded grandchild must not orphan.
+    /// Every session close is a `kill()` and then the session's drop, which kills again — by then
+    /// on a reaped child. `portable-pty`'s Unix `Child::kill` sends `SIGHUP` to the pid without
+    /// checking for that, so it must not be reached: the pid may already be someone else's. Unreused,
+    /// the stray signal fails with `ESRCH`, which is what this can see.
     #[test]
-    fn kill_reaps_the_whole_process_group() {
+    fn a_second_kill_signals_nothing_through_the_reaped_pid() {
+        let s = PtySession::spawn(SessionId::new(), sh("sleep 300"), 100, None).unwrap();
+        s.kill().unwrap();
+        s.kill().unwrap();
+    }
+
+    /// Spawn `sh -c "<script>"` after substituting `{pidfile}` with a file the script writes a
+    /// grandchild's pid to; return the session and that pid once it has been recorded.
+    fn spawn_with_grandchild(script: &str) -> (PtySession, i32, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
         let pidfile = dir.path().join("grandchild.pid");
-        // sh backgrounds a `sleep` (a grandchild in the same process group), records its pid, then
-        // waits. Killing the group must take the grandchild with it.
-        let script = format!("sleep 300 & echo $! > {} ; wait", pidfile.display());
+        let script = script.replace("{pidfile}", &pidfile.display().to_string());
         let session = PtySession::spawn(SessionId::new(), sh(&script), 100, None).unwrap();
 
         // Read the grandchild pid once the shell has recorded it.
@@ -599,24 +641,65 @@ mod tests {
             assert!(Instant::now() < deadline, "grandchild pid never recorded");
             std::thread::sleep(Duration::from_millis(20));
         };
+        (session, grandchild, dir)
+    }
+
+    /// Whether a process with `pid` exists.
+    fn exists(pid: i32) -> bool {
         // SAFETY: `kill(pid, 0)` sends no signal; it only probes whether the process exists.
-        assert_eq!(
-            unsafe { libc::kill(grandchild, 0) },
-            0,
+        unsafe { libc::kill(pid, 0) == 0 }
+    }
+
+    /// Wait (bounded — reparenting + reaping is not instantaneous) for `pid` to be gone.
+    fn assert_gone(pid: i32, what: &str) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while exists(pid) {
+            assert!(Instant::now() < deadline, "{what}");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// FR-036 / T061: tearing down a session reaps its whole process group, not just the direct
+    /// child — a backgrounded grandchild must not orphan.
+    #[test]
+    fn kill_reaps_the_whole_process_group() {
+        // sh backgrounds a `sleep` (a grandchild in the same process group), records its pid, then
+        // waits. Killing the group must take the grandchild with it.
+        let (session, grandchild, _dir) =
+            spawn_with_grandchild("sleep 300 & echo $! > {pidfile} ; wait");
+        assert!(
+            exists(grandchild),
             "grandchild should be alive before teardown"
         );
 
         session.kill().unwrap();
 
-        // The grandchild is gone once the group teardown reaches it (bounded — reparenting +
-        // reaping is not instantaneous).
-        let deadline = Instant::now() + Duration::from_secs(10);
-        while unsafe { libc::kill(grandchild, 0) } == 0 {
-            assert!(
-                Instant::now() < deadline,
-                "grandchild survived the process-group teardown"
-            );
-            std::thread::sleep(Duration::from_millis(20));
-        }
+        assert_gone(grandchild, "grandchild survived the process-group teardown");
+    }
+
+    /// FR-036, and parity with Windows (Principle VI): a grandchild still running after the child
+    /// exited *on its own* — and after supervision has noticed the exit — is ended at teardown too.
+    /// A Windows job holds it regardless of the child; on Unix the group is reachable only through
+    /// the child's pid, which a liveness check that reaped would give up.
+    ///
+    /// The grandchild ignores `SIGHUP`, as anything started under `nohup` does. One that does not is
+    /// already gone by teardown: a session leader's exit hangs up its terminal, and the kernel sends
+    /// `SIGHUP` to the terminal's foreground group — which, with no job control, is the whole group.
+    #[test]
+    fn a_grandchild_outliving_its_exited_parent_dies_at_teardown() {
+        let (session, grandchild, _dir) =
+            spawn_with_grandchild("(trap '' HUP; exec sleep 300) & echo $! > {pidfile} ; exit 0");
+        assert_eq!(wait_for_exit(&session), ExitOutcome::Clean);
+        assert!(
+            exists(grandchild),
+            "the grandchild outlives its parent's exit"
+        );
+
+        session.kill().unwrap();
+
+        assert_gone(
+            grandchild,
+            "grandchild of an exited child survived teardown",
+        );
     }
 }

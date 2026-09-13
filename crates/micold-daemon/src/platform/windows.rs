@@ -56,6 +56,15 @@ impl ProcessTree {
         Self { job: job.ok() }
     }
 
+    /// The child's exit status if it has exited. Nothing has to be held back for teardown: the job
+    /// reaches the child's descendants whether or not the child is still around.
+    pub fn exit_status(
+        &self,
+        child: &mut dyn portable_pty::Child,
+    ) -> std::io::Result<Option<portable_pty::ExitStatus>> {
+        child.try_wait()
+    }
+
     /// Nothing to forget: the job is a handle, not a pid, so reaping the child cannot make it name
     /// anything else — and it goes on holding the child's descendants, which teardown should still
     /// end.
