@@ -124,3 +124,27 @@ complete while claiming a behavior ("surface save failures non-fatally") the cod
 implement — every call site discards the `save` `Result` outright. Added **FR-012b** (a failed
 persist MUST be surfaced to the user, visibly and non-blockingly, not silently discarded) and
 reopened T029 against it; see `contracts/storage-schema.md` "Save-failure surfacing."
+
+## Bugfix: symlinks, last-active, and the launch restore (BUG-002/003/004, 2026-09-13)
+
+**Identity (BUG-002)**: the client resolves a chosen folder once, at the boundary, through
+`fs_scan::resolve_path` (`std::fs::canonicalize`, with Windows' verbatim `\\?\C:` prefix dropped
+back to `C:`, and the lexical `canonicalize_best_effort` when the folder cannot be resolved), and
+`Workspace::identity_for` keeps the stored path of a project already known under another spelling
+so FR-012's no-duplicate rule holds across the change. Worktree discovery does not rely on that
+alone: `worktree::discover`, `preflight` and `branch_candidates` re-spell git's resolved records
+under the project path they were asked about, so a catalog entry stored through a symlink before
+this fix — and a project added over the no-local-git route, where the client cannot resolve the
+daemon's paths — classifies its worktrees correctly too. The stored catalog is not migrated at
+load: re-keying a project would also re-key its per-project state file (BUG-001's split) for no
+behavioural gain.
+
+**Last active (BUG-003)**: a new correlated `ClientMsg::ProjectActivate { req, path }` carries a
+reopen to the daemon, the catalog's single writer. The daemon refreshes availability, calls
+`Workspace::activate` — the FR-023 guard — and persists only when it accepts; an unknown or
+unavailable path is refused as `NotFound`. `PROTOCOL_VERSION` 10 → 11.
+
+**Launch restore (BUG-004)**: boot calls `Workspace::release_unavailable_active` after
+`refresh_availability` and raises an error notification naming the project and its folder.
+Kept out of `refresh_availability` itself on purpose: feature 008's switcher now rescans while the
+application runs (008 BUG-003), and a scan must not drop the project being worked in.

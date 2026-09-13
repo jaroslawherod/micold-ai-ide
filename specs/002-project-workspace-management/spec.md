@@ -85,7 +85,9 @@ The user renames a project. Renaming changes only the display name stored by the
 - **Reopening an unavailable project**: When the user attempts to reopen a project whose folder is no longer present, the application does not crash, does not activate a nonexistent working space, and communicates that the folder is unavailable.
 - **Git status is point-in-time**: A folder's git-repository status is determined when the folder is inspected; a folder could gain or lose git status later on disk. The recorded status reflects the last time it was inspected.
 - **Unreadable or permission-denied paths while browsing**: The selector handles paths it cannot read gracefully rather than crashing.
-- **Re-opening the same folder**: Choosing a folder that is already known activates the existing entry and never creates a duplicate (identity is the filesystem path).
+- **Re-opening the same folder**: Choosing a folder that is already known activates the existing entry and never creates a duplicate (identity is the ~~filesystem path~~ resolved filesystem path — see FR-012).
+- **Folder reached through a symlink** (bugfix BUG-002): Choosing a symlink to a repository identifies the project by the resolved folder, which is how git records the repository and every worktree in it. Its worktrees MUST classify exactly as they would had the real folder been chosen, and choosing either spelling of a folder that is already known MUST activate that entry, not add a second.
+- **Last-active folder gone at launch** (bugfix BUG-004): If the project recorded as last active is unavailable when the application starts, the application MUST NOT open into it (FR-023): it starts with no active working space, keeps the project in the list marked unavailable, and tells the user which project could not be reopened and why.
 - **Whitespace-only or empty rename**: Rejected; the existing display name is preserved.
 - **First-ever launch**: With no known projects, the shell shows the empty state inviting the user to open a project.
 - **Storage fault scoped to one project** (bugfix BUG-001): A corrupt or unwritable per-project state file MUST degrade only that project's session/worktree-name state to empty, exactly as a corrupt catalog degrades to an empty catalog today. It MUST NOT wipe the known-projects catalog or any other project's persisted state.
@@ -111,9 +113,9 @@ The user renames a project. Renaming changes only the display name stored by the
 
 - **FR-008**: The system MUST persist the known-projects list on the local filesystem so it survives application restarts, without requiring any network or cloud service.
 - **FR-009**: Each known-project record MUST include the folder's filesystem path, its display name, and its git-repository status.
-- **FR-010**: The persisted list MUST record which project was last active.
+- **FR-010**: The persisted list MUST record which project was last active. *(Clarified by bugfix BUG-003: "last active" means last activated by any route — opening a folder through the selector **and** reopening a known project from the list or the switcher. Only an activation that succeeds is recorded, so an unavailable project is never recorded as last active.)*
 - **FR-011**: On launch, the system MUST let the user reopen a known project directly from the list without browsing the filesystem.
-- **FR-012**: Opening a folder that is already a known project MUST activate the existing entry and MUST NOT create a duplicate; project identity is the filesystem path.
+- **FR-012**: Opening a folder that is already a known project MUST activate the existing entry and MUST NOT create a duplicate; project identity is the ~~filesystem path~~ **resolved** filesystem path — symlinks followed — so that opening a symlink to a known project activates that project instead of creating a second one (bugfix BUG-002).
 - **FR-012a**: A storage fault (corruption, a failed or interrupted write, an unreadable file) affecting one project's persisted state MUST NOT cause the loss of any other project's persisted state, nor of the known-projects catalog itself (bugfix BUG-001). Persisted per-project state (sessions, worktree display-name overrides, and any other per-project data introduced by later features) MUST be isolated such that a fault is scoped to at most one project.
 - **FR-012b**: A failed attempt to persist the catalog or a project's state (e.g. a write or rename error) MUST NOT crash the application, but MUST be surfaced to the user in some visible, non-blocking way (e.g. a status message) rather than being silently discarded (bugfix BUG-001). Silently swallowing the failure is insufficient: the user must be able to tell that their most recent change may not have survived a restart.
 
@@ -135,7 +137,7 @@ The user renames a project. Renaming changes only the display name stored by the
 #### Graceful degradation and availability
 
 - **FR-022**: If a known project's folder has been deleted, moved, or renamed on disk, the system MUST NOT crash and MUST clearly mark that project as unavailable in the list.
-- **FR-023**: The system MUST NOT activate a project whose folder is unavailable, and MUST communicate the unavailability to the user rather than failing silently or crashing.
+- **FR-023**: The system MUST NOT activate a project whose folder is unavailable, and MUST communicate the unavailability to the user rather than failing silently or crashing. *(Clarified by bugfix BUG-004: this binds the application's own activation at launch — restoring the last-active project — as well as every activation the user asks for.)*
 
 #### Cross-platform parity
 
@@ -197,3 +199,15 @@ surfaced to the user, not silently discarded. Task **T029** was found checked co
 already claiming this exact behavior ("surface save failures non-fatally") without implementing
 it — every call site discards the `Result` outright. T029 reopened in tasks.md rather than left as
 a false completion. See `contracts/storage-schema.md` "Save-failure surfacing."
+
+**Bugfix**: 2026-09-13 — BUG-002 FR-012 amended: project identity is the *resolved* filesystem
+path. Git reports a repository and its worktrees by resolved path, so a project stored under a
+symlink matched none of its own worktrees and listed every one as invalid. New edge case "Folder
+reached through a symlink". Tasks T056–T058.
+
+**Bugfix**: 2026-09-13 — BUG-003 FR-010 clarified: reopening a known project from the list or the
+switcher records it as last active, exactly as opening it through the selector does. Tasks
+T059–T061.
+
+**Bugfix**: 2026-09-13 — BUG-004 FR-023 clarified to cover the launch-time restore of the
+last-active project; new edge case "Last-active folder gone at launch". Tasks T062–T064.
