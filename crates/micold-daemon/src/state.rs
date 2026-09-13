@@ -211,9 +211,10 @@ struct LiveSession {
     /// it resets to `Unknown` on daemon restart (H3/A4). Fed by claude-CLI lifecycle hooks (the
     /// loopback receiver) and by braille-spinner title evidence (`SpinnerObserved`, Working-only).
     activity: Activity,
-    /// The most recent OSC-0 title observed on the attached process (glyph-stripped), used to
-    /// project a live session title and to debounce title-change pushes (T047). Not persisted;
-    /// re-emitted by `claude` on resume.
+    /// The most recent OSC-0 title observed on the AI CLI's `Primary` process (glyph-stripped,
+    /// the CLI's own startup title excluded), used to project a live session title and to
+    /// debounce title-change pushes (T047). Persisted separately, as the catalog label (feature
+    /// 029); re-emitted by `claude` on resume.
     last_title: Option<String>,
     /// The tail of this session's own event log, for a provider whose activity source is
     /// `EventLog` (feature 026, T064). `None` for a `Hooks` provider — and `None` for every
@@ -1963,25 +1964,37 @@ impl DaemonState {
     /// there is something to write. See [`Self::record_observed_names`].
     pub fn drain_signals(&self) -> DrainedSignals {
         let mut out = DrainedSignals::default();
-        let mut inner = self.lock();
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let workspace = inner.catalog.workspace();
         for (id, live) in inner.sessions.iter_mut() {
-            let Some(proc) = live.procs.get(&live.attached) else {
-                continue;
-            };
-            let signals = proc.pty.signals();
             // A spinner glyph seen since the last drain is positive `Working` evidence.
-            if signals.take_spinner() {
-                let before = live.activity.signal().clone();
-                live.activity.apply(ActivityEvent::SpinnerObserved);
-                if live.activity.signal() != &before {
-                    out.changed = true;
+            if let Some(proc) = live.procs.get(&live.attached) {
+                if proc.pty.signals().take_spinner() {
+                    let before = live.activity.signal().clone();
+                    live.activity.apply(ActivityEvent::SpinnerObserved);
+                    if live.activity.signal() != &before {
+                        out.changed = true;
+                    }
                 }
             }
-            // The live title, debounced: only a real change is a push — and, now, only a real
-            // change is a durable write. A spinner cycling through glyph frames on an otherwise
-            // stable title produces one change here, not thirty, because the glyph was stripped
-            // before the title reached `signals`.
-            let title = signals.title();
+            // The name comes from the conversation, so from the AI CLI and nothing else (feature
+            // 029, FR-011): the `Primary` of an `AiCli` session. A shell tab is attached to the
+            // same session but titles itself `user@host: ~/dir`, and a Regular Terminal session's
+            // primary *is* a shell — neither has a conversation to name. And the CLI's own
+            // startup title is its product name, not the session's (FR-004).
+            let title = workspace
+                .find_session(*id)
+                .filter(|(_, session)| session.mode == TerminalMode::AiCli)
+                .and_then(|(_, session)| {
+                    let proc = live.procs.get(&SessionProcess::Primary)?;
+                    let startup = session.provider.provider().startup_title();
+                    proc.pty.signals().title().filter(|t| t.as_str() != startup)
+                });
+            // Debounced: only a real change is a push — and only a real change is a durable
+            // write. A spinner cycling through glyph frames on an otherwise stable title produces
+            // one change here, not thirty, because the glyph was stripped before the title
+            // reached `signals`.
             if title != live.last_title {
                 if let Some(name) = title.as_deref() {
                     out.names.push((*id, name.to_string()));
