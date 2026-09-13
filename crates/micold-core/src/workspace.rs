@@ -324,6 +324,18 @@ impl Workspace {
             .unwrap_or(0)
     }
 
+    /// Clear the active project if its folder is unavailable, returning its path (FR-023, 002
+    /// BUG-004).
+    ///
+    /// For the restore at launch, where `active` comes from the persisted `last_active` rather than
+    /// from [`Self::activate`]'s guard. Deliberately not folded into
+    /// [`Self::refresh_availability`]: that also runs while the application is in use, and a
+    /// folder vanishing under the project being worked in is not a reason to drop the working
+    /// space out from under its sessions.
+    pub fn release_unavailable_active(&mut self) -> Option<PathBuf> {
+        None
+    }
+
     /// The path a folder the user chose should be known by (FR-012, 002 BUG-002).
     ///
     /// `resolve` is the filesystem's answer to "where is this, really" — in the binary
