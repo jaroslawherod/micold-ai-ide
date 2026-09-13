@@ -607,6 +607,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Project(ProjectMsg::Reopened(path)) => {
             shell::workspace::on_known_project_reopened(app, path)
         }
+        Message::Project(ProjectMsg::SwitcherToggled) => shell::workspace::on_switcher_toggled(app),
         Message::Project(ProjectMsg::RenameConfirmed) => {
             shell::daemon_sync::on_rename_confirmed(app)
         }

@@ -228,12 +228,19 @@ pub(crate) fn on_known_project_reopened(app: &mut App, path: PathBuf) -> Task<Me
     Task::none()
 }
 
+/// The top-bar project switcher was toggled (feature 008, FR-008; 008 BUG-003).
+pub(crate) fn on_switcher_toggled(app: &mut App) -> Task<Message> {
+    app.core
+        .update(Message::Project(ProjectMsg::SwitcherToggled));
+    Task::none()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tests::base_app;
     use micold_core::fs_scan::FakeFolderScanner;
-    use micold_core::project::FolderEntry;
+    use micold_core::project::{Availability, FolderEntry};
     use micold_core::protocol::messages::{DaemonMsg, OperationResult};
 
     /// A client with no local git and a daemon to ask (feature 027, research R2 part 2) — the
@@ -575,5 +582,46 @@ mod tests {
 
         assert_eq!(app.core.workspace.active.as_deref(), Some(b.path()));
         assert!(app.core.project.switcher_open);
+    }
+
+    /// 008 BUG-003: opening the switcher is when a moved folder gets its unavailable badge
+    /// (acceptance scenario 3: "When the user opens the switcher") — not the press on its row.
+    #[test]
+    fn opening_the_switcher_marks_a_folder_that_has_gone_unavailable() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        let gone = a.path().join("gone");
+        std::fs::create_dir(&gone).unwrap();
+        let (mut app, _rx) = connected_with_two_projects(&gone, b.path());
+        std::fs::remove_dir(&gone).unwrap();
+
+        let _ = on_switcher_toggled(&mut app);
+
+        assert!(app.core.project.switcher_open);
+        let row = app
+            .core
+            .workspace
+            .projects
+            .iter()
+            .find(|p| p.path == gone)
+            .unwrap();
+        assert_eq!(row.availability, Availability::Unavailable);
+    }
+
+    /// …and the scan is also what lets a restored folder recover: an unavailable row carries no
+    /// message, so nothing else could ever clear the flag while the application runs.
+    #[test]
+    fn opening_the_switcher_clears_the_badge_of_a_folder_that_came_back() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        let (mut app, _rx) = connected_with_two_projects(a.path(), b.path());
+        app.core.workspace.projects[0].availability = Availability::Unavailable;
+
+        let _ = on_switcher_toggled(&mut app);
+
+        assert_eq!(
+            app.core.workspace.projects[0].availability,
+            Availability::Available
+        );
     }
 }
