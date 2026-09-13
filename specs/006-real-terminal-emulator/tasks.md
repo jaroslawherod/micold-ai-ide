@@ -470,12 +470,12 @@ live in `src/ui/material/terminal_pane.rs`; each is test-first (Red commit, then
 
 ### BUG-006 — paste is not bracketed (FR-013d)
 
-- [ ] T071 [BUG-006] Failing tests: a pure `keymap::paste_bytes(text, bracketed)` in
+- [x] T071 [BUG-006] Failing tests: a pure `keymap::paste_bytes(text, bracketed)` in
   `tests/keymap.rs` (mode clear → bytes unchanged; mode set → `ESC[200~ text ESC[201~`; an embedded
   `ESC[201~` — including one reassembled by removing another — never survives inside the block), and
   a widget test in `terminal_pane.rs` that the paste chord and middle-click publish bracketed bytes
   when the grid's mode has `BRACKETED_PASTE` and raw bytes when it does not.
-- [ ] T072 [BUG-006] Implement `keymap::paste_bytes` and `GridCache::bracketed_paste()`, and route
+- [x] T072 [BUG-006] Implement `keymap::paste_bytes` and `GridCache::bracketed_paste()`, and route
   all three paste paths through them: the chord and middle-click in `TerminalPane::update`, and the
   context menu's `shell::clipboard::on_paste_requested` (which reads the mode when the paste is
   requested, before the asynchronous clipboard read).

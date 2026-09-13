@@ -219,10 +219,31 @@ fn copy_paste_action(key: &Key, mods: Mods) -> Option<KeyOutput> {
     }
 }
 
-/// The bytes a paste of `text` sends to the process (FR-013d).
+/// Opens a bracketed paste (`DECSET 2004`).
+const PASTE_START: &str = "\x1b[200~";
+/// Closes a bracketed paste.
+const PASTE_END: &str = "\x1b[201~";
+
+/// The bytes a paste of `text` sends to the process (FR-013d) — shared by every paste gesture, so
+/// the chord, middle-click and the context menu cannot disagree.
+///
+/// When the process has enabled bracketed paste, the text goes out as one `ESC[200~ … ESC[201~`
+/// block, which a shell or editor inserts rather than executes line by line. Any end marker inside
+/// the text is removed first — repeatedly, since removing one can join its neighbours into another —
+/// or pasted text could close the block early and run the rest as keystrokes.
+///
+/// Only the end marker is removed, not every `ESC`: the block is the process's to interpret, and a
+/// narrower rule keeps the text the user copied intact. When bracketing is off the text is sent
+/// exactly as pasted; there is no block for a marker to close.
 pub fn paste_bytes(text: &str, bracketed: bool) -> Vec<u8> {
-    let _ = bracketed;
-    text.as_bytes().to_vec()
+    if !bracketed {
+        return text.as_bytes().to_vec();
+    }
+    let mut body = text.to_string();
+    while body.contains(PASTE_END) {
+        body = body.replace(PASTE_END, "");
+    }
+    [PASTE_START, &body, PASTE_END].concat().into_bytes()
 }
 
 /// The control byte for `Ctrl+<char>`, or `None` if the char has no control encoding.

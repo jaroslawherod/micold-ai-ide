@@ -181,7 +181,8 @@ impl GridCache {
     /// Whether the process has enabled bracketed paste (`DECSET 2004`), so a paste into it must
     /// be wrapped (FR-013d).
     pub fn bracketed_paste(&self) -> bool {
-        false
+        alacritty_terminal::term::TermMode::from_bits_truncate(self.mode)
+            .contains(alacritty_terminal::term::TermMode::BRACKETED_PASTE)
     }
 
     /// The last-applied per-session frame sequence.
