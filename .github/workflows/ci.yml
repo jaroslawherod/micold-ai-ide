@@ -438,6 +438,7 @@ jobs:
           test -f docs/user-guide/worktrees-and-sessions.md
           test -f docs/user-guide/icons.md
           test -f docs/user-guide/install-macos.md
+          test -f docs/user-guide/install-windows.md
       # Principle VII for a developer-facing capability: feature 020's showcase is documented for
       # developers rather than in the user guide (its FR-024), and the doc ships in the same change.
       - name: Required developer docs exist

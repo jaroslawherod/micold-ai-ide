@@ -5,9 +5,10 @@ name: release
 #     bumping the Cargo version + Cargo.lock and updating CHANGELOG.md (embedded in the app).
 #  2. When that PR is merged, release-please creates a DRAFT GitHub release + tag; the `deb` job
 #     builds a .deb natively on amd64 and arm64 runners and attaches them to the draft (drafts
-#     are mutable, so this works even with immutable releases enabled); the `image` jobs build and
-#     push the sandbox image for the same two architectures; the `publish` job then flips the draft
-#     to published, freezing it immutably with the assets attached.
+#     are mutable, so this works even with immutable releases enabled); the `macos` job does the
+#     same for the universal .dmg, and the `windows` job for an x64 and an arm64 setup .exe; the
+#     `image` jobs build and push the sandbox image for the deb architectures; the `publish` job
+#     then flips the draft to published, freezing it immutably with the assets attached.
 #
 # Why the image is part of the *release* and not of CI (FR-024): the client ships a compiled-in
 # default of `ghcr.io/jaroslawherod/micold-daemon:<its own version>`, so the reference a user's
@@ -182,6 +183,53 @@ jobs:
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
         run: gh release upload "$TAG_NAME" target/macos/*.dmg --clobber
 
+  # The Windows downloads (feature 030, FR-014; specs/030-windows-installer/contracts/release-artifacts.md).
+  # Same shape as `deb`: one native leg per architecture, built with the script a contributor runs
+  # locally, attached to the still-mutable draft.
+  #
+  # Native rather than cross-built because Inno Setup only runs on Windows and each setup installs
+  # only on its own architecture (FR-015). Both runner images carry Inno Setup 6 (research R8).
+  #
+  # The installed package is launched before it is uploaded, by the same smoke script CI runs on every
+  # change. A failure there fails this leg, which holds the release (FR-014): a published release is
+  # immutable, so an installer that does not install must never reach it.
+  windows:
+    name: windows (${{ matrix.arch }})
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - arch: arm64
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    # Only needs to upload assets to the release created by release-please.
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Build the setup executable
+        run: scripts/windows-installer.sh --arch ${{ matrix.arch }} --out-dir dist
+      - name: Install, launch and uninstall it
+        run: scripts/windows-install-smoke.sh dist/micold-ai-ide-*-${{ matrix.arch }}-setup.exe
+      - name: Upload the setup executable to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release upload "$TAG_NAME" dist/micold-ai-ide-*-${{ matrix.arch }}-setup.exe --clobber
+
   image:
     name: image (${{ matrix.arch }})
     needs: release-please
@@ -340,7 +388,7 @@ jobs:
     # so a platform missing from this list is a platform whose download is missing permanently.
     # `crates/micold-core/tests/release_publishes_complete_sets.rs` reads the workflow and holds
     # this list equal to the set of jobs that run `gh release upload`.
-    needs: [release-please, deb, macos, image-manifest]
+    needs: [release-please, deb, macos, windows, image-manifest]
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
     # Only needs to flip the draft release to published (contents), which freezes it immutably
@@ -361,19 +409,23 @@ jobs:
       #
       # `--notes-file` with the existing body prepended: `gh release edit --notes` replaces, so the
       # generated changelog is read back and rewritten with the notice on the end.
-      - name: Add the macOS trust notice to the release body
+      #
+      # The Windows installers are unsigned, so SmartScreen stops their first run the same way, and
+      # the Windows notice (feature 030, FR-010) goes on in the same edit.
+      - name: Add the macOS and Windows trust notices to the release body
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
         run: |
           set -euo pipefail
-          notice=".github/release-notice-macos.md"
-          [ -f "$notice" ] || { echo "missing $notice" >&2; exit 1; }
           body="$RUNNER_TEMP/body.md"
           gh release view "$TAG_NAME" --json body --jq .body > "$body"
-          printf '\n\n---\n\n' >> "$body"
-          cat "$notice" >> "$body"
+          for notice in .github/release-notice-macos.md .github/release-notice-windows.md; do
+            [ -f "$notice" ] || { echo "missing $notice" >&2; exit 1; }
+            printf '\n\n---\n\n' >> "$body"
+            cat "$notice" >> "$body"
+          done
           gh release edit "$TAG_NAME" --notes-file "$body"
       - name: Publish the release now that every platform's assets are attached
         env:

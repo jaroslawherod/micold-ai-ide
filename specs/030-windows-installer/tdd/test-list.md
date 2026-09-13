@@ -37,8 +37,8 @@ The entry points are:
 | A7  | A silent uninstall removes the install dir, `.lnk`, uninstall key and `%LOCALAPPDATA%\micold-ai-ide\run` | US2-AS2, FR-006, SC-003, I5 | example | win | PENDING | |
 | A8  | After uninstall, the markers seeded in `%APPDATA%\micold-ai-ide\data` and `%LOCALAPPDATA%\micold-ai-ide\data` still exist | US2-AS3, FR-007, I5 | example | win | PENDING | |
 | A9  | Installing while the daemon runs ends with the old daemon pid gone and the new exes in place | US2-AS4, FR-009, FR-023, I4 | example | win | PENDING | |
-| A10 | `release.yml` has a `windows` job whose matrix covers `x64`/`windows-latest` and `arm64`/`windows-11-arm`, and it runs `gh release upload` | US3-AS1, FR-014, FR-015 | example | any | PENDING | |
-| A11 | `release.yml` `publish.needs` contains `windows` | US3-AS2, FR-014, SC-002 | example | any | PENDING | |
+| A10 | `release.yml` has a `windows` job whose matrix covers `x64`/`windows-latest` and `arm64`/`windows-11-arm`, and it runs `gh release upload` | US3-AS1, FR-014, FR-015 | example | any | DONE | `crates/micold-core/tests/release_publishes_complete_sets.rs::a_windows_job_uploads_both_setup_executables` |
+| A11 | `release.yml` `publish.needs` contains `windows` | US3-AS2, FR-014, SC-002 | example | any | DONE | `crates/micold-core/tests/release_publishes_complete_sets.rs::publish_waits_for_the_windows_job` |
 | A12 | `site/stage.sh` fails and names the asset when `install-windows.md` links a setup exe missing from `MICOLD_RELEASE_ASSETS` | US3-AS3, FR-017 | example | any | DONE | `scripts/tests/site-stage.test.sh`, "a Windows guide linking a setup exe the release lacks fails the stage" + "the failure names the missing setup exe" |
 | A13 | On the x64 Windows CI leg, `scripts/windows-installer.sh --arch x64` produces `micold-ai-ide-<version>-x64-setup.exe` | US3-AS4, FR-016, FR-018, SC-007 | example | win | PENDING | |
 | A14 | `docs/install.md` no longer says there is no packaged build for Windows | US4-AS1, FR-017, SC-006 | example | any | DONE | `crates/micold-core/tests/install_guide_windows.rs::install_page_no_longer_says_windows_has_no_package` |
@@ -178,10 +178,10 @@ These tests already exist and pass on Unix. On Windows they are compiled out tod
 
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
-| U51 | The set of release jobs that run `gh release upload` equals `publish.needs` minus `release-please` | FR-014, SC-002 | example | any | PENDING | |
+| U51 | The set of release jobs that run `gh release upload` equals `publish.needs` minus `release-please` | FR-014, SC-002 | example | any | DONE | `crates/micold-core/tests/release_publishes_complete_sets.rs::publish_waits_for_every_job_that_attaches_an_artifact` (028's rule is inclusion, not equality: `image-manifest` gates `publish` and uploads nothing) |
 | U52 | `.github/release-notice-windows.md` has at most 5 non-empty lines | FR-010 | example | any | DONE | `crates/micold-core/tests/release_notice_windows.rs::notice_is_at_most_five_lines` |
 | U53 | The release notice mentions `x64`, `ARM64`, `More info` and `Run anyway`, and links `install-windows` | FR-010, FR-015 | example | any | DONE | `crates/micold-core/tests/release_notice_windows.rs::notice_names_arches_smartscreen_steps_and_guide` |
-| U57 | The `publish` job references `release-notice-windows.md` | FR-010 | example | any | PENDING | |
+| U57 | The `publish` job references `release-notice-windows.md` | FR-010 | example | any | DONE | `crates/micold-core/tests/release_notice_windows.rs::publish_appends_the_windows_notice` |
 
 ### `site/stage.sh`, tested by `scripts/tests/site-stage.test.sh`
 

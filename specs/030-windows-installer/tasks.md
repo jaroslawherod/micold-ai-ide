@@ -216,7 +216,7 @@ description: "Task list for feature 030: Windows installation package"
   - It builds through `scripts/build-lock.sh cargo build ...`.
   - It resolves `iscc` via `$ISCC`, then `"${ProgramFiles(x86)}/Inno Setup 6/ISCC.exe"`, then `command -v iscc`.
   - It runs `iscc /DAppVersion=… /DArch=… /DBinDir=… /O<out-dir> packaging/windows/micold-ai-ide.iss` and prints the output path.
-- [ ] T037 [US1] FR-016: add `[tasks.windows-installer]` to `mise.toml`, following `[tasks.deb]`: description `Build the Windows setup .exe for the host arch (needs Inno Setup 6) [build-locked]`, and `run = "{{config_root}}/scripts/windows-installer.sh"`.
+- [X] T037 [US1] FR-016: add `[tasks.windows-installer]` to `mise.toml`, following `[tasks.deb]`: description `Build the Windows setup .exe for the host arch (needs Inno Setup 6) [build-locked]`, and `run = "{{config_root}}/scripts/windows-installer.sh"`.
 - [ ] T038 [US1] [A1] [A2] [A3] [A4] [A13] FR-018 / SC-007 x64: in `.github/workflows/ci.yml` job `test`, add the step `Package, install and launch the Windows installer` with `if: runner.os == 'Windows'` and `shell: bash`. It runs `scripts/windows-installer.sh --arch x64 --out-dir dist` and then `scripts/windows-install-smoke.sh dist/micold-ai-ide-*-x64-setup.exe`. Upload `dist/*.exe` with `actions/upload-artifact` (retention 7 days) for manual quickstart M1–M6.
 - [ ] T039 [US1] [A1] [A2] [A3] [A4] FR-015 / FR-018 ARM64: add the job `windows-arm64-package` to `.github/workflows/ci.yml`:
   - `name: package + smoke (windows-11-arm)`, `needs: classify`, `if: needs.classify.outputs.docs_only != 'true'`, `runs-on: windows-11-arm`
@@ -303,10 +303,10 @@ description: "Task list for feature 030: Windows installation package"
 
 ### Tests for User Story 3 (write first, observe failing) ⚠️
 
-- [ ] T047 [P] [US3] [U51] [A10] [A11] FR-014 / SC-002, coordinating with 028.
+- [X] T047 [P] [US3] [U51] [A10] [A11] FR-014 / SC-002, coordinating with 028.
   - If `crates/micold-core/tests/release_publishes_complete_sets.rs` exists on `main` (PR #284 merged): rebase onto `main` and add a case asserting that `publish.needs` contains `windows` and that a job named `windows` exists with a matrix `include` of `x64`/`windows-latest` and `arm64`/`windows-11-arm`.
   - Otherwise: create that file with 028's rule, "the set of jobs whose steps contain `gh release upload` equals `publish.needs` minus `release-please`", plus the Windows case. Note in the file header that 028 introduces the same rule.
-- [ ] T048 [P] [US3] [U52] [U53] [U57] Release notice: create `crates/micold-core/tests/release_notice_windows.rs`. It asserts:
+- [X] T048 [P] [US3] [U52] [U53] [U57] Release notice: create `crates/micold-core/tests/release_notice_windows.rs`. It asserts:
   - `.github/release-notice-windows.md` exists, is at most 5 non-empty lines, and mentions `x64`, `ARM64`, `More info` and `Run anyway`;
   - it links `install-windows`;
   - the `publish` job in `.github/workflows/release.yml` references `release-notice-windows.md`.
@@ -314,7 +314,7 @@ description: "Task list for feature 030: Windows installation package"
 
 ### Implementation for User Story 3
 
-- [ ] T050 [US3] [U51] [A10] [A11] R15, making T047 pass: add a job `windows` to `.github/workflows/release.yml` after `deb`:
+- [X] T050 [US3] [U51] [A10] [A11] R15, making T047 pass: add a job `windows` to `.github/workflows/release.yml` after `deb`:
   - `name: windows (${{ matrix.arch }})`, `needs: release-please`, `if: ${{ needs.release-please.outputs.release_created == 'true' }}`
   - `strategy.fail-fast: false`, `matrix.include: [{arch: x64, runner: windows-latest, target: x86_64-pc-windows-msvc}, {arch: arm64, runner: windows-11-arm, target: aarch64-pc-windows-msvc}]`
   - `runs-on: ${{ matrix.runner }}`, `permissions: contents: write`
@@ -322,7 +322,7 @@ description: "Task list for feature 030: Windows installation package"
   - a header comment citing FR-014 and contracts/release-artifacts.md
 
   Change `publish.needs` to include `windows`, and update the file's top comment block to mention the Windows installers.
-- [ ] T051 [US3] [U52] [U53] [U57] Making T048 pass: create `.github/release-notice-windows.md` (≤ 5 lines: pick x64 or ARM64, SmartScreen **More info → Run anyway**, link to the install-windows page). In the `publish` job, append it to the release body before `gh release edit --draft=false`, using `gh release view "$TAG_NAME" --json body -q .body` concatenated with the notice file, passed to `gh release edit "$TAG_NAME" --notes-file`. If 028's macOS notice step exists, extend that step instead.
+- [X] T051 [US3] [U52] [U53] [U57] Making T048 pass: create `.github/release-notice-windows.md` (≤ 5 lines: pick x64 or ARM64, SmartScreen **More info → Run anyway**, link to the install-windows page). In the `publish` job, append it to the release body before `gh release edit --draft=false`, using `gh release view "$TAG_NAME" --json body -q .body` concatenated with the notice file, passed to `gh release edit "$TAG_NAME" --notes-file`. If 028's macOS notice step exists, extend that step instead.
 - [X] T052 [US3] [A12] [U54] Making T049 pass: make sure `site/stage.sh`'s release-download link scan (line ~209) covers `docs/user-guide/install-windows.md`. It already greps all sources, so only a change in its source set should be needed. Add the new page to the site's page set (`site/checks/page-set.sh` inputs / `docs/SUMMARY.md`, done in T041) so `site/checks/page-set.sh` passes.
 - [ ] T053 [P] [US3] Docs, developer-facing (Principle VII): create `docs/development/windows-packaging.md`, covering:
   - how to build locally (`mise run windows-installer`; needs Inno Setup 6 and Git Bash);
@@ -336,8 +336,8 @@ description: "Task list for feature 030: Windows installation package"
 
 ### Outer loop for User Story 3 (acceptance tests green before the story is complete)
 
-- [ ] T074 [US3] [A10] US3-AS1: `crates/micold-core/tests/release_publishes_complete_sets.rs` passes on the committed `.github/workflows/release.yml`: a `windows` job with the x64 and arm64 matrix runs `gh release upload`.
-- [ ] T075 [US3] [A11] US3-AS2: the same test passes its `publish.needs` contains `windows` case.
+- [X] T074 [US3] [A10] US3-AS1: `crates/micold-core/tests/release_publishes_complete_sets.rs` passes on the committed `.github/workflows/release.yml`: a `windows` job with the x64 and arm64 matrix runs `gh release upload`.
+- [X] T075 [US3] [A11] US3-AS2: the same test passes its `publish.needs` contains `windows` case.
 - [X] T076 [US3] [A12] US3-AS3: `scripts/tests/site-stage.test.sh` passes its missing-arm64-asset case against the committed `site/stage.sh`.
 - [ ] T077 [US3] [A13] US3-AS4: on the x64 Windows CI leg, `scripts/windows-installer.sh --arch x64` produces `micold-ai-ide-<version>-x64-setup.exe`. Record the CI run URL in the cycle log.
 
@@ -353,7 +353,7 @@ description: "Task list for feature 030: Windows installation package"
 
 ### Tests for User Story 4 (write first, observe failing) ⚠️
 
-- [ ] T054 [P] [US4] [A14] [A15] [U56] [U58] [U59] SC-006: create `crates/micold-core/tests/install_guide_windows.rs`, a text scan. It asserts:
+- [X] T054 [P] [US4] [A14] [A15] [U56] [U58] [U59] SC-006: create `crates/micold-core/tests/install_guide_windows.rs`, a text scan. It asserts:
   - `docs/install.md` does not contain `no packaged build for macOS or Windows` or `no packaged build for Windows`, and it links `user-guide/install-windows.md`;
   - `docs/user-guide/install-windows.md` contains the headings `Download`, `Install`, `Upgrading`, `Removing` and `Limits`, and mentions `Smart App Control`, `SmartScreen`, `from source` and `logging out`.
 
@@ -387,7 +387,7 @@ description: "Task list for feature 030: Windows installation package"
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T058 Rebase coordination (research, "Coordination"): if PR #284 merged during this work, rebase onto `main`. Reconcile:
+- [X] T058 Rebase coordination (research, "Coordination"): if PR #284 merged during this work, rebase onto `main`. Reconcile:
   - `release.yml` `publish.needs` and notice steps;
   - `packaging_excludes_showcase.rs`, using 028's shared helpers rather than duplicates;
   - `release_publishes_complete_sets.rs`;
@@ -395,7 +395,7 @@ description: "Task list for feature 030: Windows installation package"
   - `docs/install.md`.
 
   Re-run `mise run test`.
-- [ ] T059 [P] Update `specs/030-windows-installer/contracts/release-artifacts.md` job graph and artifact table if T058 changed any job name. Update `specs/028-macos-package/contracts/release-artifacts.md` with the Windows rows only if 028 is merged (normative single source).
+- [X] T059 [P] Update `specs/030-windows-installer/contracts/release-artifacts.md` job graph and artifact table if T058 changed any job name. Update `specs/028-macos-package/contracts/release-artifacts.md` with the Windows rows only if 028 is merged (normative single source).
 - [ ] T060 [P] Fill "Tests not run on Windows" in `docs/development/windows-packaging.md` with each file T027 left wholly `#![cfg(unix)]` and its `// unix-only:` reason.
 - [ ] T061 Security review of the Phase 2 unsafe code in `endpoint.rs`, `singleton.rs`, `spawn.rs`, `process.rs`, `win_job.rs` and `platform/windows.rs`. Check that every handle is closed via RAII, `LocalFree` runs on every path, there are no panics across FFI, the SDDL is built only from the token SID, and `terminate_daemon` cannot act on a non-`micold-daemon.exe` image. Record the findings in the PR description.
 - [ ] T062 Full gate before the final push: `cargo fmt --check`, `mise run test`, `cargo check --target x86_64-pc-windows-msvc --workspace`, `cargo check --target aarch64-apple-darwin --workspace`, and `scripts/tests/windows-installer.test.sh`. Then confirm all CI jobs are green, including `ci complete`, the Windows `test` leg and `windows-arm64-package`.

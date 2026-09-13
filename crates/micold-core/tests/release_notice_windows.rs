@@ -54,3 +54,36 @@ fn notice_names_arches_smartscreen_steps_and_guide() {
          {missing:?}"
     );
 }
+
+fn release_workflow() -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(".github/workflows/release.yml");
+    fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
+}
+
+/// The `publish` job's lines: from its two-space-indented header to the next job's.
+fn publish_job(workflow: &str) -> String {
+    workflow
+        .lines()
+        .skip_while(|line| *line != "  publish:")
+        .skip(1)
+        .take_while(|line| {
+            !(line.starts_with("  ") && !line.starts_with("   ") && line.trim_end().ends_with(':'))
+        })
+        .filter(|line| !line.trim_start().starts_with('#'))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn publish_appends_the_windows_notice() {
+    // A notice file nothing reads never reaches the release page. Comments are skipped so a step
+    // that only mentions the file does not count.
+    let job = publish_job(&release_workflow());
+    assert!(
+        job.contains("release-notice-windows.md"),
+        "the `publish` job in release.yml must append `.github/release-notice-windows.md` to the \
+         release body (FR-010); it does not reference it"
+    );
+}

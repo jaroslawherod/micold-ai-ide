@@ -385,3 +385,33 @@ failed before the implementation.
 - red: none. It passed on its first run (the link was written in cycle 42).
 - mutant: changing the link to `(user-guide/install-macos.md)` gave `must link the Windows guide as \`(user-guide/install-windows.md)\``. Restored, and cmp confirmed it.
 - commit: uncommitted
+
+## Cycle 44: A10 the release workflow has a Windows job that uploads both setup executables
+
+- test: `crates/micold-core/tests/release_publishes_complete_sets.rs::a_windows_job_uploads_both_setup_executables`
+- red: `scripts/build-lock.sh cargo test --test release_publishes_complete_sets a_windows_job_uploads_both_setup_executables -- --exact` -> `running 1 test` ... `missing ["arch: x64", "runner: windows-latest", "arch: arm64", "runner: windows-11-arm"], upload jobs ["deb", "macos"]`
+- green: `.github/workflows/release.yml` gets the `windows` job after `macos` (T050: x64/windows-latest and arm64/windows-11-arm legs, pinned checkout/toolchain/cache, `windows-installer.sh`, `windows-install-smoke.sh`, `gh release upload`) -> the test passes. The file's other gate, `publish_waits_for_every_job_that_attaches_an_artifact`, now fails with `not in \`publish\`'s \`needs:\`: ["windows"]`, which is U51 firing on the real workflow; cycle 45 closes it.
+- notes: the smoke step calls `scripts/windows-install-smoke.sh`, which T033 has not created yet. The release job cannot succeed until it exists.
+- commit: uncommitted
+
+## Cycle 45: A11 publish waits for the Windows job
+
+- test: `crates/micold-core/tests/release_publishes_complete_sets.rs::publish_waits_for_the_windows_job`
+- red: `... --test release_publishes_complete_sets publish_waits_for_the_windows_job -- --exact` -> `running 1 test` ... `` `publish` must wait for `windows` (FR-014, SC-002); its `needs:` is ["release-please", "deb", "macos", "image-manifest"] ``
+- green: `publish.needs` becomes `[release-please, deb, macos, windows, image-manifest]`; the header comment names the Windows job -> 8 passed.
+- commit: uncommitted
+
+## Cycle 46: U51 every uploading job gates publish
+
+- test: `crates/micold-core/tests/release_publishes_complete_sets.rs::publish_waits_for_every_job_that_attaches_an_artifact` (028's, merged from main)
+- red: observed in cycle 44 on the real workflow, before `windows` joined `needs:`: `these release.yml jobs upload a release asset but are not in \`publish\`'s \`needs:\`: ["windows"]`. Green since cycle 45.
+- notes: the row said "equals `publish.needs` minus `release-please`". 028's rule is inclusion, and deliberately so: `image-manifest` gates `publish` without uploading, and `a_job_that_uploads_nothing_needs_no_entry` pins that. No new test; the existing one serves FR-014 and SC-002 as written.
+- commit: uncommitted
+
+## Cycle 47: U57 publish appends the Windows notice
+
+- test: `crates/micold-core/tests/release_notice_windows.rs::publish_appends_the_windows_notice`
+- red: `... --test release_notice_windows publish_appends_the_windows_notice -- --exact` -> `running 1 test` ... `the \`publish\` job in release.yml must append \`.github/release-notice-windows.md\` to the release body (FR-010); it does not reference it`
+- green: 028's "Add the macOS trust notice" step becomes "Add the macOS and Windows trust notices" and loops over both notice files, one `gh release edit --notes-file` -> 3 passed.
+- commit: uncommitted
+

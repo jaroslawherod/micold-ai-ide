@@ -5,10 +5,17 @@
 ## Job graph
 
 ```text
-release-please ──> deb (amd64)  ─┐
-               ──> deb (arm64)  ─┼──> publish   (gh release edit --draft=false --latest)
-               ──> macos        ─┘
+release-please ──> deb (amd64)      ─┐
+               ──> deb (arm64)      ─┤
+               ──> macos            ─┼──> publish   (gh release edit --draft=false --latest)
+               ──> windows (x64)    ─┤
+               ──> windows (arm64)  ─┤
+               ──> image / manifest ─┘
 ```
+
+The `windows` legs were added by feature 030
+(`specs/030-windows-installer/contracts/release-artifacts.md`), and `image-manifest` by the sandbox
+image work; neither changes the rule below.
 
 `publish` MUST list every artifact-producing job in `needs:`. This single fact is the whole of
 FR-011: GitHub Actions runs a `needs:` job only if all of its dependencies succeeded, and
@@ -16,7 +23,7 @@ release-please creates the release as a **draft**, so:
 
 | Situation | Outcome | Why it is the required one |
 |---|---|---|
-| Every artifact job succeeds | Release published with all three assets | The normal path |
+| Every artifact job succeeds | Release published with every asset | The normal path |
 | The macOS job fails | Release stays an unpublished **draft**; the failed job is red | Nothing incomplete is published; nothing is lost; the version number is not consumed |
 | The macOS job is re-run and succeeds | `publish` runs; release goes out complete | Recovery is a re-run, not a new version (FR-011) |
 
@@ -30,6 +37,8 @@ published release is immutable and cannot be corrected.
 | `micold-ai-ide_<version>_amd64.deb` | `deb (amd64)` | `ubuntu-22.04` |
 | `micold-ai-ide_<version>_arm64.deb` | `deb (arm64)` | `ubuntu-22.04-arm` |
 | `MicoldAIIDE-<version>-universal.dmg` | `macos` | `macos-latest` |
+| `micold-ai-ide-<version>-x64-setup.exe` | `windows (x64)` | `windows-latest` |
+| `micold-ai-ide-<version>-arm64-setup.exe` | `windows (arm64)` | `windows-11-arm` |
 
 Every asset is uploaded to the draft with `gh release upload "$TAG_NAME" <path> --clobber`, so a
 re-run replaces rather than duplicates.

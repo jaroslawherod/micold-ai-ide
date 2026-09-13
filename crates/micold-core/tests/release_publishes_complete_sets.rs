@@ -167,6 +167,53 @@ fn publish_waits_for_every_job_that_attaches_an_artifact() {
 }
 
 // ---------------------------------------------------------------------------
+// The Windows installers (feature 030, FR-014, FR-015).
+// ---------------------------------------------------------------------------
+
+/// The release job that builds and attaches the Windows setup executables.
+const WINDOWS_ID: &str = "windows";
+
+/// One leg per architecture, each on a native runner: Inno Setup has no cross-compiler, and each
+/// package installs only on its own architecture.
+const WINDOWS_LEGS: [&str; 4] = [
+    "arch: x64",
+    "runner: windows-latest",
+    "arch: arm64",
+    "runner: windows-11-arm",
+];
+
+#[test]
+fn a_windows_job_uploads_both_setup_executables() {
+    let source = workflow();
+    let body = jobs(&source)
+        .into_iter()
+        .find(|(id, _)| id == WINDOWS_ID)
+        .map(|(_, body)| body)
+        .unwrap_or_default();
+    let missing: Vec<&str> = WINDOWS_LEGS
+        .into_iter()
+        .filter(|leg| !body.contains(leg))
+        .collect();
+    assert!(
+        missing.is_empty() && artifact_jobs(&source).contains(&WINDOWS_ID.to_string()),
+        "release.yml must have a `{WINDOWS_ID}` job with a matrix of {WINDOWS_LEGS:?} that runs \
+         `{UPLOAD}` (FR-014, FR-015); missing {missing:?}, upload jobs {:?}",
+        artifact_jobs(&source)
+    );
+}
+
+#[test]
+fn publish_waits_for_the_windows_job() {
+    // Named on its own, not only through the general gate: that gate is satisfied by deleting the
+    // job's upload step, and a release without Windows installers would then publish green.
+    let needs = publish_needs(&workflow());
+    assert!(
+        needs.iter().any(|n| n == WINDOWS_ID),
+        "`{PUBLISH_ID}` must wait for `{WINDOWS_ID}` (FR-014, SC-002); its `needs:` is {needs:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // The scan reads the real thing, and can fail.
 // ---------------------------------------------------------------------------
 
