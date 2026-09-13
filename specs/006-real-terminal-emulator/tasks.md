@@ -482,9 +482,10 @@ live in `src/ui/material/terminal_pane.rs`; each is test-first (Red commit, then
 
 ### Visual pass
 
-- [ ] T073 [BUG-004] [BUG-005] [BUG-006] Visual pass on a private Xvfb display (the `visual-pass`
+- [x] T073 [BUG-004] [BUG-005] [BUG-006] Visual pass on a private Xvfb display (the `visual-pass`
   skill): focused vs unfocused terminal in light and dark, plus the copy and paste behaviours where
-  reachable. Record under `evidence/`.
+  reachable. Record under `evidence/`. *(Passed 2026-09-13 — showcase and real app, both schemes, all
+  three paste paths plus the unbracketed complement: `evidence/bugfix-pass-2026-09-13.md`.)*
 
 **Checkpoint**: Copy with nothing selected is a no-op; the focused terminal shows the design system's
 focus outline in both schemes without resizing the process; a multi-line paste into a
