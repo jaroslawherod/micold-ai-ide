@@ -141,7 +141,7 @@ jobs:
           } >>"$GITHUB_OUTPUT"
           echo "publishing $version from $tag, with the prose from $docs, built from $source"
 
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.refs.outputs.source_ref }}
 
@@ -178,10 +178,10 @@ jobs:
             libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev \
             libxcursor-dev libxrandr-dev libxi-dev
 
-      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'
 
@@ -274,7 +274,7 @@ jobs:
       # keeps that photograph, so the next attempt starts from a picture rather than from a guess.
       - name: Keep the failing capture's frames
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: capture-failure
           path: site/build/failed
@@ -291,7 +291,7 @@ jobs:
       # site: download it, unpack it, serve it, and the review is of the real thing rather than of a
       # diff. That is the only way to see a publication before it is one -- the capture needs a
       # display, ffmpeg and a release build, so nothing short of a run produces it.
-      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: site/book
 
@@ -314,5 +314,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
         id: deploy
