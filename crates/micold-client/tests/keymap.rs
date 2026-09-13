@@ -2,7 +2,9 @@
 //! Runs under `cargo test --no-default-features` — no GUI. See
 //! `specs/006-real-terminal-emulator/contracts/key-encoding.md`.
 
-use micold_client::keymap::{encode, Key, KeyInput, KeyOutput, Mods, NamedKey, TermMode};
+use micold_client::keymap::{
+    encode, paste_bytes, Key, KeyInput, KeyOutput, Mods, NamedKey, TermMode,
+};
 
 fn ctrl() -> Mods {
     Mods {
@@ -328,4 +330,47 @@ fn encode_is_total() {
             }
         }
     }
+}
+
+// --- Paste bytes and bracketed paste (FR-013d, BUG-006) ---
+
+const PASTE_START: &[u8] = b"\x1b[200~";
+const PASTE_END: &[u8] = b"\x1b[201~";
+
+fn bracketed(body: &str) -> Vec<u8> {
+    [PASTE_START, body.as_bytes(), PASTE_END].concat()
+}
+
+#[test]
+fn a_paste_without_bracketed_paste_mode_is_the_text_unchanged() {
+    // Not even an embedded marker is touched: a process that never asked for bracketing has no
+    // block for it to close, and the user pasted exactly these bytes.
+    for text in ["echo hi", "echo AAA\necho BBB\n", "a\x1b[201~b", ""] {
+        assert_eq!(paste_bytes(text, false), text.as_bytes());
+    }
+}
+
+#[test]
+fn a_paste_in_bracketed_paste_mode_is_wrapped_in_start_and_end_markers() {
+    assert_eq!(
+        paste_bytes("echo AAA\necho BBB\n", true),
+        bracketed("echo AAA\necho BBB\n"),
+        "a multi-line paste must arrive as one block, not as a sequence of Enters (FR-013d)"
+    );
+}
+
+#[test]
+fn an_end_marker_inside_the_pasted_text_is_removed() {
+    assert_eq!(
+        paste_bytes("safe\x1b[201~rm -rf ~\n", true),
+        bracketed("saferm -rf ~\n"),
+        "an embedded end marker would close the block and run the rest as keystrokes (FR-013d)"
+    );
+}
+
+#[test]
+fn removing_an_end_marker_cannot_assemble_another_one() {
+    // One pass over `ESC[20` `ESC[201~` `1~` leaves an `ESC[201~` behind; the removal has to run
+    // until none is left, or the smuggled marker still closes the block early.
+    assert_eq!(paste_bytes("x\x1b[20\x1b[201~1~y", true), bracketed("xy"));
 }
