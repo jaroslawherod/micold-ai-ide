@@ -1472,7 +1472,8 @@ impl DaemonState {
         }
 
         let size = self.desired_size(id);
-        let session = match plan.mode {
+        let cwd = plan.cwd.clone();
+        let spawned = match plan.mode {
             TerminalMode::AiCli => {
                 let mut spec = LaunchSpec {
                     cwd: plan.cwd.clone(),
@@ -1485,7 +1486,7 @@ impl DaemonState {
                 // mode: it is `claude`'s mechanism, and `copilot` has no `--settings` flag to hand
                 // it to (feature 026, T016a).
                 let activity = self.activity_launch_for(id, &mut spec);
-                PtySession::spawn_ai_cli(id, &spec, plan.scrollback, size, &activity)?
+                PtySession::spawn_ai_cli(id, &spec, plan.scrollback, size, &activity)
             }
             TerminalMode::Regular => PtySession::spawn_shell(
                 id,
@@ -1493,7 +1494,29 @@ impl DaemonState {
                 &self.env_include_vars_for(&plan.cwd),
                 plan.scrollback,
                 size,
-            )?,
+            ),
+        };
+        // A refused spawn is recorded like the refusals above (`010` BUG-001, FR-012). Returned
+        // bare, it left the record in the state it was created in, so the catalog broadcast that
+        // follows every failed start said `starting…` for good. The one refusal a user causes from
+        // outside the application — the session's folder renamed or deleted — gets a sentence that
+        // names it; anything else is passed through, since it is still better read than lost.
+        let session = match spawned {
+            Ok(session) => session,
+            Err(err) => {
+                let reason = if err.kind() == io::ErrorKind::NotFound && !cwd.is_dir() {
+                    format!(
+                        "This session's folder no longer exists: {}. Restore it, or close this \
+                         session.",
+                        cwd.display()
+                    )
+                } else {
+                    format!("Couldn't start this session: {err}")
+                };
+                tracing::warn!(session = %id.0, error = %err, "session spawn refused; not starting");
+                self.lock().start_failures.insert(id, reason.clone());
+                return Err(io::Error::new(err.kind(), reason));
+            }
         };
         // Session-start event with the launch reason (FR-045). No terminal content — id + mode only.
         tracing::info!(session = %id.0, mode = ?plan.mode, ?launch, "session started");
