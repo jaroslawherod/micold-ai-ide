@@ -158,14 +158,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Both architectures from one runner: the toolchain ships the x86_64 Apple target, and
       # cross-compiling it from Apple silicon needs no extra SDK (research R8). The two must match
       # `TARGETS` in scripts/macos-dmg.sh, which is what the merge iterates.
-      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           targets: aarch64-apple-darwin, x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Build the shipped binaries for both architectures
         run: |
           cargo build --release -p micold-client -p micold-daemon \
@@ -349,7 +349,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The first launch of the macOS download is blocked by Gatekeeper, and a user who meets that
       # block without having been told about it reads it as "this download is malware" (SC-001). So
       # the release page itself has to say what will happen, next to the file it will happen to.
