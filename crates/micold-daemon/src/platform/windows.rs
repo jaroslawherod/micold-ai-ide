@@ -56,6 +56,11 @@ impl ProcessTree {
         Self { job: job.ok() }
     }
 
+    /// Nothing to forget: the job is a handle, not a pid, so reaping the child cannot make it name
+    /// anything else — and it goes on holding the child's descendants, which teardown should still
+    /// end.
+    pub fn leader_reaped(&mut self) {}
+
     /// Terminate every process still in the job. Idempotent: terminating an empty job succeeds.
     pub fn terminate(&self) {
         if let Some(job) = &self.job {

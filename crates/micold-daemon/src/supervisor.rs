@@ -57,12 +57,10 @@ pub struct PtySession {
     id: SessionId,
     /// The VT emulator, shared with the reader thread and the framer (plan W3).
     term: SharedTerm,
-    /// The child process. Behind a mutex so liveness checks / kill take `&self`.
-    child: Mutex<Box<dyn Child + Send + Sync>>,
-    /// The child and everything it starts, as the platform reaches them at teardown — a process
-    /// group on Unix, a job object on Windows (FR-036). Adopted at spawn, because a job has to
-    /// exist before the child starts the processes it should contain.
-    tree: crate::platform::ProcessTree,
+    /// The child process and its process tree. Behind a mutex so liveness checks / kill take
+    /// `&self`, and one mutex for both so that reaping the child and forgetting its pid happen
+    /// together — see [`Supervised`].
+    child: Mutex<Supervised>,
     /// The PTY master — used for resize. Behind a `Mutex` only so [`PtySession`] is `Sync` (the
     /// trait object is `Send` but not `Sync`); this lets the session live in the shared daemon
     /// registry. `resize` takes `&self` and the lock is never held across an `.await`.
@@ -110,6 +108,28 @@ fn ensure_cwd_exists(cwd: &std::path::Path) -> io::Result<()> {
             cwd.display()
         ),
     ))
+}
+
+/// A session's child together with the process tree its teardown reaches.
+///
+/// They share a lock because on Unix the tree is reached through the child's pid, and that pid stops
+/// naming the child the moment the child is reaped. Every reap below is followed, under the same
+/// guard, by [`Supervised::reaped`]; every tree teardown happens under it too. A liveness check on
+/// another thread therefore cannot reap between a teardown reading the pid and signalling it.
+struct Supervised {
+    child: Box<dyn Child + Send + Sync>,
+    /// The child and everything it starts, as the platform reaches them at teardown — a process
+    /// group on Unix, a job object on Windows (FR-036). Adopted at spawn, because a job has to
+    /// exist before the child starts the processes it should contain.
+    tree: crate::platform::ProcessTree,
+}
+
+impl Supervised {
+    /// The child has been waited on — or can no longer be, which is treated the same way: a pid
+    /// that cannot be vouched for is not one to signal.
+    fn reaped(&mut self) {
+        self.tree.leader_reaped();
+    }
 }
 
 impl PtySession {
@@ -261,8 +281,7 @@ impl PtySession {
         Ok(Self {
             id,
             term,
-            child: Mutex::new(child),
-            tree,
+            child: Mutex::new(Supervised { child, tree }),
             master: Mutex::new(Some(pair.master)),
             writer,
             signals,
@@ -336,8 +355,9 @@ impl PtySession {
     /// On observing the child gone, caches its exit success bit for [`Self::exit_outcome`].
     pub fn is_alive(&self) -> bool {
         match self.child.lock() {
-            Ok(mut child) => match child.try_wait() {
+            Ok(mut supervised) => match supervised.child.try_wait() {
                 Ok(Some(status)) => {
+                    supervised.reaped();
                     self.cache_exit(ExitOutcome::from_status(&status));
                     false
                 }
@@ -345,6 +365,7 @@ impl PtySession {
                 // A reap error means we can no longer track the child; treat it as gone (a crash,
                 // so supervision can react) rather than pretend it is alive forever.
                 Err(_) => {
+                    supervised.reaped();
                     self.cache_exit(ExitOutcome::crashed("could not be reaped"));
                     false
                 }
@@ -380,7 +401,7 @@ impl PtySession {
 
     /// The child's OS process id, if known.
     pub fn pid(&self) -> Option<u32> {
-        self.child.lock().ok().and_then(|c| c.process_id())
+        self.child.lock().ok().and_then(|s| s.child.process_id())
     }
 
     /// Terminate and reap the child (FR-015a / session close). Terminates the child's whole process
@@ -392,11 +413,16 @@ impl PtySession {
     /// reason the `?` below is sound there; `tests/windows_process_tree.rs` pins both halves — `Ok`,
     /// and the process really gone — so an upgrade that starts propagating it fails a test rather
     /// than every session close.
+    ///
+    /// The tree is terminated under the child's lock, so it cannot be racing a reap that would free
+    /// the pid it signals through. A second `kill()` — the drop after a session close — finds the
+    /// child reaped and signals nothing.
     pub fn kill(&self) -> io::Result<()> {
-        self.tree.terminate();
-        if let Ok(mut child) = self.child.lock() {
-            child.kill()?;
-            let _ = child.wait();
+        if let Ok(mut supervised) = self.child.lock() {
+            supervised.tree.terminate();
+            supervised.child.kill()?;
+            let _ = supervised.child.wait();
+            supervised.reaped();
         }
         Ok(())
     }
@@ -510,6 +536,45 @@ mod tests {
         // Repeated reads never flip the outcome (try_wait only yields the status once).
         assert_eq!(s.exit_outcome(), Some(first.clone()));
         assert_eq!(s.exit_outcome(), Some(ExitOutcome::Clean));
+    }
+
+    /// The pid a teardown would signal the process group of.
+    fn signalled_pid(session: &PtySession) -> Option<u32> {
+        session.child.lock().unwrap().tree.signal_target()
+    }
+
+    /// Teardown reaches a live session's group through the child's own pid — the only handle Unix
+    /// offers, and a sound one while the child is unreaped, because until then the kernel cannot
+    /// give that pid to anything else.
+    #[test]
+    fn a_live_child_is_signalled_through_its_own_pid() {
+        let s = PtySession::spawn(SessionId::new(), sh("sleep 5"), 100, None).unwrap();
+        assert!(s.is_alive());
+        assert_eq!(signalled_pid(&s), s.pid());
+        let _ = s.kill();
+    }
+
+    /// Once a liveness check has reaped the child, its pid belongs to the kernel again and can be
+    /// handed to an unrelated process — which, as a group leader, would have its whole group
+    /// `SIGKILL`ed by the session's later teardown. So nothing may be left to signal.
+    ///
+    /// Reuse itself cannot be provoked here: pids are allocated cyclically up to `pid_max`, and
+    /// forcing a particular one needs `CAP_SYS_ADMIN` in a pid namespace. What this pins is the
+    /// precondition — no pid is retained past the reap — without which reuse is only a matter of load.
+    #[test]
+    fn a_child_reaped_by_a_liveness_check_leaves_no_pid_to_signal() {
+        let s = PtySession::spawn(SessionId::new(), sh("exit 0"), 100, None).unwrap();
+        wait_for_exit(&s);
+        assert_eq!(signalled_pid(&s), None);
+    }
+
+    /// The same after `kill()` reaps it — the common path, because every session close is a
+    /// `kill()` followed by the session's drop, which kills again.
+    #[test]
+    fn a_child_reaped_by_kill_leaves_no_pid_to_signal() {
+        let s = PtySession::spawn(SessionId::new(), sh("sleep 300"), 100, None).unwrap();
+        s.kill().unwrap();
+        assert_eq!(signalled_pid(&s), None);
     }
 
     /// FR-036 / T061: tearing down a session reaps its whole process group, not just the direct

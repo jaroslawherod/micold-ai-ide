@@ -269,6 +269,13 @@ limit → give-up state on next attach (quickstart S4).
 
 - [X] T060 [US4] Implement the restart FSM (retry counter, `MAX_RESTART_ATTEMPTS`, give-up → durable `Failed { reason, attempts }`) in `crates/micold-daemon/src/supervisor.rs`, identical whether or not a client is attached.
 - [X] T061 [US4] Implement per-OS process-tree teardown behind the supervision abstraction — `killpg` on Unix, job object on Windows — in `crates/micold-daemon/src/platform/{unix,windows}.rs` (FR-036); teardown not gated on reader EOF (ConPTY).
+  *Amended 2026-09-13*: the Unix half signalled the group through the child's pid even after the
+  child had been reaped — by a liveness check, or by `kill()` itself before the session's drop kills
+  again. A reaped pid is free for reuse, so that teardown could `SIGKILL` an unrelated process group.
+  The pid is now forgotten at the reap, under the same lock as the child
+  (`supervisor.rs::Supervised`), and a teardown after it signals nothing. Descendants that outlive a
+  child which exited on its own and was reaped are still not signalled on Unix — as before, since
+  `getpgid` on a reaped pid already failed — whereas Windows' job object ends them at teardown.
 - [X] T062 [US4] Surface the `Failed` state (reason + attempt count) in the session list via `SessionSummary` (FR-016a `Ended`).
 - [X] T063 [P] [US4] Document the retry policy and the L5 caveat (counter has no time window) in `docs/daemon.md`.
 
