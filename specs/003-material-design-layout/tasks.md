@@ -17,6 +17,8 @@ description: "Task list for Material Design Layout & Theming"
 
 **Bugfix**: 2026-07-21 — BUG-001 Reopened T020/T021 (the OS-detection boundary and poll collapsed a transient `dark_light::detect()` `Err` into a genuine "no preference", causing a periodic flash to the light theme under CPU load); added T034/T035 for a testable seam and regression test.
 
+**Bugfix**: 2026-09-13 — BUG-002 Updated from bugfix patch: added T036–T039 (Phase 7) for known-projects rows that move their actions beneath an elided name in a narrow window. No task reopened: T015 and T033 ran and found the defect.
+
 **Organization**: Tasks grouped by user story for independent implementation and testing.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -166,6 +168,38 @@ across restarts, and can return to "Follow system".
 - [X] T031a [P] SC-007 audit: grep the restyled `src/ui/*.rs` for literal colors (`Color::`, `rgb`/`#` hex), pixel sizes, and radii; confirm every value comes from `src/tokens.rs` via `src/ui/style.rs` — zero per-widget magic numbers.
 - [X] T032 Verify `cargo test --no-default-features --all-targets` and `cargo build --features gui` pass on Linux, macOS, and Windows (Principle VI) — including a spot check of OS theme detection on each. *(2026-08-20: satisfied by the three-OS CI matrix added in `10a1fe7` (2026-07-20) — `.github/workflows/ci.yml` builds the whole workspace and runs the render-free core suite plus the component gates on ubuntu/macos/windows for every code-affecting change, and has been green on all three since. Latest run: [32302430171](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/32302430171). The full GUI suite and clippy stay Linux-only by design — that is the only runner with the iced system deps.)* The OS theme-detection spot check is not covered by CI and stays with the manual pass in T033.
 - [X] T033 Run the full `quickstart.md` validation (§1–§6) end-to-end. *(Run 2026-08-21 on Linux, headless — `evidence/T015-T033-manual-walkthrough.md`. §1 passes (604 core tests, 0 failures), §2 on Linux only, §3 passes but for FR-016 ([BUG-002](bugs/BUG-002.md)), §4 is partial — a live OS theme change would mean altering the user's own desktop, so the portal-absent FR-018 fallback was tested instead and holds — §5 passes against the shipped cycling `Theme:` overflow item rather than the menu the text describes, §6 passes. macOS/Windows remain unrun.)*
+
+---
+
+## Phase 7: Bugfix — BUG-002
+
+Appended by `/speckit-bugfix-patch`. A narrow window made each known-projects row wrap its name into a
+clipped second line, then drop the name, then strip and overflow the action buttons. See
+`bugs/BUG-002.md`.
+
+**No false completion.** T015 and T033 were closed as *run*, and they did run: finding this defect
+was the point. What they found is fixed here, and the walkthrough row is re-run in T039.
+
+**Tests first (Constitution Principle I).** The layout gates resolve only the default window, which is
+why nothing caught this, so the test paints the shell at narrow widths itself.
+
+- [X] T036 [US1] Failing test first, in `crates/micold-client/tests/known_projects_reflow.rs`: paint the shell at 640dp (the minimum window, no project open) and 440dp (the main area beside a minimum-width sidebar) with a long name, a short one and an unavailable one. Every name is painted whole on one line or elided with `…` and never dropped, and every action label is painted once per row and unclipped. Confirm both tests fail before T037 (FR-016, FR-012)
+- [X] T037 [US1] Add `cdk::reflow::Reflow` in `crates/micold-client/src/ui/cdk/reflow.rs`, a layout-only two-child widget that sets the trailing child beside the leading one while the leading one keeps `lead_min` and on the line beneath it otherwise, with unit tests for both layouts and the exact breakpoint. Register it in `cdk/mod.rs`, and give it a `showcase_completeness` exemption in `showcase/catalogue.rs`, since it has no appearance to pose (FR-016)
+- [X] T038 [US1] Rebuild the known-projects row in `crates/micold-client/src/ui/shell.rs` as `Reflow::new(lead, actions).lead_min(ROW_LEAD_MIN)` (240dp): the name an `Ellipsized` label, the actions a wrapping row. Regenerate `tests/fixtures/layout_snapshot.txt` with `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot` and confirm the diff is confined to the known-projects rows, making T036 pass (FR-016, FR-012)
+- [ ] T039 [US1] Re-run `quickstart.md` §3's "Resize small" step with the visual-pass skill: a narrow window with a long project name, before and after the fix, recorded under `evidence/` (FR-016)
+
+  > **Red, 2026-09-13**: at 640dp the long name wrapped into 163dp of a 421dp line; at 440dp the name
+  > was not painted at all and one row lost Forget.
+  >
+  > **Pass, 2026-09-13**, after T038: `known_projects_reflow` 2/2, the `Reflow` unit tests 4/4, and
+  > `cdk_no_appearance`, `material_boundary`, `material_builder_api`, `showcase_completeness`,
+  > `showcase_captions`, `layout_snapshot`, `layout_text_overflow`, `layout_coverage_registry`,
+  > `layout_apparatus`, `layout_record_format` and `layout_snapshot_regeneration` all pass;
+  > `cargo clippy -p micold-client --all-targets -- -D warnings` is clean. The regenerated snapshot
+  > changes only the known-projects rows, in 17 hunks. At 1280×800 each row still shares one line.
+  > Every button keeps its box, and the name keeps its x and width. The name's height goes from 20.0
+  > to 18.2, the one-line height of `Ellipsized`, so its centred box moves 0.9dp down. Each row gains
+  > two container boxes: the identity half and the action cluster.
 
 ---
 
