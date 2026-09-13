@@ -225,6 +225,24 @@ jobs:
 
           echo "The bundled application did not start, and not for want of a drawing surface."
           exit 1
+      # Feature 030 (FR-018, SC-007): the x64 packaging gate, the Windows counterpart of the step
+      # above. The setup .exe is built by the same script the release uses, then installed per user,
+      # launched, and checked for the daemon's pipe and for any console window -- the smoke script
+      # states each assertion. ARM64 is its own job, `windows-arm64-package`, because the matrix has
+      # no ARM64 Windows leg. The setup executables are kept a week for the manual quickstart (M1-M6).
+      - name: Package, install and launch the Windows installer
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          scripts/windows-installer.sh --arch x64 --out-dir dist
+          scripts/windows-install-smoke.sh dist/micold-ai-ide-*-x64-setup.exe
+      - name: Keep the Windows setup executable
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-setup-x64
+          path: dist/*.exe
+          retention-days: 7
       # Feature 020's gates, the 017 gates it widened, BUG-001's, feature 021's architecture guards,
       # and feature 027's two client-side §A gates. These read source text, one `const` slice and a
       # reducer — they open no window — so they run wherever the crate compiles, and this step is the authoritative list of them. Path
@@ -293,6 +311,34 @@ jobs:
       - name: Test (full workspace)
         if: runner.os == 'Linux'
         run: cargo test --workspace
+
+  # Feature 030 (FR-015, FR-018): each setup .exe installs only on its own architecture, so ARM64 is
+  # packaged and smoke-tested natively, on the runner the release uses for it. The `test` matrix has
+  # no ARM64 Windows leg, hence a job of its own; it is gated by `ci-complete` like every other.
+  windows-arm64-package:
+    name: package + smoke (windows-11-arm)
+    needs: classify
+    if: needs.classify.outputs.docs_only != 'true'
+    runs-on: windows-11-arm
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          targets: aarch64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Build the setup executable
+        run: scripts/windows-installer.sh --arch arm64 --out-dir dist
+      - name: Install and launch it
+        run: scripts/windows-install-smoke.sh dist/micold-ai-ide-*-arm64-setup.exe
+      - name: Keep the setup executable
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-setup-arm64
+          path: dist/*.exe
+          retention-days: 7
 
   # Feature 027. The sandbox adapter layer is tested on all three platforms by the `test` job
   # above, against an injected fake runner with nothing installed -- that is what keeps Principle
@@ -544,7 +590,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, test, sandbox-runtime, assertions, docs]
+    needs: [classify, lint, test, windows-arm64-package, sandbox-runtime, assertions, docs]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -557,6 +603,7 @@ jobs:
           CLASSIFY: ${{ needs.classify.result }}
           LINT: ${{ needs.lint.result }}
           TEST: ${{ needs.test.result }}
+          WINARM: ${{ needs.windows-arm64-package.result }}
           SANDBOX: ${{ needs.sandbox-runtime.result }}
           DOCS: ${{ needs.docs.result }}
           ASSERTIONS: ${{ needs.assertions.result }}
@@ -573,6 +620,7 @@ jobs:
           check classify "$CLASSIFY"
           check lint "$LINT"
           check test "$TEST"
+          check windows-arm64 "$WINARM"
           check sandbox "$SANDBOX"
           check docs "$DOCS"
           check assertions "$ASSERTIONS"
@@ -584,6 +632,7 @@ jobs:
             echo "| classify | \`$CLASSIFY\` | yes |"
             echo "| lint | \`$LINT\` | yes |"
             echo "| test | \`$TEST\` | yes |"
+            echo "| windows-arm64-package | \`$WINARM\` | yes |"
             echo "| sandbox-runtime | \`$SANDBOX\` | yes |"
             echo "| docs | \`$DOCS\` | yes |"
             echo "| assertions | \`$ASSERTIONS\` | yes |"

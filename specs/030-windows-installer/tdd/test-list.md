@@ -168,6 +168,13 @@ These tests already exist and pass on Unix. On Windows they are compiled out tod
 | U47 | When no `iscc` is found, the error names the Inno Setup download URL | FR-016 | example | any | DONE | `scripts/tests/windows-installer.test.sh` "names the Inno Setup download when no iscc is found" |
 | U48 | cargo is invoked as `build --release --locked -p micold-client --bin micold-ai-ide -p micold-daemon --target <triple>` | FR-002, FR-016 | example | any | DONE | `scripts/tests/windows-installer.test.sh` "builds the app and the daemon for <triple>" |
 
+### `scripts/windows-install-smoke.sh`, tested by `scripts/tests/windows-install-smoke.test.sh`
+
+| id  | behavior | traces | kind | where | state | test |
+| --- | --- | --- | --- | --- | --- | --- |
+| U62 | On a non-Windows `uname`, the smoke exits 1 with `the Windows installer is smoke-tested on Windows`, before touching anything | FR-018 | example | any | DONE | `scripts/tests/windows-install-smoke.test.sh` "refuses to run off Windows" (added in cycle 48 from T033: the smoke installs a real exe) |
+| U63 | Anything but exactly one existing setup executable exits 2: none or two give the usage line, and a path that does not exist (an unmatched `dist/*-setup.exe` glob) names it | FR-018 | example | any | DONE | `scripts/tests/windows-install-smoke.test.sh` "refuses to run without a setup executable", "refuses more than one setup executable", "names a setup executable that does not exist" (added in cycle 49) |
+
 ### `.github/workflows/ci.yml`
 
 | id  | behavior | traces | kind | where | state | test |

@@ -415,3 +415,27 @@ failed before the implementation.
 - green: 028's "Add the macOS trust notice" step becomes "Add the macOS and Windows trust notices" and loops over both notice files, one `gh release edit --notes-file` -> 3 passed.
 - commit: uncommitted
 
+
+## Cycle 48: U62 the smoke refuses a non-Windows host
+
+- test: `scripts/tests/windows-install-smoke.test.sh` "refuses to run off Windows"
+- red: `scripts/tests/windows-install-smoke.test.sh` against an empty, executable `scripts/windows-install-smoke.sh` -> `FAIL  refuses to run off Windows` / `want exit 1, got 0`
+- green: the `uname -s` case (MINGW*/MSYS*/CYGWIN*, else exit 1) -> 1 case, 0 failures.
+- notes: U62 and U63 were added to the list here. T033 describes only the Windows-side assertions, but the script's host and argument decisions run on any host, so they are pinned locally like `windows-installer.sh`'s U43/U44.
+- commit: uncommitted
+
+## Cycle 49: U63 the smoke refuses a bad argument
+
+- test: `scripts/tests/windows-install-smoke.test.sh` "refuses to run without a setup executable", "refuses more than one setup executable", "names a setup executable that does not exist"
+- red: `scripts/tests/windows-install-smoke.test.sh` -> 3 failures, each `want exit 2, got 0`
+- green: the `$# -ne 1` usage check and the `[ ! -f "$exe" ]` check -> 4 cases, 0 failures.
+- notes: the Windows-side body (T033 steps 1-8, behaviors A1-A4) was written after this, as assertions only, and has not run: it can only go red or green on a Windows runner (T040). Deviations from T033's text, each forced by Git Bash: the SID comes from `WindowsIdentity::GetCurrent()` rather than `whoami /user /fo csv /nh`, and the `DisplayVersion` from `Get-ItemProperty` rather than `reg query`, because MSYS2 rewrites `/switch` arguments into paths. The client is launched with `Start-Process -PassThru` without redirection, because redirecting a console-subsystem child hands it PowerShell's console and would make the conhost assertion vacuous. That also removes stderr, so there is no graphics-surface exemption: every client exit fails, which is stricter than T033.
+- commit: uncommitted
+
+## Cycle 50: U50 the ARM64 packaging job is gated
+
+- test: `crates/micold-core/tests/ci_gate_covers_every_job.rs::every_job_is_covered_by_the_gate`
+- red: after adding the `windows-arm64-package` job (T039), `scripts/build-lock.sh cargo test -p micold-core --test ci_gate_covers_every_job every_job_is_covered_by_the_gate -- --exact` -> `running 1 test` ... `these ci.yml jobs are not in \`ci-complete\`'s \`needs:\` ... ["windows-arm64-package"]`
+- green: `ci-complete.needs` gains `windows-arm64-package`, with `WINARM`, `check windows-arm64 "$WINARM"` and a summary row -> 3 passed.
+- notes: T038's x64 step in `test` and T039's job both exist, but T033/T038/T039 carry A1-A4, which stay PENDING until T040 observes the Windows legs.
+- commit: uncommitted
