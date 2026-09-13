@@ -4,7 +4,13 @@
 
 **Created**: 2026-08-25
 
-**Status**: Draft
+**Status**: Closed 2026-09-13 — implemented and shipped in PR #228 (merged 2026-08-27; its
+description still says "Specification only", but the merge includes the code); all 57 tasks in
+[tasks.md](./tasks.md) are done. T056's run of the six behaviour-preservation scenarios in
+quickstart §C.4 passed 2026-08-27 ([visual-pass.md](./visual-pass.md)). Scenario 4 passed only after
+its premise was corrected: a terminal selection did not survive a switch before this feature either.
+Not covered: frames in the middle of an animation, and a side-by-side comparison with a running
+`main` build.
 
 **Input**: User description: "Finish the component migration that feature 021 started but left opt-in. Two maintainer pains remain: (1) a single flat 119-variant `Message` enum in `app.rs` plus a long `State::update`, so changing one widget ripples into `app.rs` and `main.rs` routing; (2) no local state — everything a feature touches lives in the root `State` struct and is plumbed down through views and back up as messages. Give every remaining feature module its own message vocabulary and reducer; promote features whose state is nobody else's business to stateful widgets that own it; make both mandatory with guard tests so the pattern cannot be opted out of the way 021's was."
 

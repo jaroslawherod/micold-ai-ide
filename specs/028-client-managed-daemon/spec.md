@@ -4,7 +4,12 @@
 
 **Created**: 2026-08-27
 
-**Status**: Draft
+**Status**: Closed 2026-09-13 — implemented and shipped in PR #272 (merged 2026-09-12); all 68 tasks
+in [tasks.md](./tasks.md) are done. Quickstart Part B ran 2026-09-12 against a matched client/daemon
+pair, with real thirty-minute idle windows: B1, B2, B4, B5 and B6 pass
+([evidence/quickstart-b.md](./evidence/quickstart-b.md)). Three scenarios are **not run**, not
+passed: B3 (suspend) needs the machine to sleep, and B7/B8 (upgrading a real package, and a clean
+install registering nothing) need a fresh VM with a root install.
 
 **Input**: User description: "the micold-daemon should not longer be system service but instead should be started by client. Started once should survive the restarts of clients. After being idle for 30 min (no client connected ), should be stopped automatically that should work for direct and containerized/sandboxed"
 

@@ -4,7 +4,13 @@
 
 **Created**: 2026-08-31
 
-**Status**: Draft — clarified 2026-08-31 (7 questions across two passes, see [Clarifications](#clarifications)); ready for `/speckit-plan`.
+**Status**: Closed 2026-09-13 — implemented and shipped in PR #282 (merged 2026-09-12); all 79 tasks
+in [tasks.md](./tasks.md) are done. Clarified 2026-08-31 (7 questions across two passes, see
+[Clarifications](#clarifications)). The quickstart Part 2 and Part 3 pass ran 2026-09-12
+([visual-pass.md](./visual-pass.md)) and passed. It also found and fixed an FR-011 defect, where a
+failed store read used up the one-time migration; Part 3 step 6 was run again against the fix.
+Part 2 was not run again after the fix, because the fix touches no path Part 2 reaches. Checked on
+Linux in the light scheme only; cross-platform parity rests on CI (T078).
 
 **Input**: User description: "Extend feature 014 (hide-agent-worktrees) so worktree classification stops guessing from names. 014 marks a worktree Agent-owned only when its directory is `agent-<16+ hex>` or its branch is `worktree-agent-<16+ hex>`. That catches Claude Code's subagent-isolation worktrees and nothing else. Claude Code also creates *session* worktrees — `claude --worktree <name>` and the in-session EnterWorktree tool — under the same `.claude/worktrees/` root, named by whoever typed the name. Those are indistinguishable from a worktree the user made in the app, so they still land in the sidebar, the project switcher and the tag filters: exactly the pollution 014 set out to remove. […] So invert the rule. The app already creates every user worktree itself, so record that at creation and let provenance be known-user vs not-known-user instead of inferring agent-ness from a name pattern."
 
