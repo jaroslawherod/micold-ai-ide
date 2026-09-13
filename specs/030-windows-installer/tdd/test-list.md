@@ -28,10 +28,10 @@ The entry points are:
 
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
-| A1  | A silent per-user install of the setup exe exits 0. It leaves `micold-ai-ide.exe` and `micold-daemon.exe` in `%LOCALAPPDATA%\Programs\Micold AI IDE\` and a Start menu `Micold AI IDE.lnk`. | US1-AS1, FR-002, FR-003, FR-004, I1, I7 | example | win | PENDING | |
+| A1  | A silent per-user install of the setup exe exits 0. It leaves `micold-ai-ide.exe` and `micold-daemon.exe` in `%LOCALAPPDATA%\Programs\Micold AI IDE\` and a Start menu `Micold AI IDE.lnk`. | US1-AS1, FR-002, FR-003, FR-004, I1, I7 | example | win | DONE | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
 | A2  | The installed client, launched detached, has no `conhost.exe` child | US1-AS2, FR-005, SC-005 | example | win | PENDING | |
-| A3  | Launching the installed client makes `\\.\pipe\Micold.Daemon.<SID>` appear within 20 s, and the daemon has no `conhost.exe` child | US1-AS3, FR-005, FR-020, I2 | example | win | PENDING | |
-| A4  | The HKCU uninstall key's `DisplayVersion` equals the workspace version | US1-AS4, FR-006, FR-013 | example | win | PENDING | |
+| A3  | Launching the installed client makes `\\.\pipe\Micold.Daemon.<SID>` appear within 20 s, and the daemon has no `conhost.exe` child | US1-AS3, FR-005, FR-020, I2 | example | win | RED | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
+| A4  | The HKCU uninstall key's `DisplayVersion` equals the workspace version | US1-AS4, FR-006, FR-013 | example | win | DONE | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
 | A5  | The committed `packaging/windows/micold-ai-ide.iss` passes `windows_violations`: its `[Files]` ship exactly the two exes | US1-AS5, FR-012 | example | any | DONE | `crates/micold-client/tests/packaging_excludes_showcase.rs::the_windows_installer_contains_no_showcase` |
 | A6  | Re-running the installer over a running install exits 0 and leaves exactly one `{1B19A6AC-…}_is1` uninstall key | US2-AS1, FR-008, I4 | example | win | PENDING | |
 | A7  | A silent uninstall removes the install dir, `.lnk`, uninstall key and `%LOCALAPPDATA%\micold-ai-ide\run` | US2-AS2, FR-006, SC-003, I5 | example | win | PENDING | |
@@ -40,7 +40,7 @@ The entry points are:
 | A10 | `release.yml` has a `windows` job whose matrix covers `x64`/`windows-latest` and `arm64`/`windows-11-arm`, and it runs `gh release upload` | US3-AS1, FR-014, FR-015 | example | any | DONE | `crates/micold-core/tests/release_publishes_complete_sets.rs::a_windows_job_uploads_both_setup_executables` |
 | A11 | `release.yml` `publish.needs` contains `windows` | US3-AS2, FR-014, SC-002 | example | any | DONE | `crates/micold-core/tests/release_publishes_complete_sets.rs::publish_waits_for_the_windows_job` |
 | A12 | `site/stage.sh` fails and names the asset when `install-windows.md` links a setup exe missing from `MICOLD_RELEASE_ASSETS` | US3-AS3, FR-017 | example | any | DONE | `scripts/tests/site-stage.test.sh`, "a Windows guide linking a setup exe the release lacks fails the stage" + "the failure names the missing setup exe" |
-| A13 | On the x64 Windows CI leg, `scripts/windows-installer.sh --arch x64` produces `micold-ai-ide-<version>-x64-setup.exe` | US3-AS4, FR-016, FR-018, SC-007 | example | win | PENDING | |
+| A13 | On the x64 Windows CI leg, `scripts/windows-installer.sh --arch x64` produces `micold-ai-ide-<version>-x64-setup.exe` | US3-AS4, FR-016, FR-018, SC-007 | example | win | DONE | `.github/workflows/ci.yml` job `test` step "Package, install and launch the Windows installer" |
 | A14 | `docs/install.md` no longer says there is no packaged build for Windows | US4-AS1, FR-017, SC-006 | example | any | DONE | `crates/micold-core/tests/install_guide_windows.rs::install_page_no_longer_says_windows_has_no_package` |
 | A15 | `docs/user-guide/install-windows.md` states that sessions do not survive logging out unless the service runs in a container | US4-AS2, FR-017 | example | any | DONE | `crates/micold-core/tests/install_guide_windows.rs::windows_guide_limits_say_sessions_end_at_logout` |
 

@@ -238,10 +238,10 @@ description: "Task list for feature 030: Windows installation package"
 
 ### Outer loop for User Story 1 (acceptance tests green before the story is complete)
 
-- [ ] T065 [US1] [A1] US1-AS1: in the CI smoke run from T038/T039, the silent per-user install exits 0 and leaves both exes plus the Start menu `.lnk`. Record the CI run URL in `specs/030-windows-installer/tdd/cycle-log.md`.
+- [X] T065 [US1] [A1] US1-AS1: in the CI smoke run from T038/T039, the silent per-user install exits 0 and leaves both exes plus the Start menu `.lnk`. Record the CI run URL in `specs/030-windows-installer/tdd/cycle-log.md`.
 - [ ] T066 [US1] [A2] US1-AS2: in the same smoke run, the installed client has no `conhost.exe` child.
 - [ ] T067 [US1] [A3] US1-AS3: in the same smoke run, the daemon pipe appears within 20 s and the daemon has no `conhost.exe` child.
-- [ ] T068 [US1] [A4] US1-AS4: in the same smoke run, the uninstall key's `DisplayVersion` equals the workspace version.
+- [X] T068 [US1] [A4] US1-AS4: in the same smoke run, the uninstall key's `DisplayVersion` equals the workspace version.
 - [ ] T069 [US1] [A5] US1-AS5: the real-file case of `windows_violations` in `crates/micold-client/tests/packaging_excludes_showcase.rs` passes on the committed `packaging/windows/micold-ai-ide.iss`.
 
 **Checkpoint**: a CI-built setup `.exe` installs and launches on x64 and ARM64 with no console, and the daemon pipe appears. US1 can be demonstrated on its own from the CI artifact.
@@ -339,7 +339,7 @@ description: "Task list for feature 030: Windows installation package"
 - [X] T074 [US3] [A10] US3-AS1: `crates/micold-core/tests/release_publishes_complete_sets.rs` passes on the committed `.github/workflows/release.yml`: a `windows` job with the x64 and arm64 matrix runs `gh release upload`.
 - [X] T075 [US3] [A11] US3-AS2: the same test passes its `publish.needs` contains `windows` case.
 - [X] T076 [US3] [A12] US3-AS3: `scripts/tests/site-stage.test.sh` passes its missing-arm64-asset case against the committed `site/stage.sh`.
-- [ ] T077 [US3] [A13] US3-AS4: on the x64 Windows CI leg, `scripts/windows-installer.sh --arch x64` produces `micold-ai-ide-<version>-x64-setup.exe`. Record the CI run URL in the cycle log.
+- [X] T077 [US3] [A13] US3-AS4: on the x64 Windows CI leg, `scripts/windows-installer.sh --arch x64` produces `micold-ai-ide-<version>-x64-setup.exe`. Record the CI run URL in the cycle log.
 
 **Checkpoint**: the release workflow structurally cannot publish without both Windows assets. The notice and site links are verified by tests.
 

@@ -485,3 +485,11 @@ failed before the implementation.
 - green: `--bin micold-daemon` added to the script's cargo invocation -> 15 cases, 0 failures; every shell suite passes, also under `CARGO_TARGET_DIR=target`.
 - notes: a test change, not a weakening. cargo applies a `--bin` filter to every selected package, so `-p micold-daemon` without its own `--bin` built no exe; `.claude/skills/visual-pass/SKILL.md` already records this. U48, the contract and T025's command are corrected to match.
 - commit: see the follow-up commit
+
+## Cycle 57: the Windows install smoke runs on CI; A3 is red on the endpoint stub
+
+- test: `scripts/windows-install-smoke.sh`, run by `.github/workflows/ci.yml` on `build + test (windows-latest)` and `package + smoke (windows-11-arm)` (A1, A2, A3, A4, A13)
+- red: PR #314's fifth CI run (3138b577), both legs, at step 6: x64 `windows-install-smoke.sh: FAIL: \\.\pipe\Micold.Daemon.S-1-5-21-3699639565-2515463329-295617607-500 did not appear within 20s (I2)`; arm64 `windows-install-smoke.sh: FAIL: \\.\pipe\Micold.Daemon.S-1-5-21-2750905264-1129093905-494693804-500 did not appear within 20s (I2)`. A3 is `RED`.
+- green: steps 1-5 passed on both legs, so A1, A4 and A13 are `DONE`: x64 `Built: /d/a/micold-ai-ide/micold-ai-ide/dist/micold-ai-ide-0.14.0-x64-setup.exe` (A13); the Inno log's `Installation process succeeded.`, both exes and `Micold AI IDE.lnk` created, `installed 0.14.0 to /c/Users/runneradmin/AppData/Local/Programs/Micold AI IDE` (A1, A4); `== launched the client, pid 3696` (x64) and `pid 4164` (arm64).
+- notes: the red is the one planned for. `crates/micold-core/src/endpoint.rs`'s Windows `resolve()` is still a stub, so the client cannot reach the daemon (T016-T021). A2 is not reached: the conhost check is step 7, after the pipe. T033/T038/T039/T040 stay open until A2 and A3 are green. No code change in this cycle.
+- commit: see the follow-up commit
