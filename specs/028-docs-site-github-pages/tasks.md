@@ -377,3 +377,8 @@ links, guide captures), one on US4 (checks and workflows). US3 joins once `stage
   so the window showed "No worktrees yet" where `media.toml`'s alt text promised a worktree sidebar
   (`demo-project.sh` now creates three, named the way `naming.rs` derives them).
 
+## Phase 8: Convergence
+
+- [ ] T084 [US4] Break a check deliberately on a `workflow_dispatch` run of `.github/workflows/pages.yml` and confirm the run fails while the previously published site stays reachable, completing the second half of T064 (quickstart A9) per FR-018, FR-017, FR-020a (missing)
+- [ ] T085 Run [quickstart.md](./quickstart.md) Part B (B1-B5) against <https://jaroslawherod.github.io/micold-ai-ide/> and write the judgement halves of SC-001 and SC-006 into a pass record at `specs/028-docs-site-github-pages/evidence/quickstart-b.md`, matching the evidence convention of `specs/027-sandboxed-daemon-runtime/` and `specs/028-client-managed-daemon/`, so T082's "pass record" names an actual file per FR-023a (missing)
+- [ ] T086 Narrow the "Deferred — needs the upstream repository" section of this file to the tasks still genuinely open — T036 and T063 are now `- [X]` and merged, so the section contradicts the checkboxes above it (contradicts)
