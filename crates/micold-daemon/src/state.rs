@@ -1206,6 +1206,14 @@ impl DaemonState {
             .add_project(path, &micold_core::fs_scan::StdFolderScanner::new())
     }
 
+    /// Record a known project as the active one (002 BUG-003). `Ok(false)` when the path is not a
+    /// known project or its folder is unavailable; nothing is persisted then.
+    pub fn activate_project(&self, path: &Path) -> io::Result<bool> {
+        self.lock()
+            .catalog
+            .activate_project(path, &micold_core::fs_scan::StdFolderScanner::new())
+    }
+
     /// Forget a known project, dropping its discovery cache and returning its live primaries so the
     /// caller can `kill()` them outside the lock (T053, feature 014). A no-op for an unknown path.
     pub fn forget_project(&self, path: &Path) -> io::Result<Vec<Arc<PtySession>>> {
