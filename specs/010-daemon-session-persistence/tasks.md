@@ -276,6 +276,15 @@ limit → give-up state on next attach (quickstart S4).
   (`supervisor.rs::Supervised`), and a teardown after it signals nothing. Descendants that outlive a
   child which exited on its own and was reaped are still not signalled on Unix — as before, since
   `getpgid` on a reaped pid already failed — whereas Windows' job object ends them at teardown.
+  *Amended 2026-09-13 (again)*: that gap is closed. A liveness check now observes the exit with
+  `waitid(…, WNOWAIT)` and leaves the child a zombie, which keeps its pid — and so its group —
+  unreusable until teardown signals the group and reaps (`platform/unix.rs::ProcessTree::exit_status`).
+  The group is signalled by pid rather than through `getpgid`, which macOS does not answer for a
+  zombie. Only descendants that ignore `SIGHUP` were ever affected: the leader's exit hangs up its
+  terminal and the kernel sends `SIGHUP` to the whole group. The same change stops a second `kill()`
+  reaching `portable-pty`'s Unix `Child::kill`, which sends `SIGHUP` to the pid without checking it
+  was already reaped. An exited shell instance kept on screen (`012` FR-008) now holds one zombie
+  until it is closed.
 - [X] T062 [US4] Surface the `Failed` state (reason + attempt count) in the session list via `SessionSummary` (FR-016a `Ended`).
 - [X] T063 [P] [US4] Document the retry policy and the L5 caveat (counter has no time window) in `docs/daemon.md`.
 
