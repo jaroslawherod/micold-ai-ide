@@ -255,17 +255,21 @@ fn recovery_fills_pending_labels_from_the_clis_own_records_and_nothing_else() {
         let project = project_for("already-named");
         let cwd = SessionLocation::Default.cwd(&project);
         let named = Uuid::from_u128(0xC1);
+        let never_talked_to = Uuid::from_u128(0xC2);
         stores.claude_conversation(&cwd, named, "A newer name in the transcript");
 
         let data_dir = tempfile::tempdir().unwrap();
         let state = state_with(
             data_dir.path(),
             &project,
-            vec![session(
-                named,
-                SessionLabel::Named("The name already recorded".into()),
-                AiCli::ClaudeCode,
-            )],
+            vec![
+                session(
+                    named,
+                    SessionLabel::Named("The name already recorded".into()),
+                    AiCli::ClaudeCode,
+                ),
+                session(never_talked_to, SessionLabel::Pending, AiCli::ClaudeCode),
+            ],
         );
 
         assert_eq!(
@@ -288,6 +292,22 @@ fn recovery_fills_pending_labels_from_the_clis_own_records_and_nothing_else() {
             SessionLabel::Named("The name already recorded".into()),
             "FR-008: a `None` read is a no-op, not a clear — there is no Named → Pending \
              transition anywhere in this feature"
+        );
+
+        // The empty-session prune runs on every attach and archives what has no conversation on
+        // disk. A named session had one — losing the transcript must not take its row, and its
+        // name with it, off the list (Edge Case 1, research R5). The never-talked-to sibling is
+        // still tidied away: that rule is unchanged.
+        let pruned = state.prune_empty_sessions(&project).unwrap();
+        assert_eq!(
+            pruned,
+            vec![SessionId::from_uuid(never_talked_to)],
+            "only the session that never had a conversation is pruned"
+        );
+        assert_eq!(
+            label_of(&state, &project, named),
+            SessionLabel::Named("The name already recorded".into()),
+            "FR-008: the named session is still listed, under its name, after the prune"
         );
     }
 
