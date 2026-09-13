@@ -246,3 +246,114 @@ fn both_dialects_preserve_the_same_guarantees() {
         assert!(!args.iter().any(|a| a == "--rm"), "{kind}");
     }
 }
+
+/// The repository root, for the two assertions below that are about *where the code is* rather than
+/// about what a function returns.
+fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .expect("canonicalize repository root")
+}
+
+/// T049, FR-018, lifecycle contract 5.16: the idle rule is the *same code* on both placements.
+///
+/// Stated as the absence of a branch rather than as two measurements, because that is the claim.
+/// Two placements that each pass their own timing test still fail 5.16 if they got there down
+/// different paths — the guarantee is that there is only one path, and the only way to check that
+/// is to look at whether the code that decides ever asks where it is running.
+///
+/// The daemon's idle module holds `Presence` (the count), `IdleWindow` (the window read against a
+/// clock) and `StopReason` (what the ordered shutdown reports). If none of them branches on the
+/// placement, all four of the things 5.16 names are shared by construction.
+#[test]
+fn the_idle_rule_never_asks_which_placement_it_is_running_in() {
+    let idle = std::fs::read_to_string(repo_root().join("crates/micold-daemon/src/idle.rs"))
+        .expect("read the daemon's idle module");
+
+    // Comments stripped first, and the distinction is the point rather than an implementation
+    // convenience: this module *should* talk about the sandbox in its prose — the exception at
+    // 5.18 is exactly the kind of thing a reader needs told. What it may not do is act on it. A
+    // guard that could not tell an explanation from a branch would push the explanation out of the
+    // code to stay green, which is the opposite of what it is for.
+    let code: String = idle
+        .lines()
+        .map(|line| line.split("//").next().unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // A placement is visible to this code in exactly four ways, and none of them may be consulted:
+    // the target it was compiled for, a conditional on any of it, whether it was given a TCP
+    // address (the sandbox's control port) instead of a socket path, and the sandbox module.
+    for tell in ["cfg!(", "target_os", "tcp_listen_addr", "sandbox"] {
+        assert!(
+            !code.contains(tell),
+            "the idle rule's code mentions `{tell}`: it has learned where it is running, and \
+             the two placements have stopped being the same rule (FR-018)"
+        );
+    }
+}
+
+/// The one difference that *is* allowed, and its shape.
+///
+/// Lifecycle contract 5.18 carves out a single exception to 5.16 — while the keep-it-running opt-in
+/// is on, the sandbox is not idle-stopped — and this pins it to one `-e` chosen by that opt-in.
+/// Anything else would be a second difference, which 5.16 does not permit however reasonable it
+/// looked at the time.
+#[test]
+fn the_only_idle_difference_between_placements_is_the_one_the_user_asked_for() {
+    let off = SandboxProfile::default();
+    let on = SandboxProfile {
+        survive_logout: true,
+        ..SandboxProfile::default()
+    };
+
+    let without = argv_strings(&spec(&off));
+    let with = argv_strings(&spec(&on));
+
+    let idle_args = |args: &[String]| -> Vec<String> {
+        args.iter()
+            .filter(|a| a.starts_with(micold_core::spawn::IDLE_STOP_ENV))
+            .cloned()
+            .collect()
+    };
+    assert!(
+        idle_args(&without).is_empty(),
+        "the default sandbox is told something about the idle rule: {without:?}"
+    );
+    assert_eq!(
+        idle_args(&with),
+        vec![format!(
+            "{}={}",
+            micold_core::spawn::IDLE_STOP_ENV,
+            micold_core::spawn::IDLE_STOP_OFF
+        )],
+        "the opt-in must switch the rule off with exactly one argument"
+    );
+
+    // And nothing else moved. The restart policy is the opt-in's other half and is expected to
+    // differ; every remaining argument must be identical, or the sandbox the user opted into is a
+    // different sandbox rather than the same one kept running.
+    let strip = |args: &[String]| -> Vec<String> {
+        let mut out = Vec::new();
+        let mut i = 0;
+        while i < args.len() {
+            if args[i] == "--restart" {
+                i += 2;
+                continue;
+            }
+            if args[i] == "-e"
+                && args
+                    .get(i + 1)
+                    .is_some_and(|v| v.starts_with(micold_core::spawn::IDLE_STOP_ENV))
+            {
+                i += 2;
+                continue;
+            }
+            out.push(args[i].clone());
+            i += 1;
+        }
+        out
+    };
+    assert_eq!(strip(&without), strip(&with));
+}

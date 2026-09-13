@@ -289,9 +289,14 @@ pub struct SandboxSpec<'a> {
     /// does, and it is what makes "`ls ~` shows nothing" worth asserting at all. The directory
     /// actually mounted there is the application's own (FR-004d), never the host's.
     pub home: &'a str,
-    /// The session-survival opt-in, which selects the container's restart policy — the whole of
-    /// the mechanism behind FR-014a. Off in every probe but the one that is about it: a container
-    /// that Docker would restart on its own outlives a failing test.
+    /// The session-survival opt-in, which selects the container's restart policy **and** tells the
+    /// daemon inside not to stop itself for being unused (feature 028 FR-022 amended FR-014a, which
+    /// the restart policy alone used to be the whole of). Off in every probe but the ones that are
+    /// about it: a container that Docker would restart on its own outlives a failing test.
+    ///
+    /// With it off, the daemon inside carries the ordinary thirty-minute idle window. No probe here
+    /// runs anywhere near that long, so nothing else in this suite has to care — but a probe that
+    /// ever did would find its container `exited` rather than gone, which is the answer, not a bug.
     pub survive_logout: bool,
     /// Extra `create` arguments — the limit flags, a different network posture.
     pub extra: &'a [String],
@@ -421,6 +426,13 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
     // — actually tests. A harness that hardcoded `--user` would pass that box on podman by not
     // using podman's answer to it.
     args.extend(dialect().identity_args(uid, gid));
+    // The opt-in's other half (feature 028, FR-022). From `argv::idle_stop_value` rather than
+    // spelled here, for the reason `restart_policy` is read above: a harness carrying its own copy
+    // of the decision would go on passing after the application stopped making it.
+    if let Some(value) = micold_core::sandbox::argv::idle_stop_value(spec.survive_logout) {
+        args.push("-e".to_string());
+        args.push(format!("{}={value}", micold_core::spawn::IDLE_STOP_ENV));
+    }
     args.extend(spec.extra.iter().cloned());
     args.push(IMAGE.to_string());
 

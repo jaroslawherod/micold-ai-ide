@@ -68,16 +68,12 @@ priority = "optional"
 depends = "$auto, desktop-file-utils, hicolor-icon-theme"
 assets = [
     ["target/release/micold-ai-ide", "usr/bin/", "755"],
-    # The session daemon binary the client auto-spawns / the systemd user unit launches (feature 010).
+    # The session daemon binary the client spawns. Feature 028: the client is the only thing that
+    # ever starts it, so nothing here registers it with a service manager — no unit, no login item,
+    # no scheduled task (packaging contract §1.1). Asset source paths are resolved by cargo-deb
+    # relative to THIS crate's manifest dir, so the workspace-root files below need `../../` (the
+    # `target/` binaries are resolved via the shared target dir and stay bare).
     ["target/release/micold-daemon", "usr/bin/", "755"],
-    # systemd *user* units — shipped, NOT enabled at install; the client enables them in-session on
-    # request (US7, FR-038, research R5.1). Path is /usr/lib/systemd/user/ (merged-/usr Debian),
-    # never /etc/systemd/user/ (admin config).
-    # Asset source paths are resolved by cargo-deb relative to THIS crate's manifest dir, so the
-    # workspace-root files need `../../` (the `target/` binaries above are resolved via the shared
-    # target dir and stay bare).
-    ["../../packaging/micold-daemon.socket", "usr/lib/systemd/user/micold-daemon.socket", "644"],
-    ["../../packaging/micold-daemon.service", "usr/lib/systemd/user/micold-daemon.service", "644"],
     ["../../packaging/micold-ai-ide.desktop", "usr/share/applications/micold-ai-ide.desktop", "644"],
     ["../../assets/icon/png/icon-16.png", "usr/share/icons/hicolor/16x16/apps/micold-ai-ide.png", "644"],
     ["../../assets/icon/png/icon-32.png", "usr/share/icons/hicolor/32x32/apps/micold-ai-ide.png", "644"],

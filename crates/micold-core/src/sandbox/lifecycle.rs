@@ -392,6 +392,25 @@ pub fn mount_set_changed(state: &SandboxState) -> SandboxState {
     }
 }
 
+/// The keep-it-running opt-in changed, so a running sandbox no longer matches the settings
+/// (feature 028, FR-022a, research R2a).
+///
+/// Exactly [`mount_set_changed`], for exactly its reason, over a different input. Both halves of
+/// the opt-in — the restart policy and `MICOLD_IDLE_STOP` — are fixed when the container is
+/// created, so a container already up was made under the old answer and there is no way to talk it
+/// into the new one. Without this the user toggles the control, the settings say one thing, the
+/// container does the other, and nothing on screen admits it.
+///
+/// Its own function rather than a second caller of `mount_set_changed`, because the two are the
+/// same *transition* for different reasons and only one of them may change: if registering a
+/// project ever stops making a sandbox stale, this must not silently stop too.
+pub fn survive_logout_changed(state: &SandboxState) -> SandboxState {
+    match state {
+        SandboxState::Running(id) => SandboxState::Stale(id.clone()),
+        other => other.clone(),
+    }
+}
+
 /// The user asked, in so many words, for the sandbox to be restarted.
 ///
 /// A marker rather than a bare call, for the same reason [`ConsentedFallback`] is one: it makes

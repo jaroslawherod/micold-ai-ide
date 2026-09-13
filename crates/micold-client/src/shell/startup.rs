@@ -148,7 +148,12 @@ fn boot() -> (App, Task<Message>) {
     let mut env_include_script_path = Settings::default().env_include_script_path;
     let mut env_include_timeout_secs = micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS;
     if let Some(store) = caps.settings() {
-        let loaded = store.load().settings;
+        let outcome = store.load();
+        // T158/BUG-025: the one place a settings recovery becomes visible. Every other reader of
+        // this store discarded the status, which is why a corrupted file looked like a fresh
+        // install for eight days.
+        crate::shell::persist::notify_settings_recovery(store, outcome.status, &mut core);
+        let loaded = outcome.settings;
         core.settings.theme_pref = loaded.theme;
         scrollback_lines = loaded.scrollback_lines;
         env_include_enabled = loaded.env_include_enabled;

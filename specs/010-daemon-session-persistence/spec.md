@@ -418,6 +418,53 @@ a session survived; confirm it does not survive without the setting.
   client already read-modify-wrote and its comment shows the author reasoned the rule out; nothing
   in the artifacts obliged the service to, and the ownership split was stated per field while the
   file was written whole. See `bugs/BUG-014.md`.
+- **FR-010b** *(added — BUG-025)*: Concurrent saves to a file with more than one process-level
+  writer MUST NOT be able to interleave destructively. Specifically, for `settings.json`:
+  1. Each writer's read-modify-write (FR-010a) MUST be performed under mutual exclusion that holds
+     for the **whole** sequence — the read, the merge, and the write — not for the write alone; a
+     lock taken around the write alone still permits a lost update, because the loser's read
+     predates the winner's write.
+  2. No writer may stage a save through a path another writer can also open. A staging path derived
+     solely from the target path is shared by every writer of that target and MUST NOT be used.
+  3. A save that cannot take the lock MUST wait or fail loudly. It MUST NOT proceed unsynchronised,
+     and it MUST NOT silently discard the user's change.
+
+  Rename-atomicity does not satisfy this. A temp-file-plus-rename write is atomic against a
+  *reader* and against a crash; it is no defence at all against a second writer, which is a
+  different property and MUST be provided separately.
+
+  **Bugfix**: 2026-09-03 — BUG-025 added this requirement. Both writers already obeyed FR-010a and
+  the file was destroyed anyway: the client and the service staged every save through one
+  `settings.json.tmp` derived from the target path, so two saves that both truncated before either
+  wrote produced the shorter document over the longer one's bytes. The result does not parse, and
+  the next `load` moved it aside and adopted defaults — every setting the user had chosen, replaced
+  silently, discovered only at the next launch. The two writes are back-to-back **by construction**:
+  the client writes the file and immediately sends `SettingsSet`, which the service answers with its
+  own load-then-save. FR-010a's own fix widened that window by making the service hold a
+  load-then-save where it had previously written straight out. Ownership was specified per field and
+  freshness per save; mutual exclusion was specified nowhere. See `bugs/BUG-025.md`.
+- **FR-010c** *(added — BUG-025, second arm)*: A read that did not return the stored document MUST
+  NOT be used as the base of a write. A load that finds the file missing, unreadable, or corrupt
+  yields defaults so the application can still open (Principle IV) — those defaults are a value to
+  **display**, never a value to **persist**. A writer performing the read-modify-write of FR-010a
+  MUST inspect the load's status and MUST refuse to save when the base it would merge into is not
+  the stored document, surfacing the refusal rather than writing.
+
+  A read failure MUST NOT destroy the file it failed to read. The unreadable-for-any-other-reason
+  path leaves the file in place and returns defaults; a save that then merges into those defaults
+  overwrites a document that was intact and merely unread.
+
+  **Bugfix**: 2026-09-03 — BUG-025's second arm. `persist_service_settings`
+  (`catalog.rs:243`) and the client's theme save (`persist.rs:110`) both take
+  `store.load().settings` and discard the `LoadStatus` beside it, so `Missing` and `Recovered` — both
+  of which are `Settings::default()` — are indistinguishable from "the user has chosen the
+  defaults". The writer then persists them. Because `merged_with_existing` preserves **top-level
+  keys only** (documented, and deliberate), a default `daemon` value in the fresh document replaces
+  the stored `daemon` block **whole**: placement, runtime, image, budget, network posture, credential
+  opt-ins and survive-logout, all at once. Observed on this machine 2026-09-03 19:48 — every field
+  the service owns held a live value while every field it does not own had reverted to exactly its
+  default, and `settings.json.bak` was untouched, so no corruption was involved. See
+  `bugs/BUG-025.md`.
 - **FR-011**: All project, worktree, and version-control mutations MUST be requested from the service,
   and all connected clients affected by a mutation MUST receive the updated state without the user
   taking further action.
@@ -630,6 +677,17 @@ plus a new Edge Case and SC-011a. See `bugs/BUG-009.md`.
 - **FR-037**: On Linux, the packaged installation MAY additionally register the service with the
   platform's user service manager; the service MUST work identically whether launched by that manager
   or spawned directly by a client, from a single binary.
+
+  **Superseded**: 2026-08-31 — feature `028-client-managed-daemon` turned this `MAY` into a
+  `MUST NOT`. Installing the application registers no service-manager entry (`028` FR-002) and the
+  service cannot be socket-activated (`028` FR-004), because the application is the only thing that
+  ever starts one. `packaging/micold-daemon.socket` and `packaging/micold-daemon.service` — the two
+  files this requirement's evidence named, shipped by T076 — were deleted with that change, so a
+  reader following the old citation finds nothing. What survives is FR-037's second half, and it is
+  now the whole of it: one binary, launched the one way, behaving identically in every placement.
+  Gated from this side by `micold-client/tests/deb_ships_no_service_units.rs` (no unit reaches the
+  package, by destination or by source) and `micold-daemon/tests/no_socket_activation.rs` (the
+  daemon cannot adopt an inherited listener, and the crate that would let it is not declared).
 - **FR-038**: Surviving user logout MUST be documented as supported on Linux via an explicit,
   user-enabled setting, and explicitly unsupported on macOS and Windows. The setting MUST NOT be
   enabled silently by installation.
@@ -780,6 +838,14 @@ plus a new Edge Case and SC-011a. See `bugs/BUG-009.md`.
   a client would receive** rather than on the lifecycle state machine — every pre-existing lifecycle
   test drives the machine directly, which is how a correct machine that production never called
   stayed green for the whole of this defect's life.
+- **SC-026** (bugfix BUG-025): Zero settings files are left unparseable by concurrent saves. Two
+  writers saving `settings.json` at the same moment produce a file that parses and that has lost
+  neither writer's owned fields, in 100% of cases — proven by an executable test that runs the two
+  saves concurrently against one path, not by a walkthrough. A single save is unaffected. Zero
+  stored settings are replaced by defaults that came from a failed read: a save whose base load did
+  not return the stored document is refused, in 100% of cases, and the file it could not read is
+  still there afterwards — proven by an executable test that makes the read fail, not by a
+  walkthrough.
 
 ### How each criterion is observed *(added 2026-08-27 — BUG-008)*
 
@@ -795,7 +861,7 @@ marked `human-only` with the reason it cannot have one. A criterion phrased in t
 ("looks right", "no perceptible delay") is unverifiable by any automated agent in any environment, and
 will be skipped for as long as no human is available — which the table in `bugs/BUG-008.md` measured at
 indefinitely. `scripts/check-criteria-observables.sh` fails the build when a criterion in this file has
-no row here — all **28** of them, SC-001 through SC-025 including SC-004a, SC-009a and SC-011a — so
+no row here — all **29** of them, SC-001 through SC-026 including SC-004a, SC-009a and SC-011a — so
 the next one cannot be written by accident.
 
 Later criteria already say this in their own text — SC-022, SC-023, SC-024 and SC-025 each read
@@ -836,6 +902,7 @@ backwards.
 | SC-023 | the size a session's process is actually spawned at, for a session with no process, across first start, crash respawn and additional-instance spawn | `micold-daemon/tests/supervision_restart.rs`, `micold-client/tests/terminal_size_reporting.rs` |
 | SC-024 | the spawn decision for a session whose directory does not exist — refused, no process registered — and for one whose directory does | `micold-daemon/tests/session_cwd_guard.rs` |
 | SC-025 | the **snapshot a client would receive**, not the lifecycle machine, from the moment the process exists | `micold-daemon/tests/session_start.rs` |
+| SC-026 | *(added — BUG-025)* the bytes on disk after two concurrent saves against one path: the file parses, and each writer's owned fields survive; and the bytes on disk after a save whose base read failed — unchanged, the save refused | `micold-core/tests/settings_concurrent_writers.rs`, `micold-core/tests/settings_refuses_save_over_failed_read.rs` |
 
 Three rows say `human-only` and each names why: SC-003's 3 s (wall-clock on real hardware), SC-004a's
 budget (measured on a display, not gated in CI), SC-015's 5 s (a person's reading speed). That is the

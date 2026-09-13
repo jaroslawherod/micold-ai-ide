@@ -188,12 +188,42 @@ works with the network off entirely.
 Closing the application leaves sessions running, exactly as it does without the sandbox. Reopening
 re-attaches to them.
 
-If you have "keep sessions running after logout" enabled, the sandbox comes back after a reboot with
-its sessions live — on Linux, macOS and Windows alike. (Without the sandbox, that option only works
-on Linux.)
-
 Stopping and recreating the container does not lose anything: the service's data lives in your own
 data directory, mounted in, so it outlives any container.
+
+### The sandbox stops itself when nobody has used it
+
+The rule is the same one the direct placement follows, and it is the same code: **after 30 continuous
+minutes with no window connected, the service stops** — and here that means the container stops too,
+rather than being left running with an idle process inside it. See
+[when the service stops itself](../daemon.md#it-stops-itself-when-nobody-has-used-it-for-30-minutes)
+for what the timer measures and what happens to a session that was running; none of it changes
+inside a container.
+
+Reopening the application starts the sandbox again. A stopped container is not a failure state and
+you will not be told about it as if it were one.
+
+### Keeping the sandbox running
+
+**"Keep the sandbox running"** is the one setting that changes this. With it on:
+
+- the container is created with a restart policy, so it comes back after a sign-out and after a
+  reboot, with its sessions live;
+- and it is **not stopped when idle** — the service inside keeps running with nothing connected,
+  which is the point of asking for it.
+
+Those two are one choice because they are one question: *should this machine keep a session service
+running for you when you are not there?* Answering yes to the reboot half and no to the idle half
+would leave you with a sandbox that survives the night but not the afternoon.
+
+The setting is applied when the container is **created**, so changing it marks the running sandbox as
+out of date and takes effect the next time the sandbox starts. The application tells you so at the
+control rather than applying it silently underneath a container that was created with the other
+answer.
+
+Without the sandbox there is no equivalent: a service running directly on this computer cannot
+outlive signing out, on any platform. Your sessions are still kept and come back resumable — running
+the service in a container is what keeps them *running*.
 
 ## When it does not start
 

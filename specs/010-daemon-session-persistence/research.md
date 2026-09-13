@@ -1230,6 +1230,74 @@ renderable instead of blanking, with a fetch rate limit).
 | 17 | Wire format | JSON control plane + `postcard` grid frames in one framed stream with an encoding tag byte; `MICOLD_WIRE=json` debug override. **Not bincode — it is a dead tombstone crate** |
 | 18 | `alacritty_terminal` | Upgrade 0.25 → **0.26.0**; only child-exit handling changes. `Arc<FairMutex<Term<T>>>`, never hold the lock across `await` |
 
+### R9 What a settings save does when it cannot take the lock (T156, BUG-025)
+
+FR-010b says a save that cannot take the lock must wait or fail loudly — the one thing it must not
+do is proceed without it. Both permitted answers were on the table; the implementation waits, and
+this records why.
+
+**Decision: block on `File::lock()`.** The critical section is one small read and one small write
+of a file measured in hundreds of bytes, held by a writer that is already inside it. Waiting costs
+microseconds in the case that actually happens — the client saving a theme while the daemon saves a
+scrollback limit — and the alternative, `try_lock` with an error on `WouldBlock`, would surface
+"couldn't save your settings" for a conflict the application resolves by waiting a millisecond. An
+error the user cannot act on and that resolves itself is worse than the wait it replaces.
+
+**The failure that is not a conflict.** Failing to *open* the lock file is different in kind from
+failing to acquire it: a read-only directory, an exhausted fd table, a path that is not writable.
+That is returned as an error, and because `begin_exclusive` runs before the load, the save stops
+with nothing written. Silent degradation — noticing the lock is unavailable and writing anyway — is
+the behaviour FR-010b exists to forbid, and is what the settings file's two writers were already
+doing implicitly.
+
+**Why deadlock is not a risk here.** `flock` is held per open file description, so a second
+acquisition from the same process would block against itself rather than recurse. That is why
+`save` does not take the lock and `update` does: one guarded entry point, taken once. Making `save`
+lock too would deadlock every `update`, which is the concrete reason the trait documents `update`
+as the only way a writer should persist a change.
+
+**Why a sidecar and not the settings file.** The write replaces `settings.json` by rename, so a
+lock taken on that file is a lock on an inode the next writer will never open. `settings.json.lock`
+is never renamed and never removed, so every writer resolving the same settings path resolves the
+same lock inode — including the daemon inside the sandbox, where the bind mount at
+`/var/lib/micold-ai-ide` makes the container path and the host path the same file.
+
+**A stale lock file is not a stale lock.** The sidecar outlives the processes that used it, but the
+lock does not: `flock` is released when the fd closes, which the kernel does on exit, crash, or
+kill. There is nothing to clean up and no staleness check to get wrong — the deliberate contrast
+with a PID-file protocol.
+
+### R10 A settings recovery must reach the user, and today it reaches nobody (T158, BUG-025)
+
+T158 asked whether `LoadStatus::Recovered` should be louder, on the premise that it is *already*
+surfaced and the user still did not connect the reset to it. Checking the code first changed the
+question: for `settings.json` it is not surfaced anywhere at all.
+
+**What the code actually does.** `LoadStatus` is read in exactly one place in either binary —
+`server.rs:126`, `tracing::info!(load_status = ?catalog.load_status(), "catalog adopted")` — and
+that is the **projects** store's status, carried on `Catalog::load_status`. The settings store's
+status is dropped at every one of its five call sites: `startup.rs:140` binds `store.load().settings`
+and discards the outcome, and `:160`, `:165`, `persist.rs:110`, `:154`, `:193` do the same. So when
+`load` moved a corrupt `settings.json` to `settings.json.bak` on 2026-08-26, nothing logged it,
+nothing notified, and the app opened on defaults looking exactly like a fresh install. That silence
+is why a corruption was reported eight days later as "settings are lost after a `.deb` upgrade" —
+the only event the user could see was the restart, so the restart got the blame.
+
+**Decision: strengthen it.** A recovered settings file is not a detail; it is every preference the
+user set, gone, with a copy on disk they will never find unless told. The notification names the
+`.bak` path, because "your settings were reset" without it is an apology and with it is something
+the user can act on. This is the T158 half of the same argument T159 makes at the write end:
+the failure mode of this file is silence, and both fixes are about ending it.
+
+**Why a notice and not an error.** By the time the app opens, the recovery has already happened and
+nothing the user does now changes it — `notify_info` describes a state, `notify_error` implies a
+failed action they attempted. The refusal from T159/T160 is the opposite case and stays an error:
+there the user pressed Save, the save did not happen, and they need to know that.
+
+**Not `Missing`.** A first run recovers nothing and must stay silent, which is the same line
+`update` draws in T159 — the distinction throughout this bugfix is between a read that lost
+something and a read that had nothing to lose.
+
 ## Open items requiring a decision in the plan
 
 1. **MSRV**: bump to 1.89 for std `File::lock`, or take `fd-lock` 4.0.4. (R1.5)

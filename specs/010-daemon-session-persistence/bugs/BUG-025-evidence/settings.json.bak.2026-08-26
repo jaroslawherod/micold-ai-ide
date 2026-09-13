@@ -1,0 +1,9 @@
+{
+  "settings_version": 3,
+  "theme": "follow_system",
+  "scrollback_lines": 20000,
+  "env_include_enabled": true,
+  "env_include_script_path": "",
+  "env_include_timeout_secs": 15
+}ude_timeout_secs": 15
+}

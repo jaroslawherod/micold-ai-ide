@@ -272,6 +272,15 @@ impl Sandbox {
         self.state = micold_core::sandbox::lifecycle::mount_set_changed(&self.state);
     }
 
+    /// Adopt a change to the keep-it-running opt-in (feature 028, FR-022a).
+    ///
+    /// The same marking, and the same refusal to act on it, as [`Self::mounts_changed`]: the
+    /// restart policy and the idle rule are both fixed at container creation, so the sandbox that
+    /// is up was created under the old answer. See `lifecycle::survive_logout_changed`.
+    pub fn survive_logout_changed(&mut self) {
+        self.state = micold_core::sandbox::lifecycle::survive_logout_changed(&self.state);
+    }
+
     /// Restart the sandbox because the user asked for it, reporting whether there was anything to
     /// restart.
     ///

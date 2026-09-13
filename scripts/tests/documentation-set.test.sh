@@ -65,6 +65,12 @@ expect specs/027-sandboxed-daemon-runtime/quickstart.md unset
 # Its neighbours are unaffected -- the exception is one file, not the feature's directory.
 expect specs/027-sandboxed-daemon-runtime/spec.md  set
 expect specs/027-sandboxed-daemon-runtime/tasks.md set
+# The same exception, for the same reason: feature 028's Part A is a list of commands, and the same
+# test holds each one to a task that exists and a filter that selects something.
+expect specs/028-client-managed-daemon/quickstart.md unset
+expect specs/028-client-managed-daemon/spec.md     set
+expect specs/028-client-managed-daemon/tasks.md    set
+
 # The same shape, feature 028: `crates/micold-core/tests/macos_package_gate.rs` holds `ci.yml`'s
 # macOS packaging step to §B of this quickstart.
 expect specs/028-macos-package/quickstart.md       unset

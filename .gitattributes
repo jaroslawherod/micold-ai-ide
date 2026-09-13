@@ -57,6 +57,14 @@ specs/**      micold-docs
 # attribute.
 /specs/027-sandboxed-daemon-runtime/quickstart.md -micold-docs
 
+# Read by a test, for the same reason one file up: feature 028's Part A is a list of *commands*, and
+# `quickstart_a_runs_everywhere.rs` checks that each `mise run` task exists and that each
+# `cargo test` filter selects at least one test. A filter that selects nothing exits 0 and prints
+# `test result: ok`, so a stale line here is a validation step that validates nothing -- and if the
+# file stayed documentation, the edit that introduced it would skip the pipeline. Must stay after
+# `specs/**`, which sets the attribute.
+/specs/028-client-managed-daemon/quickstart.md -micold-docs
+
 # Same reason, feature 028: `crates/micold-core/tests/macos_package_gate.rs` compares §B of this
 # quickstart against the macOS packaging step in `ci.yml`, so the file is a test input rather than
 # prose. Must stay after `specs/**`, which sets the attribute.

@@ -364,7 +364,8 @@ assembly point harder to express for a cost that does not exist.
 | `shell/startup.rs` | boot: the window, the assembly, the first frame |
 | `shell/persist.rs` | the on-disk catalog and settings file |
 | `shell/daemon_sync.rs` | a running session daemon, over the protocol |
-| `shell/service_control.rs` | the session service as an OS process — pids, `loginctl` |
+| `shell/service_control.rs` | the session service as an OS process — stopping a mismatched build by pid |
+| `shell/legacy_units.rs` | the user's service manager, once, to clear an enablement a past release left (feature 028) |
 | `shell/subscriptions.rs` | the iced runtime and the OS events it carries |
 | `shell/workspace.rs` | the user's filesystem and their git working copies |
 | `shell/env_include.rs` | a subprocess running the user's own script |
