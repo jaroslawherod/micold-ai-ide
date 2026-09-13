@@ -92,6 +92,20 @@ The [session section](guide/worktrees.md#running-a-session) covers the terminal.
 The project is discussed [elsewhere](https://micold.invalid/forum) as well.
 MD
 
+# A link that resolves, but only in the repository. The target is real, beside the documentation
+# rather than in it, so the source check sees a file and passes -- and the site, which publishes the
+# documentation alone, serves a 404 in its place. That is how `macos-packaging.md`'s two links into
+# `specs/` reached a release and failed its publication rather than the change that wrote them. The
+# fixture is nested one level so that the escape has somewhere real to land.
+mkdir -p "$work/src-escapes/docs" "$work/src-escapes/specs"
+cp -R "$work/src-good/." "$work/src-escapes/docs/"
+printf '# A contract\n' >"$work/src-escapes/specs/contract.md"
+cat >"$work/src-escapes/docs/install.md" <<'MD'
+# Installing
+
+Back to [the guide](index.md). The normative text is [the contract](../specs/contract.md).
+MD
+
 # --- the built fixtures ---------------------------------------------------------------------------
 #
 # The same three shapes in rendered HTML, because the renderer is between the author and the reader
@@ -158,6 +172,8 @@ expect_fail "a link to a page that does not exist fails" "installation.md" \
   --sources "$work/src-missing-page"
 expect_fail "a fragment that names no heading fails" "running-a-session" \
   --sources "$work/src-missing-fragment"
+expect_fail "a link that resolves only outside the documentation fails, naming the page" "install.md" \
+  --sources "$work/src-escapes/docs"
 
 printf '== the built site, before a deploy (FR-005, SC-003) ==\n'
 expect_pass "a rendered site whose internal links resolve passes" --built "$work/built-good"
