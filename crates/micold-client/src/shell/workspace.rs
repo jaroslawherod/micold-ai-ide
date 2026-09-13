@@ -139,6 +139,13 @@ pub(crate) fn on_folder_chosen(app: &mut App, path: PathBuf) -> Task<Message> {
         });
         return Task::none();
     };
+    // Know the folder by the path git will report for it, so its worktrees belong to it (002
+    // BUG-002, FR-012). Only here, where this client's filesystem is the daemon's: over the wire
+    // the path is the daemon's to interpret, and `worktree::discover` copes with either spelling.
+    let path = app
+        .core
+        .workspace
+        .identity_for(&path, &micold_core::fs_scan::resolve_path);
     if !git.is_repo_root(&path) {
         app.core.update(Message::Project(ProjectMsg::OpenRefused(
             NOT_A_REPOSITORY.to_string(),
@@ -526,8 +533,12 @@ mod tests {
         let mut app = base_app();
         app.daemon = Some(micold_client::daemon::Outbox::new(tx));
         let scanner = FakeFolderScanner::new();
-        app.core.workspace.open_or_activate(a.to_path_buf(), &scanner);
-        app.core.workspace.open_or_activate(b.to_path_buf(), &scanner);
+        app.core
+            .workspace
+            .open_or_activate(a.to_path_buf(), &scanner);
+        app.core
+            .workspace
+            .open_or_activate(b.to_path_buf(), &scanner);
         (app, rx)
     }
 
@@ -563,7 +574,10 @@ mod tests {
         let _ = on_known_project_reopened(&mut app, a.path().to_path_buf());
 
         assert_eq!(app.core.workspace.active.as_deref(), Some(a.path()));
-        assert!(!app.core.project.switcher_open, "the panel closes on a switch");
+        assert!(
+            !app.core.project.switcher_open,
+            "the panel closes on a switch"
+        );
     }
 
     /// …but not when the pick is refused. The press is what reveals the row's unavailable badge,

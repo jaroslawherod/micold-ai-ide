@@ -345,8 +345,12 @@ impl Workspace {
     /// through a symlink before identity was resolved — keeps its stored path, so opening the
     /// folder again activates that entry rather than adding a second one.
     pub fn identity_for(&self, chosen: &Path, resolve: &dyn Fn(&Path) -> PathBuf) -> PathBuf {
-        let _ = resolve;
-        canonicalize_best_effort(chosen)
+        let resolved = resolve(chosen);
+        self.projects
+            .iter()
+            .find(|p| p.path == resolved || resolve(&p.path) == resolved)
+            .map(|p| p.path.clone())
+            .unwrap_or(resolved)
     }
 
     /// Activate a known project by path, replacing any previous active project.
