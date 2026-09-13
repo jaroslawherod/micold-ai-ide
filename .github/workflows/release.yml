@@ -138,6 +138,50 @@ jobs:
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
         run: gh release upload "$TAG_NAME" target/debian/*.deb --clobber
 
+  # The macOS download. Same shape as `deb`: build natively, produce the artifact with the same
+  # script a contributor runs locally, attach it to the still-mutable draft.
+  #
+  # It is a separate job rather than a leg of `deb`'s matrix because almost nothing is shared --
+  # a different runner, a different toolchain step, a different producer, and the two cross-
+  # compiled targets that make the download universal. A matrix whose legs share only `checkout`
+  # is a matrix in name only.
+  #
+  # Signature verification happens inside `scripts/macos-dmg.sh`, from *inside the mounted image*
+  # rather than from the directory it was built in. A failure there fails this job, which holds the
+  # release (FR-037) -- exactly the outcome FR-011 wants, since a published release is immutable.
+  macos:
+    name: macos (universal)
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: macos-latest
+    # Only needs to upload assets to the release created by release-please.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      # Both architectures from one runner: the toolchain ships the x86_64 Apple target, and
+      # cross-compiling it from Apple silicon needs no extra SDK (research R8). The two must match
+      # `TARGETS` in scripts/macos-dmg.sh, which is what the merge iterates.
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - name: Build the shipped binaries for both architectures
+        run: |
+          cargo build --release -p micold-client -p micold-daemon \
+            --target aarch64-apple-darwin --target x86_64-apple-darwin
+      # `lipo`-merges the two builds, composes and ad-hoc signs the bundle, wraps it in the image
+      # with the /Applications symlink, then mounts the result and re-verifies. No secret,
+      # certificate, or Apple account is used; `mise run dmg` on a contributor's Mac produces an
+      # artifact of equivalent trust (FR-016).
+      - name: Build the disk image
+        run: scripts/macos-dmg.sh --target-dir target --out target/macos
+      - name: Upload the .dmg to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release upload "$TAG_NAME" target/macos/*.dmg --clobber
+
   image:
     name: image (${{ matrix.arch }})
     needs: release-please
@@ -292,15 +336,46 @@ jobs:
 
   publish:
     name: publish release
-    needs: [release-please, deb, image-manifest]
+    # Every job that attaches an artifact, with no exceptions -- a published release is immutable,
+    # so a platform missing from this list is a platform whose download is missing permanently.
+    # `crates/micold-core/tests/release_publishes_complete_sets.rs` reads the workflow and holds
+    # this list equal to the set of jobs that run `gh release upload`.
+    needs: [release-please, deb, macos, image-manifest]
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
     # Only needs to flip the draft release to published (contents), which freezes it immutably
-    # with the .deb assets already attached.
+    # with every platform's assets already attached -- and to rewrite the draft's body first, which
+    # is the same `contents: write` permission.
     permissions:
       contents: write
     steps:
-      - name: Publish the release now that the .deb assets are attached
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      # The first launch of the macOS download is blocked by Gatekeeper, and a user who meets that
+      # block without having been told about it reads it as "this download is malware" (SC-001). So
+      # the release page itself has to say what will happen, next to the file it will happen to.
+      #
+      # It is appended here rather than templated because release-please generates the release body
+      # from the commits in the release and offers no fixed-text hook -- anything written into the
+      # draft earlier is replaced when it regenerates. Appending after the draft is final and before
+      # it is published is the one moment the text survives.
+      #
+      # `--notes-file` with the existing body prepended: `gh release edit --notes` replaces, so the
+      # generated changelog is read back and rewritten with the notice on the end.
+      - name: Add the macOS trust notice to the release body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          notice=".github/release-notice-macos.md"
+          [ -f "$notice" ] || { echo "missing $notice" >&2; exit 1; }
+          body="$RUNNER_TEMP/body.md"
+          gh release view "$TAG_NAME" --json body --jq .body > "$body"
+          printf '\n\n---\n\n' >> "$body"
+          cat "$notice" >> "$body"
+          gh release edit "$TAG_NAME" --notes-file "$body"
+      - name: Publish the release now that every platform's assets are attached
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}

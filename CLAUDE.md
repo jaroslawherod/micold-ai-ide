@@ -31,6 +31,8 @@ right `cargo` invocation each time:
   tests are off by default, so `mise run test` does not need a container runtime installed.
 - `mise run deb` — build the Debian `.deb` package for the host arch (installs `cargo-deb` first
   if missing).
+- `mise run app` — build the macOS `.app` bundle for the host arch, ad-hoc signed on macOS. On
+  Linux it stages the bundle unsigned, which is what `scripts/tests/macos-bundle.test.sh` drives.
 - `mise run sweep` — reclaim space in **every** target dir this repo accumulates — the shared one
   and each worktree's private one (see below) — dropping artifacts unused for 7 days (installs
   `cargo-sweep` first if missing). It walks `git worktree list` via `scripts/sweep-targets.sh` and

@@ -364,6 +364,12 @@ does not offer to make it. Settings → Session service still has a *Keep sessio
 sign out* checkbox, but it is the **container's** setting: with the direct placement selected the
 control says plainly that it cannot be honoured there, rather than quietly doing nothing.
 
+On macOS, sessions survive closing the window but not logging out when the session service runs
+directly on your computer; running it in a container is the supported way to survive logout
+there. That sentence is the one `docs/user-guide/install-macos.md` and
+`crates/micold-core/src/logout_survival.rs` also carry, held equal by
+`crates/micold-core/tests/macos_logout_claims_agree.rs`.
+
 ### What to do instead
 
 Run the session service **in a container**. A container runtime is a service the platform already

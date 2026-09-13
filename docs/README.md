@@ -14,6 +14,12 @@ follows describes the version you are reading it from (constitution, Principle V
 
 ## User Guide
 
+- [Installing on macOS](user-guide/install-macos.md) — which Mac and which macOS, downloading the
+  disk image, dragging it to Applications, and the first launch: why macOS blocks an application
+  the project cannot sign, the one pass through **Privacy & Security** that clears it, why it comes
+  back after an update, and why clearing it on the disk image does not help. Then what starts
+  automatically, what happens when you log out, updating, removing it, and the permission prompts
+  (Files and Folders, and the optional Full Disk Access) with what declining each one costs.
 - [Help & About](user-guide/help-about.md) — the application window, the Help toolbar entry,
   and the About dialog.
 - [Project Selection & Workspace Management](user-guide/project-selection.md) — opening a
@@ -71,6 +77,10 @@ follows describes the version you are reading it from (constitution, Principle V
   specs skips the build entirely, where the documentation set is declared, the single status check
   the default branch requires and the two properties that keep it honest, how to force a full run,
   and what to do when the pipeline surprises you.
+- [Packaging for macOS](development/macos-packaging.md) — the two producers (`scripts/macos-bundle.sh`
+  composes the `.app`, `scripts/macos-dmg.sh` wraps it), reproducing a release disk image locally,
+  what the release job adds on top, when to re-check the minimum-macOS floor, and what the `spctl`
+  diagnostic does and does not tell you.
 - [The documentation site](development/docs-site.md) — how a publication works: the five steps a
   build runs in, what each pre-merge and pre-deploy check catches, what triggers a publication and
   how to republish without cutting a release, what a failed publication leaves behind, and why the

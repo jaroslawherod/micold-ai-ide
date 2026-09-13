@@ -186,6 +186,48 @@ rather than training everyone to reach for the label.
 The gate runs on pull requests only; a push to main has already been through it. Its own cases are
 in `scripts/tests/check-user-guide-updated.test.sh` and run in the same job, before it.
 
+## The macOS packaging step
+
+The macOS `.app` bundle is composed and launched inside the **`test` job's macOS leg**, as a step —
+not as a job of its own. Look for *"Package and launch the macOS bundle"* in a run; it is guarded by
+`if: runner.os == 'macOS'`, so the Linux and Windows legs skip it.
+
+That placement is deliberate and it is about the section above. A new job would have to be added to
+`ci complete`'s `needs:`, and `ci_gate_covers_every_job.rs` would fail until it was — which is the
+gate working, but it means the packaging check and the merge gate have to be changed together
+forever after. As a step it rides a job that is already covered, already has the checkout, and has
+already built the binaries the bundle is composed from. No second compile, and no edit to the merge
+gate (research R12).
+
+What the step actually proves is worth being precise about, because "the bundle was created" is the
+weaker half:
+
+1. `scripts/macos-bundle.sh` composes the bundle from `target/debug` and ad-hoc signs it — the same
+   script `mise run app` runs, so a contributor reproduces the CI artifact exactly.
+2. The bundled executable is **launched**, and the step waits for the session daemon's endpoint
+   (`~/.micold/run/d.sock`) to appear.
+
+Step 2 is the one that catches the failure that matters. The client resolves the daemon as a sibling
+of its own `current_exe()`, so a bundle that puts the two binaries anywhere but together looks
+perfectly healthy — correct plist, valid signature, right layout by eye — and can never start a
+session. Waiting for the endpoint is that constraint asserting itself.
+
+### The drawing-surface escape hatch
+
+A GitHub runner may not be able to give iced a drawing surface at all. That failure says nothing
+about packaging — the bundle loaded, dyld resolved every library, the plist parsed — so the step
+reports it and passes.
+
+The hatch is matched against the launch log, not the exit status, because iced reports a missing
+surface and a missing library through the same code path. It is deliberately narrow: every other way
+of dying still fails the step, and a missing library, a rejected signature and a bundle whose daemon
+is not beside its client all look nothing like a surface failure. If you see that message in a run,
+the packaging half was still checked.
+
+`specs/028-macos-package/quickstart.md` §B states what this step does, and
+`crates/micold-core/tests/macos_package_gate.rs` holds that statement and the workflow together, so
+the description cannot drift from the step.
+
 ## Reading a run
 
 The `classify change` job writes its verdict to the run summary, so the top of any run says which

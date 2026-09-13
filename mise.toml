@@ -178,6 +178,43 @@ echo 'Built:'
 ls -1 "$({{config_root}}/scripts/build-lock.sh --print-target-dir)"/debian/*.deb
 """
 
+# The macOS application bundle, from a release build of the two shipped binaries (feature 028).
+#
+# The counterpart of `deb`: same place in the workflow, same build lock, one platform over. It
+# produces `micold-ai-ide.app` for *this* Mac only -- the universal, two-architecture artifact that
+# ships in a release is `dmg`, which merges both targets before calling the same script.
+#
+# On Linux this stages the bundle without signing, which is what `scripts/tests/macos-bundle.test.sh`
+# exercises: the layout rules are the ones that break silently, and a Mac is not needed to check
+# them.
+[tasks.app]
+description = "Build the macOS .app bundle for the host arch (ad-hoc signed on macOS) [build-locked]"
+run = """
+{{config_root}}/scripts/build-lock.sh cargo build --release -p micold-client -p micold-daemon
+target="$({{config_root}}/scripts/build-lock.sh --print-target-dir)"
+stage_only=''
+[ "$(uname -s)" = 'Darwin' ] || stage_only='--stage-only'
+{{config_root}}/scripts/macos-bundle.sh --bin-dir "$target/release" --out "$target/macos" $stage_only
+"""
+
+# The macOS disk image -- the file a release actually publishes (feature 028, FR-008).
+#
+# `app` produces the bundle; this wraps it in the container users download, with the /Applications
+# symlink that makes "drag it across" the obvious gesture, and re-verifies the signature from inside
+# the mounted image rather than trusting the directory it was built from.
+#
+# macOS only, and deliberately without a `--stage-only` counterpart: `hdiutil` has no equivalent
+# elsewhere, and everything about the *layout* that a Linux machine can check is already checked
+# through `app` and `scripts/tests/macos-bundle.test.sh`.
+[tasks.dmg]
+description = "Build the macOS .dmg for the host arch (macOS only) [build-locked]"
+run = """
+[ "$(uname -s)" = 'Darwin' ] || { echo 'mise dmg: needs macOS (hdiutil)' >&2; exit 1; }
+{{config_root}}/scripts/build-lock.sh cargo build --release -p micold-client -p micold-daemon
+target="$({{config_root}}/scripts/build-lock.sh --print-target-dir)"
+{{config_root}}/scripts/macos-dmg.sh --bin-dir "$target/release" --out "$target/macos"
+"""
+
 [tasks.site-build]
 description = "Build the documentation site (feature 028): emit theme, capture, stage, render, check"
 run = "{{config_root}}/site/build.sh"
