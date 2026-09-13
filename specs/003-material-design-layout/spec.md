@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-15
 
-**Status**: Closed (implemented and shipped; every task in tasks.md is done. The manual quickstart walkthrough ran 2026-08-21 on Linux — evidence: `evidence/T015-T033-manual-walkthrough.md`. §1, §5 and §6 pass; §3 passed but for FR-016; §2 and §4 are partial. Every bug is fixed. The last, BUG-002, was a narrow window dropping the project name and clipping the actions in the known-projects list; rows now move their actions beneath an elided name (Phase 7, T036–T039). macOS/Windows parity and a live OS theme change (SC-003) are unrun.)
+**Status**: Closed (implemented and shipped; every task in tasks.md is done. The manual quickstart walkthrough ran 2026-08-21 on Linux — evidence: `evidence/T015-T033-manual-walkthrough.md`. §1, §5 and §6 pass; §3 passed but for FR-016, which passes on its 2026-09-13 re-run (`evidence/T039-resize-small-rerun.md`); §2 and §4 are partial. Every bug is fixed. The last, BUG-002, was a narrow window dropping the project name and clipping the actions in the known-projects list; rows now move their actions beneath an elided name (Phase 7, T036–T039). macOS/Windows parity and a live OS theme change (SC-003) are unrun.)
 
 **Bugfix**: 2026-07-21 — BUG-001 Clarified FR-018/Edge Cases to distinguish a transient OS-theme-detection failure from a genuine, sustained "no preference" reading; added FR-021.
 
