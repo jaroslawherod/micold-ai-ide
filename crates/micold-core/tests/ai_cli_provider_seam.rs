@@ -265,6 +265,9 @@ impl AiCliProvider for MinimalProvider {
     fn read_title(&self, _config_dir: &Path, _cwd: &Path, id: Uuid) -> Option<String> {
         self.conversations.borrow().get(&id).cloned()
     }
+    fn startup_title(&self) -> &'static str {
+        self.display_name
+    }
     fn mark_archived(&self, _config_dir: &Path, _cwd: &Path, id: Uuid) -> io::Result<()> {
         self.archived.borrow_mut().insert(id);
         Ok(())
