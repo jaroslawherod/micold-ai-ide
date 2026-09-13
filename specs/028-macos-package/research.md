@@ -285,6 +285,31 @@ process reached window creation (bundle loaded, dyld resolved, plist parsed, dae
 treats a window-surface error as a pass, with the reason written into the step's log. A spike task
 in `/speckit-tasks` settles which, on the runner, before the rest of the gate is written.
 
+**Outcome (T001, recorded 2026-09-13)**: contingency (a). CI run
+[34747999622](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/34747999622) on PR #284,
+commit `3da33207`, `build + test (macos-latest)` on runner image `macos-26-arm64` version
+`20260907.0351.1`: the bundle was staged and ad-hoc signed (`codesign --verify` printed "valid on
+disk" and "satisfies its Designated Requirement" at 08:35:27.11 UTC), and the launch took the step's
+first branch — "Bundle launched; daemon endpoint /Users/runner/.micold/run/d.sock appeared." at
+08:35:28.26, about 1.15 s later. The step's (b) branch, which greps the launch log for a surface
+error, was not reached, so it stays in `ci.yml` as a guard for a future runner image rather than as
+the path this one takes.
+
+What that proves, precisely: the binary started from inside the bundle, found its sibling daemon
+through the R2 layout, spawned it, and was still alive when the endpoint appeared — the packaging
+claim FR-036 is after. It does **not** by itself prove a drawing surface was obtained. iced_winit
+0.14 tracks the program's subscriptions at boot (`lib.rs`, the `runtime.track` just after the window
+`open` task is queued), before the event loop creates the window and, lazily with it, the compositor;
+the daemon is spawned from one of those subscriptions (`daemon::connection`). The two run
+concurrently, so the endpoint can in principle appear before the compositor is built. A compositor
+failure reaches the event loop as `Control::Crash` and ends the process, so a failure *before* the
+check would have sent the step down the second branch; one after it would go unseen, because the
+step checks liveness once, when the endpoint appears, not "after a few seconds" as the Decision
+above describes. The launch log is printed only on the failure branches, so this run left no
+positive evidence of the window either way. The observation is consistent with (a) — and contradicts
+the premise of (b), that the runner refuses a surface outright — without closing the narrow ordering
+window; seeing the window itself is quickstart §C on a real Mac (T059).
+
 ## R13. Where the release gate runs (FR-037)
 
 **Decision**: A new `macos` job in `release.yml`, mirroring `deb`: `runs-on: macos-latest`, builds
