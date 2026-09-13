@@ -372,6 +372,11 @@ docs state per-platform support (quickstart S14).
   *Amended 2026-08-27 (BUG-008)*: the split is no longer a note inside a ticked box — the
   Windows-behaviour clause is now **T144**, open, with its unblocking condition named. This task's
   checkbox covers the CI gate, which is met.
+  *Amended 2026-09-13 (T144)*: T144 is done — the Windows behaviours are implemented and exercised
+  by their own Windows CI step. "Full test suite pass on … Windows" still overstates the gate: the
+  `build + test` matrix runs `cargo test --workspace` on Linux only, and on macOS and Windows runs
+  the core suite plus an enumerated list of client gates (and, on Windows, T144's target). Recorded
+  against SC-013 in `spec.md`.
 - [x] T084 Run all quickstart.md scenarios S1–S15 and record outcomes.
   **Run 2026-08-25** — `evidence/T084-quickstart-pass.md`. The "needs a human at the GUI" note above
   was wrong: every scenario except two named clauses was driven headlessly against a real client on
@@ -1824,7 +1829,7 @@ someone rewrote it around an observable a machine could read.
 
 ### Still open, with its unblocking condition named (the T146 rule applied to itself)
 
-- [ ] T144 [BUG-008] Exercise the three Windows behaviours T083 names — job-object process-tree
+- [X] T144 [BUG-008] Exercise the three Windows behaviours T083 names — job-object process-tree
   teardown, the `0x03` interrupt path (NOT via `cmd.exe`), and the inverted `portable-pty` `kill()`
   result (Principle VI, Risk 3).
   **Blocked on**: `crates/micold-daemon/src/platform/windows.rs::terminate_process_tree` being
@@ -1833,6 +1838,20 @@ someone rewrote it around an observable a machine could read.
   `windows-latest` in its `build + test` matrix since PR #43. The check anyone can run:
   `wc -l crates/micold-daemon/src/platform/windows.rs` and read the body. When that function creates
   a job object and terminates it, this task is unblocked and its tests are writable
+  **Done 2026-09-13.** The blocker was implemented in the same change rather than waited on. The
+  free function became `platform::ProcessTree`, adopted at spawn: on Windows a job object with
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` holding the shell child only (never `conhost`, no breakaway,
+  no UI limits — R3.2), terminated on `kill()` and closed on drop; on Unix the process group, as
+  before. The assignment race R3.2 accepts is documented at the type.
+  `crates/micold-daemon/tests/windows_process_tree.rs` exercises the three behaviours — a grandchild
+  started through PowerShell is gone after `kill()`; `0x03` written to the PTY stops `ping.exe`,
+  which obeys only a real console control event where `cmd.exe` would mask a lost one; `kill()` is
+  `Ok` *and* the process has exited, and a second `kill()` is still `Ok` — plus a fourth the tests
+  found: **dropping a live session hung on Windows**. `PtySession::drop` joined the reader before
+  the master closed, and a ConPTY reader sees end-of-file only when the pseudoconsole closes. The
+  master now closes first. The file is `#![cfg(windows)]` and every other daemon test is Unix-only,
+  so it has its own Windows-conditioned step in `.github/workflows/ci.yml`; before it, no Windows
+  runner had started a daemon session.
 
 
 ---
