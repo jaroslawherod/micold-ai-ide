@@ -293,6 +293,11 @@ jobs:
       - name: Test (full workspace)
         if: runner.os == 'Linux'
         run: cargo test --workspace
+      # Feature 021's frame budget (SC-002) is a release-build number, so its measurements are
+      # ignored in the debug suite above and run here instead (BUG-003).
+      - name: Test (type-ahead frame budget, release)
+        if: runner.os == 'Linux'
+        run: cargo test --release -p micold-core --test typeahead_budget
 
   # Feature 027. The sandbox adapter layer is tested on all three platforms by the `test` job
   # above, against an injected fake runner with nothing installed -- that is what keeps Principle

@@ -433,3 +433,29 @@ nothing.
 
 **Bugfix**: 2026-08-07 — BUG-001 Updated from bugfix patch: reopened T053, added T072–T076. T053's
 reopen is kept visible rather than erased; its matching half stays done and only its pose is retired.
+
+---
+
+## Phase 10: Bugfix — BUG-003
+
+Appended by `/speckit-bugfix-patch`. `typeahead_budget.rs` measured a debug build against SC-002's
+16 ms, which is the release build's budget, so the check's margin was never stated and read zero under
+load. See `bugs/BUG-003.md`.
+
+**No false completion.** T013 and T040 built the measurements they describe, and those stay. What
+changes is the build they run in, which neither task named.
+
+- [X] T077 [US1] Failing tests first, in `crates/micold-core/tests/typeahead_budget.rs`: `every_frame_budget_measurement_is_release_only` scans the file for every `#[test]` compared against `BUDGET_MS` (at least the four that exist) and requires each to carry `#[cfg_attr(debug_assertions, ignore …)]`; `ci_runs_the_frame_budget_in_a_release_build` requires `.github/workflows/ci.yml` to run `cargo test --release -p micold-core --test typeahead_budget`. Confirm both fail before T078 (SC-002, Principle I)
+- [X] T078 [US1] Make the budget release-only: the `cfg_attr(debug_assertions, ignore)` attribute on the four timed tests, a 027-style `release_build` refusal at the top of `millis()` so `--ignored` cannot bring the debug comparison back, the module doc's debug-pass argument replaced with why it was wrong, and a `Test (type-ahead frame budget, release)` step after `Test (full workspace)` in `.github/workflows/ci.yml`. `BUDGET_MS` stays 16 — it is the contract's number (SC-002, contract §5)
+- [X] T079 [US1] Run the file in both builds and record the numbers in `bugs/BUG-003.md`: in debug the four timed tests are ignored and the rest pass; in release all pass, each printing its best-of-5 time (SC-002)
+
+  > **Red, 2026-09-13**: both T077 tests failed; the four timed tests carried no debug ignore and
+  > `ci.yml` had no release run of the file.
+  >
+  > **Pass, 2026-09-13**, after T078. Debug: `typeahead_budget` 4 passed, 4 ignored.
+  > `ci_gate_covers_every_job` 3/3 and `quickstart_a_runs_everywhere` 4/4 still pass with the new CI
+  > step. Release: 8 passed, reading (best of 5) `feat` 0.496 ms, the long query 0.384 ms, `zzqxwv`
+  > 0.441 ms and `rtaeiov` 0.727 ms, on a machine where other worktrees were building.
+
+**Bugfix**: 2026-09-13 — BUG-003 Updated from bugfix patch: added T077–T079. No task reopened: T013
+and T040 are right about what to measure, and the defect was the build they measured it in.
