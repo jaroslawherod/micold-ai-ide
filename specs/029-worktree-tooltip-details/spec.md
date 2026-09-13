@@ -4,7 +4,10 @@
 
 **Created**: 2026-09-03
 
-**Status**: Draft
+**Status**: Closed 2026-09-13 — implemented and shipped in PR #281 (merged 2026-09-12); all 30 tasks
+in [tasks.md](./tasks.md) are done. The quickstart §B pass ran 2026-09-12 and B1–B6 all pass; the
+results table and screenshots are in [quickstart.md](./quickstart.md#the-pass--2026-09-12) and
+[evidence/](./evidence/).
 
 **Input**: User description: "tooltip of worktree should beside location should full worktree name and details"
 

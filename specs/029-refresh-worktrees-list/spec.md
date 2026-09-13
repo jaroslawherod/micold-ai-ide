@@ -4,7 +4,12 @@
 
 **Created**: 2026-08-31
 
-**Status**: Draft
+**Status**: Closed 2026-09-13 — implemented and shipped in PR #279 (merged 2026-09-12); all 43 tasks
+in [tasks.md](./tasks.md) are done. Quickstart Part B ran 2026-09-03
+([visual-pass.md](./visual-pass.md)): §B.1, §B.2 and §B.4–§B.7 pass. §B.3 failed as written because
+it described a state that cannot happen (with no project open there is no sidebar to look at);
+FR-005 is still met, and the quickstart was corrected. Research R6 was answered with no finding.
+§B.1, §B.2 and §B.5–§B.7 were checked in the dark scheme only.
 
 **Input**: User description: "Add to the buttons to hide sidebar and create new worktree a new button to refresh a list of worktrees on demand"
 

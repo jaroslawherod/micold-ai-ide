@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-28
 
-**Status**: Complete. The bulk merged as PR #47 and was then amended in place — five
+**Status**: Closed. The bulk merged as PR #47 and was then amended in place — five
 inconsistencies found by the planning phase's cross-artifact analysis, adding FR-015a and a
 daemon-connection feature; see the checklist's iteration-5 findings for what changed and why. A
 convergence phase (Phase 8, T079–T084) appended afterwards closed the gaps an assessment of the
