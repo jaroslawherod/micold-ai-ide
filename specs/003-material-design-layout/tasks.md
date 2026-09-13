@@ -186,7 +186,7 @@ why nothing caught this, so the test paints the shell at narrow widths itself.
 - [X] T036 [US1] Failing test first, in `crates/micold-client/tests/known_projects_reflow.rs`: paint the shell at 640dp (the minimum window, no project open) and 440dp (the main area beside a minimum-width sidebar) with a long name, a short one and an unavailable one. Every name is painted whole on one line or elided with `…` and never dropped, and every action label is painted once per row and unclipped. Confirm both tests fail before T037 (FR-016, FR-012)
 - [X] T037 [US1] Add `cdk::reflow::Reflow` in `crates/micold-client/src/ui/cdk/reflow.rs`, a layout-only two-child widget that sets the trailing child beside the leading one while the leading one keeps `lead_min` and on the line beneath it otherwise, with unit tests for both layouts and the exact breakpoint. Register it in `cdk/mod.rs`, and give it a `showcase_completeness` exemption in `showcase/catalogue.rs`, since it has no appearance to pose (FR-016)
 - [X] T038 [US1] Rebuild the known-projects row in `crates/micold-client/src/ui/shell.rs` as `Reflow::new(lead, actions).lead_min(ROW_LEAD_MIN)` (240dp): the name an `Ellipsized` label, the actions a wrapping row. Regenerate `tests/fixtures/layout_snapshot.txt` with `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot` and confirm the diff is confined to the known-projects rows, making T036 pass (FR-016, FR-012)
-- [ ] T039 [US1] Re-run `quickstart.md` §3's "Resize small" step with the visual-pass skill: a narrow window with a long project name, before and after the fix, recorded under `evidence/` (FR-016)
+- [X] T039 [US1] Re-run `quickstart.md` §3's "Resize small" step with the visual-pass skill: a narrow window with a long project name, before and after the fix, recorded under `evidence/` (FR-016)
 
   > **Red, 2026-09-13**: at 640dp the long name wrapped into 163dp of a 421dp line; at 440dp the name
   > was not painted at all and one row lost Forget.
@@ -200,6 +200,11 @@ why nothing caught this, so the test paints the shell at narrow widths itself.
   > Every button keeps its box, and the name keeps its x and width. The name's height goes from 20.0
   > to 18.2, the one-line height of `Ellipsized`, so its centred box moves 0.9dp down. Each row gains
   > two container boxes: the identity half and the action cluster.
+  >
+  > **Visual pass, 2026-09-13 (T039)**: Xvfb + lavapipe, before and after pinned builds, windows 400,
+  > 560 and 760 px wide. Before: the long name wraps to seven lines at 560 and is gone at 400, where
+  > Forget is an empty pill. After: the actions sit beneath a whole or elided name and every label
+  > is painted. `evidence/T039-resize-small-rerun.md`, `evidence/BUG-002-reflow-before-after.png`.
 
 ---
 

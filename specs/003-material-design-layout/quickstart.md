@@ -94,6 +94,9 @@ The user-guide page documents the new look and how to choose/persist a theme, an
 fails (`bugs/BUG-002.md`); §2 covers Linux only; §4's live OS theme change was not run — the
 portal-absent FR-018 fallback was tested in its place and holds.
 
+**Linux, 2026-09-13** — §3's "Resize small" step re-run after BUG-002's fix, before and after at 400,
+560 and 760 px (Xvfb + lavapipe): **PASS**. Recorded in `evidence/T039-resize-small-rerun.md`.
+
 **macOS and Windows**: never run. §1 and §2 are covered on all three by CI; the manual walkthroughs
 are not.
 
