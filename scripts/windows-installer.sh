@@ -62,7 +62,16 @@ if [ -z "$version" ]; then
 	exit 1
 fi
 
-target_dir="$("$root/scripts/build-lock.sh" --print-target-dir)"
+# <path> made absolute against where the script ran, as cargo resolves it. iscc would resolve a
+# relative one against the .iss's own directory instead.
+absolute() {
+	case "$1" in
+	/*) printf '%s\n' "$1" ;;
+	*) printf '%s\n' "$PWD/$1" ;;
+	esac
+}
+
+target_dir="$(absolute "$("$root/scripts/build-lock.sh" --print-target-dir)")"
 bin_dir="$target_dir/$triple/release"
 
 # Inno Setup's compiler: $ISCC, then the installer's default location, then PATH. Resolved before the
@@ -94,7 +103,7 @@ winpath() {
 "$root/scripts/build-lock.sh" cargo build --release --locked \
 	-p micold-client --bin micold-ai-ide -p micold-daemon --target "$triple"
 
-out_dir="${out_dir:-$target_dir/windows-installer}"
+out_dir="$(absolute "${out_dir:-$target_dir/windows-installer}")"
 mkdir -p "$out_dir"
 # MSYS2 would otherwise rewrite every `/D...` switch into a path.
 MSYS2_ARG_CONV_EXCL='*' "$iscc" \

@@ -128,6 +128,22 @@ for pair in x64:x86_64-pc-windows-msvc arm64:aarch64-pc-windows-msvc; do
   rm -rf "$d"
 done
 
+# CI sets `CARGO_TARGET_DIR: target`. iscc resolves a relative path against the .iss's own directory,
+# so the script must hand it the directory cargo actually built into, resolved from where it ran.
+d="$(new_stubs "$WINDOWS_UNAME")"
+run_script "$d" CARGO_TARGET_DIR=target -- --arch arm64 --out-dir "$d/out"
+expect_args "resolves a relative CARGO_TARGET_DIR before handing it to iscc" iscc \
+  "/DBinDir=$ROOT/target/aarch64-pc-windows-msvc/release "
+rm -rf "$d"
+
+# CI passes `--out-dir dist` and then smokes `dist/*-setup.exe` from the same directory, so a relative
+# --out-dir is resolved the same way.
+d="$(new_stubs "$WINDOWS_UNAME")"
+out_rel="$(realpath --relative-to="$ROOT" "$d")/out"
+run_script "$d" -- --arch x64 --out-dir "$out_rel"
+expect_args "resolves a relative --out-dir before handing it to iscc" iscc "/O$ROOT/$out_rel "
+rm -rf "$d"
+
 # Exactly the app and the daemon, never the showcase binary built from the same crate (FR-002).
 for pair in x64:x86_64-pc-windows-msvc arm64:aarch64-pc-windows-msvc; do
   arch="${pair%%:*}" triple="${pair#*:}"

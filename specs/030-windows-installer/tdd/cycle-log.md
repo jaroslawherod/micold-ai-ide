@@ -454,3 +454,18 @@ failed before the implementation.
 - red: `scripts/tests/build-lock.test.sh` -> `want exit 3 (the command's), got 127; output: .../build-lock.sh: line 84: flock: command not found`. The same exit 127 ended `windows-arm64-package` in PR #314's first CI run.
 - green: when `flock` is not on `PATH`, the wrapper says so and runs the command unlocked -> 1 case, 0 failures; every shell suite passes and a locked `scripts/build-lock.sh true` still runs.
 - commit: see the merge follow-up commit
+
+## Cycle 53: U65 windows-installer.sh resolves a relative target dir
+
+- test: `scripts/tests/windows-installer.test.sh` "resolves a relative CARGO_TARGET_DIR before handing it to iscc"
+- red: PR #314's second CI run (01f5e2f4), both Windows packaging legs, after cargo built: `Error on line 59 in ...\packaging\windows\micold-ai-ide.iss: Source file "...\packaging\windows\target\aarch64-pc-windows-msvc\release\micold-ai-ide.exe" does not exist.` Locally: `scripts/tests/windows-installer.test.sh` -> `FAIL  resolves a relative CARGO_TARGET_DIR before handing it to iscc` ... `got: ... /DBinDir=target/aarch64-pc-windows-msvc/release ...`
+- green: an `absolute` helper resolves the target dir against `$PWD`, as cargo does -> 14 cases, 0 failures.
+- commit: see the follow-up commit
+
+## Cycle 54: U66 windows-installer.sh resolves a relative out dir
+
+- test: `scripts/tests/windows-installer.test.sh` "resolves a relative --out-dir before handing it to iscc"
+- red: `scripts/tests/windows-installer.test.sh` -> `FAIL  resolves a relative --out-dir before handing it to iscc` ... `got: ... /O../../../../../../../tmp/tmp.BMUif2O6Dp/out ...`
+- green: `out_dir` goes through the same `absolute` helper -> 15 cases, 0 failures.
+- notes: not yet observed on CI, where compile stopped at cycle 53's error before `/O` mattered. Without it, `--out-dir dist` would put the setup exe beside the `.iss`, and the smoke's `dist/*-setup.exe` would name a file that does not exist.
+- commit: see the follow-up commit

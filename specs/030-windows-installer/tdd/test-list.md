@@ -167,6 +167,8 @@ These tests already exist and pass on Unix. On Windows they are compiled out tod
 | U46 | `iscc` receives `/DArch=<arch>` and `/DBinDir=<target>/<triple>/release` | FR-015, FR-016 | example | any | DONE | `scripts/tests/windows-installer.test.sh` "passes /DArch=<arch> to iscc; points iscc at the <triple> release binaries" |
 | U47 | When no `iscc` is found, the error names the Inno Setup download URL | FR-016 | example | any | DONE | `scripts/tests/windows-installer.test.sh` "names the Inno Setup download when no iscc is found" |
 | U48 | cargo is invoked as `build --release --locked -p micold-client --bin micold-ai-ide -p micold-daemon --target <triple>` | FR-002, FR-016 | example | any | DONE | `scripts/tests/windows-installer.test.sh` "builds the app and the daemon for <triple>" |
+| U65 | A relative `CARGO_TARGET_DIR` reaches `iscc` as an absolute `/DBinDir`, resolved from where the script ran | FR-016, FR-018 | example | any | DONE | `scripts/tests/windows-installer.test.sh` "resolves a relative CARGO_TARGET_DIR before handing it to iscc" (added in cycle 53: CI's `CARGO_TARGET_DIR: target` made iscc look under `packaging\windows\target`) |
+| U66 | A relative `--out-dir` reaches `iscc` as an absolute `/O`, resolved from where the script ran | FR-016, FR-018 | example | any | DONE | `scripts/tests/windows-installer.test.sh` "resolves a relative --out-dir before handing it to iscc" (added in cycle 54) |
 
 ### `scripts/windows-install-smoke.sh`, tested by `scripts/tests/windows-install-smoke.test.sh`
 
