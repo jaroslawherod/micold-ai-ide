@@ -1608,6 +1608,10 @@ where
                 }
                 Err(e) => send_io_error(state, id, req, "failed to add the project", &e),
             },
+            ClientMsg::ProjectActivate { req, path } => {
+                let _ = path;
+                send_ack(state, id, req);
+            }
             ClientMsg::ProjectRemove { req, path } => match state.forget_project(&path) {
                 Ok(ptys) => {
                     for pty in ptys {

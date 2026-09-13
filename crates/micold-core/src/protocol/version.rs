@@ -45,7 +45,11 @@
 /// frame that carries a provider can hold, and `DaemonSettings` / `ClientMsg::SettingsSet` gain
 /// `pi_activity_component` (FR-012e). An older peer would fail to decode either. It developed
 /// against 10 while `WorktreeRefresh` took that number here, so both cannot be 10.
-pub const PROTOCOL_VERSION: u32 = 11;
+/// Bumped 11 → 12 for `ClientMsg::ProjectActivate` (`002` BUG-003): reopening a known project has
+/// to reach the catalog's single writer, or `last_active` keeps naming whichever project was last
+/// opened by browsing and the next launch restores that one. It developed against 10 while the Pi
+/// provider took 11.
+pub const PROTOCOL_VERSION: u32 = 12;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
