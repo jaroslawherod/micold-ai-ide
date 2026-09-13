@@ -691,6 +691,28 @@ plus a new Edge Case and SC-011a. See `bugs/BUG-009.md`.
 - **FR-038**: Surviving user logout MUST be documented as supported on Linux via an explicit,
   user-enabled setting, and explicitly unsupported on macOS and Windows. The setting MUST NOT be
   enabled silently by installation.
+
+  **Superseded**: 2026-08-31 — feature `028-client-managed-daemon` removed the setting this
+  requirement documents. The Linux opt-in worked by registering the daemon with the user's own
+  `systemd --user` manager (`loginctl enable-linger`, then `systemctl --user enable --now
+  micold-daemon.socket`), and that registration is exactly what `028` FR-005 deletes: no path
+  through the application may hand a second starter to the operating system. A service running
+  directly on the machine therefore does not survive logout **on any platform**, Linux included.
+
+  What replaced it is not a move but a widening. The promise now rests on the sandboxed placement's
+  keep-running setting (`028` FR-005b), which is the container runtime's restart policy rather than
+  a session-scoped registration — so it holds on Linux, macOS and Windows alike. FR-038 was written
+  as an explicit Constitution VI exception, a capability one platform had and the other two did
+  not; that exception is retired rather than relocated.
+
+  Two halves of FR-038 survive intact. The documentation obligation is met by `docs/daemon.md`
+  "Surviving logout: run the service in a container", which states the direct placement's limit and
+  names the sandbox as the supported way (`028` FR-005c). "MUST NOT be enabled silently by
+  installation" holds more strongly than before: installation now registers nothing at all (`028`
+  FR-002 — see FR-037 above). Gated from this side by
+  `micold-client/tests/no_host_logout_survival.rs`, which asserts both directions — no client or
+  core source offers the host path, and the sandbox's own `enable_for` path is still there, so the
+  guard cannot be satisfied by deleting too much.
 - **FR-039**: The service MUST NOT require a graphical environment to run.
 
 ### Observability & diagnostics
