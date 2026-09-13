@@ -59,10 +59,17 @@ pub struct PtySession {
     term: SharedTerm,
     /// The child process. Behind a mutex so liveness checks / kill take `&self`.
     child: Mutex<Box<dyn Child + Send + Sync>>,
+    /// The child and everything it starts, as the platform reaches them at teardown — a process
+    /// group on Unix, a job object on Windows (FR-036). Adopted at spawn, because a job has to
+    /// exist before the child starts the processes it should contain.
+    tree: crate::platform::ProcessTree,
     /// The PTY master — used for resize. Behind a `Mutex` only so [`PtySession`] is `Sync` (the
     /// trait object is `Send` but not `Sync`); this lets the session live in the shared daemon
     /// registry. `resize` takes `&self` and the lock is never held across an `.await`.
-    master: Mutex<Box<dyn MasterPty + Send>>,
+    ///
+    /// An `Option` only so [`Drop`] can close it before joining the reader; it is `Some` for the
+    /// whole of the session's public life.
+    master: Mutex<Option<Box<dyn MasterPty + Send>>>,
     /// The PTY writer, shared with the [`DaemonListener`] (VT replies use the same writer as user
     /// input, so both hold this).
     writer: SharedWriter,
@@ -183,7 +190,20 @@ impl PtySession {
             })
             .map_err(io::Error::other)?;
 
-        let child = pair.slave.spawn_command(cmd).map_err(io::Error::other)?;
+        let mut child = pair.slave.spawn_command(cmd).map_err(io::Error::other)?;
+        // Before anything else: on Windows this is what puts the child in a job object, and every
+        // instant between the spawn and this call is one in which a grandchild would escape it.
+        let tree = match child.process_id() {
+            Some(pid) => crate::platform::ProcessTree::adopt(pid),
+            None => {
+                // Neither platform's `portable-pty` child can lack a pid; if one ever does, end it
+                // rather than hand back a session whose tree nothing could reap.
+                let _ = child.kill();
+                return Err(io::Error::other(
+                    "the PTY child has no process id, so its process tree cannot be reaped",
+                ));
+            }
+        };
         // Drop the slave so the PTY reports EOF once the child (and any of its children holding the
         // slave open) exit — otherwise the reader thread would block forever.
         drop(pair.slave);
@@ -242,7 +262,8 @@ impl PtySession {
             id,
             term,
             child: Mutex::new(child),
-            master: Mutex::new(pair.master),
+            tree,
+            master: Mutex::new(Some(pair.master)),
             writer,
             signals,
             size,
@@ -287,6 +308,8 @@ impl PtySession {
         self.master
             .lock()
             .map_err(|_| io::Error::other("pty master mutex poisoned"))?
+            .as_ref()
+            .ok_or_else(|| io::Error::other("pty master already closed"))?
             .resize(PtySize {
                 rows,
                 cols,
@@ -360,13 +383,17 @@ impl PtySession {
         self.child.lock().ok().and_then(|c| c.process_id())
     }
 
-    /// Terminate and reap the child (FR-015a / session close). Signals the child's whole process
-    /// **group** first so grandchildren the session forked don't orphan (FR-036, T061), then reaps
-    /// the direct child.
+    /// Terminate and reap the child (FR-015a / session close). Terminates the child's whole process
+    /// tree first — its process group on Unix, its job object on Windows — so processes the session
+    /// started don't orphan (FR-036, T061), then kills and reaps the direct child.
+    ///
+    /// On Windows `child.kill()` is `portable-pty`'s, whose killer reports `TerminateProcess`
+    /// inverted (research R3.4). `Child::kill` discards that result in 0.9.0, which is the only
+    /// reason the `?` below is sound there; `tests/windows_process_tree.rs` pins both halves — `Ok`,
+    /// and the process really gone — so an upgrade that starts propagating it fails a test rather
+    /// than every session close.
     pub fn kill(&self) -> io::Result<()> {
-        if let Some(pid) = self.pid() {
-            crate::platform::terminate_process_tree(pid);
-        }
+        self.tree.terminate();
         if let Ok(mut child) = self.child.lock() {
             child.kill()?;
             let _ = child.wait();
@@ -377,9 +404,17 @@ impl PtySession {
 
 impl Drop for PtySession {
     fn drop(&mut self) {
-        // Best-effort teardown: kill the child so the reader thread hits EOF, then join it so no
-        // thread outlives the session.
+        // Best-effort teardown: kill the child, close the master, then join the reader so no thread
+        // outlives the session.
+        //
+        // The master must close *before* the join. On Unix the reader sees end-of-file as soon as
+        // the child's side of the PTY is gone, so the order never mattered there. On ConPTY it sees
+        // it only when the pseudoconsole is closed — `conhost` keeps the output pipe open after the
+        // child exits — and dropping the master is what closes it (the slave was dropped at spawn).
+        // Joining first waited forever. The reader stays running meanwhile, which matters too:
+        // before Windows 11 24H2 `ClosePseudoConsole` blocks until pending output is drained.
         let _ = self.kill();
+        drop(self.master.get_mut().ok().and_then(Option::take));
         if let Some(handle) = self.reader.take() {
             let _ = handle.join();
         }
