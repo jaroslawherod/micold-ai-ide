@@ -181,15 +181,16 @@ gui-gated layer in `src/main.rs` and `src/ui/**`.
 opening the switcher rescans availability (FR-008, acceptance scenario US3-3). See plan.md
 "Bugfix: closing the panel and rescanning on open".
 
-- [ ] T036 [P] [US2] Failing tests (BUG-002): `picking_a_project_in_the_switcher_closes_it` and
+- [x] T036 [P] [US2] Failing tests (BUG-002): `picking_a_project_in_the_switcher_closes_it` and
   `a_refused_pick_leaves_the_switcher_open` in `crates/micold-client/src/shell/workspace.rs`.
-- [ ] T037 [US2] `on_known_project_reopened` closes the switcher on an accepted switch only
-  (depends on T036).
-- [ ] T038 [P] [US3] Failing tests (BUG-003): `opening_the_switcher_marks_a_folder_that_has_gone_unavailable`
+- [x] T037 [US2] `on_known_project_reopened` closes the switcher on an accepted switch only
+  (depends on T036). The shell now reads the flag, so `project.switcher_open` no longer qualifies
+  as component-local and leaves `COMPONENT_LOCAL` in `crates/micold-client/tests/root_state_is_shared.rs`.
+- [x] T038 [P] [US3] Failing tests (BUG-003): `opening_the_switcher_marks_a_folder_that_has_gone_unavailable`
   and `opening_the_switcher_clears_the_badge_of_a_folder_that_came_back` in
   `crates/micold-client/src/shell/workspace.rs`; `SwitcherToggled` routed to the shell handler
   `on_switcher_toggled`.
-- [ ] T039 [US3] `on_switcher_toggled` runs `Workspace::refresh_availability` when the panel opens
+- [x] T039 [US3] `on_switcher_toggled` runs `Workspace::refresh_availability` when the panel opens
   (depends on T038).
 
 **Bugfix**: 2026-09-13 — BUG-002/BUG-003 Added Phase 8 (T036–T039). See `bugs/BUG-002.md`,

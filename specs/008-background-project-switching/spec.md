@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-17
 
-**Status**: Closed (implemented and shipped; the manual quickstart pass ran 2026-08-21 — [evidence](./evidence/T034-quickstart.md). SC-001/003/004/006/007 confirmed. SC-002 holds as designed — open, select, switched — but BUG-002 then costs a third press to clear the panel. SC-005's ~1 s is unmeasured: the headless harness cannot resolve it. Two defects found and filed, neither blocking: [BUG-002](./bugs/BUG-002.md) — the switcher does not close when you pick a project; [BUG-003](./bugs/BUG-003.md) — availability is scanned only at startup and on a reopen, so FR-008's unavailable indication is always out of date.)
+**Status**: Closed (implemented and shipped; the manual quickstart pass ran 2026-08-21 — [evidence](./evidence/T034-quickstart.md). SC-001/003/004/006/007 confirmed. SC-002 holds — open, select, switched; the third press BUG-002 cost to clear the panel is gone. SC-005's ~1 s is unmeasured: the headless harness cannot resolve it. The two defects that pass found are fixed (2026-09-13, Phase 8): [BUG-002](./bugs/BUG-002.md) — the switcher now closes when you pick a project; [BUG-003](./bugs/BUG-003.md) — opening the switcher rescans availability, so FR-008's unavailable indication is current when the panel is shown.)
 
 **Input**: User description: "Allow switching projects once a terminal session has been started, and continue those sessions in the background. The switcher should be located next to the menu button at the top bar."
 
