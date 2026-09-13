@@ -468,4 +468,42 @@ mod tests {
             other => panic!("expected a reported failure, got {other:?}"),
         }
     }
+
+    /// A real, committed git repository at `dir`.
+    #[cfg(unix)]
+    fn init_repo(dir: &Path) {
+        std::fs::create_dir_all(dir).unwrap();
+        for args in [
+            &["init", "-q"][..],
+            &["config", "user.email", "t@t.test"],
+            &["config", "user.name", "T"],
+            &["commit", "-q", "--allow-empty", "-m", "init"],
+        ] {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(dir)
+                .args(args)
+                .output()
+                .expect("git runs");
+            assert!(out.status.success(), "git {args:?} failed");
+        }
+    }
+
+    /// 002 BUG-002: a repository chosen through a symlink opens under the path git reports for it,
+    /// so its worktrees — which git records by that path — belong to it.
+    #[cfg(unix)]
+    #[test]
+    fn choosing_a_symlink_to_a_repository_opens_it_by_its_resolved_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let real = std::fs::canonicalize(tmp.path()).unwrap().join("real");
+        init_repo(&real);
+        let link = tmp.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        let mut app = base_app();
+        let _ = on_folder_chosen(&mut app, link);
+
+        assert_eq!(app.core.workspace.active.as_deref(), Some(real.as_path()));
+        assert_eq!(app.core.workspace.projects.len(), 1);
+    }
 }
