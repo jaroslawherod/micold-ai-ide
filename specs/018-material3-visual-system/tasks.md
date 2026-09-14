@@ -1735,3 +1735,52 @@ the button over its pressed fill for 500 ms after a press, and every sample was 
 faded.
 
 **Bugfix**: 2026-09-13 — BUG-013 added Phase 25 (T176–T179). **No task is reopened.** T160 and T175 are complete as written: the assertion measures what §5 says, and T175's rendered-frame record is what found this. The wrapper that stacks the layers is feature 027's FR-030 work, outside this feature's tasks.
+
+## Phase 26: BUG-014 — a press drew the ripple over the surface's own hover or pressed layer
+
+**Goal**: a running ripple is the surface's only state layer. The surface draws its resting fill, the
+circle draws at the pressed opacity and fades to the layer the surface resumes, and the ripple stays
+visible against the surface it crosses (FR-024h, SC-008j; FR-024a).
+
+- [X] T180 Failing tests first: in `crates/micold-client/src/ui/material/ripple_layers.rs`, render a real `Button` headlessly through a press at stated frame instants and read pixels back — held and clicked, the fill under a fully expanded ripple is no further from rest than the pressed layer alone; early in a press the circle differs from the surface beyond it by at least half the pressed layer; and no frame of the fade or the handoff steps by more than a third of it. Red today on the first two (FR-024h, SC-008j)
+
+- [X] T181 In `crates/micold-client/src/ui/material/style.rs`, give `state_layer` and `state_fill` a draw-scoped yield (`beneath_ripple`) that returns the resting fill and reports the heaviest layer asked for; in `crates/micold-client/src/ui/material/ripple.rs`, draw the content inside it while a ripple runs and fade the circle's opacity to the reported layer. T180 goes green (FR-024h)
+
+- [X] T182 Run the workspace gate (fmt, clippy, `cargo test --workspace`) and record the result here
+
+- [X] T183 Confirm on a rendered frame, dark scheme, that a pressed button mid-ripple shows one layer; record what was sampled, and what could not be
+
+**Red record (T180)** — 2026-09-14, against the unfixed ripple, dark scheme, filled button (`primary`
+at rest `(207,188,255)`, its own pressed layer alone `(192,172,241)`): `a_held_press_draws_one_layer_under_its_ripple`
+failed on `(178,157,227)` and `a_click_draws_one_layer_under_its_ripple` on `(181,160,230)` — about twice the
+pressed layer's distance from rest, the 19% and 17.2% composites. The visibility and handoff tests passed, as
+they should before the fix. A first run was discarded: iced draws a button that has not yet seen a redraw as
+`Disabled`, so "rest" was the disabled fill and the two layer tests passed on nothing; the harness now sends
+one frame before sampling.
+
+**Pass record (T182)** — 2026-09-14: `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace` 3051 passed, 0 failed (summed over every `test result` line, doc tests included). The first run failed `motion_tokens::every_duration_is_a_named_token` on the test harness's own `from_millis(16)`; it now takes `cdk::motion::FRAME`. `ripple_clipping` and `ripple_pulse` pass unchanged, and no snapshot moved.
+
+**Rendered-frame record (T183)** — 2026-09-14, the `micold-showcase` gallery in the dark scheme on
+Xvfb + lavapipe (the `visual-pass` skill), not on a real display; the binary built and pinned from
+this branch. The filled `Rebuild index` button, pressed at its centre, sampled at its leading padding
+and, mid-ripple, inside the growing circle:
+
+| State | Fill sampled | Layer | Before the fix |
+|---|---|---|---|
+| at rest | `(207,188,255)` | none | — |
+| hovered | `(195,175,244)` | 8% | — |
+| held, circle growing — inside it | `(192,172,240)` | 10%, the ripple alone | `(178,157,227)`, 19% (T180) |
+| held, circle growing — beyond it | `(207,188,255)` | none — FR-024h's accepted change | `(192,172,241)` |
+| held, every later capture to 1.2 s | `(192,172,241)`–`(192,172,240)` | 10% | 19% for the ripple's span |
+| released, pointer over it | `(195,175,244)` | 8% | — |
+| clicked, circle growing — inside / beyond | `(192,172,240)` / `(207,188,255)` | 10% / none | `(181,160,230)`, 17.2% (T180) |
+| clicked, fading | `(194,175,243)` then `(195,175,244)` | 10% → 8%, no step | — |
+
+No capture was heavier than the pressed layer alone. The captures are about 200 ms apart, since an
+`import` of the root window takes that long, so the fade was caught at one intermediate frame rather
+than traced. Its continuity is `the_ripple_hands_back_to_the_hover_layer_without_a_jump`'s claim, not
+this record's. Crop:
+[`evidence/BUG-014-ripple-one-layer.png`](evidence/BUG-014-ripple-one-layer.png), top to bottom: rest,
+hovered, held mid-ripple, held settled, clicked mid-ripple, clicked settled.
+
+**Bugfix**: 2026-09-14 — BUG-014 added Phase 26 (T180–T183). **No task is reopened.** T032 drew what FR-024c asked for; the clause is struck, and FR-024h is the requirement it now meets.

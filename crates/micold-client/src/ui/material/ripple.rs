@@ -128,6 +128,17 @@ fn shape_bands(bounds: Rectangle, radius: f32) -> Vec<Rectangle> {
     out
 }
 
+/// The ripple's opacity this frame: the pressed opacity at full strength, settling on `resumes` — the
+/// layer the surface beneath will draw once the ripple is gone — as the strength falls.
+///
+/// Not faded to 0. The ripple stands in for the surface's own layer while it runs, so fading to 0
+/// would strip a still-hovered button to its resting fill and then snap the hover layer back on the
+/// frame the ripple released its state (FR-024h). The behaviour layer supplies the fraction and this
+/// supplies the opacities, so neither knows the other's business.
+fn ripple_opacity(resumes: f32, strength: f32) -> f32 {
+    resumes + (state::PRESSED - resumes) * strength.clamp(0.0, 1.0)
+}
+
 /// `content` with Material's press indication.
 ///
 /// ```ignore
@@ -301,27 +312,33 @@ where
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        self.content.as_widget().draw(
-            &tree.children[0],
-            renderer,
-            theme,
-            style,
-            layout,
-            cursor,
-            viewport,
-        );
-
         let state = tree.state.downcast_ref::<RippleState>();
+        let draw_content = |renderer: &mut Renderer| {
+            self.content.as_widget().draw(
+                &tree.children[0],
+                renderer,
+                theme,
+                style,
+                layout,
+                cursor,
+                viewport,
+            );
+        };
         let Some(origin) = state.origin() else {
+            draw_content(renderer);
             return;
         };
+        // While the ripple runs it is the surface's only state layer: the surface draws its resting
+        // fill and reports the layer it would have drawn, which is the one it resumes afterwards
+        // (§5, FR-024h, BUG-014). Drawing the ripple over that layer instead summed the two — 19%
+        // held, 17.2% clicked — on every press.
+        let resumes = super::style::beneath_ripple(|| draw_content(renderer));
+
         let radius = state.radius();
         if radius <= 0.0 {
             return;
         }
-        // The state-layer opacity, faded out over the ripple's tail. The behaviour layer supplies a
-        // fraction and this supplies the opacity, so neither knows the other's business.
-        let alpha = state::PRESSED * state.strength();
+        let alpha = ripple_opacity(resumes, state.strength());
         if alpha <= 0.0 {
             return;
         }
@@ -476,6 +493,44 @@ pub fn pulse(found: Arc<AtomicUsize>) -> impl Operation<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Full strength is the pressed layer whatever the surface would draw; a finished fade is
+    /// exactly the layer it resumes, so the handoff has nothing to step over (FR-024h).
+    #[test]
+    fn the_ripple_fades_to_the_layer_the_surface_resumes() {
+        for resumes in [0.0, state::HOVER, state::PRESSED] {
+            assert!((ripple_opacity(resumes, 1.0) - state::PRESSED).abs() < 1e-6);
+            assert!((ripple_opacity(resumes, 0.0) - resumes).abs() < 1e-6);
+            let half = ripple_opacity(resumes, 0.5);
+            assert!(half >= resumes.min(state::PRESSED) && half <= resumes.max(state::PRESSED));
+        }
+    }
+
+    /// The suppression is scoped to the subtree being drawn: a layer asked for outside it is drawn,
+    /// and a nested scope hands the enclosing one back intact.
+    #[test]
+    fn beneath_a_ripple_the_surface_draws_no_layer_and_reports_the_heaviest() {
+        use super::super::style::{beneath_ripple, state_fill, state_layer};
+        let (base, on) = (Color::BLACK, Color::WHITE);
+
+        let mut inner = 0.0;
+        let outer = beneath_ripple(|| {
+            assert_eq!(state_layer(base, on, state::HOVER), base);
+            inner = beneath_ripple(|| {
+                assert_eq!(state_fill(on, state::PRESSED), Color::TRANSPARENT);
+            });
+            assert_eq!(state_fill(on, state::HOVER), Color::TRANSPARENT);
+        });
+        assert!((inner - state::PRESSED).abs() < 1e-6);
+        assert!((outer - state::HOVER).abs() < 1e-6);
+
+        assert_ne!(
+            state_layer(base, on, state::HOVER),
+            base,
+            "the scope leaked past its draw"
+        );
+        assert_eq!(beneath_ripple(|| {}), 0.0);
+    }
 
     /// The reference case: a sidebar row. 40dp tall at `shape::FULL`, which is where the original
     /// rectangular clip put two 20×20 square caps outside a pill.
