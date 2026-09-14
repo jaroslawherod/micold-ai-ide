@@ -5,7 +5,7 @@ profile: .specify/memory/tdd-profile.md
 spec_criteria: 11 # US1 scenarios 1–7, US2 scenarios 1–4
 planned_at: a9f54e77
 updated_at: b27ffe62
-suite_baseline: red # local only: two daemon `pi` tests fail on this host, CI on main is green; see cycle-log.md
+suite_baseline: red # local only: one daemon `pi` test (`exclusivity`) fails on this host since b27ffe62, CI on main is green; see cycle-log.md
 ---
 
 # Test List: The settings rail slides when it collapses and expands
@@ -55,6 +55,7 @@ own message.
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
 | U1  | Driven at instants 0, +64 ms and +84 ms, a drawer's track is within 0.01 of `EMPHASIZED` at a linear twin's value (0.25 ± 0.001) and not within 0.25 ± 0.05 | FR-003 | example | DONE | `navigation_drawer.rs::tests::the_sidebar_slides_on_the_emphasized_curve` |
+| U23 | A closing drawer (panel 300, rail 31, handle 6) at progress 0.05, 0.02 and `2 · CLOSED` lays out at least as wide as its rail. Added in M1 review round 1: the curve's slow tail made the sub-rail stretch visible (D20) | FR-003 (invariant: the swap moves nothing) | example | DONE | `navigation_drawer.rs::tests::a_sliding_drawer_is_never_narrower_than_its_rail` |
 
 ### `crates/micold-client/src/ui/material/section_list.rs` — derived values
 

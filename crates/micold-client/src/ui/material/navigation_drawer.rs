@@ -174,11 +174,16 @@ where
 
         // The panel reveals from its right edge: the space it occupies shrinks while the content
         // slides left behind it, so the part that disappears is the far side, not the near one.
+        // Never narrower than the rail, though: the swap then happens at the rail's own width, so
+        // the content beside the drawer does not creep past the rail's edge during the slide's slow
+        // tail and jump back when the rail takes over.
         let full = panel.size();
-        let width = (full.width * progress).max(0.0);
+        let handle_width = handle.as_ref().map_or(0.0, |h| h.size().width);
+        let width = (full.width * progress)
+            .max(rail.size().width - handle_width)
+            .clamp(0.0, full.width);
         let panel = panel.translate(Vector::new(-(full.width - width), 0.0));
 
-        let handle_width = handle.as_ref().map_or(0.0, |h| h.size().width);
         let height = full
             .height
             .max(handle.as_ref().map_or(0.0, |h| h.size().height));
@@ -508,5 +513,35 @@ mod tests {
             (sidebar - EMPHASIZED_AT_A_QUARTER).abs() <= 0.01,
             "expected the emphasized curve's {EMPHASIZED_AT_A_QUARTER}, got {sidebar}"
         );
+    }
+
+    /// The sidebar's collapsed strip, `sidebar.rs`'s `STRIP_WIDTH - 1`.
+    const RAIL_WIDTH: f32 = 31.0;
+
+    /// Near the end of a slide `full · p` plus the handle is narrower than the rail, and the
+    /// `emphasized` tail lingers there for well over a frame. Laid out that narrow, the content
+    /// beside the drawer creeps left of the rail's edge and jumps back when the rail takes over.
+    #[test]
+    fn a_sliding_drawer_is_never_narrower_than_its_rail() {
+        let mut drawer: Element<'_, ()> = NavigationDrawer::new(
+            Space::new().width(300.0).height(100.0),
+            Space::new().width(RAIL_WIDTH).height(100.0),
+        )
+        .open(false)
+        .handle(Space::new().width(crate::ui::material::resize_handle::WIDTH))
+        .into();
+        let renderer = crate::ui::material::test_support::renderer();
+        let mut tree = Tree::new(drawer.as_widget());
+        let limits = layout::Limits::new(Size::ZERO, Size::new(1000.0, 100.0));
+
+        for progress in [0.05, 0.02, CLOSED * 2.0] {
+            tree.state.downcast_mut::<Track>().progress = Progress::new(progress);
+            let node = drawer.as_widget_mut().layout(&mut tree, &renderer, &limits);
+            assert!(
+                node.size().width >= RAIL_WIDTH,
+                "at progress {progress} the drawer is {} wide, narrower than its {RAIL_WIDTH} rail",
+                node.size().width
+            );
+        }
     }
 }
