@@ -956,8 +956,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 let (col, line) = grid_at(*position, content, metrics);
                 // Jitter inside the pressed cell is still a click (FR-013e). Once the pointer has
                 // left it, every cell counts — the pressed one included, so one character stays
-                // selectable by dragging out and back.
-                if state.press_cell == Some((col, line)) {
+                // selectable by dragging out and back. A position outside the pane has left it,
+                // even where `grid_at` clamps it back onto a pressed edge cell.
+                if content.contains(*position) && state.press_cell == Some((col, line)) {
                     shell.capture_event();
                     return;
                 }
@@ -1066,6 +1067,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                         return;
                     }
                     WheelRouting::ScrollLocally { lines } => {
+                        // Scrolling under a held button puts other text under the pointer, so
+                        // the pressed screen cell no longer holds the pressed text (FR-013e).
+                        state.press_cell = None;
                         shell.publish(Message::Session(SessionMsg::TerminalScrolled(lines)));
                         shell.capture_event();
                         return;
@@ -1115,7 +1119,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 KeyRouting::Copy => {
                     // Nothing selected, nothing to copy: the chord is still the terminal's, but the
                     // clipboard keeps whatever the user put there (FR-013c, BUG-004) — the same rule
-                    // the release that ends a drag already follows.
+                    // the shell's auto-copy on release follows in `selection::copy_request`.
                     let selected = self.selectable_content();
                     if !selected.is_empty() {
                         clipboard.write(ClipboardKind::Standard, selected);
