@@ -328,3 +328,12 @@
 - refactor: none needed
 - commit: `feat(031): classify web and mail addresses verbatim (U28)`
 - notes: T005 ticked in this commit, since every behavior it names (U17–U27) is DONE
+
+## Cycle 33: U29 scheme classification is ASCII case-insensitive
+
+- test: `crates/micold-core/src/link/address.rs::tests::the_scheme_classifies_whatever_its_case` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::address::tests::the_scheme_classifies_whatever_its_case -- --exact`
+  -> `assertion failed: an upper-case web scheme is still a web address, and keeps its case` / `left: NotFollowable` / `right: Web("HTTPS://A.EXAMPLE/X")` (1 failed)
+- green: `classify` compares the leading `scheme.len()` bytes with `eq_ignore_ascii_case`, through a local `starts_with` closure. Suite -> 1091 passed, 0 failed; clippy clean
+- refactor: none needed
+- commit: `feat(031): classify a scheme whatever its case (U29)`

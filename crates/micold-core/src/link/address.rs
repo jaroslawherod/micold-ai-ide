@@ -13,9 +13,13 @@ pub enum Address {
 
 /// What kind of address `uri` is (FR-011).
 pub fn classify(uri: &str) -> Address {
-    if uri.starts_with("http://") || uri.starts_with("https://") {
+    let starts_with = |scheme: &str| {
+        uri.get(..scheme.len())
+            .is_some_and(|head| head.eq_ignore_ascii_case(scheme))
+    };
+    if starts_with("http://") || starts_with("https://") {
         Address::Web(uri.to_string())
-    } else if uri.starts_with("mailto:") {
+    } else if starts_with("mailto:") {
         Address::Mail(uri.to_string())
     } else {
         Address::NotFollowable
@@ -39,6 +43,25 @@ mod tests {
             classify("mailto:team@example.com?subject=Hi%20there"),
             Address::Mail("mailto:team@example.com?subject=Hi%20there".to_string()),
             "a mail address is passed on exactly as written, escapes included"
+        );
+    }
+
+    #[test]
+    fn the_scheme_classifies_whatever_its_case() {
+        assert_eq!(
+            classify("HTTPS://A.EXAMPLE/X"),
+            Address::Web("HTTPS://A.EXAMPLE/X".to_string()),
+            "an upper-case web scheme is still a web address, and keeps its case"
+        );
+        assert_eq!(
+            classify("Http://a.example"),
+            Address::Web("Http://a.example".to_string()),
+            "a mixed-case web scheme is a web address"
+        );
+        assert_eq!(
+            classify("MailTo:team@example.com"),
+            Address::Mail("MailTo:team@example.com".to_string()),
+            "a mixed-case mail scheme is a mail address"
         );
     }
 }
