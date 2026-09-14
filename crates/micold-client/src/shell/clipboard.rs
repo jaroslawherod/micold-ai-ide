@@ -74,6 +74,15 @@ pub fn on_copy_requested(app: &mut App) -> Task<Message> {
     selection_copy_request(app).map_or_else(Task::none, interpret)
 }
 
+/// Auto-copy the current selection when a selection gesture ends (FR-013).
+///
+/// Unlike [`on_copy_requested`] this leaves the context menu alone, and it reads `app.selection`
+/// after the gesture's own `TerminalSelectStart`/`TerminalSelectUpdate` were applied — so a click,
+/// which selects nothing, copies nothing (FR-013e, BUG-007).
+pub fn on_selection_released(app: &mut App) -> Task<Message> {
+    selection_copy_request(app).map_or_else(Task::none, interpret)
+}
+
 /// Paste the system clipboard into the displayed session's PTY (FR-013). The read is async;
 /// its result flows back through `TerminalBytes`, which honours the Running write-gate.
 ///

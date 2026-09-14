@@ -14,11 +14,11 @@
 //!
 //! # The vocabulary this feature declares
 //!
-//! Thirty-seven transitions in [`Msg`], the largest vocabulary in the application: the session
+//! Forty-one transitions in [`Msg`], the largest vocabulary in the application: the session
 //! lifecycle (`StartRequested`, `Started`, `Running`, `Selected`, `TitleUpdated`, `CloseRequested`,
 //! `RemoveRequested`, `RemoveConfirmed`, `RemoveCancelled`, `MenuToggled`, `MenuDismissed`), the
 //! shell instances attached to one (`ShellInstance*`, seven of them), the terminal surface
-//! (`Terminal*`, sixteen — bytes, selection, scroll, resize, focus, clipboard, context menu, tick,
+//! (`Terminal*`, seventeen — bytes, selection, scroll, resize, focus, clipboard, context menu, tick,
 //! restart, and the AI CLI picker), and the tab strip's geometry (`TabStripScrolled`,
 //! `TabStripViewportResized`, `StripTabMenuRequested`).
 //!
@@ -1358,7 +1358,10 @@ pub enum Msg {
     TerminalResized { cols: u16, rows: u16 },
     /// Copy the current terminal selection to the clipboard (binary handles clipboard) (FR-013).
     TerminalCopyRequested,
-    /// A left-button selection gesture ended (BUG-007 stub, T074).
+    /// A left-button selection gesture ended: copy the current selection, if it resolves to any
+    /// text, to the clipboard (FR-013 auto-copy; binary handles clipboard). Resolved against the
+    /// selection after the gesture's own start and updates are applied, not the pane's view, and
+    /// unlike [`Msg::TerminalCopyRequested`] it leaves the context menu alone (FR-013e, BUG-007).
     TerminalSelectionReleased,
     /// Paste clipboard text into the focused session's PTY (binary handles clipboard) (FR-013).
     TerminalPasteRequested,
@@ -1378,8 +1381,8 @@ pub enum Msg {
 
 /// The pure half of this feature's reducer surface: shape A (contract M2).
 ///
-/// All forty arms are here. Fifteen of them additionally need an effect — spawning a
-/// process, writing to a PTY, scrolling or resizing it, and the clipboard — and those fifteen are
+/// All forty-one arms are here. Sixteen of them additionally need an effect — spawning a
+/// process, writing to a PTY, scrolling or resizing it, and the clipboard — and those sixteen are
 /// matched a second time in `main.rs`, which runs the effect and lets the message reach here.
 /// The split is by *effect*, not by variant, as `worktree_form` established and M2 names as the
 /// reference.
