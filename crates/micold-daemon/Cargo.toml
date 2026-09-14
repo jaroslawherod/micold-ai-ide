@@ -54,8 +54,9 @@ portable-pty = { workspace = true }
 # Ownership/mode verification for the `/tmp` endpoint fallback (protocol.md §1, FR-030).
 libc = { workspace = true }
 
-# The per-session job object that reaps a session's process tree (`src/platform/windows.rs`,
-# FR-036). `tests/windows_process_tree.rs` uses it too, to watch those processes by handle.
+# The pipe's protected DACL and the per-session job object that reaps a session's process tree
+# (`src/platform/windows.rs`, feature 030, research R2, R6, FR-036). `tests/windows_process_tree.rs`
+# and `tests/windows_pipe_acl.rs` use it too, through this normal dependency.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true }
 
