@@ -321,6 +321,22 @@ speak the same contract, so nothing is actually incompatible, only stale. Until 
 out, or reboot), the service keeps running the version it was already running, even though the app you
 just relaunched is newer.
 
+### On Windows
+
+The service works the same way on Windows, with Windows mechanisms underneath:
+
+- **It is reached over a named pipe**, `\\.\pipe\Micold.Daemon.<SID>`, where `<SID>` is your
+  account's security identifier. The pipe allows only your account to connect, so another user
+  signed in to the same PC cannot reach your sessions.
+- **Its pid is recorded** at `%LOCALAPPDATA%\micold-ai-ide\run\micold-daemon.pid`.
+- **Restart service works** as described above. The app stops the recorded process only if it
+  really is `micold-daemon.exe`, so a stale record never stops an unrelated program.
+- **Installing an update stops it for you.** The installer stops the running service before
+  replacing its files, and its Ready to Install page warns that running sessions will be stopped.
+  The next launch starts the new service, and the sessions come back interrupted-resumable, as
+  below.
+- **Logout still ends it**, exactly as in the table at the top of this page.
+
 ### Interrupted-resumable sessions after any service restart
 
 Whenever the service starts and finds sessions that were running when it last stopped — whether from
@@ -412,7 +428,7 @@ lives in Settings → Session service, described in
 
 | Placement | What it is | Reached over |
 |---|---|---|
-| **On this computer** (default) | A detached host process, spawned by the app on a cold start | A Unix socket or named pipe in a `0700` directory |
+| **On this computer** (default) | A detached host process, spawned by the app on a cold start | A Unix socket in a `0700` directory on Linux and macOS; on Windows, a named pipe only your account can open |
 | **In a container** | A container on this machine, seeing only your registered projects | Loopback TCP, authenticated by a shared secret |
 | *Remote* | Reserved. Not selectable in this release | — |
 

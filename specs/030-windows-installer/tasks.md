@@ -369,7 +369,7 @@ description: "Task list for feature 030: Windows installation package"
   - Unsupported architecture gives Inno's message.
   - Each Windows account runs its own session service, which no other account can connect to.
 - [X] T056 [US4] [A14] [U56] Rewrite the "macOS and Windows" section of `docs/install.md`. Add a `## Windows` section that summarises and links `user-guide/install-windows.md`, with the two download links. Keep the from-source build instructions under a "Build from source" heading. Leave the macOS wording as it is on `main`, so 028 owns it; if 028 has merged, fit into its per-platform layout.
-- [ ] T057 [P] [US4] Update `docs/daemon.md`:
+- [X] T057 [P] [US4] Update `docs/daemon.md`:
   - the Windows endpoint is `\\.\pipe\Micold.Daemon.<SID>`, owner-only;
   - the pid record lives at `%LOCALAPPDATA%\micold-ai-ide\run\micold-daemon.pid`;
   - "Restart service" works on Windows;
