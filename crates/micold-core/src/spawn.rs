@@ -293,4 +293,27 @@ mod tests {
             "a pid record whose endpoint is not live is a leftover, not a daemon to stop; got {stopped:?}"
         );
     }
+
+    #[cfg(windows)]
+    #[test]
+    fn terminate_refuses_foreign_image() {
+        // E4.3: a recorded pid can be reused by an unrelated process between the check and the stop,
+        // so only a process whose image is `micold-daemon.exe` is ever terminated.
+        let mut foreign = Command::new("cmd")
+            .args(["/c", "ping", "-n", "30", "127.0.0.1"])
+            .stdout(Stdio::null())
+            .spawn()
+            .expect("spawn a foreign process");
+
+        let refused = terminate_daemon(foreign.id());
+        let still_running = matches!(foreign.try_wait(), Ok(None));
+        let _ = foreign.kill();
+        let _ = foreign.wait();
+
+        assert!(
+            matches!(&refused, Err(e) if e.kind() == io::ErrorKind::InvalidData),
+            "terminating a pid whose image is not micold-daemon.exe must be refused as InvalidData; got {refused:?}"
+        );
+        assert!(still_running, "the foreign process must be left running");
+    }
 }
