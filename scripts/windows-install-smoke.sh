@@ -105,6 +105,44 @@ for bin in micold-ai-ide.exe micold-daemon.exe; do
 	[ -f "$install_dir/$bin" ] || fail "$bin is not in $install_dir (I1)"
 done
 
+# 2a. Each exe carries an icon group resource, which is what Explorer, the taskbar and Installed apps
+# show for it (FR-003). Without one Windows draws its generic exe icon.
+cat >"$logs/group-icons.ps1" <<'PS1'
+param([string]$Path)
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class MicoldResources {
+    delegate bool EnumNames(IntPtr module, IntPtr type, IntPtr name, IntPtr param);
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern IntPtr LoadLibraryExW(string path, IntPtr file, uint flags);
+    [DllImport("kernel32.dll")]
+    static extern bool EnumResourceNamesW(IntPtr module, IntPtr type, EnumNames callback, IntPtr param);
+    [DllImport("kernel32.dll")]
+    static extern bool FreeLibrary(IntPtr module);
+    // RT_GROUP_ICON resources in the image at path, or -1 if it cannot be loaded as a data file.
+    public static int GroupIcons(string path) {
+        IntPtr module = LoadLibraryExW(path, IntPtr.Zero, 0x22); // AS_DATAFILE | AS_IMAGE_RESOURCE
+        if (module == IntPtr.Zero) return -1;
+        int count = 0;
+        try {
+            EnumResourceNamesW(module, (IntPtr)14, (m, t, n, p) => { count++; return true; }, IntPtr.Zero);
+        } finally {
+            FreeLibrary(module);
+        }
+        return count;
+    }
+}
+'@
+[MicoldResources]::GroupIcons($Path)
+PS1
+for bin in micold-ai-ide.exe micold-daemon.exe; do
+	icons="$(MSYS2_ARG_CONV_EXCL='*' powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass \
+		-File "$(cygpath -w "$logs/group-icons.ps1")" "$(cygpath -w "$install_dir/$bin")" | tr -d '\r')"
+	[ "$icons" -ge 1 ] 2>/dev/null || fail "$bin has no icon resource (found '$icons'), so Windows shows a generic icon (FR-003)"
+done
+echo "both exes carry an icon"
+
 # 3. The Start menu entry (I1).
 shortcut="$app_data/Microsoft/Windows/Start Menu/Programs/Micold AI IDE.lnk"
 [ -f "$shortcut" ] || fail "no Start menu shortcut at $shortcut (I1)"
