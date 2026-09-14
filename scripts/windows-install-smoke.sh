@@ -58,6 +58,8 @@ local_app_data="$(cygpath -u "$LOCALAPPDATA")"
 app_data="$(cygpath -u "$APPDATA")"
 install_dir="$local_app_data/Programs/Micold AI IDE"
 logs="$(mktemp -d)"
+# What stands in for a user's projects and settings, which an uninstall keeps (I5, FR-007).
+markers=("$app_data/micold-ai-ide/data/smoke-marker" "$local_app_data/micold-ai-ide/data/smoke-marker")
 client_pid=""
 daemon_pid=""
 
@@ -70,6 +72,7 @@ clean_up() {
 	if [ -n "$daemon_pid" ]; then
 		win "Stop-Process -Id $daemon_pid -Force -ErrorAction SilentlyContinue" || true
 	fi
+	rm -f "${markers[@]}"
 	rm -rf "$logs"
 }
 trap clean_up EXIT
@@ -84,6 +87,11 @@ fail() {
 	done
 	exit 1
 }
+
+for marker in "${markers[@]}"; do
+	mkdir -p "$(dirname "$marker")"
+	echo "seeded by ${0##*/}" >"$marker"
+done
 
 # 1. The silent install succeeds (I7).
 echo "== install $exe"
@@ -209,6 +217,10 @@ done
 	fail "$local_app_data/micold-ai-ide/run is still there after the uninstall (I5)"
 echo "uninstalled: no install dir, shortcut, uninstall key or run dir"
 client_pid=""
+for marker in "${markers[@]}"; do
+	[ -f "$marker" ] || fail "the uninstall removed user data: $marker is gone (I5, FR-007)"
+done
+echo "both data markers survived the uninstall"
 
 # clean_up stops what is still running on exit.
 echo "== smoke passed"
