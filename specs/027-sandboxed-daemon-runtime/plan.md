@@ -418,9 +418,9 @@ The approach:
   directly, which is below the level the defect lives at — the number is honest and cannot see the
   dropped callback. SC-004c moves the measurement to the application.
 
-**Bugfix**: 2026-09-12 — BUG-004. Section added; nothing above it changed. See `bugs/BUG-004.md`.
+**Bugfix**: 2026-09-12 — BUG-005. Section added; nothing above it changed. See `bugs/BUG-005.md`.
 
-**Bugfix**: 2026-09-14 — BUG-004. The start grace (`Sandbox::is_coming_up`,
+**Bugfix**: 2026-09-14 — BUG-005. The start grace (`Sandbox::is_coming_up`,
 `features/sandbox.rs`) runs from `Started` to the service's first answer, and counts a sandbox that
 is `Running` or `Stale` in that gap. A settings save during the start marks the container `Stale`
 without stopping it, and its service is still coming up (FR-036b). `on_connected` ends the grace

@@ -8,9 +8,9 @@ updated_at: b53e3449
 suite_baseline: green
 ---
 
-# Test List: BUG-004 — a sandbox the application finds absent is brought up again
+# Test List: BUG-005 — a sandbox the application finds absent is brought up again
 
-Scope is the BUG-004 increment only (`tasks.md` Phases 18 and 19). Feature 027's earlier phases
+Scope is the BUG-005 increment only (`tasks.md` Phases 18 and 19). Feature 027's earlier phases
 (T001–T166) were not planned through this extension and have no per-behavior evidence here.
 
 `loop: inside-out` because the end-to-end path needs a real container runtime (`sandbox_real_*`,

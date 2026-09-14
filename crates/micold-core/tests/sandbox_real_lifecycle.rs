@@ -496,7 +496,7 @@ impl Fixture {
 }
 
 // ---------------------------------------------------------------------------------------------
-// BUG-004 — a sandbox stopped under an attached client comes back on its own
+// BUG-005 — a sandbox stopped under an attached client comes back on its own
 // ---------------------------------------------------------------------------------------------
 
 /// FR-036a, S-6, US6 scenario 9: a sandbox stopped from outside while a client is attached comes

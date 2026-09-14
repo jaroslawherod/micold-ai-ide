@@ -322,7 +322,7 @@ pub fn refused_dial(app: &mut App, reason: &str) -> Option<crate::shell::sandbox
 
 /// The unattended bring-up for a sandbox whose service is not there, if one may start.
 ///
-/// A sandboxed service that is not there is brought up, not reported (FR-002a, BUG-004). Only for
+/// A sandboxed service that is not there is brought up, not reported (FR-002a, BUG-005). Only for
 /// the sandbox placement: consent to run on the host is never undone from here (FR-035). Shared by
 /// the two ways the application learns it is gone — a refused dial, and the liveness check finding
 /// the container stopped — so neither leaves a failure on screen the other would have cleared.
