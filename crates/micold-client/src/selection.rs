@@ -59,6 +59,9 @@ pub struct Selection {
     granularity: SelectGranularity,
     /// Cached normalized, expanded, inclusive bounds `(top_left, bottom_right)`.
     bounds: (Anchor, Anchor),
+    /// Whether the moving end has been extended at all. A `Char` selection that never was is a
+    /// click, and selects nothing (FR-013e, BUG-007).
+    extended: bool,
 }
 
 impl Selection {
@@ -75,14 +78,26 @@ impl Selection {
             current: anchor,
             granularity,
             bounds,
+            extended: false,
         }
     }
 
     /// Extend the moving end of the selection to `anchor`, re-expanding for `Word`/`Line`. The
     /// fixed (start) anchor is unchanged, so dragging back and forth is stable.
+    ///
+    /// Any update counts as a drag, whatever its anchor: the pane sends one only once the pointer
+    /// has left the pressed cell, and a `LineId` anchor drifts under streaming output, so comparing
+    /// anchors here would judge a drag a second time, in different units (FR-013e).
     pub fn update(&mut self, anchor: Anchor, line_text: impl Fn(LineId) -> Option<String>) {
+        self.extended = true;
         self.current = anchor;
         self.bounds = expand(self.start, anchor, self.granularity, &line_text);
+    }
+
+    /// Whether this selection covers nothing: a `Char` selection that was never extended is a click
+    /// (FR-013e). `Word` and `Line` selections cover their word or line from the press.
+    fn is_empty(&self) -> bool {
+        self.granularity == SelectGranularity::Char && !self.extended
     }
 
     /// The granularity this selection was started with.
@@ -102,6 +117,9 @@ impl Selection {
     /// start column to end, every intermediate line in full, and the last line from its start to
     /// the end column. Both endpoint columns are inclusive.
     pub fn contains(&self, line: LineId, col: u16) -> bool {
+        if self.is_empty() {
+            return false;
+        }
         let (top, bot) = self.bounds;
         if line < top.line || line > bot.line {
             return false;
@@ -124,6 +142,9 @@ impl Selection {
     /// respected: the first line starts at the start column, the last ends at the end column, and
     /// intermediate lines are taken in full.
     pub fn text(&self, line_text: impl Fn(LineId) -> Option<String>) -> String {
+        if self.is_empty() {
+            return String::new();
+        }
         let (top, bot) = self.bounds;
         let mut out = String::new();
         let mut line = top.line;

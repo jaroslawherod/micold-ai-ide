@@ -216,6 +216,10 @@ impl<'a> From<GridSizeReporter<'a>> for Element<'a, Message> {
 #[derive(Default)]
 struct PaneState {
     dragging: bool,
+    /// The viewport cell a local left press landed in, until the pointer first leaves it. While
+    /// set, motion is still a click and extends nothing (FR-013e, BUG-007): the pane decides this
+    /// in screen cells because a selection's `LineId` anchors drift under streaming output.
+    press_cell: Option<(u16, u16)>,
     modifiers: keyboard::Modifiers,
     last_click: Option<Click>,
     /// While dragging the scrollbar thumb: the cursor's offset below the thumb's top edge, so the
@@ -895,6 +899,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     let kind = select_kind(c.kind());
                     state.last_click = Some(c);
                     state.dragging = true;
+                    state.press_cell = Some((col, line));
                     shell.publish(Message::Session(SessionMsg::TerminalSelectStart {
                         col,
                         line,
@@ -949,6 +954,14 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             }
             Event::Mouse(mouse::Event::CursorMoved { position }) if state.dragging => {
                 let (col, line) = grid_at(*position, content, metrics);
+                // Jitter inside the pressed cell is still a click (FR-013e). Once the pointer has
+                // left it, every cell counts — the pressed one included, so one character stays
+                // selectable by dragging out and back.
+                if state.press_cell == Some((col, line)) {
+                    shell.capture_event();
+                    return;
+                }
+                state.press_cell = None;
                 shell.publish(Message::Session(SessionMsg::TerminalSelectUpdate {
                     col,
                     line,
@@ -958,11 +971,12 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if state.dragging => {
                 state.dragging = false;
-                // Auto-copy the selection to the clipboard on release (FR-013).
-                let selected = self.selectable_content();
-                if !selected.is_empty() {
-                    clipboard.write(ClipboardKind::Standard, selected);
-                }
+                state.press_cell = None;
+                // Auto-copy on release (FR-013), decided by the shell against the selection as
+                // this gesture left it. `self.selection` is the one this pane was built with: when
+                // the press and release arrive in one batch it predates the press, and copying it
+                // would put the previous selection over the clipboard (FR-013e, BUG-007).
+                shell.publish(Message::Session(SessionMsg::TerminalSelectionReleased));
                 shell.capture_event();
                 return;
             }
