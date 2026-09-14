@@ -1334,6 +1334,34 @@ limit, and T201 closes it too. Findings 3, 5 and 6 are LOW and unchanged.
 
 ---
 
+## Phase 24: TDD remediation — BUG-004 (sixth audit)
+
+**Goal**: Clear the findings of `tdd/verification.md` (2026-09-14, at `b983395e`, verdict **FAIL**).
+**BUG-004 is not done until T202 is cleared.** Every test passes when a bring-up delivers its first
+message and drops the rest (mutants X7, X8, X9). A failed bring-up is then never recorded or counted, and
+a successful one leaves the sandbox in `Probing`.
+
+### Blocking (HIGH)
+
+- [ ] T202 [BUG-004] *(test)* Finding 1 — `crates/micold-client/src/main.rs:3022-3045` (`first_message`,
+      `is_probing`), A1 at `:3084-3089`, U24 at `:3261-3267`; `crates/micold-client/src/shell/sandbox.rs:215-236`
+      (`BringUp::task`), `:462` (`Msg::Lost`), `crates/micold-client/src/shell/daemon_sync.rs:293`.
+      `first_message` stops at the first message, so only `Progress(Probing)` is checked. Make A1 and U24
+      run the work the update returns to its end, and assert what U20 (`sandbox.rs:603-620`) asserts of
+      the stream: `Progress(Probing)` first and `Started` or `Failed` last, or the whole sequence. No new
+      dependency is needed. Proven when X7 (`iced::Task::stream(StreamExt::take(stream, 1))` in `task`)
+      fails A1 and U24, X8 (`Msg::Lost` keeps only `SandboxMsg::Progress` via `.then(..)`) fails U24, and
+      X9 (the same filter at `daemon_sync.rs:293`) fails A1. X1–X6, N12, N13, T191a and T191b must still
+      fail them: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+
+Findings 2–5 need no task here. Finding 2 (two older save tests write the developer's real
+`settings.json`) is outside BUG-004's scope. Findings 3–5 are LOW. Finding 3's `live_tasks` token becomes
+removable once T202 lands, but that is a refactor, not remediation.
+
+**Order**: T202, then re-run `/speckit.tdd.verify`.
+
+---
+
 ## Parallel Opportunities
 
 **Phase 1**: T002, T003, T005, T006 in parallel after T001.
