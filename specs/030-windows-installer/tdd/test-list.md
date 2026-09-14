@@ -29,8 +29,8 @@ The entry points are:
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
 | A1  | A silent per-user install of the setup exe exits 0. It leaves `micold-ai-ide.exe` and `micold-daemon.exe` in `%LOCALAPPDATA%\Programs\Micold AI IDE\` and a Start menu `Micold AI IDE.lnk`. | US1-AS1, FR-002, FR-003, FR-004, I1, I7 | example | win | DONE | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
-| A2  | The installed client, launched detached, has no `conhost.exe` child | US1-AS2, FR-005, SC-005 | example | win | PENDING | |
-| A3  | Launching the installed client makes `\\.\pipe\Micold.Daemon.<SID>` appear within 20 s, and the daemon has no `conhost.exe` child | US1-AS3, FR-005, FR-020, I2 | example | win | RED | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
+| A2  | The installed client, launched detached, has no `conhost.exe` child | US1-AS2, FR-005, SC-005 | example | win | DONE | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
+| A3  | Launching the installed client makes `\\.\pipe\Micold.Daemon.<SID>` appear within 20 s, and the daemon has no `conhost.exe` child | US1-AS3, FR-005, FR-020, I2 | example | win | DONE | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
 | A4  | The HKCU uninstall key's `DisplayVersion` equals the workspace version | US1-AS4, FR-006, FR-013 | example | win | DONE | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
 | A5  | The committed `packaging/windows/micold-ai-ide.iss` passes `windows_violations`: its `[Files]` ship exactly the two exes | US1-AS5, FR-012 | example | any | DONE | `crates/micold-client/tests/packaging_excludes_showcase.rs::the_windows_installer_contains_no_showcase` |
 | A6  | Re-running the installer over a running install exits 0 and leaves exactly one `{1B19A6AC-…}_is1` uninstall key | US2-AS1, FR-008, I4 | example | win | PENDING | |
