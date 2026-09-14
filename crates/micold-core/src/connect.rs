@@ -15,6 +15,7 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use interprocess::local_socket::tokio::prelude::*;
 use interprocess::local_socket::tokio::Stream;
+#[cfg(not(windows))]
 use interprocess::local_socket::{GenericFilePath, Name, ToFsName};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio_util::codec::Framed;
@@ -121,6 +122,7 @@ pub enum Connected {
 /// How long to wait for a freshly-spawned daemon to start accepting.
 pub const SPAWN_TIMEOUT: Duration = Duration::from_secs(10);
 
+#[cfg(not(windows))]
 fn fs_name(endpoint: &Endpoint) -> io::Result<Name<'_>> {
     endpoint
         .socket_path
@@ -187,6 +189,68 @@ fn refuse_foreign_server(stream: &Stream, own_sid: &str) -> io::Result<()> {
     }
 }
 
+/// Connects to the endpoint's pipe at `SecurityIdentification` (U72, security review D2).
+///
+/// `interprocess` opens the pipe with no quality of service, which lets its server impersonate the
+/// client fully. Whoever serves the pipe needs to learn who connected, and nothing more. Otherwise
+/// this is `interprocess`'s own connect: a busy pipe is waited for, unbounded.
+#[cfg(windows)]
+async fn connect_pipe(endpoint: &Endpoint) -> io::Result<Stream> {
+    use interprocess::os::windows::named_pipe::local_socket::tokio::Stream as PipeStream;
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::io::{FromRawHandle, OwnedHandle};
+    use windows_sys::Win32::Foundation::{
+        ERROR_PIPE_BUSY, GENERIC_READ, GENERIC_WRITE, INVALID_HANDLE_VALUE,
+    };
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_FLAG_OVERLAPPED, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+        SECURITY_IDENTIFICATION, SECURITY_SQOS_PRESENT,
+    };
+    use windows_sys::Win32::System::Pipes::{WaitNamedPipeW, NMPWAIT_WAIT_FOREVER};
+
+    let path: Vec<u16> = endpoint
+        .socket_path
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    loop {
+        // SAFETY: `path` is NUL-terminated and outlives the call; every other argument is a plain
+        // flag or null, as `CreateFileW` allows.
+        let handle = unsafe {
+            CreateFileW(
+                path.as_ptr(),
+                GENERIC_READ | GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                std::ptr::null(),
+                OPEN_EXISTING,
+                FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION,
+                std::ptr::null_mut(),
+            )
+        };
+        if handle != INVALID_HANDLE_VALUE {
+            // SAFETY: a valid handle `CreateFileW` just returned, owned by nothing else.
+            let handle = unsafe { OwnedHandle::from_raw_handle(handle) };
+            let pipe = PipeStream::try_from(handle)?;
+            return Ok(pipe.into());
+        }
+        let error = io::Error::last_os_error();
+        if error.raw_os_error() != Some(ERROR_PIPE_BUSY as i32) {
+            return Err(error);
+        }
+        let path = path.clone();
+        // SAFETY: `path` is NUL-terminated and owned by the closure for the whole call.
+        let waited = tokio::task::spawn_blocking(move || unsafe {
+            WaitNamedPipeW(path.as_ptr(), NMPWAIT_WAIT_FOREVER)
+        })
+        .await
+        .map_err(io::Error::other)?;
+        if waited == 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+}
+
 /// Open a raw connection to the endpoint, or `None` if nothing is listening.
 pub async fn dial(endpoint: &Endpoint) -> io::Result<Option<Transport>> {
     dial_address(&DialAddress::Local(endpoint.clone())).await
@@ -196,8 +260,11 @@ pub async fn dial(endpoint: &Endpoint) -> io::Result<Option<Transport>> {
 pub async fn dial_address(address: &DialAddress) -> io::Result<Option<Transport>> {
     match address {
         DialAddress::Local(endpoint) => {
-            let name = fs_name(endpoint)?;
-            match Stream::connect(name).await {
+            #[cfg(windows)]
+            let connected = connect_pipe(endpoint).await;
+            #[cfg(not(windows))]
+            let connected = Stream::connect(fs_name(endpoint)?).await;
+            match connected {
                 Ok(stream) => {
                     // Anyone may create a pipe by this name first; only this user's daemon is ours
                     // to talk to (FR-021).
@@ -414,6 +481,8 @@ pub async fn connect_or_spawn(
 mod tests {
     use super::*;
     use crate::protocol::codec::CodecError;
+    #[cfg(windows)]
+    use interprocess::local_socket::{GenericFilePath, ToFsName};
 
     /// FR-016, §4.14: a reset that arrives through the codec is still a reset.
     ///
