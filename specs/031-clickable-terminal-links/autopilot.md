@@ -7,21 +7,21 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
-- **Phase**: 3-design
-- **Next step**: merge PR 2 (design), then Phase 4 milestone M1
+- **Phase**: 4-milestones
+- **Next step**: M1 (T001–T012): implement, gate, reviews A and B, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #336 | Spec | merged | 411711c1 |
-| #341 | Design (clarify, plan, tasks, milestones) | open | — |
+| #341 | Design (clarify, plan, tasks, milestones) | merged | 226d3a8b |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T012 | Link recognition core (`micold_core::link`, SC-002 corpus) | — | pending |
+| M1 | T001–T012 | Link recognition core (`micold_core::link`, SC-002 corpus) | — | in progress |
 | M2 | T013–T022 | Opening pipeline: `LinkActivated` through `update_inner` to the system opener | — | pending |
 | M3 | T082, T083, T037, T023–T034 | Clickable web, mail and declared links in the pane | — | pending |
 | M4 | T035, T036, T038–T041 | Session terminal identity and the FORCE_HYPERLINK opt-in | — | pending |
@@ -47,6 +47,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | 11 | 3-design | Tasks review round 1: declared-link hover was built in M3 but tested in M4 (tests-after) | Moved T083 (A7–A11) and T037 (U129) into M3 ahead of T028; M4 keeps session identity and the opt-in | agent-resolved | milestones.md rule 7; constitution I |
 | 12 | 3-design | Local baseline is red on 2 `micold-daemon` pi tests (exclusivity, pi_launch_wiring): block the loop? | No; recorded as pre-existing, not fixed here — out of flow, and green in CI on main | agent-resolved | tdd/cycle-log.md Baseline; CI run on b27ffe62 success |
 | 13 | 3-design | Tasks review round 3 still had 2 MAJOR (fixed): review again or open PR 2? | Open PR 2 now | decided by user | round-3 findings fixed in tasks.md, tdd/test-list.md, research.md R15 |
+| 14 | 4-milestones | Which suite is "the full suite" inside an M1 cycle, at ~343 s a workspace run? | The core fast subset (`cargo test -p micold-core --all-targets`) per cycle, since M1 touches only `micold-core`; the workspace suite and `mise run gate` at the milestone's end | agent-resolved | .specify/memory/tdd-profile.md fast-subset note |
 
 ## Declined review findings
 

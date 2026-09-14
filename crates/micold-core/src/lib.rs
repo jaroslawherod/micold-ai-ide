@@ -20,6 +20,7 @@ pub mod fs_scan;
 pub mod git;
 pub mod input;
 pub mod install_location;
+pub mod link;
 pub mod logout_survival;
 pub mod metadata;
 pub mod naming;
