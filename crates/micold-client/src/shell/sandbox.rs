@@ -17,7 +17,7 @@ use micold_client::features::sandbox::Msg as SandboxMsg;
 use micold_core::endpoint::DEFAULT_SANDBOX_PORT;
 use micold_core::protocol::auth::{host_token_path, Token, CONTAINER_TOKEN_PATH};
 use micold_core::sandbox::cli::CliRuntime;
-use micold_core::sandbox::exec::SystemRunner;
+use micold_core::sandbox::exec::{CommandRunner, SystemRunner};
 use micold_core::sandbox::lifecycle::{bring_up, Failure, SandboxState, Started};
 use micold_core::sandbox::runtime::RuntimeCapabilities;
 use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
@@ -80,11 +80,12 @@ pub struct Ready {
 ///
 /// `observe` is called as each stage is entered, so the view can show progress while the image is
 /// being acquired — the one stage that may take minutes (SC-004).
-pub fn start(
+pub fn start<R: CommandRunner>(
     profile: &SandboxProfile,
     projects: &[PathBuf],
     facts: &HostFacts,
     port: u16,
+    runner: R,
     observe: &mut dyn FnMut(SandboxState),
 ) -> Result<Ready, Failure> {
     // A fresh token per sandbox lifetime. Written 0600 and mounted read-only, so it reaches the
@@ -132,7 +133,7 @@ pub fn start(
         },
     );
 
-    let runtime = CliRuntime::new(profile.runtime, SystemRunner);
+    let runtime = CliRuntime::new(profile.runtime, runner);
     let build_spec = |_caps: &RuntimeCapabilities| SandboxSpec {
         name: CONTAINER_NAME.to_string(),
         profile: profile.clone(),
@@ -180,42 +181,105 @@ pub struct BootPlan {
 /// minutes — on the render thread that would freeze the window for the whole of it, the opposite of
 /// SC-004's "continuous progress".
 pub fn boot(plan: BootPlan) -> iced::Task<micold_client::app::Message> {
-    iced::Task::future(async move {
-        let outcome = tokio::task::spawn_blocking(move || {
+    BringUp::now(plan).task()
+}
+
+/// A bring-up the application has decided to run, and when.
+///
+/// A value rather than a task, so that the decision — which plan, after how long — can be read back
+/// by a test, where a `Task` is opaque.
+#[derive(Debug, Clone)]
+pub struct BringUp {
+    pub plan: BootPlan,
+    /// The spacing S-6 puts between unattended bring-ups; a person's restart does not wait.
+    pub after: std::time::Duration,
+}
+
+impl BringUp {
+    /// A bring-up that starts at once.
+    pub fn now(plan: BootPlan) -> Self {
+        Self {
+            plan,
+            after: std::time::Duration::ZERO,
+        }
+    }
+
+    /// Run it against the real container runtime.
+    pub fn task(self) -> iced::Task<micold_client::app::Message> {
+        iced::Task::stream(self.stream(SystemRunner))
+    }
+
+    /// The messages the bring-up produces, driving the runtime through `runner`.
+    fn stream<R: CommandRunner + 'static>(
+        self,
+        runner: R,
+    ) -> impl iced::futures::Stream<Item = Message> + Send + 'static {
+        let Self { plan, after } = self;
+        reported(after, move |observe| {
             let facts = HostFacts::gather(plan.state_dir);
-            // Progress is dropped here rather than streamed: a `Task::future` yields one message,
-            // and threading a channel through boot for the sake of the first release's progress bar
-            // would buy less than the settings view (US3) will when it renders this properly.
             start(
                 &plan.profile,
                 &plan.projects,
                 &facts,
                 control_port(),
-                &mut |_| {},
+                runner,
+                observe,
             )
             .map(|ready| ready.started)
         })
-        .await;
+    }
+}
 
-        match outcome {
-            Ok(Ok(started)) => {
-                micold_client::app::Message::Sandbox(SandboxMsg::Started(Box::new(started)))
-            }
-            Ok(Err(failure)) => {
-                micold_client::app::Message::Sandbox(SandboxMsg::Failed(Box::new(failure)))
-            }
-            // A panicked or cancelled blocking task is still a sandbox that did not come up, and
-            // the user needs the same standing banner for it as for a runtime that refused.
-            Err(join) => {
-                micold_client::app::Message::Sandbox(SandboxMsg::Failed(Box::new(Failure {
-                    stage: micold_core::sandbox::lifecycle::Stage::Starting,
-                    error: micold_core::sandbox::runtime::RuntimeError::Unknown {
-                        stderr: join.to_string(),
-                    },
-                })))
-            }
+/// Run `work` off the render thread and turn what it reports into messages.
+///
+/// Every stage `work` enters becomes a [`SandboxMsg::Progress`], in order, and how it ended comes
+/// last. Split from [`BringUp::stream`] so that ordering is testable without a container runtime.
+fn reported<W>(
+    after: std::time::Duration,
+    work: W,
+) -> impl iced::futures::Stream<Item = Message> + Send + 'static
+where
+    W: FnOnce(&mut dyn FnMut(SandboxState)) -> Result<Started, Failure> + Send + 'static,
+{
+    use iced::futures::StreamExt;
+
+    let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+    let run = async move {
+        if !after.is_zero() {
+            tokio::time::sleep(after).await;
         }
-    })
+        // Each stage goes out as it is entered. `observe` is called on the blocking thread, and an
+        // unbounded send never blocks it, so a slow render cannot slow the pull (SC-004c).
+        let progress = tx.clone();
+        let outcome = tokio::task::spawn_blocking(move || {
+            work(&mut |state| {
+                let _ = progress
+                    .unbounded_send(Message::Sandbox(SandboxMsg::Progress(Box::new(state))));
+            })
+        })
+        .await;
+        let _ = tx.unbounded_send(finished(outcome));
+    };
+    iced::futures::stream::select(
+        iced::futures::stream::once(run).filter_map(|()| std::future::ready(None)),
+        rx,
+    )
+}
+
+/// The message a finished bring-up leaves behind.
+fn finished(outcome: Result<Result<Started, Failure>, tokio::task::JoinError>) -> Message {
+    match outcome {
+        Ok(Ok(started)) => Message::Sandbox(SandboxMsg::Started(Box::new(started))),
+        Ok(Err(failure)) => Message::Sandbox(SandboxMsg::Failed(Box::new(failure))),
+        // A panicked or cancelled blocking task is still a sandbox that did not come up, and the
+        // user needs the same standing banner for it as for a runtime that refused.
+        Err(join) => Message::Sandbox(SandboxMsg::Failed(Box::new(Failure {
+            stage: micold_core::sandbox::lifecycle::Stage::Starting,
+            error: micold_core::sandbox::runtime::RuntimeError::Unknown {
+                stderr: join.to_string(),
+            },
+        }))),
+    }
 }
 
 /// Ask the runtime, once, whether our container is still running (FR-036, US6 scenario 3).
@@ -348,6 +412,10 @@ pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
             app.sandbox.container_lost(CONTAINER_NAME);
             iced::Task::none()
         }
+        Msg::Progress(state) => {
+            app.sandbox.observe(*state);
+            iced::Task::none()
+        }
         // The one edge back into bring-up, and it is here because a person pressed something
         // (R9, FR-035a). Both of these are user actions; neither is ever sent by the application
         // to itself.
@@ -421,6 +489,117 @@ mod tests {
         // "runtime is not installed" failure could never be reported properly.
         let facts = HostFacts::gather(std::env::temp_dir());
         assert!(facts.layout.git_config.is_some());
+    }
+
+    /// SC-004c at its source: every stage a bring-up enters has to leave the worker, in order, and
+    /// before the outcome — not be handed to a callback that drops it.
+    #[tokio::test]
+    async fn every_stage_a_bring_up_enters_is_reported_before_how_it_ended() {
+        use iced::futures::StreamExt;
+        use micold_core::sandbox::lifecycle::Stage;
+        use micold_core::sandbox::runtime::{Progress, RuntimeError};
+
+        let acquiring = SandboxState::Acquiring(Progress {
+            stage: "Downloading".into(),
+            detail: None,
+            percent: Some(10),
+        });
+        let failure = Failure {
+            stage: Stage::Starting,
+            error: RuntimeError::Timeout {
+                operation: "starting the sandbox".into(),
+            },
+        };
+        let (stages, outcome) = (
+            [SandboxState::Probing, acquiring, SandboxState::Starting],
+            failure.clone(),
+        );
+        let reported_stages = stages.clone();
+
+        let messages: Vec<Message> = reported(std::time::Duration::ZERO, move |observe| {
+            for stage in reported_stages {
+                observe(stage);
+            }
+            Err(outcome)
+        })
+        .collect()
+        .await;
+
+        let mut expected: Vec<Message> = stages
+            .into_iter()
+            .map(|s| Message::Sandbox(SandboxMsg::Progress(Box::new(s))))
+            .collect();
+        expected.push(Message::Sandbox(SandboxMsg::Failed(Box::new(failure))));
+        assert_eq!(messages, expected);
+    }
+
+    /// SC-004c through the production bring-up rather than a closure the test writes: the work
+    /// [`BringUp`] runs has to hand its stages on, or the view is left on whatever it showed before.
+    #[tokio::test]
+    async fn the_production_bring_up_reports_probing_first_and_how_it_ended_last() {
+        use iced::futures::StreamExt;
+        use micold_core::sandbox::exec::RecordingRunner;
+
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        let plan = BootPlan {
+            profile: SandboxProfile::default(),
+            state_dir: state_dir.path().to_path_buf(),
+            projects: Vec::new(),
+        };
+
+        let messages: Vec<Message> = BringUp::now(plan)
+            .stream(RecordingRunner::new())
+            .collect()
+            .await;
+
+        assert!(
+            matches!(
+                messages.first(),
+                Some(Message::Sandbox(SandboxMsg::Progress(stage))) if **stage == SandboxState::Probing
+            ),
+            "the first stage a bring-up enters has to reach the view (SC-004c): {messages:?}"
+        );
+        assert!(
+            matches!(
+                messages.last(),
+                Some(Message::Sandbox(
+                    SandboxMsg::Started(_) | SandboxMsg::Failed(_)
+                ))
+            ),
+            "how the bring-up ended comes last, after every stage: {messages:?}"
+        );
+    }
+
+    /// S-6's spacing at the place it is applied: an unattended bring-up is handed its delay, and the
+    /// runtime must not be touched before the delay is over — or the budget's spacing is a number
+    /// nobody waits for, and three attempts arrive on three consecutive connection retries.
+    #[tokio::test]
+    async fn a_delayed_bring_up_does_not_start_before_its_delay() {
+        use iced::futures::StreamExt;
+        use micold_core::sandbox::lifecycle::Stage;
+        use micold_core::sandbox::runtime::RuntimeError;
+
+        const DELAY: std::time::Duration = std::time::Duration::from_millis(200);
+        let (began_after, waited) = std::sync::mpsc::channel();
+        let asked = std::time::Instant::now();
+
+        let _: Vec<Message> = reported(DELAY, move |_observe| {
+            let _ = began_after.send(asked.elapsed());
+            Err(Failure {
+                stage: Stage::Probing,
+                error: RuntimeError::Timeout {
+                    operation: "probing".into(),
+                },
+            })
+        })
+        .collect()
+        .await;
+
+        let waited = waited.recv().expect("the bring-up never ran");
+        assert!(
+            waited >= DELAY,
+            "the bring-up started {waited:?} after it was asked for, before its {DELAY:?} delay (S-6)"
+        );
     }
 
     #[test]

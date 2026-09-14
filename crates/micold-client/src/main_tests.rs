@@ -698,18 +698,23 @@ pub(crate) fn base_app() -> App {
 
 // --- FR-035a: an accepted fallback has to reach the connection, not only the banner --------
 
+/// The failure [`app_with_a_failed_sandbox`] starts from: the runtime is not installed.
+fn failed_sandbox_state() -> micold_core::sandbox::lifecycle::SandboxState {
+    use micold_core::sandbox::lifecycle::{Failure, Stage};
+    micold_core::sandbox::lifecycle::SandboxState::Failed(Failure {
+        stage: Stage::Probing,
+        error: micold_core::sandbox::runtime::RuntimeError::NotInstalled {
+            kind: micold_core::sandbox::runtime::RuntimeKind::Docker,
+        },
+    })
+}
+
 /// An `App` configured for the sandbox, with the sandbox failed and a boot plan to restart.
 fn app_with_a_failed_sandbox() -> App {
-    use micold_core::sandbox::lifecycle::{Failure, Stage};
     let mut app = base_app();
     app.placement.kind = micold_core::sandbox::placement::PlacementKind::LocalSandbox;
     app.sandbox = micold_client::features::sandbox::Sandbox {
-        state: micold_core::sandbox::lifecycle::SandboxState::Failed(Failure {
-            stage: Stage::Probing,
-            error: micold_core::sandbox::runtime::RuntimeError::NotInstalled {
-                kind: micold_core::sandbox::runtime::RuntimeKind::Docker,
-            },
-        }),
+        state: failed_sandbox_state(),
         ..micold_client::features::sandbox::Sandbox::default()
     };
     app.sandbox_boot = Some(shell::sandbox::BootPlan {
@@ -1948,5 +1953,402 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
             daemon_build: "daemon-0".into(),
         },
         "a wire-contract mismatch must win over a same-contract build mismatch"
+    );
+}
+
+// --- BUG-004 (T168, FR-002a/FR-036b): a sandbox the client finds absent is brought up --------
+
+/// A refused dial, and the work the application scheduled in answer to it.
+fn connection_failed(app: &mut App) -> Task<Message> {
+    update_inner(
+        app,
+        Message::Connection(ConnectionMsg::ConnectFailed(
+            "Connection refused (os error 111)".into(),
+        )),
+    )
+}
+
+/// Whether the refused dial reached the user as an error. By level, not wording: the sentence
+/// is the handler's to rephrase.
+fn a_connection_failure_was_reported(app: &App) -> bool {
+    app.core
+        .notifications
+        .queue
+        .visible()
+        .is_some_and(|n| n.level == micold_core::notify::Level::Error)
+}
+
+/// Whether nothing at all was raised, on screen or waiting. The negative of "reported" is not
+/// "not visible": a report queued behind another notice would pass for silence.
+fn nothing_was_reported(app: &App) -> bool {
+    let queue = &app.core.notifications.queue;
+    queue.visible().is_none() && queue.pending() == 0
+}
+
+/// The report itself: switched to the sandbox, the bring-up failed once (the runtime was busy,
+/// the port was a moment late), and from then on every dial was refused and nothing but a
+/// restart the user did not know they needed could bring the daemon up.
+#[test]
+fn a_failed_sandbox_the_client_cannot_reach_is_brought_up_again() {
+    let mut app = app_with_a_failed_sandbox();
+
+    let work = connection_failed(&mut app);
+
+    assert!(
+        work.units() > 0,
+        "the state says a bring-up started, so one has to be scheduled — `Probing` with nothing \
+             running is BUG-004 with a different banner"
+    );
+    assert_eq!(
+        app.sandbox.state,
+        micold_core::sandbox::lifecycle::SandboxState::Probing,
+        "a refused dial to a sandbox that is not running has to start one — waiting for the \
+             user to find Restart is BUG-004"
+    );
+    assert!(
+        nothing_was_reported(&app),
+        "a bring-up the application has started is progress, not a failure to report (FR-036b)"
+    );
+}
+
+/// S-6's spacing where it is decided: the first unattended bring-up starts at once, and the one
+/// after a failed attempt waits the delay the budget gave it — not zero, which puts every attempt
+/// on the next connection retry and spends the bound in seconds.
+#[test]
+fn the_bring_up_after_a_failed_attempt_waits_the_budgets_delay() {
+    use micold_core::sandbox::lifecycle::UNATTENDED_BRING_UP_DELAYS;
+    let mut app = app_with_a_failed_sandbox();
+    let reason = "Connection refused (os error 111)";
+
+    let first = shell::daemon_sync::refused_dial(&mut app, reason)
+        .expect("a failed sandbox the client cannot reach is brought up");
+    let micold_core::sandbox::lifecycle::SandboxState::Failed(failure) = failed_sandbox_state()
+    else {
+        unreachable!("the fixture's sandbox is failed")
+    };
+    let _ = update_inner(
+        &mut app,
+        Message::Sandbox(SandboxMsg::Failed(Box::new(failure))),
+    );
+    let second = shell::daemon_sync::refused_dial(&mut app, reason)
+        .expect("a failed attempt with attempts left is brought up again");
+
+    assert_eq!(
+        [first.after, second.after],
+        [UNATTENDED_BRING_UP_DELAYS[0], UNATTENDED_BRING_UP_DELAYS[1]],
+        "each unattended bring-up waits the delay the budget gave it (S-6)"
+    );
+}
+
+#[test]
+fn a_refused_dial_during_a_bring_up_is_not_reported_as_a_failure() {
+    use micold_core::sandbox::lifecycle::SandboxState;
+    let in_flight = [
+        SandboxState::Probing,
+        SandboxState::Acquiring(micold_core::sandbox::runtime::Progress {
+            stage: "Downloading".into(),
+            detail: None,
+            percent: Some(40),
+        }),
+        SandboxState::Starting,
+    ];
+
+    for stage in in_flight {
+        let mut app = app_with_a_failed_sandbox();
+        app.sandbox.state = stage.clone();
+
+        let work = connection_failed(&mut app);
+
+        assert_eq!(
+            work.units(),
+            0,
+            "{stage:?}: the bring-up in flight is the only one there may be (S-6)"
+        );
+        assert_eq!(
+            app.sandbox.state, stage,
+            "a bring-up already under way must not be started a second time"
+        );
+        assert!(
+            nothing_was_reported(&app),
+            "{stage:?}: the daemon is not listening *yet*; saying it could not be reached reads \
+                 a working bring-up as a broken one (FR-036b)"
+        );
+    }
+}
+
+/// FR-036b at the banner: a service that is not listening because the application is bringing
+/// it up is not a lost connection. "Not connected to the session service … Reconnecting…" above a
+/// sandbox view showing the stage reads a working bring-up as a broken one — the toast this
+/// replaced said the same thing more quietly.
+#[test]
+fn a_bring_up_in_flight_is_not_shown_as_a_lost_connection() {
+    use micold_client::features::connection::ConnectionStatus;
+    use micold_core::sandbox::lifecycle::SandboxState;
+    let mut app = app_with_a_failed_sandbox();
+    let _ = connection_failed(&mut app);
+    assert_eq!(
+        app.sandbox.state,
+        SandboxState::Probing,
+        "setup: the refused dial has to start a bring-up"
+    );
+    let in_flight = [
+        SandboxState::Probing,
+        SandboxState::Acquiring(micold_core::sandbox::runtime::Progress {
+            stage: "Downloading".into(),
+            detail: None,
+            percent: Some(40),
+        }),
+        SandboxState::Starting,
+    ];
+
+    for stage in in_flight {
+        app.sandbox.state = stage.clone();
+        let _ = connection_failed(&mut app);
+
+        assert_ne!(
+            connection_status(&app),
+            ConnectionStatus::Disconnected,
+            "{stage:?}: the service is being brought up, and the sandbox view says so (FR-036b)"
+        );
+    }
+}
+
+/// FR-036b and FR-035a together: while the application is bringing the sandbox up there is no
+/// failure to stand behind, so neither "The sandbox did not start" nor an offer to run without it
+/// may be on screen. Offering the host fallback over a bring-up that is about to succeed asks the
+/// user to give up isolation for nothing.
+#[test]
+fn a_bring_up_in_flight_offers_no_failure_card_and_no_fallback() {
+    use micold_core::sandbox::lifecycle::SandboxState;
+    let mut app = app_with_a_failed_sandbox();
+    let _ = connection_failed(&mut app);
+    let in_flight = [
+        SandboxState::Probing,
+        SandboxState::Acquiring(micold_core::sandbox::runtime::Progress {
+            stage: "Downloading".into(),
+            detail: None,
+            percent: Some(40),
+        }),
+        SandboxState::Starting,
+    ];
+
+    for stage in in_flight {
+        app.sandbox.state = stage.clone();
+        let _ = connection_failed(&mut app);
+
+        assert_eq!(
+            app.sandbox.persistent_notice(),
+            None,
+            "{stage:?}: the standing sandbox card is for a sandbox that did not start (FR-036b)"
+        );
+        assert_eq!(
+            app.sandbox.fallback_offer(),
+            None,
+            "{stage:?}: the host fallback is offered for a failure, not a bring-up (FR-035a)"
+        );
+    }
+}
+
+/// FR-036a / US6 scenario 9, "each attempt MUST report why it failed": the refused dial that
+/// starts the next attempt moves `Failed(reason)` to `Probing`, and the reason has to survive
+/// the move. Otherwise the user watches "Checking the container runtime" come round again with
+/// no word of what went wrong last time, and a sandbox that fails three times reads as one that
+/// is merely slow.
+#[test]
+fn the_previous_attempts_reason_stays_visible_while_the_next_one_runs() {
+    use micold_core::sandbox::lifecycle::SandboxState;
+    let mut app = app_with_a_failed_sandbox();
+    let SandboxState::Failed(failure) = failed_sandbox_state() else {
+        unreachable!("the fixture's sandbox is failed")
+    };
+    let _ = connection_failed(&mut app);
+
+    for stage in [SandboxState::Probing, SandboxState::Starting] {
+        let _ = update_inner(
+            &mut app,
+            Message::Sandbox(SandboxMsg::Progress(Box::new(stage.clone()))),
+        );
+
+        let line = micold_client::ui::attempt_line(&app.sandbox)
+            .expect("setup: a bring-up in flight has a stage line");
+        assert!(
+            line.detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains(&failure.reason())),
+            "{stage:?}: the attempt that failed has to say why while the next one runs \
+                 (FR-036a): {line:?}"
+        );
+    }
+}
+
+/// A refused dial while the state still says `Running` is reported, not brought up: nothing
+/// has shown the sandbox is gone yet. The liveness check `on_disconnected` starts is what
+/// decides that and moves the state on (FR-036, US6 scenario 3); a bring-up from here would
+/// start a second container beside one that may be running. Pinned as it stands (T180).
+#[test]
+fn a_refused_dial_while_the_sandbox_reads_running_is_reported() {
+    use micold_core::sandbox::lifecycle::SandboxState;
+    use micold_core::sandbox::runtime::ContainerId;
+    let mut app = app_with_a_failed_sandbox();
+    let running = SandboxState::Running(ContainerId("abc".into()));
+    app.sandbox.state = running.clone();
+
+    let work = connection_failed(&mut app);
+
+    assert_eq!(
+        work.units(),
+        0,
+        "only the liveness check may conclude a running sandbox is gone (FR-036)"
+    );
+    assert_eq!(app.sandbox.state, running);
+    assert!(
+        a_connection_failure_was_reported(&app),
+        "a running sandbox the client cannot reach is a connection failure, until shown otherwise"
+    );
+}
+
+/// S-6's bound, driven the way the application meets it: a refused dial, the attempt failing,
+/// and again — with nothing written into the budget by the test, so a budget the handler forgets
+/// to spend is an unbounded loop here rather than a green run.
+#[test]
+fn once_the_unattended_bring_ups_are_spent_the_failure_is_reported() {
+    use micold_core::sandbox::lifecycle::{SandboxState, UNATTENDED_BRING_UP_DELAYS};
+    let mut app = app_with_a_failed_sandbox();
+    let SandboxState::Failed(failure) = failed_sandbox_state() else {
+        unreachable!("the fixture's sandbox is failed")
+    };
+
+    let mut bring_ups = 0;
+    while connection_failed(&mut app).units() > 0 {
+        bring_ups += 1;
+        assert!(
+            bring_ups <= UNATTENDED_BRING_UP_DELAYS.len(),
+            "a bound that keeps bringing the sandbox up is no bound (S-6)"
+        );
+        let _ = update_inner(
+            &mut app,
+            Message::Sandbox(SandboxMsg::Failed(Box::new(failure.clone()))),
+        );
+    }
+
+    assert_eq!(
+        bring_ups,
+        UNATTENDED_BRING_UP_DELAYS.len(),
+        "every unattended bring-up the budget allows is made before the failure stands (S-6)"
+    );
+    assert_eq!(
+        app.sandbox.state,
+        failed_sandbox_state(),
+        "with the attempts spent, the failure stands rather than a bring-up nothing runs"
+    );
+    assert!(
+        a_connection_failure_was_reported(&app),
+        "with nothing left to try, the user has to be told"
+    );
+}
+
+#[test]
+fn without_a_boot_plan_nothing_is_brought_up() {
+    let mut app = app_with_a_failed_sandbox();
+    app.sandbox_boot = None;
+    let failed = app.sandbox.state.clone();
+
+    let work = connection_failed(&mut app);
+
+    assert_eq!(
+        work.units(),
+        0,
+        "with no plan there is nothing to bring up, so nothing may be scheduled"
+    );
+
+    assert_eq!(
+        app.sandbox.state, failed,
+        "a sandbox with no plan to run stays failed rather than claiming a bring-up"
+    );
+    assert!(
+        a_connection_failure_was_reported(&app),
+        "with nothing to bring up, the refused dial is the user's to know about"
+    );
+}
+
+#[test]
+fn a_host_process_placement_never_brings_a_sandbox_up() {
+    // FR-035 read the other way round: consent to run on the host is not consent to be put
+    // back in a container behind the user's back either.
+    let mut app = app_with_a_failed_sandbox();
+    app.placement.kind = micold_core::sandbox::placement::PlacementKind::HostProcess;
+    let failed = app.sandbox.state.clone();
+
+    let work = connection_failed(&mut app);
+
+    assert_eq!(
+        work.units(),
+        0,
+        "the host placement's own connection starts its service; a sandbox task here would \
+             undo the consent (FR-035)"
+    );
+
+    assert_eq!(
+        app.sandbox.state, failed,
+        "the host placement leaves the sandbox state alone (FR-035)"
+    );
+    assert!(
+        a_connection_failure_was_reported(&app),
+        "on the host placement a refused dial is an ordinary connection failure"
+    );
+}
+
+#[test]
+fn a_reported_stage_becomes_the_sandbox_state() {
+    let mut app = app_with_a_failed_sandbox();
+
+    let _ = update_inner(
+        &mut app,
+        Message::Sandbox(SandboxMsg::Progress(Box::new(
+            micold_core::sandbox::lifecycle::SandboxState::Starting,
+        ))),
+    );
+
+    assert_eq!(
+        app.sandbox.state,
+        micold_core::sandbox::lifecycle::SandboxState::Starting,
+        "a stage that never reaches the state is the progress SC-004c says was dropped"
+    );
+}
+
+#[test]
+fn a_sandbox_that_came_up_earns_its_unattended_bring_ups_back() {
+    use micold_core::sandbox::lifecycle::{Started, UnattendedBringUps};
+    use micold_core::sandbox::runtime::{
+        ContainerId, IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
+    };
+    let mut app = app_with_a_failed_sandbox();
+    let _ = connection_failed(&mut app);
+    assert_ne!(
+        app.sandbox.unattended,
+        UnattendedBringUps::default(),
+        "setup: the refused dial has to spend an attempt, or there is nothing to earn back"
+    );
+    let _ = update_inner(
+        &mut app,
+        Message::Sandbox(SandboxMsg::Started(Box::new(Started {
+            id: ContainerId("abc".into()),
+            capabilities: RuntimeCapabilities {
+                kind: RuntimeKind::Docker,
+                version: "27.0".into(),
+                cpus: LimitSupport::Supported,
+                memory: LimitSupport::Supported,
+                pids: LimitSupport::Supported,
+                storage: LimitSupport::Supported,
+                identity_mapping: IdentityMapping::ExplicitUidGid,
+            },
+            unsatisfiable: Vec::new(),
+        }))),
+    );
+
+    assert_eq!(
+        app.sandbox.unattended,
+        UnattendedBringUps::default(),
+        "a bound that is never restored makes the second outage of a long session unrecoverable"
     );
 }

@@ -11,7 +11,9 @@
 //! what the view needs to render about limits the runtime cannot enforce.
 
 use micold_core::protocol::messages::ExitStatus;
-use micold_core::sandbox::lifecycle::{Failure, RestartRequested, SandboxState, Started};
+use micold_core::sandbox::lifecycle::{
+    Failure, RestartRequested, SandboxState, Started, UnattendedBringUps,
+};
 use micold_core::sandbox::placement::{ConsentedFallback, PlacementKind};
 use micold_core::sandbox::runtime::{RuntimeCapabilities, UnsatisfiableLimit};
 use micold_core::sandbox::{Bytes, ResourceBudget};
@@ -53,6 +55,8 @@ pub enum Msg {
     ///
     /// Boxed for the same reason as [`Msg::Started`].
     Failed(Box<Failure>),
+    /// A bring-up entered a stage.
+    Progress(Box<SandboxState>),
 }
 
 /// A limit that can stop a session, and the control that governs it (US4 scenario 3).
@@ -213,6 +217,12 @@ pub struct Sandbox {
     /// having to remember to re-enable it (US6 scenario 2) — which is what stops a broken sandbox
     /// becoming a permanently disabled one that nobody notices.
     pub fallback: Option<ConsentedFallback>,
+    /// The bring-ups the application may still start on its own.
+    pub unattended: UnattendedBringUps,
+    /// Why the attempt before the one in flight failed, while the application tries again on its
+    /// own (FR-036a). Taken from `Failed` as it moves to `Probing`, which is otherwise where the
+    /// reason is lost; retired when a sandbox comes up.
+    pub previous_attempt: Option<Failure>,
 }
 
 impl Default for Sandbox {
@@ -222,6 +232,8 @@ impl Default for Sandbox {
             unsatisfiable: Vec::new(),
             capabilities: None,
             fallback: None,
+            unattended: UnattendedBringUps::default(),
+            previous_attempt: None,
         }
     }
 }
@@ -245,6 +257,9 @@ impl Sandbox {
 
     /// Adopt the result of a successful bring-up.
     pub fn started(&mut self, started: Started) {
+        // A sandbox that came up has recovered; the next outage gets the whole bound again.
+        self.unattended = UnattendedBringUps::default();
+        self.previous_attempt = None;
         self.unsatisfiable = started.unsatisfiable;
         self.capabilities = Some(started.capabilities);
         self.state = SandboxState::Running(started.id);
@@ -295,6 +310,20 @@ impl Sandbox {
             }
             None => false,
         }
+    }
+
+    /// Bring the sandbox up again because its service is not there (FR-002a, BUG-004).
+    ///
+    /// Moves a failed sandbox back to `Probing`, spends one of the unattended attempts, and returns
+    /// how long to wait before starting it. `None` — nothing moved — for a sandbox that has not
+    /// failed or has no attempts left; the decision is `lifecycle::service_absent`'s (S-6, S-7).
+    pub fn service_absent(&mut self) -> Option<std::time::Duration> {
+        let again = micold_core::sandbox::lifecycle::service_absent(&self.state, self.unattended)?;
+        if let SandboxState::Failed(failure) = std::mem::replace(&mut self.state, again.state) {
+            self.previous_attempt = Some(failure);
+        }
+        self.unattended = again.budget;
+        Some(again.after)
     }
 
     /// Adopt the loss of the container the sandbox was using (FR-036, US6 scenario 3).

@@ -11,8 +11,8 @@ use micold_core::sandbox::cli::CliRuntime;
 use micold_core::sandbox::exec::{CommandOutput, RecordingRunner};
 use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
 use micold_core::sandbox::lifecycle::{
-    bring_up, container_lost, mount_set_changed, restart, survive_logout_changed, RestartRequested,
-    SandboxState, Stage,
+    bring_up, container_lost, mount_set_changed, restart, service_absent, survive_logout_changed,
+    RestartRequested, SandboxState, Stage, UnattendedBringUps, UNATTENDED_BRING_UP_DELAYS,
 };
 use micold_core::sandbox::runtime::{ContainerId, Progress, RuntimeError, RuntimeKind};
 use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
@@ -428,9 +428,10 @@ fn a_stale_sandbox_still_serves_the_sessions_already_in_it() {
     );
 }
 
-/// The only edge back into bring-up, and it takes an explicit request to cross.
+/// The only edge back into bring-up from a running sandbox, and it takes an explicit request to
+/// cross. The unattended edge out of `Failed` is `service_absent`'s, below (S-6, S-7).
 #[test]
-fn only_an_explicit_request_restarts_the_sandbox() {
+fn a_running_sandbox_restarts_only_on_an_explicit_request() {
     for before in every_state() {
         let after = restart(&before, RestartRequested);
         match &before {
@@ -505,6 +506,137 @@ fn a_sandbox_that_never_ran_cannot_be_lost() {
             container_lost(&before, "micold-sandbox"),
             None,
             "{before:?} was reported as a lost container"
+        );
+    }
+}
+
+// --- BUG-004 (T167, S-6/S-7, FR-002a, FR-036a): a sandbox found absent is brought up again -------
+
+fn failed() -> SandboxState {
+    SandboxState::Failed(micold_core::sandbox::lifecycle::Failure {
+        stage: Stage::Starting,
+        error: RuntimeError::SandboxStopped {
+            name: "micold-sandbox".into(),
+        },
+    })
+}
+
+/// FR-002a. The host placement has always started its service when it found none there; this is the
+/// same promise for the container, and it carries no `RestartRequested` because nobody pressed
+/// anything — which is exactly the situation BUG-004 left without a way out.
+#[test]
+fn a_failed_sandbox_found_absent_is_brought_up_again_without_anyone_asking() {
+    let budget = UnattendedBringUps::default();
+
+    let again = service_absent(&failed(), budget)
+        .expect("a sandbox that is not running, with attempts left, has to be brought up again");
+
+    assert_eq!(again.state, SandboxState::Probing);
+    assert_eq!(
+        again.budget.remaining() + 1,
+        budget.remaining(),
+        "the attempt has to be paid for, or the bound below means nothing"
+    );
+}
+
+/// S-6's guard and S-7's scope, over the whole state space. A bring-up already in flight is never
+/// started a second time — the connection keeps failing at 1 Hz while one runs, and each failure
+/// is not a new reason to begin again. A running or stale sandbox is R9's to protect, and an
+/// absent *service* in front of a present container is `container_lost`'s question, not this one.
+#[test]
+fn absence_only_brings_up_a_sandbox_that_has_failed() {
+    for before in every_state() {
+        if matches!(before, SandboxState::Failed(_)) {
+            continue;
+        }
+        assert_eq!(
+            service_absent(&before, UnattendedBringUps::default()),
+            None,
+            "{before:?} was brought up again on a failed connection"
+        );
+    }
+}
+
+/// FR-036b's "not listening *yet*", over the whole state space. These are exactly the states a
+/// bring-up passes through; a refused dial in any other one is not the bring-up still running, and
+/// one missing from here is a working bring-up the client reports as a broken connection.
+#[test]
+fn only_a_bring_up_in_flight_is_coming_up() {
+    let coming_up: Vec<SandboxState> = every_state()
+        .into_iter()
+        .filter(SandboxState::is_coming_up)
+        .collect();
+
+    assert!(
+        matches!(
+            coming_up.as_slice(),
+            [
+                SandboxState::Probing,
+                SandboxState::Acquiring(_),
+                SandboxState::Starting
+            ]
+        ),
+        "a bring-up in flight is Probing, Acquiring and Starting, and nothing else: {coming_up:?}"
+    );
+}
+
+/// More unattended bring-ups than any bound this application could mean. A loop that passes it has
+/// no bound, and stops here instead of hanging the suite.
+const NO_BOUND: usize = 10;
+
+/// FR-036a, S-2. A runtime that is not installed fails in milliseconds; unbounded, this would be
+/// a bring-up loop for as long as the application stayed open. Bounded, the failure ends up
+/// standing with its reason and remedy on screen, which is where FR-034's manual path takes over.
+#[test]
+fn unattended_bring_ups_are_bounded_and_then_the_failure_stands() {
+    let mut budget = UnattendedBringUps::default();
+    let mut attempts = 0;
+    while let Some(again) = service_absent(&failed(), budget) {
+        attempts += 1;
+        budget = again.budget;
+        assert!(attempts <= NO_BOUND, "the bound never arrived");
+    }
+
+    assert!(
+        attempts >= 1,
+        "a bound of zero is the bug, not a fix for it"
+    );
+    assert_eq!(
+        attempts,
+        UNATTENDED_BRING_UP_DELAYS.len(),
+        "the bound is one attempt per delay in the table"
+    );
+    assert_eq!(budget.remaining(), 0);
+    assert_eq!(
+        service_absent(&failed(), budget),
+        None,
+        "a spent budget has to stay spent"
+    );
+}
+
+/// S-6: "spaced by their own backoff". The first attempt may go at once — the service is missing
+/// *now* — and none after it waits less than the one before. How many there are is the bound test's
+/// to say, and that the waits outlast the connection's own retry is checked where that retry is
+/// defined, against the real value: `micold-client/src/daemon.rs`.
+#[test]
+fn unattended_bring_ups_never_wait_less_than_the_one_before() {
+    let mut budget = UnattendedBringUps::default();
+    let mut waits = Vec::new();
+    while let Some(again) = service_absent(&failed(), budget) {
+        waits.push(again.after);
+        budget = again.budget;
+        assert!(waits.len() <= NO_BOUND, "the bound never arrived");
+    }
+
+    assert!(
+        waits.len() >= 2,
+        "spacing needs at least two attempts to be between: {waits:?}"
+    );
+    for (i, wait) in waits.iter().enumerate().skip(1) {
+        assert!(
+            *wait >= waits[i - 1],
+            "attempt {} waits less than the one before it: {waits:?}",
+            i + 1
         );
     }
 }
