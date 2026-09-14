@@ -356,3 +356,12 @@
 - green: `resolve` classifies the address; `Web` and `Mail` give `Url(address)` shown as the address with no confirmation, anything else `None`. The context is unused until file links (`_ctx`). Suite -> 1093 passed, 0 failed; clippy clean
 - refactor: none needed
 - commit: `feat(031): resolve a web or mail link to its address (U33)`
+
+## Cycle 36: U34 a declared non-followable URI resolves to `None`
+
+- test: `crates/micold-core/src/link/resolve.rs::tests::a_declared_uri_that_is_not_followable_resolves_to_nothing` (new). Also T006's interim guard `a_file_link_resolves_to_nothing_before_file_links_land`, which carries no behavior id and is replaced by T042
+- red: both passed on arrival (`test ... ok`), since U33's `resolve` returns `None` for `NotFollowable`. Deliberate mutant: `NotFollowable` resolves to `Url(address)` like a web link. `scripts/build-lock.sh cargo test -p micold-core --lib link::resolve::tests::a_declared_uri_that_is_not_followable_resolves_to_nothing -- --exact`
+  -> `assertion failed: a program may declare vscode://file/home/u/a.rs, but it is never offered as a link` / `left: Some(ResolvedLink { ..., target: Url("vscode://file/home/u/a.rs"), ... })` / `right: None` (1 failed); the file guard failed under the same mutant (`assertion failed: file links open nothing until their resolution exists`). Mutant reverted from the backup
+- green: no implementation change. Suite -> 1095 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin that a non-followable declared URI resolves to nothing (U34)`

@@ -114,4 +114,34 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn a_declared_uri_that_is_not_followable_resolves_to_nothing() {
+        for address in [
+            "vscode://file/home/u/a.rs",
+            "javascript:alert(1)",
+            "gopher://a.example/",
+        ] {
+            let link = Link {
+                address: address.to_string(),
+                origin: LinkOrigin::Declared,
+                cells: Vec::new(),
+            };
+            assert_eq!(
+                resolve(link, &local()),
+                None,
+                "a program may declare {address}, but it is never offered as a link"
+            );
+        }
+    }
+
+    /// Replaced by contract link-recognition C4–C10 when file links land (T042).
+    #[test]
+    fn a_file_link_resolves_to_nothing_before_file_links_land() {
+        assert_eq!(
+            resolve(detected("file:///tmp/x"), &local()),
+            None,
+            "file links open nothing until their resolution exists"
+        );
+    }
 }
