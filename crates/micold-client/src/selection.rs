@@ -59,6 +59,9 @@ pub struct Selection {
     granularity: SelectGranularity,
     /// Cached normalized, expanded, inclusive bounds `(top_left, bottom_right)`.
     bounds: (Anchor, Anchor),
+    /// Whether the moving end has been extended at all. A `Char` selection that never was is a
+    /// click, and selects nothing (FR-013e, BUG-007).
+    extended: bool,
 }
 
 impl Selection {
@@ -75,14 +78,26 @@ impl Selection {
             current: anchor,
             granularity,
             bounds,
+            extended: false,
         }
     }
 
     /// Extend the moving end of the selection to `anchor`, re-expanding for `Word`/`Line`. The
     /// fixed (start) anchor is unchanged, so dragging back and forth is stable.
+    ///
+    /// Any update counts as a drag, whatever its anchor: the pane sends one only once the pointer
+    /// has left the pressed cell, and a `LineId` anchor drifts under streaming output, so comparing
+    /// anchors here would judge a drag a second time, in different units (FR-013e).
     pub fn update(&mut self, anchor: Anchor, line_text: impl Fn(LineId) -> Option<String>) {
+        self.extended = true;
         self.current = anchor;
         self.bounds = expand(self.start, anchor, self.granularity, &line_text);
+    }
+
+    /// Whether this selection covers nothing: a `Char` selection that was never extended is a click
+    /// (FR-013e). `Word` and `Line` selections cover their word or line from the press.
+    fn is_empty(&self) -> bool {
+        self.granularity == SelectGranularity::Char && !self.extended
     }
 
     /// The granularity this selection was started with.
@@ -102,6 +117,9 @@ impl Selection {
     /// start column to end, every intermediate line in full, and the last line from its start to
     /// the end column. Both endpoint columns are inclusive.
     pub fn contains(&self, line: LineId, col: u16) -> bool {
+        if self.is_empty() {
+            return false;
+        }
         let (top, bot) = self.bounds;
         if line < top.line || line > bot.line {
             return false;
@@ -124,6 +142,9 @@ impl Selection {
     /// respected: the first line starts at the start column, the last ends at the end column, and
     /// intermediate lines are taken in full.
     pub fn text(&self, line_text: impl Fn(LineId) -> Option<String>) -> String {
+        if self.is_empty() {
+            return String::new();
+        }
         let (top, bot) = self.bounds;
         let mut out = String::new();
         let mut line = top.line;
@@ -417,6 +438,45 @@ mod tests {
         assert!(sel.contains(LineId(200), 0));
         assert!(sel.contains(LineId(200), 10));
         assert_eq!(sel.text(&p), "foo bar baz");
+    }
+
+    #[test]
+    fn a_click_without_a_drag_selects_nothing() {
+        let p = provider(&[(100, "hello world")]);
+        // A single left press on the 'l' at col 2, released without moving.
+        let sel = Selection::start(a(100, 2), SelectGranularity::Char, &p);
+        assert!(
+            !sel.contains(LineId(100), 2),
+            "a click is not a drag: no cell may be highlighted (FR-013e)"
+        );
+        assert_eq!(sel.text(&p), "", "a click must leave nothing to auto-copy");
+    }
+
+    #[test]
+    fn an_update_onto_the_start_anchor_selects_that_cell() {
+        // The pane only sends an update once the pointer has left the pressed cell, so an update
+        // that lands on the start anchor is a drag that came back: one character stays selectable.
+        let p = provider(&[(100, "hello world")]);
+        let mut sel = Selection::start(a(100, 2), SelectGranularity::Char, &p);
+        sel.update(a(100, 2), &p);
+        assert!(
+            sel.contains(LineId(100), 2),
+            "a drag that ends on its start cell selects that cell (FR-013e)"
+        );
+        assert_eq!(sel.text(&p), "l");
+    }
+
+    #[test]
+    fn a_drag_out_and_back_selects_the_pressed_cell() {
+        let p = provider(&[(100, "hello world")]);
+        let mut sel = Selection::start(a(100, 2), SelectGranularity::Char, &p);
+        sel.update(a(100, 5), &p);
+        sel.update(a(100, 2), &p);
+        assert!(
+            sel.contains(LineId(100), 2),
+            "returning to the pressed cell must not turn a drag back into a click (FR-013e)"
+        );
+        assert_eq!(sel.text(&p), "l");
     }
 
     #[test]

@@ -117,6 +117,25 @@ fn a_selection_the_provider_cannot_resolve_asks_for_nothing() {
     assert_eq!(copy_request(Some(&sel), |_| None), None);
 }
 
+#[test]
+fn a_click_without_a_drag_asks_for_nothing() {
+    // BUG-007: a press that never left its cell selected, and so auto-copied, the character under
+    // it — replacing whatever the user had on the clipboard with one letter.
+    let rows = ["hello world"];
+    let provider = lines(&rows);
+    let click = Selection::start(
+        Anchor::new(LineId(0), 6),
+        SelectGranularity::Char,
+        &provider,
+    );
+
+    assert_eq!(
+        copy_request(Some(&click), lines(&rows)),
+        None,
+        "a click is not a drag: it selects nothing, so it must not ask to copy (FR-013e, FR-013c)"
+    );
+}
+
 /// Client sources outside the shell, with comments stripped.
 fn non_shell_sources() -> Vec<(String, String)> {
     inventory::sources_under(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"))

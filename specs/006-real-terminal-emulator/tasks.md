@@ -495,6 +495,49 @@ bracketed-paste process waits at the prompt instead of running.
 focus-indicator clause was ticked but never drawn — BUG-005). Added Phase 13 (T067–T073). No task was
 ever generated for bracketed paste (it lived in an assumption), so BUG-006 adds rather than reopens.
 
+## Phase 14: Bugfix BUG-007 — a single click selects the clicked cell (FR-013e)
+
+**Purpose**: A left click that never leaves its cell selected that cell — highlighted until the next
+press, and auto-copied over the clipboard on release. Test-first (Red commit, then Green). The
+selection model has no empty selection. The pane sends same-cell pointer jitter as a move, and a
+`LineId` anchor drifts under streaming output, so the model cannot tell jitter from a drag. And the
+pane's release copies from its pre-batch view, so a press and release delivered together copy the
+previous selection.
+
+- [X] T074 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] [U11] [U12] [U13] Failing regression tests. In `src/selection.rs` (`mod tests`): a `Char`
+  selection started and never updated `contains` no cell and yields empty `text`; one updated onto
+  its own start anchor selects that cell, and so does one dragged into another cell and back; `Word`
+  and `Line` selections started without motion still select the word and the line. In `tests/clipboard_request.rs`: a click-only selection over text produces no copy
+  request (FR-013e, FR-013c). In `src/ui/material/terminal_pane.rs` (`clipboard_gestures`): after a
+  left press, a `CursorMoved` inside the pressed cell publishes no `TerminalSelectUpdate` and one
+  into another cell does. So does one after a wheel turn that scrolled the view, or one outside the
+  pane; a press and jitter in the focus gutter beside an edge cell, or after a wheel turn that
+  cannot scroll, publishes none. With a selection already held, a left press and release delivered in one
+  batch write nothing to the clipboard, and the release publishes `TerminalSelectionReleased` after
+  its `TerminalSelectStart`.
+- [X] T075 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] [U11] [U12] [U13] In `Selection` (`src/selection.rs`), a `Char` selection is empty until its first
+  `update`, whatever that update's anchor is. Until then `contains` returns false and `text` returns
+  an empty string. `Word`/`Line` behaviour and every existing selection test are unchanged. In
+  `TerminalPane`, remember the pressed viewport cell and publish no
+  `TerminalSelectUpdate` until the pointer has entered another cell; a local scroll that moves the
+  view, or a position outside the pane, counts as having left it. In the left-release arm,
+  publish a new `SessionMsg::TerminalSelectionReleased` instead of writing `selectable_content()`,
+  and handle it in the shell (`shell::clipboard`) with `selection::copy_request` on the current
+  `app.selection`, without closing the context menu. Make T074 pass.
+- [X] T076 [BUG-007] Visual pass on a private Xvfb display (the `visual-pass` skill): in a Regular
+  Terminal, drag text onto the clipboard, single-click a character at human pace, paste — no
+  highlight remains and the dragged text is pasted (quickstart §10f step 20a); after a drag, put
+  other text on the clipboard, send a synthetic `xdotool click` and paste — the other text is
+  pasted; a drag still highlights and copies. Record under `evidence/`. In
+  `docs/user-guide/worktrees-and-sessions.md`, say that a plain click clears the selection without selecting or copying anything (Principle VII).
+
+**Checkpoint**: Clicking in the terminal leaves no highlight and never touches the clipboard; drag,
+double-click and triple-click select as before.
+
+**Bugfix**: 2026-09-14 — BUG-007 Updated from bugfix patch. No task reopened: T016/T019 wired
+press/drag/auto-copy as their text describes, and the click case was never specified until FR-013e.
+Added Phase 14 (T074–T076).
+
 ---
 
 ## Dependencies & Execution Order

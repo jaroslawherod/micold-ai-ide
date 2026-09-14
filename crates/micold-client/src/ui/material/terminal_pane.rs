@@ -216,6 +216,10 @@ impl<'a> From<GridSizeReporter<'a>> for Element<'a, Message> {
 #[derive(Default)]
 struct PaneState {
     dragging: bool,
+    /// The viewport cell a local left press landed in, until the pointer first leaves it. While
+    /// set, motion is still a click and extends nothing (FR-013e, BUG-007): the pane decides this
+    /// in screen cells because a selection's `LineId` anchors drift under streaming output.
+    press_cell: Option<(u16, u16)>,
     modifiers: keyboard::Modifiers,
     last_click: Option<Click>,
     /// While dragging the scrollbar thumb: the cursor's offset below the thumb's top edge, so the
@@ -895,6 +899,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     let kind = select_kind(c.kind());
                     state.last_click = Some(c);
                     state.dragging = true;
+                    state.press_cell = Some((col, line));
                     shell.publish(Message::Session(SessionMsg::TerminalSelectStart {
                         col,
                         line,
@@ -949,6 +954,17 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             }
             Event::Mouse(mouse::Event::CursorMoved { position }) if state.dragging => {
                 let (col, line) = grid_at(*position, content, metrics);
+                // Jitter inside the pressed cell is still a click (FR-013e). Once the pointer has
+                // left it, every cell counts — the pressed one included, so one character stays
+                // selectable by dragging out and back. The top and left focus gutters belong to
+                // the edge cell `grid_at` clamps them onto, as a press there does; past the last
+                // column or row is a cell of its own. A position outside the pane has left the
+                // pressed cell even where `grid_at` clamps it back onto it.
+                if bounds.contains(*position) && state.press_cell == Some((col, line)) {
+                    shell.capture_event();
+                    return;
+                }
+                state.press_cell = None;
                 shell.publish(Message::Session(SessionMsg::TerminalSelectUpdate {
                     col,
                     line,
@@ -958,11 +974,12 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) if state.dragging => {
                 state.dragging = false;
-                // Auto-copy the selection to the clipboard on release (FR-013).
-                let selected = self.selectable_content();
-                if !selected.is_empty() {
-                    clipboard.write(ClipboardKind::Standard, selected);
-                }
+                state.press_cell = None;
+                // Auto-copy on release (FR-013), decided by the shell against the selection as
+                // this gesture left it. `self.selection` is the one this pane was built with: when
+                // the press and release arrive in one batch it predates the press, and copying it
+                // would put the previous selection over the clipboard (FR-013e, BUG-007).
+                shell.publish(Message::Session(SessionMsg::TerminalSelectionReleased));
                 shell.capture_event();
                 return;
             }
@@ -1052,6 +1069,14 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                         return;
                     }
                     WheelRouting::ScrollLocally { lines } => {
+                        // Scrolling under a held button puts other text under the pointer, so
+                        // the pressed screen cell no longer holds the pressed text (FR-013e). A
+                        // turn the shell's clamp absorbs moves nothing and ends nothing.
+                        let offset = self.display_offset as i64;
+                        let history = self.history_size() as i64;
+                        if (offset + i64::from(lines)).clamp(0, history) != offset {
+                            state.press_cell = None;
+                        }
                         shell.publish(Message::Session(SessionMsg::TerminalScrolled(lines)));
                         shell.capture_event();
                         return;
@@ -1101,7 +1126,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 KeyRouting::Copy => {
                     // Nothing selected, nothing to copy: the chord is still the terminal's, but the
                     // clipboard keeps whatever the user put there (FR-013c, BUG-004) — the same rule
-                    // the release that ends a drag already follows.
+                    // the shell's auto-copy on release follows in `selection::copy_request`.
                     let selected = self.selectable_content();
                     if !selected.is_empty() {
                         clipboard.write(ClipboardKind::Standard, selected);
@@ -1427,19 +1452,25 @@ mod tests {
 
         /// A three-row grid whose top line reads `hello world`, with the given terminal mode bits.
         fn grid(mode: u32) -> GridCache {
+            grid_with_history(mode, 0)
+        }
+
+        /// [`grid`] with `history` lines of scrollback above the screen, viewed at the live bottom.
+        fn grid_with_history(mode: u32, history: i64) -> GridCache {
             let text = "hello world";
+            let top = LineId(history);
             let mut cache = GridCache::default();
             cache.apply(&GridFrame {
                 session: SessionId::new(),
                 seq: 1,
                 generation: 1,
                 full: true,
-                viewport_top: LineId(0),
+                viewport_top: top,
                 oldest_available: LineId(0),
                 cols: 20,
                 rows: 3,
                 cursor: WireCursor {
-                    line: LineId(0),
+                    line: top,
                     col: 0,
                     shape: WireCursorShape::Block,
                     visible: false,
@@ -1448,7 +1479,7 @@ mod tests {
                 styles: vec![DEFAULT_STYLE],
                 hyperlinks: Vec::new(),
                 lines: vec![WireLine {
-                    id: LineId(0),
+                    id: top,
                     text: text.to_string(),
                     runs: vec![StyleRun {
                         len: text.len() as u16,
@@ -1566,6 +1597,321 @@ mod tests {
             dispatch(&grid, Some(&selection), chord("c"), &mut clipboard);
 
             assert_eq!(clipboard.writes, vec!["hello world".to_string()]);
+        }
+
+        // BUG-007 (FR-013e).
+
+        /// A point inside grid cell `(col, line)`, at fraction `(fx, fy)` of the cell's width and
+        /// height from its top-left corner, for a pane laid out at `node`.
+        fn in_cell(node: Rectangle, col: u16, line: u16, fx: f32, fy: f32) -> Point {
+            let content = content_bounds(node);
+            let cell = CellMetrics::new(TERM_FONT_SIZE);
+            Point::new(
+                content.x + (f32::from(col) + fx) * cell.width,
+                content.y + (f32::from(line) + fy) * cell.height,
+            )
+        }
+
+        /// One pointer step of a gesture, at a point inside a cell (see [`in_cell`]).
+        #[derive(Clone, Copy)]
+        enum Pointer {
+            Press(u16, u16, f32, f32),
+            Move(u16, u16, f32, f32),
+            Release(u16, u16, f32, f32),
+            /// A wheel turn of `lines` lines with the pointer at the middle of cell `(col, line)`.
+            Wheel(u16, u16, f32),
+        }
+
+        /// Deliver a whole gesture to one focused pane, built once with `selection`, and return
+        /// everything it published in order.
+        ///
+        /// One pane for every step is what iced does within a batch: every event since the last
+        /// redraw reaches the same widget, and the published messages are applied only afterwards
+        /// — so a release in the same batch as its press sees the selection from before it.
+        fn gesture(
+            grid: &GridCache,
+            selection: Option<&Selection>,
+            steps: &[Pointer],
+            clipboard: &mut RecordingClipboard,
+        ) -> Vec<Message> {
+            let renderer = super::presses::headless();
+            let mut element: Element<'_, Message> = TerminalPane::new(
+                grid,
+                TermPalette::from_scheme(micold_core::theme::ColorScheme::Dark),
+            )
+            .selection(selection)
+            .focused(true)
+            .into();
+            let mut tree = Tree::new(&element);
+            let node = element.as_widget_mut().layout(
+                &mut tree,
+                &renderer,
+                &Limits::new(Size::ZERO, WINDOW),
+            );
+            let bounds = node.bounds();
+            let mut messages = Vec::new();
+            for step in steps {
+                let (event, at) = match *step {
+                    Pointer::Press(c, l, fx, fy) => (
+                        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                        in_cell(bounds, c, l, fx, fy),
+                    ),
+                    Pointer::Move(c, l, fx, fy) => {
+                        let position = in_cell(bounds, c, l, fx, fy);
+                        (
+                            Event::Mouse(mouse::Event::CursorMoved { position }),
+                            position,
+                        )
+                    }
+                    Pointer::Release(c, l, fx, fy) => (
+                        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                        in_cell(bounds, c, l, fx, fy),
+                    ),
+                    Pointer::Wheel(c, l, lines) => (
+                        Event::Mouse(mouse::Event::WheelScrolled {
+                            delta: mouse::ScrollDelta::Lines { x: 0.0, y: lines },
+                        }),
+                        in_cell(bounds, c, l, 0.5, 0.5),
+                    ),
+                };
+                let mut shell = Shell::new(&mut messages);
+                element.as_widget_mut().update(
+                    &mut tree,
+                    &event,
+                    Layout::new(&node),
+                    mouse::Cursor::Available(at),
+                    &renderer,
+                    clipboard,
+                    &mut shell,
+                    &Rectangle::with_size(WINDOW),
+                );
+            }
+            messages
+        }
+
+        fn select_updates(published: &[Message]) -> Vec<(u16, u16)> {
+            published
+                .iter()
+                .filter_map(|m| match m {
+                    Message::Session(SessionMsg::TerminalSelectUpdate { col, line }) => {
+                        Some((*col, *line))
+                    }
+                    _ => None,
+                })
+                .collect()
+        }
+
+        #[test]
+        fn pointer_jitter_inside_the_pressed_cell_is_not_a_drag() {
+            let grid = grid(0);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            let published = gesture(
+                &grid,
+                None,
+                &[
+                    Pointer::Press(6, 0, 0.3, 0.4),
+                    Pointer::Move(6, 0, 0.7, 0.6),
+                    Pointer::Move(6, 0, 0.5, 0.9),
+                ],
+                &mut clipboard,
+            );
+
+            assert_eq!(
+                select_updates(&published),
+                Vec::<(u16, u16)>::new(),
+                "motion that never left the pressed cell is a click, not a drag, so it must not \
+                 extend the selection (FR-013e)"
+            );
+        }
+
+        #[test]
+        fn motion_into_another_cell_and_back_extends_the_selection_each_time() {
+            let grid = grid(0);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            let published = gesture(
+                &grid,
+                None,
+                &[
+                    Pointer::Press(6, 0, 0.5, 0.5),
+                    Pointer::Move(7, 0, 0.5, 0.5),
+                    Pointer::Move(6, 0, 0.5, 0.5),
+                ],
+                &mut clipboard,
+            );
+
+            assert_eq!(
+                select_updates(&published),
+                vec![(7, 0), (6, 0)],
+                "once the pointer has left the pressed cell it is a drag, and every cell it \
+                 enters — including the pressed one again — extends the selection (FR-013a)"
+            );
+        }
+
+        #[test]
+        fn motion_after_a_scroll_while_held_is_a_drag_even_in_the_pressed_screen_cell() {
+            // Scrollback to scroll into, so the wheel turn really moves the view.
+            let grid = grid_with_history(0, 10);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            let published = gesture(
+                &grid,
+                None,
+                &[
+                    Pointer::Press(6, 0, 0.5, 0.5),
+                    Pointer::Wheel(6, 0, 3.0),
+                    Pointer::Move(6, 0, 0.7, 0.5),
+                ],
+                &mut clipboard,
+            );
+
+            assert_eq!(
+                select_updates(&published),
+                vec![(6, 0)],
+                "scrolling while the button is held puts other text under the pointer, so the \
+                 pressed screen cell no longer holds the pressed text and motion there is a drag \
+                 (FR-013e)"
+            );
+        }
+
+        #[test]
+        fn motion_past_the_panes_edge_is_a_drag_even_where_it_clamps_to_the_pressed_cell() {
+            let grid = grid(0);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            let published = gesture(
+                &grid,
+                None,
+                &[
+                    Pointer::Press(0, 0, 0.5, 0.5),
+                    Pointer::Move(0, 0, -2.0, 0.5),
+                ],
+                &mut clipboard,
+            );
+
+            assert_eq!(
+                select_updates(&published),
+                vec![(0, 0)],
+                "a pointer that has left the pane has left the pressed cell, even though the \
+                 position clamps back onto it (FR-013e)"
+            );
+        }
+
+        #[test]
+        fn jitter_in_the_focus_gutter_beside_the_pressed_edge_cell_is_not_a_drag() {
+            let grid = grid(0);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            // A fifth of a cell left of column 0 is inside the pane's focus gutter, where a press
+            // still belongs to the pane and lands on the edge cell.
+            let published = gesture(
+                &grid,
+                None,
+                &[
+                    Pointer::Press(0, 0, -0.1, 0.5),
+                    Pointer::Move(0, 0, -0.2, 0.5),
+                    Pointer::Move(0, 0, 0.3, 0.5),
+                ],
+                &mut clipboard,
+            );
+
+            assert_eq!(
+                select_updates(&published),
+                Vec::<(u16, u16)>::new(),
+                "a press in the gutter belongs to the edge cell beside it, and motion that stays \
+                 in that gutter or that cell never entered another cell (FR-013e)"
+            );
+        }
+
+        #[test]
+        fn a_wheel_turn_that_cannot_scroll_leaves_jitter_a_click() {
+            // No scrollback: the view is already at both ends, so the text under the pointer
+            // stays where it was.
+            let grid = grid(0);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            let published = gesture(
+                &grid,
+                None,
+                &[
+                    Pointer::Press(6, 0, 0.5, 0.5),
+                    Pointer::Wheel(6, 0, 3.0),
+                    Pointer::Wheel(6, 0, -3.0),
+                    Pointer::Move(6, 0, 0.7, 0.5),
+                ],
+                &mut clipboard,
+            );
+
+            assert_eq!(
+                select_updates(&published),
+                Vec::<(u16, u16)>::new(),
+                "a wheel turn that moves nothing leaves the pressed text under the pointer, so \
+                 motion inside the pressed cell is still a click (FR-013e)"
+            );
+        }
+
+        /// A selection the user made earlier: the whole of `hello world`.
+        fn held_line(grid: &GridCache) -> Selection {
+            Selection::start(
+                crate::selection::Anchor::new(LineId(0), 0),
+                crate::selection::SelectGranularity::Line,
+                |id| grid.line(id).map(|l| l.text.clone()),
+            )
+        }
+
+        #[test]
+        fn a_tap_over_a_held_selection_writes_nothing_to_the_clipboard() {
+            let grid = grid(0);
+            let held = held_line(&grid);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            gesture(
+                &grid,
+                Some(&held),
+                &[
+                    Pointer::Press(6, 0, 0.5, 0.5),
+                    Pointer::Release(6, 0, 0.5, 0.5),
+                ],
+                &mut clipboard,
+            );
+
+            assert!(
+                clipboard.writes.is_empty(),
+                "a press and release delivered together copied {:?} — the selection from before \
+                 the press — over the user's clipboard (FR-013e, BUG-007)",
+                clipboard.writes
+            );
+        }
+
+        #[test]
+        fn a_release_asks_for_the_copy_after_its_press_starts_the_selection() {
+            let grid = grid(0);
+            let held = held_line(&grid);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            let published = gesture(
+                &grid,
+                Some(&held),
+                &[
+                    Pointer::Press(6, 0, 0.5, 0.5),
+                    Pointer::Release(6, 0, 0.5, 0.5),
+                ],
+                &mut clipboard,
+            );
+
+            let start = published.iter().position(|m| {
+                matches!(m, Message::Session(SessionMsg::TerminalSelectStart { .. }))
+            });
+            let released = published
+                .iter()
+                .position(|m| matches!(m, Message::Session(SessionMsg::TerminalSelectionReleased)));
+            assert!(
+                matches!((start, released), (Some(s), Some(r)) if s < r),
+                "the release must ask the shell to copy the selection as its own press left it, \
+                 so the request has to follow the press's TerminalSelectStart (FR-013): start at \
+                 {start:?}, release request at {released:?}"
+            );
         }
 
         // BUG-006 (FR-013d).
