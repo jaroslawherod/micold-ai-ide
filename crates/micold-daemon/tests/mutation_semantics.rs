@@ -162,11 +162,22 @@ async fn connect_and_attach(state: &std::sync::Arc<DaemonState>, project: &Path)
 
 /// Read control frames until one matches `pred`, returning it (grid frames are skipped).
 async fn expect_control(client: &mut Client, pred: impl Fn(&DaemonMsg) -> bool) -> DaemonMsg {
-    loop {
-        match client.next().await.expect("stream open").unwrap() {
-            Frame::Control(m) if pred(&m) => return m,
-            Frame::Control(_) | Frame::Grid(_) => continue,
+    // Bounded, and naming what arrived instead: a refusal is a reply the predicate skips, and
+    // unbounded, a test that expected success waited on it forever rather than failing.
+    let mut skipped = Vec::new();
+    let wait = async {
+        loop {
+            match client.next().await.expect("stream open").unwrap() {
+                Frame::Control(m) if pred(&m) => return m,
+                Frame::Control(m) => skipped.push(format!("{m:?}")),
+                Frame::Grid(_) => continue,
+            }
         }
+    };
+    let outcome = tokio::time::timeout(std::time::Duration::from_secs(60), wait).await;
+    match outcome {
+        Ok(m) => m,
+        Err(_) => panic!("the expected reply never arrived; got instead: {skipped:#?}"),
     }
 }
 
@@ -1362,7 +1373,9 @@ async fn including_a_worktree_lists_it_and_touches_nothing_on_disk() {
     let store = tempfile::tempdir().unwrap();
     init_git_repo(project.path());
 
-    let outside = elsewhere.path().join("olx");
+    // Canonical, because git reports worktree paths that way and the daemon matches them exactly:
+    // on macOS the temp dir is under `/var`, a symlink to `/private/var`.
+    let outside = std::fs::canonicalize(elsewhere.path()).unwrap().join("olx");
     add_worktree_outside(project.path(), &outside, "fix/olx");
     let head_before = std::fs::read_to_string(project.path().join(".git/HEAD")).unwrap();
 
@@ -1471,7 +1484,7 @@ async fn including_and_excluding_are_both_idempotent_and_reversible() {
     let store = tempfile::tempdir().unwrap();
     init_git_repo(project.path());
 
-    let outside = elsewhere.path().join("olx");
+    let outside = std::fs::canonicalize(elsewhere.path()).unwrap().join("olx");
     add_worktree_outside(project.path(), &outside, "fix/olx");
 
     let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
