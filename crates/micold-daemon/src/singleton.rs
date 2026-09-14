@@ -162,13 +162,22 @@ pub async fn acquire(endpoint: &Endpoint) -> io::Result<Acquisition> {
             _lock: None,
             socket_path: endpoint.socket_path.clone(),
         })),
-        Err(e)
-            if matches!(
-                e.kind(),
-                io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied
-            ) =>
-        {
-            Ok(Acquisition::AlreadyRunning)
+        Err(e) if e.kind() == io::ErrorKind::AddrInUse => Ok(Acquisition::AlreadyRunning),
+        // Losing the first-instance race to this user's own daemon reads as access denied, and so
+        // does a pipe another account created first. Only the first can be connected to.
+        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+            match Stream::connect(fs_name(&endpoint.socket_path)?).await {
+                Err(refused) if refused.kind() == io::ErrorKind::PermissionDenied => {
+                    Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        format!(
+                            "{} exists but refuses this user, so another account may hold it: {refused}",
+                            endpoint.socket_path.display()
+                        ),
+                    ))
+                }
+                _ => Ok(Acquisition::AlreadyRunning),
+            }
         }
         Err(e) => Err(e),
     }

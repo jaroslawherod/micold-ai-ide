@@ -594,3 +594,20 @@ failed before the implementation.
 - refactor: `continue-on-error: true` and its "Non-blocking until the Windows endpoint lands" comment are removed from both "Install and launch" steps, so a failed smoke now fails `ci-complete` (T040). The pipe times are recorded in research.md, R14.
 - notes: T027 (the PR description lists the four files still wholly gated), T028 and T060 are ticked. For T028, `mise run test` on this machine fails two Pi tests, `exclusivity::one_conversation_one_session::a_second_open_of_a_held_pi_conversation_starts_nothing` and `pi_launch_wiring::a_pi_session_carries_the_component_only_while_the_switch_is_on`. The cause is this machine, not the branch: a real `pi` is installed through mise, and env-include sources `~/.bashrc`, whose mise activation puts that `pi` ahead of the tests' fake one on a session's `PATH`. Both pass on CI's Linux and macOS legs.
 - commit: see the follow-up commit
+
+## Cycle 70: A6 red on Windows; the daemon stops holding the app mutex
+
+- test: `scripts/windows-install-smoke.sh`, step 8 (a95d0d74), run by `.github/workflows/ci.yml`. It stops the client, leaves its daemon running, re-runs the same setup silently, and expects exit 0 and one Installed apps entry.
+- red (A6): PR #332's CI run 34844103001 (81fc302e), `package + smoke (windows-11-arm)`: `windows-install-smoke.sh: FAIL: the repair with the daemon running exited 1, want 0 (I4)`. The repair log: `Defaulting to Cancel for suppressed message box (OK/Cancel): Setup has detected that Micold AI IDE is currently running.` then `Got EAbort exception.` The same run's `build + test (windows-latest)` failed the same way: `== repair dist/micold-ai-ide-0.14.0-x64-setup.exe with the daemon (pid 1804) running`, then `windows-install-smoke.sh: FAIL: the repair with the daemon running exited 1, want 0 (I4)`. A6 is `RED`.
+- green (A6): pending CI (b8459a95). The daemon held `Local\MicoldAIIDE` (research R12, layer 1), so Inno's `AppMutex` check stopped setup before `PrepareToInstall` could run `StopDaemon`. Interactively the same prompt could never be passed either, since no user can close a windowless process. `micold-daemon`'s `main` no longer calls `announce_running`; the client's still does. R12, E7.2, the `.iss` comment, `process.rs` and `docs/development/windows-packaging.md` say so.
+- notes: the assertion is unchanged. The x64 leg's smoke runs after `Test (daemon, Windows)` in the same job, so it is skipped while U73's test is red (cycle 71); ARM64 observes A6 on its own.
+- commit: see the follow-up commit
+- green (A6, ARM64): PR #332's CI run 34844763570 (b8459a95), `package + smoke (windows-11-arm)`: `== repair dist/micold-ai-ide-0.14.0-arm64-setup.exe with the daemon (pid 7140) running`, `repaired, one Installed apps entry`, `== smoke passed`. A6 stays `RED` until the x64 leg shows the same.
+
+## Cycle 71: U73 red on Windows; a refused bind is told apart from a lost race
+
+- test (U73, new, from the T061 security review, D1): `crates/micold-daemon/tests/windows_pipe_acl.rs::binding_over_a_pipe_that_refuses_this_user_is_an_error_naming_it`. A `SquattedPipe` creates the endpoint's pipe first with `D:P(A;;GA;;;SY)`, so this user can neither connect nor add an instance.
+- red (U73): PR #332's CI run 34844477210 (6bf5a473), `build + test (windows-latest)`, step `Test (daemon, Windows)`: panicked at `crates\micold-daemon\tests\windows_pipe_acl.rs:267:13` with `a pipe this user cannot open was taken for this user's running daemon`; `test result: FAILED. 2 passed; 1 failed`. U73 is `RED`.
+- green (U73): pending CI. `acquire` on Windows no longer maps `PermissionDenied` straight to `AlreadyRunning`. Losing the first-instance race to this user's own daemon also fails with access denied, so it connects once more: a connection means this user's daemon is live (`AlreadyRunning`, U6 unchanged), and a `PermissionDenied` connect is an error naming the pipe. Any other connect failure keeps the old `AlreadyRunning`.
+- notes: the U73 row was reworded before its test, to keep U6's race case explicit. U71 and U72 (D1's client side, D2) are still `PENDING`.
+- commit: see the follow-up commit

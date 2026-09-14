@@ -33,7 +33,7 @@ The entry points are:
 | A3  | Launching the installed client makes `\\.\pipe\Micold.Daemon.<SID>` appear within 20 s, and the daemon has no `conhost.exe` child | US1-AS3, FR-005, FR-020, I2 | example | win | DONE | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
 | A4  | The HKCU uninstall key's `DisplayVersion` equals the workspace version | US1-AS4, FR-006, FR-013 | example | win | DONE | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
 | A5  | The committed `packaging/windows/micold-ai-ide.iss` passes `windows_violations`: its `[Files]` ship exactly the two exes | US1-AS5, FR-012 | example | any | DONE | `crates/micold-client/tests/packaging_excludes_showcase.rs::the_windows_installer_contains_no_showcase` |
-| A6  | Re-running the installer over a running install exits 0 and leaves exactly one `{1B19A6AC-…}_is1` uninstall key | US2-AS1, FR-008, I4 | example | win | PENDING | |
+| A6  | Re-running the installer over a running install exits 0 and leaves exactly one `{1B19A6AC-…}_is1` uninstall key | US2-AS1, FR-008, I4 | example | win | RED | |
 | A7  | A silent uninstall removes the install dir, `.lnk`, uninstall key and `%LOCALAPPDATA%\micold-ai-ide\run` | US2-AS2, FR-006, SC-003, I5 | example | win | PENDING | |
 | A8  | After uninstall, the markers seeded in `%APPDATA%\micold-ai-ide\data` and `%LOCALAPPDATA%\micold-ai-ide\data` still exist | US2-AS3, FR-007, I5 | example | win | PENDING | |
 | A9  | Installing while the daemon runs ends with the old daemon pid gone and the new exes in place | US2-AS4, FR-009, FR-023, I4 | example | win | PENDING | |
@@ -68,7 +68,7 @@ The entry points are:
 | U5  | The bound pipe's DACL has exactly one ACE, allowing the current token's user SID | FR-021, SC-009, E2.1 | example | win | DONE | `crates/micold-daemon/tests/windows_pipe_acl.rs::the_bound_pipe_dacl_allows_only_the_current_user` |
 | U6  | Of two simultaneous starters on one endpoint, exactly one is `Bound` and the other `AlreadyRunning` | FR-022, E3.1 | example | any | DONE | `crates/micold-daemon/tests/daemon_singleton.rs::two_simultaneous_starters_converge_on_one_daemon` (Unix and Windows, run 34823596152) |
 | U7  | Acquiring after the previous listener is dropped returns `Bound` | FR-020, FR-022, E3.2 | example | any | DONE | `crates/micold-daemon/tests/daemon_singleton.rs::acquire_after_drop_rebinds` (Unix and Windows, run 34823596152) |
-| U73 | Binding over a pipe name that already exists but refuses this user (another account created it, so neither connecting nor adding an instance is allowed) is an error naming the pipe, not `AlreadyRunning`; a bind that loses the race to a live daemon of this user stays `AlreadyRunning` (U6) (security review D1) | FR-021, E2.1 | example | win | PENDING | |
+| U73 | Binding over a pipe name that already exists but refuses this user (another account created it, so neither connecting nor adding an instance is allowed) is an error naming the pipe, not `AlreadyRunning`; a bind that loses the race to a live daemon of this user stays `AlreadyRunning` (U6) (security review D1) | FR-021, E2.1 | example | win | RED | |
 
 ### `crates/micold-core/src/connect.rs` (client side of the pipe, from the T061 security review)
 
