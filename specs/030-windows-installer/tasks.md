@@ -488,6 +488,43 @@ Task: "T033 smoke assertions in scripts/windows-install-smoke.sh"
 - One commit per task or per red → green pair, with Conventional Commit prefixes `feat(030)`, `test(030)`, `ci(030)`, `docs(030)`.
 - Push the red on its own commit wherever the red is only observable on Windows CI.
 
+## Milestones
+
+Each milestone merges to `main` on its own, through one PR (speckit-autopilot). The flow was adopted
+after both PRs were open, so the cut records what each PR already carries rather than a fresh plan;
+see `autopilot.md`.
+
+### M1 — Windows installer package 🎯 MVP
+
+- **Tasks**: T001–T005, T013, T022, T023, T029–T032, T035–T037, T041, T042, T044, T046–T052,
+  T054–T056, T058, T059, T065, T068, T074–T079 (US3 series)
+- **Deliverable**: every CI run builds an x64 and an ARM64 Inno Setup installer, releases attach both,
+  and `docs/install.md` describes the Windows package; the install smoke runs but does not block.
+- **Satisfies**: US1 AS1–AS3 (package side), US3 AS1–AS3, US4 AS1–AS2; FR-001–FR-008, FR-010, FR-012–FR-019
+- **Verify**: `scripts/tests/windows-installer.test.sh`; CI jobs `package + smoke (windows-11-arm)` and
+  `build + test (windows-latest)` upload the setup executables
+- **Depends on**: —
+
+### M2 — Windows daemon endpoint and in-use lifecycle
+
+- **Tasks**: T006–T012, T014–T017, T019–T021, T024–T028, T033, T034, T038–T040, T043, T045, T053,
+  T057, T060, T061, T066, T067, T069–T073, T074–T076 (U71–U73 series), T084, T085
+- **Deliverable**: an installed build launches, connects to its per-user daemon over the SID-named pipe,
+  and survives repair and uninstall; the install smoke blocks CI on both Windows legs.
+- **Satisfies**: US1 AS1–AS3 (launch), US2 AS1–AS4; FR-009, FR-011, FR-020–FR-025
+- **Verify**: `scripts/windows-install-smoke.sh` green on both Windows legs of the PR's CI run
+- **Depends on**: M1
+
+### M3 — Close
+
+- **Tasks**: T010, T018, T062–T064
+- **Deliverable**: the daemon pid record lifecycle holds on every platform, the full gate is green, and
+  research.md/plan.md match what shipped.
+- **Satisfies**: FR-022, FR-023 (pid record, R4); quickstart Part M
+- **Verify**: `mise run gate`; `cargo check --workspace --target x86_64-pc-windows-msvc` and
+  `--target aarch64-apple-darwin`; quickstart Part M rows M1–M10
+- **Depends on**: M2
+
 ---
 
 ## Notes
