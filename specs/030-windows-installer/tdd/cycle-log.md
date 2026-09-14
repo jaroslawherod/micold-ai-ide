@@ -509,3 +509,11 @@ failed before the implementation.
 - green: `PtySession`'s `Drop` closes the PTY master before it joins the reader thread; `master` is now `Mutex<Option<..>>`. Linux: `cargo test -p micold-daemon --lib supervisor` -> 6 passed. Windows green is pending the next CI run.
 - notes: found by the hang in run 34813428322 (353214b5), where U13 never finished. Under ConPTY the reader's pipe reaches EOF only when the pseudoconsole closes, not when the child exits. `Drop` joined first, so every Windows session teardown hung, and U13 hung while unwinding. Added mid-loop as its own behavior. The Windows daemon step gained `timeout-minutes: 20`.
 - commit: see the follow-up commit
+
+## Cycle 60: U67 green on Windows; U13 red on its assertion; the daemon step runs every target
+
+- test: `crates/micold-daemon/src/supervisor.rs::windows_tests::dropping_a_session_returns` (U67), `::kill_reaps_grandchild` (U13)
+- red (U13): PR #332's CI run 34821852718 (df1932da), `build + test (windows-latest)`, step `Test (daemon, Windows)`: `assertion \`left == right\` failed: grandchild 2668 survived the session kill by 5s` / `left: 258` / `right: 0` (`WAIT_TIMEOUT`). U13 is `RED`.
+- green (U67): same run, `micold_daemon` lib tests -> `59 passed; 1 failed` (only `kill_reaps_grandchild`), with no hang. U67 is `DONE`.
+- notes: the lib failure stopped cargo before the integration test binaries, so U4/U5 and the ungated daemon test files had not run on Windows. The step now passes `--no-fail-fast`, so the next run records the whole T006 baseline. No production code changed in this cycle.
+- commit: see the follow-up commit
