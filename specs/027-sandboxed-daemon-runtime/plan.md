@@ -378,6 +378,48 @@ The approach:
 
 **Bugfix**: 2026-09-03 — BUG-003. Section added; nothing above it changed. See `bugs/BUG-003.md`.
 
+### The sandbox is started when it is not running (FR-002a, FR-036a–b, SC-004c)
+
+BUG-003 made the placement move. What it moved *to* is a placement that starts its service once per
+launch. `daemon.rs::connect_and_pump` states the asymmetry in two arms: the host process gets
+`connect_or_spawn`, which starts a daemon whenever nothing answers, on every attempt of the
+reconnect loop; the sandbox gets `connect_at` and, on nothing answering, an error string. So a user
+who switches to container mode and hits any bump — a pull that has not finished, a runtime that was
+busy, a container stopped from the host — is left with a client dialling `127.0.0.1:7727` once a
+second, forever, and no service.
+
+The approach:
+
+- **The absence of the service is the trigger, and it already has a handler.** `on_connect_failed`
+  is where a sandboxed placement learns the service is not there; it logs and notifies. It gains the
+  one thing `connect_or_spawn` does for the other placement — start the service — from the
+  `BootPlan` that `app.sandbox_boot` is already holding for exactly this. No new state, no new
+  ownership: the plan is kept for the whole run precisely because a restart cannot re-derive it
+  (R9).
+- **Bounded, spaced, and never a fallback.** The reconnect loop runs at 1 Hz and a bring-up shells
+  out to a container runtime, so the re-attempt needs its own backoff and its own bound, and a
+  bring-up already in flight must not be started twice. Exhausting the bound leaves `Failed`
+  standing with its reason and its manual **Restart** — FR-034 and FR-035's existing behaviour, now
+  the end of a road rather than the whole of it. What must not appear is a host process: FR-035
+  forbids that fallback and re-attempting the sandbox is not it.
+- **R9 is about a sandbox that is running.** *"Nothing restarts on its own"* was decided for a
+  container full of the user's sessions, where restarting to service a settings change turns an edit
+  into an outage. A container that does not exist has no sessions to protect, and applying the rule
+  there removes a recovery while protecting nothing. `RestartRequested`'s marker type is what
+  currently makes the over-broad reading structural, so the edge into bring-up for an absent sandbox
+  gets its own witness rather than borrowing that one.
+- **A bring-up that is working must look different from one that failed.** `shell/sandbox.rs::boot`
+  discards every `observe` call, so the state sits on `Probing` for the whole sequence — probe,
+  pull, create, start — while `ui/sandbox_status.rs`, which was built to render exactly those
+  stages, has nothing to render them from. Threading the callback through is the missing half of
+  contract obligation C-8, and it is what lets the connection banner stand down while a bring-up is
+  in flight (FR-036b) instead of shouting over it.
+- **Measure it where the user is.** SC-004 was measured in `micold-core` against `acquire_image`
+  directly, which is below the level the defect lives at — the number is honest and cannot see the
+  dropped callback. SC-004c moves the measurement to the application.
+
+**Bugfix**: 2026-09-12 — BUG-004. Section added; nothing above it changed. See `bugs/BUG-004.md`.
+
 ## Complexity Tracking
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
