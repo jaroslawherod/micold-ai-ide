@@ -282,4 +282,13 @@ mod tests {
             "a file address with no path, or a host with no path after it, is not an address"
         );
     }
+
+    #[test]
+    fn never_finds_an_address_without_a_scheme() {
+        assert_eq!(
+            found("See example.com/docs or www.example.com for details."),
+            Vec::<String>::new(),
+            "text that only looks like an address, with no scheme in front, is not one"
+        );
+    }
 }

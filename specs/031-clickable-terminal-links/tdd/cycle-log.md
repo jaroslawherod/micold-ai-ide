@@ -141,3 +141,14 @@
 - green: `file://` joins the recognised schemes; `well_formed` accepts it when a `/` follows the optional host (research R3: "`file` needs `file://` followed by an optional host and a path starting with `/`"). Suite -> 1071 passed, 0 failed
 - refactor: `well_formed` became one `match` arm per scheme; suite re-run green
 - commit: `feat(031): recognise a file address with an absolute path (U13)`
+
+## Cycle 14: U14 never finds scheme-less text (`example.com/docs`, `www.example.com`)
+
+- test: `crates/micold-core/src/link/detect.rs::tests::never_finds_an_address_without_a_scheme` (new)
+- red: none on arrival. `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::never_finds_an_address_without_a_scheme -- --exact`
+  -> `1 passed`: only the four scheme prefixes start an address.
+  Deliberate mutant: `"www."` added to `SCHEMES` -> `left: ["www.example.com"]` / `right: []` (1 failed). Mutant removed, file restored.
+- green: no implementation change. Suite -> 1072 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin that text without a scheme is never an address (U14)`
+- notes: green on arrival; the scheme list from U1/U12/U13 already excludes it (FR-001, SC-002)
