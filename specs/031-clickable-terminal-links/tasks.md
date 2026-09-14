@@ -115,7 +115,7 @@ the `env_include.rs` builders (plan, Target Platform).
   - Map char indices to cells, keeping wide-char spacers.
   - Take the declared maximal run first.
   - Otherwise map a `detect` range to cells, and drop candidates at the cap or at a `None` boundary.
-- [ ] T011 [US1] [U28] [U29] [U30] Implement `Address` and `classify` in `crates/micold-core/src/link/address.rs`: `Web(String)` for `http`/`https` verbatim, `Mail(String)` for `mailto` verbatim, and `NotFollowable` for everything else. `file` is also `NotFollowable` until T046.
+- [X] T011 [US1] [U28] [U29] [U30] Implement `Address` and `classify` in `crates/micold-core/src/link/address.rs`: `Web(String)` for `http`/`https` verbatim, `Mail(String)` for `mailto` verbatim, and `NotFollowable` for everything else. `file` is also `NotFollowable` until T046.
 - [ ] T012 [US1] [U33] [U34] [U46] Implement `resolve(link: Link, ctx: &LinkContext) -> Option<ResolvedLink>` in `crates/micold-core/src/link/resolve.rs` for `Web` and `Mail` (C1–C2): `target = Url(address)`, `display = address`, `needs_confirmation = false`. Anything else gives `None`.
 
 **Checkpoint (M1)**: `mise run test-core` passes `link::*` and `link_corpus`. No client change yet.

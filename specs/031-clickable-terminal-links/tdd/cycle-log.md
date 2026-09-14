@@ -337,3 +337,13 @@
 - green: `classify` compares the leading `scheme.len()` bytes with `eq_ignore_ascii_case`, through a local `starts_with` closure. Suite -> 1091 passed, 0 failed; clippy clean
 - refactor: none needed
 - commit: `feat(031): classify a scheme whatever its case (U29)`
+
+## Cycle 34: U30 `vscode:`, `slack:`, `zoommtg:`, `javascript:`, `data:`, `vbscript:` and an unknown scheme classify as `NotFollowable`
+
+- test: `crates/micold-core/src/link/address.rs::tests::application_script_data_and_unknown_schemes_are_not_followable` (new)
+- red: passed on arrival (`test ... ok`), since `classify` only names `http`, `https` and `mailto`. Deliberate mutant: any `://` address is `Web`. `scripts/build-lock.sh cargo test -p micold-core --lib link::address::tests::application_script_data_and_unknown_schemes_are_not_followable -- --exact`
+  -> `assertion failed: vscode://file/home/u/a.rs opens an application, runs code, carries its own content or is unknown` / `left: Web("vscode://file/home/u/a.rs")` / `right: NotFollowable` (1 failed). Mutant reverted from the backup
+- green: no implementation change. Suite -> 1092 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin that other schemes are not followable (U30)`
+- notes: T011 ticked in this commit (U28–U30 DONE)

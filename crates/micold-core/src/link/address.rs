@@ -64,4 +64,23 @@ mod tests {
             "a mixed-case mail scheme is a mail address"
         );
     }
+
+    #[test]
+    fn application_script_data_and_unknown_schemes_are_not_followable() {
+        for uri in [
+            "vscode://file/home/u/a.rs",
+            "slack://channel?team=T1&id=C1",
+            "zoommtg://zoom.us/join?confno=1",
+            "javascript:alert(1)",
+            "data:text/html;base64,PHNjcmlwdD4=",
+            "vbscript:msgbox(1)",
+            "gopher://a.example/",
+        ] {
+            assert_eq!(
+                classify(uri),
+                Address::NotFollowable,
+                "{uri} opens an application, runs code, carries its own content or is unknown"
+            );
+        }
+    }
 }
