@@ -517,3 +517,11 @@ failed before the implementation.
 - green (U67): same run, `micold_daemon` lib tests -> `59 passed; 1 failed` (only `kill_reaps_grandchild`), with no hang. U67 is `DONE`.
 - notes: the lib failure stopped cargo before the integration test binaries, so U4/U5 and the ungated daemon test files had not run on Windows. The step now passes `--no-fail-fast`, so the next run records the whole T006 baseline. No production code changed in this cycle.
 - commit: see the follow-up commit
+
+## Cycle 61: the Windows red baseline (T006)
+
+- test: none changed.
+- red: recorded in PR #332's description. Core, run 34813428322 (353214b5): U1, U2, U3, U11, U16 and U17 failed, 170 passed. Daemon, run 34822221519 (68df318f): U13; `daemon_singleton.rs` ×3 and `windows_pipe_acl.rs` ×2 (`acquire: Os { code: 3, kind: NotFound, message: "The system cannot find the path specified." }`); `daemon_stop.rs` ×2 (`resolve the test endpoint: Custom { kind: Unsupported, ... }`). Every other daemon target passes on Windows.
+- green: n/a.
+- notes: U4 and U5 are red on `acquire` failing, not yet on their DACL assertions. The Windows `acquire` opens a lock file under a directory that does not exist. Binding the pipe and setting its DACL land in the same change (T017), so the DACL assertions are first exercised at green. T003 is ticked: after the `win_job` move, the `env_include` cases stay green on Windows in the same core run. T006 is ticked.
+- commit: see the follow-up commit
