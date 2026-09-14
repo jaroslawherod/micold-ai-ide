@@ -2012,7 +2012,7 @@ dependencies = [
 
 [[package]]
 name = "micold-client"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "alacritty_terminal",
  "dark-light",
@@ -2031,7 +2031,7 @@ dependencies = [
 
 [[package]]
 name = "micold-core"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "bytes",
  "directories",
@@ -2050,7 +2050,7 @@ dependencies = [
 
 [[package]]
 name = "micold-daemon"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "alacritty_terminal",
  "bytes",

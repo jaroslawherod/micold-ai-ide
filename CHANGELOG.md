@@ -1,5 +1,62 @@
 # Changelog
 
+## [0.15.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.14.0...micold-ai-ide-v0.15.0) (2026-09-14)
+
+
+### Features
+
+* **029:** a session keeps its name when nothing is running it (Green) ([e17873d](https://github.com/jaroslawherod/micold-ai-ide/commit/e17873d2b6b34101b463bef1b334129cebbca2cd))
+
+
+### Bug Fixes
+
+* **001:** resolve the About identity in the client, not in micold-core (BUG-001) ([6e82148](https://github.com/jaroslawherod/micold-ai-ide/commit/6e82148d07c49802d730668307f75513f31be7fa))
+* **002:** do not open a last-active project whose folder is gone (BUG-004) ([b0da7dc](https://github.com/jaroslawherod/micold-ai-ide/commit/b0da7dcd83a37d433b7a6ec05ed1b623608f804c))
+* **002:** identify a project by its resolved path so its worktrees are valid (BUG-002) ([ad32150](https://github.com/jaroslawherod/micold-ai-ide/commit/ad32150192be308ee2f718ff7ec841a6247a2297))
+* **002:** record a reopened project as the last active one (BUG-003) ([4d74f3b](https://github.com/jaroslawherod/micold-ai-ide/commit/4d74f3ba2712d9f2e3df1b88ed98ec41156ca978))
+* **003:** move a narrow known-projects row's actions beneath its name (BUG-002) ([0ceb774](https://github.com/jaroslawherod/micold-ai-ide/commit/0ceb77466dcdd43babdbc060d066fabe7463d8c7))
+* **006:** bracket every paste into a process that asked for it (BUG-006) ([a1ab946](https://github.com/jaroslawherod/micold-ai-ide/commit/a1ab9460a960e478613b7bda5488a670c9f3723b))
+* **006:** draw the 018 focus ring on the focused terminal (BUG-005) ([5b58230](https://github.com/jaroslawherod/micold-ai-ide/commit/5b582301f02cc1d0e8143c86965548391cc012bd))
+* **006:** leave the clipboard alone when copy has nothing to copy (BUG-004) ([ab389e6](https://github.com/jaroslawherod/micold-ai-ide/commit/ab389e6e1ffc0e243f8fa3f53216505d2387e1ff))
+* **008:** close the project switcher when a project is picked (BUG-002) ([5145afa](https://github.com/jaroslawherod/micold-ai-ide/commit/5145afa98e308c6c48c4407272ee5e0e09d533b0))
+* **008:** rescan project availability when the switcher opens (BUG-003) ([a69519d](https://github.com/jaroslawherod/micold-ai-ide/commit/a69519dffd906580a99ac910a4536abcd0f1c7cf))
+* **010:** never signal a Unix session's group through a reaped pid ([81d3cb0](https://github.com/jaroslawherod/micold-ai-ide/commit/81d3cb0fd747a150986f6e8ddc11f4044b53b744))
+* **010:** reach a Unix session's leftover descendants at teardown ([6f0e356](https://github.com/jaroslawherod/micold-ai-ide/commit/6f0e356a714f037e5071aef36494940fd2f0303d))
+* **010:** reap a Windows session's process tree with a job object (T144) ([b1e9e74](https://github.com/jaroslawherod/micold-ai-ide/commit/b1e9e74415de07b088b1e5f44647246d32d1fa5f))
+* **016:** a worktree named through a symlink is that worktree (BUG-004) ([9780f1a](https://github.com/jaroslawherod/micold-ai-ide/commit/9780f1ac4f26c1e03d7197d42311cc32e8b5874d))
+* **018:** draw one state layer on a focused button, and focus only from the keyboard (BUG-013) ([3ac8cb8](https://github.com/jaroslawherod/micold-ai-ide/commit/3ac8cb828b13e3d0ce89aa628099e9ba887ba0b2))
+* **018:** keep a long snackbar's Dismiss whole inside the snackbar (BUG-015) ([1e63ef7](https://github.com/jaroslawherod/micold-ai-ide/commit/1e63ef72a80820e67f44601ebf6f1ad4a832958c))
+* **018:** let a running ripple replace the surface's state layer, not stack on it (BUG-014) ([93227c3](https://github.com/jaroslawherod/micold-ai-ide/commit/93227c3c952ca94bda5eb6bc06f1cdbf03469204))
+* **021:** measure the frame budget in a release build only (BUG-003) ([082824d](https://github.com/jaroslawherod/micold-ai-ide/commit/082824d0778727dce101bbd56fd5e68cc92dd0b9))
+* **028:** refuse a documentation link that resolves only outside docs/ ([b94a6d8](https://github.com/jaroslawherod/micold-ai-ide/commit/b94a6d8f121ade840caa699b28b72a4c64bbae2f))
+* **029:** a named session keeps its row when its transcript is gone (Green) ([0a02544](https://github.com/jaroslawherod/micold-ai-ide/commit/0a02544f2f33dc7572ed658767912bf141a1d50c))
+* **029:** a running Pi row reads its first message until it is named ([117eec1](https://github.com/jaroslawherod/micold-ai-ide/commit/117eec1259062de2c020f8bf61a419110e202c41))
+* **029:** advise a missing AI CLI by where sessions run and what is starting ([0158840](https://github.com/jaroslawherod/micold-ai-ide/commit/01588407092860354440068527a81ec02e06131d))
+* **029:** each AI CLI says which part of its terminal title is the name (Green) ([30e1fd7](https://github.com/jaroslawherod/micold-ai-ide/commit/30e1fd704a1eeab170475b7848566d430d6fe6d0))
+* **029:** only the AI CLI's conversation title names a session (Green) ([a9fe674](https://github.com/jaroslawherod/micold-ai-ide/commit/a9fe67409968e00d624333ef0f2268ac950ddd72))
+
+
+### Dependencies
+
+* bump dark-light from 2.0.0 to 3.0.0 ([9dfdaeb](https://github.com/jaroslawherod/micold-ai-ide/commit/9dfdaebc2428a4a840f7d8135e7c3a4c6b6db79a))
+* bump iced_tiny_skia from 0.14.0 to 0.14.1 in the iced group ([c882909](https://github.com/jaroslawherod/micold-ai-ide/commit/c882909f8a7be1e19ebe7d1322146491d1cdf0de))
+* bump the cargo group across 1 directory with 3 updates ([c2942dc](https://github.com/jaroslawherod/micold-ai-ide/commit/c2942dc46afa03d11ee7e5d70c22d341925f003e))
+
+
+### Build & CI
+
+* **010:** run the daemon's tests on macOS ([771ec0c](https://github.com/jaroslawherod/micold-ai-ide/commit/771ec0cf0989d6b9c45eb719cf2218df122eb7c4))
+* add `mise run gate`, CI's merge gate in CI's order ([32e14a8](https://github.com/jaroslawherod/micold-ai-ide/commit/32e14a8f91ab755af0e41085a880da93c10503ed))
+* add the speckit-autopilot skill ([2518992](https://github.com/jaroslawherod/micold-ai-ide/commit/2518992cc9f36557e1d1422d0ef22a0fe9caab2d))
+* cancel a pull request's superseded CI runs ([7080418](https://github.com/jaroslawherod/micold-ai-ide/commit/70804183ce3b5d1b17ab2094458116c4db09da13))
+* let Dependabot keep the Cargo dependencies current ([0fd1883](https://github.com/jaroslawherod/micold-ai-ide/commit/0fd1883b7cab052171b70b3328e565a34c02bf7e))
+* let Dependabot keep the pinned actions current ([4335af8](https://github.com/jaroslawherod/micold-ai-ide/commit/4335af86982a9230602cef96fa0f66767d4f03bc))
+* let Dependabot keep the site checks and sandbox base image current ([da88513](https://github.com/jaroslawherod/micold-ai-ide/commit/da88513aa69193cd4541d05e0a0202b739ee5ee3))
+* **release:** create the tag with the draft release ([87f556c](https://github.com/jaroslawherod/micold-ai-ide/commit/87f556cf6cd13ab798c05b71e4ac73c9f0675a2e))
+* **speckit-autopilot:** `resume` finds the run from the worktree's branch ([67046e7](https://github.com/jaroslawherod/micold-ai-ide/commit/67046e769eae8cd3b4c3babe65cdf3d18cfa7e23))
+* **speckit-autopilot:** spell out the bug path and draw it ([69df9dd](https://github.com/jaroslawherod/micold-ai-ide/commit/69df9dd30faebcba82cf41ac9c8ebf8639205d31))
+* **speckit-autopilot:** wait for `ci complete` to register before watching it ([77456c5](https://github.com/jaroslawherod/micold-ai-ide/commit/77456c50268834171437661beae1492e6eaf2b70))
+
 ## [0.14.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.13.1...micold-ai-ide-v0.14.0) (2026-09-13)
 
 
