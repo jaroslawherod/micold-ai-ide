@@ -32,3 +32,14 @@
 - green: `detect` drops `.,;:!?'*` from the end while any remains. Suite -> 1060 passed, 0 failed
 - refactor: folded the scan end into the trimmed end; suite re-run -> 1060 passed
 - commit: `feat(031): trim sentence punctuation from an address's end (U2)`
+
+## Cycle 3: U3 keeps a closing bracket balanced inside the address
+
+- test: `crates/micold-core/src/link/detect.rs::tests::keeps_a_closing_bracket_balanced_inside_the_address` (new)
+- red: none on arrival. `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::keeps_a_closing_bracket_balanced_inside_the_address -- --exact`
+  -> `1 passed`, because the scanner has no bracket rule yet and so never trims `)`.
+  Deliberate mutant: `)` added to `TRAILING_PUNCTUATION` -> `left: ["https://example.com/a_(b"]` / `right: ["https://example.com/a_(b)"]` (1 failed). Mutant removed, file restored.
+- green: no implementation change. Suite -> 1061 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin a balanced closing bracket inside an address (U3)`
+- notes: green on arrival; it guards the next cycle (U4), whose bracket rule must not trim a balanced closer
