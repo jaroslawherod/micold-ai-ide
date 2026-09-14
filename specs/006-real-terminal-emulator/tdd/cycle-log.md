@@ -126,3 +126,15 @@ added to the list and written as tests before any change.
 - U13 `clipboard_gestures::a_wheel_turn_that_cannot_scroll_leaves_jitter_a_click` (new)
   - red: same run -> `panicked at crates/micold-client/src/ui/material/terminal_pane.rs:1839:13` `left: [(6, 0)]  right: []`
 
+## Green: U12 and U13
+
+- change: in the pane's `CursorMoved` arm, only a position outside the pane's `bounds` (not its
+  character area) leaves the pressed cell. The wheel `ScrollLocally` arm clears the pressed cell only
+  when `(display_offset + lines).clamp(0, history_size)` differs from the offset, which is the clamp
+  `main.rs` applies to `TerminalScrolled`.
+- green: `scripts/build-lock.sh cargo test -p micold-client --lib clipboard_gestures` -> 14 passed; 0 failed.
+  `mise run gate` runs the full suite before the push.
+- refactor: none. With the same commit, the T074/T075 text and the plan and contract notes now name
+  U10–U13 (Review B round 2, F2).
+- commit: the `fix(006)` commit that carries this entry.
+
