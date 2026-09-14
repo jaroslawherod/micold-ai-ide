@@ -334,19 +334,37 @@ fn an_ai_clis_own_startup_title_is_not_a_name() {
     // `recover_session_names` would then skip the session as already `Named` (contract C15) and
     // never find the real one.
     //
+    //
+    // `pi` has no fixed startup title: it titles the terminal `π - <folder>` while the conversation
+    // has no name and `π - <name> - <folder>` once it has one (`interactive-mode.js`,
+    // `updateTerminalTitle`). The folder is the session's working directory, so neither the
+    // unnamed title nor the named one's decoration is the name.
+    //
     // The real title follows the placeholder, so the test cannot pass by observing nothing.
-    for (cli, placeholder) in [
-        (AiCli::ClaudeCode, r"\342\234\263 Claude Code"),
-        (AiCli::Copilot, "GitHub Copilot"),
-    ] {
+    for cli in [AiCli::ClaudeCode, AiCli::Copilot, AiCli::Pi] {
         let project = tempfile::tempdir().unwrap();
         let store = tempfile::tempdir().unwrap();
+        let folder = project.path().file_name().unwrap().to_str().unwrap();
+        let (placeholder, named) = match cli {
+            AiCli::ClaudeCode => (
+                r"\342\234\263 Claude Code".to_string(),
+                "Fixing the parser".to_string(),
+            ),
+            AiCli::Copilot => (
+                "GitHub Copilot".to_string(),
+                "Fixing the parser".to_string(),
+            ),
+            AiCli::Pi => (
+                format!("π - {folder}"),
+                format!("π - Fixing the parser - {folder}"),
+            ),
+        };
         let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
         let state = DaemonState::new(catalog_with_session(project.path(), store.path(), cli));
         let session = register_emitter(
             &state,
             id,
-            &format!(r"\033]0;{placeholder}\007'; sleep 0.5; printf '\033]0;Fixing the parser\007"),
+            &format!(r"\033]0;{placeholder}\007'; sleep 0.5; printf '\033]0;{named}\007"),
         );
 
         let mut observed: Vec<(SessionId, String)> = Vec::new();

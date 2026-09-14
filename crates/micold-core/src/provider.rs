@@ -867,6 +867,10 @@ impl AiCliProvider for PiProvider {
         "pi"
     }
 
+    fn startup_title(&self) -> &'static str {
+        "π"
+    }
+
     fn is_available(&self) -> bool {
         // A `PATH` resolution, like the other two: no spawn, no `--version` read, no minimum
         // version gate (FR-003, FR-003a). What is installed is what the user gets, and a failure
