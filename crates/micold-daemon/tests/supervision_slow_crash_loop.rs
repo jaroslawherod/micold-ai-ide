@@ -12,8 +12,9 @@
 //! between two crashes — the seam `supervision.rs`'s unit tests, which drive the policy directly,
 //! cannot reach.
 //!
-//! Its own binary: it points `SHELL` (on Windows, `COMSPEC`) at a script that fails slowly, and
-//! that is process-global.
+//! Its own binary, with this one test: it points `SHELL` (on Windows, `COMSPEC`) at something that
+//! fails slowly, and that is process-global. On Windows that something is this binary, so a second
+//! test here would run inside every respawn.
 
 use std::collections::BTreeMap;
 #[cfg(unix)]
@@ -60,8 +61,9 @@ fn sh(script: &str) -> CommandBuilder {
 }
 
 /// Make the platform shell, which every respawn runs, one that lives about a second and exits 1.
-/// On Unix that is `SHELL`; on Windows, `COMSPEC`, pointed at a batch file that waits out two
-/// `ping` echoes one second apart.
+/// On Unix that is `SHELL`, pointed at a script. On Windows it is `COMSPEC`, pointed at this test
+/// binary with [`SLOW_FAILURE_ROLE`] set: a batch file cannot stand in there, because Windows runs
+/// a batch file through `COMSPEC` itself, and it exits 1 without ever starting.
 ///
 /// Both variables are process-global; the caller is the only test in this binary, so nothing reads
 /// either one concurrently.
@@ -75,9 +77,23 @@ fn shell_that_fails_after_a_second(bin: &Path) {
     }
     #[cfg(windows)]
     {
-        let slow_failure = bin.join("fails-after-a-second.cmd");
-        std::fs::write(&slow_failure, "@ping -n 2 127.0.0.1 >nul\r\n@exit 1\r\n").unwrap();
-        std::env::set_var("COMSPEC", &slow_failure);
+        let _ = bin;
+        std::env::set_var(SLOW_FAILURE_ROLE, "1");
+        std::env::set_var("COMSPEC", std::env::current_exe().unwrap());
+    }
+}
+
+/// Set in the environment a Windows respawn inherits, so this binary, started as `COMSPEC` with no
+/// arguments, runs its one test as the slow failure instead of as the test.
+#[cfg(windows)]
+const SLOW_FAILURE_ROLE: &str = "MICOLD_TEST_SLOW_FAILURE";
+
+/// This process is a respawned shell, not the test: live about a second, then exit 1.
+#[cfg(windows)]
+fn fail_after_a_second_if_respawned() {
+    if std::env::var_os(SLOW_FAILURE_ROLE).is_some() {
+        std::thread::sleep(Duration::from_secs(1));
+        std::process::exit(1);
     }
 }
 
@@ -149,6 +165,9 @@ fn later(reading: Uptime, by: Duration) -> Uptime {
 
 #[test]
 fn a_respawn_that_outlives_a_tick_but_not_the_window_still_counts_toward_failed() {
+    #[cfg(windows)]
+    fail_after_a_second_if_respawned();
+
     // Every respawn is a shell that comes up, lives a second, and exits 1 — BUG-004's `claude
     // --resume` with nothing to resume, minus the CLI.
     let bin = tempfile::tempdir().unwrap();
