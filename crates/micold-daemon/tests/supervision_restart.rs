@@ -6,9 +6,6 @@
 //! counter and respawns it. The crash-loop *give-up* case lives in `supervision_giveup.rs` (it needs
 //! a crashing shell, so it owns its own test binary to keep `SHELL` isolated).
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -30,9 +27,18 @@ use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
 
 /// `sh -c "<script>"` — a real, short-lived child whose exit status we choose.
+#[cfg(unix)]
 fn sh(script: &str) -> CommandBuilder {
     let mut cmd = CommandBuilder::new("sh");
     cmd.arg("-c");
+    cmd.arg(script);
+    cmd
+}
+/// `cmd /c` reads `exit <status>` the same way, which is all these scripts do on Windows.
+#[cfg(windows)]
+fn sh(script: &str) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("cmd");
+    cmd.arg("/c");
     cmd.arg(script);
     cmd
 }

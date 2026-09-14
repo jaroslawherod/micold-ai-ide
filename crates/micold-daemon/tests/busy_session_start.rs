@@ -14,9 +14,6 @@
 //! Sessions are Regular (shell) mode so the spawn is the platform shell, with no `claude` binary
 //! needed — the same choice `session_start.rs` makes.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -52,6 +49,7 @@ fn session_id() -> SessionId {
 /// Write an environment-include script that sleeps before emitting its (empty) environment, and
 /// return its path. This is what makes `start_session` slow, exactly as a hanging version-manager
 /// hook does in production.
+#[cfg(unix)]
 fn slow_env_script(dir: &Path, sleeps: Duration) -> std::path::PathBuf {
     let path = dir.join("env-include.sh");
     std::fs::write(
@@ -62,6 +60,18 @@ fn slow_env_script(dir: &Path, sleeps: Duration) -> std::path::PathBuf {
     let mut perms = std::fs::metadata(&path).unwrap().permissions();
     std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
     std::fs::set_permissions(&path, perms).unwrap();
+    path
+}
+
+/// On Windows the environment-include script is PowerShell, dot-sourced.
+#[cfg(windows)]
+fn slow_env_script(dir: &Path, sleeps: Duration) -> std::path::PathBuf {
+    let path = dir.join("env-include.ps1");
+    std::fs::write(
+        &path,
+        format!("Start-Sleep -Milliseconds {}\r\n", sleeps.as_millis()),
+    )
+    .unwrap();
     path
 }
 
