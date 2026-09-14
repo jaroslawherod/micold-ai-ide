@@ -1568,6 +1568,211 @@ mod tests {
             assert_eq!(clipboard.writes, vec!["hello world".to_string()]);
         }
 
+        // BUG-007 (FR-013e).
+
+        /// A point inside grid cell `(col, line)`, at fraction `(fx, fy)` of the cell's width and
+        /// height from its top-left corner, for a pane laid out at `node`.
+        fn in_cell(node: Rectangle, col: u16, line: u16, fx: f32, fy: f32) -> Point {
+            let content = content_bounds(node);
+            let cell = CellMetrics::new(TERM_FONT_SIZE);
+            Point::new(
+                content.x + (f32::from(col) + fx) * cell.width,
+                content.y + (f32::from(line) + fy) * cell.height,
+            )
+        }
+
+        /// One pointer step of a gesture, at a point inside a cell (see [`in_cell`]).
+        #[derive(Clone, Copy)]
+        enum Pointer {
+            Press(u16, u16, f32, f32),
+            Move(u16, u16, f32, f32),
+            Release(u16, u16, f32, f32),
+        }
+
+        /// Deliver a whole gesture to one focused pane, built once with `selection`, and return
+        /// everything it published in order.
+        ///
+        /// One pane for every step is what iced does within a batch: every event since the last
+        /// redraw reaches the same widget, and the published messages are applied only afterwards
+        /// — so a release in the same batch as its press sees the selection from before it.
+        fn gesture(
+            grid: &GridCache,
+            selection: Option<&Selection>,
+            steps: &[Pointer],
+            clipboard: &mut RecordingClipboard,
+        ) -> Vec<Message> {
+            let renderer = super::presses::headless();
+            let mut element: Element<'_, Message> = TerminalPane::new(
+                grid,
+                TermPalette::from_scheme(micold_core::theme::ColorScheme::Dark),
+            )
+            .selection(selection)
+            .focused(true)
+            .into();
+            let mut tree = Tree::new(&element);
+            let node = element.as_widget_mut().layout(
+                &mut tree,
+                &renderer,
+                &Limits::new(Size::ZERO, WINDOW),
+            );
+            let bounds = node.bounds();
+            let mut messages = Vec::new();
+            for step in steps {
+                let (event, at) = match *step {
+                    Pointer::Press(c, l, fx, fy) => (
+                        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                        in_cell(bounds, c, l, fx, fy),
+                    ),
+                    Pointer::Move(c, l, fx, fy) => {
+                        let position = in_cell(bounds, c, l, fx, fy);
+                        (
+                            Event::Mouse(mouse::Event::CursorMoved { position }),
+                            position,
+                        )
+                    }
+                    Pointer::Release(c, l, fx, fy) => (
+                        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                        in_cell(bounds, c, l, fx, fy),
+                    ),
+                };
+                let mut shell = Shell::new(&mut messages);
+                element.as_widget_mut().update(
+                    &mut tree,
+                    &event,
+                    Layout::new(&node),
+                    mouse::Cursor::Available(at),
+                    &renderer,
+                    clipboard,
+                    &mut shell,
+                    &Rectangle::with_size(WINDOW),
+                );
+            }
+            messages
+        }
+
+        fn select_updates(published: &[Message]) -> Vec<(u16, u16)> {
+            published
+                .iter()
+                .filter_map(|m| match m {
+                    Message::Session(SessionMsg::TerminalSelectUpdate { col, line }) => {
+                        Some((*col, *line))
+                    }
+                    _ => None,
+                })
+                .collect()
+        }
+
+        #[test]
+        fn pointer_jitter_inside_the_pressed_cell_is_not_a_drag() {
+            let grid = grid(0);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            let published = gesture(
+                &grid,
+                None,
+                &[
+                    Pointer::Press(6, 0, 0.3, 0.4),
+                    Pointer::Move(6, 0, 0.7, 0.6),
+                    Pointer::Move(6, 0, 0.5, 0.9),
+                ],
+                &mut clipboard,
+            );
+
+            assert_eq!(
+                select_updates(&published),
+                Vec::<(u16, u16)>::new(),
+                "motion that never left the pressed cell is a click, not a drag, so it must not \
+                 extend the selection (FR-013e)"
+            );
+        }
+
+        #[test]
+        fn motion_into_another_cell_and_back_extends_the_selection_each_time() {
+            let grid = grid(0);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            let published = gesture(
+                &grid,
+                None,
+                &[
+                    Pointer::Press(6, 0, 0.5, 0.5),
+                    Pointer::Move(7, 0, 0.5, 0.5),
+                    Pointer::Move(6, 0, 0.5, 0.5),
+                ],
+                &mut clipboard,
+            );
+
+            assert_eq!(
+                select_updates(&published),
+                vec![(7, 0), (6, 0)],
+                "once the pointer has left the pressed cell it is a drag, and every cell it \
+                 enters — including the pressed one again — extends the selection (FR-013a)"
+            );
+        }
+
+        /// A selection the user made earlier: the whole of `hello world`.
+        fn held_line(grid: &GridCache) -> Selection {
+            Selection::start(
+                crate::selection::Anchor::new(LineId(0), 0),
+                crate::selection::SelectGranularity::Line,
+                |id| grid.line(id).map(|l| l.text.clone()),
+            )
+        }
+
+        #[test]
+        fn a_tap_over_a_held_selection_writes_nothing_to_the_clipboard() {
+            let grid = grid(0);
+            let held = held_line(&grid);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            gesture(
+                &grid,
+                Some(&held),
+                &[
+                    Pointer::Press(6, 0, 0.5, 0.5),
+                    Pointer::Release(6, 0, 0.5, 0.5),
+                ],
+                &mut clipboard,
+            );
+
+            assert!(
+                clipboard.writes.is_empty(),
+                "a press and release delivered together copied {:?} — the selection from before \
+                 the press — over the user's clipboard (FR-013e, BUG-007)",
+                clipboard.writes
+            );
+        }
+
+        #[test]
+        fn a_release_asks_for_the_copy_after_its_press_starts_the_selection() {
+            let grid = grid(0);
+            let held = held_line(&grid);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            let published = gesture(
+                &grid,
+                Some(&held),
+                &[
+                    Pointer::Press(6, 0, 0.5, 0.5),
+                    Pointer::Release(6, 0, 0.5, 0.5),
+                ],
+                &mut clipboard,
+            );
+
+            let start = published.iter().position(|m| {
+                matches!(m, Message::Session(SessionMsg::TerminalSelectStart { .. }))
+            });
+            let released = published
+                .iter()
+                .position(|m| matches!(m, Message::Session(SessionMsg::TerminalSelectionReleased)));
+            assert!(
+                matches!((start, released), (Some(s), Some(r)) if s < r),
+                "the release must ask the shell to copy the selection as its own press left it, \
+                 so the request has to follow the press's TerminalSelectStart (FR-013): start at \
+                 {start:?}, release request at {released:?}"
+            );
+        }
+
         // BUG-006 (FR-013d).
 
         const BRACKETED_PASTE: u32 = TermMode::BRACKETED_PASTE.bits();

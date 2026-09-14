@@ -1358,6 +1358,8 @@ pub enum Msg {
     TerminalResized { cols: u16, rows: u16 },
     /// Copy the current terminal selection to the clipboard (binary handles clipboard) (FR-013).
     TerminalCopyRequested,
+    /// A left-button selection gesture ended (BUG-007 stub, T074).
+    TerminalSelectionReleased,
     /// Paste clipboard text into the focused session's PTY (binary handles clipboard) (FR-013).
     TerminalPasteRequested,
     /// Open the terminal right-click context menu at a pane-local pixel point (FR-013).
@@ -1452,6 +1454,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         | Msg::TerminalScrolledTo(_)
         | Msg::TerminalResized { .. }
         | Msg::TerminalCopyRequested
+        | Msg::TerminalSelectionReleased
         | Msg::TerminalPasteRequested => {}
     }
     Vec::new()
