@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/settings-side-bar-should-be-animated
 - **Started**: 2026-09-14
 - **Phase**: 4-implement
-- **Next step**: M1 review round 3 (fresh A and B) on the round-2 fixes, then PR 3 (M1)
+- **Next step**: escalation (category 5): M1 review round 3 had a MAJOR (fixed as D22); run a 4th round or open PR 3 (M1)?
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T004, T045 | The worktree sidebar hides and shows on `emphasized` over `medium_4`, never narrower than its rail | — | in review (round 3) |
+| M1 | T001–T004, T045–T046 | The worktree sidebar hides and shows on `emphasized` over `medium_4`, never narrower than its rail, handing over to it once no wider | — | in review (round 3 fixed; escalated) |
 | M2 | T005–T044 | The settings rail slides, with icons on their line, badges marked, focus kept, pointer confined | — | pending |
 
 ## Decisions
@@ -48,13 +48,17 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | D18 | tasks | Tasks and milestone review still had MAJOR findings after 3 rounds (r1 3, r2 4, r3 2 MAJOR; all fixed). Run a 4th round or open PR 2? | Run a 4th round | decided by user | escalation, category 5 |
 | D19 | tasks | Tasks review r4 returned 1 MAJOR (T017 expected Escape to close Settings, which it does not: Settings is not a registered surface) and nothing else. Review again? | No. Fixed as the reviewer proposed (Save and Cancel are Settings' only exits). D18 approved one more round, not an open-ended loop; r4 confirmed every earlier fix holds (same reasoning as D9, D14) | agent-resolved | tasks review r4; app.rs `EscapePressed`, overlay/registry.rs |
 | D20 | implement | M1 review r1 (B, MAJOR): on `emphasized` the closing drawer spends ~150 ms (linear ~33 ms) laid out narrower than its rail (32 px; first recorded as 31, corrected in r2), so the main pane creeps left and jumps back at the swap. Accept it or fix it? | Fix it in M1: `NavigationDrawer::layout` floors the revealed width at the rail's width less the handle's (clamped to the panel's), test-first as U23/T045. The swap itself (at `CLOSED`) is unchanged. A regression the curve introduced is FR-003's to carry, and the fix is three lines. spec.md (Assumptions, Scope, SC-002), contract §2 and plan (*Scale/Scope*, *The sidebar curve*) amended in r2 | agent-resolved | navigation_drawer.rs `layout`; sidebar.rs:33,262; divider.rs:18; resize_handle.rs:30; M1 review r2 A F1 |
-| D21 | implement | M1 review r2 (B, MINOR): closing, the drawer's width reaches its floor at p ≈ 0.087 (~224 ms) but the rail swaps in at `CLOSED` (~379 ms), so the slide visibly ends ~155 ms before the strip appears. Fix in M1? | No: recorded under *Follow-ups not done*. The swap time is unchanged from `main` (not a regression), and swapping at the floor moves `showing_rail` off progress alone into state `layout` computes, a change to the drawer's swap that the spec scopes out | agent-resolved | M1 review r2 B F2; spec.md *Scope* |
+| D21 | implement | M1 review r2 (B, MINOR): closing, the drawer's width reaches its floor at p ≈ 0.087 (~224 ms) but the rail swaps in at `CLOSED` (~379 ms), so the slide visibly ends ~155 ms before the strip appears. Fix in M1? | No: recorded under *Follow-ups not done*. The swap time is unchanged from `main` (not a regression), and swapping at the floor moves `showing_rail` off progress alone into state `layout` computes, a change to the drawer's swap that the spec scopes out. **Superseded by D22** | agent-resolved | M1 review r2 B F2; spec.md *Scope* |
+| D22 | implement | M1 review r3 (A, MAJOR): D21's "not a regression" was wrong. What the user sees is how long nothing moves before the strip appears: 17–57 ms on `main` (linear, panels 600–180 px), 108–192 ms with the curve and floor, showing a still sliver of the *Hide sidebar* button. Fix in M1? | Yes, test-first as U24/T046: `layout` swaps to the rail once a closing panel's `full · p` is no wider than the floor (or at `CLOSED`), stores the decision in `Track`, and `update`, `draw`, `mouse_interaction` and `overlay` read it, so they always match the layout they get. Opening never swaps early; a zero floor (settings view, T019) keeps `CLOSED`. D20's rule applies: a regression the curve introduced is FR-003's. Spec (Assumptions, Scope, SC-002), contract §2/§6, plan, research R7, quickstart §A.2 and tasks amended; U23 re-cut | agent-resolved | M1 review r3 A F1; navigation_drawer.rs `layout`; tdd/cycle-log.md cycle 3 |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M1 | code r1 (B) | MINOR: drive U1 at `start + FRAME · i` instead of instants that restate the private `MAX_STEP` | T003 and T019 (M2) both specify 0, +64, +84 ms so the rail and drawer tests share instants; the test's comment states why those instants are a quarter. Revisit if `MAX_STEP` changes |
+| M1 | code r3 (B) | NIT: U1's `(sidebar - 0.25).abs() > 0.05` assertion is redundant with the ±0.01 check on 0.607 | T003's text and test-list U1 name that assertion; it gives the clearer failure message on a linear track |
+| M1 | code r3 (B) | NIT: U1 steps `Progress` directly, so a wrong duration passed by `update` would go unseen | Predates 030 (`SLIDE` was passed the same way); T019 (M2) drives the drawer through `Widget::update` with frame events |
+| M1 | spec r3 (A) | NIT: `4af105ca`'s message says 31 px | Commits are not rewritten; cycle-log *Correction and strengthening: U23* records 32 |
 | — (spec) | spec r2 | F6 part: file a bug against 018 for the sidebar's linear curve | Writing into 018's directory is outside this flow (the only allowed edit to another spec is the bug path's patch). 030 carries the fix as FR-003 and cites 018 SC-010 in its assumptions; the rest of F6 was fixed |
 
 ## Open escalation
@@ -68,6 +72,3 @@ None.
   (`a_pi_session_carries_the_component_only_while_the_switch_is_on`), in code this flow does not
   touch; CI on main is green (D17). T001 rechecked on b27ffe62: only `exclusivity` fails (3074 passed,
   1 failed, shell suites pass), so the flow continues; not this feature's to fix.
-- The worktree sidebar swaps to its strip at `CLOSED`, ~155 ms after its width reaches the rail's
-  floor on `emphasized` (D21). Swapping when the laid-out width reaches the floor would end the slide
-  on the swap; it needs `showing_rail` to read state from `layout`, and the spec scopes the swap out.
