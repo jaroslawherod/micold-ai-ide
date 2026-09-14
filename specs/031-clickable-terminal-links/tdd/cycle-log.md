@@ -101,3 +101,14 @@
 - green: `ends_an_address` stops at whitespace, any control character and the nine listed characters. Suite -> 1067 passed, 0 failed
 - refactor: re-wrapped the `scan_end` doc comment to name rule 2; `cargo fmt`; suite re-run -> 1067 passed
 - commit: `feat(031): end an address at characters no address contains (U9)`
+
+## Cycle 10: U10 accepts web hosts `localhost`, dotted, bracketed IPv6 or with a port
+
+- test: `crates/micold-core/src/link/detect.rs::tests::accepts_a_web_host_only_when_it_is_localhost_dotted_bracketed_or_has_a_port` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::accepts_a_web_host_only_when_it_is_localhost_dotted_bracketed_or_has_a_port -- --exact`
+  -> `a dotless name with no port is too likely to be prose to be an address` / `left: ["http://intranet/x"]` / `right: []` (1 failed)
+- green: `well_formed` reads the authority up to `/`, `?` or `#`, drops any user info, and accepts
+  a bracketed literal, `localhost`, a dotted name, or a name with a numeric port. A rejected
+  candidate advances the scan by one character. Suite -> 1068 passed, 0 failed
+- refactor: `cargo fmt` only
+- commit: `feat(031): recognise a web address only when it names a host (U10)`
