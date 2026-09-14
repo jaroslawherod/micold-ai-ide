@@ -1,7 +1,7 @@
 # Spec Kit autopilot
 
 `/speckit-autopilot <feature idea>`, `/speckit-autopilot bug: <report>` or
-`/speckit-autopilot resume <NNN>` (`resume <NNN> BUG-<k>` for a bug).
+`/speckit-autopilot resume`.
 
 You give it one prompt. For a feature, the agent writes the spec and merges it, clarifies it with
 you, plans and cuts the work into milestones, then ships each milestone to `main` as its own
@@ -160,7 +160,8 @@ worktree or the branch. Removing the worktree in micold IDE cleans up both.
 
 Progress is kept in `specs/<NNN>-<slug>/autopilot.md`, or for a bug in `bugs/BUG-<k>.autopilot.md`
 beside the BUG record. It is committed with every PR and holds the phase, PRs, milestones, every decision (and who made it), declined review findings, and follow-ups.
-After a crash or `/clear`, run `/speckit-autopilot resume <NNN>` or `resume <NNN> BUG-<k>`.
+After a crash or `/clear`, run `/speckit-autopilot resume` in the same worktree. It finds the run
+itself, from the unfinished ledger that records this worktree's branch.
 
 ## Files
 
