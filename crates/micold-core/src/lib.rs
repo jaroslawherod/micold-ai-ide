@@ -41,5 +41,7 @@ pub mod terminal;
 pub mod theme;
 pub mod tokens;
 pub mod typeahead;
+#[cfg(windows)]
+pub(crate) mod win_job;
 pub mod workspace;
 pub mod worktree;
