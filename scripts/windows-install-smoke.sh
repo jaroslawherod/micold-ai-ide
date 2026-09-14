@@ -79,7 +79,7 @@ trap clean_up EXIT
 
 fail() {
 	echo "${0##*/}: FAIL: $*" >&2
-	for log in "$logs/install.log" "$logs/repair.log" "$logs/uninstall.log" "$local_app_data/micold-ai-ide/data/micold-daemon.log"; do
+	for log in "$logs/install.log" "$logs/repair.log" "$logs/uninstall-open.log" "$logs/uninstall.log" "$local_app_data/micold-ai-ide/data/micold-daemon.log"; do
 		if [ -f "$log" ]; then
 			echo "---- $log" >&2
 			cat "$log" >&2
@@ -238,8 +238,7 @@ wait_for_uninstaller() {
 }
 
 # 9. Uninstall as Installed apps would run it, with the daemon running (I5, I7, FR-006). Relaunch the
-# client so it spawns a daemon, then close the window as in step 8. A silent uninstall with the
-# window still open cancels at the app-mutex prompt, as FR-009 requires with no one to confirm.
+# client so it spawns a daemon, then close the window as in step 8.
 client_pid="$(win "(Start-Process -FilePath '$(cygpath -w "$install_dir/micold-ai-ide.exe")' -PassThru).Id")"
 [ -n "$client_pid" ] || fail "the repaired client did not start"
 started=$SECONDS
@@ -248,6 +247,18 @@ until [ "$(win "Test-Path -LiteralPath '$pipe'")" = True ]; do
 	[ $((SECONDS - started)) -lt "$pipe_wait_secs" ] || fail "$pipe did not come back within ${pipe_wait_secs}s"
 	sleep 1
 done
+# 9a. With the window still open, the same silent uninstall refuses and removes nothing (A16, FR-009,
+# I7). An uninstall proceeds only once the app is closed or someone confirms, and a silent run has
+# no one to confirm.
+echo "== uninstall with the client (pid $client_pid) open"
+status=0
+MSYS2_ARG_CONV_EXCL='*' "$install_dir/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART \
+	"/LOG=$(cygpath -w "$logs/uninstall-open.log")" || status=$?
+wait_for_uninstaller
+[ "$status" -ne 0 ] || fail "the silent uninstall with the window open exited 0, want non-zero (FR-009, I7)"
+[ -f "$install_dir/micold-ai-ide.exe" ] || fail "the refused uninstall removed $install_dir/micold-ai-ide.exe (FR-009)"
+[ "$(win "Test-Path -LiteralPath '$key'")" = True ] || fail "the refused uninstall removed the uninstall key $key (FR-009)"
+echo "refused with the window open (exit $status); install dir and uninstall key in place"
 daemon_pid="$(win "(Get-CimInstance Win32_Process |
 Where-Object { \$_.ParentProcessId -eq $client_pid -and \$_.Name -eq 'micold-daemon.exe' } |
 Select-Object -First 1).ProcessId")"
