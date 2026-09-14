@@ -341,6 +341,40 @@ touches `~/.local/share`.
 - **`winresource`**: rejected. It needs a manual target-OS guard and is less maintained.
 - **Hand-invoking `rc.exe`**: rejected, because it is not portable to cross builds.
 
+#### Dependency vetting
+
+Recorded for T002 on 2026-09-14, before the dependency is added. `cargo tree -e build -i
+embed-resource --target x86_64-pc-windows-msvc`, run in a scratch crate with only
+`[build-dependencies] embed-resource = "3"`, printed this with `-f '{p} {l}'` and `-e normal,build`
+to show licenses (the crate's own root line omitted):
+
+```text
+embed-resource v3.0.11 MIT
+├── cc v1.4.6 MIT OR Apache-2.0
+│   ├── find-msvc-tools v0.1.12 MIT OR Apache-2.0
+│   └── shlex v2.0.1 MIT OR Apache-2.0
+├── memchr v2.8.3 Unlicense OR MIT
+├── rustc_version v0.4.1 MIT OR Apache-2.0
+│   └── semver v1.0.28 MIT OR Apache-2.0
+└── toml v1.1.6+spec-1.1.0 MIT OR Apache-2.0
+    ├── serde_core v1.0.229 MIT OR Apache-2.0
+    ├── serde_spanned v1.1.1 MIT OR Apache-2.0
+    │   └── serde_core v1.0.229 MIT OR Apache-2.0
+    ├── toml_datetime v1.1.1+spec-1.1.0 MIT OR Apache-2.0
+    │   └── serde_core v1.0.229 MIT OR Apache-2.0
+    ├── toml_parser v1.1.3+spec-1.1.0 MIT OR Apache-2.0
+    │   └── winnow v1.0.4 MIT
+    ├── toml_writer v1.1.2+spec-1.1.0 MIT OR Apache-2.0
+    └── winnow v1.0.4 MIT
+```
+
+- **Last release**: 3.0.11 on 2026-07-02, after 3.0.9 (2026-04-24), 3.0.8 (2026-03-23) and 3.0.7
+  (2026-03-15). The repository is `nabijaczleweli/rust-embed-resource`.
+- **New to `Cargo.lock`**: `embed-resource`, `toml`, `serde_spanned` and `toml_writer`, all MIT or
+  MIT OR Apache-2.0. Every other crate above is already locked, some at an older patch version that
+  Cargo may unify upward. No license outside MIT, Apache-2.0 and Unlicense enters.
+- **Build time only**: nothing reaches the shipped binaries' runtime code.
+
 ### R12. Upgrading or uninstalling while the app or daemon runs (FR-008, FR-009, edge cases)
 
 **Decision**, in three layers:
