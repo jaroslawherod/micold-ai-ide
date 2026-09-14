@@ -38,7 +38,7 @@ fn scan_end(chars: &[char], from: usize, quote: Option<char>) -> usize {
     let mut open = Vec::new();
     for (index, &c) in chars.iter().enumerate().skip(from) {
         match c {
-            c if c.is_whitespace() || Some(c) == quote => return index,
+            c if c.is_whitespace() || c == '>' || Some(c) == quote => return index,
             '(' | '[' => open.push(c),
             ')' | ']' => {
                 let opener = if c == ')' { '(' } else { '[' };
@@ -136,6 +136,15 @@ mod tests {
             found("See [text](https://x.example) here"),
             ["https://x.example"],
             "neither the link text nor the brackets around the address are part of it"
+        );
+    }
+
+    #[test]
+    fn finds_only_the_address_inside_angle_brackets() {
+        assert_eq!(
+            found("Homepage: <https://x.example>"),
+            ["https://x.example"],
+            "the angle brackets that mark an address in mail and Markdown are not part of it"
         );
     }
 }

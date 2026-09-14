@@ -74,3 +74,12 @@
 - refactor: none needed
 - commit: `test(031): pin the address of a Markdown link (U6)`
 - notes: green on arrival, as research R3 rule 4 predicts ("That handles `[text](https://x.y)`")
+
+## Cycle 7: U7 finds only the address inside angle brackets
+
+- test: `crates/micold-core/src/link/detect.rs::tests::finds_only_the_address_inside_angle_brackets` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::finds_only_the_address_inside_angle_brackets -- --exact`
+  -> `left: ["https://x.example>"]` / `right: ["https://x.example"]` (1 failed)
+- green: `scan_end` stops at `>`. Suite -> 1065 passed, 0 failed
+- refactor: none needed; the rest of research R3 rule 2's stop set is U9's cycle
+- commit: `feat(031): end an address at a closing angle bracket (U7)`
