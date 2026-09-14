@@ -347,3 +347,12 @@
 - refactor: none needed
 - commit: `test(031): pin that other schemes are not followable (U30)`
 - notes: T011 ticked in this commit (U28–U30 DONE)
+
+## Cycle 35: U33 a web or mail link resolves to `Url(address)` with `display == address` and no confirmation
+
+- test: `crates/micold-core/src/link/resolve.rs::tests::a_web_or_mail_link_opens_its_address_as_shown` (new), with `local()` and `detected(address)` fixtures; a `resolve` stub returning `None` was declared so it compiled
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::resolve::tests::a_web_or_mail_link_opens_its_address_as_shown -- --exact`
+  -> `assertion failed: https://a.example/x?y=1 opens as written, the hint shows it as written, and nothing asks first` / `left: None` / `right: Some(ResolvedLink { ..., display: "https://a.example/x?y=1", target: Url("https://a.example/x?y=1"), needs_confirmation: false })` (1 failed)
+- green: `resolve` classifies the address; `Web` and `Mail` give `Url(address)` shown as the address with no confirmation, anything else `None`. The context is unused until file links (`_ctx`). Suite -> 1093 passed, 0 failed; clippy clean
+- refactor: none needed
+- commit: `feat(031): resolve a web or mail link to its address (U33)`

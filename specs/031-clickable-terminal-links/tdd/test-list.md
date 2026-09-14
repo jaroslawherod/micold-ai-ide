@@ -127,7 +127,7 @@ U32 is a guard: `file:` is `NotFollowable` until T046. Its red is shown after T0
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U33 | A web or mail link resolves to `Url(address)` with `display == address` and no confirmation | FR-008, C1, C2 | example | PENDING | |
+| U33 | A web or mail link resolves to `Url(address)` with `display == address` and no confirmation | FR-008, C1, C2 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::a_web_or_mail_link_opens_its_address_as_shown` |
 | U34 | A declared non-followable URI resolves to `None` | FR-011, C3 | example | PENDING | |
 | U35 | A `file` link with host empty, `localhost` or one of `host_names` (any ASCII case) resolves to `HostPath(path)` | FR-012, C4, C5 | example | PENDING | |
 | U36 | A `file` link naming another host, including `file://server/share/…` and an unresolvable `file://build-host.invalid/…`, resolves to `None` with no lookup | FR-012, US3.6, C6, C18 | example | PENDING | |
