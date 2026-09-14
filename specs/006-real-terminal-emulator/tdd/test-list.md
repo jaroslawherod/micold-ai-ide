@@ -5,7 +5,7 @@ profile: .specify/memory/tdd-profile.md
 spec_criteria: 1 # scoped to BUG-007: FR-013e / SC-014 only — see "Out of scope"
 planned_at: 226d3a8b
 updated_at: fadb8e9f # the origin/main this branch was last rebased onto; states match the branch head
-suite_baseline: green # CI run on origin/main 226d3a8b concluded success; see cycle-log.md
+suite_baseline: green # CI run on origin/main 226d3a8b (before the rebase onto fadb8e9f) concluded success; see cycle-log.md
 ---
 
 # Test List: BUG-007 — a single click in the terminal selects nothing
@@ -56,6 +56,8 @@ GUI. A1 is therefore held by T076's recorded visual pass on Xvfb (the `visual-pa
 | U9  | A left release publishes `TerminalSelectionReleased`, after its press's `TerminalSelectStart` | FR-013, D4 | example | DONE | `clipboard_gestures::a_release_asks_for_the_copy_after_its_press_starts_the_selection` |
 | U10 | After a left press, a wheel scroll and then motion inside the pressed screen cell publish a `TerminalSelectUpdate` | FR-013e, D8 | example | DONE | `clipboard_gestures::motion_after_a_scroll_while_held_is_a_drag_even_in_the_pressed_screen_cell` |
 | U11 | After a left press in an edge cell, motion outside the pane, which clamps back onto the pressed cell, publishes a `TerminalSelectUpdate` | FR-013e, D8 | example | DONE | `clipboard_gestures::motion_past_the_panes_edge_is_a_drag_even_where_it_clamps_to_the_pressed_cell` |
+| U12 | A left press in the focus gutter beside an edge cell, then motion within that gutter or into that edge cell, publishes no `TerminalSelectUpdate` | FR-013e, D9 | example | RED | `clipboard_gestures::jitter_in_the_focus_gutter_beside_the_pressed_edge_cell_is_not_a_drag` |
+| U13 | After a left press, a wheel turn that cannot move the view (no scrollback) leaves motion inside the pressed cell a click | FR-013e, D9 | example | RED | `clipboard_gestures::a_wheel_turn_that_cannot_scroll_leaves_jitter_a_click` |
 
 ## Invariants and edge cases still to place
 
