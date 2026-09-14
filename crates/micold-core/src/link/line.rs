@@ -137,4 +137,27 @@ mod tests {
             "the second run starts after the undeclared cell before it, though its URI is the same"
         );
     }
+
+    #[test]
+    fn adjacent_runs_with_different_uris_are_two_links() {
+        const OTHER: &str = "https://b.example";
+        let rows = Rows::new(
+            0,
+            vec![row("onetwo").declare(0..3, ADDRESS).declare(3..6, OTHER)],
+        );
+        assert_eq!(
+            link_at(&rows, 0, 2),
+            declared(vec![span(0, 0..3)]),
+            "the first run ends where the next URI starts"
+        );
+        assert_eq!(
+            link_at(&rows, 0, 3),
+            Some(Link {
+                address: OTHER.to_string(),
+                origin: LinkOrigin::Declared,
+                cells: vec![span(0, 3..6)],
+            }),
+            "the second run opens its own address"
+        );
+    }
 }

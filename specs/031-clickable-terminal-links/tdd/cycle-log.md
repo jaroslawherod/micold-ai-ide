@@ -193,3 +193,14 @@
 - refactor: none needed
 - commit: `test(031): pin that separated same-URI runs are two links (U18)`
 - notes: green on arrival; contract L6
+
+## Cycle 19: U19 adjacent runs with different URIs are two links with their own addresses
+
+- test: `crates/micold-core/src/link/line.rs::tests::adjacent_runs_with_different_uris_are_two_links` (new)
+- red: none on arrival. `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::adjacent_runs_with_different_uris_are_two_links -- --exact`
+  -> `1 passed`: U17's run compares the exact URI.
+  Deliberate mutant: a neighbouring cell counts as the same run when it carries any URI -> `left: ... cols: 0..6` / `right: ... cols: 0..3` (1 failed). Mutant removed, file restored.
+- green: no implementation change. Suite -> 1077 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin that adjacent runs with different URIs are two links (U19)`
+- notes: green on arrival; US2 scenario 3

@@ -97,7 +97,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | --- | -------- | ------ | ---- | ----- | ---- |
 | U17 | Any cell of a maximal same-URI declared run returns that whole run as one link | FR-002, L1 | example | DONE | `crates/micold-core/src/link/line.rs::tests::any_cell_of_a_declared_run_returns_the_whole_run` |
 | U18 | Two same-URI runs separated by an undeclared cell are two links | US2.4, L6 | example | DONE | `crates/micold-core/src/link/line.rs::tests::two_same_uri_runs_apart_are_two_links` |
-| U19 | Adjacent runs with different URIs are two links with their own addresses | US2.3 | example | PENDING | |
+| U19 | Adjacent runs with different URIs are two links with their own addresses | US2.3 | example | DONE | `crates/micold-core/src/link/line.rs::tests::adjacent_runs_with_different_uris_are_two_links` |
 | U20 | A declared URI wins over address-shaped visible text in the same cells | US2.5 | example | PENDING | |
 | U21 | A detected address over rows joined by `wrapped = true` returns cells on every row it covers | FR-003, US1.3, L2 | example | PENDING | |
 | U22 | Rows separated by a real line break are never joined; only the first row's well-formed piece is a link | FR-003 | example | PENDING | |
