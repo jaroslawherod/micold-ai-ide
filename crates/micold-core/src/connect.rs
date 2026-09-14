@@ -460,4 +460,73 @@ mod tests {
         );
         refuse_foreign_server(&stream, &own).expect("this user's own server must be accepted");
     }
+
+    /// U72, security review D2: whoever serves the pipe learns who connected, and nothing more. A
+    /// pipe opened without a quality of service lets its server act as the client
+    /// (`SecurityImpersonation`), so a pipe squatter could reach whatever this user can.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn the_daemon_pipe_lets_its_server_identify_the_client_but_not_impersonate_it() {
+        use interprocess::local_socket::traits::tokio::Listener as _;
+        use interprocess::local_socket::ListenerOptions;
+        use std::os::windows::io::{AsHandle, AsRawHandle};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use windows_sys::Win32::Security::{
+            GetTokenInformation, RevertToSelf, SecurityIdentification, TokenImpersonationLevel,
+            SECURITY_IMPERSONATION_LEVEL, TOKEN_QUERY,
+        };
+        use windows_sys::Win32::System::Pipes::ImpersonateNamedPipeClient;
+        use windows_sys::Win32::System::Threading::{GetCurrentThread, OpenThreadToken};
+
+        let path = format!(r"\\.\pipe\Micold.Test.Connect.Sqos.{}", std::process::id());
+        let name = path.as_str().to_fs_name::<GenericFilePath>().unwrap();
+        let listener = ListenerOptions::new().name(name).create_tokio().unwrap();
+        let endpoint = Endpoint {
+            socket_path: path.clone().into(),
+            lock_path: Default::default(),
+        };
+        let (served, dialed) = tokio::join!(listener.accept(), dial(&endpoint));
+        let mut served = served.unwrap();
+        let mut client = dialed.unwrap().expect("the test pipe is listening");
+        // A server may impersonate only once it has read from the client.
+        client.write_all(b"?").await.unwrap();
+        served.read_exact(&mut [0u8]).await.unwrap();
+        let Stream::NamedPipe(pipe) = &served;
+        let server_handle = pipe.as_handle().as_raw_handle();
+
+        // SAFETY: the handle is the accepted pipe, alive for this whole block. The thread token is
+        // read into a correctly sized local and closed before `RevertToSelf` ends the impersonation.
+        let level = unsafe {
+            assert_ne!(
+                ImpersonateNamedPipeClient(server_handle),
+                0,
+                "ImpersonateNamedPipeClient: {}",
+                io::Error::last_os_error()
+            );
+            let mut token = std::ptr::null_mut();
+            let opened = OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, 1, &mut token);
+            let opened_error = io::Error::last_os_error();
+            let mut level: SECURITY_IMPERSONATION_LEVEL = -1;
+            let mut written = 0u32;
+            let read = opened != 0
+                && GetTokenInformation(
+                    token,
+                    TokenImpersonationLevel,
+                    (&mut level as *mut SECURITY_IMPERSONATION_LEVEL).cast(),
+                    std::mem::size_of::<SECURITY_IMPERSONATION_LEVEL>() as u32,
+                    &mut written,
+                ) != 0;
+            if opened != 0 {
+                windows_sys::Win32::Foundation::CloseHandle(token);
+            }
+            RevertToSelf();
+            assert!(opened != 0, "OpenThreadToken: {opened_error}");
+            assert!(read, "GetTokenInformation(TokenImpersonationLevel) failed");
+            level
+        };
+        assert_eq!(
+            level, SecurityIdentification,
+            "the client must open the pipe at SecurityIdentification (1); 2 is SecurityImpersonation"
+        );
+    }
 }
