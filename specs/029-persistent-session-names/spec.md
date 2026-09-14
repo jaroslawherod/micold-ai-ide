@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-12
 
-**Status**: Draft
+**Status**: Closed 2026-09-14 — implemented and shipped; all 30 tasks in [tasks.md](./tasks.md) are done
 
 **Input**: User description: "the name of session should be always visible when it was set. Currently after daemon restart when session is not yet active it's shown as `New Session` but it already has name that was assigned once and should be persistent and remembered"
 
