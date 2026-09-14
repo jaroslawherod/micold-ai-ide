@@ -63,7 +63,7 @@ file-rotate = "0.8.0"
 futures-util = { version = "0.3", features = ["sink"] }
 # --- client (iced) deps ---
 iced = { version = "0.14.0", features = ["tokio", "canvas", "advanced", "lazy"] }
-dark-light = "2.0"
+dark-light = "3.0"
 # --- terminal stack (client today; migrates into micold-daemon at T030) ---
 portable-pty = "0.9"
 alacritty_terminal = "0.26"
