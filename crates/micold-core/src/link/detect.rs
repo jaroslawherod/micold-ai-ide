@@ -66,4 +66,13 @@ mod tests {
             "each of . , ; : ! ? ' * is trimmed from the end"
         );
     }
+
+    #[test]
+    fn keeps_a_closing_bracket_balanced_inside_the_address() {
+        assert_eq!(
+            found("Read https://example.com/a_(b)."),
+            ["https://example.com/a_(b)"],
+            "a closing bracket that closes one opened inside the address is part of it"
+        );
+    }
 }
