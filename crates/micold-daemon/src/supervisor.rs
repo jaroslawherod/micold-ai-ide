@@ -687,8 +687,13 @@ mod tests {
     /// `SIGHUP` to the terminal's foreground group — which, with no job control, is the whole group.
     #[test]
     fn a_grandchild_outliving_its_exited_parent_dies_at_teardown() {
-        let (session, grandchild, _dir) =
-            spawn_with_grandchild("(trap '' HUP; exec sleep 300) & echo $! > {pidfile} ; exit 0");
+        // The grandchild records its own pid once it ignores SIGHUP, and the child exits only after
+        // that: the child leads the session, so its exit hangs up the terminal, and a grandchild
+        // not yet past its `trap` died of it (seen on macOS).
+        let (session, grandchild, _dir) = spawn_with_grandchild(
+            "sh -c 'trap \"\" HUP; echo $$ > {pidfile}; exec sleep 300' & \
+             until [ -s {pidfile} ]; do sleep 0.01; done; exit 0",
+        );
         assert_eq!(wait_for_exit(&session), ExitOutcome::Clean);
         assert!(
             exists(grandchild),
