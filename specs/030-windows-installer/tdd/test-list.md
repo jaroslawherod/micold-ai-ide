@@ -34,8 +34,8 @@ The entry points are:
 | A4  | The HKCU uninstall key's `DisplayVersion` equals the workspace version | US1-AS4, FR-006, FR-013 | example | win | DONE | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
 | A5  | The committed `packaging/windows/micold-ai-ide.iss` passes `windows_violations`: its `[Files]` ship exactly the two exes | US1-AS5, FR-012 | example | any | DONE | `crates/micold-client/tests/packaging_excludes_showcase.rs::the_windows_installer_contains_no_showcase` |
 | A6  | Re-running the installer over a running install exits 0 and leaves exactly one `{1B19A6AC-…}_is1` uninstall key | US2-AS1, FR-008, I4 | example | win | DONE | `scripts/windows-install-smoke.sh` step 8, run by `.github/workflows/ci.yml` on both Windows legs (run 34845626478) |
-| A7  | A silent uninstall removes the install dir, `.lnk`, uninstall key and `%LOCALAPPDATA%\micold-ai-ide\run` | US2-AS2, FR-006, SC-003, I5 | example | win | PENDING | |
-| A8  | After uninstall, the markers seeded in `%APPDATA%\micold-ai-ide\data` and `%LOCALAPPDATA%\micold-ai-ide\data` still exist | US2-AS3, FR-007, I5 | example | win | PENDING | |
+| A7  | A silent uninstall removes the install dir, `.lnk`, uninstall key and `%LOCALAPPDATA%\micold-ai-ide\run` | US2-AS2, FR-006, SC-003, I5 | example | win | DONE | `scripts/windows-install-smoke.sh` step 9 |
+| A8  | After uninstall, the markers seeded in `%APPDATA%\micold-ai-ide\data` and `%LOCALAPPDATA%\micold-ai-ide\data` still exist | US2-AS3, FR-007, I5 | example | win | DONE | `scripts/windows-install-smoke.sh` step 9, data markers |
 | A9  | Installing while the daemon runs ends with the old daemon pid gone and the new exes in place | US2-AS4, FR-009, FR-023, I4 | example | win | DONE | `scripts/windows-install-smoke.sh` step 8, the old-daemon check (runs 34847141077 green, 34871836361 mutant killed) |
 | A10 | `release.yml` has a `windows` job whose matrix covers `x64`/`windows-latest` and `arm64`/`windows-11-arm`, and it runs `gh release upload` | US3-AS1, FR-014, FR-015 | example | any | DONE | `crates/micold-core/tests/release_publishes_complete_sets.rs::a_windows_job_uploads_both_setup_executables` |
 | A11 | `release.yml` `publish.needs` contains `windows` | US3-AS2, FR-014, SC-002 | example | any | DONE | `crates/micold-core/tests/release_publishes_complete_sets.rs::publish_waits_for_the_windows_job` |
@@ -44,7 +44,7 @@ The entry points are:
 | A14 | `docs/install.md` no longer says there is no packaged build for Windows | US4-AS1, FR-017, SC-006 | example | any | DONE | `crates/micold-core/tests/install_guide_windows.rs::install_page_no_longer_says_windows_has_no_package` |
 | A15 | `docs/user-guide/install-windows.md` states that sessions do not survive logging out unless the service runs in a container | US4-AS2, FR-017 | example | any | DONE | `crates/micold-core/tests/install_guide_windows.rs::windows_guide_limits_say_sessions_end_at_logout` |
 | A16 | A silent uninstall while the app window is open exits non-zero and leaves the install dir and uninstall key in place (added in cycle 74, from A7's first run) | US2-AS4, FR-009, I7 | example | win | PENDING | |
-| A17 | Both installed exes carry an `RT_GROUP_ICON` resource, so Explorer and the taskbar show the project icon, not the generic exe icon (placed in cycle 75, from the unplaced FR-003 note) | US1-AS1, FR-003 | example | win | PENDING | |
+| A17 | Both installed exes carry an `RT_GROUP_ICON` resource, so Explorer and the taskbar show the project icon, not the generic exe icon (placed in cycle 75, from the unplaced FR-003 note) | US1-AS1, FR-003 | example | win | DONE | `scripts/windows-install-smoke.sh` step 2a |
 
 ## Inner loop: unit behaviors
 
