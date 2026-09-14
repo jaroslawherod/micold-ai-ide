@@ -173,9 +173,11 @@ jobs:
       # Feature 030 (FR-025): the daemon's own suite on Windows -- the singleton, the pipe's DACL, the
       # stop path and the process-tree teardown are all Windows-specific code. Linux already runs it
       # in the full-workspace step below. `!cancelled()` so a red core step above does not hide
-      # which daemon behaviours differ on this platform.
+      # which daemon behaviours differ on this platform. The timeout bounds a hung test: libtest has
+      # none of its own, and a hang otherwise holds the runner until GitHub's six-hour limit.
       - name: Test (daemon, Windows)
         if: ${{ !cancelled() && runner.os == 'Windows' }}
+        timeout-minutes: 20
         shell: bash
         run: cargo test -p micold-daemon --all-targets
       # Feature 028 (FR-036): the packaging gate. The bundle is composed from the binaries the

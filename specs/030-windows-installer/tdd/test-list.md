@@ -89,6 +89,7 @@ The entry points are:
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
 | U13 | Killing a Regular session ends a grandchild its shell started, within 5 s | FR-020, E5.1 | example | win | PENDING | |
+| U67 | Dropping a session whose child is still running returns within 10 s | FR-020 | example | win | RED | `crates/micold-daemon/src/supervisor.rs::windows_tests::dropping_a_session_returns` |
 
 ### `crates/micold-core/src/process.rs`
 

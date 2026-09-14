@@ -102,11 +102,12 @@ description: "Task list for feature 030: Windows installation package"
   3. Calls `TerminateProcess` and `WaitForSingleObject(5000)`.
 
   In `running_daemon_pid`, return `None` when the endpoint is not live, so a stale record is ignored.
-- [ ] T020 [U13] R6, making T012 pass: in `crates/micold-daemon/src/platform/windows.rs`, replace the no-op `terminate_process_tree` with a per-session job built on `micold_core::win_job` (make it `pub` behind `#[cfg(windows)]`).
+- [ ] T020 [U13] [U67] R6, making T012 pass: in `crates/micold-daemon/src/platform/windows.rs`, replace the no-op `terminate_process_tree` with a per-session job built on `micold_core::win_job` (make it `pub` behind `#[cfg(windows)]`).
   - In `crates/micold-daemon/src/supervisor.rs`, right after the `portable-pty` spawn, call `OpenProcess` plus `AssignProcessToJobObject` on the child pid, and store the job with the session.
   - On kill, terminate the job.
   - The job is created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`.
   - Record the known limit in a code comment: a grandchild spawned before assignment escapes.
+  - [U67] In `PtySession`'s `Drop`, close the PTY master before joining the reader thread. Under ConPTY the reader sees EOF only once the pseudoconsole is closed, so joining first never returns.
 - [ ] T021 [U14] [U15] [U16] [U17] R7, making T014 pass: implement `crates/micold-core/src/process.rs`.
   - `no_window` calls `std::os::windows::process::CommandExt::creation_flags(CREATE_NO_WINDOW)` on Windows and does nothing elsewhere.
   - `announce_running` calls `CreateMutexW(null, FALSE, "Local\\MicoldAIIDE")` and returns a `RunningMarker` that closes the handle on drop. It returns `None` on Unix.
