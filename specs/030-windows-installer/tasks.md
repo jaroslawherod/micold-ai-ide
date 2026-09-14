@@ -290,7 +290,7 @@ description: "Task list for feature 030: Windows installation package"
 - [X] T070 [US2] [A6] US2-AS1: in the CI smoke run from T043, the repair over a live install exits 0 and leaves exactly one `_is1` uninstall key.
 - [ ] T071 [US2] [A7] US2-AS2: in the same smoke run, uninstall removes the install dir, `.lnk`, uninstall key and `%LOCALAPPDATA%\micold-ai-ide\run`.
 - [ ] T072 [US2] [A8] US2-AS3: in the same smoke run, both seeded data markers survive uninstall.
-- [ ] T073 [US2] [A9] US2-AS4: in the same smoke run, installing with the daemon running ends with the old daemon pid gone.
+- [X] T073 [US2] [A9] US2-AS4: in the same smoke run, installing with the daemon running ends with the old daemon pid gone.
 
 **Checkpoint**: CI proves repair over a live daemon and uninstall with user data preserved, on both architectures.
 

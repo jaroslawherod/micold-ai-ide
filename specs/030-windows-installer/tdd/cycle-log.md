@@ -620,3 +620,14 @@ failed before the implementation.
 - green (A6): the same run. x64: `== repair dist/micold-ai-ide-0.14.0-x64-setup.exe with the daemon (pid 4672) running`, `repaired, one Installed apps entry`, `== smoke passed`. ARM64: `== repair dist/micold-ai-ide-0.14.0-arm64-setup.exe with the daemon (pid 10160) running`, `repaired, one Installed apps entry`, `== smoke passed`. `ci complete` succeeded. A6 is `DONE`, so T070 and T076 are ticked. T043 and T045 wait on A7-A9.
 - refactor: none needed.
 - commit: see the follow-up commit
+
+## Cycle 73: A9 passes first time; the mutant needs Restart Manager off too
+
+- test: `scripts/windows-install-smoke.sh`, step 8, after the repair (39eea574). The daemon pid recorded before the repair must no longer be a `micold-daemon` process.
+- red: none. The check passed on first run in PR #332's CI run 34847141077 (39eea574). x64: `the old daemon (pid 5896) is gone`. ARM64: `the old daemon (pid 2408) is gone`.
+- mutant 1 (59244b0d): `StopDaemon` exits at once, and `micold-daemon.exe` gets `onlyifdoesntexist`. It survived in run 34848432359. x64: `the old daemon (pid 616) is gone`, `== smoke passed`. ARM64: `the old daemon (pid 3624) is gone`, `== smoke passed`. With `CloseApplications=force`, Restart Manager also closed the running daemon, so `StopDaemon` is not the only thing that stops it on a repair.
+- mutant 2 (2458d976, 6a5135b8): mutant 1 plus `CloseApplications=no`. Killed in run 34871836361. ARM64: `windows-install-smoke.sh: FAIL: the old daemon (pid 5448) is still running after the repair (I4)`. x64 stopped earlier, at `crates\micold-core\tests\windows_installer_in_use.rs:58:5`, `setup must close a still-open app window through Restart Manager, not leave its exe locked (FR-009)`, `left: ["no"]`, `right: ["force"]`. The mutants are reverted in 1d0e4c0a, and the `.iss` is again byte-identical to 39eea574's.
+- green (A9): run 34847141077, above. A9 is `DONE`.
+- refactor: none needed.
+- notes: the row's "new exes in place" is not asserted beyond step 2's presence check. A repair installs the same version, so the old and new binaries cannot be told apart. The check covers what FR-009 is about: the old daemon is not left running over replaced files. Step 8's `ci complete` result for 1d0e4c0a is pending, together with A7 and A8.
+- commit: see the follow-up commit
