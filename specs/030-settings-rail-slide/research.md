@@ -255,7 +255,8 @@ duration `MEDIUM_4`. `Rail` names the two tokens as `SLIDE` and `SLIDE_CURVE`, a
 **Rationale**: 018 §6.3 *sidebar slide* assigns `medium_4` and `emphasized`; the drawer set only the
 duration and so defaulted to linear (D7). Both panels width their content by `full · progress`, so
 equal progress at equal elapsed time is equal fraction of width change, which is SC-002's second
-sentence. No existing test pins the drawer to linear: its unit tests assert which child is laid out
+sentence. (Implementation added a floor and an earlier swap to the drawer, where its width is held at
+or replaced by its strip's; SC-002 excludes both, and T019's zero-width rail has neither: D20, D21.) No existing test pins the drawer to linear: its unit tests assert which child is laid out
 and its gate asserts relayout requests.
 
 **Alternatives considered**: a shared `sidebar_slide()` constructor in `cdk::motion` — the cdk names

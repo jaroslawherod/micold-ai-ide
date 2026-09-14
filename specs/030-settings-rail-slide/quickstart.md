@@ -32,6 +32,9 @@ hand, when the test is written, per the TDD loop's deliberate-mutant step).
 
 | Gate | Covers | Fails on | Requirement |
 |---|---|---|---|
+| `navigation_drawer.rs` unit test `the_sidebar_slides_on_the_emphasized_curve` | driven at 0, +64, +84 ms the drawer's track is within 0.01 of `emphasized`'s 0.607, not linear's 0.25 | main (linear track) | FR-003, contract §2 |
+| ″ `a_sliding_drawer_is_never_narrower_than_its_rail` | opening below the floor the drawer is exactly its rail's width; above it `full · p` plus the handle; the handle at the panel's right edge; a panel narrower than the floor is not stretched | main (21 px at 0.05); mutants: the floor without subtracting the handle, the floor without the panel's cap | FR-003, contract §2 (D20) |
+| ″ `a_closing_drawer_swaps_to_its_rail_once_it_is_no_wider` | closing, the rail is on screen (in layout and in the state `draw` and `update` read) once `full · p` is no wider than the floor; not while opening; at `CLOSED` for a zero-width rail | main (panel until `CLOSED`) | FR-003, contract §2 (D21) |
 | `section_list.rs` unit tests | `fraction` clamps and maps 64→0, 272→1; `form` at 0.001, 0.999, badged and not; `offset` makes the drawn icon x equal the line in every form; a selection change moves it by 12·f | — (new functions) | contract §3–§4 |
 | `tests/settings_rail_motion.rs` **(new)** `collapsing…` / `expanding…` | widths strictly between on some frame, each way | main | FR-001, SC-001 |
 | ″ `the_section_follows_the_rail_edge` | on a slide with at least one intermediate frame, the section region starts at the rail's right edge; content offset unchanged | main (no intermediate frame); mutant: `Rail::layout` returning the destination width while its child is at the animated width | FR-002 |

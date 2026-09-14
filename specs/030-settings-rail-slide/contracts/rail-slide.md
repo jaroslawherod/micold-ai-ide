@@ -1,7 +1,7 @@
 # Contract: The section rail's slide
 
 Owns what `SectionList` promises, frame by frame, while it moves between its labelled and
-icons-only states, and the two changes it makes to `NavigationDrawer`. Every clause names the
+icons-only states, and the changes it makes to `NavigationDrawer`. Every clause names the
 requirement it serves and the test that holds it (quickstart §A.2).
 
 This is a UI contract: the API surface is unchanged, so what is contracted is geometry, timing,
@@ -31,9 +31,11 @@ and none can opt out: every screen built on the component slides (Principle VIII
 
 **`NavigationDrawer`** takes the same duration and curve. Driven with the same frame instants from
 the same press, the drawer's panel and the rail are at the same fraction of their width change at
-every sample, excluding the drawer's swap to its strip once fully closed and, before it, the stretch
-where its width is floored at its strip's (SC-002). That floor: the drawer's node is never narrower
-than its rail while it slides, so the swap moves nothing beside it (D20; U23).
+every sample, excluding the drawer's swap to its strip and any stretch where its width is floored at
+its strip's (SC-002). That floor: the drawer's node is never narrower than its rail while it slides
+(D20; U23). That swap: a closing drawer shows its rail once its panel is no wider than the rail, and
+at `CLOSED` when the rail is no wider than the handle, so the swap moves nothing beside it and no
+still panel is left on screen (D21; U24).
 
 ## 3. Geometry
 
@@ -76,6 +78,6 @@ than its rail while it slides, so the swap moves nothing beside it (D20; U23).
 
 ## 6. Not contracted
 
-- The worktree sidebar's strip swap once fully closed (unchanged).
+- The worktree sidebar's collapsed strip itself (unchanged).
 - Animating the selection marker's move, and reduced-motion preferences (spec Assumptions).
 - Frame pacing and the look of the clip, which the recorded visual pass covers (quickstart §B).

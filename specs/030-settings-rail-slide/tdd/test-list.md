@@ -4,7 +4,7 @@ loop: outside-in
 profile: .specify/memory/tdd-profile.md
 spec_criteria: 11 # US1 scenarios 1–7, US2 scenarios 1–4
 planned_at: a9f54e77
-updated_at: 4af105ca
+updated_at: bcfcb15d
 suite_baseline: red # local only: rechecked on b27ffe62, only the daemon `pi` test `exclusivity` fails on this host; CI on main is green; see cycle-log.md
 ---
 
@@ -55,7 +55,8 @@ own message.
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
 | U1  | Driven at instants 0, +64 ms and +84 ms, a drawer's track is within 0.01 of `EMPHASIZED` at a linear twin's value (0.25 ± 0.001) and not within 0.25 ± 0.05 | FR-003 | example | DONE | `navigation_drawer.rs::tests::the_sidebar_slides_on_the_emphasized_curve` |
-| U23 | A drawer (panel 300, rail 32, handle 6) lays out exactly its rail's width closing at progress 0.05, 0.02 and `2 · CLOSED` and opening at 0, `300 · p + 6` closing at 0.5, with the handle at the panel's right edge. Added in M1 review round 1: the curve's slow tail made the sub-rail stretch visible (D20) | FR-003 (invariant: the swap moves nothing) | example | DONE | `navigation_drawer.rs::tests::a_sliding_drawer_is_never_narrower_than_its_rail` |
+| U23 | A drawer (rail 32, handle 6) lays out exactly its rail's width opening at progress 0 and 0.05 (panel 300), `300 · p + 6` closing at 0.125 and 0.5, and a 10 px panel's own width plus the handle open at 1, with the handle and the panel's right edge both at the revealed width. Added in M1 review round 1 (D20); re-cut in round 3, when its closing cases below the floor began showing the rail (U24) | FR-003 (invariant: the swap moves nothing) | example | DONE | `navigation_drawer.rs::tests::a_sliding_drawer_is_never_narrower_than_its_rail` |
+| U24 | Closing, a drawer (panel 300, rail 32, handle 6) has its rail on screen at 0.05 and 0.085 and its panel at 0.1; opening at 0.05 its panel; with a 0 px rail and no handle, its panel at 0.01 and its rail at `CLOSED`. Each read from the rail's laid-out x and the state `draw` and `update` read. Added in M1 review round 3 (D21) | FR-003 (invariant: no still panel before the swap) | example | DONE | `navigation_drawer.rs::tests::a_closing_drawer_swaps_to_its_rail_once_it_is_no_wider` |
 
 ### `crates/micold-client/src/ui/material/section_list.rs` — derived values
 
@@ -108,7 +109,7 @@ None left unplaced. Spec edge cases map as follows:
 
 ## Out of scope
 
-- The sidebar's strip swap once fully closed: unchanged, contract §6.
+- The sidebar's collapsed strip itself: unchanged, contract §6.
 - Animating the selection marker's move and any reduced-motion preference: spec Assumptions.
 - Frame pacing, the look of the clip and the tint's colour: not observable by layout; quickstart §B. Which form a badged row draws is observable, and is U17.
 - *Empty or minimal rails* and *several windows*: no code path depends on row count or window

@@ -25,7 +25,8 @@ in `ui/material/section_list.rs`:
    focus moves with it.
 
 Beside that: `NavigationDrawer`'s track gains `.easing(EMPHASIZED)` so the sidebar panel moves on the
-curve its contract row names (FR-003), the do-nothing drawer wrapper in `settings_view.rs` goes, and
+curve its contract row names (FR-003), with the width floor and earlier strip swap that curve needs
+(D20, D21), the do-nothing drawer wrapper in `settings_view.rs` goes, and
 `docs/user-guide/settings.md` documents the collapse control and its slide (FR-012).
 
 The implementation set aside in WIP commit `14d9c0e4` (D6) is the starting point: the `Rail` widget,
@@ -74,8 +75,8 @@ rectangle (SC-005). Source-scanning gates stay green: `animated_layout_relayouts
 tokens), `one_overlay_implementation.rs` (the new widgets forward overlays and construct none).
 
 **Scale/Scope**: One component (`SectionList`) and its two screens — Settings and the showcase's
-rail example — plus `NavigationDrawer`'s curve and its width floor (D20). The worktree sidebar's strip
-swap is out of scope.
+rail example — plus `NavigationDrawer`'s curve, its width floor and its earlier strip swap (D20, D21).
+The worktree sidebar's strip itself is out of scope.
 
 ## Constitution Check
 
@@ -131,7 +132,7 @@ crates/micold-client/
 │   ├── section_list.rs        # Rail + RowSlide widgets, TakeFocus/GiveFocus, pure slide functions, unit tests,
 │   │                          #   and the in-crate mounts (rail vs drawer, no-icon row): `material` is pub(crate)
 │   ├── keyboard_focus.rs      # operate also offers `Focus` via operation.custom (focus handoff keeps `visible`)
-│   └── navigation_drawer.rs   # Progress gains .easing(EMPHASIZED); `parked` becomes pub(super)
+│   └── navigation_drawer.rs   # .easing(EMPHASIZED), width floor, swap at the floor; `parked` pub(super)
 ├── src/ui/settings_view.rs    # drop the pinned-open NavigationDrawer wrapper
 ├── tests/
 │   ├── settings_rail_motion.rs          # NEW: frame-by-frame slide tests (FR-001–FR-015, SC-001–SC-007)
@@ -160,8 +161,8 @@ tokens as constants beside the drawer's, the way the drawer names its duration.
 `NavigationDrawer::state` builds `Progress::new(..)` with no curve, which defaults to linear. It
 gains `.easing(EMPHASIZED.x1, EMPHASIZED.y1, EMPHASIZED.x2, EMPHASIZED.y2)`. No existing test
 asserts the drawer's timing shape (checked: `navigation_drawer.rs` tests assert which child shows,
-`animated_layout_relayouts.rs` asserts relayout requests). The strip swap in `ui/mod.rs` is
-untouched. SC-002's "same fraction at the same elapsed time" is asserted by driving a drawer and a
+`animated_layout_relayouts.rs` asserts relayout requests). `ui/mod.rs`, which composes the sidebar,
+is untouched. SC-002's "same fraction at the same elapsed time" is asserted by driving a drawer and a
 rail with the same frame instants.
 
 The curve's slow tail makes a second change necessary (M1 review round 1, D20). `layout` sized the
@@ -169,7 +170,15 @@ revealed panel at `full · p`, which below `p ≈ 0.087` (a 300 px panel) is nar
 strip, so on `emphasized` the content beside the drawer spent ~150 ms left of the strip's edge and
 jumped back at the swap. The revealed width is floored at the rail's width less the handle's,
 clamped to the panel's (U23). With no handle and a zero-width rail, as in T019's mount and
-`settings_view.rs`, the floor is 0 and nothing changes. The swap itself still happens at `CLOSED`.
+`settings_view.rs`, the floor is 0 and nothing changes.
+
+The floor alone left the other half of the tail on screen (M1 review round 3, D21): closing, the
+width reached the floor at `p ≈ 0.087` (~226 ms) but the rail swapped in at `CLOSED` (~378 ms), so a
+still 26 px sliver of panel, the edge of its *Hide sidebar* button, sat there for ~150 ms (17–57 ms
+on linear). `layout` now swaps to the rail once a closing panel's `full · p` is no wider than the
+floor, or at `CLOSED`, and records that decision in the drawer's state; `update`, `draw`,
+`mouse_interaction` and `overlay` read it, so they always agree with the layout they are handed
+(U24). Opening never swaps early, and a zero floor keeps the swap at `CLOSED`.
 
 ### Risks
 

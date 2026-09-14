@@ -90,6 +90,7 @@ impl<'a, M, Theme, Renderer> NavigationDrawer<'a, M, Theme, Renderer> {
 /// The slide, owned here rather than by the application.
 struct Track {
     progress: Progress,
+    rail_showing: bool,
 }
 
 /// A node parked where it cannot be seen. The inactive child still needs a layout entry — the tree,
@@ -117,6 +118,7 @@ where
                 EMPHASIZED.x2,
                 EMPHASIZED.y2,
             ),
+            rail_showing: !self.open,
         })
     }
 
@@ -146,7 +148,6 @@ where
         limits: &layout::Limits,
     ) -> layout::Node {
         let progress = tree.state.downcast_ref::<Track>().progress.value();
-        let rail_showing = self.showing_rail(progress);
 
         let (panel_tree, rest) = tree.children.split_at_mut(1);
         let (rail_tree, handle_tree) = rest.split_at_mut(1);
@@ -165,6 +166,17 @@ where
                 .layout(&mut handle_tree[0], renderer, limits)
         });
 
+        // A closing panel that is no wider than the rail has nothing left to slide, so the rail
+        // takes over there rather than at `CLOSED`: `emphasized` spends a long, slow tail in
+        // between, and the panel would sit frozen on screen for all of it. The decision is kept
+        // for the other methods, which are handed this layout and must agree with it.
+        let full = panel.size();
+        let handle_width = handle.as_ref().map_or(0.0, |h| h.size().width);
+        let rail_floor = rail.size().width - handle_width;
+        let rail_showing =
+            self.showing_rail(progress) || (!self.open && full.width * progress <= rail_floor);
+        tree.state.downcast_mut::<Track>().rail_showing = rail_showing;
+
         if rail_showing {
             let size = rail.size();
             let mut nodes = vec![parked(panel), rail];
@@ -174,14 +186,12 @@ where
 
         // The panel reveals from its right edge: the space it occupies shrinks while the content
         // slides left behind it, so the part that disappears is the far side, not the near one.
-        // Never narrower than the rail, though: the swap then happens at the rail's own width, so
-        // the content beside the drawer does not creep past the rail's edge during the slide's slow
-        // tail and jump back when the rail takes over.
-        let full = panel.size();
-        let handle_width = handle.as_ref().map_or(0.0, |h| h.size().width);
+        // Never narrower than the rail, though, which an opening panel starts out as: the content
+        // beside the drawer would otherwise dip past the rail's edge before it moves out.
         let width = (full.width * progress)
-            .max(rail.size().width - handle_width)
-            .clamp(0.0, full.width);
+            .max(rail_floor)
+            .min(full.width)
+            .max(0.0);
         let panel = panel.translate(Vector::new(-(full.width - width), 0.0));
 
         let height = full
@@ -210,8 +220,10 @@ where
         let track = tree.state.downcast_mut::<Track>();
         // `on_layout_frame`, not `on_frame`: this widget's `layout` reads the progress to size the
         // revealed panel, and iced re-lays-out only when asked (BUG-001).
-        let progress = track.progress.on_layout_frame(event, target, SLIDE, shell);
-        let rail_showing = self.showing_rail(progress);
+        track.progress.on_layout_frame(event, target, SLIDE, shell);
+        // Which child `layout` put on screen, not what the advanced progress would pick: the event
+        // is delivered through that layout, until the next one.
+        let rail_showing = track.rail_showing;
 
         // Only the child on screen hears about the event. The parked one is not merely invisible —
         // it is somewhere the pointer can never be, so forwarding to it would be feeding it
@@ -251,8 +263,7 @@ where
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        let progress = tree.state.downcast_ref::<Track>().progress.value();
-        let rail_showing = self.showing_rail(progress);
+        let rail_showing = tree.state.downcast_ref::<Track>().rail_showing;
         self.parts()
             .into_iter()
             .zip(&tree.children)
@@ -288,8 +299,7 @@ where
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let progress = tree.state.downcast_ref::<Track>().progress.value();
-        let rail_showing = self.showing_rail(progress);
+        let rail_showing = tree.state.downcast_ref::<Track>().rail_showing;
 
         for (index, ((child, child_tree), child_layout)) in self
             .parts()
@@ -361,8 +371,7 @@ where
         viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, M, Theme, Renderer>> {
-        let progress = tree.state.downcast_ref::<Track>().progress.value();
-        let rail_showing = !self.open && progress <= CLOSED;
+        let rail_showing = tree.state.downcast_ref::<Track>().rail_showing;
         let index = usize::from(rail_showing);
         let child_layout = layout.children().nth(index)?;
         let child = if rail_showing {
@@ -518,27 +527,28 @@ mod tests {
     /// The sidebar's collapsed strip: `sidebar.rs`'s `STRIP_WIDTH`, its surface plus a 1 px border.
     const RAIL_WIDTH: f32 = 32.0;
 
-    /// Near the end of a slide `full · p` plus the handle is narrower than the rail, and the
-    /// `emphasized` tail lingers there for well over a frame. Laid out that narrow, the content
-    /// beside the drawer creeps left of the rail's edge and jumps back when the rail takes over;
-    /// laid out any wider than the rail, it jumps the other way. The same holds for an opening's
-    /// first frame, and above the floor the slide is untouched.
+    /// An opening panel starts out narrower than the rail it replaces, and `emphasized` lingers
+    /// there. Laid out that narrow, the content beside the drawer would dip left of the rail's edge
+    /// before moving out; so the panel is held at the rail's width until it outgrows it. Above that
+    /// the slide is untouched, and a panel narrower than the floor is never stretched past itself.
     #[test]
     fn a_sliding_drawer_is_never_narrower_than_its_rail() {
-        const PANEL: f32 = 300.0;
         let handle = crate::ui::material::resize_handle::WIDTH;
         let renderer = crate::ui::material::test_support::renderer();
         let limits = layout::Limits::new(Size::ZERO, Size::new(1000.0, 100.0));
+        let floor = RAIL_WIDTH - handle;
 
-        for (open, progress, expected) in [
-            (false, 0.05, RAIL_WIDTH),
-            (false, 0.02, RAIL_WIDTH),
-            (false, CLOSED * 2.0, RAIL_WIDTH),
-            (true, 0.0, RAIL_WIDTH),
-            (false, 0.5, PANEL * 0.5 + handle),
+        // (open, progress, panel width, the panel's revealed width)
+        for (open, progress, panel_width, revealed) in [
+            (true, 0.0, 300.0, floor),
+            (true, 0.05, 300.0, floor),
+            (false, 0.125, 300.0, 37.5),
+            (false, 0.5, 300.0, 150.0),
+            (true, 1.0, 10.0, 10.0),
         ] {
+            let expected = revealed + handle;
             let mut drawer: Element<'_, ()> = NavigationDrawer::new(
-                Space::new().width(PANEL).height(100.0),
+                Space::new().width(panel_width).height(100.0),
                 Space::new().width(RAIL_WIDTH).height(100.0),
             )
             .open(open)
@@ -561,9 +571,60 @@ mod tests {
                 .expect("the handle's node")
                 .bounds();
             assert_eq!(
-                edge.x,
-                panel.x + panel.width,
-                "open {open} at progress {progress}: the handle is off the panel's edge"
+                (edge.x, panel.x + panel.width),
+                (revealed, revealed),
+                "open {open} at progress {progress}: the handle and the panel's right edge"
+            );
+        }
+    }
+
+    /// Once a closing panel is no wider than its rail there is nothing left to slide, so the rail
+    /// takes over there rather than at `CLOSED`: on `emphasized` the tail between the two lasts
+    /// ~150 ms, a frozen sliver of panel. An opening drawer never swaps back early, and a drawer
+    /// with nothing to floor at (the settings view's empty rail) still swaps at `CLOSED`.
+    #[test]
+    fn a_closing_drawer_swaps_to_its_rail_once_it_is_no_wider() {
+        const PANEL: f32 = 300.0;
+        let handle = crate::ui::material::resize_handle::WIDTH;
+        let renderer = crate::ui::material::test_support::renderer();
+        let limits = layout::Limits::new(Size::ZERO, Size::new(1000.0, 100.0));
+
+        // (open, progress, rail width, with a handle, rail on screen)
+        for (open, progress, rail, with_handle, expected) in [
+            (false, 0.05, RAIL_WIDTH, true, true),
+            (false, 0.085, RAIL_WIDTH, true, true),
+            (false, 0.1, RAIL_WIDTH, true, false),
+            (true, 0.05, RAIL_WIDTH, true, false),
+            (false, 0.01, 0.0, false, false),
+            (false, CLOSED, 0.0, false, true),
+        ] {
+            let mut drawer = NavigationDrawer::new(
+                Space::new().width(PANEL).height(100.0),
+                Space::new().width(rail).height(100.0),
+            )
+            .open(open);
+            if with_handle {
+                drawer = drawer.handle(Space::new().width(handle));
+            }
+            let mut drawer: Element<'_, ()> = drawer.into();
+            let mut tree = Tree::new(drawer.as_widget());
+            tree.state.downcast_mut::<Track>().progress = Progress::new(progress);
+            let node = drawer.as_widget_mut().layout(&mut tree, &renderer, &limits);
+
+            let rail_node = Layout::new(&node)
+                .children()
+                .nth(1)
+                .expect("the rail's node")
+                .bounds();
+            assert_eq!(
+                rail_node.x == 0.0,
+                expected,
+                "open {open} at progress {progress} beside a {rail} rail: the rail on screen"
+            );
+            assert_eq!(
+                tree.state.downcast_ref::<Track>().rail_showing,
+                expected,
+                "open {open} at progress {progress} beside a {rail} rail: what draw and update read"
             );
         }
     }

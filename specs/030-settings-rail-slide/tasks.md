@@ -52,7 +52,7 @@ Rust workspace. Paths are repository-relative. `section_list.rs` is
 
 The sidebar's curve (US1 acceptance scenario 6, FR-003's sidebar half) needs nothing the rail's
 foundation builds, and ships first as milestone M1. So Phase 2 is that half of US1, and the rail's
-foundation follows as Phase 3. Task ids stay in execution order.
+foundation follows as Phase 3. Task ids stay in execution order, except T045 and T046, added to M1 in review.
 
 ---
 
@@ -76,6 +76,7 @@ at 25% of `MEDIUM_4` in linear time its progress is the emphasized curve's value
 - [X] T003 [US1] [U1] Write a failing unit test `the_sidebar_slides_on_the_emphasized_curve` in `crates/micold-client/src/ui/material/navigation_drawer.rs`'s test module: build a drawer closed, open it, and drive its `Track`'s `Progress` with `on_frame` at instants 0, +64 ms and +84 ms. `Progress` steps one `FRAME` (16 ms) on a track's first frame and caps later gaps at `MAX_STEP` (64 ms) (`crates/micold-client/src/ui/cdk/motion.rs`), so those instants are 25% of `MEDIUM_4` in linear time. Drive a linear twin `Progress::new(..)` with the same instants beside it. Assert the twin reads 0.25 ± 0.001, and the drawer's value is **not** within `0.25 ± 0.05` and is within 0.01 of 0.607, the value of `cubic-bezier(0.2, 0, 0, 1)` at x = 0.25 (contract §2 *Curve*; `cdk::motion::ease` is private, so the reference is a named constant in the test, with a comment saying it was solved for x = 0.25 by bisection). Observe it fail on the linear track
 - [X] T004 [US1] [U1] Build the drawer's track as `Progress::new(..).easing(EMPHASIZED.x1, EMPHASIZED.y1, EMPHASIZED.x2, EMPHASIZED.y2)` in `NavigationDrawer::state` in `crates/micold-client/src/ui/material/navigation_drawer.rs` (`Progress::new` at line 113), importing `micold_core::tokens::motion::EMPHASIZED`, to make T003 pass. The strip swap in `crates/micold-client/src/ui/mod.rs` is untouched (plan *The sidebar curve*)
 - [X] T045 [US1] [U23] Added in M1 review round 1 (D20): `emphasized` lingers where `full · p` plus the handle is narrower than the 32 px rail, so the main pane crept left of the rail's edge for ~150 ms and jumped back at the swap (linear passed through in ~33 ms). Write a failing unit test `a_sliding_drawer_is_never_narrower_than_its_rail` in `navigation_drawer.rs`'s test module (panel 300 wide, rail 32, `resize_handle::WIDTH` handle; closing at progress 0.05, 0.02 and `2 · CLOSED`, and opening at 0, the node is exactly 32 wide; closing at 0.5 it is 156; the handle sits at the panel's right edge throughout), then floor the revealed width in `NavigationDrawer::layout` at the rail's width less the handle's, clamped to the panel's
+- [X] T046 [US1] [U24] Added in M1 review round 3 (D21): with the floor, a closing sidebar's width stopped at 32 px ~150 ms before the rail swapped in at `CLOSED`, a still sliver of panel. Write a failing unit test `a_closing_drawer_swaps_to_its_rail_once_it_is_no_wider` in `navigation_drawer.rs`'s test module (panel 300; rail 32 with a handle: closing at 0.05 and 0.085 the rail is on screen, closing at 0.1 and opening at 0.05 it is not; rail 0 without a handle: closing at 0.01 it is not, at `CLOSED` it is; each read from the rail's laid-out x and from the drawer state's recorded decision), then swap in `NavigationDrawer::layout` once a closing panel's `full · p` is no wider than the floor, record the decision in `Track`, and have `update`, `draw`, `mouse_interaction` and `overlay` read it. U23's closing cases below the floor now show the rail, so U23 is re-cut to opening cases, a case above the floor, and a panel narrower than the floor
 
 **Checkpoint**: `mise run gate` green. Hiding and showing the worktree sidebar eases in and out.
 This is milestone M1.
@@ -190,7 +191,7 @@ the rail mid-slide; nothing outside a row's bounds is hovered or pressed (quicks
 ### Phase order
 
 1. **Setup (T001–T002)**: no dependencies.
-2. **US1 part A, the sidebar curve (T003–T004, T045)**: after Setup; T045 after T004. Independent of everything after it.
+2. **US1 part A, the sidebar curve (T003–T004, T045–T046)**: after Setup; T045 after T004, T046 after T045. Independent of everything after it.
 3. **Foundational (T005–T013)**: after Setup. Blocks Phases 4 and 5.
 4. **US1 part B, the rail slide (T014–T030)**: after Foundational. T019 needs T004.
 5. **US2 (T031–T041)**: after T025, since its tests exercise `RowSlide`'s forms.
@@ -198,7 +199,7 @@ the rail mid-slide; nothing outside a row's bounds is hovered or pressed (quicks
 
 ### Within phases
 
-- Every test task comes before the implementation task that names it: T003 → T004; T045 (its test, then its floor); T005 → T006;
+- Every test task comes before the implementation task that names it: T003 → T004; T045 (its test, then its floor); T046 (its test, then its swap); T005 → T006;
   T007 → T008; T009 → T010; T014–T019 → T020–T021; T022–T024 → T025; T031–T037 → T038–T041.
 - `section_list.rs` is touched by T005–T010, T019, T020, T024–T026, T030, T038–T041, so those run
   in sequence. `settings_rail_motion.rs` is touched by T013, T014–T018, T022, T023 and T031–T037,
@@ -253,12 +254,14 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M1 — The sidebar eases
 
-- **Tasks**: T001–T004, T045
+- **Tasks**: T001–T004, T045–T046
 - **Deliverable**: Hiding and showing the worktree sidebar's panel moves on the `emphasized` curve
-  over `medium_4` instead of at a constant speed, never laid out narrower than its rail.
+  over `medium_4` instead of at a constant speed, never laid out narrower than its rail, and hands
+  over to the rail as soon as it is no wider.
 - **Satisfies**: US1 acceptance scenario 6 (sidebar half); FR-003 (sidebar half)
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-client --lib navigation_drawer`
-  (`the_sidebar_slides_on_the_emphasized_curve`, `a_sliding_drawer_is_never_narrower_than_its_rail`);
+  (`the_sidebar_slides_on_the_emphasized_curve`, `a_sliding_drawer_is_never_narrower_than_its_rail`,
+  `a_closing_drawer_swaps_to_its_rail_once_it_is_no_wider`);
   `mise run gate`
 - **Depends on**: —
 
