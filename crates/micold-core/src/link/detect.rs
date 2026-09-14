@@ -17,7 +17,7 @@ pub fn detect(text: &str) -> Vec<Range<usize>> {
             continue;
         };
         let body = start + scheme.chars().count();
-        let mut end = body + chars[body..].iter().take_while(|c| !c.is_whitespace()).count();
+        let mut end = scan_end(&chars, body);
         while end > body && TRAILING_PUNCTUATION.contains(&chars[end - 1]) {
             end -= 1;
         }
@@ -25,6 +25,27 @@ pub fn detect(text: &str) -> Vec<Range<usize>> {
         start = end;
     }
     found
+}
+
+/// Where the characters of an address starting at `from` end: at whitespace, or at a closing
+/// bracket that no opener inside the address balances (research R3 rule 4).
+fn scan_end(chars: &[char], from: usize) -> usize {
+    let mut open = Vec::new();
+    for (index, &c) in chars.iter().enumerate().skip(from) {
+        match c {
+            c if c.is_whitespace() => return index,
+            '(' | '[' => open.push(c),
+            ')' | ']' => {
+                let opener = if c == ')' { '(' } else { '[' };
+                if open.last() != Some(&opener) {
+                    return index;
+                }
+                open.pop();
+            }
+            _ => {}
+        }
+    }
+    chars.len()
 }
 
 fn starts_with(chars: &[char], prefix: &str) -> bool {
@@ -73,6 +94,20 @@ mod tests {
             found("Read https://example.com/a_(b)."),
             ["https://example.com/a_(b)"],
             "a closing bracket that closes one opened inside the address is part of it"
+        );
+    }
+
+    #[test]
+    fn stops_before_an_unbalanced_closing_bracket() {
+        assert_eq!(
+            found("(https://example.com/a)"),
+            ["https://example.com/a"],
+            "a closing bracket with no opener inside the address belongs to the text around it"
+        );
+        assert_eq!(
+            found("(https://example.com/a_(b))"),
+            ["https://example.com/a_(b)"],
+            "only the unbalanced closer is excluded, not the balanced one before it"
         );
     }
 }

@@ -43,3 +43,13 @@
 - refactor: none needed
 - commit: `test(031): pin a balanced closing bracket inside an address (U3)`
 - notes: green on arrival; it guards the next cycle (U4), whose bracket rule must not trim a balanced closer
+
+## Cycle 4: U4 stops before an unbalanced closing bracket
+
+- test: `crates/micold-core/src/link/detect.rs::tests::stops_before_an_unbalanced_closing_bracket` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::stops_before_an_unbalanced_closing_bracket -- --exact`
+  -> `left: ["https://example.com/a)"]` / `right: ["https://example.com/a"]` (1 failed)
+- green: `scan_end` tracks `(` and `[` openers and ends the address at a closer with no matching
+  opener. Suite -> 1062 passed, 0 failed (U3 still green)
+- refactor: none needed; the scan already moved into its own function in the green step
+- commit: `feat(031): end an address before an unbalanced closing bracket (U4)`
