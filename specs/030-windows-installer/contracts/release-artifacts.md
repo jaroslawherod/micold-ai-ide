@@ -59,7 +59,7 @@ notice. It is at most 5 lines:
 | Job / step | Runner | Proves |
 |---|---|---|
 | `test` matrix, Windows leg: `cargo test -p micold-daemon --all-targets` | `windows-latest` | FR-020 to FR-025 (contracts/windows-endpoint.md) |
-| `test` matrix, Windows leg: "Package, install and launch the Windows installer" | `windows-latest` | FR-018 / SC-007 for x64 |
+| `test` matrix, Windows leg: "Package the Windows installer", then "Install and launch the Windows installer" | `windows-latest` | FR-018 / SC-007 for x64 |
 | `windows-arm64-package` (new job, listed in `ci-complete.needs`) | `windows-11-arm` | FR-015 / FR-018 for ARM64 |
 
 `ci_gate_covers_every_job.rs` enforces the `ci-complete.needs` listing.

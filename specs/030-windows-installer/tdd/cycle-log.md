@@ -493,3 +493,11 @@ failed before the implementation.
 - green: steps 1-5 passed on both legs, so A1, A4 and A13 are `DONE`: x64 `Built: /d/a/micold-ai-ide/micold-ai-ide/dist/micold-ai-ide-0.14.0-x64-setup.exe` (A13); the Inno log's `Installation process succeeded.`, both exes and `Micold AI IDE.lnk` created, `installed 0.14.0 to /c/Users/runneradmin/AppData/Local/Programs/Micold AI IDE` (A1, A4); `== launched the client, pid 3696` (x64) and `pid 4164` (arm64).
 - notes: the red is the one planned for. `crates/micold-core/src/endpoint.rs`'s Windows `resolve()` is still a stub, so the client cannot reach the daemon (T016-T021). A2 is not reached: the conhost check is step 7, after the pipe. T033/T038/T039/T040 stay open until A2 and A3 are green. No code change in this cycle.
 - commit: see the follow-up commit
+
+## Cycle 58: the install smoke is non-blocking until the endpoint lands
+
+- test: none changed. `scripts/windows-install-smoke.sh` and its assertions are untouched.
+- red: n/a. A3 stays `RED` per cycle 57.
+- green: n/a.
+- notes: the user chose to merge PR #314 with A3 still red. `ci-complete` is required and `--admin` cannot bypass it, so both "Install and launch" steps in `.github/workflows/ci.yml` carry `continue-on-error: true`. The x64 build was split into its own blocking step, "Package the Windows installer", so a broken setup exe still fails CI. T040 now says to remove both `continue-on-error`s. This is a deliberate, user-approved gate relaxation, not a green.
+- commit: see the follow-up commit

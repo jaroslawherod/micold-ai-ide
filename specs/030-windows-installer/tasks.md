@@ -226,7 +226,7 @@ description: "Task list for feature 030: Windows installation package"
   - add it to `ci-complete.needs`;
   - add an env `WINARM: ${{ needs.windows-arm64-package.result }}` and a `check windows-arm64 "$WINARM"` line;
   - confirm `crates/micold-core/tests/ci_gate_covers_every_job.rs` passes.
-- [ ] T040 [US1] [A1] [A2] [A3] [A4] [A13] Push and observe both Windows packaging legs green. If a leg fails, fix `.iss`, the scripts, or the Phase 2 code; do not weaken smoke assertions. Record the observed pipe-appearance time on each architecture in `specs/030-windows-installer/research.md`, R14, as evidence.
+- [ ] T040 [US1] [A1] [A2] [A3] [A4] [A13] Push and observe both Windows packaging legs green. If a leg fails, fix `.iss`, the scripts, or the Phase 2 code; do not weaken smoke assertions. Remove the `continue-on-error: true` that PR #314 put on both "Install and launch" steps in `.github/workflows/ci.yml`, so the smoke gates `ci-complete` again. Record the observed pipe-appearance time on each architecture in `specs/030-windows-installer/research.md`, R14, as evidence.
 - [X] T041 [P] [US1] Docs, FR-017 install part and FR-010: create `docs/user-guide/install-windows.md`, covering:
   - which file to download, with `{{MICOLD_VERSION}}`/`{{MICOLD_TAG}}` download links for `micold-ai-ide-{{MICOLD_VERSION}}-x64-setup.exe` and `-arm64-setup.exe`, and how to tell x64 from ARM64 (Settings → System → About → System type);
   - the SmartScreen "Windows protected your PC" dialog, then **More info**, then **Run anyway**, and why it appears (unsigned);
