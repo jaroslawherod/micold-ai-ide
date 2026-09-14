@@ -40,3 +40,30 @@ updates:
         exclude-patterns:
           - "iced"
           - "iced_*"
+
+  # The docs site's rendered-page checks (feature 028); `pages.yml` installs them with `npm ci`.
+  # Playwright and its axe integration move together, so they share one PR.
+  - package-ecosystem: npm
+    directory: /site/checks
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      site-checks:
+        patterns:
+          - "*"
+
+  # The sandbox image's base. Its tag names a Node major on purpose — the current LTS — so a major bump
+  # (which would be a non-LTS odd release half the time) is a deliberate change, not a weekly one.
+  - package-ecosystem: docker
+    directory: /packaging/sandbox
+    schedule:
+      interval: weekly
+    # `deps`, like the crates: the base is part of the image that ships.
+    commit-message:
+      prefix: deps
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
