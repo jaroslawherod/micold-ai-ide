@@ -1,10 +1,14 @@
 //! Read-only application identity shown in the About dialog.
 //!
-//! Version, license, and description come from Cargo package metadata at **compile
-//! time** (`env!`), so the version can never drift from the packaged release
-//! (FR-007, SC-003) and nothing is read from disk or network at runtime
-//! (Constitution Principle IV). The display name is a constant because Cargo package
+//! Version, license, and description are fixed at **compile time**, so the version can never
+//! drift from the packaged release (FR-007, SC-003) and nothing is read from disk or network at
+//! runtime (Constitution Principle IV). The display name is a constant because Cargo package
 //! names cannot contain spaces (FR-006).
+//!
+//! **This module does not read them.** `env!` expands in the crate where it is *written*, so an
+//! `env!("CARGO_PKG_DESCRIPTION")` here reads this library's manifest whichever crate calls it —
+//! which is how the About dialog came to describe `micold-core` to its users (001 BUG-001). The
+//! application resolves its own identity, from its own manifest, through [`AppMetadata::resolve`].
 
 /// The application's display name. Exactly this string per FR-006.
 pub const APP_NAME: &str = "Micold AI IDE";
@@ -22,28 +26,20 @@ const FALLBACK: &str = "unknown";
 pub struct AppMetadata {
     /// Application name — always [`APP_NAME`].
     pub name: &'static str,
-    /// Version string (from `CARGO_PKG_VERSION`).
+    /// Version string (the application's `CARGO_PKG_VERSION`).
     pub version: String,
-    /// OSI-approved license name (from `CARGO_PKG_LICENSE`).
+    /// OSI-approved license name (the application's `CARGO_PKG_LICENSE`).
     pub license: String,
-    /// One-line description (from `CARGO_PKG_DESCRIPTION`).
+    /// One-line description of the application, written for its users (FR-009).
     pub description: String,
 }
 
 impl AppMetadata {
-    /// Resolve identity from Cargo package metadata baked in at compile time.
-    pub fn from_env() -> Self {
-        Self::resolve(
-            env!("CARGO_PKG_VERSION"),
-            env!("CARGO_PKG_LICENSE"),
-            env!("CARGO_PKG_DESCRIPTION"),
-        )
-    }
-
     /// Resolve identity from raw metadata strings, applying the empty → fallback rule.
     ///
-    /// Kept separate from [`from_env`](Self::from_env) so the fallback behavior is a pure
-    /// function that can be unit-tested with arbitrary inputs (FR-016).
+    /// The only constructor. The caller passes its own compile-time values, so the `env!`s expand
+    /// against the application's manifest rather than this library's (BUG-001), and the fallback
+    /// behaviour stays a pure function that can be unit-tested with arbitrary inputs (FR-016).
     pub fn resolve(version: &str, license: &str, description: &str) -> Self {
         Self {
             name: APP_NAME,

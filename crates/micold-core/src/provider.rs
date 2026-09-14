@@ -168,6 +168,17 @@ pub trait AiCliProvider {
     /// the session (FR-017).
     fn read_title(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> Option<String>;
 
+    /// The conversation name carried by `title`, the (glyph-stripped) terminal title this CLI set
+    /// while running in `cwd` — or `None` when the title names no conversation.
+    ///
+    /// The daemon learns a session's name from the OSC-0 title, so it has to know which titles are
+    /// not names (feature 029, FR-004): recorded, a CLI's own product name would label every
+    /// never-named session with it, and name recovery would then skip that session as already
+    /// named. Each CLI decorates differently. Observed 2026-09-13: `claude` 2.1.270 starts as
+    /// `"✳ Claude Code"` and `copilot` as `"GitHub Copilot"`, then each shows the bare name; `pi`
+    /// shows `π - <folder>` until the conversation has a name and `π - <name> - <folder>` after.
+    fn name_in_terminal_title(&self, title: &str, cwd: &Path) -> Option<String>;
+
     // --- durable close/remove suppression ---
 
     /// Record that the user closed or removed this session (FR-015): write an empty marker in the
@@ -418,6 +429,10 @@ impl AiCliProvider for ClaudeProvider {
         self.parse_title(&contents)
     }
 
+    fn name_in_terminal_title(&self, title: &str, _cwd: &Path) -> Option<String> {
+        (title != "Claude Code").then(|| title.to_string())
+    }
+
     fn mark_archived(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> io::Result<()> {
         let path = self.archived_marker_path(config_dir, cwd, session_id);
         if let Some(parent) = path.parent() {
@@ -646,6 +661,10 @@ impl AiCliProvider for CopilotProvider {
         Self::read_yaml_scalar(&contents, "name")
     }
 
+    fn name_in_terminal_title(&self, title: &str, _cwd: &Path) -> Option<String> {
+        (title != "GitHub Copilot").then(|| title.to_string())
+    }
+
     fn mark_archived(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> io::Result<()> {
         let path = self.archived_marker_path(config_dir, session_id);
         if let Some(parent) = path.parent() {
@@ -848,6 +867,17 @@ impl AiCliProvider for PiProvider {
 
     fn command(&self) -> &'static str {
         "pi"
+    }
+
+    fn name_in_terminal_title(&self, title: &str, cwd: &Path) -> Option<String> {
+        // `π - <name> - <folder>`; the unnamed `π - <folder>` leaves no ` - ` to strip. A title of
+        // any other shape — an extension's `setTitle`, a `piConfigName` build — names nothing.
+        let folder = cwd.file_name()?.to_str()?;
+        let name = title
+            .strip_prefix("π - ")?
+            .strip_suffix(folder)?
+            .strip_suffix(" - ")?;
+        (!name.is_empty()).then(|| name.to_string())
     }
 
     fn is_available(&self) -> bool {
@@ -1147,6 +1177,10 @@ impl AiCliProvider for FakeAiCliProvider {
         let inner = self.inner.borrow();
         let contents = inner.conversations.get(&(cwd.to_path_buf(), session_id))?;
         inner.titles.get(contents).cloned()
+    }
+
+    fn name_in_terminal_title(&self, title: &str, _cwd: &Path) -> Option<String> {
+        (title != "Fake AI CLI").then(|| title.to_string())
     }
 
     fn mark_archived(&self, _config_dir: &Path, cwd: &Path, session_id: Uuid) -> io::Result<()> {

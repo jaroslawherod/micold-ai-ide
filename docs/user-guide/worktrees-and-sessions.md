@@ -491,6 +491,32 @@ Right-click a worktree in the sidebar to open its context menu:
 Session labels come from the AI CLI itself (its own session title); until a title is available a
 placeholder is shown.
 
+### The name on a session row
+
+You never type a session's name. It is the AI CLI's own name for the conversation, and the row
+picks it up as soon as the CLI has one — usually a few exchanges in, once there is enough of a
+conversation to name.
+
+**The name stays.** Once a session has been named, that name is the row's, whether or not anything
+is running: after you close the app, after the background service restarts, after a reboot. You do
+not have to open a session to find out which one it is — the list you come back to reads the same
+as the list you left, so you can pick the session you want by its name alone.
+
+**"New session" means the conversation has no name yet**, not that the app hasn't finished loading.
+A session you created and never talked to reads "New session" for as long as that is true. It does
+not wait around unnamed, though: with no conversation in it there is nothing to come back to, so the
+next time the project is opened while nothing is running it, the row is tidied away. A session that
+was named keeps its row, even if the CLI later clears out that conversation's records.
+
+**The newest name wins.** If the conversation moves on and the CLI re-titles it, the row follows,
+and that newer name is the one that comes back next time. Names are per session: re-titling one
+never touches another.
+
+**Sessions from before this was true get their names back.** If you have sessions that were showing
+"New session" even though you had named conversations in them, opening the project is enough — each
+one is looked up in its own CLI's records, once, and keeps the name it finds. A session whose
+conversation the CLI no longer has keeps the name it was already showing; nothing takes a name away.
+
 ## Choosing which AI CLI a session runs
 
 A session runs one AI coding CLI — Claude Code, GitHub Copilot or Pi Coding Agent — and which one is
@@ -503,10 +529,14 @@ decided when the session is created.
 - **If only one CLI is installed, the chevron is not there at all.** There is nothing to choose
   between, so the affordance is the plain button it always was.
 - Only CLIs you actually have installed are ever offered.
+- **Installed means installed where sessions run.** With the session service directly on this
+  computer, that is your `PATH`. With it [in a container](./sandboxed-daemon.md), it is the
+  container's image, and what is on your own `PATH` makes no difference. The image this app
+  publishes, and one built from a checkout, ships all three.
 - **If your default CLI is not installed, pressing start offers the ones that are** instead of
   trying to run something that isn't there. Nothing is created until you pick — your default stays
-  as you set it, and the list is checked against your `PATH` at that moment, so a CLI you installed
-  since opening the app is in it.
+  as you set it, and the list is checked at that moment, so a CLI you installed since opening the
+  app is in it.
 
 **The choice is fixed for the session's lifetime.** There is no way to switch a running session to
 another CLI, and nothing switches it for you — not changing your default, not restarting the app,
@@ -550,8 +580,9 @@ Two things worth knowing about discovered sessions:
 ### Sessions on Pi
 
 Pick **Pi Coding Agent** from the chevron beside the start-session action, or set it as your
-[Default AI CLI](./settings.md#default-ai-cli). It is offered once `pi` is on your `PATH`; the
-sidebar and the terminal bar label its sessions `pi`.
+[Default AI CLI](./settings.md#default-ai-cli). It is offered once `pi` is installed where sessions
+run: on your `PATH`, or in the container's image when the session service runs in one. The sidebar
+and the terminal bar label its sessions `pi`.
 
 A few things about a Pi session are worth knowing:
 
@@ -584,8 +615,26 @@ guess; if you do run the same conversation in two places at once, both write to 
 - It is never offered — not in Settings, not in the per-session list.
 - Sessions that already run it are **still listed and still labelled with it**. They do not
   disappear and they are not relabelled as something else.
+- **Settings tells you before you start anything.** Under
+  [Default AI CLI](./settings.md#default-ai-cli), and under *Image reference* when sessions run in a
+  container, a note names each CLI missing from where sessions run.
 - Starting one tells you which CLI is missing, by name, and starts nothing. You get a clear failure
-  rather than a terminal that never comes to life.
+  rather than a terminal that never comes to life. The session's pane and an error banner say what
+  to change, and that depends on where sessions run and on what you were starting:
+
+  | | On this computer | In a container |
+  |---|---|---|
+  | **A new session** | Install it, or start this session on another AI CLI. | Choose an image that provides it, or start this session on another AI CLI. |
+  | **Resuming a session** | Install it, then restart this session. | Choose an image that provides it, then restart this session. |
+
+  A resumed session is never pointed at another CLI: its conversation lives in that CLI's own
+  store, so it can only continue there.
+- **Restart fails the same way until that is fixed.** So the pane does not suggest *restart* for
+  this failure, as it does after a crash loop. Once the CLI is installed, or the service runs from an
+  image that has it, press **restart** in the bar. The service has to restart before a newly chosen
+  image is used, as described under [Session service](./settings.md#session-service).
+- The banner appears once per failure. Pressing **restart** again with nothing changed fails again
+  without a second banner, and the bar's `failed` is what remains.
 
 ### Reopening where you left off
 
@@ -656,8 +705,9 @@ You keep control of the panel:
   keeps the sessions; reopening the project restores them and resumes the same conversations.
   **Switching** to another project does not stop them — see below.
 
-> Requires the session's CLI — `claude`, `copilot` or `pi` — on your `PATH`. If it is missing, starting
-> the session reports which one could not be found.
+> Requires the session's CLI — `claude`, `copilot` or `pi` — where sessions run: on your `PATH`, or in
+> the container's image. If it is missing, starting the session reports which one could not be found
+> — see [When a CLI isn't installed](#when-a-cli-isnt-installed).
 
 ## Switching to a regular terminal
 

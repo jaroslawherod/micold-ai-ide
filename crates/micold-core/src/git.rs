@@ -137,7 +137,9 @@ fn run_git(repo: &Path, args: &[&str]) -> io::Result<String> {
 /// (a symlinked checkout, a symlinked home, `/tmp` on macOS) a raw `==` never matches. Falls
 /// back to a literal comparison when either side cannot be canonicalized — the "already gone"
 /// case, where the path no longer exists on disk. Mirrors [`GitCli::is_repo_root`].
-fn same_path(a: &Path, b: &Path) -> bool {
+///
+/// The daemon matches a worktree named by a client against git's records with it too (016 BUG-004).
+pub fn same_path(a: &Path, b: &Path) -> bool {
     match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
         (Ok(a), Ok(b)) => a == b,
         _ => a == b,

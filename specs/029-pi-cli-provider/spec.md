@@ -4,7 +4,14 @@
 
 **Created**: 2026-09-03
 
-**Status**: Draft
+**Status**: Closed 2026-09-14 — implemented and shipped in PR #300 (merged 2026-09-13); all 61 tasks
+in [tasks.md](./tasks.md) are done. Clarified 2026-09-03 and 2026-09-12 (10 questions, see
+[Clarifications](#clarifications)). Quickstart §B, §C and §D are recorded in [evidence/](./evidence/);
+§B and §D ran in the application on Xvfb with lavapipe, not on a real GPU. They found two defects,
+both fixed and re-run in the application: a running Pi row showed Pi's terminal title instead of its
+name (PR #320), and resuming a Pi session into an image without `pi` gave advice that could not work
+(PR #333, re-run in PR #335). Still open, and Pi's own output: every new Pi session opens with a
+`No project session found` warning.
 
 **Input**: User description: "add support for https://pi.dev/"
 

@@ -47,11 +47,15 @@ async fn a_client_cold_starts_a_daemon_and_it_outlives_the_client() {
     // SAFETY: this test binary runs these env writes before any spawn; `#[cfg(unix)]` + single test.
     std::env::set_var(DAEMON_BIN_ENV, DAEMON_BIN);
     std::env::set_var("XDG_RUNTIME_DIR", dir.path());
+    // macOS keys the endpoint on `$HOME` and ignores `XDG_RUNTIME_DIR`; without this the test finds
+    // whatever daemon the user (or an earlier CI step) left at `~/.micold/run/d.sock`.
+    std::env::set_var("HOME", dir.path());
     // Keep the spawned daemon's logs out of the user's real data dir.
     std::env::set_var("MICOLD_LOG", "warn");
 
     // Derive the endpoint through the shared resolver *after* setting XDG_RUNTIME_DIR, so it matches
-    // what the spawned daemon computes ($XDG_RUNTIME_DIR/micold/daemon.sock on Linux).
+    // what the spawned daemon computes ($XDG_RUNTIME_DIR/micold/daemon.sock on Linux,
+    // $HOME/.micold/run/d.sock on macOS).
     let endpoint = micold_core::endpoint::resolve().expect("resolve isolated endpoint");
 
     // Precondition: nothing is listening. This is a true cold start.

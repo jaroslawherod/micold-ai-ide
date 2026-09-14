@@ -254,3 +254,18 @@ Each story adds value without breaking the previous.
 
 - [X] T034 Implement keyboard focus moving into the About dialog (onto Close) when it opens, and back to the main window when it closes, in `crates/micold-client/src/app.rs` (`AboutOpened`/`AboutClosed` handlers) — or, if iced 0.13.1's focus chain genuinely cannot focus a `button`, document the concrete technical constraint and re-scope FR-014 accordingly per FR-014 (missing). Confirmed via `iced_widget` 0.13.4 source that `button` has no focusable operation; re-scoped FR-014 in spec.md (+ data-model.md, contracts/ui-contract.md, research.md) rather than implementing a workaround, per user decision.
 - [X] T035 Remove the dead `TOOLBAR_ENTRIES`/`toolbar_entries()` helper in `crates/micold-client/src/app.rs` and the `toolbar_exposes_only_help` test in `crates/micold-client/tests/toolbar.rs` that only asserts the dead constant against itself and no longer exercises the real (overflow-menu) toolbar, per the spec's 2026-07-20 alignment note per FR-002/FR-003 (contradicts)
+
+## Phase 8: BUG-001 — About describes a library, not the application
+
+**Goal**: The About dialog's description is the application's user-facing copy, resolved in the
+client, so no crate's maintainer-facing `description` can reach it again (FR-009, contract C5).
+
+- [X] T036 Failing test first: `crates/micold-client/tests/about_description.rs` opens the About dialog through the real reducer and reads what `ui::view` paints — the description must equal the first sentence of the client's `extended-description`, and must equal neither `micold-core`'s nor `micold-client`'s `description`. A client-side test, because from inside `micold-core` the `env!` looks right (FR-009, BUG-001)
+- [X] T037 Remove `AppMetadata::from_env()` from `crates/micold-core/src/metadata.rs`; resolve the identity in the client (`ui::about::metadata()`, with an `APP_DESCRIPTION` constant) so every `env!` expands against the application's manifest; the toolbar takes `APP_NAME` directly. Move the version/license coverage the removed core tests carried into T036's file (FR-007, FR-008, FR-009)
+- [X] T038 Run the workspace gate and show the dialog on a rendered frame; record both here
+
+**Red record (T036)** — 2026-09-13, before T037: `about_paints_the_applications_own_description` failed with the dialog painting "Render-free shared domain model for Micold AI IDE (state, persistence, session/worktree logic, wire protocol)."; `about_does_not_paint_a_library_crates_description` failed naming `micold-core`.
+
+**Pass record (T038)** — 2026-09-13: `about_description` 3/3 and `micold-core --test metadata` 3/3 pass after T037. On a rendered frame (Xvfb + lavapipe, pinned before/after builds), the dialog painted `micold-core`'s "Render-free shared domain model…" before the fix. After it, the dialog paints "A local-first, AI-assisted desktop IDE for managing git worktrees and AI coding sessions in an embedded terminal." The record is `evidence/T038-about-description.md`; the comparison image is `evidence/BUG-001-about-before-after.png`. The workspace gate was run on the branch rebased onto main: `cargo fmt --all -- --check` is clean; `cargo clippy --workspace --all-targets -- -D warnings` is clean; `cargo test --workspace` passes 3041 tests with 0 failures and 6 ignored; `scripts/tests/*.test.sh` pass 14/14.
+
+**Bugfix**: 2026-09-13 — BUG-001 added Phase 8 (T036–T038). **No task is reopened.** T017 read Cargo metadata with `env!` in a single-crate tree, where that was correct; the 010/021 split moved the manifest out from under it.

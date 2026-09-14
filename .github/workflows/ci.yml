@@ -10,6 +10,15 @@ on:
     # push reclassifies anyway, and a full run someone asked for costs nothing to keep.
     types: [opened, synchronize, reopened, labeled]
 
+# One live run per pull request. `labeled` fires once per label, so a PR opened with labels already
+# attached -- every Dependabot PR -- started a full pipeline per label for the same commit and queued
+# the runners behind five copies. A newer run supersedes an older one safely: its payload carries
+# every label on the PR at that moment, `full-ci` included. Pushes to main key on the run id, so they
+# never cancel each other.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
   # See the matching note in release.yml. The shared target directory in .cargo/config.toml is a
@@ -312,10 +321,34 @@ jobs:
             --test features_worktree \
             --test features_worktree_form \
             --test anatomy_call_sites
+      # Feature 010's T144 (BUG-008). The daemon's PTY tests are Unix-only and run in the Linux
+      # full-workspace step below, so without this step no Windows runner ever started a session:
+      # job-object process-tree teardown, the `0x03` interrupt through ConPTY, `portable-pty`'s
+      # inverted Windows `kill()` result and the ConPTY teardown order were all built here and
+      # exercised nowhere. The target is `#![cfg(windows)]`, so it is conditioned rather than listed
+      # in the all-platform step, where it would pass on the other two by compiling to nothing.
+      - name: Test (daemon Windows process supervision)
+        if: runner.os == 'Windows'
+        run: cargo test -p micold-daemon --test windows_process_tree
+      # Feature 010's SC-013. Every daemon test that starts a session is Unix-only and ran in the
+      # Linux full-workspace step below alone, so the macOS arms of `platform/unix.rs` were compiled
+      # here and run nowhere -- among them the `waitid(WNOWAIT)` exit check and the `kill(-pid)`
+      # group signal, which differ from Linux in what `getpgid` answers for a zombie.
+      - name: Test (daemon)
+        if: runner.os == 'macOS'
+        # Several of these start a real daemon and wait on it; a test that cannot find the one it
+        # started waits forever, and a job's own limit is six hours.
+        timeout-minutes: 20
+        run: cargo test -p micold-daemon --no-fail-fast
       # Run the client + daemon test suites where the iced system deps are present.
       - name: Test (full workspace)
         if: runner.os == 'Linux'
         run: cargo test --workspace
+      # Feature 021's frame budget (SC-002) is a release-build number, so its measurements are
+      # ignored in the debug suite above and run here instead (BUG-003).
+      - name: Test (type-ahead frame budget, release)
+        if: runner.os == 'Linux'
+        run: cargo test --release -p micold-core --test typeahead_budget
 
   # Feature 030 (FR-015, FR-018): each setup .exe installs only on its own architecture, so ARM64 is
   # packaged and smoke-tested natively, on the runner the release uses for it. The `test` matrix has

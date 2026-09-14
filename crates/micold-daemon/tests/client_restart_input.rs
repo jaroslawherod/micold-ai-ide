@@ -237,6 +237,8 @@ async fn a_restarted_client_drives_a_session_it_did_not_start() {
     // SAFETY: set before any spawn; this test binary runs one test.
     std::env::set_var(DAEMON_BIN_ENV, DAEMON_BIN);
     std::env::set_var("XDG_RUNTIME_DIR", runtime.path());
+    // macOS keys the endpoint on `$HOME` instead; set both so the daemon is this test's own there too.
+    std::env::set_var("HOME", runtime.path());
     std::env::set_var("XDG_DATA_HOME", data.path());
     std::env::set_var("MICOLD_LOG", "warn");
 

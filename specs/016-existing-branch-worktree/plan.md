@@ -23,6 +23,12 @@
 > rather than decline them (FR-035). The two-phase creation design is untouched; nothing about
 > pre-flight, `CreateMode`, or rollback changes.
 
+> **Bugfix**: 2026-09-14 — [BUG-004](./bugs/BUG-004.md) Updated from bugfix patch. The persisted
+> included set holds each worktree **as git reports it**, whatever spelling the request used. The
+> daemon matches a request to a record by location with `micold_core::git::same_path()` (links
+> resolved when both paths exist, literal otherwise), for include and exclude alike, so
+> `reconcile()`'s exact comparison against git's records stays true by construction.
+
 ## Summary
 
 Today `create_worktree` treats an existing branch as a dead end: its pre-flight returns

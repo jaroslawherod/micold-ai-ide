@@ -58,6 +58,8 @@ async fn a_stale_daemon_is_stopped_and_replaced_without_the_user_finding_a_proce
     // SAFETY: written before any spawn; `#[cfg(unix)]` + the single test this file deliberately has.
     std::env::set_var(DAEMON_BIN_ENV, DAEMON_BIN);
     std::env::set_var("XDG_RUNTIME_DIR", dir.path());
+    // macOS keys the endpoint on `$HOME` instead; set both so the stale daemon is this test's own.
+    std::env::set_var("HOME", dir.path());
     std::env::set_var("MICOLD_LOG", "warn");
 
     let endpoint = micold_core::endpoint::resolve().expect("resolve isolated endpoint");

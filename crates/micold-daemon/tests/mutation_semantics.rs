@@ -163,11 +163,22 @@ async fn connect_and_attach(state: &std::sync::Arc<DaemonState>, project: &Path)
 
 /// Read control frames until one matches `pred`, returning it (grid frames are skipped).
 async fn expect_control(client: &mut Client, pred: impl Fn(&DaemonMsg) -> bool) -> DaemonMsg {
-    loop {
-        match client.next().await.expect("stream open").unwrap() {
-            Frame::Control(m) if pred(&m) => return m,
-            Frame::Control(_) | Frame::Grid(_) => continue,
+    // Bounded, and naming what arrived instead: a refusal is a reply the predicate skips, and
+    // unbounded, a test that expected success waited on it forever rather than failing.
+    let mut skipped = Vec::new();
+    let wait = async {
+        loop {
+            match client.next().await.expect("stream open").unwrap() {
+                Frame::Control(m) if pred(&m) => return m,
+                Frame::Control(m) => skipped.push(format!("{m:?}")),
+                Frame::Grid(_) => continue,
+            }
         }
+    };
+    let outcome = tokio::time::timeout(std::time::Duration::from_secs(60), wait).await;
+    match outcome {
+        Ok(m) => m,
+        Err(_) => panic!("the expected reply never arrived; got instead: {skipped:#?}"),
     }
 }
 
@@ -1027,14 +1038,15 @@ async fn attach_prunes_empty_sessions_but_keeps_live_ones() {
     let store = tempfile::tempdir().unwrap();
 
     // Two Default (shell) sessions: `live` will be started (excluded from pruning); `empty` stays
-    // idle with no recorded conversation → a prune candidate.
+    // idle with no recorded conversation → a prune candidate. Both are unnamed: a named session had
+    // a conversation and is never pruned (feature 029, FR-008).
     let live = SessionId::from_uuid(Uuid::from_u128(0xA11E));
     let empty = SessionId::from_uuid(Uuid::from_u128(0xE111));
     let mk = |id| {
         Session::restored(
             id,
             SessionLocation::Default,
-            SessionLabel::Named("S".into()),
+            SessionLabel::Pending,
             TerminalMode::Regular,
             AiCli::ClaudeCode,
         )
@@ -1362,7 +1374,9 @@ async fn including_a_worktree_lists_it_and_touches_nothing_on_disk() {
     let store = tempfile::tempdir().unwrap();
     init_git_repo(project.path());
 
-    let outside = elsewhere.path().join("olx");
+    // Canonical, because git reports worktree paths that way and the daemon matches them exactly:
+    // on macOS the temp dir is under `/var`, a symlink to `/private/var`.
+    let outside = std::fs::canonicalize(elsewhere.path()).unwrap().join("olx");
     add_worktree_outside(project.path(), &outside, "fix/olx");
     let head_before = std::fs::read_to_string(project.path().join(".git/HEAD")).unwrap();
 
@@ -1471,7 +1485,7 @@ async fn including_and_excluding_are_both_idempotent_and_reversible() {
     let store = tempfile::tempdir().unwrap();
     init_git_repo(project.path());
 
-    let outside = elsewhere.path().join("olx");
+    let outside = std::fs::canonicalize(elsewhere.path()).unwrap().join("olx");
     add_worktree_outside(project.path(), &outside, "fix/olx");
 
     let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
@@ -1531,6 +1545,134 @@ async fn including_and_excluding_are_both_idempotent_and_reversible() {
     assert!(
         outside.join(".git").exists(),
         "the worktree itself is untouched by either direction — only the app stopped showing it"
+    );
+}
+
+/// 016 BUG-004: a worktree named through a symlink is still that worktree. Git reports its
+/// canonical location, so a spelling through a linked directory — macOS's `/var`, which is
+/// `/private/var` — was refused as "not one of this repository's worktrees", and excluding by that
+/// spelling matched nothing.
+#[tokio::test]
+async fn a_worktree_named_through_a_symlink_is_included_and_excluded_as_itself() {
+    let project = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let links = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+
+    let real = std::fs::canonicalize(elsewhere.path()).unwrap();
+    let outside = real.join("olx");
+    add_worktree_outside(project.path(), &outside, "fix/olx");
+    let link = links.path().join("elsewhere");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let through_link = link.join("olx");
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    client
+        .send(Frame::Control(ClientMsg::WorktreeInclude {
+            req: 1,
+            project: project.path().to_path_buf(),
+            path: through_link.clone(),
+        }))
+        .await
+        .unwrap();
+    let reply = expect_control(&mut client, |m| {
+        matches!(
+            m,
+            DaemonMsg::OperationOk { req: 1, .. } | DaemonMsg::OperationError { req: 1, .. }
+        )
+    })
+    .await;
+    match reply {
+        DaemonMsg::OperationOk {
+            result: OperationResult::WorktreeIncluded { worktree },
+            ..
+        } => assert_eq!(
+            worktree.path, outside,
+            "the row is the worktree as git reports it, not the spelling it was asked for by"
+        ),
+        other => panic!("expected WorktreeIncluded, got {other:?}"),
+    }
+    let (after, _) = state.welcome_payload();
+    assert!(
+        worktree_paths_for(&after, project.path()).contains(&outside),
+        "listed once, at its own location"
+    );
+
+    client
+        .send(Frame::Control(ClientMsg::WorktreeExclude {
+            req: 2,
+            project: project.path().to_path_buf(),
+            path: through_link,
+        }))
+        .await
+        .unwrap();
+    expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationOk { req: 2, .. })
+    })
+    .await;
+    let (excluded, _) = state.welcome_payload();
+    assert!(
+        !worktree_paths_for(&excluded, project.path()).contains(&outside),
+        "and the same spelling stops showing it (FR-030)"
+    );
+}
+
+/// 016 BUG-004: matching by location must not strand a worktree that is no longer on disk — there is
+/// no location left to resolve, and its row (FR-031) is still the user's to stop showing.
+#[tokio::test]
+async fn an_included_worktree_removed_from_disk_is_still_excluded_by_its_rows_path() {
+    let project = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+
+    let outside = std::fs::canonicalize(elsewhere.path()).unwrap().join("olx");
+    add_worktree_outside(project.path(), &outside, "fix/olx");
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    client
+        .send(Frame::Control(ClientMsg::WorktreeInclude {
+            req: 1,
+            project: project.path().to_path_buf(),
+            path: outside.clone(),
+        }))
+        .await
+        .unwrap();
+    expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationOk { req: 1, .. })
+    })
+    .await;
+
+    std::fs::remove_dir_all(&outside).unwrap();
+    client
+        .send(Frame::Control(ClientMsg::WorktreeExclude {
+            req: 2,
+            project: project.path().to_path_buf(),
+            path: outside.clone(),
+        }))
+        .await
+        .unwrap();
+    expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationOk { req: 2, .. })
+    })
+    .await;
+
+    assert!(
+        !state.included_worktrees(project.path()).contains(&outside),
+        "a worktree gone from disk is stopped by the path its row shows"
     );
 }
 

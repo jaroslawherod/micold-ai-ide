@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-13
 
-**Status**: Closed (implemented and shipped; every task including T033 is done). The manual quickstart pass ran 2026-08-20 on Linux — [evidence](./evidence/B-about-flow-pass.md). Steps 3/5/7/8/9 pass; **step 4 fails** and is an open bug rather than an open task — [BUG-001](./bugs/BUG-001.md), the About dialog shows `micold-core`'s package description, not the application's. Steps 1–2 describe a toolbar that 003/017/018 replaced and are recorded stale. One claim remains out of reach: **macOS/Windows parity** for the walkthrough is unrun — there is no host here, and no CI job drives a GUI on any platform (T032's build/test claim *is* carried by the three-OS matrix; this one is not).
+**Status**: Closed (implemented and shipped; every task including T033 is done). The manual quickstart pass ran 2026-08-20 on Linux — [evidence](./evidence/B-about-flow-pass.md). Steps 3/5/7/8/9 pass; step 4 failed on [BUG-001](./bugs/BUG-001.md) — the About dialog showed `micold-core`'s package description — which is **fixed** (Phase 8, T036–T038): the client resolves its own identity. Steps 1–2 describe a toolbar that 003/017/018 replaced and are recorded stale. One claim remains out of reach: **macOS/Windows parity** for the walkthrough is unrun — there is no host here, and no CI job drives a GUI on any platform (T032's build/test claim *is* carried by the three-OS matrix; this one is not).
 
 **Input**: User description: "Basic application window with a Help / About toolbar. When the user launches Micold AI IDE, the app opens a main window with a toolbar across the top. The toolbar contains a \"Help\" entry. Selecting \"Help\" reveals an \"About\" action. Activating \"About\" opens an About dialog showing the application name (Micold AI IDE), the current version, the open-source license, and a one-line description of the app. The user can dismiss the About dialog (via a Close button or the Esc key) to return to the main window."
 
@@ -99,7 +99,7 @@ is focused and unchanged in both cases.
 - **FR-006**: The About dialog MUST display the application name, exactly "Micold AI IDE".
 - **FR-007**: The About dialog MUST display the current application version, sourced from build/package metadata rather than a hardcoded literal.
 - **FR-008**: The About dialog MUST display the project's open-source license name (the OSI-approved license the project ships under).
-- **FR-009**: The About dialog MUST display a one-line description of the application.
+- **FR-009**: The About dialog MUST display a one-line description of the application. The description MUST be the **application's** user-facing copy — the first sentence of the client's packaged `extended-description` — and MUST NOT be any crate's Cargo `description`, which is written for the crate's maintainers. *(Added by BUG-001. After the 010/021 split the dialog read `micold-core`'s `description` through an `env!` that expands in the crate where it is written, so it described an internal library in maintainer's terms.)*
 - **FR-010**: The About dialog MUST be dismissible via a "Close" button.
 - **FR-011**: The About dialog MUST be dismissible via the Esc key.
 - **FR-012**: Dismissing the About dialog MUST return the user to the main window with the window's prior state intact.
@@ -143,3 +143,5 @@ is focused and unchanged in both cases.
 **Alignment**: 2026-07-20 — Spec/code alignment audit. FR-002 and FR-003 amended: the labelled "Help" toolbar entry became an unlabelled overflow-menu trigger, and FR-003's "no entry other than Help" scope boundary was intentionally crossed by features 003 (theme toggle), 006 (Settings), and 008 (project switcher). FR-004 reworded to match. No behaviour change — the code was correct and the spec had gone stale. Note: `app::toolbar_entries()` / `TOOLBAR_ENTRIES` remain in the code exercised only by `tests/toolbar.rs`; they describe the superseded FR-002 wording and should be removed with that test.
 
 **Alignment**: 2026-07-27 — Spec/code convergence audit. FR-014 amended: focus-into-dialog/focus-to-window was never implementable with iced 0.13's `button` widget (confirmed by reading `iced_widget` 0.13.4 source — only `text_input`/`text_editor` implement the focusable operation), so it is re-scoped to the input-blocking + always-dismissible behavior the code actually provides. `app::toolbar_entries()` / `TOOLBAR_ENTRIES` and the stale `toolbar_exposes_only_help` test (previous alignment note) have been removed.
+
+**Bugfix**: 2026-09-13 — BUG-001 amended FR-009: the description is the client's user-facing copy, never a crate's `description`. The identity is resolved in the client, where `env!` expands against the application's own manifest.

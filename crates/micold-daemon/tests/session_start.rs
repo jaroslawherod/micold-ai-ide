@@ -1252,6 +1252,126 @@ fn starting_a_session_whose_cli_is_absent_reports_it_and_spends_no_restart_budge
     }
 }
 
+/// Sets `MICOLD_IMAGE_REFERENCE` the way a sandboxed service is started, and puts it back.
+///
+/// Holds no lock of its own: it is only ever made while a [`NoCliOnPath`] holds `ENV_LOCK`, and is
+/// declared after it so it is dropped first.
+struct ImageReference {
+    previous: Option<std::ffi::OsString>,
+}
+
+impl ImageReference {
+    fn set(reference: &str) -> Self {
+        let previous = std::env::var_os("MICOLD_IMAGE_REFERENCE");
+        std::env::set_var("MICOLD_IMAGE_REFERENCE", reference);
+        Self { previous }
+    }
+
+    fn unset() -> Self {
+        let previous = std::env::var_os("MICOLD_IMAGE_REFERENCE");
+        std::env::remove_var("MICOLD_IMAGE_REFERENCE");
+        Self { previous }
+    }
+}
+
+impl Drop for ImageReference {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            Some(value) => std::env::set_var("MICOLD_IMAGE_REFERENCE", value),
+            None => std::env::remove_var("MICOLD_IMAGE_REFERENCE"),
+        }
+    }
+}
+
+/// The reason a missing CLI reports, for one start of a session on `cli`.
+fn missing_cli_reason(cli: AiCli, launch: micold_core::terminal::LaunchMode, seed: u128) -> String {
+    let store = tempfile::tempdir().unwrap();
+    let project_dir = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(seed));
+    let state = DaemonState::new(catalog_with_ai_cli_session(
+        cli,
+        project_dir.path(),
+        store.path(),
+        id,
+    ));
+    assert!(state.start_session(id, launch).is_err());
+    let WireLifecycle::Failed { reason, attempts } = reported_lifecycle(&state, id) else {
+        panic!(
+            "expected a reported failure, got {:?}",
+            reported_lifecycle(&state, id)
+        );
+    };
+    assert_eq!(attempts, 0, "a missing binary is not a crash loop");
+    reason
+}
+
+/// The advice a missing CLI gives has to be advice that works where sessions run, and for what is
+/// being started (`029` quickstart §D, finding 1).
+///
+/// Before this every refusal said `<CLI> isn't installed. Install it, or start this session on
+/// another AI CLI.` — on a sandboxed service resuming a conversation, that was wrong three ways.
+/// Installing on this computer changes nothing, because the image is what lacks it. A conversation
+/// cannot move to another CLI. And the pane's pointer at `restart` fails the same way until the
+/// image does change.
+#[test]
+fn a_missing_cli_is_advised_on_where_sessions_run_and_on_what_is_being_started() {
+    use micold_core::terminal::LaunchMode;
+
+    let _path = NoCliOnPath::new();
+
+    // On the host. `MICOLD_IMAGE_REFERENCE` is unset for a service started outside a container.
+    let host = ImageReference::unset();
+    assert_eq!(
+        missing_cli_reason(AiCli::ClaudeCode, LaunchMode::Fresh, 0x1D01),
+        format!(
+            "{} isn't installed. Install it, or start this session on another AI CLI.",
+            AiCli::ClaudeCode.provider().display_name()
+        ),
+        "a fresh start on the host keeps the advice that was already right for it"
+    );
+    for (index, cli) in AiCli::ALL.into_iter().enumerate() {
+        let reason = missing_cli_reason(cli, LaunchMode::Resume, 0x1D10 + index as u128);
+        assert!(
+            reason.contains(cli.provider().display_name()),
+            "got {reason:?}"
+        );
+        assert!(
+            !reason.contains("another AI CLI"),
+            "a conversation continues only in the CLI that holds it; got {reason:?}"
+        );
+    }
+    drop(host);
+
+    // In a container.
+    let image = "registry.example/agents:7";
+    let _image = ImageReference::set(image);
+    let mut seed = 0x1D20;
+    for cli in AiCli::ALL {
+        for launch in [LaunchMode::Fresh, LaunchMode::Resume] {
+            seed += 1;
+            let reason = missing_cli_reason(cli, launch, seed);
+            assert!(
+                reason.contains(cli.provider().display_name()),
+                "got {reason:?}"
+            );
+            assert!(
+                reason.contains(image),
+                "a sandboxed service names the image, which is what lacks the CLI; got {reason:?}"
+            );
+            assert!(
+                !reason.contains("install"),
+                "installing on this computer changes nothing a container runs; got {reason:?}"
+            );
+            if launch == LaunchMode::Resume {
+                assert!(
+                    !reason.contains("another AI CLI"),
+                    "a conversation continues only in the CLI that holds it; got {reason:?}"
+                );
+            }
+        }
+    }
+}
+
 /// …and the refusal is scoped to sessions that need an AI CLI at all.
 ///
 /// The check sits in `start_session`, in front of every launch; what keeps it off a Regular session

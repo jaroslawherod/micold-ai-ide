@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-04
 
-**Status**: Closed (implemented and shipped; every task in [tasks.md](./tasks.md) is done, including §B8's manual pass, run 2026-08-21 — [evidence](./evidence/B8-open-close-rule.md). One open defect remains against the feature and it is a test defect, not a product one: [BUG-003](./bugs/BUG-003.md) measures a debug build against the release frame budget, which leaves SC-002 unmeasured for the build users actually run.)
+**Status**: Closed (implemented and shipped; every task in [tasks.md](./tasks.md) is done, including §B8's manual pass, run 2026-08-21 — [evidence](./evidence/B8-open-close-rule.md). Every bug is fixed. The last, [BUG-003](./bugs/BUG-003.md), was a test defect rather than a product one: the frame-budget test measured a debug build against the release budget. SC-002 is now measured in a release build, in a CI step of its own (Phase 10, T077–T079).)
 
 **Input**: User description: "the branch selector should allow type a head search. Should show branches that contain a given text or a close to it. For development we should create a type a head component found text should be highlighted in found items"
 
@@ -345,7 +345,8 @@ individually legible.
   typing at most 8 characters, without scrolling.
 - **SC-002**: Narrowing a 500-branch list keeps up with typing: producing the matched, ranked, and
   emphasis-annotated results for 500 branches takes at most 16 ms — one frame at 60 frames per
-  second — and typing into the field drops no frames.
+  second — and typing into the field drops no frames. The 16 ms is measured in a **release build**,
+  the build a user runs; a debug build's time is not checked against it. *(Clarified by BUG-003.)*
 - **SC-003**: Against a pinned corpus of realistic branch names and a fixed set of query →
   intended-branch pairs, at least 95% of the pairs place the intended branch among the first five
   results. The corpus and the pairs are part of the deliverable, so the figure is measured rather
@@ -369,6 +370,10 @@ it. What was missing was any requirement that the *gallery* demonstrate it — F
 typeable" example and stops there, so a list pinned open satisfied it while showing the opposite rule
 on the one page that exists to teach the component. The lesson generalises past this entry: "live"
 has to mean the states are exercised, not that one of them is staged well.
+
+**Bugfix**: 2026-09-13 — BUG-003 clarified SC-002: its 16 ms is measured in a release build. The
+requirement was never about a debug build, but the test measured one and argued that a debug pass
+implied a release pass, which left a margin nobody stated and that was gone under load.
 
 ## Assumptions
 

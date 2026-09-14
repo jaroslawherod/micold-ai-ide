@@ -159,6 +159,8 @@ macOS 15 or later" message — not a crash, and not our own check (FR-004).
 
 ## Record of the pass
 
+Not yet run — tracked in issue #317.
+
 | Part | Date | Machine / macOS | Result |
 |---|---|---|---|
 | §C1 | | | |

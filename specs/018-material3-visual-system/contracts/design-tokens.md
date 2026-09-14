@@ -386,16 +386,36 @@ mutually exclusive, so the heaviest **single** layer is the measurement and laye
 Material's own convention and by WCAG's. *(Added by BUG-010: §1.3 proved its pairs and §5 proved
 its opacities, and nothing multiplied them together.)*
 
-**Focus indicator (FR-022, FR-043)**: every element that *can* hold keyboard focus draws a **3dp
+**Mutual exclusion is the widget's obligation, not only the table's (FR-022a).** A control can hold
+focus *and* be hovered or pressed at the same moment, so "mutually exclusive" is something the
+drawing has to make true: such a control draws `max(focus, hover)` or `max(focus, pressed)`, never
+both layers over each other. Where the focus layer is drawn by a wrapper over a child that draws its
+own hover or pressed layer, the wrapper tops the child's layer up to the heavier opacity rather than
+laying a full `focus` layer over it. *(Added by BUG-013: 027's keyboard wrapper did lay a full one,
+and a clicked button composited 17.2% hovered and 19% pressed.)*
+
+**A running ripple is a layer too (FR-024h).** While a ripple animates, it is the surface's only
+state layer: the surface draws its resting fill, the circle draws at the `pressed` opacity, and as
+it fades it settles on the layer the surface resumes — `hover` if the pointer is still over it,
+`pressed` if still held, none otherwise — so the handoff is not a step. *(Added by BUG-014: the
+ripple was drawn over the surface's own hover or pressed layer, the same 17.2% and 19% as BUG-013,
+for the ripple's full-strength span of every press.)*
+
+**Focus indicator (FR-022, FR-022a, FR-043)**: every element that *can* hold keyboard focus draws a **3dp
 `secondary` outline** at its own shape radius when focused, in addition to the focus state layer.
 It is visible without the pointer being over the element and remains distinguishable when the
-element is simultaneously hovered.
+element is simultaneously hovered. On a button it is drawn only for focus that arrived by keyboard —
+a traversal, or a key the button answers; a pointer press moves focus without drawing either the
+outline or the layer (FR-022a).
 
-That set is **text fields and the select control only**. Buttons, list rows, tree items, menu items
+~~That set is **text fields and the select control only**. Buttons, list rows, tree items, menu items
 and chips cannot hold focus in the rendering stack — their status model has no focused state
 (research R4) — and the application has no keyboard traversal between them. This is accepted
 fidelity gap #2 (FR-043), recorded here so the `focus` state-layer opacity above is understood to
-apply only where focus is reachable.
+apply only where focus is reachable.~~ *(Superseded by BUG-013: feature 027's FR-030 gave every
+shared button a keyboard focus, and feature 022 the checkbox, so the `focus` layer is reachable on
+both. The select control stays out of the set (FR-043a); chips and tags that are not buttons remain
+fidelity gap #2.)*
 
 **Disabled content (FR-023)**: the existing behavior carries forward, including the case where a
 self-coloring icon glyph cannot inherit its disabled parent's text color and must be dimmed to
@@ -412,12 +432,16 @@ the interface does not read as Material.
 | Radius (start)  | 0                                                                     |
 | Radius (end)    | far enough to cover the element from the origin — the distance to its furthest corner |
 | Color           | the element's state-layer content color                               |
-| Opacity         | the `pressed` opacity (0.10), fading to 0                             |
+| Opacity         | ~~the `pressed` opacity (0.10), fading to 0~~ the `pressed` opacity (0.10), fading to the layer the surface resumes (§5, FR-024h; BUG-014) |
 | Clip            | the element's own shape, including its corner radius                  |
 | Expand duration | `medium_2` (300 ms), `standard_decelerate`                            |
 | Fade duration   | `short_4` (200 ms), `standard`                                        |
 | Concurrency     | independent per element; pressing a second element does not disturb the first |
 | At rest         | no ripple state retained; the animation clock idles                   |
+
+**Instead of the surface's layer, not over it.** While the ripple runs, the element beneath it draws
+no hover, focus or pressed layer of its own; the ripple is that layer (§5, FR-024h). *(Added by
+BUG-014.)*
 
 **Composition.** The rendering stack's button exposes no press position, so the ripple is composed
 by the shared component wrapper (feature 017): a pointer-area supplies the press point, and the ripple
@@ -833,6 +857,7 @@ surface — not a strip in the layout.
 | Message role    | `body_medium`, `inverse_on_surface`       |
 | Action label    | `label_large`, `inverse_primary`          |
 | Max width       | 600                                       |
+| Action width    | its label's natural width, inside the padded edge; the message wraps in what remains (BUG-015) |
 | Position        | floating above content, above dialog scrim |
 
 **Semantics (FR-032a, FR-032b).** The snackbar adopts Material's *behavior*, not only its

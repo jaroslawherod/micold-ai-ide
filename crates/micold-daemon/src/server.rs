@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use futures_util::stream::StreamExt;
 use futures_util::SinkExt;
-use micold_core::git::{Git, GitCli};
+use micold_core::git::{same_path, Git, GitCli};
 use micold_core::naming::DerivedNames;
 use micold_core::project::validate_rename;
 use micold_core::protocol::codec::{DaemonCodec, Frame};
@@ -252,14 +252,35 @@ fn spawn_supervisor(state: Arc<DaemonState>) {
         loop {
             ticker.tick().await;
             let worker = Arc::clone(&state);
-            let changed = tokio::task::spawn_blocking(move || worker.supervise_exited_sessions())
-                .await
-                .unwrap_or_default();
+            // Same blocking hop: the names of running sessions that gave a reason to look again
+            // (feature 029, FR-011). The flag bounds it — an idle tick reads nothing.
+            let (changed, named) = tokio::task::spawn_blocking(move || {
+                (
+                    worker.supervise_exited_sessions(),
+                    worker.recover_live_session_names(),
+                )
+            })
+            .await
+            .unwrap_or_default();
             // Drain out-of-band terminal signals (title + spinner-derived activity, US2 T046/T047)
             // on the same cadence. It is lock-only (no blocking I/O), so it runs on the async task.
-            let signals_changed = state.drain_signals();
-            if !changed.is_empty() || signals_changed {
+            let crate::state::DrainedSignals {
+                changed: signals_changed,
+                names,
+            } = state.drain_signals();
+            if !changed.is_empty() || named > 0 || signals_changed {
                 state.broadcast_catalog();
+            }
+            // The screen first, the record second — then persist the names that changed (feature
+            // 029, FR-003). Writing one means rewriting a project's state file, which is blocking
+            // I/O and belongs on a blocking thread, not on this 250 ms tick (contract C11); the
+            // drain's own debounce is what keeps this to once per re-title rather than once per
+            // tick, so the hop is rare. Awaited rather than detached so a slow disk cannot stack
+            // up writes behind a tick that keeps firing.
+            if !names.is_empty() {
+                let writer = Arc::clone(&state);
+                let _ =
+                    tokio::task::spawn_blocking(move || writer.record_observed_names(&names)).await;
             }
         }
     });
@@ -1495,6 +1516,9 @@ where
                 // The repository has to actually know this worktree. Recording a location git does
                 // not report would persist a wish that can never resolve into a row — and the whole
                 // point of including one is that it already exists (contract `branch-rpc.md` §3a).
+                // Matched by location, and recorded as git spells it: a path through a symlink is
+                // the same worktree, and `reconcile()` compares the stored path with git's exactly
+                // (BUG-004).
                 let probe = path.clone();
                 let known = tokio::task::spawn_blocking(move || {
                     let porcelain = GitCli::new()
@@ -1502,12 +1526,13 @@ where
                         .unwrap_or_default();
                     parse_worktrees(&porcelain)
                         .into_iter()
-                        .any(|rec| rec.path == probe)
+                        .find(|rec| same_path(&rec.path, &probe))
+                        .map(|rec| rec.path)
                 })
                 .await;
-                match known {
-                    Ok(true) => {}
-                    Ok(false) => {
+                let path = match known {
+                    Ok(Some(recorded)) => recorded,
+                    Ok(None) => {
                         state.send(
                             id,
                             DaemonMsg::OperationError {
@@ -1531,7 +1556,7 @@ where
                         );
                         continue;
                     }
-                }
+                };
                 // Settings only — no git command runs, and nothing on disk moves (FR-028).
                 match state.include_worktree(&project, &path) {
                     Ok(()) => {
@@ -1570,7 +1595,36 @@ where
                 }
             }
             ClientMsg::WorktreeExclude { req, project, path } => {
-                match state.exclude_worktree(&project, &path) {
+                // The stored entry naming the same location, whatever the spelling (BUG-004).
+                // Resolving links touches the filesystem, so it happens off the state lock.
+                let stored = state.included_worktrees(&project);
+                let probe = path.clone();
+                let matched = tokio::task::spawn_blocking(move || {
+                    stored
+                        .into_iter()
+                        .filter(|p| same_path(p, &probe))
+                        .collect::<Vec<_>>()
+                })
+                .await;
+                let matched = match matched {
+                    Ok(matched) => matched,
+                    Err(e) => {
+                        state.send(
+                            id,
+                            DaemonMsg::OperationError {
+                                req,
+                                kind: ErrorKind::Internal,
+                                message: "could not check the included worktrees".into(),
+                                detail: Some(e.to_string()),
+                            },
+                        );
+                        continue;
+                    }
+                };
+                match matched
+                    .iter()
+                    .try_for_each(|p| state.exclude_worktree(&project, p))
+                {
                     Ok(()) => {
                         refresh_worktrees_and_broadcast(state, project).await;
                         state.send(
@@ -1741,15 +1795,28 @@ async fn refresh_worktrees_off_runtime(state: &Arc<DaemonState>, project: &std::
     let proj = project.to_path_buf();
     let discovered = tokio::task::spawn_blocking(move || {
         st.refresh_worktrees(&proj);
-        st.discover_external_sessions(&proj)
+        let adopted = st.discover_external_sessions(&proj);
+        // Third step, same hop and same worktree cache (feature 029, FR-006, contract C14): the
+        // sessions this application already knows but has no name for. After discovery, not
+        // before — a session adopted a moment ago already carries whatever name its records hold,
+        // so it is `Named` and costs this pass nothing.
+        let recovered = st.recover_session_names(&proj);
+        (adopted, recovered)
     })
     .await;
-    if let Ok(count) = discovered {
-        if count > 0 {
+    if let Ok((adopted, recovered)) = discovered {
+        if adopted > 0 {
             tracing::info!(
                 project = %project.display(),
-                count,
+                count = adopted,
                 "adopted sessions started outside this application"
+            );
+        }
+        if recovered > 0 {
+            tracing::info!(
+                project = %project.display(),
+                count = recovered,
+                "recovered session names from the AI CLI's own records"
             );
         }
     }

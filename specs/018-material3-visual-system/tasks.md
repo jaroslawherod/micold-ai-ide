@@ -288,7 +288,7 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [X] T049 [US4] Apply the linear progress anatomy in `crates/micold-client/src/ui/material/progress.rs` — `secondary_container` track, `primary` indicator, 4dp thickness, fully rounded (FR-031e)
 - [X] T050 [US4] Replace the static 0.4 fill in `crates/micold-client/src/ui/material/progress.rs` with Material's indeterminate presentation, so the bar stops asserting a completion fraction the application cannot know (FR-031f)
 - [X] T051 [US4] Implement the notification queue in `crates/micold-core/src/notify.rs` — one visible, ordered pending queue, severity-derived duration, dedup and cap preserved (FR-032a, FR-032b)
-- [X] T052 [US4] Create the `Snackbar` component in `crates/micold-client/src/ui/material/snackbar.rs` per `contracts/component-api.md` §2.2 (FR-032, Principle VIII)
+- [X] ⚠️ Reopened T052 [US4] Create the `Snackbar` component in `crates/micold-client/src/ui/material/snackbar.rs` per `contracts/component-api.md` §2.2 (FR-032, Principle VIII) *(reopened 2026-09-14 — BUG-015: past §7.8's maximum width the message took the line and left `Dismiss` under 20dp, its label drawn past the container. Closed by T185.)*
 - [X] T053 [US4] Replace the inline notification strip in `crates/micold-client/src/ui/mod.rs` with the floating snackbar overlay, above the dialog scrim and not obstructing a dialog's action row (FR-032)
 - [X] T053a [P] [US4] Assert the connection-status banner stayed a separate component: a test confirming `ConnectionBanner` still renders as a full-width, non-dismissible, non-queued strip and does not route through the snackbar queue. Material treats banners and snackbars as different components, and folding one into the other is the specific mistake this requirement forbids (FR-032c)
 - [X] T054 [US4] Rework `crates/micold-client/src/ui/material/toolbar.rs` to the small app bar anatomy — 64dp height, 16dp padding, `title_large` title, 48dp icon targets — and add `.elevated(bool)` (FR-025)
@@ -1680,6 +1680,158 @@ FR-004b now names: a narrowed host where one exists, a moved tone where it does 
 
 **Red record (T172)** — `every_pair_still_meets_aa_with_its_state_layer_composited` failed with the pin emptied: `Dark / inverse_primary/inverse_surface: 4.37 < 4.5`. The chip's pair did not appear, because T172 already measures it on its new host; its red is BUG-011's own 4.47:1.
 
-**Pass record (T175)** — 2026-09-13: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace` 2798 passed, 0 failed. `style_snapshot` regenerated: 13 lines, all `host.snackbar` and `button.*@snackbar[*]`, dark `on_fill` `(103,80,164)` → `(79,55,138)` — primary tone 40 → 30, and nothing else. Not checked on a rendered frame.
+**Pass record (T175)** — 2026-09-13: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace` 2798 passed, 0 failed. `style_snapshot` regenerated: 13 lines, all `host.snackbar` and `button.*@snackbar[*]`, dark `on_fill` `(103,80,164)` → `(79,55,138)` — primary tone 40 → 30, and nothing else.
+
+**Rendered-frame record (T175)** — 2026-09-13, the `micold-showcase` gallery in the dark scheme on
+Xvfb + lavapipe (the `visual-pass` skill), not on a real display; pixels sampled from full-resolution
+frames. The active neutral `ToggleChip` fills `(43,41,45)` with its label at `(202,196,207)` — 8.44:1
+— and held pressed its fill is `(59,57,61)`, exactly §5's 10% of the label over the fill: 6.69:1,
+the figure the tokens predict. The snackbar's `Dismiss` draws `(79,55,138)`, primary tone 30, on
+`(230,225,230)`: 7.25:1. The chip still reads as selected against its outlined inactive neighbour.
+Crops: [`evidence/BUG-011-dark-chip-and-snackbar-action.png`](evidence/BUG-011-dark-chip-and-snackbar-action.png)
+(red: chip row at rest; blue: active chip held; green: the action). **Not** a pass for `Dismiss`
+pressed: a held press there composited 19%, not 10% — the focus a click hands the button stacks its
+own layer on the pressed one. That is a separate defect with its own report, BUG-013; this bug's
+tone is right on the frame.
 
 **Bugfix**: 2026-09-13 — BUG-011 added Phase 24 (T172–T175). **No task is reopened.** T160 and T165 found these two pairs and are complete as written; the pin they left was the failing-check form of an undecided remedy.
+
+## Phase 25: BUG-013 — a clicked button stacked its focus layer on its hover and pressed layers
+
+**Goal**: §5's layers never sum on screen. A focused button draws the heaviest single layer of its
+states, and a button that took focus from a pointer press draws no focus indicator at all, while a
+button reached by Tab keeps its ring and layer (FR-022a, SC-008i).
+
+- [X] T176 Failing tests first: in `crates/micold-client/src/ui/material/keyboard_focus.rs`, assert the indicator's composited opacity over the child's own layer equals `max(child, FOCUS)` for rest, hover and pressed; in `crates/micold-client/src/ui/material/field_focus.rs`, drive a `Button` — a press shows no indicator but Enter still acts, a traversal shows it, a traversal then hover draws focus alone, a press after a traversal hides it. Red today on the stacked layer and on the pressed button's indicator (FR-022a, SC-008i)
+
+- [X] T177 In `keyboard_focus.rs`, track whether focus came by keyboard and whether the child is pressed, and draw the focus layer as the top-up to the heavier opacity rather than a full layer; update the module docs, which describe a press as taking the keyboard *and* the indicator. T176 goes green (FR-022a)
+
+- [X] T178 Run the workspace gate (fmt, clippy, `cargo test --workspace`) and record the result here
+
+- [X] T179 Confirm on a rendered frame, dark scheme, that the snackbar's `Dismiss` composites 10% held pressed after a click and draws no ring once released, and that a Tab-focused button hovered composites 10% with its ring; record the sampled colours here
+
+**Red record (T176)** — against a stub of the unfixed indicator, four tests failed: the composition test and `a_button_reached_by_the_traversal_draws_focus_alone_when_hovered` on `0.17199999` where §5 allows `0.1`; `a_clicked_button_takes_the_keyboard_and_draws_no_indicator` and `a_press_after_the_traversal_hides_the_indicator` on `Some(0.1)` where no indicator belongs.
+
+**Pass record (T178)** — 2026-09-13: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace` 3009 passed, 0 failed (summed over every `test result` line, doc tests included). No snapshot moved.
+
+**Rendered-frame record (T179)** — 2026-09-13, the `micold-showcase` gallery in the dark scheme on
+Xvfb + lavapipe (the `visual-pass` skill), not on a real display; the binary built and pinned from
+this branch. The snackbar's `Dismiss`, `inverse_primary` on `inverse_surface` `(230,225,230)`:
+
+| State | Fill sampled | Layer | BUG-013's figure |
+|---|---|---|---|
+| held pressed after a click | `(215,208,221)` | 10% | `(201,193,212)`, 19% |
+| released, pointer over it | `(218,211,223)` | 8%, no ring | `(204,195,214)`, 17% |
+| released, pointer gone | `(230,225,230)` | none, no ring | `(215,208,221)` and the ring |
+| after Space, pointer gone | `(215,208,221)` | 10% and the ring | — |
+| after Space, pointer over it | `(215,207,221)` | 10% and the ring | 17% |
+
+The showcase's `Switch to light` also showed no ring after the click that toggled it. Keyboard focus
+was reached here by Space on the clicked button, not by Tab — the traversal is covered by
+`a_button_reached_by_the_traversal_draws_focus_alone_when_hovered`. Crops:
+[`evidence/BUG-013-one-layer-after-fix.png`](evidence/BUG-013-one-layer-after-fix.png), top to bottom
+in the table's order after a first row at rest. The ripple is not in these figures: it is drawn inside
+the button over its pressed fill for 500 ms after a press, and every sample was taken after it had
+faded.
+
+**Bugfix**: 2026-09-13 — BUG-013 added Phase 25 (T176–T179). **No task is reopened.** T160 and T175 are complete as written: the assertion measures what §5 says, and T175's rendered-frame record is what found this. The wrapper that stacks the layers is feature 027's FR-030 work, outside this feature's tasks.
+
+## Phase 26: BUG-014 — a press drew the ripple over the surface's own hover or pressed layer
+
+**Goal**: a running ripple is the surface's only state layer. The surface draws its resting fill, the
+circle draws at the pressed opacity and fades to the layer the surface resumes, and the ripple stays
+visible against the surface it crosses (FR-024h, SC-008j; FR-024a).
+
+- [X] T180 Failing tests first: in `crates/micold-client/src/ui/material/ripple_layers.rs`, render a real `Button` headlessly through a press at stated frame instants and read pixels back — held and clicked, the fill under a fully expanded ripple is no further from rest than the pressed layer alone; early in a press the circle differs from the surface beyond it by at least half the pressed layer; and no frame of the fade or the handoff steps by more than a third of it. Red today on the first two (FR-024h, SC-008j)
+
+- [X] T181 In `crates/micold-client/src/ui/material/style.rs`, give `state_layer` and `state_fill` a draw-scoped yield (`beneath_ripple`) that returns the resting fill and reports the heaviest layer asked for; in `crates/micold-client/src/ui/material/ripple.rs`, draw the content inside it while a ripple runs and fade the circle's opacity to the reported layer. T180 goes green (FR-024h)
+
+- [X] T182 Run the workspace gate (fmt, clippy, `cargo test --workspace`) and record the result here
+
+- [X] T183 Confirm on a rendered frame, dark scheme, that a pressed button mid-ripple shows one layer; record what was sampled, and what could not be
+
+**Red record (T180)** — 2026-09-14, against the unfixed ripple, dark scheme, filled button (`primary`
+at rest `(207,188,255)`, its own pressed layer alone `(192,172,241)`): `a_held_press_draws_one_layer_under_its_ripple`
+failed on `(178,157,227)` and `a_click_draws_one_layer_under_its_ripple` on `(181,160,230)` — about twice the
+pressed layer's distance from rest, the 19% and 17.2% composites. The visibility and handoff tests passed, as
+they should before the fix. A first run was discarded: iced draws a button that has not yet seen a redraw as
+`Disabled`, so "rest" was the disabled fill and the two layer tests passed on nothing; the harness now sends
+one frame before sampling.
+
+**Pass record (T182)** — 2026-09-14: `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace` 3051 passed, 0 failed (summed over every `test result` line, doc tests included). The first run failed `motion_tokens::every_duration_is_a_named_token` on the test harness's own `from_millis(16)`; it now takes `cdk::motion::FRAME`. `ripple_clipping` and `ripple_pulse` pass unchanged, and no snapshot moved.
+
+**Rendered-frame record (T183)** — 2026-09-14, the `micold-showcase` gallery in the dark scheme on
+Xvfb + lavapipe (the `visual-pass` skill), not on a real display; the binary built and pinned from
+this branch. The filled `Rebuild index` button, pressed at its centre, sampled at its leading padding
+and, mid-ripple, inside the growing circle:
+
+| State | Fill sampled | Layer | Before the fix |
+|---|---|---|---|
+| at rest | `(207,188,255)` | none | — |
+| hovered | `(195,175,244)` | 8% | — |
+| held, circle growing — inside it | `(192,172,240)` | 10%, the ripple alone | `(178,157,227)`, 19% (T180) |
+| held, circle growing — beyond it | `(207,188,255)` | none — FR-024h's accepted change | `(192,172,241)` |
+| held, every later capture to 1.2 s | `(192,172,241)`–`(192,172,240)` | 10% | 19% for the ripple's span |
+| released, pointer over it | `(195,175,244)` | 8% | — |
+| clicked, circle growing — inside / beyond | `(192,172,240)` / `(207,188,255)` | 10% / none | `(181,160,230)`, 17.2% (T180) |
+| clicked, fading | `(194,175,243)` then `(195,175,244)` | 10% → 8%, no step | — |
+
+No capture was heavier than the pressed layer alone. The captures are about 200 ms apart, since an
+`import` of the root window takes that long, so the fade was caught at one intermediate frame rather
+than traced. Its continuity is `the_ripple_hands_back_to_the_hover_layer_without_a_jump`'s claim, not
+this record's. Crop:
+[`evidence/BUG-014-ripple-one-layer.png`](evidence/BUG-014-ripple-one-layer.png), top to bottom: rest,
+hovered, held mid-ripple, held settled, clicked mid-ripple, clicked settled.
+
+**Bugfix**: 2026-09-14 — BUG-014 added Phase 26 (T180–T183). **No task is reopened.** T032 drew what FR-024c asked for; the clause is struck, and FR-024h is the requirement it now meets.
+
+## Phase 27: BUG-015 — a long snackbar message squeezed `Dismiss` past the snackbar's edge
+
+**Goal**: a dismissible snackbar keeps its action whole, at its natural width and inside the container's
+padded edge, at every message length and window width; below the maximum width it stays sized by its
+content (FR-032, US4 acceptance scenario 19).
+
+- [X] T184 Failing test first: in `crates/micold-client/src/ui/material/snackbar.rs`, lay a dismissible snackbar out headlessly with a message longer than one 600dp line, in a 1200dp and a 400dp window, and assert the action's node is at least the width the same button takes alone and ends inside the container's padded edge; beside it, assert a one-word snackbar stays narrower than §7.8's cap. Red today on the first (FR-032)
+
+- [X] T185 In `crates/micold-client/src/ui/cdk/reflow.rs`, let `Reflow` honour a content-sized (`Shrink`) parent — measure the lead at its intrinsic width and resolve to lead + spacing + trail — with unit tests beside the existing ones; in `crates/micold-client/src/ui/material/snackbar.rs`, arrange the message and the action through it so the action is laid out first, keeping §7.8's 48dp floor (the height-only spacer) beside the message. T184 goes green; the `Reflow` call site in `ui/shell.rs` is unchanged (FR-032)
+
+- [X] T186 Run the workspace gate (`mise run gate`) and record the result here
+
+- [X] T187 Confirm on a rendered frame that a long launch notification draws `Dismiss` whole inside the snackbar, beside a short one that stays content-sized; record what was captured
+
+**Red record (T184)** — 2026-09-14, against the unfixed snackbar (`origin/main` at `226d3a8b`),
+`cargo test -p micold-client --lib snackbar::tests`: `a_long_message_leaves_the_action_its_width_inside_the_container`
+failed with "at a 1200dp window the Dismiss button is 18.950195dp wide but its label needs 74.086914dp";
+`a_short_message_still_sizes_the_snackbar_to_its_content` passed, as it should before the fix. A first draft
+that asserted only the action's right edge passed on the unfixed code — the squeezed node stays inside while
+its label does not — so the test reads the node's width against the button laid out alone. T185's
+`Reflow` tests were red first too: `in_a_content_sized_parent_it_is_as_wide_as_what_it_holds` failed on
+`left: Size { width: 400.0, height: 40.0 }` / `right: Size { width: 228.0, height: 40.0 }`, and the stacked
+case on a 250dp lead where 120dp was expected. `…a_lead_wider_than_the_line_takes_only_what_the_cluster_leaves`
+passed before the change, as it should: it holds the cap the change must keep.
+
+**Pass record (T186)** — 2026-09-14: `cargo fmt --all -- --check`, `cargo clippy -p micold-core` and
+`cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace --no-fail-fast`
+3079 passed, 1 failed, 6 ignored (summed over every `test result` line); all 14 `scripts/tests/*.test.sh`
+pass. The one failure is `micold-daemon`'s `exclusivity::one_conversation_one_session::a_second_open_of_a_held_pi_conversation_starts_nothing`
+("exactly one `pi` for one conversation", left 0), five runs out of five on this machine, sandboxed or not.
+It is not this change's: that test binary does not use `micold-client`, and this change touches only the
+client's layout. `origin/main`'s CI at `226d3a8b` passed it. Left as a follow-up. The nine snackbar and
+`Reflow` tests pass, `anatomy_size`'s width-cap gate and `known_projects_reflow` pass unchanged, and no
+snapshot moved.
+
+**Rendered-frame record (T187)** — 2026-09-14, on Xvfb (1600×1400) with lavapipe, not a real GPU, from
+`micold-ai-ide`, `micold-daemon` and `micold-showcase` built together from this branch and run from a
+private copy (the daemon log shows `client attached to daemon`). The app was opened on a seeded catalog
+whose last-active project's folder is gone, the long path BUG-004's pass used, so it raised the same
+error notification. It wrapped to three lines, and `Dismiss` sat whole at its natural width inside the
+snackbar's right padded edge. Before the fix it read "Dismis", straddling that edge
+(`specs/002-project-workspace-management/evidence/bug004-launch-gone-last-active.png`). The showcase's
+Snackbar section shows the other half: "Rebuild index" with `Dismiss`, the
+one-line error with `Dismiss` and the no-action pose all stay as wide as their content, well short of
+the 600dp cap. The app frame is the dark scheme and the showcase the light one. Not exercised: a window narrow enough to narrow the message to a few
+words, and the enter and exit motion, none of which this fix touches. Crop:
+[`evidence/BUG-015-dismiss-whole.png`](evidence/BUG-015-dismiss-whole.png). The top strip is the app's
+long notification and the bottom strip is the showcase's three poses.
+
+**Bugfix**: 2026-09-14 — BUG-015 Updated from bugfix patch: reopened T052 and added Phase 27 (T184–T187).

@@ -40,6 +40,27 @@ use crate::supervisor::PtySession;
 /// A per-connection client identity (ephemeral; never persisted).
 pub type ClientId = u64;
 
+/// What one [`DaemonState::drain_signals`] pass observed on the live sessions.
+///
+/// Two things, because the supervisor does two different things with them: `changed` decides
+/// whether to push a `CatalogChanged`, and `names` is durable state that has to be written — on a
+/// blocking thread, which is why it comes back here rather than being written where it was seen
+/// (feature 029, research R2).
+#[derive(Debug, Default)]
+pub struct DrainedSignals {
+    /// A session's projected summary changed, so the supervisor tick pushes one `CatalogChanged`.
+    pub changed: bool,
+    /// The sessions whose stripped OSC-0 title differed from the previous drain, with the new
+    /// title. Debounced against `LiveSession::last_title`, so each change appears exactly once
+    /// however many ticks pass with the title unchanged.
+    ///
+    /// The title is the **stripped** one — the leading status glyph the agent puts in front of it
+    /// is already gone, and the braille-spinner edge was taken separately as activity evidence.
+    /// So this is precisely the text the row displays, which is what keeps the record and the
+    /// screen from being able to diverge.
+    pub names: Vec<(SessionId, String)>,
+}
+
 /// The daemon's shared, mutable runtime state.
 pub struct DaemonState {
     inner: Mutex<Inner>,
@@ -190,10 +211,18 @@ struct LiveSession {
     /// it resets to `Unknown` on daemon restart (H3/A4). Fed by claude-CLI lifecycle hooks (the
     /// loopback receiver) and by braille-spinner title evidence (`SpinnerObserved`, Working-only).
     activity: Activity,
-    /// The most recent OSC-0 title observed on the attached process (glyph-stripped), used to
-    /// project a live session title and to debounce title-change pushes (T047). Not persisted;
-    /// re-emitted by `claude` on resume.
+    /// The most recent OSC-0 title observed on the AI CLI's `Primary` process (glyph-stripped,
+    /// the CLI's own startup title excluded), used to project a live session title and to
+    /// debounce title-change pushes (T047). Persisted separately, as the catalog label (feature
+    /// 029); re-emitted by `claude` on resume.
     last_title: Option<String>,
+    /// Whether the conversation behind this session may have gained a name since it was last
+    /// looked for. Set when the session starts and whenever its activity moves; cleared by
+    /// [`DaemonState::recover_live_session_names`], which does the looking. A CLI whose terminal
+    /// title names nothing until the user names the conversation — `pi` — would otherwise leave a
+    /// running row on the placeholder while its store already holds the first message (feature
+    /// 029, FR-011). A flag rather than a timer: the read happens because something happened.
+    name_stale: bool,
     /// The tail of this session's own event log, for a provider whose activity source is
     /// `EventLog` (feature 026, T064). `None` for a `Hooks` provider — and `None` for every
     /// session this application merely *discovered* rather than started, since a tail is only ever
@@ -232,6 +261,34 @@ fn materialise_pi_activity_component() -> io::Result<PathBuf> {
         std::fs::write(&path, PI_ACTIVITY_COMPONENT)?;
     }
     Ok(path)
+}
+
+/// What a start refused for a missing AI CLI tells the user (FR-010), as advice that works where
+/// sessions run and for what is being started (`029` quickstart §D, finding 1).
+///
+/// `cli` is the provider's `display_name()`, not its `command()`: this is a sentence, and "copilot
+/// isn't installed" reads as a shell error rather than as something to go and fix. `image` is the
+/// service's `MICOLD_IMAGE_REFERENCE`, empty on the host. In a container, installing on this
+/// computer changes nothing, so the image is named instead, as the settings notices name it. A
+/// resume continues a conversation only the same CLI holds, so it is not offered another one.
+fn missing_cli_reason(cli: &str, image: &str, launch: LaunchMode) -> String {
+    match (image.is_empty(), launch) {
+        (true, LaunchMode::Fresh) => {
+            format!("{cli} isn't installed. Install it, or start this session on another AI CLI.")
+        }
+        (true, LaunchMode::Resume) => format!(
+            "{cli} isn't installed, and this conversation can only continue in it. Install it, \
+             then restart this session."
+        ),
+        (false, LaunchMode::Fresh) => format!(
+            "{cli} isn't in {image}, where sessions run. Choose an image that provides it, or \
+             start this session on another AI CLI."
+        ),
+        (false, LaunchMode::Resume) => format!(
+            "{cli} isn't in {image}, where sessions run, and this conversation can only continue \
+             in it. Choose an image that provides it, then restart this session."
+        ),
+    }
 }
 
 fn new_proc(pty: Arc<PtySession>, id: SessionId) -> Proc {
@@ -1119,6 +1176,140 @@ impl DaemonState {
             .adopt_discovered_sessions(project, found)
     }
 
+    /// Give every **known but unnamed** session of `project` the name its own AI CLI recorded for
+    /// it, persisting each one (feature 029, US2 — FR-006, FR-007, FR-010). Returns how many names
+    /// were recovered (`0` ⇒ no write happened).
+    ///
+    /// This is the one-time repair for every session that predates the live write path: the name
+    /// was observed and displayed for as long as the session ran, and never written, so the record
+    /// says `Pending` and the row reads "New session" until something runs it again. The
+    /// conversation's own store still has the name, and this pass fetches it without starting
+    /// anything.
+    ///
+    /// # Why it is not folded into [`Self::discover_external_sessions`]
+    ///
+    /// That pass deliberately subtracts the ids the catalog already knows *before* touching the
+    /// filesystem, which is what holds its per-*location* cost rule. These are exactly the ids it
+    /// subtracts. Recovery cannot be per location — a name is per conversation — so it is a
+    /// separate pass with a different bound: a recovered name is **persisted**, so a session costs
+    /// one read once and is `Named` for good (research R4).
+    ///
+    /// # Blocking
+    ///
+    /// Reads the providers' stores, so it runs in the same `spawn_blocking` hop as the worktree
+    /// refresh and the discovery pass, never on the async runtime.
+    ///
+    /// A `Named` session is filtered out **under the lock, before any filesystem access** — that is
+    /// what bounds the pass, and it is also what protects FR-008: a name already recorded is never
+    /// re-read, so a deleted transcript cannot take it away. A `None` read is a no-op for the same
+    /// reason: never an error, never a wrong name, and never a way back to `Pending`.
+    pub fn recover_session_names(&self, project: &Path) -> usize {
+        // Candidates, read under the lock, once: the session, where it runs, and which CLI owns it.
+        let candidates: Vec<(SessionId, PathBuf, AiCli)> = {
+            let inner = self.lock();
+            inner
+                .catalog
+                .workspace()
+                .sessions
+                .get(project)
+                .map(|sessions| {
+                    sessions
+                        .iter()
+                        .filter(|s| !s.archived && matches!(s.label, SessionLabel::Pending))
+                        .map(|s| (s.id, s.location.cwd(project), s.provider))
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        self.record_recovered_names(candidates)
+    }
+
+    /// [`Self::recover_session_names`] for the sessions running here whose conversation may have
+    /// gained a name since it was last looked for — they started, or their activity moved — and
+    /// that still have none (feature 029, FR-011). Returns how many were named, so the caller knows
+    /// whether to broadcast.
+    ///
+    /// This is what shows a running `pi` row its first message: `pi` titles its terminal with a
+    /// name only after `/name`, so the terminal alone would hold the row on the placeholder until
+    /// the next refresh. Bounded the same way — a `Named` session is never a candidate — and by the
+    /// flag, which only an event sets.
+    ///
+    /// # Blocking
+    ///
+    /// Reads the providers' stores, so it runs in the supervisor's `spawn_blocking` hop.
+    pub fn recover_live_session_names(&self) -> usize {
+        let candidates: Vec<(SessionId, PathBuf, AiCli)> = {
+            let mut guard = self.lock();
+            let inner = &mut *guard;
+            let workspace = inner.catalog.workspace();
+            inner
+                .sessions
+                .iter_mut()
+                .filter(|(_, live)| live.name_stale)
+                .filter_map(|(id, live)| {
+                    live.name_stale = false;
+                    let (project, session) = workspace.find_session(*id)?;
+                    (session.mode == TerminalMode::AiCli
+                        && !session.archived
+                        && matches!(session.label, SessionLabel::Pending))
+                    .then(|| (*id, session.location.cwd(project), session.provider))
+                })
+                .collect()
+        };
+        self.record_recovered_names(candidates)
+    }
+
+    /// Read each candidate's name from its own provider's store, off the lock, and record the ones
+    /// found against sessions that are still unnamed. Returns how many were recorded.
+    fn record_recovered_names(&self, candidates: Vec<(SessionId, PathBuf, AiCli)>) -> usize {
+        if candidates.is_empty() {
+            return 0;
+        }
+
+        // Off the lock: everything below touches the providers' stores. Each session asks its
+        // **own** provider — one hoisted provider would read a Copilot session's name out of
+        // `claude`'s store, find nothing, or worse find another CLI's conversation under the same
+        // id and name the row wrongly (contract C16). A provider with no resolvable config dir
+        // contributes nothing and stops nothing (C20).
+        let found: Vec<(SessionId, String)> = candidates
+            .into_iter()
+            .filter_map(|(id, cwd, which)| {
+                let provider = which.provider();
+                let config_dir = provider.config_dir()?;
+                let title = provider.read_title(&config_dir, &cwd, id.0)?;
+                Some((id, title))
+            })
+            .collect();
+        if found.is_empty() {
+            return 0;
+        }
+
+        let mut inner = self.lock();
+        let mut recovered = 0;
+        for (id, name) in found {
+            // The live path may have named it in the time this spent off the lock, and the
+            // terminal's name is the newer one.
+            let still_pending = inner
+                .catalog
+                .workspace()
+                .find_session(id)
+                .is_some_and(|(_, s)| matches!(s.label, SessionLabel::Pending));
+            if !still_pending {
+                continue;
+            }
+            match inner.catalog.record_session_name(id, &name) {
+                Ok(true) => recovered += 1,
+                Ok(false) => {}
+                Err(err) => tracing::warn!(
+                    session = %id.0,
+                    %err,
+                    "could not persist the recovered session name; it is still shown"
+                ),
+            }
+        }
+        recovered
+    }
+
     /// Set a worktree's display-name override for `project` (validated by the caller), persisting.
     pub fn set_worktree_display_name(
         &self,
@@ -1432,11 +1623,10 @@ impl DaemonState {
         if plan.mode == TerminalMode::AiCli {
             let provider = plan.provider.provider();
             if !provider.is_available() {
-                // `display_name()`, not `command()`: this is a sentence, and "copilot isn't
-                // installed" reads as a shell error rather than as something to go and fix.
-                let reason = format!(
-                    "{} isn't installed. Install it, or start this session on another AI CLI.",
-                    provider.display_name()
+                let reason = missing_cli_reason(
+                    provider.display_name(),
+                    &std::env::var("MICOLD_IMAGE_REFERENCE").unwrap_or_default(),
+                    launch,
                 );
                 tracing::warn!(session = %id.0, cli = provider.command(), "AI CLI not on PATH; not starting");
                 self.lock().start_failures.insert(id, reason.clone());
@@ -1568,6 +1758,7 @@ impl DaemonState {
                 input: InputReceiver::new(),
                 activity: Activity::new(),
                 last_title: None,
+                name_stale: true,
                 event_log: None,
                 respawned_at: None,
             },
@@ -1842,38 +2033,95 @@ impl DaemonState {
         };
         let before = live.activity.signal().clone();
         live.activity.apply(event);
-        live.activity.signal() != &before
+        let changed = live.activity.signal() != &before;
+        live.name_stale |= changed;
+        changed
     }
 
     /// Drain each live session's out-of-band terminal signals into runtime state (US2, T046/T047):
     /// the latest OSC-0 title (debounced against `last_title`) and the braille-spinner edge (fed to
-    /// the FSM as Working-only evidence, H1a). Returns `true` if any session's projected summary
-    /// changed, so the supervisor tick pushes one `CatalogChanged`. Cheap and lock-only — it reads
-    /// atomics/`Mutex<Option<String>>` already populated by the reader thread, never blocking I/O.
-    pub fn drain_signals(&self) -> bool {
-        let mut changed = false;
-        let mut inner = self.lock();
-        for live in inner.sessions.values_mut() {
-            let Some(proc) = live.procs.get(&live.attached) else {
-                continue;
-            };
-            let signals = proc.pty.signals();
+    /// the FSM as Working-only evidence, H1a).
+    ///
+    /// Cheap and lock-only — it reads atomics/`Mutex<Option<String>>` already populated by the
+    /// reader thread, never blocking I/O. **That is why it returns the name changes instead of
+    /// recording them** (feature 029, research R2): the supervisor calls this directly on its async
+    /// task, and persisting a name means writing a project's state file, which is blocking I/O and
+    /// does not belong on the async runtime — let alone on the 250 ms tick path while the state
+    /// lock is held. The write is the caller's job, in its own `spawn_blocking` hop, and only when
+    /// there is something to write. See [`Self::record_observed_names`].
+    pub fn drain_signals(&self) -> DrainedSignals {
+        let mut out = DrainedSignals::default();
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let workspace = inner.catalog.workspace();
+        for (id, live) in inner.sessions.iter_mut() {
             // A spinner glyph seen since the last drain is positive `Working` evidence.
-            if signals.take_spinner() {
-                let before = live.activity.signal().clone();
-                live.activity.apply(ActivityEvent::SpinnerObserved);
-                if live.activity.signal() != &before {
-                    changed = true;
+            if let Some(proc) = live.procs.get(&live.attached) {
+                if proc.pty.signals().take_spinner() {
+                    let before = live.activity.signal().clone();
+                    live.activity.apply(ActivityEvent::SpinnerObserved);
+                    if live.activity.signal() != &before {
+                        out.changed = true;
+                    }
                 }
             }
-            // The live title, debounced: only a real change is a push.
-            let title = signals.title();
+            // The name comes from the conversation, so from the AI CLI and nothing else (feature
+            // 029, FR-011): the `Primary` of an `AiCli` session. A shell tab is attached to the
+            // same session but titles itself `user@host: ~/dir`, and a Regular Terminal session's
+            // primary *is* a shell — neither has a conversation to name. And only the part of the
+            // title the CLI means as the name counts: not its product name, not its decoration
+            // (FR-004).
+            let title = workspace
+                .find_session(*id)
+                .filter(|(_, session)| session.mode == TerminalMode::AiCli)
+                .and_then(|(project, session)| {
+                    let proc = live.procs.get(&SessionProcess::Primary)?;
+                    let title = proc.pty.signals().title()?;
+                    session
+                        .provider
+                        .provider()
+                        .name_in_terminal_title(&title, &session.location.cwd(project))
+                });
+            // Debounced: only a real change is a push — and only a real change is a durable
+            // write. A spinner cycling through glyph frames on an otherwise stable title produces
+            // one change here, not thirty, because the glyph was stripped before the title
+            // reached `signals`.
             if title != live.last_title {
+                if let Some(name) = title.as_deref() {
+                    out.names.push((*id, name.to_string()));
+                }
                 live.last_title = title;
-                changed = true;
+                out.changed = true;
             }
         }
-        changed
+        out
+    }
+
+    /// Record the names [`Self::drain_signals`] observed, durably (feature 029, FR-003).
+    ///
+    /// **Blocking**: each write persists a project's state file, so this runs in the supervisor's
+    /// `spawn_blocking` hop and never on the async runtime.
+    ///
+    /// A failed write is logged and the rest of the batch continues — one session's bad write does
+    /// not abandon the others — and nothing is surfaced to the client. That is deliberate and is
+    /// what FR-009 asks for: the label is already updated in memory, so the user sees the right
+    /// name either way, and a read-only data directory is not a session failure. `WireLifecycle::
+    /// Failed` is about the session's *process*. It is the same posture `adopt_discovered_sessions`
+    /// takes, for the same reason.
+    pub fn record_observed_names(&self, changes: &[(SessionId, String)]) {
+        if changes.is_empty() {
+            return;
+        }
+        let mut inner = self.lock();
+        for (id, name) in changes {
+            if let Err(err) = inner.catalog.record_session_name(*id, name) {
+                tracing::warn!(
+                    session = %id.0,
+                    %err,
+                    "could not persist the session's name; it is still shown"
+                );
+            }
+        }
     }
 
     /// Respawn a session's primary process after a crash and swap it into the live registry. The
@@ -2115,6 +2363,8 @@ impl DaemonState {
                         input: InputReceiver::new(),
                         activity: Activity::new(),
                         last_title: None,
+                        // A shell-only session has no conversation to name.
+                        name_stale: false,
                         // A shell-only session has no AI CLI, so there is nothing to tail.
                         event_log: None,
                         respawned_at: None,

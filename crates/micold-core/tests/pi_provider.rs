@@ -602,3 +602,36 @@ fn a_marker_can_be_written_for_a_location_pi_never_wrote_to() {
     PiProvider.mark_archived(home.path(), &cwd, id).unwrap();
     assert!(PiProvider.is_archived(home.path(), &cwd, id));
 }
+
+// ---------------------------------------------------------------------------------------
+// Feature 029 (persistent session names), FR-004 — the name inside pi's terminal title
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn only_the_name_inside_pis_terminal_title_is_a_name() {
+    // `updateTerminalTitle`: `π - <folder>` while the conversation is unnamed, `π - <name> -
+    // <folder>` once named. The folder is the basename of the directory pi runs in.
+    let cwd = PathBuf::from("/fixture/.claude/worktrees/proj");
+    let name = |title: &str| PiProvider.name_in_terminal_title(title, &cwd);
+
+    assert_eq!(name("π - proj"), None, "an unnamed conversation");
+    assert_eq!(
+        name("π - Fixing the parser - proj"),
+        Some("Fixing the parser".into())
+    );
+    assert_eq!(
+        name("π - a - b - proj"),
+        Some("a - b".into()),
+        "a name may itself contain the separator"
+    );
+    assert_eq!(
+        name("π - Fixing the parser - elsewhere"),
+        None,
+        "another folder's title"
+    );
+    assert_eq!(
+        name("Some extension's title"),
+        None,
+        "a title pi did not shape"
+    );
+}

@@ -185,3 +185,10 @@ boundary, keeping `cfg(target_os)` out of the core.
 ## Complexity Tracking
 
 > No constitution violations. Section intentionally empty.
+
+**Bugfix**: 2026-09-13 — BUG-002: a known-projects row is a `cdk::reflow::Reflow` — a layout-only
+behaviour-layer wrapper that sets the action cluster beside the row's identity half (markers, name,
+git badge) while that half keeps `ROW_LEAD_MIN` (240dp), and on the line beneath it otherwise. The
+name is an `Ellipsized` label and the cluster a wrapping row. Held by
+`crates/micold-client/tests/known_projects_reflow.rs` at 640dp and 440dp, because the layout gates
+resolve only the default window.

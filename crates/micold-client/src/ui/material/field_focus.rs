@@ -643,6 +643,92 @@ fn an_unfocused_button_leaves_both_keys_alone() {
     );
 }
 
+impl Mounted<'_> {
+    /// The keyboard wrapper's state, for an element whose root is a `Button`.
+    fn button_focus(&self) -> super::keyboard_focus::Focus {
+        *self
+            .tree
+            .state
+            .downcast_ref::<super::keyboard_focus::Focus>()
+    }
+
+    /// The middle of the laid-out element.
+    fn centre(&self) -> Point {
+        self.node.bounds().center()
+    }
+}
+
+#[test]
+fn a_clicked_button_takes_the_keyboard_and_draws_no_indicator() {
+    let r = roles();
+    let mut mounted = Mounted::new(button(r));
+    let at = mounted.centre();
+
+    mounted.press(at);
+
+    assert_eq!(
+        mounted.button_focus().indicator(true, true),
+        None,
+        "a pointer press moves focus without drawing the ring or the focus layer — the last button \
+         clicked kept both until something else was clicked, and stacked them on its hover and \
+         pressed layers (FR-022a, BUG-013)",
+    );
+    assert_eq!(
+        mounted.press_key(iced::keyboard::key::Named::Enter),
+        vec!["saved".to_string()],
+        "the press still moved the keyboard: Enter acts on the button just clicked",
+    );
+    assert!(
+        mounted.button_focus().indicator(true, false).is_some(),
+        "a key the button answers is keyboard use, and from then on the focus is shown",
+    );
+}
+
+#[test]
+fn a_button_reached_by_the_traversal_draws_focus_alone_when_hovered() {
+    use micold_core::tokens::state;
+
+    let r = roles();
+    let mut mounted = Mounted::new(button(r));
+    let at = mounted.centre();
+
+    mounted.focus_next();
+    assert_eq!(
+        mounted.button_focus().indicator(true, false),
+        Some(state::FOCUS),
+        "a Tab-focused button at rest draws §5's focus layer and its ring",
+    );
+
+    mounted.hover(at);
+    let top = mounted
+        .button_focus()
+        .indicator(true, true)
+        .expect("hovering a Tab-focused button does not hide its ring");
+    let drawn = 1.0 - (1.0 - state::HOVER) * (1.0 - top);
+    assert!(
+        (drawn - state::FOCUS).abs() < 1e-6,
+        "focus over hover composited {drawn}; §5's layers never sum, so it must be {} (FR-022a)",
+        state::FOCUS,
+    );
+}
+
+#[test]
+fn a_press_after_the_traversal_hides_the_indicator() {
+    let r = roles();
+    let mut mounted = Mounted::new(button(r));
+    let at = mounted.centre();
+
+    mounted.focus_next();
+    mounted.press(at);
+
+    assert_eq!(
+        mounted.button_focus().indicator(true, true),
+        None,
+        "the pointer took over: a press on a Tab-focused button leaves it focused and unmarked, \
+         so its pressed layer is §5's single 10%",
+    );
+}
+
 #[test]
 fn a_disabled_button_is_not_a_tab_stop() {
     let r = roles();

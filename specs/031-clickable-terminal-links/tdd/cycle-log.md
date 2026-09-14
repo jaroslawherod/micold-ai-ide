@@ -1,0 +1,14 @@
+# Cycle Log: Clickable Links in the Terminal
+
+## Baseline
+
+- suite: `scripts/build-lock.sh cargo test --workspace --no-fail-fast` -> 3073 passed, 2 failed, 6 ignored (310 test binaries)
+- commit: `411711c1` (spec merged; no code for this feature yet)
+- recorded: cycle 0, before any change, 2026-09-14
+- the two failures are in `micold-daemon`, which this feature does not touch, and neither involves links:
+  - `exclusivity::one_conversation_one_session::a_second_open_of_a_held_pi_conversation_starts_nothing`
+    (`exclusivity.rs:435`, "exactly one `pi` for one conversation", left 0, right 1; red on 3 reruns)
+  - `pi_launch_wiring::a_pi_session_carries_the_component_only_while_the_switch_is_on`
+    (`pi_launch_wiring.rs:130`, "launch 0 never reached `pi`")
+- both pass in CI on `main` (run `CI` on `b27ffe62`, success), so they are local to this machine. The loop
+  treats them as pre-existing: a cycle is green when nothing else fails, and they are not fixed here.

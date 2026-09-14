@@ -216,7 +216,9 @@ first.
 **Budget**: `rank` over 500 names of realistic length (up to ~60 characters) for a query of up to 32
 characters completes in **≤16 ms** — one frame at 60 fps (SC-002).
 
-Held by a test in `micold-core` over synthetic names, not by inspection. There is no cache and no
+Held by a test in `micold-core` over synthetic names, not by inspection, measured in a **release
+build** (`cargo test --release -p micold-core --test typeahead_budget`, a CI step of its own). A
+debug build's time is not checked against the budget (BUG-003). There is no cache and no
 debounce: FR-005 requires the visible results to correspond to the complete current text, and a
 debounce is exactly a window in which they do not (research R11).
 

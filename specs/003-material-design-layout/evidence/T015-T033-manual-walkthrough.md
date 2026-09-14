@@ -35,7 +35,7 @@ SC-006 ("all pre-existing tests continue to pass") holds for the whole core.
 The binaries under test were built from this checkout, so Linux compiles. macOS and Windows are not
 reachable from here; CI is what enforces them.
 
-## §3 Layout walkthrough — **PASS except FR-016**
+## §3 Layout walkthrough — **PASS except FR-016** (FR-016 fixed and re-run 2026-09-13: **PASS**, `T039-resize-small-rerun.md`)
 
 | Claim | Result |
 |---|---|
@@ -44,7 +44,7 @@ reachable from here; CI is what enforces them.
 | Active-project header: name (`headline`) + path (`label`) + action | **PASS** — "Active project: w2-git", the path in label type, "Open another project" |
 | Known-projects list preserves marker, `git` badge, unavailable state, Open/Rename | **PASS** — Open is replaced by a disabled **Unavailable** on the unavailable row; Rename and Forget stay enabled |
 | Hover / press / focus / disabled visibly distinct (FR-014) | **PASS, with one documented exception** — see below |
-| Resize small: reflows, usable, no clipping (FR-016) | **FAIL** — [BUG-002](../bugs/BUG-002.md) |
+| Resize small: reflows, usable, no clipping (FR-016) | **FAIL** — [BUG-002](../bugs/BUG-002.md). Fixed; the re-run passes (`T039-resize-small-rerun.md`) |
 | About, selector and rename dialogs share the design system (FR-013) | **PASS** |
 
 ### FR-014 — measured, not eyeballed

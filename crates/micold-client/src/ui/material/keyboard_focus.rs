@@ -28,10 +28,16 @@
 //! So for those the indicator is drawn *here*, over the child: §5's focus state layer and FR-022's
 //! ring, at the control's own shape radius. One control, one focus, no call site involved.
 //!
+//! Drawing from outside has two costs, and 018's BUG-013 found both on screen. The child draws its
+//! own hover or pressed layer from state this cannot see, so the focus layer is a top-up to the
+//! heavier opacity rather than a second layer summed onto the first; and a pointer press moves the
+//! keyboard here without showing it, so the ring marks keyboard focus only (FR-022a).
+//!
 //! [`state::FOCUS_RING_WIDTH`]: micold_core::tokens::state::FOCUS_RING_WIDTH
 
 use iced::advanced::widget::{operation, tree, Operation, Tree, Widget};
 use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Renderer as _, Shell};
+use iced::touch;
 use iced::{keyboard, Background, Border, Color, Element, Event, Length, Rectangle, Size, Vector};
 use micold_core::tokens::{state, Rgb};
 
@@ -124,7 +130,7 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
 ///
 /// Implements the stack's own focus trait, so a focus traversal moves through the wrapped control
 /// like any text input — which is what makes this a keyboard fix and not only a paint one.
-#[derive(Default)]
+#[derive(Debug, Default, Clone, Copy)]
 pub(super) struct Focus {
     focused: bool,
     /// The application's answer, as of the last frame this saw it (BUG-004).
@@ -150,6 +156,49 @@ pub(super) struct Focus {
     /// last said catches it on the frame that follows, which is when there is finally a shell to
     /// say it to.
     reported: bool,
+    /// Whether the focus came by keyboard — a traversal, or a key this control answers — and so is
+    /// shown (FR-022a, BUG-013).
+    ///
+    /// A pointer press still takes the keyboard, so Enter and Space act on the button just clicked,
+    /// but it clears this: Material marks keyboard focus, and a ring left on the last button clicked
+    /// says the keyboard is somewhere the user never sent it.
+    visible: bool,
+    /// Whether the child is held down, mirrored from the rendering stack's button, which keeps its
+    /// own copy private. The indicator needs it to know which layer the child has already drawn.
+    pressed: bool,
+}
+
+impl Focus {
+    /// The opacity of the focus layer drawn over the child, or `None` for no indicator at all.
+    ///
+    /// Not §5's focus opacity as it stands. The child has already drawn its own hover or pressed
+    /// layer in the same colour, and §5's states are mutually exclusive — "the heaviest single
+    /// layer is the measurement and layers never sum" — so this is whatever tops the child's layer
+    /// up to the heavier of the two, and nothing when the child's is already heavier (FR-022a).
+    /// Laying a full focus layer over it composited 17.2% hovered and 19% pressed (BUG-013).
+    ///
+    /// `over` is whether the pointer is over the control, which is what the child's own status is
+    /// decided from.
+    pub(super) fn indicator(&self, enabled: bool, over: bool) -> Option<f32> {
+        if !(self.focused && self.visible) {
+            return None;
+        }
+        let child = match (enabled && over, self.pressed) {
+            (false, _) => 0.0,
+            (true, false) => state::HOVER,
+            (true, true) => state::PRESSED,
+        };
+        Some(top_up(child, state::FOCUS))
+    }
+}
+
+/// The opacity of a layer that, laid over one of `under` in the same colour, leaves `target`.
+fn top_up(under: f32, target: f32) -> f32 {
+    if under >= target {
+        0.0
+    } else {
+        (target - under) / (1.0 - under)
+    }
 }
 
 impl operation::Focusable for Focus {
@@ -157,12 +206,16 @@ impl operation::Focusable for Focus {
         self.focused
     }
 
+    /// Only a traversal calls this — a press sets the flag directly — so focus arriving here is
+    /// keyboard focus, and shown.
     fn focus(&mut self) {
         self.focused = true;
+        self.visible = true;
     }
 
     fn unfocus(&mut self) {
         self.focused = false;
+        self.visible = false;
     }
 }
 
@@ -257,12 +310,17 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
         let Some(indicator) = self.indicator else {
             return;
         };
-        if !tree.state.downcast_ref::<Focus>().focused {
-            return;
-        }
         let bounds = layout.bounds();
-        // §5's state layer: the content colour over the container at the published focus opacity.
-        // Over rather than composited into, because a button's background belongs to the child.
+        let Some(opacity) = tree
+            .state
+            .downcast_ref::<Focus>()
+            .indicator(self.enabled, cursor.is_over(bounds))
+        else {
+            return;
+        };
+        // §5's state layer: the content colour over the container, topped up to the focus opacity
+        // over whatever layer the child drew. Over rather than composited into, because a button's
+        // background belongs to the child.
         renderer.fill_quad(
             renderer::Quad {
                 bounds,
@@ -273,7 +331,7 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
                 ..renderer::Quad::default()
             },
             Background::Color(Color {
-                a: state::FOCUS,
+                a: opacity,
                 ..style::color(indicator.layer)
             }),
         );
@@ -312,6 +370,8 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
         if before {
             if let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event {
                 if let Some(message) = self.message_for(key) {
+                    // Keyboard use, so from here the focus is shown — whatever put it here.
+                    tree.state.downcast_mut::<Focus>().visible = true;
                     shell.publish(message);
                     shell.capture_event();
                 }
@@ -331,11 +391,29 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
 
         // A press takes the keyboard, and a press anywhere else gives it up — the same rule the
         // stack's text input follows, so a surface holding both behaves as one thing rather than as
-        // two controls with different ideas about what a click means.
+        // two controls with different ideas about what a click means. It does not *show* the
+        // keyboard, though: the pointer is what the user is using (FR-022a).
         if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event {
             let now = self.enabled && cursor.is_over(layout.bounds());
             let state = tree.state.downcast_mut::<Focus>();
             state.focused = now;
+            state.visible = false;
+        }
+
+        // The child's pressed state, by the rendering stack's button's own rule: taken by a press
+        // over it, released by any release, lost with the finger.
+        match event {
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+            | Event::Touch(touch::Event::FingerPressed { .. }) => {
+                if self.enabled && cursor.is_over(layout.bounds()) {
+                    tree.state.downcast_mut::<Focus>().pressed = true;
+                }
+            }
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+            | Event::Touch(touch::Event::FingerLifted { .. } | touch::Event::FingerLost { .. }) => {
+                tree.state.downcast_mut::<Focus>().pressed = false;
+            }
+            _ => {}
         }
 
         // Against what was last reported, not against `before`: focus can also have been taken by
@@ -451,5 +529,40 @@ mod tests {
             height: 1.0,
         });
         assert_eq!((ring.width, ring.height), (0.0, 0.0));
+    }
+
+    /// One layer of `top` laid over another of `under`, both in the same colour — which is what
+    /// the indicator and a button's own hover or pressed fill are (`Variant::content`).
+    fn over(under: f32, top: f32) -> f32 {
+        1.0 - (1.0 - under) * (1.0 - top)
+    }
+
+    /// §5's states are mutually exclusive, so a focused control that is also hovered or pressed
+    /// shows the heavier of the two layers — never both (FR-022a, BUG-013). The focus layer is
+    /// drawn over a child that has already drawn its own, so what it adds is the difference.
+    #[test]
+    fn the_focus_layer_tops_the_childs_layer_up_rather_than_adding_to_it() {
+        let focus = Focus {
+            focused: true,
+            visible: true,
+            ..Focus::default()
+        };
+        for (over_child, pressed, child) in [
+            (false, false, 0.0),
+            (true, false, state::HOVER),
+            (true, true, state::PRESSED),
+        ] {
+            let focus = Focus { pressed, ..focus };
+            let top = focus
+                .indicator(true, over_child)
+                .expect("a keyboard-focused control draws its indicator");
+            let drawn = over(child, top);
+            assert!(
+                (drawn - child.max(state::FOCUS)).abs() < 1e-6,
+                "child layer {child}: drew {drawn}, §5 allows the heaviest single layer, \
+                 {}",
+                child.max(state::FOCUS),
+            );
+        }
     }
 }

@@ -819,6 +819,15 @@ pub const EXEMPTIONS: &[Exemption] = &[
                  section poses.",
     },
     Exemption {
+        module: "cdk/reflow.rs",
+        component: "Reflow",
+        reason: "a layout-only wrapper with no appearance: it measures a trailing cluster and \
+                 either sets it beside a leading block or moves it to the line below (003 \
+                 BUG-002). It draws its two children and nothing else; posing it would show \
+                 whatever it was handed, and its breakpoint is held by its own unit tests and \
+                 `tests/known_projects_reflow.rs`.",
+    },
+    Exemption {
         module: "material/terminal_pane.rs",
         component: "GridSizeReporter",
         reason: "a measuring wrapper with no appearance: it lays out to its child, draws the child \
