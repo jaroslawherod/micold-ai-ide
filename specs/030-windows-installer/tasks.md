@@ -243,7 +243,7 @@ description: "Task list for feature 030: Windows installation package"
 - [X] T066 [US1] [A2] US1-AS2: in the same smoke run, the installed client has no `conhost.exe` child.
 - [X] T067 [US1] [A3] US1-AS3: in the same smoke run, the daemon pipe appears within 20 s and the daemon has no `conhost.exe` child.
 - [X] T068 [US1] [A4] US1-AS4: in the same smoke run, the uninstall key's `DisplayVersion` equals the workspace version.
-- [ ] T069 [US1] [A5] US1-AS5: the real-file case of `windows_violations` in `crates/micold-client/tests/packaging_excludes_showcase.rs` passes on the committed `packaging/windows/micold-ai-ide.iss`.
+- [X] T069 [US1] [A5] US1-AS5: the real-file case of `windows_violations` in `crates/micold-client/tests/packaging_excludes_showcase.rs` passes on the committed `packaging/windows/micold-ai-ide.iss`.
 
 **Checkpoint**: a CI-built setup `.exe` installs and launches on x64 and ARM64 with no console, and the daemon pipe appears. US1 can be demonstrated on its own from the CI artifact.
 
