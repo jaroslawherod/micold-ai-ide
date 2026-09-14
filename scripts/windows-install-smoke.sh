@@ -170,5 +170,13 @@ Where-Object { \$_.GetValue('DisplayName') -like 'Micold AI IDE*' }).Count")"
 [ "$entries" = 1 ] || fail "$entries Installed apps entries for Micold AI IDE after the repair, want 1 (I4)"
 echo "repaired, one Installed apps entry"
 
+# The repair stopped the old daemon rather than replacing its files underneath it (I4, FR-009). Its
+# pid counts as gone once no micold-daemon.exe holds it, so a pid Windows reuses does not fail this.
+survivor="$(win "[bool](Get-Process -Id $daemon_pid -ErrorAction SilentlyContinue |
+Where-Object { \$_.ProcessName -eq 'micold-daemon' })")"
+[ "$survivor" = False ] || fail "the old daemon (pid $daemon_pid) is still running after the repair (I4)"
+echo "the old daemon (pid $daemon_pid) is gone"
+daemon_pid=""
+
 # clean_up stops what is still running on exit.
 echo "== smoke passed"
