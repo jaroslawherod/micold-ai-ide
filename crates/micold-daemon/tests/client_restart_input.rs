@@ -21,7 +21,7 @@
 //! discarded" — the thing a person checks by typing. (That applied bytes then reach the PTY is
 //! `drive_loop.rs`'s job; this test is about the ordering contract across the restart.)
 
-// unix-only: pending Windows triage (030 T026/T027)
+// unix-only: seeds `projects.json` through `XDG_DATA_HOME`, which the Windows data directory (a known folder) ignores, so it would overwrite the signed-in user's catalog; stops its daemon with `kill` and `fuser`
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

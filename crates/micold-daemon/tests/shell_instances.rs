@@ -2,9 +2,6 @@
 //! instances; exactly one is *attached* (streamed + driven) at a time, and `SessionId`-addressed
 //! input routes to the attached one (data-model §Session, contracts/shell-instance-lifecycle.md).
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
@@ -22,6 +19,25 @@ use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
+
+/// What a terminal sends for Enter: a newline through a Unix PTY, a carriage return through ConPTY.
+#[cfg(unix)]
+const ENTER: &str = "\n";
+#[cfg(windows)]
+const ENTER: &str = "\r";
+
+/// A primary that stays alive and echoes nothing on its own, so its screen tells it apart from a
+/// shell instance's.
+#[cfg(unix)]
+fn quiet_primary() -> CommandBuilder {
+    CommandBuilder::new("cat")
+}
+#[cfg(windows)]
+fn quiet_primary() -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("cmd");
+    cmd.arg("/q");
+    cmd
+}
 
 fn visible_text(session: &PtySession) -> String {
     let term = session.term().lock();
@@ -91,8 +107,8 @@ fn a_shell_instance_can_be_opened_attached_and_driven_independently_of_the_prima
     let sid = SessionId::new();
     let state = DaemonState::new(catalog_with_session(project.path(), store.path(), sid));
 
-    // Primary process: a `cat` (echoes input) so we can tell processes apart by content.
-    let mut cmd = CommandBuilder::new("cat");
+    // Primary process: a `cat` (`cmd /q` on Windows) so we can tell processes apart by content.
+    let mut cmd = quiet_primary();
     cmd.cwd(std::env::temp_dir());
     let primary = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn primary");
     let primary = state.register_session(primary);
@@ -108,7 +124,7 @@ fn a_shell_instance_can_be_opened_attached_and_driven_independently_of_the_prima
 
     // Input (SessionId-addressed) routes to the ATTACHED process — the shell echoes it (cooked-mode
     // line discipline). The Primary `cat` must never see it: proof the two processes are distinct.
-    state.session_input(sid, 0, b"feature011_marker\n");
+    state.session_input(sid, 0, format!("feature011_marker{ENTER}").as_bytes());
     assert!(
         wait_until(Duration::from_secs(5), || visible_text(&shell)
             .contains("feature011_marker")),
@@ -253,7 +269,7 @@ fn the_snapshot_reports_which_shell_instances_are_live() {
     // standing in for one (mirrors `input_serial`'s reasoning).
     assert!(reported_live_shells(&state, sid).is_empty());
 
-    let mut cmd = CommandBuilder::new("cat");
+    let mut cmd = quiet_primary();
     cmd.cwd(std::env::temp_dir());
     let primary = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn primary");
     let primary = state.register_session(primary);
@@ -305,7 +321,7 @@ fn a_shell_instance_that_exits_on_its_own_stops_being_reported_live() {
     let sid = SessionId::new();
     let state = DaemonState::new(catalog_with_session(project.path(), store.path(), sid));
 
-    let mut cmd = CommandBuilder::new("cat");
+    let mut cmd = quiet_primary();
     cmd.cwd(std::env::temp_dir());
     let primary = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn primary");
     let primary = state.register_session(primary);
@@ -319,7 +335,7 @@ fn a_shell_instance_that_exits_on_its_own_stops_being_reported_live() {
     assert_eq!(reported_live_shells(&state, sid), vec![inst]);
 
     // Let it end the way a user ends one.
-    state.session_input(sid, 0, b"exit\n");
+    state.session_input(sid, 0, format!("exit{ENTER}").as_bytes());
     assert!(
         wait_until(Duration::from_secs(10), || !shell.is_alive()),
         "the shell must actually exit for this test to be testing anything"
@@ -357,7 +373,7 @@ fn the_supervision_tick_announces_a_dead_shell_instance_exactly_once() {
     let sid = SessionId::new();
     let state = DaemonState::new(catalog_with_session(project.path(), store.path(), sid));
 
-    let mut cmd = CommandBuilder::new("cat");
+    let mut cmd = quiet_primary();
     cmd.cwd(std::env::temp_dir());
     let primary = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn primary");
     let primary = state.register_session(primary);
@@ -372,7 +388,7 @@ fn the_supervision_tick_announces_a_dead_shell_instance_exactly_once() {
     // While it lives, the tick has nothing to say about it.
     assert!(state.supervise_exited_sessions().is_empty());
 
-    state.session_input(sid, 0, b"exit\n");
+    state.session_input(sid, 0, format!("exit{ENTER}").as_bytes());
     assert!(wait_until(Duration::from_secs(10), || !shell.is_alive()));
 
     assert_eq!(

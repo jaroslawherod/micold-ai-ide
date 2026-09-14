@@ -25,9 +25,10 @@
 //! on parallel threads. A second `#[test]` here would race the first's `set_var`, so the
 //! idempotence check is folded into the one flow rather than split out — see `autospawn.rs`, which
 //! is one test for the same reason.
-
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
+//!
+//! The Windows endpoint takes no environment input by design, so there the flow uses the signed-in
+//! user's real endpoint, like `daemon_stop.rs`: it is meant for the CI leg, not a desktop with the
+//! app open.
 
 use std::time::Duration;
 
@@ -37,8 +38,8 @@ use micold_core::spawn::{running_daemon_pid, stop_running_daemon, DAEMON_BIN_ENV
 /// The daemon binary Cargo built for this test run.
 const DAEMON_BIN: &str = env!("CARGO_BIN_EXE_micold-daemon");
 
-/// Poll until nothing is listening on `endpoint`. SIGTERM is asynchronous: the daemon unlinks its
-/// socket in `Drop`, so "stopped" is observable only by asking, and only after a moment.
+/// Poll until nothing is listening on `endpoint`. A stop is asynchronous: the daemon releases its
+/// endpoint as it exits, so "stopped" is observable only by asking, and only after a moment.
 async fn wait_until_nothing_listens(endpoint: &micold_core::endpoint::Endpoint) {
     for _ in 0..200 {
         if matches!(connect(endpoint, "probe").await, Ok(None)) {
@@ -55,7 +56,7 @@ async fn a_stale_daemon_is_stopped_and_replaced_without_the_user_finding_a_proce
 
     // Isolate the endpoint into our tempdir and point the spawner at the freshly built binary; the
     // child inherits both, so both sides resolve the same socket path.
-    // SAFETY: written before any spawn; `#[cfg(unix)]` + the single test this file deliberately has.
+    // SAFETY: written before any spawn, by the single test this file deliberately has.
     std::env::set_var(DAEMON_BIN_ENV, DAEMON_BIN);
     std::env::set_var("XDG_RUNTIME_DIR", dir.path());
     // macOS keys the endpoint on `$HOME` instead; set both so the stale daemon is this test's own.

@@ -6,9 +6,6 @@
 //! (head/path/token/event) are unit-tested inside `hooks.rs`; this proves the wiring — bind → POST →
 //! the session's projected activity signal.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -69,9 +66,17 @@ fn state_with_session(id: SessionId) -> (Arc<DaemonState>, tempfile::TempDir, te
     (state, project, store)
 }
 
-/// Register a `cat` PTY under the catalog id so the session is live (a target for `note_activity`).
+/// Register a `cat` PTY (`cmd /q` on Windows) under the catalog id so the session is live (a target
+/// for `note_activity`).
 fn register_cat(state: &DaemonState, id: SessionId) -> Arc<PtySession> {
+    #[cfg(unix)]
     let mut cmd = CommandBuilder::new("cat");
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut cmd = CommandBuilder::new("cmd");
+        cmd.arg("/q");
+        cmd
+    };
     cmd.cwd(std::env::temp_dir());
     let session = PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("spawn cat");
     state.register_session(session)

@@ -34,9 +34,6 @@
 //! state (H1a/A1a). The event log can always overrule the spinner; the spinner can never overrule
 //! the log.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
@@ -137,9 +134,17 @@ fn catalog_with_session_in_mode(
     )
 }
 
-/// Register a `cat` PTY under the catalog-known id so the session is both durable and live.
+/// Register a `cat` PTY (`cmd /q` on Windows) under the catalog-known id so the session is both
+/// durable and live.
 fn register_cat(state: &DaemonState, id: SessionId) -> std::sync::Arc<PtySession> {
+    #[cfg(unix)]
     let mut cmd = CommandBuilder::new("cat");
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut cmd = CommandBuilder::new("cmd");
+        cmd.arg("/q");
+        cmd
+    };
     cmd.cwd(std::env::temp_dir());
     let session = PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("spawn cat session");
     state.register_session(session)
@@ -153,12 +158,57 @@ fn register_emitter(
     id: SessionId,
     printf_body: &str,
 ) -> std::sync::Arc<PtySession> {
-    let mut cmd = CommandBuilder::new("sh");
-    cmd.arg("-c");
-    cmd.arg(format!("printf '{printf_body}'; sleep 5"));
+    let mut cmd = emitter_command(printf_body);
     cmd.cwd(std::env::temp_dir());
     let session = PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("spawn emitter session");
     state.register_session(session)
+}
+
+#[cfg(unix)]
+fn emitter_command(printf_body: &str) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("sh");
+    cmd.arg("-c");
+    cmd.arg(format!("printf '{printf_body}'; sleep 5"));
+    cmd
+}
+
+/// ConPTY does not pass a child's own escape sequences through verbatim: it keeps the console's
+/// state and re-renders it as VT. A title reaches the parser as the OSC-0 ConPTY emits when the
+/// console title changes, so on Windows the emitter sets the title and ConPTY writes the sequence.
+#[cfg(windows)]
+fn emitter_command(printf_body: &str) -> CommandBuilder {
+    let decoded = printf_octal_unescape(printf_body);
+    let title = decoded
+        .strip_prefix("\x1b]0;")
+        .and_then(|rest| rest.strip_suffix('\x07'))
+        .expect("the Windows emitter only sets OSC-0 titles");
+    let codes: Vec<String> = title.encode_utf16().map(|unit| unit.to_string()).collect();
+    let mut cmd = CommandBuilder::new("powershell");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command"]);
+    cmd.arg(format!(
+        "[Console]::Title = -join [char[]]({}); Start-Sleep -Seconds 5",
+        codes.join(",")
+    ));
+    cmd
+}
+
+/// Resolve the `\NNN` octal escapes a `printf` format uses, decoding the bytes as UTF-8.
+#[cfg(windows)]
+fn printf_octal_unescape(body: &str) -> String {
+    let mut bytes = Vec::new();
+    let mut rest = body.as_bytes();
+    while let Some((&first, tail)) = rest.split_first() {
+        if first == b'\\' && tail.len() >= 3 && tail[..3].iter().all(|b| (b'0'..=b'7').contains(b))
+        {
+            let octal = std::str::from_utf8(&tail[..3]).unwrap();
+            bytes.push(u8::from_str_radix(octal, 8).expect("a three-digit octal escape"));
+            rest = &tail[3..];
+        } else {
+            bytes.push(first);
+            rest = tail;
+        }
+    }
+    String::from_utf8(bytes).expect("the escaped body is UTF-8")
 }
 
 /// `COPILOT_HOME` is process-global, so every test that points the Copilot provider at a private
