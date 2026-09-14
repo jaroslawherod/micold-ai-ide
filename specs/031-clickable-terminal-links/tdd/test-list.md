@@ -86,7 +86,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | U10 | Accepts web hosts `localhost`, `a.example`, `[::1]` and `intranet:8080`; rejects `http://intranet` (no dot, no port) | FR-001 | example | DONE | `crates/micold-core/src/link/detect.rs::tests::accepts_a_web_host_only_when_it_is_localhost_dotted_bracketed_or_has_a_port` |
 | U11 | Rejects `https://` alone and `http://exa mple` | FR-001 | example | DONE | `crates/micold-core/src/link/detect.rs::tests::rejects_a_scheme_alone_and_a_host_broken_by_a_space` |
 | U12 | Finds `mailto:team@example.com`; rejects `mailto:@example.com` and `mailto:team@` | FR-001 | example | DONE | `crates/micold-core/src/link/detect.rs::tests::finds_a_mail_address_only_with_text_on_both_sides_of_the_at_sign` |
-| U13 | Finds `file:///tmp/x`; rejects a `file:` address whose path does not start with `/` | FR-001 | example | PENDING | |
+| U13 | Finds `file:///tmp/x`; rejects a `file:` address whose path does not start with `/` | FR-001 | example | DONE | `crates/micold-core/src/link/detect.rs::tests::finds_a_file_address_only_when_its_path_starts_with_a_slash` |
 | U14 | Never finds scheme-less text (`example.com/docs`, `www.example.com`) | FR-001, SC-002 | example | PENDING | |
 | U15 | Never finds `javascript:…`, `data:…` or `vbscript:…` | FR-011 | example | PENDING | |
 | U16 | Matches the scheme ASCII case-insensitively (`HTTPS://EXAMPLE.COM`) | FR-001 | example | PENDING | |

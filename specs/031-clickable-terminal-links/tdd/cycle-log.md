@@ -132,3 +132,12 @@
 - green: `mailto:` joins the recognised schemes; `well_formed` takes the scheme and, for `mailto:`, requires text on both sides of the first `@`. Suite -> 1070 passed, 0 failed
 - refactor: the web host rule moved unchanged into `names_a_host`, so `well_formed` reads as one rule per scheme; suite re-run green
 - commit: `feat(031): recognise a mail address with a mailbox and a domain (U12)`
+
+## Cycle 13: U13 finds `file:///tmp/x`; rejects a `file:` address whose path does not start with `/`
+
+- test: `crates/micold-core/src/link/detect.rs::tests::finds_a_file_address_only_when_its_path_starts_with_a_slash` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::finds_a_file_address_only_when_its_path_starts_with_a_slash -- --exact`
+  -> `left: []` / `right: ["file:///tmp/x", "file://localhost/tmp/y"]` (1 failed)
+- green: `file://` joins the recognised schemes; `well_formed` accepts it when a `/` follows the optional host (research R3: "`file` needs `file://` followed by an optional host and a path starting with `/`"). Suite -> 1071 passed, 0 failed
+- refactor: `well_formed` became one `match` arm per scheme; suite re-run green
+- commit: `feat(031): recognise a file address with an absolute path (U13)`
