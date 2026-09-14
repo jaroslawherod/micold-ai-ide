@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/settings-side-bar-should-be-animated
 - **Started**: 2026-09-14
 - **Phase**: 4-implement
-- **Next step**: M1 review round 2 (fresh A and B) on the round-1 fixes, then PR 3 (M1)
+- **Next step**: M1 review round 3 (fresh A and B) on the round-2 fixes, then PR 3 (M1)
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T004, T045 | The worktree sidebar hides and shows on `emphasized` over `medium_4`, never narrower than its rail | — | in review (round 2) |
+| M1 | T001–T004, T045 | The worktree sidebar hides and shows on `emphasized` over `medium_4`, never narrower than its rail | — | in review (round 3) |
 | M2 | T005–T044 | The settings rail slides, with icons on their line, badges marked, focus kept, pointer confined | — | pending |
 
 ## Decisions
@@ -47,7 +47,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | D17 | tasks | The TDD baseline is red: 2 of 3081 fail. Stop the loop? | No. Both are daemon `pi` launch tests (`exclusivity`, `pi_launch_wiring`) that fail on this host only; CI `main` is green and 030 touches no daemon code. Recorded as a local-only red; T001 rechecks on fresh main and escalates only if CI fails too or another test fails | agent-resolved | tdd/cycle-log.md *Baseline*; `gh run list --branch main` |
 | D18 | tasks | Tasks and milestone review still had MAJOR findings after 3 rounds (r1 3, r2 4, r3 2 MAJOR; all fixed). Run a 4th round or open PR 2? | Run a 4th round | decided by user | escalation, category 5 |
 | D19 | tasks | Tasks review r4 returned 1 MAJOR (T017 expected Escape to close Settings, which it does not: Settings is not a registered surface) and nothing else. Review again? | No. Fixed as the reviewer proposed (Save and Cancel are Settings' only exits). D18 approved one more round, not an open-ended loop; r4 confirmed every earlier fix holds (same reasoning as D9, D14) | agent-resolved | tasks review r4; app.rs `EscapePressed`, overlay/registry.rs |
-| D20 | implement | M1 review r1 (B, MAJOR): on `emphasized` the closing drawer spends ~150 ms (linear ~33 ms) laid out narrower than its 31 px rail, so the main pane creeps left and jumps back at the swap. Accept it or fix it? | Fix it in M1: `NavigationDrawer::layout` floors the revealed width at the rail's width less the handle's (clamped to the panel's), test-first as U23/T045. The swap itself (at `CLOSED`) is unchanged. A regression the curve introduced is FR-003's to carry, and the fix is three lines | agent-resolved | navigation_drawer.rs `layout`; sidebar.rs:33,262; resize_handle.rs:30 |
+| D20 | implement | M1 review r1 (B, MAJOR): on `emphasized` the closing drawer spends ~150 ms (linear ~33 ms) laid out narrower than its rail (32 px; first recorded as 31, corrected in r2), so the main pane creeps left and jumps back at the swap. Accept it or fix it? | Fix it in M1: `NavigationDrawer::layout` floors the revealed width at the rail's width less the handle's (clamped to the panel's), test-first as U23/T045. The swap itself (at `CLOSED`) is unchanged. A regression the curve introduced is FR-003's to carry, and the fix is three lines. spec.md (Assumptions, Scope, SC-002), contract §2 and plan (*Scale/Scope*, *The sidebar curve*) amended in r2 | agent-resolved | navigation_drawer.rs `layout`; sidebar.rs:33,262; divider.rs:18; resize_handle.rs:30; M1 review r2 A F1 |
+| D21 | implement | M1 review r2 (B, MINOR): closing, the drawer's width reaches its floor at p ≈ 0.087 (~224 ms) but the rail swaps in at `CLOSED` (~379 ms), so the slide visibly ends ~155 ms before the strip appears. Fix in M1? | No: recorded under *Follow-ups not done*. The swap time is unchanged from `main` (not a regression), and swapping at the floor moves `showing_rail` off progress alone into state `layout` computes, a change to the drawer's swap that the spec scopes out | agent-resolved | M1 review r2 B F2; spec.md *Scope* |
 
 ## Declined review findings
 
@@ -67,3 +68,6 @@ None.
   (`a_pi_session_carries_the_component_only_while_the_switch_is_on`), in code this flow does not
   touch; CI on main is green (D17). T001 rechecked on b27ffe62: only `exclusivity` fails (3074 passed,
   1 failed, shell suites pass), so the flow continues; not this feature's to fix.
+- The worktree sidebar swaps to its strip at `CLOSED`, ~155 ms after its width reaches the rail's
+  floor on `emphasized` (D21). Swapping when the laid-out width reaches the floor would end the slide
+  on the swap; it needs `showing_rail` to read state from `layout`, and the spec scopes the swap out.

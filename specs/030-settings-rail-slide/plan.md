@@ -74,7 +74,8 @@ rectangle (SC-005). Source-scanning gates stay green: `animated_layout_relayouts
 tokens), `one_overlay_implementation.rs` (the new widgets forward overlays and construct none).
 
 **Scale/Scope**: One component (`SectionList`) and its two screens — Settings and the showcase's
-rail example — plus one line of `NavigationDrawer`. The worktree sidebar's strip swap is out of scope.
+rail example — plus `NavigationDrawer`'s curve and its width floor (D20). The worktree sidebar's strip
+swap is out of scope.
 
 ## Constitution Check
 
@@ -162,6 +163,13 @@ asserts the drawer's timing shape (checked: `navigation_drawer.rs` tests assert 
 `animated_layout_relayouts.rs` asserts relayout requests). The strip swap in `ui/mod.rs` is
 untouched. SC-002's "same fraction at the same elapsed time" is asserted by driving a drawer and a
 rail with the same frame instants.
+
+The curve's slow tail makes a second change necessary (M1 review round 1, D20). `layout` sized the
+revealed panel at `full · p`, which below `p ≈ 0.087` (a 300 px panel) is narrower than the 32 px
+strip, so on `emphasized` the content beside the drawer spent ~150 ms left of the strip's edge and
+jumped back at the swap. The revealed width is floored at the rail's width less the handle's,
+clamped to the panel's (U23). With no handle and a zero-width rail, as in T019's mount and
+`settings_view.rs`, the floor is 0 and nothing changes. The swap itself still happens at `CLOSED`.
 
 ### Risks
 

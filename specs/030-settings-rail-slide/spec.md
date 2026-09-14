@@ -189,7 +189,8 @@ hover and press land only on controls that are drawn.
   the slide. The settings rail and the worktree
   sidebar's panel take the same duration and follow the same curve: sampled at the same elapsed
   times, both have completed the same fraction of their width change. The sidebar's swap to its
-  narrow strip once fully closed is not part of that travel.
+  narrow strip once fully closed is not part of that travel, nor is the stretch before it where the
+  panel's width holds at the strip's.
 - **SC-003**: On every frame of a slide in which the user neither moves focus nor changes section,
   focus is on the control the user activated (100% of frames), and the number of keyboard-reachable
   controls equals the count at rest.
@@ -219,7 +220,9 @@ hover and press land only on controls that are drawn.
   from a named motion token"). Matching the rail to that drift would put a second panel off the
   contract. Leaving the
   sidebar alone would make the two panels move differently, the opposite of the request. FR-003
-  therefore corrects the sidebar's curve. That is the only change to the sidebar.
+  therefore corrects the sidebar's curve, and floors its panel's laid-out width at its narrow
+  strip's so the curve's slow tail does not pull the content beside it past the strip's edge (D20).
+  Those are the only changes to the sidebar.
 - **The rail is an instance of the sidebar slide, not a new kind of animation.** Feature 018 capped
   the new animations *it* introduced at four (018 FR-035a, "introduced by this feature"). Its
   contract repeats the cap more strongly: "Four is the count FR-035a and SC-010 both carry, and no
@@ -239,7 +242,7 @@ hover and press land only on controls that are drawn.
   lasts as long as the process (feature 027, FR-026d). This feature changes none of that.
 - **Scope**: the shared navigation rail component (feature 027, FR-026a) and every screen built on
   it: Settings, and the component showcase's rail example. The worktree sidebar is in scope only for
-  its panel's curve (FR-003); its swap to a narrow strip once fully closed is out of scope. Other
+  its panel's curve (FR-003) and the width floor that curve needs (D20); its swap to a narrow strip once fully closed is out of scope. Other
   layout changes that snap today, such as the text field's floating label (feature 018, FR-044),
   are out of scope.
 - **Dependencies**: feature 027's collapsible rail (FR-026a–e), feature 018's motion tokens (§6.3),

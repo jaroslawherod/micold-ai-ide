@@ -59,3 +59,15 @@ existed and failed before the implementation.
 - commit: the M1 round-1 fixes commit on top of `bbc2414b`
 - notes: added mid-milestone from M1 code review round 1 (ledger D20, task T045). The behaviour
   predates 030 on a linear track, where it lasted ~33 ms; `emphasized` stretched it to ~150 ms
+
+## Correction and strengthening: U23 (M1 review round 2)
+
+- correction: cycle 2's commit is `4af105ca`. The rail is 32 px wide, not 31: `collapsed_strip` is a
+  `STRIP_WIDTH - 1` surface plus a 1 px `Divider` (`divider.rs:18`). The code reads `rail.size()`, so
+  only the test's constant and the records were wrong
+- test strengthened, no production change: `a_sliding_drawer_is_never_narrower_than_its_rail` now
+  asserts the node's exact width (32 closing at 0.05, 0.02, `2 · CLOSED` and opening at 0; 156 closing
+  at 0.5) and that the handle sits at the panel's right edge. It passes on `4af105ca`
+- mutant: the floor without subtracting the handle (`.max(rail.size().width)`) ->
+  `scripts/build-lock.sh cargo test -p micold-client --lib ui::material::navigation_drawer::tests::a_sliding_drawer_is_never_narrower_than_its_rail -- --exact`
+  -> `panicked at crates/micold-client/src/ui/material/navigation_drawer.rs:551:13: assertion `left == right` failed: open false at progress 0.05: the drawer's width  left: 38.0 right: 32.0`; restored
