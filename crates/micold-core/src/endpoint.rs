@@ -278,14 +278,52 @@ mod imp {
 mod tests {
     use super::*;
 
+    /// The pipe name's prefix; the user's SID follows it (contracts/windows-endpoint.md, E1).
+    #[cfg(windows)]
+    const PIPE_PREFIX: &str = r"\\.\pipe\Micold.Daemon.";
+
     #[cfg(windows)]
     #[test]
     fn resolve_creates_a_usable_endpoint_pair() {
-        // Windows endpoint resolution is a deliberate stub until the Windows CI gate (T083/W5): it
-        // must fail loudly as `Unsupported` rather than bind a half-configured pipe. Asserting the
-        // stub contract keeps CI honest without pretending Windows is done.
-        let err = resolve().expect_err("windows resolve is a planned stub (T083/W5)");
-        assert_eq!(err.kind(), std::io::ErrorKind::Unsupported);
+        // E1.1: the pipe is keyed on the user's SID, so two users on one machine never share it.
+        let ep = resolve().expect("resolve endpoint");
+        let name = ep.socket_path.to_str().expect("a pipe name is UTF-8");
+        let sid = name
+            .strip_prefix(PIPE_PREFIX)
+            .unwrap_or_else(|| panic!("pipe name {name:?} should start with {PIPE_PREFIX:?}"));
+        let digits = sid.strip_prefix("S-1-").unwrap_or("");
+        assert!(
+            !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit() || c == '-'),
+            "pipe name {name:?} should end in a string SID matching ^S-1-[0-9-]+$"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolve_puts_the_pid_record_in_the_local_run_dir() {
+        // E1.2: the pid record the stop path reads (FR-023), beside the app's local data.
+        let ep = resolve().expect("resolve endpoint");
+        let tail = std::path::Path::new(r"micold-ai-ide\run\micold-daemon.pid");
+        assert!(
+            ep.lock_path.ends_with(tail),
+            "lock path {:?} should end in {tail:?}",
+            ep.lock_path
+        );
+        assert!(
+            ep.lock_path.parent().is_some_and(|dir| dir.is_dir()),
+            "resolve must create the directory of {:?}",
+            ep.lock_path
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolve_is_stable() {
+        // E1.3: the client and the daemon resolve independently and must meet at one pipe.
+        assert_eq!(
+            resolve().expect("first resolve"),
+            resolve().expect("second resolve")
+        );
     }
 
     #[cfg(unix)]
