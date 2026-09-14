@@ -117,14 +117,14 @@ mod tests {
 
     /// One row of the fake grid: its text, whether it soft-wraps, and the URIs declared on it.
     struct Row {
-        text: &'static str,
+        text: String,
         wrapped: bool,
         declared: Vec<(Range<u16>, &'static str)>,
     }
 
-    fn row(text: &'static str) -> Row {
+    fn row(text: &str) -> Row {
         Row {
-            text,
+            text: text.to_string(),
             wrapped: false,
             declared: Vec::new(),
         }
@@ -162,7 +162,7 @@ mod tests {
 
     impl LinkRows for Rows {
         fn text(&self, row: i64) -> Option<&str> {
-            self.get(row).map(|row| row.text)
+            self.get(row).map(|row| row.text.as_str())
         }
 
         fn wrapped(&self, row: i64) -> bool {
