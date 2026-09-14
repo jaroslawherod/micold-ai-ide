@@ -4,7 +4,7 @@ loop: outside-in
 profile: .specify/memory/tdd-profile.md
 spec_criteria: 1 # scoped to BUG-007: FR-013e / SC-014 only — see "Out of scope"
 planned_at: 226d3a8b
-updated_at: 226d3a8b
+updated_at: 2c8c5ae3 # the Red commit; states updated with the Green commit
 suite_baseline: green # CI run on origin/main 226d3a8b concluded success; see cycle-log.md
 ---
 
@@ -35,25 +35,25 @@ GUI. A1 is therefore held by T076's recorded visual pass on Xvfb (the `visual-pa
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U1  | A `Char` selection started and never updated contains no cell and yields empty text | FR-013e | example | PENDING | |
-| U2  | A `Char` selection updated onto its own start anchor contains that cell and yields its character | FR-013e, D2 | example (mutant: empty while `current == start`) | PENDING | |
-| U3  | A `Char` selection dragged into another cell and back contains the pressed cell and yields its character | FR-013e, D2 | example (mutant: empty until the moving end differs from the start) | PENDING | |
-| U4  | `Word` and `Line` selections started without motion select the word and the line | FR-013b, FR-013e | example | PENDING | |
+| U1  | A `Char` selection started and never updated contains no cell and yields empty text | FR-013e | example | DONE | `crates/micold-client/src/selection.rs::tests::a_click_without_a_drag_selects_nothing` |
+| U2  | A `Char` selection updated onto its own start anchor contains that cell and yields its character | FR-013e, D2 | example (mutant: empty while `current == start`) | DONE | `selection.rs::tests::an_update_onto_the_start_anchor_selects_that_cell` |
+| U3  | A `Char` selection dragged into another cell and back contains the pressed cell and yields its character | FR-013e, D2 | example (mutant: empty until the moving end differs from the start) | DONE | `selection.rs::tests::a_drag_out_and_back_selects_the_pressed_cell` |
+| U4  | `Word` and `Line` selections started without motion select the word and the line | FR-013b, FR-013e | example | DONE | `selection.rs::tests::word_expansion_selects_whole_word, line_granularity_selects_whole_line (existing)` |
 
 ### `crates/micold-client/tests/clipboard_request.rs` (the copy decision)
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U5  | A click-only selection over text produces no copy request | FR-013e, FR-013c | example | PENDING | |
+| U5  | A click-only selection over text produces no copy request | FR-013e, FR-013c | example | DONE | `crates/micold-client/tests/clipboard_request.rs::a_click_without_a_drag_asks_for_nothing` |
 
 ### `crates/micold-client/src/ui/material/terminal_pane.rs` (`clipboard_gestures`)
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U6  | After a left press, pointer motion that stays inside the pressed cell publishes no `TerminalSelectUpdate` | FR-013e, D5 | example | PENDING | |
-| U7  | After a left press, motion into another cell and back onto the pressed cell publishes a `TerminalSelectUpdate` for each | FR-013a, D2 | example (mutant: the pane never publishes an update) | PENDING | |
-| U8  | With a selection already held, a left press and release delivered together write nothing to the clipboard | FR-013e, D4 | example | PENDING | |
-| U9  | A left release publishes `TerminalSelectionReleased`, after its press's `TerminalSelectStart` | FR-013, D4 | example | PENDING | |
+| U6  | After a left press, pointer motion that stays inside the pressed cell publishes no `TerminalSelectUpdate` | FR-013e, D5 | example | DONE | `terminal_pane.rs::tests::clipboard_gestures::pointer_jitter_inside_the_pressed_cell_is_not_a_drag` |
+| U7  | After a left press, motion into another cell and back onto the pressed cell publishes a `TerminalSelectUpdate` for each | FR-013a, D2 | example (mutant: the pane never publishes an update) | DONE | `clipboard_gestures::motion_into_another_cell_and_back_extends_the_selection_each_time` |
+| U8  | With a selection already held, a left press and release delivered together write nothing to the clipboard | FR-013e, D4 | example | DONE | `clipboard_gestures::a_tap_over_a_held_selection_writes_nothing_to_the_clipboard` |
+| U9  | A left release publishes `TerminalSelectionReleased`, after its press's `TerminalSelectStart` | FR-013, D4 | example | DONE | `clipboard_gestures::a_release_asks_for_the_copy_after_its_press_starts_the_selection` |
 
 ## Invariants and edge cases still to place
 

@@ -572,7 +572,7 @@ selection model has no empty selection. The pane sends same-cell pointer jitter 
 pane's release copies from its pre-batch view, so a press and release delivered together copy the
 previous selection.
 
-- [ ] T074 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] Failing regression tests. In `src/selection.rs` (`mod tests`): a `Char`
+- [X] T074 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] Failing regression tests. In `src/selection.rs` (`mod tests`): a `Char`
   selection started and never updated `contains` no cell and yields empty `text`; one updated onto
   its own start anchor selects that cell, and so does one dragged into another cell and back; `Word`
   and `Line` selections started without motion still select the word and the line. In `tests/clipboard_request.rs`: a click-only selection over text produces no copy
@@ -581,7 +581,7 @@ previous selection.
   into another cell does. With a selection already held, a left press and release delivered in one
   batch write nothing to the clipboard, and the release publishes `TerminalSelectionReleased` after
   its `TerminalSelectStart`.
-- [ ] T075 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] In `Selection` (`src/selection.rs`), a `Char` selection is empty until its first
+- [X] T075 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] In `Selection` (`src/selection.rs`), a `Char` selection is empty until its first
   `update`, whatever that update's anchor is. Until then `contains` returns false and `text` returns
   an empty string. `Word`/`Line` behaviour and every existing selection test are unchanged. In
   `TerminalPane`, remember the pressed viewport cell and publish no

@@ -758,6 +758,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Session(SessionMsg::TerminalCopyRequested) => {
             shell::clipboard::on_copy_requested(app)
         }
+        Message::Session(SessionMsg::TerminalSelectionReleased) => {
+            shell::clipboard::on_selection_released(app)
+        }
         Message::Session(SessionMsg::TerminalPasteRequested) => {
             shell::clipboard::on_paste_requested(app)
         }
