@@ -223,6 +223,10 @@ reboot the host with session survival opted out and opted in and confirm each be
    recorded with the same author identity the user has configured on the host.
 8. **Given** sandboxed mode is on, **When** a session starts a service on a port the user has asked
    the app to expose, **Then** that service is reachable from the host at that port.
+9. **Given** sandboxed mode is on and the application is already open, **When** the sandbox is not
+   running — stopped from the host, lost to a runtime restart, or never successfully started — **Then**
+   the application brings it back up without being restarted and without the user pressing anything,
+   reporting each attempt's reason if it cannot (FR-002a, FR-036a). *(Added 2026-09-12 — BUG-004.)*
 
 ---
 
@@ -419,6 +423,12 @@ without the user having chosen that for the occasion.
   sandbox on the local host, as an alternative to running it as a plain host process.
 - **FR-002**: Running as a host process MUST remain supported and MUST remain the behaviour until
   the user opts into the sandbox.
+- **FR-002a**: Every placement MUST provide the availability guarantee the host-process placement
+  provides: when the client finds no session service to talk to, the application starts one *in that
+  placement*. This is not scoped to a launch — the host-process placement satisfies it on every
+  connection attempt for the life of the process, and no placement may offer less. A placement that
+  can only be started by launching the application again, or by a user pressing a control, does not
+  satisfy this requirement.
 - **FR-003**: The application MUST treat *where the session service runs* as a configured placement
   that the client resolves at connect time, rather than an assumption compiled into the client.
 - **FR-003a**: The placement model MUST be able to describe a service that is not on this host — a
@@ -633,10 +643,31 @@ asked, what declining costs, and that confirming acts now rather than at the nex
   contained one.
 - **FR-036**: The application MUST detect a sandbox that has been stopped or removed outside the
   application, report it, and recover to a defined state.
+- **FR-036a**: That recovery MUST include bringing the sandbox back up (FR-002a), not only naming
+  what happened. It applies wherever the application finds the service absent — a bring-up that
+  failed, a container stopped or removed from outside, a host reboot while the application stays
+  open — and not at launch alone. Re-attempts MUST be bounded and spaced, each MUST report why it
+  failed, and exhausting them MUST leave the standing failure and its manual retry that FR-034 and
+  FR-035 already require. Nothing here permits starting the service unsandboxed: FR-035 stands, and
+  re-attempting the *sandbox* is not the fallback it forbids.
+- **FR-036b**: While a bring-up is in flight, the application MUST report the stage it has reached,
+  and MUST NOT present the absence of the service it is starting as a connection failure. A
+  successful bring-up that takes minutes and a failed one MUST NOT look the same, and the one that
+  is working MUST NOT be the louder of the two.
 - **FR-037**: The application MUST recognise a stale sandbox left by a previous or mismatched
   version and replace it, rather than attaching to it or creating another alongside it.
 - **FR-038**: The service's own diagnostics from inside the sandbox MUST be retrievable through the
   application.
+
+**Bugfix**: 2026-09-12 — BUG-004. FR-002a, FR-036a and FR-036b added. FR-014a said the sandbox
+starts *when the application launches* and nothing said what happens at any other moment, so the
+sandboxed placement got auto-start once per launch while the host placement got it on every
+connection attempt — and a user switching to container mode was left dialling a service nobody
+would start. FR-002a states the parity that was assumed rather than written; FR-036a extends
+FR-036's "recover to a defined state" past reporting; FR-036b covers the half that made a working
+bring-up read as a failure. **SC-004c** and US6's ninth acceptance scenario are added alongside
+them: the first says where SC-004's progress has to be measured, the second is the flow this bug
+is. See `bugs/BUG-004.md`.
 
 ### Key Entities
 
@@ -682,6 +713,12 @@ asked, what declining costs, and that confirming acts now rather than at the nex
 - **SC-004b**: A developer working on this application can go from a source change to running that
   change sandboxed without publishing an image and without any registry interaction, and the loop is
   no more onerous than the existing build-and-run loop plus a single image build.
+- **SC-004c**: SC-004's progress is measured **at the application**, not at the runtime seam — what
+  counts is the stage the user can see, so a measurement that observes the acquisition callbacks
+  without observing what the application does with them does not satisfy SC-004. Over the same
+  first enable, no two consecutive stage changes the application displays are more than 10 seconds
+  apart, and the application reports no connection failure for the service it is starting while it
+  is starting it (FR-036b).
 - **SC-005**: Every capability listed in FR-009 passes its existing acceptance checks in sandboxed
   mode with no behavioural difference a user can observe.
 - **SC-006**: With a constrained budget configured, a session running a workload that would

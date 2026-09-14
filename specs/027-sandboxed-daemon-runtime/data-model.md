@@ -177,7 +177,7 @@ pub struct ProjectMount {
 - M-4 (R9): the set is fixed at creation. Changing the registered projects marks the sandbox stale
   and surfaces an explicit restart; nothing restarts on its own.
 
-## 7. `SandboxState` — the lifecycle (FR-034 – FR-036, SC-004)
+## 7. `SandboxState` — the lifecycle (FR-034 – FR-036b, SC-004)
 
 ```text
              ┌──────────────┐
@@ -200,11 +200,17 @@ pub struct ProjectMount {
              ┌──────▼───────┐   projects changed (R9)   ┌──────────┐
              │  Running     │──────────────────────────>│  Stale   │
              └──────────────┘<── user restarts ─────────└──────────┘
+
+  Failed ──── service found absent, attempts remain (S-6) ────> Probing
+  Failed ──── attempts exhausted ────> Failed, standing, manual restart only (S-2, FR-034)
 ```
 
 **Rules.**
-- S-1 (SC-004): `Acquiring` reports continuous progress. It is the only state that may last
-  minutes, and it is the first thing a new user sees — silence here reads as a hang.
+- S-1 (SC-004, SC-004c): `Acquiring` reports continuous progress. It is the only state that may last
+  minutes, and it is the first thing a new user sees — silence here reads as a hang. The progress
+  has to reach the *application*: `Acquiring` and `Starting` are states the view renders, so a
+  bring-up that computes them and does not deliver them satisfies contract obligation C-8 and fails
+  this rule.
 - S-2 (FR-035, FR-035a): no edge leaves `Failed` for a working unsandboxed daemon without an explicit
   per-occurrence user action. There is no automatic path out of this state.
 - S-3 (FR-035b): `Failed` and `Stale` are persistently visible via `ConnectionBanner`, not a toast
@@ -213,6 +219,17 @@ pub struct ProjectMount {
   enumeration — so they are testable strings, not formatted-at-the-call-site prose.
 - S-5: this state machine is pure and lives in `micold-core`; the client's `features/sandbox.rs`
   holds only the current value and the messages that advance it.
+- S-6 (FR-002a, FR-036a): finding the service absent under a sandboxed placement is an edge back
+  into `Probing`, and it carries no human. It is guarded, not free: a bring-up already in flight
+  (`Probing`, `Acquiring`, `Starting`) is never started twice, attempts are spaced by their own
+  backoff rather than by the connection's 1 Hz retry, and they are bounded — exhausting the bound
+  leaves `Failed` standing, which is where S-2 and FR-034's manual remedy take over. The edge needs
+  a witness of its own; `RestartRequested` is not it, because that marker exists to say a person
+  asked, and the whole point of this edge is that nobody has to.
+- S-7 (R9): R9's *"nothing restarts on its own"* is about a sandbox that **is running** — restarting
+  it to service a settings change would end the user's live sessions, which is the trade R9 refuses.
+  It says nothing about a sandbox that is not running, where there are no sessions to protect and
+  the rule only removes a recovery. S-6 is inside that scope, not an exception to R9.
 
 ## Traceability
 
@@ -226,6 +243,7 @@ pub struct ProjectMount {
 | `MountSet` | FR-006 – FR-011 | [container-runtime](./contracts/container-runtime.md) |
 | `SandboxState` | FR-034 – FR-036, SC-004 | — (client-side; covered by quickstart Part B) |
 | Placement *change* | FR-032, FR-032a–b, FR-033, FR-033a | — (client-side; Phase 16) |
+| Service *absent* | FR-002a, FR-036a, FR-036b, SC-004c | — (client-side; Phase 18) |
 
 **Bugfix**: 2026-09-03 — BUG-003. §7's heading, rule S-1 and the `SandboxState` row all claimed a
 requirement range starting at FR-032. The lifecycle requirements are FR-034 – FR-036; FR-032 and
@@ -233,3 +251,11 @@ FR-033 govern *changing a setting*, belong to the settings surface, and were imp
 because this table said they were covered. S-1's own citation was the tell — it named FR-032 for
 continuous progress alongside SC-004, which is the requirement that actually says it. The corrected
 rows are above; FR-033 had been cited nowhere at all and now has a row of its own.
+
+**Bugfix**: 2026-09-12 — BUG-004. §7 gained rules S-6 and S-7 and the two edges above the rule list;
+S-1 gained the clause that says where the progress has to arrive. The lifecycle had exactly three
+ways into `Probing` — a launch, a placement change, and a person pressing Restart — and none of them
+covers "the application is open and the service is not there", so the sandboxed placement started
+its service once per launch while the host placement started it on every attempt. S-7 records why
+R9 was not the reason for that: R9 is about a *running* sandbox, and it had been read as a rule
+about every sandbox. See `bugs/BUG-004.md`.

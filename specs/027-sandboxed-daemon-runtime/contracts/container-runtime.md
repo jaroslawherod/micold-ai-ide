@@ -91,6 +91,12 @@ race with the user's own `docker stop` must not produce an error dialog.
 callback often enough for `StageProgress` to move. SC-004 gives first-time enable five minutes; five
 silent minutes reads as a hang.
 
+*This obligation is half of the guarantee, and the half a runtime can keep.* The caller has the
+other: a client that passes a callback which discards what it is given leaves C-8 satisfied and
+SC-004 broken, because the stage the user can see never changes. The application-side counterpart is
+SC-004c and `data-model.md` §7's rule S-1 — the stages have to arrive where they are rendered.
+*(Added 2026-09-12 — BUG-004.)*
+
 **C-9 — No privilege escalation.** No dialect emits `--privileged`, `--cap-add`, `--security-opt
 seccomp=unconfined`, `--pid=host`, `--network=host`, or a host-path mount outside the `MountSet`.
 Asserted by a denylist test over generated argv, so a future dialect cannot quietly add one.
