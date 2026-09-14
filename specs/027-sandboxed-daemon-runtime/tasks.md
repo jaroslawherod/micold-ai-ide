@@ -1302,6 +1302,36 @@ Findings 2–5 need no task here. Finding 2 (two older save tests write the deve
 
 **Order**: T200, then re-run `/speckit.tdd.verify`.
 
+## Phase 23: TDD remediation — BUG-004 (fifth audit)
+
+**Goal**: Clear the findings of `tdd/verification.md` (2026-09-14, at `a23bb637`, verdict **FAIL**).
+**BUG-004 is not done until T201 is cleared.** Every test passes when a bring-up's messages are discarded
+(mutants X3, X5, X6). The container starts, but the application stays in `Probing`.
+
+### Blocking (HIGH)
+
+- [ ] T201 [BUG-004] *(test)* Finding 1 — `crates/micold-client/src/shell/sandbox.rs:215-232`
+      (`BringUp::task`), `:457` (`Msg::Lost`), `crates/micold-client/src/shell/daemon_sync.rs:293`, and
+      A1/U24 at `crates/micold-client/src/main.rs:3024-3050` and `:3188-3218`. No test runs a bring-up
+      task. `scheduled()`, `units()` and `live_tasks()` all hold for `task().discard()`. Make A1 and U24
+      run the work the update returns and assert that the bring-up's first message
+      (`Progress(Probing)`) comes out of it. U20 already asserts the same first message on
+      `BringUp::stream`. Give `task()` a runner seam, so the test drives a recording runner and never a
+      real container runtime. **Needs the user's approval before starting:** the direct route is a
+      `micold-client` dev-dependency on `iced_runtime` for `iced_runtime::task::into_stream`. The crate is
+      already in `Cargo.lock` at `iced`'s version, but naming it is a dependency change. If approval is
+      refused, stop and report; do not weaken the finding. Proven when X3 (`iced::Task::stream(stream).discard()`
+      in `task`) and X5 (`return bring_up.task().discard();` in `Msg::Lost`) fail U24, and X3 and X6
+      (`map_or_else(Task::none, |b| b.task().discard())` at `daemon_sync.rs:293`) fail A1. X1, X2, N12,
+      N13, T191a and T191b must still fail them:
+      `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+
+Findings 2–6 need no task here. Finding 2 (two older save tests write the developer's real
+`settings.json`) is outside BUG-004's scope. Finding 4 (X4, a leaked task) is the token seam's recorded
+limit, and T201 closes it too. Findings 3, 5 and 6 are LOW and unchanged.
+
+**Order**: T201, then re-run `/speckit.tdd.verify`.
+
 ---
 
 ## Parallel Opportunities
