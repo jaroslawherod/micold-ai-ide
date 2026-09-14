@@ -102,7 +102,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | U21 | A detected address over rows joined by `wrapped = true` returns cells on every row it covers | FR-003, US1.3, L2 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_detected_address_over_soft_wrapped_rows_covers_every_row` |
 | U22 | Rows separated by a real line break are never joined; only the first row's well-formed piece is a link | FR-003 | example | DONE | `crates/micold-core/src/link/line.rs::tests::rows_apart_by_a_line_break_are_never_joined` |
 | U23 | A wrapped logical line within 64 rows each way is joined; a candidate reaching the 64-row cap is dropped | FR-003, L4 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_line_is_joined_64_rows_each_way_and_a_candidate_reaching_the_cap_is_dropped` |
-| U24 | A candidate touching a row whose `text` is `None` is dropped | L7 | example | PENDING | |
+| U24 | A candidate touching a row whose `text` is `None` is dropped | L7 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_candidate_touching_an_unavailable_row_is_dropped` |
 | U25 | A wide character's spacer cell belongs to the link | FR-007, L5 | example | PENDING | |
 | U26 | A plain-text cell returns `None` | L3 | example | PENDING | |
 | U27 | A negative (scrollback) row resolves exactly as a viewport row with the same content | US1.6 | example | PENDING | |

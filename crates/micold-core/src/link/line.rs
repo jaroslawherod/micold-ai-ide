@@ -22,9 +22,10 @@ struct LogicalLine {
     text: Vec<char>,
     /// The cell each char of `text` sits in.
     cells: Vec<(i64, u16)>,
-    /// The line continues above its first row, past the cap.
+    /// The line may go on above its first row: the cap stopped the walk, or the row above is
+    /// unavailable (contract L4, L7).
     cut_above: bool,
-    /// The line continues below its last row, past the cap.
+    /// The line goes on below its last row, past the cap or into an unavailable row.
     cut_below: bool,
 }
 
@@ -38,28 +39,24 @@ impl LogicalLine {
         while first > row - MAX_ROWS_EACH_WAY && continues_above(first) {
             first -= 1;
         }
-        let mut line = Self {
-            text: Vec::new(),
-            cells: Vec::new(),
-            cut_above: continues_above(first),
-            cut_below: false,
-        };
-        let mut current = first;
-        while let Some(text) = rows.text(current) {
-            for (col, c) in text.chars().enumerate() {
-                line.text.push(c);
-                line.cells.push((current, col as u16));
-            }
-            if !rows.wrapped(current) {
-                break;
-            }
-            if current == row + MAX_ROWS_EACH_WAY {
-                line.cut_below = continues_below(current);
-                break;
-            }
-            current += 1;
+        let mut last = first;
+        while last < row + MAX_ROWS_EACH_WAY && continues_below(last) {
+            last += 1;
         }
-        line
+        let mut text = Vec::new();
+        let mut cells = Vec::new();
+        for current in first..=last {
+            for (col, c) in rows.text(current).unwrap_or_default().chars().enumerate() {
+                text.push(c);
+                cells.push((current, col as u16));
+            }
+        }
+        Self {
+            text,
+            cells,
+            cut_above: rows.text(first - 1).is_none() || rows.wrapped(first - 1),
+            cut_below: rows.wrapped(last),
+        }
     }
 
     /// Where the char in the cell at `row`, `col` sits in `text`.
@@ -409,6 +406,34 @@ mod tests {
             link_at(&rows, 71, 0),
             None,
             "the cap 64 rows above cuts the address; the part below it is not offered as a link"
+        );
+    }
+
+    #[test]
+    fn a_candidate_touching_an_unavailable_row_is_dropped() {
+        let rows = Rows::new(0, vec![row("See https://a.exa").wrapped()]);
+        assert_eq!(
+            link_at(&rows, 0, 6),
+            None,
+            "the row below is unavailable, so the address may go on there and is dropped"
+        );
+
+        let rows = Rows::new(0, vec![row("See https://a.example ").wrapped()]);
+        assert_eq!(
+            link_at(&rows, 0, 6),
+            Some(Link {
+                address: ADDRESS.to_string(),
+                origin: LinkOrigin::Detected,
+                cells: vec![span(0, 4..21)],
+            }),
+            "an address ending before the last column is whole, though the row below is unavailable"
+        );
+
+        let rows = Rows::new(0, vec![row("https://a.example now")]);
+        assert_eq!(
+            link_at(&rows, 0, 3),
+            None,
+            "the row above the first available row is unknown, so an address at column 0 may have started there"
         );
     }
 }

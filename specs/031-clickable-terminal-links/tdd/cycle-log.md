@@ -262,3 +262,12 @@
 - refactor: the continuation checks named as `continues_above`/`continues_below` closures; suite re-run green (1083); clippy clean. Mutant check on the third assertion (`cut_above: false`) -> `assertion failed: the cap 64 rows above cuts the address; the part below it is not offered as a link`, reverted
 - commit: `feat(031): cap the logical line at 64 rows each way (U23)`
 - notes: declared runs are not dropped at the cap, since their URI is whole whatever cells are visible. Appended U149: a candidate whose trimmed end is separated from the cut only by trailing punctuation is still truncated and must be dropped; the contract's "ends in the last column" wording misses it
+
+## Cycle 26: U24 a candidate touching a row whose `text` is `None` is dropped
+
+- test: `crates/micold-core/src/link/line.rs::tests::a_candidate_touching_an_unavailable_row_is_dropped` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::a_candidate_touching_an_unavailable_row_is_dropped -- --exact`
+  -> `assertion failed: the row below is unavailable, so the address may go on there and is dropped` / `left: Some(Link { address: "https://a.exa", origin: Detected, cells: [CellSpan { row: 0, cols: 4..17 }] })` / `right: None` (1 failed)
+- green: the forward walk stops before an unavailable row, and `cut_below` is set whenever the last joined row has `wrapped`; `cut_above` is also set when the row above the first joined row is unavailable. Suite -> 1084 passed, 0 failed
+- refactor: `LogicalLine::around` finds `first` and `last` with two symmetric loops, then builds the text and cells once, so `cut_above` = the row above is unavailable or wraps, `cut_below` = the last row wraps; the field docs now name both cuts. Suite re-run green (1084), clippy clean. Mutant check on the column-0 assertion (`cut_above` ignoring an unavailable row) -> `assertion failed: the row above the first available row is unknown, so an address at column 0 may have started there`, reverted
+- commit: `feat(031): drop a detected address cut by an unavailable row (U24)`
