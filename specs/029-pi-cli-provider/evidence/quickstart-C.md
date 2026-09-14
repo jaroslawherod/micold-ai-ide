@@ -63,6 +63,7 @@ the component changes, alongside C.2.
 - **§B** (GUI start, resume, `/name`, close, and discovering a hand-run conversation) needs a display
   and a host `pi`. The same properties are covered headlessly by `pi_provider.rs`,
   `session_discovery.rs`, `session_archive_durable_marker.rs` and `session_reconciliation.rs`.
-- **§D.1–2** in the application with sandboxed placement. `mise run test-sandbox` passed 23/23,
+- **§D.1–2** in the application with sandboxed placement; since recorded in
+  [`quickstart-D.md`](quickstart-D.md). `mise run test-sandbox` passed 23/23,
   including `sandbox_real_the_image_ships_every_ai_cli_the_application_offers`, which runs
   `pi --version` in a session inside the container.
