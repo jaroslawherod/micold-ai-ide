@@ -111,7 +111,7 @@ The entry points are:
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
 | U19 | A daemon that fails at startup exits non-zero, and its log file contains a `fatal:` line | FR-005, E6.4 | example | any | DONE | `crates/micold-daemon/tests/fatal_startup_is_logged.rs::fatal_startup_error_reaches_the_log_file` |
-| U20 | Release builds of `micold-ai-ide.exe` and `micold-daemon.exe` both have PE subsystem 2 (GUI) | FR-005, SC-005, E6.1 | example | win | PENDING | |
+| U20 | Release builds of `micold-ai-ide.exe` and `micold-daemon.exe` both have PE subsystem 2 (GUI) | FR-005, SC-005, E6.1 | example | win | RED | |
 
 ### Existing daemon tests un-gated on Windows (`crates/micold-daemon/tests/`)
 
