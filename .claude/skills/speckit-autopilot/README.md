@@ -1,13 +1,15 @@
 # Spec Kit autopilot
 
 `/speckit-autopilot <feature idea>`, `/speckit-autopilot bug: <report>` or
-`/speckit-autopilot resume <NNN>`.
+`/speckit-autopilot resume <NNN>` (`resume <NNN> BUG-<k>` for a bug).
 
-You give it one prompt. The agent writes the spec and merges it, clarifies it with you, plans and
-cuts the work into milestones, then ships each milestone to `main` as its own reviewed PR. It reviews
-every artifact and every diff itself; no human does. It asks you only for decisions that are yours
-(see [When you are asked](#when-you-are-asked)). When everything has merged, it tells you the
-worktree can be removed.
+You give it one prompt. For a feature, the agent writes the spec and merges it, clarifies it with
+you, plans and cuts the work into milestones, then ships each milestone to `main` as its own
+reviewed PR. For a bug, it reproduces it, records it against the spec that owns the behaviour, and
+ships the regression test and fix as one PR. It reviews every artifact and every diff itself; no
+human does. It asks you only for decisions that are yours (see
+[When you are asked](#when-you-are-asked)). When everything has merged, it tells you the worktree
+can be removed.
 
 The agent follows [SKILL.md](SKILL.md). This page is the human-facing overview.
 
@@ -17,11 +19,9 @@ The agent follows [SKILL.md](SKILL.md). This page is the human-facing overview.
 flowchart TD
     START(["Your prompt: feature idea or bug report"]) --> TRIAGE{"Feature or bug?"}
 
-    TRIAGE -->|bug| BUG["Reproduce, then bugfix-report traces it to the owning spec"]
-    BUG --> BUGQ{"Owning spec, and the fix fits the current design?"}
-    BUGQ -->|"no: needs design"| SPEC
-    BUGQ -->|yes| BPATCH["bugfix-patch, then bugfix-verify"]
-    BPATCH --> MLOOP
+    TRIAGE -->|bug| BUGPATH[["Bug path, see A bug report below"]]
+    BUGPATH -->|"no owning spec, or new behaviour"| SPEC
+    BUGPATH -->|"fixed and merged"| DONE
 
     TRIAGE -->|feature| SPEC["speckit-specify"]
     SPEC --> SREV["Fresh-context reviewer: spec rubric"]
@@ -89,6 +89,37 @@ flowchart TD
     class ESC human
 ```
 
+### A bug report
+
+```mermaid
+flowchart TD
+    B0(["bug: your report"]) --> REPRO["systematic-debugging: reproduce on origin/main, with variations"]
+    REPRO --> RQ{"Reproduces?"}
+    RQ -.->|no| ESCR["ACTION REQUIRED: the missing reproduction detail"]
+    ESCR -.->|"your answer"| REPRO
+    RQ -->|yes| OWN{"Which spec owns the broken behaviour?"}
+    OWN -->|none| FEAT["Feature path from speckit-specify, citing the reproduction"]
+    OWN -.->|"a feature still in flight"| ESCO["ACTION REQUIRED: blocked by work outside my flow"]
+    OWN -->|"a Closed spec"| REP["bugfix-report: BUG-k.md with root cause and false completions, ledger beside it"]
+    REP --> PATCH["bugfix-patch: missing requirement, reopened tasks, fix tasks"]
+    PATCH --> VER["bugfix-verify, then fresh reviewer: bug rubric"]
+    VER -->|"changes, max 3 rounds"| PATCH
+    VER -->|clean| SIZE{"New behaviour, or more than 10 tasks?"}
+    SIZE -->|yes| FEAT
+    SIZE -->|no| RED["Regression test fails on origin/main for the reported reason"]
+    RED --> MS[["One milestone: fix, gate, reviews A and B, PR fix(NNN) BUG-k, CI, merge"]]
+    MS --> BDONE(["WORK COMPLETE: BUG-k fixed, worktree safe to remove in micold IDE"])
+
+    classDef human fill:#ffe0e0,stroke:#c00,stroke-width:2px,color:#000
+    classDef pr fill:#e0f0ff,stroke:#06c,color:#000
+    class ESCR,ESCO human
+    class MS pr
+```
+
+A bug gets no spec PR, design PR or close phase: the BUG record, the spec patch, the regression test
+and the fix all ship in one PR. If the fix turns out to be new behaviour, the bug becomes the input
+to a normal feature flow.
+
 ## When you are asked
 
 Every question arrives as a `🛑 ACTION REQUIRED FROM YOU` banner and a push notification. The banner
@@ -118,7 +149,8 @@ flaky CI, visual checks, and implementation choices. Details:
 
 The agent owns only the work its own flow created:
 - this worktree and its branch
-- the feature directory it created
+- the feature directory it created, or for a bug, the BUG record it filed and its patch to the
+  owning Closed spec
 - the PRs recorded in its ledger
 
 It never merges, reviews or fixes other sessions' PRs, specs or worktrees. It never deletes the
@@ -126,9 +158,9 @@ worktree or the branch. Removing the worktree in micold IDE cleans up both.
 
 ## Resuming
 
-Progress is kept in `specs/<NNN>-<slug>/autopilot.md`, which is committed with every PR. It holds the
-phase, PRs, milestones, every decision (and who made it), declined review findings, and follow-ups.
-After a crash or `/clear`, run `/speckit-autopilot resume <NNN>`.
+Progress is kept in `specs/<NNN>-<slug>/autopilot.md`, or for a bug in `bugs/BUG-<k>.autopilot.md`
+beside the BUG record. It is committed with every PR and holds the phase, PRs, milestones, every decision (and who made it), declined review findings, and follow-ups.
+After a crash or `/clear`, run `/speckit-autopilot resume <NNN>` or `resume <NNN> BUG-<k>`.
 
 ## Files
 

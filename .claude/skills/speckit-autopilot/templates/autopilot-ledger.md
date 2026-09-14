@@ -1,4 +1,4 @@
-# Autopilot ledger — <NNN>-<slug>
+# Autopilot ledger — <NNN>-<slug> [BUG-<k>]
 
 Maintained by the `speckit-autopilot` skill. It is the record of what this flow owns and how far it
 has got. `resume <NNN>` reads this file. Keep it true.

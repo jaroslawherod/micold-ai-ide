@@ -1,7 +1,7 @@
 ---
 name: speckit-autopilot
 description: Use when the user hands over a feature idea or a bug report and wants the whole Spec Kit flow run end to end with as little of their involvement as possible — "autopilot", "run it autonomously", "take it all the way to main", "only ask me when you must" — or says to resume an autopilot run for a feature number.
-argument-hint: "<feature description> | bug: <report> | resume <NNN>"
+argument-hint: "<feature description> | bug: <report> | resume <NNN> [BUG-<k>]"
 user-invocable: true
 ---
 
@@ -25,13 +25,14 @@ the phase needs them.
 
 | Argument | Start at |
 |---|---|
-| `resume <NNN>` | Read `specs/<NNN>-*/autopilot.md`, confirm each recorded PR's `state` with `gh pr view`, and continue at the first unfinished step. **Never** reconstruct progress from `gh pr list` or from memory. |
+| `resume <NNN>` or `resume <NNN> BUG-<k>` | Read the ledger (`specs/<NNN>-*/autopilot.md`, or `specs/<NNN>-*/bugs/BUG-<k>.autopilot.md`), confirm each recorded PR's `state` with `gh pr view`, and continue at the first unfinished step. **Never** reconstruct progress from `gh pr list` or from memory. |
 | `bug: …`, or wording describing broken behaviour | Phase 0 (bug path) |
 | anything else | Phase 1 |
 
 Before any phase, run `git fetch origin` and check the worktree is clean. Copy
-[templates/autopilot-ledger.md](templates/autopilot-ledger.md) to the feature directory as
-`autopilot.md` the moment that directory exists. Update the ledger **before** every commit.
+[templates/autopilot-ledger.md](templates/autopilot-ledger.md) into place the moment its directory
+exists: `autopilot.md` in the feature directory, or `bugs/BUG-<k>.autopilot.md` beside the BUG
+record. Update the ledger **before** every commit.
 
 Debug notes, probe scripts and logs go in the session scratchpad, never the worktree, so nothing
 but deliverables is ever there to commit.
@@ -45,7 +46,7 @@ milestone loop. If a commit on `main` reverted it, someone decided against it: e
 
 | # | Phase | Skills driven | Ends with |
 |---|---|---|---|
-| 0 | **Bug triage.** Reproduce first. | `superpowers:systematic-debugging`, `speckit-bugfix-report`, `speckit-bugfix-patch`, `speckit-bugfix-verify` | One milestone: BUG record, spec patch, failing test and fix in one PR. Switch to Phase 1 when there is no owning spec, the fix changes requirements, or the patch adds more than 10 tasks. A bug that won't reproduce is escalated. |
+| 0 | **Bug**, see below | `superpowers:systematic-debugging` → `speckit-bugfix-report` → `speckit-bugfix-patch` → `speckit-bugfix-verify` → review (bug rubric) | **One PR** carrying the BUG record, the spec patch, a regression test and the fix, merged on green, then the **handoff**. Or a switch to Phase 1. |
 | 1 | **Spec** | `speckit-specify` → artifact review (spec rubric) | **PR 1**: the spec, merged on green |
 | 2 | **Clarify** in rounds until a scan finds nothing | `speckit-clarify` | Clarifications written to spec.md (merged with PR 2) |
 | 3 | **Design** | `speckit-plan` → review · `speckit-tasks` → cut milestones · `speckit-analyze` → fix · review (tasks + milestone rubric) · close checklists | **PR 2**: clarified spec, plan, research, contracts, tasks with `## Milestones`, merged on green |
@@ -57,6 +58,27 @@ Phase 1. Leave them as `[NEEDS CLARIFICATION]` markers and triage them in Phase 
 
 Each artifact review loops fix → re-review up to **3 rounds**. A fourth round is an escalation. How
 to dispatch a reviewer and the rubrics: [references/review-rubrics.md](references/review-rubrics.md).
+
+### Phase 0: a bug report
+
+1. **Reproduce on `origin/main`** with `superpowers:systematic-debugging`. Try the report's steps
+   and the obvious variations: another OS arm, a fresh profile, several sessions. If it still does
+   not reproduce, escalate (category 5) and ask for the missing detail. Never guess-fix.
+2. **Find the owning spec**, the `specs/<NNN>-*` whose requirements cover the broken behaviour.
+   - **None does** (the code predates specs, or the behaviour was never specified): switch to
+     Phase 1 and specify the correct behaviour, citing the reproduction.
+   - **The owning feature is still in flight**: its `**Status**` is not Closed, or its autopilot
+     ledger is not `done`. That spec belongs to another flow. Escalate as *blocked by work outside
+     my flow*, and include the reproduction.
+3. **`speckit-bugfix-report`** writes `bugs/BUG-<k>.md` in the owning spec, with the root cause
+   and any false completions. Start the ledger beside it.
+4. **`speckit-bugfix-patch`**, then **`speckit-bugfix-verify`**. A fresh reviewer then checks the
+   patch against the bug rubric in [references/review-rubrics.md](references/review-rubrics.md).
+5. **Decide the size.** Switch to Phase 1 when the fix adds behaviour the spec never intended, or
+   the patch adds more than 10 tasks. The new spec cites `BUG-<k>` as its input. Otherwise:
+6. **Run one milestone** through the Phase 4 loop. Its first task is a regression test that fails on
+   `origin/main` for the reported reason. The PR is titled `fix(NNN): … (BUG-<k>)`. No spec PR,
+   design PR or close phase follows: after the merge, go to the handoff.
 
 ### Phase 2: clarify, triaged
 
@@ -121,7 +143,8 @@ Everything else is outside the flow:
 
 - **Other PRs.** Never list them, review them, merge them, rebase them, approve their runs, comment
   on them or close them, even when they are green.
-- **Other specs.** Never edit another feature's `tasks.md` or spec.
+- **Other specs.** Never edit another feature's `tasks.md` or spec. The one exception is the bug
+  path's patch to a **Closed** owning spec, made through `speckit-bugfix-patch`.
 - **Other worktrees and branches.** Never touch them.
 - **A red `main`, or a failure caused by code this flow did not write.** Don't fix it. Escalate it
   as *blocked by work outside my flow*, and state what you checked.
@@ -160,9 +183,9 @@ If any check fails, report exactly what remains instead. Otherwise send this, an
 ```
 ✅ WORK COMPLETE — <NNN-feature>
 Delivered (all merged to main):
-  M1 #<pr> — <deliverable>
+  M1 #<pr> — <deliverable>        (a bug: BUG-<k> #<pr> — <what now works>)
   M2 #<pr> — <deliverable>
-Decisions: <n> made by you, <m> resolved by me from repo evidence — see specs/<NNN>/autopilot.md
+Decisions: <n> made by you, <m> resolved by me from repo evidence — see <ledger path>
 Follow-ups not done: <none | list>
 This worktree has no uncommitted work, no unpushed commits and no open PRs.
 👉 You can remove this worktree in micold IDE now — that also cleans up its branch.
