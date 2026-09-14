@@ -55,12 +55,12 @@ description: "Task list for feature 030: Windows installation package"
 
 ### Tests first (must fail on the Windows CI leg)
 
-- [ ] T007 [P] [U1] [U2] [U3] E1.1–E1.3: in `crates/micold-core/src/endpoint.rs` tests, replace the `#[cfg(windows)]` stub assertion in `resolve_creates_a_usable_endpoint_pair` with assertions that:
+- [X] T007 [P] [U1] [U2] [U3] E1.1–E1.3: in `crates/micold-core/src/endpoint.rs` tests, replace the `#[cfg(windows)]` stub assertion in `resolve_creates_a_usable_endpoint_pair` with assertions that:
   - `socket_path` equals `\\.\pipe\Micold.Daemon.<SID>`, where `<SID>` matches `^S-1-[0-9-]+$`;
   - `lock_path` ends in `micold-ai-ide\run\micold-daemon.pid`, and its parent directory exists.
 
   Add `resolve_is_stable`: two calls return equal endpoints.
-- [ ] T008 [P] [U4] [U5] E2.1: create `crates/micold-daemon/tests/windows_pipe_acl.rs` (`#![cfg(windows)]`, no gate reason needed). It binds via `singleton::acquire` on a test-unique endpoint, opens the pipe, and calls `GetSecurityInfo(SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION)`. It asserts that the DACL is protected (`SE_DACL_PROTECTED`), that `AceCount == 1`, and that the one ACE is `ACCESS_ALLOWED` for the current token's user SID.
+- [X] T008 [P] [U4] [U5] E2.1: create `crates/micold-daemon/tests/windows_pipe_acl.rs` (`#![cfg(windows)]`, no gate reason needed). It binds via `singleton::acquire` on a test-unique endpoint, opens the pipe, and calls `GetSecurityInfo(SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION)`. It asserts that the DACL is protected (`SE_DACL_PROTECTED`), that `AceCount == 1`, and that the one ACE is `ACCESS_ALLOWED` for the current token's user SID.
 - [X] T009 [P] [U6] [U7] E3.1–E3.2: in `crates/micold-daemon/tests/daemon_singleton.rs`:
   - Remove the whole-file `#![cfg(unix)]`.
   - Put `#[cfg(unix)]` plus a `// unix-only:` reason on the stale-socket-reclaim and directory-ownership/mode cases.
@@ -71,14 +71,14 @@ description: "Task list for feature 030: Windows installation package"
   - `stop_running_daemon_ends_endpoint`: spawn, call `micold_core::spawn::stop_running_daemon(&endpoint)`, and assert it returns `Ok(true)` and the endpoint refuses connections within 5 s.
 
   Kill only the child this test spawned.
-- [ ] T011 [P] [U11] [U12] E4.3–E4.4: in `crates/micold-core/src/spawn.rs` tests:
+- [X] T011 [P] [U11] [U12] E4.3–E4.4: in `crates/micold-core/src/spawn.rs` tests:
   - `#[cfg(windows)] terminate_refuses_foreign_image`: spawn `cmd /c ping -n 30 127.0.0.1`, call `terminate_daemon(child.id())`, and assert `ErrorKind::InvalidData` and that the child is still running. Then kill that child.
   - `stale_pid_record_is_ignored` (all platforms): write a pid file for a non-live endpoint and assert `stop_running_daemon` returns `Ok(false)`.
-- [ ] T012 [P] [U13] E5.1: in `crates/micold-daemon/src/supervisor.rs` tests, add `#[cfg(windows)] kill_reaps_grandchild`. Start a Regular session whose shell runs `cmd /c start /b ping -t 127.0.0.1`, read the grandchild pid via `CreateToolhelp32Snapshot`, kill the session, and assert the grandchild has exited within 5 s.
+- [X] T012 [P] [U13] E5.1: in `crates/micold-daemon/src/supervisor.rs` tests, add `#[cfg(windows)] kill_reaps_grandchild`. Start a Regular session whose shell runs `cmd /c start /b ping -t 127.0.0.1`, read the grandchild pid via `CreateToolhelp32Snapshot`, kill the session, and assert the grandchild has exited within 5 s.
 - [X] T013 [P] [U18] E6.2: create `crates/micold-core/tests/background_spawns_hide_console.rs`. It walks `crates/*/src/**/*.rs`, strips `//` comments and `#[cfg(test)] mod` bodies, and finds every `Command::new(`. It fails unless `no_window(` appears in the same statement or builder chain.
   - Allowlist exactly `crates/micold-core/src/spawn.rs` `spawn_detached_daemon`, which uses DETACHED_PROCESS, and the PTY builder in `crates/micold-daemon/src/supervisor.rs`, which uses `portable_pty::CommandBuilder`, not `Command::new`.
   - It must report `git.rs:114`, `git.rs:160`, `git.rs:308`, the two `powershell.exe` spawns at `env_include.rs:363,387`, and `sandbox/exec.rs:102,121`. Items under `#[cfg(not(windows))]`, such as `env_include.rs:323` `bash`, are exempt.
-- [ ] T014 [P] [U14] [U15] [U16] [U17] E6.3 and E7.1: create `crates/micold-core/src/process.rs` holding only `pub fn no_window(cmd: &mut std::process::Command) -> &mut Command`, a `tokio::process::Command` twin, and `pub fn announce_running() -> Option<RunningMarker>`. Each body is `todo!()`, and the module is declared in `lib.rs`. Its tests:
+- [X] T014 [P] [U14] [U15] [U16] [U17] E6.3 and E7.1: create `crates/micold-core/src/process.rs` holding only `pub fn no_window(cmd: &mut std::process::Command) -> &mut Command`, a `tokio::process::Command` twin, and `pub fn announce_running() -> Option<RunningMarker>`. Each body is `todo!()`, and the module is declared in `lib.rs`. Its tests:
   - `no_window_sets_flag` (`#[cfg(windows)]`): pins `CREATE_NO_WINDOW == 0x0800_0000` and asserts that a `cmd /c exit 0` spawned through it succeeds.
   - `no_window_is_noop_elsewhere` (`#[cfg(unix)]`): `true` spawns fine.
   - `announce_running_is_visible` (`#[cfg(windows)]`): after the call, `OpenMutexW(SYNCHRONIZE, 0, "Local\\MicoldAIIDE")` returns a non-null handle; after the marker drops, a fresh `OpenMutexW` fails.
@@ -86,29 +86,29 @@ description: "Task list for feature 030: Windows installation package"
 
 ### Implementation
 
-- [ ] T016 [U1] [U2] [U3] R1, making T007 pass: implement the Windows `user_sid()` in `crates/micold-core/src/endpoint.rs` via `OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY)`, then `GetTokenInformation(TokenUser)`, `ConvertSidToStringSidW` and `LocalFree`. Use RAII guards for the token handle and the SID string.
+- [X] T016 [U1] [U2] [U3] R1, making T007 pass: implement the Windows `user_sid()` in `crates/micold-core/src/endpoint.rs` via `OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY)`, then `GetTokenInformation(TokenUser)`, `ConvertSidToStringSidW` and `LocalFree`. Use RAII guards for the token handle and the SID string.
   - Set `lock_path` to `ProjectDirs::from("", "", "micold-ai-ide").data_local_dir().parent()/run/micold-daemon.pid`, and `create_dir_all` the `run` directory.
   - Remove the `T083/W5` stub message.
   - The data-model rule applies: "No environment variable influences the Windows endpoint".
-- [ ] T017 [U4] [U5] [U6] [U7] R2 and R3, making T008 and T009 pass: in `crates/micold-daemon/src/singleton.rs`, rewrite the Windows `acquire`:
+- [X] T017 [U4] [U5] [U6] [U7] R2 and R3, making T008 and T009 pass: in `crates/micold-daemon/src/singleton.rs`, rewrite the Windows `acquire`:
   - Build `SecurityDescriptor::deserialize(format!("D:P(A;;GA;;;{sid})"))` from `endpoint::user_sid()`, which must be made `pub` in micold-core. Pass it to `ListenerOptions::new().name(..).security_descriptor(sd)`.
   - Drop the `File::open(temp_dir())` lock and change `BoundListener._lock` to `Option<std::fs::File>`, `None` on Windows.
   - Keep the `is_live` pre-probe and the `AddrInUse | PermissionDenied → AlreadyRunning` mapping.
   - Fix the comment so it states that `interprocess` sets `FILE_FLAG_FIRST_PIPE_INSTANCE` itself (`create_instance.rs:86`).
 - [ ] T018 [U8] [U9] R4, making the T010 `pid_record_lifecycle` case pass: in `crates/micold-daemon/src/server.rs`, write the pid on `Acquisition::Bound` on all platforms. The Windows path is now real, so escalate the warning to an error log if the write fails. Remove `lock_path` on clean exit through a guard that drops after `serve_interprocess` returns.
-- [ ] T019 [U10] [U11] [U12] R5, making T010 `stop_running_daemon_ends_endpoint` and T011 pass: in `crates/micold-core/src/spawn.rs`, replace `#[cfg(not(unix))] terminate_daemon`. Add a `#[cfg(windows)]` arm that:
+- [X] T019 [U10] [U11] [U12] R5, making T010 `stop_running_daemon_ends_endpoint` and T011 pass: in `crates/micold-core/src/spawn.rs`, replace `#[cfg(not(unix))] terminate_daemon`. Add a `#[cfg(windows)]` arm that:
   1. Calls `OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE)`.
   2. Checks `QueryFullProcessImageNameW`; the file name must equal `micold-daemon.exe` case-insensitively, otherwise return `ErrorKind::InvalidData`.
   3. Calls `TerminateProcess` and `WaitForSingleObject(5000)`.
 
   In `running_daemon_pid`, return `None` when the endpoint is not live, so a stale record is ignored.
-- [ ] T020 [U13] [U67] R6, making T012 pass: in `crates/micold-daemon/src/platform/windows.rs`, replace the no-op `terminate_process_tree` with a per-session job built on `micold_core::win_job` (make it `pub` behind `#[cfg(windows)]`).
+- [X] T020 [U13] [U67] R6, making T012 pass: in `crates/micold-daemon/src/platform/windows.rs`, replace the no-op `terminate_process_tree` with a per-session job built on `micold_core::win_job` (make it `pub` behind `#[cfg(windows)]`).
   - In `crates/micold-daemon/src/supervisor.rs`, right after the `portable-pty` spawn, call `OpenProcess` plus `AssignProcessToJobObject` on the child pid, and store the job with the session.
   - On kill, terminate the job.
   - The job is created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`.
   - Record the known limit in a code comment: a grandchild spawned before assignment escapes.
   - [U67] In `PtySession`'s `Drop`, close the PTY master before joining the reader thread. Under ConPTY the reader sees EOF only once the pseudoconsole is closed, so joining first never returns.
-- [ ] T021 [U14] [U15] [U16] [U17] R7, making T014 pass: implement `crates/micold-core/src/process.rs`.
+- [X] T021 [U14] [U15] [U16] [U17] R7, making T014 pass: implement `crates/micold-core/src/process.rs`.
   - `no_window` calls `std::os::windows::process::CommandExt::creation_flags(CREATE_NO_WINDOW)` on Windows and does nothing elsewhere.
   - `announce_running` calls `CreateMutexW(null, FALSE, "Local\\MicoldAIIDE")` and returns a `RunningMarker` that closes the handle on drop. It returns `None` on Unix.
 - [X] T022 [U18] R7, making T013 pass: route every flagged spawn through `micold_core::process::no_window`:
