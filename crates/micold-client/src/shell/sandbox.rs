@@ -198,6 +198,8 @@ pub struct BringUp {
 #[cfg(test)]
 thread_local! {
     static SCHEDULED: std::cell::RefCell<Vec<BringUp>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// One per bring-up task built on this thread, alive for as long as that task is.
+    static LIVE: std::cell::RefCell<Vec<std::sync::Weak<()>>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 impl BringUp {
@@ -213,7 +215,20 @@ impl BringUp {
     pub fn task(self) -> iced::Task<micold_client::app::Message> {
         #[cfg(test)]
         SCHEDULED.with(|scheduled| scheduled.borrow_mut().push(self.clone()));
-        iced::Task::stream(self.stream(SystemRunner))
+        let stream = self.stream(SystemRunner);
+        // The task carries a token, so a test holding the work an update returned can tell a
+        // bring-up handed back from one built and dropped inside the update.
+        #[cfg(test)]
+        let stream = {
+            use iced::futures::StreamExt;
+            let token = std::sync::Arc::new(());
+            LIVE.with(|live| live.borrow_mut().push(std::sync::Arc::downgrade(&token)));
+            stream.map(move |message| {
+                let _alive = &token;
+                message
+            })
+        };
+        iced::Task::stream(stream)
     }
 
     /// The bring-ups this test's thread turned into tasks, oldest first, and forgets them. A `Task`
@@ -221,6 +236,18 @@ impl BringUp {
     #[cfg(test)]
     pub fn scheduled() -> Vec<BringUp> {
         SCHEDULED.with(|scheduled| scheduled.take())
+    }
+
+    /// How many bring-up tasks built on this test's thread still exist. [`Self::scheduled`] counts
+    /// the bring-ups built; this counts the ones not dropped, which is what reaches the runtime.
+    #[cfg(test)]
+    pub fn live_tasks() -> usize {
+        LIVE.with(|live| {
+            live.borrow()
+                .iter()
+                .filter(|token| token.strong_count() > 0)
+                .count()
+        })
     }
 
     /// The messages the bring-up produces, driving the runtime through `runner`.

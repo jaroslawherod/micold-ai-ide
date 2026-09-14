@@ -1276,6 +1276,32 @@ real-runtime gap is documented by T192, and T194 states its own limits.
 **Order**: T197 first; T198 and T199 are independent. Then re-run
 `/speckit.tdd.verify`.
 
+## Phase 22: TDD remediation — BUG-004 (fourth audit)
+
+**Goal**: Clear the findings of `tdd/verification.md` (2026-09-14, at `ae018388`, verdict **FAIL**).
+**BUG-004 is not done until T200 is cleared.** A1 and U24 pass when the bring-up is built, dropped and
+replaced by another one-unit task (mutants X1, X2), which is BUG-004 on both paths.
+
+### Blocking (HIGH)
+
+- [X] T200 [BUG-004] *(test)* Finding 1 — `crates/micold-client/src/main.rs:3027-3040` (A1) and
+      `:3191-3203` (U24). `BringUp::scheduled()` records a bring-up when it is built
+      (`shell/sandbox.rs:213-217`), and `work.units() == 1` holds for any single task, so neither shows
+      that the returned work is the bring-up. Make A1 and U24 assert that the bring-up is in the work the
+      update returns: for example, a `#[cfg(test)]` guard carried by the bring-up's stream and counted
+      while alive, asserted as exactly one live bring-up while the test holds `work`. Add no dependency.
+      Proven when X1 (`let _ = bring_up.task(); return iced::Task::done(Message::EscapePressed);` at
+      `shell/sandbox.rs:430`) fails U24 and X2
+      (`map_or_else(Task::none, |b| { let _ = b.task(); Task::done(Message::EscapePressed) })` at
+      `daemon_sync.rs:293`) fails A1, while N12, N13, T191a and T191b still fail them:
+      `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+
+Findings 2–5 need no task here. Finding 2 (two older save tests write the developer's real
+`settings.json`) is outside BUG-004's scope and belongs to the feature that owns those tests. Findings 3–5
+(LOW) are unchanged from the third audit.
+
+**Order**: T200, then re-run `/speckit.tdd.verify`.
+
 ---
 
 ## Parallel Opportunities

@@ -516,3 +516,27 @@ Appended rather than edited in place. The log is append-only.
 - `scripts/build-lock.sh cargo test --workspace` -> 2964 passed, 0 failed, 2 ignored (116s)
 - `cargo clippy --workspace --all-targets -- -D warnings` -> clean
 - `cargo fmt --all -- --check` -> clean
+
+## Test strength: A1 and U24 tie the returned work to the bring-up (T200, fourth-audit finding 1)
+
+- tests: `a_failed_sandbox_the_client_cannot_reach_is_brought_up_again`, `a_container_found_stopped_is_brought_up_without_showing_a_failure`
+- seam: under `cfg(test)`, `BringUp::task()` puts an `Arc<()>` token inside the task's stream and keeps a `Weak` in a
+  thread-local. `BringUp::live_tasks()` counts the tokens still held. A test holding `work` sees the bring-up only if the
+  update handed it back; one dropped inside the update drops its token. No dependency added
+- red (`live_tasks()` declared as a stub returning 0; both tests gained `assert_eq!(BringUp::live_tasks(), 1, ..)`, no
+  assertion removed):
+  `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide -- tests::a_failed_sandbox_the_client_cannot_reach_is_brought_up_again tests::a_container_found_stopped_is_brought_up_without_showing_a_failure`
+  -> `panicked at crates/micold-client/src/main.rs:3040:9: ... the work handed back has to be the bring-up itself, not other work beside a dropped one  left: 0  right: 1`
+  and `panicked at crates/micold-client/src/main.rs:3209:9: ... one swapped for other work leaves `Probing` with nothing running, which is BUG-004  left: 0  right: 1` (0 passed; 2 failed)
+- green: the token and the count. -> 138 passed; serial (`--test-threads=1`) 138 passed
+- proof (`python3 mutants.py X1 X2 N12 N13 T191a T191b`, each restored, sha verified): X1 fails U24 at `main.rs:3209`;
+  X2 fails A1 at `main.rs:3040`; N12 still fails A1 (`:3035`), N13 still fails U24 (`:3203`), T191a still fails A1
+  (`:3029`), T191b still fails U24 (`:3198`)
+- refactor: `cargo fmt` only
+- commit: not committed
+
+## Gates after Phase 22 (T200)
+
+- `scripts/build-lock.sh cargo test --workspace` -> 2964 passed, 0 failed, 2 ignored (56s)
+- `cargo clippy --workspace --all-targets -- -D warnings` -> clean
+- `cargo fmt --all -- --check` -> clean
