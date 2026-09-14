@@ -674,3 +674,12 @@ failed before the implementation.
 - notes: run 34876494804 (0b8f3f68) also showed `both exes carry an icon` on x64 before its uninstall raced, as in cycle 76.
 - refactor: none needed.
 - commit: see the follow-up commit
+
+## Cycle 78: A16 passes first time; its mutant is killed on both legs; U9 dropped
+
+- test (A16, df776782): `scripts/windows-install-smoke.sh` step 9a runs the silent uninstall while the client window is open, waits for the uninstaller, and expects a non-zero exit with `micold-ai-ide.exe` and the uninstall key still in place.
+- first run (A16): PR #332's CI run 34879161807 (df776782), passed first time on both legs. x64, `build + test (windows-latest)`: `== uninstall with the client (pid 8980) open`, `refused with the window open (exit 1); install dir and uninstall key in place`, then `== smoke passed`. ARM64, `package + smoke (windows-11-arm)`: `== uninstall with the client (pid 10476) open`, `refused with the window open (exit 1); install dir and uninstall key in place`, `== smoke passed`.
+- mutant (A16, 0bda3770): `AppMutex=Local\MicoldAIIDE` removed from `packaging/windows/micold-ai-ide.iss`. Killed in run 34879198563. ARM64, `package + smoke (windows-11-arm)`: `== uninstall with the client (pid 7964) open`, then `windows-install-smoke.sh: FAIL: the silent uninstall with the window open exited 0, want non-zero (FR-009, I7)`. x64, `build + test (windows-latest)`: the core guard failed first, `test app_mutex_matches_the_running_app ... FAILED`, panicked at `crates\micold-core\tests\windows_installer_in_use.rs:47:5`, so that leg's smoke was skipped. Reverted in 9e05e5ca. A16 is `DONE`; T085 is ticked.
+- U9: `DROPPED` by user decision (AskUserQuestion, 2026-09-14), for cycle 6's reasons. E4.1, data-model.md and R4 no longer promise removal on exit. With U8 and U10 `DONE`, T010 and T018 are ticked.
+- refactor: none needed.
+- commit: see the follow-up commit

@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/windows-endpoint
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: record A16's first run and mutant kill (cycle 78), revert the mutant commit 0bda3770, tick T085; then Review A and B on M2.
+- **Next step**: push main merged into `feat/windows-package` (#314) once the local check passes; the user merges #314 in the web UI. Then Review A and B on M2 (#332).
 
 ## Pull requests
 
@@ -24,8 +24,8 @@ Spec and design PRs predate the flow: spec, plan and tasks ride in #314.
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
 | M1 | see tasks.md § Milestones | x64 and ARM64 installers built in CI, attached to releases, documented | #314 | ci |
-| M2 | see tasks.md § Milestones | installed build connects to its daemon; smoke blocks CI on both Windows legs | #332 | in-progress (T085) |
-| M3 | T010, T018, T062–T064 | pid record lifecycle, full gate, research/plan updated | — | pending |
+| M2 | see tasks.md § Milestones | installed build connects to its daemon; smoke blocks CI on both Windows legs | #332 | in-review |
+| M3 | T062–T064 | full gate, quickstart Part M, research/plan updated | — | pending |
 
 ## Decisions
 
@@ -34,6 +34,8 @@ Spec and design PRs predate the flow: spec, plan and tasks ride in #314.
 | D1 | tasks | One PR or several? | "all in one PR"; later split into #314 and the stacked #332 | user | tasks.md § Implementation Strategy (2026-09-13) |
 | D2 | 4-milestones | How to cut milestones for a feature already in two PRs? | M1 = #314, M2 = #332, M3 = close tasks | agent-resolved | this ledger, 2026-09-14 |
 | D3 | 4-milestones | Force-push after amending pushed commits? | Never; the auto-mode classifier denied it. Bring #332 onto main by merging main in, then squash-merge | agent-resolved | session 2026-09-13 |
+| D4 | 4-milestones | How does #314 merge without the `workflow` token scope? | "I'll merge it in the web UI"; then "rebase 314 / or merge main into it" | user | AskUserQuestion 2026-09-14 |
+| D5 | 4-milestones | Drop U9 (pid record removed on clean exit)? | "Drop U9 (Recommended)" | user | AskUserQuestion 2026-09-14; cycle-log cycle 78 |
 
 ## Declined review findings
 
@@ -42,10 +44,7 @@ Spec and design PRs predate the flow: spec, plan and tasks ride in #314.
 
 ## Open escalation
 
-Sent 2026-09-14 (AskUserQuestion + push notification), phase 4-milestones, M2/M3:
-
-1. Category 4, missing access: #314 cannot be merged by this token (no `workflow` scope). Recommended: run `gh auth refresh -h github.com -s workflow`, or merge #314 in the web UI.
-2. Category 1, scope: U9 ("lock_path removed on clean exit", E4.1, R4) has no clean exit to observe, and unlinking the Unix flock file is unsafe (cycle-log cycle 6). Recommended: drop U9 and the "removes on clean exit" wording; U12 already makes a stale record harmless.
+None.
 
 ## Follow-ups not done
 

@@ -66,8 +66,8 @@ description: "Task list for feature 030: Windows installation package"
   - Put `#[cfg(unix)]` plus a `// unix-only:` reason on the stale-socket-reclaim and directory-ownership/mode cases.
   - Make the two-simultaneous-starters case platform-neutral.
   - Add `acquire_after_drop_rebinds`: acquire → `Bound`, drop the listener → acquire again → `Bound`.
-- [ ] T010 [P] [U8] [U9] [U10] E4.1–E4.2: create `crates/micold-daemon/tests/daemon_stop.rs` (all platforms, no gate) with two cases:
-  - `pid_record_lifecycle`: spawn the real `micold-daemon` binary (`env!("CARGO_BIN_EXE_micold-daemon")`) with an isolated endpoint/home. Wait for the endpoint, then assert `lock_path` holds the child's pid followed by a newline. Stop it cleanly and assert the file is removed.
+- [X] T010 [P] [U8] [U10] E4.1–E4.2: create `crates/micold-daemon/tests/daemon_stop.rs` (all platforms, no gate) with two cases:
+  - `pid_record_lifecycle`: spawn the real `micold-daemon` binary (`env!("CARGO_BIN_EXE_micold-daemon")`) with an isolated endpoint/home. Wait for the endpoint, then assert `lock_path` holds the child's pid followed by a newline. (The removal half, U9, was dropped by user decision 2026-09-14.)
   - `stop_running_daemon_ends_endpoint`: spawn, call `micold_core::spawn::stop_running_daemon(&endpoint)`, and assert it returns `Ok(true)` and the endpoint refuses connections within 5 s.
 
   Kill only the child this test spawned.
@@ -95,7 +95,7 @@ description: "Task list for feature 030: Windows installation package"
   - Drop the `File::open(temp_dir())` lock and change `BoundListener._lock` to `Option<std::fs::File>`, `None` on Windows.
   - Keep the `is_live` pre-probe and the `AddrInUse | PermissionDenied → AlreadyRunning` mapping.
   - Fix the comment so it states that `interprocess` sets `FILE_FLAG_FIRST_PIPE_INSTANCE` itself (`create_instance.rs:86`).
-- [ ] T018 [U8] [U9] R4, making the T010 `pid_record_lifecycle` case pass: in `crates/micold-daemon/src/server.rs`, write the pid on `Acquisition::Bound` on all platforms. The Windows path is now real, so escalate the warning to an error log if the write fails. Remove `lock_path` on clean exit through a guard that drops after `serve_interprocess` returns.
+- [X] T018 [U8] R4, making the T010 `pid_record_lifecycle` case pass: in `crates/micold-daemon/src/server.rs`, write the pid on `Acquisition::Bound` on all platforms. The Windows path is now real, so escalate the warning to an error log if the write fails. (The clean-exit removal guard, U9, was dropped by user decision 2026-09-14.)
 - [X] T019 [U10] [U11] [U12] R5, making T010 `stop_running_daemon_ends_endpoint` and T011 pass: in `crates/micold-core/src/spawn.rs`, replace `#[cfg(not(unix))] terminate_daemon`. Add a `#[cfg(windows)]` arm that:
   1. Calls `OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE)`.
   2. Checks `QueryFullProcessImageNameW`; the file name must equal `micold-daemon.exe` case-insensitively, otherwise return `ErrorKind::InvalidData`.
@@ -292,7 +292,7 @@ description: "Task list for feature 030: Windows installation package"
 - [X] T071 [US2] [A7] US2-AS2: in the same smoke run, uninstall removes the install dir, `.lnk`, uninstall key and `%LOCALAPPDATA%\micold-ai-ide\run`.
 - [X] T072 [US2] [A8] US2-AS3: in the same smoke run, both seeded data markers survive uninstall.
 - [X] T073 [US2] [A9] US2-AS4: in the same smoke run, installing with the daemon running ends with the old daemon pid gone.
-- [ ] T085 [US2] [A16] FR-009: in `scripts/windows-install-smoke.sh`, run the silent uninstall once with the app window open. Expect a non-zero exit with the install dir and uninstall key still in place, then close the window and continue with step 9.
+- [X] T085 [US2] [A16] FR-009: in `scripts/windows-install-smoke.sh`, run the silent uninstall once with the app window open. Expect a non-zero exit with the install dir and uninstall key still in place, then close the window and continue with step 9.
 
 **Checkpoint**: CI proves repair over a live daemon and uninstall with user data preserved, on both architectures.
 
@@ -517,10 +517,10 @@ see `autopilot.md`.
 
 ### M3 — Close
 
-- **Tasks**: T010, T018, T062–T064
-- **Deliverable**: the daemon pid record lifecycle holds on every platform, the full gate is green, and
-  research.md/plan.md match what shipped.
-- **Satisfies**: FR-022, FR-023 (pid record, R4); quickstart Part M
+- **Tasks**: T062–T064
+- **Deliverable**: the full gate is green, quickstart Part M is recorded, and research.md/plan.md
+  match what shipped.
+- **Satisfies**: quickstart Part M rows M1–M10
 - **Verify**: `mise run gate`; `cargo check --workspace --target x86_64-pc-windows-msvc` and
   `--target aarch64-apple-darwin`; quickstart Part M rows M1–M10
 - **Depends on**: M2
