@@ -10,6 +10,15 @@ on:
     # push reclassifies anyway, and a full run someone asked for costs nothing to keep.
     types: [opened, synchronize, reopened, labeled]
 
+# One live run per pull request. `labeled` fires once per label, so a PR opened with labels already
+# attached -- every Dependabot PR -- started a full pipeline per label for the same commit and queued
+# the runners behind five copies. A newer run supersedes an older one safely: its payload carries
+# every label on the PR at that moment, `full-ci` included. Pushes to main key on the run id, so they
+# never cancel each other.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
   # See the matching note in release.yml. The shared target directory in .cargo/config.toml is a
