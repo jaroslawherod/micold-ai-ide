@@ -4,7 +4,7 @@ loop: outside-in
 profile: .specify/memory/tdd-profile.md
 spec_criteria: 15
 planned_at: 61cc0318
-updated_at: 61cc0318
+updated_at: 69bdaefb
 suite_baseline: green
 ---
 
@@ -56,18 +56,18 @@ The entry points are:
 
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
-| U1  | The Windows `socket_path` is `\\.\pipe\Micold.Daemon.<SID>`, where `<SID>` matches `^S-1-[0-9-]+$` | FR-020, FR-022, E1 | example | win | PENDING | |
-| U2  | The Windows `lock_path` ends in `micold-ai-ide\run\micold-daemon.pid`, and its parent directory exists after resolving | FR-023, E1 | example | win | PENDING | |
-| U3  | Resolving the endpoint twice yields equal endpoints (win: on Unix the test would race parallel tests that set `XDG_RUNTIME_DIR`) | FR-020, FR-022, E1 | example | win | PENDING | |
+| U1  | The Windows `socket_path` is `\\.\pipe\Micold.Daemon.<SID>`, where `<SID>` matches `^S-1-[0-9-]+$` | FR-020, FR-022, E1 | example | win | DONE | `crates/micold-core/src/endpoint.rs::tests::resolve_creates_a_usable_endpoint_pair` (Windows arm) |
+| U2  | The Windows `lock_path` ends in `micold-ai-ide\run\micold-daemon.pid`, and its parent directory exists after resolving | FR-023, E1 | example | win | DONE | `crates/micold-core/src/endpoint.rs::tests::resolve_puts_the_pid_record_in_the_local_run_dir` |
+| U3  | Resolving the endpoint twice yields equal endpoints (win: on Unix the test would race parallel tests that set `XDG_RUNTIME_DIR`) | FR-020, FR-022, E1 | example | win | DONE | `crates/micold-core/src/endpoint.rs::tests::resolve_is_stable` |
 
 ### `crates/micold-daemon/src/singleton.rs`
 
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
-| U4  | The bound pipe's DACL is protected (`SE_DACL_PROTECTED`) | FR-021, SC-009, E2.1 | example | win | PENDING | |
-| U5  | The bound pipe's DACL has exactly one ACE, allowing the current token's user SID | FR-021, SC-009, E2.1 | example | win | PENDING | |
-| U6  | Of two simultaneous starters on one endpoint, exactly one is `Bound` and the other `AlreadyRunning` | FR-022, E3.1 | example | any | DONE | `crates/micold-daemon/tests/daemon_singleton.rs::two_simultaneous_starters_converge_on_one_daemon` (Unix; Windows run pending T028) |
-| U7  | Acquiring after the previous listener is dropped returns `Bound` | FR-020, FR-022, E3.2 | example | any | DONE | `crates/micold-daemon/tests/daemon_singleton.rs::acquire_after_drop_rebinds` (Unix; Windows run pending T028) |
+| U4  | The bound pipe's DACL is protected (`SE_DACL_PROTECTED`) | FR-021, SC-009, E2.1 | example | win | DONE | `crates/micold-daemon/tests/windows_pipe_acl.rs::the_bound_pipe_dacl_is_protected` |
+| U5  | The bound pipe's DACL has exactly one ACE, allowing the current token's user SID | FR-021, SC-009, E2.1 | example | win | DONE | `crates/micold-daemon/tests/windows_pipe_acl.rs::the_bound_pipe_dacl_allows_only_the_current_user` |
+| U6  | Of two simultaneous starters on one endpoint, exactly one is `Bound` and the other `AlreadyRunning` | FR-022, E3.1 | example | any | DONE | `crates/micold-daemon/tests/daemon_singleton.rs::two_simultaneous_starters_converge_on_one_daemon` (Unix and Windows, run 34823596152) |
+| U7  | Acquiring after the previous listener is dropped returns `Bound` | FR-020, FR-022, E3.2 | example | any | DONE | `crates/micold-daemon/tests/daemon_singleton.rs::acquire_after_drop_rebinds` (Unix and Windows, run 34823596152) |
 
 ### `crates/micold-daemon/src/server.rs` (pid record)
 
@@ -80,25 +80,25 @@ The entry points are:
 
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
-| U10 | `stop_running_daemon` on a live daemon returns `Ok(true)`, and the endpoint refuses connections within 5 s | FR-023, E4.2 | example | any | DONE | `crates/micold-daemon/tests/daemon_stop.rs::stop_running_daemon_ends_endpoint` (Unix; Windows run pending) |
-| U11 | `terminate_daemon` on a pid whose image is not `micold-daemon.exe` returns `InvalidData` and leaves the process running | FR-023, E4.3 | example | win | PENDING | |
+| U10 | `stop_running_daemon` on a live daemon returns `Ok(true)`, and the endpoint refuses connections within 5 s | FR-023, E4.2 | example | any | DONE | `crates/micold-daemon/tests/daemon_stop.rs::stop_running_daemon_ends_endpoint` (Unix and Windows, run 34823596152) |
+| U11 | `terminate_daemon` on a pid whose image is not `micold-daemon.exe` returns `InvalidData` and leaves the process running | FR-023, E4.3 | example | win | DONE | `crates/micold-core/src/spawn.rs::tests::terminate_refuses_foreign_image` |
 | U12 | `stop_running_daemon` with a pid record for a non-live endpoint returns `Ok(false)` | FR-023, E4.4 | example | any | DONE | `crates/micold-core/src/spawn.rs::tests::stale_pid_record_is_ignored` |
 
 ### `crates/micold-daemon/src/platform/windows.rs` and `crates/micold-daemon/src/supervisor.rs`
 
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
-| U13 | Killing a Regular session ends a grandchild its shell started, within 5 s | FR-020, E5.1 | example | win | RED | `crates/micold-daemon/src/supervisor.rs::windows_tests::kill_reaps_grandchild` |
+| U13 | Killing a Regular session ends a grandchild its shell started, within 5 s | FR-020, E5.1 | example | win | DONE | `crates/micold-daemon/src/supervisor.rs::windows_tests::kill_reaps_grandchild` |
 | U67 | Dropping a session whose child is still running returns within 10 s | FR-020 | example | win | DONE | `crates/micold-daemon/src/supervisor.rs::windows_tests::dropping_a_session_returns` |
 
 ### `crates/micold-core/src/process.rs`
 
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
-| U14 | On Windows, a command passed through `no_window` still spawns and exits 0, and the pinned `CREATE_NO_WINDOW` equals `0x0800_0000` | FR-024, E6.3 | example | win | BLOCKED | `crates/micold-core/src/process.rs::tests::no_window_sets_flag`, compile-checked; implemented before any Windows run (cycle 8 notes), awaiting the CI leg |
+| U14 | On Windows, a command passed through `no_window` still spawns and exits 0, and the pinned `CREATE_NO_WINDOW` equals `0x0800_0000` | FR-024, E6.3 | example | win | DONE | `crates/micold-core/src/process.rs::tests::no_window_sets_flag` (Windows, run 34823596152) |
 | U15 | On Unix, a command passed through `no_window` spawns and exits 0 | FR-024 (parity, Principle VI) | example | any | DONE | `crates/micold-core/src/process.rs::tests::no_window_is_noop_elsewhere` |
-| U16 | While the `announce_running` marker is held, `OpenMutexW("Local\\MicoldAIIDE")` succeeds | FR-009, E7.1 | example | win | PENDING | |
-| U17 | After the marker is dropped, `OpenMutexW("Local\\MicoldAIIDE")` fails | FR-009, E7.1 | example | win | PENDING | |
+| U16 | While the `announce_running` marker is held, `OpenMutexW("Local\\MicoldAIIDE")` succeeds | FR-009, E7.1 | example | win | DONE | `crates/micold-core/src/process.rs::tests::announce_running_holds_the_app_mutex` |
+| U17 | After the marker is dropped, `OpenMutexW("Local\\MicoldAIIDE")` fails | FR-009, E7.1 | example | win | DONE | `crates/micold-core/src/process.rs::tests::dropping_the_marker_releases_the_app_mutex` |
 
 ### `crates/micold-core/tests/background_spawns_hide_console.rs` (guard over `crates/*/src`)
 
