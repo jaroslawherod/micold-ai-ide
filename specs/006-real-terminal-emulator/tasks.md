@@ -521,7 +521,7 @@ previous selection.
   publish a new `SessionMsg::TerminalSelectionReleased` instead of writing `selectable_content()`,
   and handle it in the shell (`shell::clipboard`) with `selection::copy_request` on the current
   `app.selection`, without closing the context menu. Make T074 pass.
-- [ ] T076 [BUG-007] Visual pass on a private Xvfb display (the `visual-pass` skill): in a Regular
+- [X] T076 [BUG-007] Visual pass on a private Xvfb display (the `visual-pass` skill): in a Regular
   Terminal, drag text onto the clipboard, single-click a character at human pace, paste — no
   highlight remains and the dragged text is pasted (quickstart §10f step 20a); after a drag, put
   other text on the clipboard, send a synthetic `xdotool click` and paste — the other text is

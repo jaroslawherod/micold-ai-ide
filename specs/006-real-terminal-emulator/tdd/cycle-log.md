@@ -75,3 +75,13 @@ and no sender), was added with the tests.
   corrected alongside the new variant's handling.
 - commit: the `fix(006)` Green commit that carries this entry (the SHA is in `git log`; a commit
   cannot name its own hash).
+
+## Acceptance: A1, the visual pass (T076)
+
+- A1 [evidence/bugfix-007-pass-2026-09-14.md](../evidence/bugfix-007-pass-2026-09-14.md). This is not
+  an automated test: the profile's acceptance runner has no GUI. On `origin/main` `226d3a8b`, a
+  synthetic click and a click at human pace each left the `w` highlighted, and the slow one pasted
+  `w` (red). On this branch's build, neither click leaves a highlight, the dragged `hello` is pasted,
+  and a synthetic click after a drag leaves another client's `OTHER-TEXT` on the clipboard (green).
+- commit: the `docs(006)` T076 commit that carries this entry.
+

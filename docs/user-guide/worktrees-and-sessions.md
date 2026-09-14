@@ -887,7 +887,9 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
   inserted into the CLI as input.
 - **Select** text by dragging with the mouse (double-click selects a word, triple-click a line);
   the selection is copied to the clipboard automatically on release. **Copy** the current
-  selection with Ctrl+Shift+C (Cmd+C on macOS); **middle-click** pastes.
+  selection with Ctrl+Shift+C (Cmd+C on macOS); **middle-click** pastes. A plain click, without
+  dragging, clears the selection and selects nothing, so it never replaces what is on the
+  clipboard.
 - **Mouse-driven programs**: when the running program turns on mouse reporting, mouse clicks are
   forwarded to it; hold **Shift** while dragging to select text instead.
 - **Keys route to the terminal's process only while the terminal is focused.** When focused, every
