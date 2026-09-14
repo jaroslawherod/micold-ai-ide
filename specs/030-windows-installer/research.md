@@ -374,6 +374,12 @@ embed-resource v3.0.11 MIT
   MIT OR Apache-2.0. Every other crate above is already locked, some at an older patch version that
   Cargo may unify upward. No license outside MIT, Apache-2.0 and Unlicense enters.
 - **Build time only**: nothing reaches the shipped binaries' runtime code.
+- **Added with T034**: adding the dependency also locked `vswhom` 0.1.0, `vswhom-sys` 0.1.3 and
+  `winreg` 0.55.0, all MIT. They are `embed-resource`'s dependencies on a Windows MSVC build host,
+  which the tree above, resolved on a Linux host, did not show. They find `rc.exe` on the CI
+  Windows runners. `toml_parser` moved from 1.1.2 to 1.1.3. A host with no resource compiler (this
+  repository's Linux cross-checks) builds the Windows exes without an icon and prints a
+  `cargo:warning`; the packaging smoke's A17 check fails such an exe.
 
 ### R12. Upgrading or uninstalling while the app or daemon runs (FR-008, FR-009, edge cases)
 

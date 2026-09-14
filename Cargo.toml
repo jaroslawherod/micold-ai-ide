@@ -48,6 +48,10 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_System_SystemInformation",
     "Win32_System_Threading",
 ] }
+# Build-time only: compiles `packaging/windows/app-icon.rc` into the Windows exes, so Explorer and the
+# taskbar show the project icon (feature 030, FR-003, research R11, vetted there). A no-op for any
+# other target.
+embed-resource = "3"
 # --- transport / async (daemon; the client already has tokio via iced) — plan W1 ---
 # The shared framing codec lives in micold-core; the runtime + IPC live in the daemon/client.
 tokio = { version = "1.53", features = [

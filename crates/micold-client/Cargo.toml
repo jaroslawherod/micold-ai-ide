@@ -53,6 +53,10 @@ ttf-parser = { workspace = true }
 iced_renderer = { workspace = true }
 iced_tiny_skia = { workspace = true }
 
+[build-dependencies]
+# The exe icon on Windows (feature 030, FR-003); see `build.rs`.
+embed-resource = { workspace = true }
+
 [lints]
 workspace = true
 

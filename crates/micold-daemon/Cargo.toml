@@ -73,5 +73,9 @@ portable-pty = { workspace = true }
 # Not a cycle: `micold-client` depends only on `micold-core`, never on the daemon.
 micold-client = { path = "../micold-client" }
 
+[build-dependencies]
+# The exe icon on Windows (feature 030, FR-003); see `build.rs`.
+embed-resource = { workspace = true }
+
 [lints]
 workspace = true
