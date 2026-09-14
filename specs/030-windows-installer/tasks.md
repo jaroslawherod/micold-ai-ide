@@ -287,7 +287,7 @@ description: "Task list for feature 030: Windows installation package"
 
 ### Outer loop for User Story 2 (acceptance tests green before the story is complete)
 
-- [ ] T070 [US2] [A6] US2-AS1: in the CI smoke run from T043, the repair over a live install exits 0 and leaves exactly one `_is1` uninstall key.
+- [X] T070 [US2] [A6] US2-AS1: in the CI smoke run from T043, the repair over a live install exits 0 and leaves exactly one `_is1` uninstall key.
 - [ ] T071 [US2] [A7] US2-AS2: in the same smoke run, uninstall removes the install dir, `.lnk`, uninstall key and `%LOCALAPPDATA%\micold-ai-ide\run`.
 - [ ] T072 [US2] [A8] US2-AS3: in the same smoke run, both seeded data markers survive uninstall.
 - [ ] T073 [US2] [A9] US2-AS4: in the same smoke run, installing with the daemon running ends with the old daemon pid gone.
@@ -401,7 +401,7 @@ description: "Task list for feature 030: Windows installation package"
 - [X] T061 Security review of the Phase 2 unsafe code in `endpoint.rs`, `singleton.rs`, `spawn.rs`, `process.rs`, `win_job.rs` and `platform/windows.rs`. Check that every handle is closed via RAII, `LocalFree` runs on every path, there are no panics across FFI, the SDDL is built only from the token SID, and `terminate_daemon` cannot act on a non-`micold-daemon.exe` image. Record the findings in the PR description.
 - [ ] T074 [U71] Test then implement: the Windows client checks the pipe server's process token SID against the current user before the handshake, in `crates/micold-core/src/connect.rs`; red on the Windows CI leg first.
 - [ ] T075 [U72] Test then implement: the Windows client opens the pipe at `SECURITY_IDENTIFICATION`, in `crates/micold-core/src/connect.rs`; red on the Windows CI leg first.
-- [ ] T076 [U73] Test then implement: a `PermissionDenied` bind in `crates/micold-daemon/src/singleton.rs` is an error naming the pipe, not `AlreadyRunning`; red on the Windows CI leg first.
+- [X] T076 [U73] Test then implement: a `PermissionDenied` bind in `crates/micold-daemon/src/singleton.rs` is an error naming the pipe, not `AlreadyRunning`; red on the Windows CI leg first.
 - [ ] T062 Full gate before the final push: `cargo fmt --check`, `mise run test`, `cargo check --target x86_64-pc-windows-msvc --workspace`, `cargo check --target aarch64-apple-darwin --workspace`, and `scripts/tests/windows-installer.test.sh`. Then confirm all CI jobs are green, including `ci complete`, the Windows `test` leg and `windows-arm64-package`.
 - [ ] T063 Manual quickstart Part M, rows M1–M10 in `specs/030-windows-installer/quickstart.md`, run on a standard-user Windows 11 x64 VM and an ARM64 device or VM with the CI-uploaded setup executables. Record one result line per row in the PR description. M7 needs a second local account.
 - [ ] T064 [P] Update `specs/030-windows-installer/research.md` with any decision that changed during implementation, for example if cross-compiling ARM64 replaced native `windows-11-arm`. Update `plan.md`'s Technical Context if versions moved.

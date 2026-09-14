@@ -611,3 +611,12 @@ failed before the implementation.
 - green (U73): pending CI. `acquire` on Windows no longer maps `PermissionDenied` straight to `AlreadyRunning`. Losing the first-instance race to this user's own daemon also fails with access denied, so it connects once more: a connection means this user's daemon is live (`AlreadyRunning`, U6 unchanged), and a `PermissionDenied` connect is an error naming the pipe. Any other connect failure keeps the old `AlreadyRunning`.
 - notes: the U73 row was reworded before its test, to keep U6's race case explicit. U71 and U72 (D1's client side, D2) are still `PENDING`.
 - commit: see the follow-up commit
+
+## Cycle 72: U73 and A6 green on both Windows legs
+
+- test: U73, `crates/micold-daemon/tests/windows_pipe_acl.rs::binding_over_a_pipe_that_refuses_this_user_is_an_error_naming_it`; A6, `scripts/windows-install-smoke.sh` step 8.
+- red: cycles 70 and 71, not re-run.
+- green (U73): PR #332's CI run 34845626478 (d196c1cd), `build + test (windows-latest)`, step `Test (daemon, Windows)`: `test binding_over_a_pipe_that_refuses_this_user_is_an_error_naming_it ... ok`, `test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s`. U6 still holds in the same step: `test two_simultaneous_starters_converge_on_one_daemon ... ok`. U73 is `DONE`.
+- green (A6): the same run. x64: `== repair dist/micold-ai-ide-0.14.0-x64-setup.exe with the daemon (pid 4672) running`, `repaired, one Installed apps entry`, `== smoke passed`. ARM64: `== repair dist/micold-ai-ide-0.14.0-arm64-setup.exe with the daemon (pid 10160) running`, `repaired, one Installed apps entry`, `== smoke passed`. `ci complete` succeeded. A6 is `DONE`, so T070 and T076 are ticked. T043 and T045 wait on A7-A9.
+- refactor: none needed.
+- commit: see the follow-up commit
