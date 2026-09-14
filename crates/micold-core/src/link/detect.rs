@@ -129,4 +129,13 @@ mod tests {
             "an address opened right after a single quote ends at the next one, not the last"
         );
     }
+
+    #[test]
+    fn finds_only_the_address_of_a_markdown_link() {
+        assert_eq!(
+            found("See [text](https://x.example) here"),
+            ["https://x.example"],
+            "neither the link text nor the brackets around the address are part of it"
+        );
+    }
 }

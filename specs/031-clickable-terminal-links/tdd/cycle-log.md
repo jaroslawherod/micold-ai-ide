@@ -63,3 +63,14 @@
   that quote. Suite -> 1063 passed, 0 failed
 - refactor: none needed
 - commit: `feat(031): end a quoted address before its closing quote (U5)`
+
+## Cycle 6: U6 finds only the address of a Markdown link
+
+- test: `crates/micold-core/src/link/detect.rs::tests::finds_only_the_address_of_a_markdown_link` (new)
+- red: none on arrival. `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::finds_only_the_address_of_a_markdown_link -- --exact`
+  -> `1 passed`: the unbalanced-closer stop from U4 already ends the address before `)`.
+  Deliberate mutant: `scan_end` no longer treats `)` as a closer -> `left: ["https://x.example)"]` / `right: ["https://x.example"]` (1 failed). Mutant removed, file restored.
+- green: no implementation change. Suite -> 1064 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin the address of a Markdown link (U6)`
+- notes: green on arrival, as research R3 rule 4 predicts ("That handles `[text](https://x.y)`")
