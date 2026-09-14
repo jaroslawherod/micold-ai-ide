@@ -1141,7 +1141,7 @@ a new test fails with that mutant applied, and the full suite (`mise run test`) 
       example `boot_work(plan, runtime)`), feed it a `CliRuntime` over `RecordingRunner`, and assert that
       `Progress(Probing)` arrives first and the outcome last. Proven when M16 (`observe` → `&mut |_| {}`)
       fails it: `scripts/build-lock.sh cargo test -p micold-client`.
-- [ ] T178 [BUG-004] Finding 6 — FR-036b / SC-004c. Test first, in `main.rs` `mod tests`: after a
+- [X] T178 [BUG-004] Finding 6 — FR-036b / SC-004c. Test first, in `main.rs` `mod tests`: after a
       refused dial starts a bring-up, and for every `is_coming_up()` state, `connection_status(&app)` is
       not `Disconnected`, and no "The sandbox did not start" card offering FR-035a's fallback is shown.
       Both are red today (`daemon_sync.rs:296` sets `disconnected` unconditionally; `ui/mod.rs:118-122`,

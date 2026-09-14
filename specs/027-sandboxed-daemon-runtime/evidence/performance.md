@@ -315,3 +315,44 @@ Times below come from frame mtimes, deduplicated by hash, and the daemon log (lo
    mid-word at this width.
 
 Not assessed: how the banner flicker looks at real frame rates. lavapipe frame pacing says nothing about a GPU.
+
+### Re-run after T187 and T188
+
+Run on **2026-09-14** with the `visual-pass` skill, again on **Xvfb :96 with lavapipe** rather than a real
+display. The client came from the working tree on top of `639c92c3` with T187 and T188 applied, and was pinned to
+`~/vp/bin-t178b`. That binary differs from the `bin-t178` pin. `micold-daemon` is byte-identical to that pin,
+because neither the daemon nor core changed. The run used the same image (`micold-daemon:dev` `sha256:5bc77699…`),
+local-build placement and a fresh data home. The client brought the sandbox up from nothing and attached
+(`client attached to daemon … client_window=320996`), then `docker stop micold-sandbox` was run from a shell.
+Frames were captured continuously; gaps were about 0.13s. Every frame from launch to 5s after re-attachment was
+deduplicated by hash.
+
+| Time | Source | What the application showed |
+|---|---|---|
+| 08:11:35.35 – 08:11:36.04 | frame | launch: "Checking the container runtime", then "Starting the sandbox", with a bar |
+| 08:11:36.04 – 08:11:36.57 | frame | no stage, **no banner**: the service started and had not answered yet (T188) |
+| 08:11:36.31 | daemon log | `client attached to daemon` |
+| 08:11:52.7 | shell | `docker stop micold-sandbox`; it returns 08:12:02.3, after the 10s grace |
+| 08:11:52.7 – 08:12:06.38 | frame | identical by hash to the attached view, in every frame |
+| 08:12:06.53 | frame | "Checking the container runtime", with "Trying again: The sandbox failed while starting the sandbox. Th…". **No card, no fallback, no banner** (T187) |
+| 08:12:06.67 – 08:12:06.95 | frame | "Starting the sandbox", with the same attempt line and a bar |
+| 08:12:07.08 | frame | identical by hash to the attached view before the stop |
+| 08:12:07.35 | daemon log | `client attached to daemon … client_window=320996`: the same window |
+
+- **Recovery: automatic.** About 5.0s passed from `docker stop` returning to re-attachment, with no user action.
+  The client log shows one `service absent, bringing it up again in 0s (2 left)` and no `attach: failed` line.
+- **Toasts: 0**, **failure cards: 0** and **red banners: 0**, in any frame, at first enable and on recovery.
+
+![T178 re-run: the stage at launch, the gap before the service answers, and the recovery, with no banner or card](t178-rerun-stopped-from-outside.png)
+
+### Verdict: T178 is proven, at this capture resolution
+
+Findings 1 and 2 of the first pass no longer reproduce. Two limits remain.
+
+- The code still sets the banner for the time between the disconnect and the liveness check's `Lost` (T180's
+  pinned decision). The first pass measured about 0.1s for it, which is below this pass's 0.13s frame gap.
+  No frame caught it, and this pass cannot show that it is gone.
+- Finding 3 is unchanged. The attempt line still says "failed while starting the sandbox" for a container
+  stopped from outside, truncated mid-word. It is not part of FR-036b and is left open.
+
+Not assessed: how the stage transitions look at real frame rates. lavapipe frame pacing says nothing about a GPU.
