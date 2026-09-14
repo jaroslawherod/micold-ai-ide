@@ -127,13 +127,13 @@ description: "Task list for feature 030: Windows installation package"
   - `crates/micold-daemon/tests/session_survival.rs`
 
   For each: remove the whole-file `#![cfg(unix)]` and its placeholder reason. Fix Unix-specific test plumbing, for example `/bin/sh` → the platform shell via `terminal.rs`'s resolver, and path separators. Put `#[cfg(unix)]` plus a `// unix-only:` reason only on cases that genuinely need Unix. Also fix `crates/micold-daemon/tests/support/` helpers these files use.
-- [ ] T027 FR-025 triage of the remaining 21 gated files in `crates/micold-daemon/tests/`. For each file, in this order of preference:
+- [X] T027 FR-025 triage of the remaining 21 gated files in `crates/micold-daemon/tests/`. For each file, in this order of preference:
   1. un-gate it, or
   2. partly gate it, with per-case reasons, or
   3. keep the whole-file gate, replacing the placeholder with a concrete `// unix-only: <dependency>` reason.
 
   Append every file still wholly gated to a list in the PR description. T060 carries that list into docs.
-- [ ] T028 Cross-check and push: run `cargo fmt --check`, `cargo check --target x86_64-pc-windows-msvc -p micold-core -p micold-daemon -p micold-client`, `cargo check --target aarch64-apple-darwin -p micold-core -p micold-daemon`, and `mise run test`. Push, and confirm that the Windows leg runs T007–T015 green and that Linux and macOS are unchanged.
+- [X] T028 Cross-check and push: run `cargo fmt --check`, `cargo check --target x86_64-pc-windows-msvc -p micold-core -p micold-daemon -p micold-client`, `cargo check --target aarch64-apple-darwin -p micold-core -p micold-daemon`, and `mise run test`. Push, and confirm that the Windows leg runs T007–T015 green and that Linux and macOS are unchanged.
 
 **Checkpoint**: on `windows-latest`, `cargo test -p micold-daemon --all-targets` is green, including `windows_pipe_acl`, `daemon_singleton`, `daemon_stop`, `autospawn`, `stream_view` and `session_start`. FR-020 to FR-025 hold for a `cargo run` build.
 
@@ -175,7 +175,7 @@ description: "Task list for feature 030: Windows installation package"
   - cargo is invoked as `--release --locked -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon --target <triple>`.
 
   Wire it into the `.github/workflows/ci.yml` step that loops over `scripts/tests/*.test.sh`, if it is not already globbed.
-- [ ] T033 [P] [US1] [A1] [A2] [A3] [A4] FR-018 / I1, I2, I7: create `scripts/windows-install-smoke.sh <setup.exe>`, written first as assertions only. It runs, in order:
+- [X] T033 [P] [US1] [A1] [A2] [A3] [A4] FR-018 / I1, I2, I7: create `scripts/windows-install-smoke.sh <setup.exe>`, written first as assertions only. It runs, in order:
   1. `"$exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=install.log` and asserts exit 0.
   2. Asserts `$LOCALAPPDATA/Programs/Micold AI IDE/micold-ai-ide.exe` and `micold-daemon.exe` exist.
   3. Asserts `$APPDATA/Microsoft/Windows/Start Menu/Programs/Micold AI IDE.lnk` exists.
@@ -218,8 +218,8 @@ description: "Task list for feature 030: Windows installation package"
   - It resolves `iscc` via `$ISCC`, then `"${ProgramFiles(x86)}/Inno Setup 6/ISCC.exe"`, then `command -v iscc`.
   - It runs `iscc /DAppVersion=… /DArch=… /DBinDir=… /O<out-dir> packaging/windows/micold-ai-ide.iss` and prints the output path.
 - [X] T037 [US1] FR-016: add `[tasks.windows-installer]` to `mise.toml`, following `[tasks.deb]`: description `Build the Windows setup .exe for the host arch (needs Inno Setup 6) [build-locked]`, and `run = "{{config_root}}/scripts/windows-installer.sh"`.
-- [ ] T038 [US1] [A1] [A2] [A3] [A4] [A13] FR-018 / SC-007 x64: in `.github/workflows/ci.yml` job `test`, add the step `Package, install and launch the Windows installer` with `if: runner.os == 'Windows'` and `shell: bash`. It runs `scripts/windows-installer.sh --arch x64 --out-dir dist` and then `scripts/windows-install-smoke.sh dist/micold-ai-ide-*-x64-setup.exe`. Upload `dist/*.exe` with `actions/upload-artifact` (retention 7 days) for manual quickstart M1–M6.
-- [ ] T039 [US1] [A1] [A2] [A3] [A4] FR-015 / FR-018 ARM64: add the job `windows-arm64-package` to `.github/workflows/ci.yml`:
+- [X] T038 [US1] [A1] [A2] [A3] [A4] [A13] FR-018 / SC-007 x64: in `.github/workflows/ci.yml` job `test`, add the step `Package, install and launch the Windows installer` with `if: runner.os == 'Windows'` and `shell: bash`. It runs `scripts/windows-installer.sh --arch x64 --out-dir dist` and then `scripts/windows-install-smoke.sh dist/micold-ai-ide-*-x64-setup.exe`. Upload `dist/*.exe` with `actions/upload-artifact` (retention 7 days) for manual quickstart M1–M6.
+- [X] T039 [US1] [A1] [A2] [A3] [A4] FR-015 / FR-018 ARM64: add the job `windows-arm64-package` to `.github/workflows/ci.yml`:
   - `name: package + smoke (windows-11-arm)`, `needs: classify`, `if: needs.classify.outputs.docs_only != 'true'`, `runs-on: windows-11-arm`
   - steps: checkout, `dtolnay/rust-toolchain@stable` with `targets: aarch64-pc-windows-msvc`, rust-cache, the two script calls with `--arch arm64`, and upload-artifact
 
@@ -227,7 +227,7 @@ description: "Task list for feature 030: Windows installation package"
   - add it to `ci-complete.needs`;
   - add an env `WINARM: ${{ needs.windows-arm64-package.result }}` and a `check windows-arm64 "$WINARM"` line;
   - confirm `crates/micold-core/tests/ci_gate_covers_every_job.rs` passes.
-- [ ] T040 [US1] [A1] [A2] [A3] [A4] [A13] Push and observe both Windows packaging legs green. If a leg fails, fix `.iss`, the scripts, or the Phase 2 code; do not weaken smoke assertions. Remove the `continue-on-error: true` that PR #314 put on both "Install and launch" steps in `.github/workflows/ci.yml`, so the smoke gates `ci-complete` again. Record the observed pipe-appearance time on each architecture in `specs/030-windows-installer/research.md`, R14, as evidence.
+- [X] T040 [US1] [A1] [A2] [A3] [A4] [A13] Push and observe both Windows packaging legs green. If a leg fails, fix `.iss`, the scripts, or the Phase 2 code; do not weaken smoke assertions. Remove the `continue-on-error: true` that PR #314 put on both "Install and launch" steps in `.github/workflows/ci.yml`, so the smoke gates `ci-complete` again. Record the observed pipe-appearance time on each architecture in `specs/030-windows-installer/research.md`, R14, as evidence.
 - [X] T041 [P] [US1] Docs, FR-017 install part and FR-010: create `docs/user-guide/install-windows.md`, covering:
   - which file to download, with `{{MICOLD_VERSION}}`/`{{MICOLD_TAG}}` download links for `micold-ai-ide-{{MICOLD_VERSION}}-x64-setup.exe` and `-arm64-setup.exe`, and how to tell x64 from ARM64 (Settings → System → About → System type);
   - the SmartScreen "Windows protected your PC" dialog, then **More info**, then **Run anyway**, and why it appears (unsigned);
@@ -240,8 +240,8 @@ description: "Task list for feature 030: Windows installation package"
 ### Outer loop for User Story 1 (acceptance tests green before the story is complete)
 
 - [X] T065 [US1] [A1] US1-AS1: in the CI smoke run from T038/T039, the silent per-user install exits 0 and leaves both exes plus the Start menu `.lnk`. Record the CI run URL in `specs/030-windows-installer/tdd/cycle-log.md`.
-- [ ] T066 [US1] [A2] US1-AS2: in the same smoke run, the installed client has no `conhost.exe` child.
-- [ ] T067 [US1] [A3] US1-AS3: in the same smoke run, the daemon pipe appears within 20 s and the daemon has no `conhost.exe` child.
+- [X] T066 [US1] [A2] US1-AS2: in the same smoke run, the installed client has no `conhost.exe` child.
+- [X] T067 [US1] [A3] US1-AS3: in the same smoke run, the daemon pipe appears within 20 s and the daemon has no `conhost.exe` child.
 - [X] T068 [US1] [A4] US1-AS4: in the same smoke run, the uninstall key's `DisplayVersion` equals the workspace version.
 - [ ] T069 [US1] [A5] US1-AS5: the real-file case of `windows_violations` in `crates/micold-client/tests/packaging_excludes_showcase.rs` passes on the committed `packaging/windows/micold-ai-ide.iss`.
 
@@ -397,7 +397,7 @@ description: "Task list for feature 030: Windows installation package"
 
   Re-run `mise run test`.
 - [X] T059 [P] Update `specs/030-windows-installer/contracts/release-artifacts.md` job graph and artifact table if T058 changed any job name. Update `specs/028-macos-package/contracts/release-artifacts.md` with the Windows rows only if 028 is merged (normative single source).
-- [ ] T060 [P] Fill "Tests not run on Windows" in `docs/development/windows-packaging.md` with each file T027 left wholly `#![cfg(unix)]` and its `// unix-only:` reason.
+- [X] T060 [P] Fill "Tests not run on Windows" in `docs/development/windows-packaging.md` with each file T027 left wholly `#![cfg(unix)]` and its `// unix-only:` reason.
 - [ ] T061 Security review of the Phase 2 unsafe code in `endpoint.rs`, `singleton.rs`, `spawn.rs`, `process.rs`, `win_job.rs` and `platform/windows.rs`. Check that every handle is closed via RAII, `LocalFree` runs on every path, there are no panics across FFI, the SDDL is built only from the token SID, and `terminate_daemon` cannot act on a non-`micold-daemon.exe` image. Record the findings in the PR description.
 - [ ] T062 Full gate before the final push: `cargo fmt --check`, `mise run test`, `cargo check --target x86_64-pc-windows-msvc --workspace`, `cargo check --target aarch64-apple-darwin --workspace`, and `scripts/tests/windows-installer.test.sh`. Then confirm all CI jobs are green, including `ci complete`, the Windows `test` leg and `windows-arm64-package`.
 - [ ] T063 Manual quickstart Part M, rows M1–M10 in `specs/030-windows-installer/quickstart.md`, run on a standard-user Windows 11 x64 VM and an ARM64 device or VM with the CI-uploaded setup executables. Record one result line per row in the PR description. M7 needs a second local account.

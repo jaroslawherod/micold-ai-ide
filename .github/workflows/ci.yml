@@ -253,11 +253,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: scripts/windows-installer.sh --arch x64 --out-dir dist
-      # Non-blocking until the Windows endpoint lands (030 T016-T021): the daemon's pipe cannot appear
-      # while `resolve()` is a stub, so A3 is red by design. Remove `continue-on-error` in T040.
       - name: Install and launch the Windows installer
         if: runner.os == 'Windows'
-        continue-on-error: true
         shell: bash
         run: scripts/windows-install-smoke.sh dist/micold-ai-ide-*-x64-setup.exe
       - name: Keep the Windows setup executable
@@ -404,10 +401,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Build the setup executable
         run: scripts/windows-installer.sh --arch arm64 --out-dir dist
-      # Non-blocking until the Windows endpoint lands (030 T016-T021), as on the x64 leg. Remove
-      # `continue-on-error` in T040.
       - name: Install and launch it
-        continue-on-error: true
         run: scripts/windows-install-smoke.sh dist/micold-ai-ide-*-arm64-setup.exe
       - name: Keep the setup executable
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

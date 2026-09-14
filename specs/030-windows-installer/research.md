@@ -422,6 +422,11 @@ the rule.
   desktop.
 - Pipe appearance is the observable proof that FR-020 holds in an installed layout.
 
+**Evidence** (T040): in PR #332's CI run 34841225620 (e002ec1b), the daemon's pipe appeared **0 s**
+after the installed client started on x64 (`build + test (windows-latest)`) and **1 s** after on
+ARM64 (`package + smoke (windows-11-arm)`), against the 20 s bound. Run 34840058051 (bbaa2dab) also
+saw 1 s on ARM64. Both legs found no `conhost.exe` under the client or the daemon.
+
 **Alternatives considered**:
 
 - **Adding `windows-11-arm` as a third `os` value of the test matrix**: rejected. It would triple the
