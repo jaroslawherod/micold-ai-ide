@@ -575,6 +575,9 @@ jobs:
           # account, and what a Developer ID would change. A packaging process nobody but CI can
           # run is one nobody can fix (FR-033).
           test -f docs/development/macos-packaging.md
+          # Feature 030: how the Windows setup executables are built and smoke-tested, and how the daemon's
+          # pipe is protected (T053).
+          test -f docs/development/windows-packaging.md
 
       # Constitution Principle VII, the half that was not mechanical. "Every user-facing feature
       # MUST ship with corresponding user-guide documentation in the same change" was enforced by
