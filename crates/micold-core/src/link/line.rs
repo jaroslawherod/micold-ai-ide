@@ -553,4 +553,35 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn a_scrollback_row_resolves_like_a_viewport_row() {
+        let lines = || [row("See https://a.exa").wrapped(), row("mple/x now")];
+        let in_view = link_at(
+            &Rows::new(0, std::iter::once(row("")).chain(lines()).collect()),
+            2,
+            2,
+        );
+        let in_scrollback = link_at(
+            &Rows::new(-2, lines().into_iter().chain([row("")]).collect()),
+            -1,
+            2,
+        );
+        let moved = |link: Option<Link>, by: i64| {
+            link.map(|link| Link {
+                cells: link
+                    .cells
+                    .into_iter()
+                    .map(|cell| span(cell.row + by, cell.cols))
+                    .collect(),
+                ..link
+            })
+        };
+        assert!(in_view.is_some(), "the address is found in the viewport");
+        assert_eq!(
+            in_scrollback,
+            moved(in_view, -3),
+            "the same rows three lines up, in scrollback, give the same link on the rows above"
+        );
+    }
 }
