@@ -350,6 +350,31 @@ jobs:
         # started waits forever, and a job's own limit is six hours.
         timeout-minutes: 20
         run: cargo test -p micold-daemon --no-fail-fast
+      # Feature 030 (FR-005, SC-005, contract E6.1): a console-subsystem exe gets a console window
+      # whenever Explorer or the Start menu launches it, so both shipped exes must be GUI-subsystem
+      # (2) in release. Read straight from the PE optional header: `e_lfanew` at 0x3C, and the
+      # `Subsystem` u16 at `e_lfanew + 0x5C`. Last among the Windows steps and run even after an
+      # earlier failure, so a red here never hides the others.
+      - name: Release exes are GUI-subsystem (Windows)
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          cargo build --release -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $target = (cargo metadata --format-version 1 --no-deps | ConvertFrom-Json).target_directory
+          $failed = $false
+          foreach ($exe in 'micold-ai-ide.exe', 'micold-daemon.exe') {
+            $bytes = [System.IO.File]::ReadAllBytes((Join-Path $target "release\$exe"))
+            $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+            $subsystem = [BitConverter]::ToUInt16($bytes, $peOffset + 0x5C)
+            if ($subsystem -eq 2) {
+              Write-Output "$exe subsystem $subsystem (GUI)"
+            } else {
+              Write-Output "::error::$exe has PE subsystem $subsystem, expected 2 (GUI) (FR-005)"
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
       # Run the client + daemon test suites where the iced system deps are present.
       - name: Test (full workspace)
         if: runner.os == 'Linux'
