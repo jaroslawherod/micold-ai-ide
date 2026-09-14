@@ -63,9 +63,10 @@ behind each directive. The ones that matter when changing it:
 - **Exactly two files.** `micold-ai-ide.exe` and `micold-daemon.exe`, named one by one. Never use a
   wildcard, because the showcase binary is built into the same directory.
   `crates/micold-client/tests/packaging_excludes_showcase.rs` guards this.
-- **A running app blocks setup.** The client and daemon each hold the mutex `Local\MicoldAIIDE`
-  (`micold_core::process::APP_MUTEX_NAME`) for their lifetime, and `AppMutex` makes setup ask the
-  user to close the app. `CloseApplications=force` lets Restart Manager close a window that is still
+- **An open window blocks setup.** The client holds the mutex `Local\MicoldAIIDE`
+  (`micold_core::process::APP_MUTEX_NAME`) for its lifetime, and `AppMutex` makes setup ask the
+  user to close the app. The daemon does not hold it: a windowless process cannot be closed, so
+  setup would never get past the prompt. `CloseApplications=force` lets Restart Manager close a window that is still
   open.
 - **The daemon is stopped explicitly.** Restart Manager does not close the windowless daemon, and a
   live daemon keeps its exe locked. So `StopDaemon` in `[Code]` runs before install and uninstall. It

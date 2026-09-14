@@ -3,8 +3,8 @@
 //! - [`no_window`]: a GUI-subsystem app that spawns a console program (`git`, `powershell`, `docker`)
 //!   gets a console window flashed up for every call unless the spawn says otherwise.
 //! - [`announce_running`]: the installer asks the user to close the app before it replaces the
-//!   exes. It finds a running app through a named mutex, so both binaries hold one for their whole
-//!   lifetime.
+//!   exes. It finds a running app through a named mutex, which the client holds for its whole
+//!   lifetime. The daemon does not: nobody can close a windowless process, so setup stops it itself.
 //!
 //! Both are no-ops off Windows, so call sites stay free of `cfg`.
 

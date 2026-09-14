@@ -67,7 +67,7 @@ Covers FR-020 to FR-025. Each row names the test that proves it. Every test must
 | # | Guarantee | Test |
 |---|---|---|
 | E7.1 | `process::announce_running()` creates `Local\MicoldAIIDE`. A second call in another process succeeds (it is shared, not exclusive), and `OpenMutexW` sees it while either process holds it. | `process::tests::announce_running_is_visible` (`#[cfg(windows)]`) |
-| E7.2 | Both `main`s call it before anything else can fail. | Code review. The binaries are GUI glue under the constitution's Principle I exception, and E7.1 covers the logic. |
+| E7.2 | The client's `main` calls it before anything else can fail. The daemon's does not (revised after A6: a daemon holding it cancelled a silent repair at the prompt, before setup's `StopDaemon` ran). | Code review. The binaries are GUI glue under the constitution's Principle I exception, and E7.1 covers the logic. |
 
 ## Un-gating the daemon suite (FR-025)
 

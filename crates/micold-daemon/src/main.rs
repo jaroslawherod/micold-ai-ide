@@ -21,8 +21,9 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 fn main() {
-    // Held for the whole process: the installer's `AppMutex` check sees the daemon while it runs.
-    let _running = micold_core::process::announce_running();
+    // No `announce_running` here: the installer's `AppMutex` prompt asks the user to close the app,
+    // and a windowless daemon cannot be closed, so setup would never get past it. Setup stops the
+    // daemon itself instead, in `[Code] PrepareToInstall` (feature 030, research R12).
     if let Err(e) = start() {
         let line = format!("micold-daemon: fatal: {e}");
         // A detached daemon (and on Windows, a GUI-subsystem one) has no stderr anyone reads, so
