@@ -6,10 +6,6 @@
 //!
 //! This is a genuine two-process test: it runs the real `micold-daemon` binary that Cargo built.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
-use std::path::PathBuf;
 use std::time::Duration;
 
 use micold_core::connect::{connect, connect_or_spawn, Connected};
@@ -17,24 +13,6 @@ use micold_core::spawn::DAEMON_BIN_ENV;
 
 /// The daemon binary Cargo built for this test run.
 const DAEMON_BIN: &str = env!("CARGO_BIN_EXE_micold-daemon");
-
-/// Terminate a process we spawned ourselves, so the test leaves nothing behind.
-fn terminate(pid: u32) {
-    let _ = std::process::Command::new("kill")
-        .arg(pid.to_string())
-        .status();
-}
-
-/// Find the daemon holding `socket_path`, so the test can clean up after itself.
-fn daemon_pid_holding(socket: &PathBuf) -> Option<u32> {
-    let out = std::process::Command::new("fuser")
-        .arg(socket)
-        .output()
-        .ok()?;
-    String::from_utf8_lossy(&out.stdout)
-        .split_whitespace()
-        .find_map(|tok| tok.trim().parse::<u32>().ok())
-}
 
 #[tokio::test]
 async fn a_client_cold_starts_a_daemon_and_it_outlives_the_client() {
@@ -44,7 +22,8 @@ async fn a_client_cold_starts_a_daemon_and_it_outlives_the_client() {
     // tempdir. The child inherits this environment, so both sides resolve the *same* path — which
     // is exactly why endpoint resolution lives in micold-core: the client and the spawned daemon
     // cannot disagree about where the socket is.
-    // SAFETY: this test binary runs these env writes before any spawn; `#[cfg(unix)]` + single test.
+    // SAFETY: this test binary runs these env writes before any spawn, and holds a single test.
+    // The Windows endpoint takes no environment input, so there this is the user's real endpoint.
     std::env::set_var(DAEMON_BIN_ENV, DAEMON_BIN);
     std::env::set_var("XDG_RUNTIME_DIR", dir.path());
     // macOS keys the endpoint on `$HOME` and ignores `XDG_RUNTIME_DIR`; without this the test finds
@@ -93,10 +72,8 @@ async fn a_client_cold_starts_a_daemon_and_it_outlives_the_client() {
         "the spawned daemon must outlive the client that spawned it"
     );
 
-    // Clean up the process this test created.
-    if let Some(pid) = daemon_pid_holding(&endpoint.socket_path) {
-        terminate(pid);
-    }
+    // Clean up the process this test created, through the pid record it wrote.
+    let _ = micold_core::spawn::stop_running_daemon(&endpoint);
     std::env::remove_var(DAEMON_BIN_ENV);
     std::env::remove_var("XDG_RUNTIME_DIR");
     std::env::remove_var("MICOLD_LOG");

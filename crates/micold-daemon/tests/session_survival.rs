@@ -11,9 +11,6 @@
 //! CLI. The first test is survival with nothing watching; the second is survival with nothing
 //! *running*, where the only thing that crosses the gap is what was written to disk.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::time::{Duration, Instant};
 
 use alacritty_terminal::grid::Dimensions;
@@ -43,6 +40,26 @@ fn tick_count(session: &PtySession) -> usize {
     visible_text(session).matches("tick").count()
 }
 
+/// A child that prints `tick` over and over, forever.
+#[cfg(unix)]
+fn endless_ticks() -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("sh");
+    cmd.arg("-c");
+    cmd.arg("while true; do echo tick; sleep 0.05; done");
+    cmd
+}
+
+/// `cmd` has no `sleep`; `ping -n 2` to loopback waits about a second between ticks.
+#[cfg(windows)]
+fn endless_ticks() -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("cmd");
+    cmd.args([
+        "/c",
+        "for /l %i in (0,0,1) do @(echo tick& ping -n 2 127.0.0.1 >nul)",
+    ]);
+    cmd
+}
+
 /// Poll `cond` until true or `timeout` elapses; returns whether it became true.
 fn wait_until(timeout: Duration, mut cond: impl FnMut() -> bool) -> bool {
     let deadline = Instant::now() + timeout;
@@ -57,10 +74,8 @@ fn wait_until(timeout: Duration, mut cond: impl FnMut() -> bool) -> bool {
 
 #[test]
 fn a_session_keeps_producing_output_with_no_client_reading() {
-    // A child that emits a line ~20×/s forever. Nothing attaches to consume it.
-    let mut cmd = CommandBuilder::new("sh");
-    cmd.arg("-c");
-    cmd.arg("while true; do echo tick; sleep 0.05; done");
+    // A child that emits lines forever. Nothing attaches to consume it.
+    let cmd = endless_ticks();
 
     let session =
         PtySession::spawn(SessionId::new(), cmd, 10_000, Some((80, 24))).expect("spawn session");
@@ -146,7 +161,7 @@ fn a_copilot_session_survives_a_daemon_restart_on_the_cli_it_was_started_on() {
     let settings_path = store.path().join("settings.json");
 
     // Scratch provider stores. `CLAUDE_CONFIG_DIR` and `COPILOT_HOME` are process-global, and no
-    // other test in this binary reads either — the PTY test above spawns `sh`.
+    // other test in this binary reads either — the PTY test above spawns a shell.
     let homes = tempfile::tempdir().unwrap();
     let claude_home = homes.path().join("claude");
     let copilot_home = homes.path().join("copilot");
