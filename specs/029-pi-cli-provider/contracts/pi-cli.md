@@ -134,6 +134,12 @@ resolve in this order:
   no `session_info` entry is ever appended. What a user reads on a Pi row is Pi's or their own.
 - A missing file, a truncated prefix, or an unparseable line NEVER fails the session; the label stays
   `Pending` and is re-read opportunistically, exactly like `claude`'s `ai-title`.
+- **A running session reads its first message too, not only after a refresh.** Pi's terminal title
+  carries a name only once `/name` has run (`name_in_terminal_title`), so for an unnamed running
+  session this read is repeated when it starts and whenever its activity moves — a turn ending is
+  when the first message is on disk — and never on a timer. What it finds is recorded like any
+  recovered name, and a later `/name` replaces it. With the activity component declined, the
+  fallback appears at the next start or refresh instead.
 
 ## Activity signal (FR-012, FR-014)
 

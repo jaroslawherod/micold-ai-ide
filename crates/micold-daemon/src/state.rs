@@ -216,6 +216,13 @@ struct LiveSession {
     /// debounce title-change pushes (T047). Persisted separately, as the catalog label (feature
     /// 029); re-emitted by `claude` on resume.
     last_title: Option<String>,
+    /// Whether the conversation behind this session may have gained a name since it was last
+    /// looked for. Set when the session starts and whenever its activity moves; cleared by
+    /// [`DaemonState::recover_live_session_names`], which does the looking. A CLI whose terminal
+    /// title names nothing until the user names the conversation — `pi` — would otherwise leave a
+    /// running row on the placeholder while its store already holds the first message (feature
+    /// 029, FR-011). A flag rather than a timer: the read happens because something happened.
+    name_stale: bool,
     /// The tail of this session's own event log, for a provider whose activity source is
     /// `EventLog` (feature 026, T064). `None` for a `Hooks` provider — and `None` for every
     /// session this application merely *discovered* rather than started, since a tail is only ever
@@ -1170,7 +1177,7 @@ impl DaemonState {
     /// reason: never an error, never a wrong name, and never a way back to `Pending`.
     pub fn recover_session_names(&self, project: &Path) -> usize {
         // Candidates, read under the lock, once: the session, where it runs, and which CLI owns it.
-        let candidates: Vec<(SessionId, SessionLocation, AiCli)> = {
+        let candidates: Vec<(SessionId, PathBuf, AiCli)> = {
             let inner = self.lock();
             inner
                 .catalog
@@ -1181,11 +1188,52 @@ impl DaemonState {
                     sessions
                         .iter()
                         .filter(|s| !s.archived && matches!(s.label, SessionLabel::Pending))
-                        .map(|s| (s.id, s.location.clone(), s.provider))
+                        .map(|s| (s.id, s.location.cwd(project), s.provider))
                         .collect()
                 })
                 .unwrap_or_default()
         };
+        self.record_recovered_names(candidates)
+    }
+
+    /// [`Self::recover_session_names`] for the sessions running here whose conversation may have
+    /// gained a name since it was last looked for — they started, or their activity moved — and
+    /// that still have none (feature 029, FR-011). Returns how many were named, so the caller knows
+    /// whether to broadcast.
+    ///
+    /// This is what shows a running `pi` row its first message: `pi` titles its terminal with a
+    /// name only after `/name`, so the terminal alone would hold the row on the placeholder until
+    /// the next refresh. Bounded the same way — a `Named` session is never a candidate — and by the
+    /// flag, which only an event sets.
+    ///
+    /// # Blocking
+    ///
+    /// Reads the providers' stores, so it runs in the supervisor's `spawn_blocking` hop.
+    pub fn recover_live_session_names(&self) -> usize {
+        let candidates: Vec<(SessionId, PathBuf, AiCli)> = {
+            let mut guard = self.lock();
+            let inner = &mut *guard;
+            let workspace = inner.catalog.workspace();
+            inner
+                .sessions
+                .iter_mut()
+                .filter(|(_, live)| live.name_stale)
+                .filter_map(|(id, live)| {
+                    live.name_stale = false;
+                    let (project, session) = workspace.find_session(*id)?;
+                    (session.mode == TerminalMode::AiCli
+                        && !session.archived
+                        && matches!(session.label, SessionLabel::Pending))
+                    .then(|| (*id, session.location.cwd(project), session.provider))
+                })
+                .collect()
+        };
+        self.record_recovered_names(candidates)
+    }
+
+    /// Read each candidate's name from its own provider's store, off the lock, and record the ones
+    /// found against sessions that are still unnamed. Returns how many were recorded.
+    fn record_recovered_names(&self, candidates: Vec<(SessionId, PathBuf, AiCli)>) -> usize {
         if candidates.is_empty() {
             return 0;
         }
@@ -1197,10 +1245,10 @@ impl DaemonState {
         // contributes nothing and stops nothing (C20).
         let found: Vec<(SessionId, String)> = candidates
             .into_iter()
-            .filter_map(|(id, location, which)| {
+            .filter_map(|(id, cwd, which)| {
                 let provider = which.provider();
                 let config_dir = provider.config_dir()?;
-                let title = provider.read_title(&config_dir, &location.cwd(project), id.0)?;
+                let title = provider.read_title(&config_dir, &cwd, id.0)?;
                 Some((id, title))
             })
             .collect();
@@ -1211,9 +1259,18 @@ impl DaemonState {
         let mut inner = self.lock();
         let mut recovered = 0;
         for (id, name) in found {
+            // The live path may have named it in the time this spent off the lock, and the
+            // terminal's name is the newer one.
+            let still_pending = inner
+                .catalog
+                .workspace()
+                .find_session(id)
+                .is_some_and(|(_, s)| matches!(s.label, SessionLabel::Pending));
+            if !still_pending {
+                continue;
+            }
             match inner.catalog.record_session_name(id, &name) {
                 Ok(true) => recovered += 1,
-                // The live path got there first, in the time this pass spent off the lock.
                 Ok(false) => {}
                 Err(err) => tracing::warn!(
                     session = %id.0,
@@ -1674,6 +1731,7 @@ impl DaemonState {
                 input: InputReceiver::new(),
                 activity: Activity::new(),
                 last_title: None,
+                name_stale: true,
                 event_log: None,
                 respawned_at: None,
             },
@@ -1948,7 +2006,9 @@ impl DaemonState {
         };
         let before = live.activity.signal().clone();
         live.activity.apply(event);
-        live.activity.signal() != &before
+        let changed = live.activity.signal() != &before;
+        live.name_stale |= changed;
+        changed
     }
 
     /// Drain each live session's out-of-band terminal signals into runtime state (US2, T046/T047):
@@ -2276,6 +2336,8 @@ impl DaemonState {
                         input: InputReceiver::new(),
                         activity: Activity::new(),
                         last_title: None,
+                        // A shell-only session has no conversation to name.
+                        name_stale: false,
                         // A shell-only session has no AI CLI, so there is nothing to tail.
                         event_log: None,
                         respawned_at: None,

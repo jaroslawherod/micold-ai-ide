@@ -251,16 +251,23 @@ fn spawn_supervisor(state: Arc<DaemonState>) {
         loop {
             ticker.tick().await;
             let worker = Arc::clone(&state);
-            let changed = tokio::task::spawn_blocking(move || worker.supervise_exited_sessions())
-                .await
-                .unwrap_or_default();
+            // Same blocking hop: the names of running sessions that gave a reason to look again
+            // (feature 029, FR-011). The flag bounds it — an idle tick reads nothing.
+            let (changed, named) = tokio::task::spawn_blocking(move || {
+                (
+                    worker.supervise_exited_sessions(),
+                    worker.recover_live_session_names(),
+                )
+            })
+            .await
+            .unwrap_or_default();
             // Drain out-of-band terminal signals (title + spinner-derived activity, US2 T046/T047)
             // on the same cadence. It is lock-only (no blocking I/O), so it runs on the async task.
             let crate::state::DrainedSignals {
                 changed: signals_changed,
                 names,
             } = state.drain_signals();
-            if !changed.is_empty() || signals_changed {
+            if !changed.is_empty() || named > 0 || signals_changed {
                 state.broadcast_catalog();
             }
             // The screen first, the record second — then persist the names that changed (feature
