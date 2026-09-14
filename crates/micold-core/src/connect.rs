@@ -161,6 +161,13 @@ fn vanished_mid_handshake(e: &io::Error) -> bool {
     )
 }
 
+/// Refuses a pipe whose server process does not run as `own_sid` (U71, security review D1).
+#[cfg(windows)]
+fn refuse_foreign_server(stream: &Stream, own_sid: &str) -> io::Result<()> {
+    let _ = (stream, own_sid);
+    Ok(())
+}
+
 /// Open a raw connection to the endpoint, or `None` if nothing is listening.
 pub async fn dial(endpoint: &Endpoint) -> io::Result<Option<Transport>> {
     dial_address(&DialAddress::Local(endpoint.clone())).await
@@ -422,5 +429,35 @@ mod tests {
             CodecError::ControlNotJson(crate::protocol::envelope::Encoding::Postcard).into();
         assert_eq!(wrapped.kind(), io::ErrorKind::Other);
         assert!(!vanished_mid_handshake(&wrapped));
+    }
+
+    /// U71 (security review D1): the pipe name is predictable, so another account can create it
+    /// first. A client that checks nothing hands that account its session traffic. No second
+    /// account exists on CI, so the server here runs as this user and the client is told to expect
+    /// SYSTEM instead; the same client expecting this user still connects.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn a_pipe_served_as_another_account_is_refused_naming_both_sids() {
+        use interprocess::local_socket::ListenerOptions;
+
+        const SYSTEM: &str = "S-1-5-18";
+        let path = format!(
+            r"\\.\pipe\Micold.Test.Connect.Foreign.{}",
+            std::process::id()
+        );
+        let name = || path.as_str().to_fs_name::<GenericFilePath>().unwrap();
+        let _listener = ListenerOptions::new().name(name()).create_tokio().unwrap();
+        let stream = Stream::connect(name()).await.unwrap();
+        let own = crate::endpoint::user_sid().unwrap();
+
+        let refused = refuse_foreign_server(&stream, SYSTEM)
+            .expect_err("a pipe served as this user was accepted as SYSTEM's");
+        assert_eq!(refused.kind(), io::ErrorKind::PermissionDenied);
+        let message = refused.to_string();
+        assert!(
+            message.contains(SYSTEM) && message.contains(&own),
+            "the refusal must name the expected SID {SYSTEM} and the server's {own}, got: {message}"
+        );
+        refuse_foreign_server(&stream, &own).expect("this user's own server must be accepted");
     }
 }
