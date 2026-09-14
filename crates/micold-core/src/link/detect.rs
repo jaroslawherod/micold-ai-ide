@@ -230,4 +230,13 @@ mod tests {
             "a dotless name with no port is too likely to be prose to be an address"
         );
     }
+
+    #[test]
+    fn rejects_a_scheme_alone_and_a_host_broken_by_a_space() {
+        assert_eq!(
+            found("https:// and http://exa mple"),
+            Vec::<String>::new(),
+            "a scheme with no host, and a host cut short by a space, are not addresses"
+        );
+    }
 }
