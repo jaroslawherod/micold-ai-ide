@@ -40,7 +40,7 @@ PrivilegesRequired=lowest
 ; [Code] StopDaemon stops it.
 AppMutex=Local\MicoldAIIDE
 ; When the user continues, Restart Manager closes a still-open app window (FR-009).
-CloseApplications=force
+CloseApplications=no ; MUTANT (A9): Restart Manager closes nothing either
 ; Never relaunch the app setup closed; the installer starts nothing on its own (FR-011).
 RestartApplications=no
 ; One package per architecture; each refuses the other with Inno's own message (FR-015).
