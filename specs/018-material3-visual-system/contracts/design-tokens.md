@@ -386,16 +386,29 @@ mutually exclusive, so the heaviest **single** layer is the measurement and laye
 Material's own convention and by WCAG's. *(Added by BUG-010: §1.3 proved its pairs and §5 proved
 its opacities, and nothing multiplied them together.)*
 
-**Focus indicator (FR-022, FR-043)**: every element that *can* hold keyboard focus draws a **3dp
+**Mutual exclusion is the widget's obligation, not only the table's (FR-022a).** A control can hold
+focus *and* be hovered or pressed at the same moment, so "mutually exclusive" is something the
+drawing has to make true: such a control draws `max(focus, hover)` or `max(focus, pressed)`, never
+both layers over each other. Where the focus layer is drawn by a wrapper over a child that draws its
+own hover or pressed layer, the wrapper tops the child's layer up to the heavier opacity rather than
+laying a full `focus` layer over it. *(Added by BUG-013: 027's keyboard wrapper did lay a full one,
+and a clicked button composited 17.2% hovered and 19% pressed.)*
+
+**Focus indicator (FR-022, FR-022a, FR-043)**: every element that *can* hold keyboard focus draws a **3dp
 `secondary` outline** at its own shape radius when focused, in addition to the focus state layer.
 It is visible without the pointer being over the element and remains distinguishable when the
-element is simultaneously hovered.
+element is simultaneously hovered. On a button it is drawn only for focus that arrived by keyboard —
+a traversal, or a key the button answers; a pointer press moves focus without drawing either the
+outline or the layer (FR-022a).
 
-That set is **text fields and the select control only**. Buttons, list rows, tree items, menu items
+~~That set is **text fields and the select control only**. Buttons, list rows, tree items, menu items
 and chips cannot hold focus in the rendering stack — their status model has no focused state
 (research R4) — and the application has no keyboard traversal between them. This is accepted
 fidelity gap #2 (FR-043), recorded here so the `focus` state-layer opacity above is understood to
-apply only where focus is reachable.
+apply only where focus is reachable.~~ *(Superseded by BUG-013: feature 027's FR-030 gave every
+shared button a keyboard focus, and feature 022 the checkbox, so the `focus` layer is reachable on
+both. The select control stays out of the set (FR-043a); chips and tags that are not buttons remain
+fidelity gap #2.)*
 
 **Disabled content (FR-023)**: the existing behavior carries forward, including the case where a
 self-coloring icon glyph cannot inherit its disabled parent's text color and must be dimmed to

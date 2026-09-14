@@ -1695,3 +1695,43 @@ own layer on the pressed one. That is a separate defect with its own report, BUG
 tone is right on the frame.
 
 **Bugfix**: 2026-09-13 — BUG-011 added Phase 24 (T172–T175). **No task is reopened.** T160 and T165 found these two pairs and are complete as written; the pin they left was the failing-check form of an undecided remedy.
+
+## Phase 25: BUG-013 — a clicked button stacked its focus layer on its hover and pressed layers
+
+**Goal**: §5's layers never sum on screen. A focused button draws the heaviest single layer of its
+states, and a button that took focus from a pointer press draws no focus indicator at all, while a
+button reached by Tab keeps its ring and layer (FR-022a, SC-008i).
+
+- [X] T176 Failing tests first: in `crates/micold-client/src/ui/material/keyboard_focus.rs`, assert the indicator's composited opacity over the child's own layer equals `max(child, FOCUS)` for rest, hover and pressed; in `crates/micold-client/src/ui/material/field_focus.rs`, drive a `Button` — a press shows no indicator but Enter still acts, a traversal shows it, a traversal then hover draws focus alone, a press after a traversal hides it. Red today on the stacked layer and on the pressed button's indicator (FR-022a, SC-008i)
+
+- [X] T177 In `keyboard_focus.rs`, track whether focus came by keyboard and whether the child is pressed, and draw the focus layer as the top-up to the heavier opacity rather than a full layer; update the module docs, which describe a press as taking the keyboard *and* the indicator. T176 goes green (FR-022a)
+
+- [X] T178 Run the workspace gate (fmt, clippy, `cargo test --workspace`) and record the result here
+
+- [X] T179 Confirm on a rendered frame, dark scheme, that the snackbar's `Dismiss` composites 10% held pressed after a click and draws no ring once released, and that a Tab-focused button hovered composites 10% with its ring; record the sampled colours here
+
+**Red record (T176)** — against a stub of the unfixed indicator, four tests failed: the composition test and `a_button_reached_by_the_traversal_draws_focus_alone_when_hovered` on `0.17199999` where §5 allows `0.1`; `a_clicked_button_takes_the_keyboard_and_draws_no_indicator` and `a_press_after_the_traversal_hides_the_indicator` on `Some(0.1)` where no indicator belongs.
+
+**Pass record (T178)** — 2026-09-13: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace` 3009 passed, 0 failed (summed over every `test result` line, doc tests included). No snapshot moved.
+
+**Rendered-frame record (T179)** — 2026-09-13, the `micold-showcase` gallery in the dark scheme on
+Xvfb + lavapipe (the `visual-pass` skill), not on a real display; the binary built and pinned from
+this branch. The snackbar's `Dismiss`, `inverse_primary` on `inverse_surface` `(230,225,230)`:
+
+| State | Fill sampled | Layer | BUG-013's figure |
+|---|---|---|---|
+| held pressed after a click | `(215,208,221)` | 10% | `(201,193,212)`, 19% |
+| released, pointer over it | `(218,211,223)` | 8%, no ring | `(204,195,214)`, 17% |
+| released, pointer gone | `(230,225,230)` | none, no ring | `(215,208,221)` and the ring |
+| after Space, pointer gone | `(215,208,221)` | 10% and the ring | — |
+| after Space, pointer over it | `(215,207,221)` | 10% and the ring | 17% |
+
+The showcase's `Switch to light` also showed no ring after the click that toggled it. Keyboard focus
+was reached here by Space on the clicked button, not by Tab — the traversal is covered by
+`a_button_reached_by_the_traversal_draws_focus_alone_when_hovered`. Crops:
+[`evidence/BUG-013-one-layer-after-fix.png`](evidence/BUG-013-one-layer-after-fix.png), top to bottom
+in the table's order after a first row at rest. The ripple is not in these figures: it is drawn inside
+the button over its pressed fill for 500 ms after a press, and every sample was taken after it had
+faded.
+
+**Bugfix**: 2026-09-13 — BUG-013 added Phase 25 (T176–T179). **No task is reopened.** T160 and T175 are complete as written: the assertion measures what §5 says, and T175's rendered-frame record is what found this. The wrapper that stacks the layers is feature 027's FR-030 work, outside this feature's tasks.
