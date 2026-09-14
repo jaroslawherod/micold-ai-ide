@@ -690,9 +690,14 @@ fn empty_terminal_message(state: &State, id: SessionId) -> String {
         return "Starting…".to_string();
     }
     match give_up_reason(state, id) {
+        // A start the daemon refused (`attempts: 0`) carries its own remedy, and pointing at
+        // `restart` after it would contradict that remedy: a CLI missing from the image, or a
+        // conversation the CLI no longer has, fails the same way on every restart until the user
+        // changes something (`029` quickstart §D, finding 1).
+        Some((reason, 0)) => reason.to_string(),
         // The recorded sentence already ends in a full stop (`on_unexpected_exit` assembles it), so
         // the pointer at the control follows it as a second sentence.
-        Some(reason) => format!("{reason} Choose restart below to resume it."),
+        Some((reason, _)) => format!("{reason} Choose restart below to resume it."),
         None => "This session is not running. Choose restart below to resume it.".to_string(),
     }
 }
@@ -704,10 +709,12 @@ fn empty_terminal_message(state: &State, id: SessionId) -> String {
 /// exactly that, and a client attached to a daemon from before BUG-017 receives one — so the two
 /// have to collapse somewhere. Collapsing them here gives the pane one fallback instead of a blank
 /// interpolated into the middle of a sentence.
-fn give_up_reason(state: &State, id: SessionId) -> Option<&str> {
+fn give_up_reason(state: &State, id: SessionId) -> Option<(&str, u8)> {
     let session = state.active_sessions().iter().find(|s| s.id == id)?;
     match &session.lifecycle {
-        SessionLifecycle::Failed { reason, .. } => Some(reason.trim()).filter(|r| !r.is_empty()),
+        SessionLifecycle::Failed { reason, attempts } => Some(reason.trim())
+            .filter(|r| !r.is_empty())
+            .map(|r| (r, *attempts)),
         _ => None,
     }
 }
@@ -2020,6 +2027,25 @@ mod tests {
             message.contains("restart"),
             "and must still point at the control that resolves it (025 FR-014); got {message:?}"
         );
+    }
+
+    /// A start the daemon refused is shown as its own advice, without the pointer at `restart`
+    /// (`029` quickstart §D, finding 1).
+    ///
+    /// The daemon reports a refusal as `Failed { attempts: 0 }`, and every refusal's sentence
+    /// already says what to change. Appending "Choose restart below to resume it." told a user
+    /// whose image lacks the CLI to retry something that fails the same way until the image
+    /// changes, and one whose conversation is gone to resume what cannot be resumed.
+    #[test]
+    fn a_refused_start_is_not_pointed_at_restart() {
+        let reason = "Pi Coding Agent isn't in registry.example/agents:7, where sessions run, and \
+                      this conversation can only continue in it. Choose an image that provides \
+                      it, then restart this session.";
+        let (state, id) = state_showing(SessionLifecycle::Failed {
+            reason: reason.into(),
+            attempts: 0,
+        });
+        assert_eq!(empty_terminal_message(&state, id), reason);
     }
 
     /// A give-up whose reason is empty must still read as a sentence.
