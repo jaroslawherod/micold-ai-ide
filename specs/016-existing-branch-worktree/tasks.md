@@ -282,6 +282,26 @@ restart, and is unchanged on disk.
 
 ---
 
+## Phase 11: BUG-004 — a worktree named through a symlink
+
+**Bugfix**: 2026-09-14 — [BUG-004](./bugs/BUG-004.md) Updated from bugfix patch. Four tasks added
+(T093–T096); none reopened — T078 and T086 did what they said, and the rule that a link names the
+same worktree was never written down.
+
+**Goal**: a worktree is included and stopped by its location, however the path spells it (FR-027,
+FR-030, contract `branch-rpc.md` §3a).
+
+**Independent Test**: add a worktree at `<real>/olx`, link `<links>/elsewhere` → `<real>`, include
+`<links>/elsewhere/olx`: the reply and the list carry `<real>/olx`; stopping by the linked spelling
+removes it.
+
+- [X] T093 Failing test: including a worktree by a path through a symlinked directory succeeds and answers with git's path; excluding by that same spelling removes it from the snapshot; and an included worktree removed from disk is still stopped by the path its row shows, in `crates/micold-daemon/tests/mutation_semantics.rs`
+- [X] T094 Make `same_path()` public in `crates/micold-core/src/git.rs`, so the daemon uses the rule the worktree removal already follows rather than a second copy
+- [X] T095 `WorktreeInclude` matches the repository's records with `same_path()` and persists and answers with the matched record's path, in `crates/micold-daemon/src/server.rs` (depends on T094)
+- [X] T096 `WorktreeExclude` finds the stored entries `same_path()` matches off the state lock (`spawn_blocking`, as include already does its filesystem work) and removes those exact entries through the unchanged `Catalog::exclude_worktree`, in `crates/micold-daemon/src/server.rs` (depends on T094)
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -298,6 +318,7 @@ restart, and is unchanged on disk.
 - **BUG-002 Goal A (T073–T074, T079–T081)**: depends on US2 only — the press fix is independent of everything else in this phase and ships on its own
 - **BUG-002 Goal B (T075–T078, T082–T090)**: depends on US5 and on BUG-001's holder taxonomy. T082 blocks T083; T083 blocks T084 and T086; T085 blocks T086; T086 blocks T087–T089
 - **BUG-002 validation (T091–T092)**: depends on whichever of the two goals is being shipped
+- **BUG-004 (T093–T096)**: depends on BUG-002 Goal B. T093 comes first and fails; T094 blocks T095 and T096
 
 ### Within Foundational
 

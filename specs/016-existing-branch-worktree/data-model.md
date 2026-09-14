@@ -172,6 +172,9 @@ the app also shows.
 
 Paths are **absolute and canonical**, the same normalization projects themselves use, so a path
 recorded once matches the record git reports for it.
+*Amended by BUG-004*: that normalization is lexical and does not resolve links, so it cannot make a
+path match git's record. What does: the daemon stores **the record's own path**, found by location
+(`git::same_path()`), never the spelling it was asked for.
 
 **Nothing else is persisted.** Branch, status, and existence are derived at read time from the same
 `worktree list --porcelain` records everything else here reads — an included worktree that has been

@@ -85,6 +85,11 @@ WorktreeExclude { req, project, path }
   already registered, which is precisely why it can block a branch. The daemon MUST reject a `path`
   the repository does not report as a worktree, rather than recording a location that will never
   resolve.
+- **By location, not spelling** (BUG-004): `path` names a worktree when it reaches the same
+  directory as the repository's record, through symbolic links or not. `WorktreeIncluded.worktree.path`
+  and the stored entry are the record's path; `WorktreeExclude` removes whichever stored entry names
+  the same location, and compares literally when either path no longer exists. `WorktreeExcluded.path`
+  echoes the request; the catalog snapshot that follows is what says which row went.
 - **Idempotent both ways**: including an already-included path, or excluding one that is not
   included, succeeds and changes nothing.
 - The daemon's next catalog snapshot carries the worktree like any other, so every existing consumer

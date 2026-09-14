@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use futures_util::stream::StreamExt;
 use futures_util::SinkExt;
-use micold_core::git::{Git, GitCli};
+use micold_core::git::{same_path, Git, GitCli};
 use micold_core::naming::DerivedNames;
 use micold_core::project::validate_rename;
 use micold_core::protocol::codec::{DaemonCodec, Frame};
@@ -1515,6 +1515,9 @@ where
                 // The repository has to actually know this worktree. Recording a location git does
                 // not report would persist a wish that can never resolve into a row — and the whole
                 // point of including one is that it already exists (contract `branch-rpc.md` §3a).
+                // Matched by location, and recorded as git spells it: a path through a symlink is
+                // the same worktree, and `reconcile()` compares the stored path with git's exactly
+                // (BUG-004).
                 let probe = path.clone();
                 let known = tokio::task::spawn_blocking(move || {
                     let porcelain = GitCli::new()
@@ -1522,12 +1525,13 @@ where
                         .unwrap_or_default();
                     parse_worktrees(&porcelain)
                         .into_iter()
-                        .any(|rec| rec.path == probe)
+                        .find(|rec| same_path(&rec.path, &probe))
+                        .map(|rec| rec.path)
                 })
                 .await;
-                match known {
-                    Ok(true) => {}
-                    Ok(false) => {
+                let path = match known {
+                    Ok(Some(recorded)) => recorded,
+                    Ok(None) => {
                         state.send(
                             id,
                             DaemonMsg::OperationError {
@@ -1551,7 +1555,7 @@ where
                         );
                         continue;
                     }
-                }
+                };
                 // Settings only — no git command runs, and nothing on disk moves (FR-028).
                 match state.include_worktree(&project, &path) {
                     Ok(()) => {
@@ -1590,7 +1594,36 @@ where
                 }
             }
             ClientMsg::WorktreeExclude { req, project, path } => {
-                match state.exclude_worktree(&project, &path) {
+                // The stored entry naming the same location, whatever the spelling (BUG-004).
+                // Resolving links touches the filesystem, so it happens off the state lock.
+                let stored = state.included_worktrees(&project);
+                let probe = path.clone();
+                let matched = tokio::task::spawn_blocking(move || {
+                    stored
+                        .into_iter()
+                        .filter(|p| same_path(p, &probe))
+                        .collect::<Vec<_>>()
+                })
+                .await;
+                let matched = match matched {
+                    Ok(matched) => matched,
+                    Err(e) => {
+                        state.send(
+                            id,
+                            DaemonMsg::OperationError {
+                                req,
+                                kind: ErrorKind::Internal,
+                                message: "could not check the included worktrees".into(),
+                                detail: Some(e.to_string()),
+                            },
+                        );
+                        continue;
+                    }
+                };
+                match matched
+                    .iter()
+                    .try_for_each(|p| state.exclude_worktree(&project, p))
+                {
                     Ok(()) => {
                         refresh_worktrees_and_broadcast(state, project).await;
                         state.send(
