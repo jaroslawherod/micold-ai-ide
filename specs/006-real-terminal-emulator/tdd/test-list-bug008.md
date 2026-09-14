@@ -27,7 +27,7 @@ GUI. A1 is therefore held by T076's recorded visual pass on Xvfb (the `visual-pa
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| A1  | In a real Regular Terminal, a click at human pace after a drag leaves no highlight and the paste is still the dragged text; a synthetic press+release after a drag leaves other clipboard text in place; a drag still highlights and copies | FR-013e, SC-014 | visual pass | PENDING | |
+| A1  | In a real Regular Terminal, a click at human pace after a drag leaves no highlight and the paste is still the dragged text; a synthetic press+release after a drag leaves other clipboard text in place; a drag still highlights and copies | FR-013e, SC-014 | visual pass | DONE | [evidence/bugfix-007-pass-2026-09-14.md](../evidence/bugfix-007-pass-2026-09-14.md) |
 
 ## Inner loop: unit behaviors
 
