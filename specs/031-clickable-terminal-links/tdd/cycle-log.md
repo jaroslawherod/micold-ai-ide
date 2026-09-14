@@ -204,3 +204,13 @@
 - refactor: none needed
 - commit: `test(031): pin that adjacent runs with different URIs are two links (U19)`
 - notes: green on arrival; US2 scenario 3
+
+## Cycle 20: U147 a detected address on one row returns its cells on that row
+
+- test: `crates/micold-core/src/link/line.rs::tests::a_detected_address_on_one_row_returns_its_cells` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::a_detected_address_on_one_row_returns_its_cells -- --exact`
+  -> `left: None` / `right: Some(Link { address: "https://a.example/x", origin: Detected, cells: [CellSpan { row: 0, cols: 4..23 }] })` (1 failed)
+- green: with no declared URI at the cell, `link_at` runs `detect` on the row's text and returns the range holding the column, one char per cell. Suite -> 1078 passed, 0 failed
+- refactor: none; U21 reshapes `link_at` around the logical line
+- commit: `feat(031): return a detected address under a cell on one row (U147)`
+- notes: split before its cycle. U21 (detection over soft-wrapped rows) needed both detection in `link_at` and the logical line, two new behaviors at once. This one-row step was appended to the list as U147 and run first, so U20's precedence rule can also be proven against real detection. Order now U147, U21, U20, U22…U27

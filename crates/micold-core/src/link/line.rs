@@ -1,11 +1,24 @@
 //! Which link is under a cell (research R4, R5; contract link-recognition §2).
 
-use super::{CellSpan, Link, LinkOrigin, LinkRows};
+use super::{detect::detect, CellSpan, Link, LinkOrigin, LinkRows};
 
 /// The link under the cell at `row`, `col`, if any (contract link-recognition §2).
 pub fn link_at(rows: &impl LinkRows, row: i64, col: u16) -> Option<Link> {
-    let uri = rows.hyperlink(row, col)?;
-    let width = rows.text(row)?.chars().count() as u16;
+    let text = rows.text(row)?;
+    let Some(uri) = rows.hyperlink(row, col) else {
+        let range = detect(text)
+            .into_iter()
+            .find(|range| range.contains(&usize::from(col)))?;
+        return Some(Link {
+            address: text.chars().skip(range.start).take(range.len()).collect(),
+            origin: LinkOrigin::Detected,
+            cells: vec![CellSpan {
+                row,
+                cols: range.start as u16..range.end as u16,
+            }],
+        });
+    };
+    let width = text.chars().count() as u16;
     let same = |col: u16| rows.hyperlink(row, col) == Some(uri);
     let start = (0..col)
         .rev()
@@ -158,6 +171,20 @@ mod tests {
                 cells: vec![span(0, 3..6)],
             }),
             "the second run opens its own address"
+        );
+    }
+
+    #[test]
+    fn a_detected_address_on_one_row_returns_its_cells() {
+        let rows = Rows::new(0, vec![row("See https://a.example/x now")]);
+        assert_eq!(
+            link_at(&rows, 0, 6),
+            Some(Link {
+                address: "https://a.example/x".to_string(),
+                origin: LinkOrigin::Detected,
+                cells: vec![span(0, 4..23)],
+            }),
+            "a cell inside a recognised address gives that address and the cells it covers"
         );
     }
 }

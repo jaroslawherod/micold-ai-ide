@@ -106,6 +106,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | U25 | A wide character's spacer cell belongs to the link | FR-007, L5 | example | PENDING | |
 | U26 | A plain-text cell returns `None` | L3 | example | PENDING | |
 | U27 | A negative (scrollback) row resolves exactly as a viewport row with the same content | US1.6 | example | PENDING | |
+| U147 | A detected address on one row returns its cells on that row (split from U21 before its cycle) | FR-001, L2 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_detected_address_on_one_row_returns_its_cells` |
 
 ### `crates/micold-core/src/link/address.rs`
 
