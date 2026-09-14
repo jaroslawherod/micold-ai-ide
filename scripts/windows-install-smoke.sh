@@ -5,7 +5,7 @@
 #   scripts/windows-install-smoke.sh <micold-ai-ide-<version>-<arch>-setup.exe>
 #
 # CI runs it on both Windows packaging legs, and the release runs it before each upload. Contract:
-# specs/030-windows-installer/contracts/windows-installer.md, rows I1, I2, I4 and I7. Its host and
+# specs/030-windows-installer/contracts/windows-installer.md, rows I1, I2, I4, I5 and I7. Its host and
 # argument checks are driven by scripts/tests/windows-install-smoke.test.sh; the rest only runs on
 # Windows.
 
@@ -33,6 +33,8 @@ fi
 app_id='{1B19A6AC-4C91-4033-88EA-F7F283127C8A}'
 # How long the daemon's pipe may take to appear after the client starts (I2).
 pipe_wait_secs=20
+# How long the uninstaller may take to remove the install once it is started (I5).
+uninstall_wait_secs=60
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' "$root/Cargo.toml")"
@@ -74,7 +76,7 @@ trap clean_up EXIT
 
 fail() {
 	echo "${0##*/}: FAIL: $*" >&2
-	for log in "$logs/install.log" "$logs/repair.log" "$local_app_data/micold-ai-ide/data/micold-daemon.log"; do
+	for log in "$logs/install.log" "$logs/repair.log" "$logs/uninstall.log" "$local_app_data/micold-ai-ide/data/micold-daemon.log"; do
 		if [ -f "$log" ]; then
 			echo "---- $log" >&2
 			cat "$log" >&2
@@ -177,6 +179,36 @@ Where-Object { \$_.ProcessName -eq 'micold-daemon' })")"
 [ "$survivor" = False ] || fail "the old daemon (pid $daemon_pid) is still running after the repair (I4)"
 echo "the old daemon (pid $daemon_pid) is gone"
 daemon_pid=""
+
+# 9. Uninstall with the app open, as Installed apps would run it (I5, I7, FR-006). Relaunch the client
+# and wait for its daemon, so the uninstaller has both to stop.
+client_pid="$(win "(Start-Process -FilePath '$(cygpath -w "$install_dir/micold-ai-ide.exe")' -PassThru).Id")"
+[ -n "$client_pid" ] || fail "the repaired client did not start"
+started=$SECONDS
+until [ "$(win "Test-Path -LiteralPath '$pipe'")" = True ]; do
+	[ "$(alive "$client_pid")" = True ] || fail "the repaired client (pid $client_pid) exited before $pipe appeared"
+	[ $((SECONDS - started)) -lt "$pipe_wait_secs" ] || fail "$pipe did not come back within ${pipe_wait_secs}s"
+	sleep 1
+done
+echo "== uninstall with the client (pid $client_pid) open"
+status=0
+MSYS2_ARG_CONV_EXCL='*' "$install_dir/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART \
+	"/LOG=$(cygpath -w "$logs/uninstall.log")" || status=$?
+[ "$status" -eq 0 ] || fail "the silent uninstall exited $status, want 0 (I7)"
+# unins000.exe hands over to a copy of itself in %TEMP% (_iu*.tmp) and exits before the removal is
+# done; wait for that copy.
+started=$SECONDS
+until [ "$(win "@(Get-CimInstance Win32_Process | Where-Object { \$_.Name -like '_iu*' -or \$_.Name -eq 'unins000.exe' }).Count")" = 0 ]; do
+	[ $((SECONDS - started)) -lt "$uninstall_wait_secs" ] || fail "the uninstaller still runs after ${uninstall_wait_secs}s"
+	sleep 1
+done
+[ ! -e "$install_dir" ] || fail "$install_dir is still there after the uninstall (I5): $(ls -A "$install_dir" | tr '\n' ' ')"
+[ ! -e "$shortcut" ] || fail "the Start menu shortcut $shortcut is still there after the uninstall (I5)"
+[ "$(win "Test-Path -LiteralPath '$key'")" = False ] || fail "the uninstall key $key is still there after the uninstall (I5)"
+[ ! -e "$local_app_data/micold-ai-ide/run" ] ||
+	fail "$local_app_data/micold-ai-ide/run is still there after the uninstall (I5)"
+echo "uninstalled: no install dir, shortcut, uninstall key or run dir"
+client_pid=""
 
 # clean_up stops what is still running on exit.
 echo "== smoke passed"
