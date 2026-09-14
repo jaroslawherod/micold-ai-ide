@@ -106,3 +106,36 @@ fn the_leftover_report_is_capped() {
         leftovers.len()
     );
 }
+
+/// A directory whose contents all go but which itself survives is still reported, as itself.
+///
+/// Windows keeps the directory a running process has as its working directory, after deleting
+/// everything inside it (feature 030, U69). Clearing write on the parent reproduces the same shape
+/// without privilege: every entry inside unlinks, and only removing the target itself is refused.
+#[cfg(unix)]
+#[test]
+fn a_directory_that_empties_but_survives_is_named_itself() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let parent = tmp.path().join("worktrees");
+    let target = parent.join("feat-held");
+    std::fs::create_dir_all(target.join("src")).unwrap();
+    std::fs::write(target.join("src/main.rs"), b"fn main() {}").unwrap();
+
+    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+    let leftovers = remove_worktree_dir(&target);
+
+    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    assert!(
+        target.exists() && std::fs::read_dir(&target).unwrap().next().is_none(),
+        "the precondition of this test is that the directory survived, empty"
+    );
+    assert_eq!(
+        leftovers.iter().map(|l| &l.path).collect::<Vec<_>>(),
+        vec![&target],
+        "the surviving directory itself must be reported (FR-023d)"
+    );
+}

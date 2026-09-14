@@ -1185,6 +1185,11 @@ pub fn remove_worktree_dir(path: &Path) -> Vec<Leftover> {
         if err.kind() != io::ErrorKind::NotFound {
             let mut leftovers = Vec::new();
             collect_leftovers(path, &mut leftovers);
+            // Emptied but still there (on Windows, some process's working directory): nothing
+            // inside is left to name, so name the directory.
+            if leftovers.is_empty() && path.exists() {
+                leftovers.push(leftover(path));
+            }
             return leftovers;
         }
     }
