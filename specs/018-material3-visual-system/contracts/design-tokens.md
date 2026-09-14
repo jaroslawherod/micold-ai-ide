@@ -857,6 +857,7 @@ surface — not a strip in the layout.
 | Message role    | `body_medium`, `inverse_on_surface`       |
 | Action label    | `label_large`, `inverse_primary`          |
 | Max width       | 600                                       |
+| Action width    | its label's natural width, inside the padded edge; the message wraps in what remains (BUG-015) |
 | Position        | floating above content, above dialog scrim |
 
 **Semantics (FR-032a, FR-032b).** The snackbar adopts Material's *behavior*, not only its

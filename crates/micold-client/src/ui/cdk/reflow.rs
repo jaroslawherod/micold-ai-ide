@@ -14,6 +14,10 @@
 //! the line below, where it is laid out again at that width — so a cluster that can wrap (a
 //! `Row::wrap`) still has somewhere to go at a width too narrow even for a line of its own.
 //!
+//! It fills the width it is offered, except in a parent sized by its content (a `Shrink`
+//! container), where it is as wide as its two children need and no wider — which is how the
+//! snackbar keeps its action whole beside a message long enough to wrap (018 BUG-015).
+//!
 //! Layout only. It draws nothing of its own, which is why it lives in the behaviour layer.
 
 use iced::advanced::layout::{self, Layout};
@@ -88,6 +92,20 @@ where
     ) -> layout::Node {
         let limits = limits.width(Length::Fill).height(Length::Shrink);
         let width = limits.max().width;
+        // A parent sized by its content (a `Shrink` container) lays this out compressed, and wants
+        // back the width of what it holds rather than every pixel it offered — otherwise a snackbar
+        // holding one word would be as wide as its cap (018 BUG-015). The lead is then measured
+        // compressed too, so a filling lead reports its content's width; the resolve below turns
+        // that into this widget's own width. Uncompressed, both are exactly what they were.
+        let compressed = limits.compression().width;
+        let bounded = |max: Size| {
+            let bounded = layout::Limits::new(Size::ZERO, max);
+            if compressed {
+                bounded.width(Length::Shrink)
+            } else {
+                bounded
+            }
+        };
         let [lead, trail] = &mut self.children;
         let (lead_tree, trail_tree) = tree.children.split_at_mut(1);
         let (lead_tree, trail_tree) = (&mut lead_tree[0], &mut trail_tree[0]);
@@ -104,23 +122,25 @@ where
             let lead_node = lead.as_widget_mut().layout(
                 lead_tree,
                 renderer,
-                &layout::Limits::new(Size::ZERO, Size::new(lead_width, limits.max().height)),
+                &bounded(Size::new(lead_width, limits.max().height)),
             );
             let (lead_size, trail_size) = (lead_node.size(), natural.size());
             let height = lead_size.height.max(trail_size.height);
+            let own = limits.resolve(
+                Length::Fill,
+                Length::Shrink,
+                Size::new(lead_size.width + self.spacing + trail_size.width, height),
+            );
             let lead_node = lead_node.move_to(Point::new(0.0, (height - lead_size.height) / 2.0));
             let trail_node = natural.move_to(Point::new(
-                width - trail_size.width,
+                own.width - trail_size.width,
                 (height - trail_size.height) / 2.0,
             ));
-            return layout::Node::with_children(
-                limits.resolve(Length::Fill, Length::Shrink, Size::new(width, height)),
-                vec![lead_node, trail_node],
-            );
+            return layout::Node::with_children(own, vec![lead_node, trail_node]);
         }
 
         // Stacked: each gets the whole width, the cluster starting on the line below.
-        let line = layout::Limits::new(Size::ZERO, Size::new(width, f32::INFINITY));
+        let line = bounded(Size::new(width, f32::INFINITY));
         let lead_node = lead.as_widget_mut().layout(lead_tree, renderer, &line);
         let top = lead_node.size().height + self.spacing;
         let trail_node = trail
@@ -128,8 +148,9 @@ where
             .layout(trail_tree, renderer, &line)
             .move_to(Point::new(0.0, top));
         let height = top + trail_node.size().height;
+        let content = lead_node.size().width.max(trail_node.size().width);
         layout::Node::with_children(
-            limits.resolve(Length::Fill, Length::Shrink, Size::new(width, height)),
+            limits.resolve(Length::Fill, Length::Shrink, Size::new(content, height)),
             vec![lead_node, trail_node],
         )
     }
@@ -282,19 +303,33 @@ mod tests {
     /// Lays a 20dp-tall filling lead beside a fixed `TRAIL`-wide, 40dp-tall cluster out at `width`,
     /// against the null renderer, and returns the widget's own box and its two children's.
     fn laid_out(width: f32) -> (Rectangle, Rectangle, Rectangle) {
-        let mut reflow: Reflow<'_, (), iced::Theme, ()> = Reflow::new(
-            Space::new().width(Length::Fill).height(20.0),
-            Space::new().width(TRAIL).height(40.0),
+        laid_out_in(
+            Space::new().width(Length::Fill).height(20.0).into(),
+            layout::Limits::new(Size::ZERO, Size::new(width, 1000.0)),
         )
-        .spacing(SPACING)
-        .lead_min(LEAD_MIN);
+    }
+
+    /// Lays a filling lead that holds `content` wide of content out beside the `TRAIL`-wide
+    /// cluster, in a parent sized by what it holds (`Length::Shrink`) at most `width` wide.
+    fn laid_out_shrunk(content: f32, width: f32) -> (Rectangle, Rectangle, Rectangle) {
+        laid_out_in(
+            iced::widget::container(Space::new().width(content).height(20.0))
+                .width(Length::Fill)
+                .into(),
+            layout::Limits::new(Size::ZERO, Size::new(width, 1000.0)).width(Length::Shrink),
+        )
+    }
+
+    fn laid_out_in(
+        lead: Element<'_, (), iced::Theme, ()>,
+        limits: layout::Limits,
+    ) -> (Rectangle, Rectangle, Rectangle) {
+        let mut reflow: Reflow<'_, (), iced::Theme, ()> =
+            Reflow::new(lead, Space::new().width(TRAIL).height(40.0))
+                .spacing(SPACING)
+                .lead_min(LEAD_MIN);
         let mut tree = Tree::new(&reflow as &dyn Widget<(), iced::Theme, ()>);
-        let node = Widget::<(), iced::Theme, ()>::layout(
-            &mut reflow,
-            &mut tree,
-            &(),
-            &layout::Limits::new(Size::ZERO, Size::new(width, 1000.0)),
-        );
+        let node = Widget::<(), iced::Theme, ()>::layout(&mut reflow, &mut tree, &(), &limits);
         let layout = Layout::new(&node);
         let mut children = layout.children();
         let lead = children.next().expect("a lead node").bounds();
@@ -342,6 +377,48 @@ mod tests {
             stacked.y > 0.0 && stacked.x == 0.0,
             "1dp under it the cluster stacks"
         );
+    }
+
+    #[test]
+    fn in_a_content_sized_parent_it_is_as_wide_as_what_it_holds() {
+        // A parent that sizes itself by its content (a `Shrink` container, 018 BUG-015) must get
+        // back the width of the content, not every pixel it could have had.
+        let (own, lead, trail) = laid_out_shrunk(120.0, 400.0);
+        assert_eq!(own.size(), Size::new(120.0 + SPACING + TRAIL, 40.0));
+        assert_eq!(
+            lead,
+            Rectangle::new(Point::new(0.0, 10.0), Size::new(120.0, 20.0))
+        );
+        assert_eq!(
+            trail,
+            Rectangle::new(Point::new(120.0 + SPACING, 0.0), Size::new(TRAIL, 40.0))
+        );
+    }
+
+    #[test]
+    fn in_a_content_sized_parent_a_lead_wider_than_the_line_takes_only_what_the_cluster_leaves() {
+        // The cluster is measured first, so the lead cannot take its width however much it holds.
+        let (own, lead, trail) = laid_out_shrunk(1000.0, 400.0);
+        assert_eq!(own.size(), Size::new(400.0, 40.0));
+        assert_eq!(
+            lead,
+            Rectangle::new(Point::new(0.0, 10.0), Size::new(292.0, 20.0))
+        );
+        assert_eq!(
+            trail,
+            Rectangle::new(Point::new(300.0, 0.0), Size::new(TRAIL, 40.0))
+        );
+    }
+
+    #[test]
+    fn in_a_content_sized_parent_a_stacked_pair_is_as_wide_as_the_wider_line() {
+        let (own, lead, trail) = laid_out_shrunk(120.0, 250.0);
+        assert_eq!(lead, Rectangle::new(Point::ORIGIN, Size::new(120.0, 20.0)));
+        assert_eq!(
+            trail,
+            Rectangle::new(Point::new(0.0, 28.0), Size::new(TRAIL, 40.0))
+        );
+        assert_eq!(own.size(), Size::new(120.0, 68.0));
     }
 
     #[test]
