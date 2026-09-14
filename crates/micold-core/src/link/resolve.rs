@@ -1,6 +1,9 @@
 //! What a link opens on this machine (research R8, R10; contract link-recognition §4).
 
-use super::Link;
+use super::{
+    address::{classify, Address},
+    Link,
+};
 
 /// What resolution may consult, all known without I/O.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -57,4 +60,58 @@ pub enum Target {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reason {
     NotShared,
+}
+
+/// What `link` opens on this machine, or `None` when it is not followable here (FR-008, FR-012,
+/// FR-018).
+pub fn resolve(link: Link, _ctx: &LinkContext) -> Option<ResolvedLink> {
+    match classify(&link.address) {
+        Address::Web(address) | Address::Mail(address) => Some(ResolvedLink {
+            link,
+            display: address.clone(),
+            target: Target::Url(address),
+            needs_confirmation: false,
+        }),
+        Address::NotFollowable => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::link::LinkOrigin;
+
+    /// A session on this machine, not sandboxed, not on Windows.
+    fn local() -> LinkContext {
+        LinkContext {
+            host_names: vec!["devbox".to_string()],
+            windows_host: false,
+            sandbox: None,
+        }
+    }
+
+    fn detected(address: &str) -> Link {
+        Link {
+            address: address.to_string(),
+            origin: LinkOrigin::Detected,
+            cells: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_web_or_mail_link_opens_its_address_as_shown() {
+        for address in ["https://a.example/x?y=1", "mailto:team@example.com"] {
+            let link = detected(address);
+            assert_eq!(
+                resolve(link.clone(), &local()),
+                Some(ResolvedLink {
+                    link,
+                    display: address.to_string(),
+                    target: Target::Url(address.to_string()),
+                    needs_confirmation: false,
+                }),
+                "{address} opens as written, the hint shows it as written, and nothing asks first"
+            );
+        }
+    }
 }
