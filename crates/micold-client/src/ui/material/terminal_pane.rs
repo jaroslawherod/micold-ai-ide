@@ -956,8 +956,9 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 let (col, line) = grid_at(*position, content, metrics);
                 // Jitter inside the pressed cell is still a click (FR-013e). Once the pointer has
                 // left it, every cell counts — the pressed one included, so one character stays
-                // selectable by dragging out and back. The focus gutter belongs to the edge cell
-                // it clamps onto, as a press there does; a position outside the pane has left the
+                // selectable by dragging out and back. The top and left focus gutters belong to
+                // the edge cell `grid_at` clamps them onto, as a press there does; past the last
+                // column or row is a cell of its own. A position outside the pane has left the
                 // pressed cell even where `grid_at` clamps it back onto it.
                 if bounds.contains(*position) && state.press_cell == Some((col, line)) {
                     shell.capture_event();
