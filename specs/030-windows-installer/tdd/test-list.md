@@ -90,7 +90,8 @@ The entry points are:
 | --- | --- | --- | --- | --- | --- | --- |
 | U13 | Killing a Regular session ends a grandchild its shell started, within 5 s | FR-020, E5.1 | example | win | DONE | `crates/micold-daemon/src/supervisor.rs::windows_tests::kill_reaps_grandchild` |
 | U67 | Dropping a session whose child is still running returns within 10 s | FR-020 | example | win | DONE | `crates/micold-daemon/src/supervisor.rs::windows_tests::dropping_a_session_returns` |
-| U68 | An AI CLI found on the daemon's own `PATH` is spawned on Windows, not refused by CreateProcessW as not found | FR-020, FR-025 | example | win | RED | `crates/micold-daemon/tests/session_start.rs::{a_cli_that_refuses_the_resume_is_reported_and_leaves_nothing_running, a_session_that_never_recorded_a_conversation_is_not_told_its_conversation_is_gone, resuming_a_conversation_another_terminal_may_hold_is_attempted_like_any_other}` |
+| U68 | An AI CLI found on the daemon's own `PATH` is spawned on Windows, not refused by CreateProcessW as not found | FR-020, FR-025 | example | win | DONE | `crates/micold-daemon/tests/session_start.rs::{a_cli_that_refuses_the_resume_is_reported_and_leaves_nothing_running, a_session_that_never_recorded_a_conversation_is_not_told_its_conversation_is_gone, resuming_a_conversation_another_terminal_may_hold_is_attempted_like_any_other}` (Windows CI run 34834904463) |
+| U69 | Deleting a worktree with `stop_sessions` removes its directory on Windows, where a session still running in it holds it open | FR-020, FR-025 | example | win | RED | `crates/micold-daemon/tests/mutation_semantics.rs::worktree_delete_with_stop_sessions_archives_and_removes` (added in cycle 66) |
 
 ### `crates/micold-core/src/process.rs`
 
@@ -122,7 +123,7 @@ These tests already exist and pass on Unix. On Windows they are compiled out tod
 | --- | --- | --- | --- | --- | --- | --- |
 | U22 | A client cold-starts a real daemon that outlives the client (`autospawn.rs`) | FR-020, FR-025, E3.3 | example | win | DONE | `crates/micold-daemon/tests/autospawn.rs` (all cases, Windows CI run 34825425160) |
 | U23 | A session survives the client disconnecting and is reattached (`session_survival.rs`) | FR-020, FR-025, SC-008 | example | win | DONE | `crates/micold-daemon/tests/session_survival.rs` (all cases, Windows CI run 34825425160) |
-| U24 | A started session streams output to the attached client (`session_start.rs`) | FR-020, FR-025 | example | win | PENDING | |
+| U24 | A started session streams output to the attached client (`session_start.rs`) | FR-020, FR-025 | example | win | DONE | `crates/micold-daemon/tests/session_start.rs` (all cases, Windows CI run 34834904463) |
 | U25 | A second view of a running session receives its stream (`stream_view.rs`) | FR-020, FR-025 | example | win | DONE | `crates/micold-daemon/tests/stream_view.rs` (all cases, Windows CI run 34825425160) |
 | U26 | Sessions of different projects do not see each other's output (`session_isolation.rs`) | FR-020, FR-025 | example | win | DONE | `crates/micold-daemon/tests/session_isolation.rs` (all cases, Windows CI run 34825425160) |
 
