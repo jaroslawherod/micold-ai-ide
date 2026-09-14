@@ -468,3 +468,51 @@ Appended rather than edited in place. The log is append-only.
 - `scripts/build-lock.sh cargo test --workspace` -> 2964 passed, 0 failed, 2 ignored
 - `cargo clippy --workspace --all-targets -- -D warnings` -> clean
 - `cargo fmt --all -- --check` -> clean
+
+## Test strength: A1 and U24 require the bring-up to be handed back (T197, third-audit finding 1)
+
+- tests: `a_failed_sandbox_the_client_cannot_reach_is_brought_up_again`, `a_container_found_stopped_is_brought_up_without_showing_a_failure`
+- red (before the change, from the third audit at `6b802791`): N13 (`let _ = bring_up.task(); return iced::Task::none();`
+  at `shell/sandbox.rs:430`) left U24 passing. `scheduled()` records at build time, so a bring-up built and dropped
+  satisfied `scheduled().len() == 1`
+- change: both tests keep the update's returned work and assert `work.units() == 1` after the `scheduled()` assert.
+  Test-only; no production change
+- proof (`python3 mutants.py T191a T191b N12 N13`, each restored, sha verified):
+  N13 fails U24 at `main.rs:3198` "the bring-up has to be handed back to run — one built and dropped leaves `Probing`
+  with nothing running, which is BUG-004 left: 0 right: 1"; N12 fails A1 at `main.rs:3035` "the bring-up has to be
+  handed back to run, not built and dropped left: 0 right: 1"; T191a still fails A1 (`:3029`), T191b still fails U24 (`:3193`)
+- commit: not committed
+
+## Spec and plan record the start grace for `Stale` (T198, third-audit finding 2)
+
+- `spec.md`: bugfix note 2026-09-14 under FR-036b. A `Stale` reached before the first answer is still coming up; a
+  `Stale` found on connect is past the bring-up (FR-027). Pinned by U30 and U31; T193's text left as written
+- `plan.md`: bugfix note 2026-09-14. `Sandbox::is_coming_up` counts `Running | Stale` from `Started` to the first
+  answer, and `on_connected` calls `answered()` before `adopt_mount_set`
+- no code or test change
+- commit: not committed
+
+## U30 reaches `Stale` through the settings save (T199, third-audit finding 3)
+
+- test: `a_started_sandbox_marked_stale_before_its_service_answered_is_still_coming_up`
+- change: setup replaced `app.sandbox.survive_logout_changed()` with `SettingsMsg::Opened`,
+  `SettingsMsg::SurviveLogoutToggled(true)` and `SettingsMsg::Saved` through `update_inner`. Assertions unchanged
+- deviation: the first version ran on `Capabilities::real()` and wrote `~/.local/share/micold-ai-ide/settings.json`
+  (mtime 12:12:51, `survive_logout: true`). Fixed with `app.caps = Capabilities::real().without_settings()`; the
+  re-run left the mtime at 12:12:51. Without a store, `survival_before` is `false`, so the save still takes
+  `SurvivalStep::Enable`
+- proof (`python3 mutants.py N11 T199a`, each restored, sha verified):
+  N11 (`Running(_) | Stale(_)` narrowed to `Running(_)`) fails U30 at `main.rs:3473` "an out-of-date container is still
+  up, and its service still starting (FR-036b) left: Disconnected right: Disconnected"; T199a (removes
+  `app.sandbox.survive_logout_changed();` from `shell/persist.rs`) fails U30's setup at `main.rs:3466` "setup: the
+  settings saved during the start marked the running sandbox out of date" — so the save route is what the test drives
+- not fixed, out of scope: `settings_saved_sends_settings_set_to_a_connected_daemon` and
+  `settings_saved_is_a_silent_no_op_toward_the_daemon_when_disconnected` save on `base_app()`'s real store and rewrite
+  the developer's `settings.json` on every client test run (seen at 12:16:53)
+- commit: not committed
+
+## Gates after Phase 21 (T197–T199)
+
+- `scripts/build-lock.sh cargo test --workspace` -> 2964 passed, 0 failed, 2 ignored (116s)
+- `cargo clippy --workspace --all-targets -- -D warnings` -> clean
+- `cargo fmt --all -- --check` -> clean

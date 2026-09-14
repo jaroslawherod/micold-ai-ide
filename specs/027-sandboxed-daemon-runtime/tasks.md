@@ -1240,6 +1240,42 @@ names deleted (mutant N3), and U4 has no recorded red. Everything the previous a
 **Order**: T189 and T190 first, and independent of each other. T193 follows T189 (both touch the
 start-grace fixtures). The rest are independent. Then re-run `/speckit.tdd.verify`.
 
+## Phase 21: TDD remediation — BUG-004 (third audit)
+
+**Goal**: Clear the findings of `tdd/verification.md` (2026-09-14, at `6b802791`, verdict **FAIL**).
+**BUG-004 is not done until T197 is cleared.** U24 passes when `Msg::Lost` builds the bring-up and
+drops it (mutant N13), which is BUG-004 on the `Lost` path.
+
+### Blocking (HIGH)
+
+- [X] T197 [BUG-004] *(test)* Finding 1 — `crates/micold-client/src/main.rs:3187-3193` (U24) and
+      `:3027-3034` (A1). `BringUp::scheduled()` records a bring-up when `BringUp::task()` builds it
+      (`shell/sandbox.rs:213-224`), not when it is returned, and the returned work is discarded. Assert
+      both that exactly one bring-up was scheduled and that it is in the work handed back (for example,
+      `scheduled().len() == 1` plus the returned task's `units() == 1`). Proven when N13
+      (`let _ = bring_up.task(); return iced::Task::none();` at `shell/sandbox.rs:430`) fails U24 and N12
+      (`map_or_else(Task::none, |b| { let _ = b.task(); Task::none() })` at `daemon_sync.rs:293`) fails
+      A1, while T191a and T191b still fail them:
+      `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+
+### Non-blocking (MED, LOW)
+
+- [X] T198 [BUG-004] Finding 2 — record the start-grace rule for `Stale` where requirements live. Add a
+      bugfix note to `spec.md` (FR-036b) and `plan.md` saying that a `Stale` reached before the service
+      answers (settings saved during the start) is still coming up, and a `Stale` found on connect is
+      past the grace. Cite U30 and U31. T193's text stays as written; the note records why U30 departs
+      from it. Proven by `/speckit.bugfix.verify` passing.
+- [X] T199 [BUG-004] Finding 3 — `crates/micold-client/src/main.rs:3446`: make U30 reach `Stale`
+      through the settings save in `update_inner` (the path to `shell/persist.rs:348`) instead of
+      calling `app.sandbox.survive_logout_changed()`. Keep its assertions. Proven when N11 still fails
+      it: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+
+Findings 4–6 (LOW) are recorded in the report and need no task: the test hooks are justified, the
+real-runtime gap is documented by T192, and T194 states its own limits.
+
+**Order**: T197 first; T198 and T199 are independent. Then re-run
+`/speckit.tdd.verify`.
+
 ---
 
 ## Parallel Opportunities

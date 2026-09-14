@@ -669,6 +669,15 @@ bring-up read as a failure. **SC-004c** and US6's ninth acceptance scenario are 
 them: the first says where SC-004's progress has to be measured, the second is the flow this bug
 is. See `bugs/BUG-004.md`.
 
+**Bugfix**: 2026-09-14 — BUG-004, FR-036b clarified for a sandbox marked stale. A bring-up is still in
+flight after the container starts, until its service first answers. A sandbox marked stale in that
+gap, because settings the container was created under were saved while it started, is still coming
+up: the container is running and its service is still on its way to listening, so a refused dial
+there MUST NOT be presented as a connection failure. Staleness found once the service has answered
+(a changed mount set seen on connect) is past the bring-up, and losing that service is a lost
+connection (FR-027). Pinned by U30 and U31 in `tdd/test-list.md`. This departs from T193's wording,
+which asked for the second rule on both routes.
+
 ### Key Entities
 
 - **Service placement**: Where the session service runs — as a host process, or in a sandbox on this
