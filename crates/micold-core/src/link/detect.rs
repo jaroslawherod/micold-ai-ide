@@ -7,12 +7,11 @@ const TRAILING_PUNCTUATION: [char; 8] = ['.', ',', ';', ':', '!', '?', '\'', '*'
 
 /// The char-index ranges of every address in `text` (FR-001, FR-005).
 pub fn detect(text: &str) -> Vec<Range<usize>> {
-    const SCHEMES: [&str; 2] = ["http://", "https://"];
     let chars: Vec<char> = text.chars().collect();
     let mut found = Vec::new();
     let mut start = 0;
     while start < chars.len() {
-        let Some(scheme) = SCHEMES.iter().find(|s| starts_with(&chars[start..], s)) else {
+        let Some(scheme) = scheme_at(&chars, start) else {
             start += 1;
             continue;
         };
@@ -51,6 +50,18 @@ fn scan_end(chars: &[char], from: usize, quote: Option<char>) -> usize {
         }
     }
     chars.len()
+}
+
+/// The scheme prefix an address starts with at `start`, unless a letter or digit right before it
+/// makes it the end of a word (research R3 rule 1).
+fn scheme_at(chars: &[char], start: usize) -> Option<&'static str> {
+    const SCHEMES: [&str; 2] = ["http://", "https://"];
+    if start > 0 && chars[start - 1].is_ascii_alphanumeric() {
+        return None;
+    }
+    SCHEMES
+        .into_iter()
+        .find(|scheme| starts_with(&chars[start..], scheme))
 }
 
 fn starts_with(chars: &[char], prefix: &str) -> bool {
@@ -145,6 +156,15 @@ mod tests {
             found("Homepage: <https://x.example>"),
             ["https://x.example"],
             "the angle brackets that mark an address in mail and Markdown are not part of it"
+        );
+    }
+
+    #[test]
+    fn rejects_a_scheme_preceded_by_a_letter_or_digit() {
+        assert_eq!(
+            found("xhttps://a.example 2http://a.example"),
+            Vec::<String>::new(),
+            "a scheme glued to the end of a word is part of that word, not the start of an address"
         );
     }
 }

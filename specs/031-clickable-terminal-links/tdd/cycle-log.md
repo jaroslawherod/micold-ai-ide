@@ -83,3 +83,12 @@
 - green: `scan_end` stops at `>`. Suite -> 1065 passed, 0 failed
 - refactor: none needed; the rest of research R3 rule 2's stop set is U9's cycle
 - commit: `feat(031): end an address at a closing angle bracket (U7)`
+
+## Cycle 8: U8 rejects a scheme preceded by a letter or digit
+
+- test: `crates/micold-core/src/link/detect.rs::tests::rejects_a_scheme_preceded_by_a_letter_or_digit` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::rejects_a_scheme_preceded_by_a_letter_or_digit -- --exact`
+  -> `left: ["https://a.example", "http://a.example"]` / `right: []` (1 failed)
+- green: a scheme whose previous character is an ASCII letter or digit is skipped. Suite -> 1066 passed, 0 failed
+- refactor: moved the scheme lookup and the glued-word check into `scheme_at`; suite re-run -> 1066 passed
+- commit: `feat(031): ignore a scheme glued to the end of a word (U8)`
