@@ -32,5 +32,6 @@
 - [The component showcase](development/component-showcase.md)
 - [The CI pipeline](development/ci-pipeline.md)
 - [Packaging for macOS](development/macos-packaging.md)
+- [Packaging for Windows](development/windows-packaging.md)
 - [The documentation site](development/docs-site.md)
 - [Screenshots for the manual visual passes](development/screenshots.md)

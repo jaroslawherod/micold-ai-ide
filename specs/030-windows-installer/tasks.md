@@ -325,7 +325,7 @@ description: "Task list for feature 030: Windows installation package"
   Change `publish.needs` to include `windows`, and update the file's top comment block to mention the Windows installers.
 - [X] T051 [US3] [U52] [U53] [U57] Making T048 pass: create `.github/release-notice-windows.md` (≤ 5 lines: pick x64 or ARM64, SmartScreen **More info → Run anyway**, link to the install-windows page). In the `publish` job, append it to the release body before `gh release edit --draft=false`, using `gh release view "$TAG_NAME" --json body -q .body` concatenated with the notice file, passed to `gh release edit "$TAG_NAME" --notes-file`. If 028's macOS notice step exists, extend that step instead.
 - [X] T052 [US3] [A12] [U54] Making T049 pass: make sure `site/stage.sh`'s release-download link scan (line ~209) covers `docs/user-guide/install-windows.md`. It already greps all sources, so only a change in its source set should be needed. Add the new page to the site's page set (`site/checks/page-set.sh` inputs / `docs/SUMMARY.md`, done in T041) so `site/checks/page-set.sh` passes.
-- [ ] T053 [P] [US3] Docs, developer-facing (Principle VII): create `docs/development/windows-packaging.md`, covering:
+- [X] T053 [P] [US3] Docs, developer-facing (Principle VII): create `docs/development/windows-packaging.md`, covering:
   - how to build locally (`mise run windows-installer`; needs Inno Setup 6 and Git Bash);
   - what the `.iss` does, and why `AppId` must never change;
   - the CI legs (x64 in the `test` matrix, `windows-arm64-package` job) and the release `windows` job, and that it gates `publish`;
