@@ -40,8 +40,7 @@ PrivilegesRequired=lowest
 ; [Code] StopDaemon stops it.
 AppMutex=Local\MicoldAIIDE
 ; When the user continues, Restart Manager closes a still-open app window (FR-009).
-; MUTANT (A9): Restart Manager closes nothing either
-CloseApplications=no
+CloseApplications=force
 ; Never relaunch the app setup closed; the installer starts nothing on its own (FR-011).
 RestartApplications=no
 ; One package per architecture; each refuses the other with Inno's own message (FR-015).
@@ -59,7 +58,7 @@ ArchitecturesInstallIn64BitMode=arm64
 ; Exactly the app and the daemon it spawns (FR-002, FR-012). Never a wildcard: the showcase is built
 ; into the same directory. Guarded by crates/micold-client/tests/packaging_excludes_showcase.rs.
 Source: "{#BinDir}\micold-ai-ide.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#BinDir}\micold-daemon.exe"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
+Source: "{#BinDir}\micold-daemon.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -93,7 +92,6 @@ var
   ResultCode: Integer;
 begin
   Result := '';
-  exit; // MUTANT (A9): the daemon is never stopped
   if LoadStringFromFile(ExpandConstant('{localappdata}\micold-ai-ide\run\micold-daemon.pid'), PidText) then
     Pid := Trim(String(PidText));
   if StrToIntDef(Pid, 0) > 0 then
