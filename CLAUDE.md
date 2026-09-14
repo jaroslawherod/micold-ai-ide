@@ -23,6 +23,9 @@ right `cargo` invocation each time:
   you need it in the foreground instead of auto-spawned.
 - `mise run test` — test the **whole** workspace (core + client + daemon), matching CI
   (`cargo test --workspace`).
+- `mise run gate` — CI's merge gate locally, in CI's order: `cargo fmt --check`, clippy (core, then
+  workspace, `-D warnings`), `cargo test --workspace`, then `scripts/tests/*.test.sh`. Run this, not
+  `mise run test`, before pushing — CI stops at fmt before any test runs.
 - `mise run test-core` — test only the render-free core (`cargo test -p micold-core
   --all-targets`); no GUI, no iced, so it is much faster for logic-only changes.
 - `mise run build` — build the release GUI binary (`cargo build --release -p micold-client`).
