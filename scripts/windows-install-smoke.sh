@@ -5,7 +5,7 @@
 #   scripts/windows-install-smoke.sh <micold-ai-ide-<version>-<arch>-setup.exe>
 #
 # CI runs it on both Windows packaging legs, and the release runs it before each upload. Contract:
-# specs/030-windows-installer/contracts/windows-installer.md, rows I1, I2 and I7. Its host and
+# specs/030-windows-installer/contracts/windows-installer.md, rows I1, I2, I4 and I7. Its host and
 # argument checks are driven by scripts/tests/windows-install-smoke.test.sh; the rest only runs on
 # Windows.
 
@@ -74,7 +74,7 @@ trap clean_up EXIT
 
 fail() {
 	echo "${0##*/}: FAIL: $*" >&2
-	for log in "$logs/install.log" "$local_app_data/micold-ai-ide/data/micold-daemon.log"; do
+	for log in "$logs/install.log" "$logs/repair.log" "$local_app_data/micold-ai-ide/data/micold-daemon.log"; do
 		if [ -f "$log" ]; then
 			echo "---- $log" >&2
 			cat "$log" >&2
@@ -153,5 +153,22 @@ for pid in "$client_pid" "$daemon_pid"; do
 	[ "$(alive "$pid")" = True ] || fail "pid $pid exited after $pipe appeared"
 done
 
-# 8. clean_up stops both on exit.
+# 8. Repair over a live install (I4, FR-008). A user closes the window and runs the installer again,
+# while the daemon outlives the window by design. Stopping the client without /T leaves the daemon,
+# which the client spawned, running.
+MSYS2_ARG_CONV_EXCL='*' taskkill.exe /PID "$client_pid" /F >/dev/null 2>&1 ||
+	fail "could not stop the client (pid $client_pid)"
+client_pid=""
+[ "$(alive "$daemon_pid")" = True ] || fail "the daemon (pid $daemon_pid) exited with its client, before the repair"
+echo "== repair $exe with the daemon (pid $daemon_pid) running"
+status=0
+MSYS2_ARG_CONV_EXCL='*' "$exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART "/LOG=$(cygpath -w "$logs/repair.log")" ||
+	status=$?
+[ "$status" -eq 0 ] || fail "the repair with the daemon running exited $status, want 0 (I4)"
+entries="$(win "@(Get-ChildItem -LiteralPath 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall' |
+Where-Object { \$_.GetValue('DisplayName') -like 'Micold AI IDE*' }).Count")"
+[ "$entries" = 1 ] || fail "$entries Installed apps entries for Micold AI IDE after the repair, want 1 (I4)"
+echo "repaired, one Installed apps entry"
+
+# clean_up stops what is still running on exit.
 echo "== smoke passed"
