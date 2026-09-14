@@ -4,6 +4,9 @@ use std::ops::Range;
 
 use super::{detect::detect, CellSpan, Link, LinkOrigin, LinkRows};
 
+/// How many rows a logical line reaches above and below the pointer row (research R4; contract L4).
+const MAX_ROWS_EACH_WAY: i64 = 64;
+
 /// The link under the cell at `row`, `col`, if any (contract link-recognition §2).
 pub fn link_at(rows: &impl LinkRows, row: i64, col: u16) -> Option<Link> {
     rows.text(row)?;
@@ -19,19 +22,27 @@ struct LogicalLine {
     text: Vec<char>,
     /// The cell each char of `text` sits in.
     cells: Vec<(i64, u16)>,
+    /// The line continues above its first row, past the cap.
+    cut_above: bool,
+    /// The line continues below its last row, past the cap.
+    cut_below: bool,
 }
 
 impl LogicalLine {
     /// The logical line holding `row`: back while the row above soft-wraps into this one, then
-    /// forward while this row soft-wraps into the next.
+    /// forward while this row soft-wraps into the next, at most [`MAX_ROWS_EACH_WAY`] rows each way.
     fn around(rows: &impl LinkRows, row: i64) -> Self {
+        let continues_above = |row: i64| rows.wrapped(row - 1) && rows.text(row - 1).is_some();
+        let continues_below = |row: i64| rows.wrapped(row) && rows.text(row + 1).is_some();
         let mut first = row;
-        while rows.wrapped(first - 1) && rows.text(first - 1).is_some() {
+        while first > row - MAX_ROWS_EACH_WAY && continues_above(first) {
             first -= 1;
         }
         let mut line = Self {
             text: Vec::new(),
             cells: Vec::new(),
+            cut_above: continues_above(first),
+            cut_below: false,
         };
         let mut current = first;
         while let Some(text) = rows.text(current) {
@@ -40,6 +51,10 @@ impl LogicalLine {
                 line.cells.push((current, col as u16));
             }
             if !rows.wrapped(current) {
+                break;
+            }
+            if current == row + MAX_ROWS_EACH_WAY {
+                line.cut_below = continues_below(current);
                 break;
             }
             current += 1;
@@ -102,6 +117,11 @@ fn detected_at(line: &LogicalLine, row: i64, col: u16) -> Option<Link> {
     let range = detect(&text)
         .into_iter()
         .find(|range| range.contains(&index))?;
+    let reaches_a_cut =
+        (line.cut_above && range.start == 0) || (line.cut_below && range.end == line.text.len());
+    if reaches_a_cut {
+        return None;
+    }
     Some(Link {
         address: line.text[range.clone()].iter().collect(),
         origin: LinkOrigin::Detected,
@@ -176,6 +196,19 @@ mod tests {
                 .find(|(cols, _)| cols.contains(&col))
                 .map(|(_, uri)| *uri)
         }
+    }
+
+    /// `text` soft-wrapped into rows `width` cells wide, every row but the last wrapping.
+    fn soft_wrapped(text: &str, width: usize) -> Vec<Row> {
+        let chars: Vec<char> = text.chars().collect();
+        let mut rows: Vec<Row> = chars
+            .chunks(width)
+            .map(|chunk| row(&chunk.iter().collect::<String>()).wrapped())
+            .collect();
+        if let Some(last) = rows.last_mut() {
+            last.wrapped = false;
+        }
+        rows
     }
 
     fn declared(cells: Vec<CellSpan>) -> Option<Link> {
@@ -336,6 +369,46 @@ mod tests {
             link_at(&rows, 1, 1),
             None,
             "the row after a line break starts a new line, with no address on it"
+        );
+    }
+
+    #[test]
+    fn a_line_is_joined_64_rows_each_way_and_a_candidate_reaching_the_cap_is_dropped() {
+        const WIDTH: usize = 4;
+        let web = |fill: usize| format!("https://a.example/{}", "p".repeat(fill));
+
+        let within = web(496);
+        let rows = Rows::new(0, soft_wrapped(&format!(" {within} "), WIDTH));
+        let mut cells = vec![span(0, 1..4)];
+        cells.extend((1..128).map(|row| span(row, 0..4)));
+        cells.push(span(128, 0..3));
+        assert_eq!(
+            link_at(&rows, 64, 0),
+            Some(Link {
+                address: within,
+                origin: LinkOrigin::Detected,
+                cells,
+            }),
+            "an address reaching exactly 64 rows above and below the pointer row is joined whole"
+        );
+
+        let past_the_bottom = web(499);
+        let rows = Rows::new(0, soft_wrapped(&format!(" {past_the_bottom} now"), WIDTH));
+        assert_eq!(
+            link_at(&rows, 64, 0),
+            None,
+            "an address running past 64 rows below the pointer row is cut there, so it is dropped"
+        );
+
+        let past_the_top = format!(
+            "See https://a.example/?next=https://b.example/{} now",
+            "p".repeat(244)
+        );
+        let rows = Rows::new(0, soft_wrapped(&past_the_top, WIDTH));
+        assert_eq!(
+            link_at(&rows, 71, 0),
+            None,
+            "the cap 64 rows above cuts the address; the part below it is not offered as a link"
         );
     }
 }

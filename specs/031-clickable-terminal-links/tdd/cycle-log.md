@@ -252,3 +252,13 @@
 - green: no implementation change. Suite -> 1082 passed, 0 failed
 - refactor: none needed
 - commit: `test(031): pin that rows apart by a line break are never joined (U22)`
+
+## Cycle 25: U23 a wrapped logical line within 64 rows each way is joined; a candidate reaching the 64-row cap is dropped
+
+- test: `crates/micold-core/src/link/line.rs::tests::a_line_is_joined_64_rows_each_way_and_a_candidate_reaching_the_cap_is_dropped` (new), with a `soft_wrapped(text, width)` fixture; the fake rows were first made to own their text in the structural commit `test(031): let the link_at test rows own their text`
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::a_line_is_joined_64_rows_each_way_and_a_candidate_reaching_the_cap_is_dropped -- --exact`
+  -> the first assertion (an address reaching exactly 64 rows each way) passed; `assertion failed: an address running past 64 rows below the pointer row is cut there, so it is dropped` / `left: Some(Link { address: "https://a.example/ppp…` / `right: None` (1 failed)
+- green: `LogicalLine::around` stops 64 rows above and below the pointer row and records `cut_above`/`cut_below` when the line continues past the cap; `detected_at` drops a candidate starting at the line's first char under `cut_above` or ending at its last char under `cut_below`. Suite -> 1083 passed, 0 failed
+- refactor: the continuation checks named as `continues_above`/`continues_below` closures; suite re-run green (1083); clippy clean. Mutant check on the third assertion (`cut_above: false`) -> `assertion failed: the cap 64 rows above cuts the address; the part below it is not offered as a link`, reverted
+- commit: `feat(031): cap the logical line at 64 rows each way (U23)`
+- notes: declared runs are not dropped at the cap, since their URI is whole whatever cells are visible. Appended U149: a candidate whose trimmed end is separated from the cut only by trailing punctuation is still truncated and must be dropped; the contract's "ends in the last column" wording misses it
