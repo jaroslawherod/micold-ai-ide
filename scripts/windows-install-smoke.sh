@@ -173,16 +173,19 @@ until [ "$(win "Test-Path -LiteralPath '$pipe'")" = True ]; do
 done
 echo "$pipe appeared after $((SECONDS - started))s"
 
-# The daemon: the pid it records, else the micold-daemon.exe the client spawned.
+# The daemon: the live pid it records, else the micold-daemon.exe the client spawned. A record can
+# still name the daemon a repair stopped, so a pid that is not running does not count.
 pid_record="$local_app_data/micold-ai-ide/run/micold-daemon.pid"
-if [ -f "$pid_record" ]; then
-	daemon_pid="$(tr -dc '0-9' <"$pid_record")"
-fi
-if [ -z "$daemon_pid" ]; then
-	daemon_pid="$(win "(Get-CimInstance Win32_Process |
+find_daemon_pid() {
+	local pid=""
+	[ ! -f "$pid_record" ] || pid="$(tr -dc '0-9' <"$pid_record")"
+	[ -z "$pid" ] || [ "$(alive "$pid")" = True ] || pid=""
+	[ -n "$pid" ] || pid="$(win "(Get-CimInstance Win32_Process |
 Where-Object { \$_.ParentProcessId -eq $client_pid -and \$_.Name -eq 'micold-daemon.exe' } |
 Select-Object -First 1).ProcessId")"
-fi
+	printf '%s' "$pid"
+}
+daemon_pid="$(find_daemon_pid)"
 [ -n "$daemon_pid" ] || fail "$pipe is up, but no micold-daemon.exe process was found behind it"
 
 # 7. No console for the client or its daemon (FR-005, SC-005). Checked while both are still running:
@@ -259,13 +262,13 @@ wait_for_uninstaller
 [ -f "$install_dir/micold-ai-ide.exe" ] || fail "the refused uninstall removed $install_dir/micold-ai-ide.exe (FR-009)"
 [ "$(win "Test-Path -LiteralPath '$key'")" = True ] || fail "the refused uninstall removed the uninstall key $key (FR-009)"
 echo "refused with the window open (exit $status); install dir and uninstall key in place"
-daemon_pid="$(win "(Get-CimInstance Win32_Process |
-Where-Object { \$_.ParentProcessId -eq $client_pid -and \$_.Name -eq 'micold-daemon.exe' } |
-Select-Object -First 1).ProcessId")"
+daemon_pid="$(find_daemon_pid)"
+[ -n "$daemon_pid" ] || fail "$pipe is up, but no micold-daemon.exe process was found behind it"
 MSYS2_ARG_CONV_EXCL='*' taskkill.exe /PID "$client_pid" /F >/dev/null 2>&1 ||
 	fail "could not stop the repaired client (pid $client_pid)"
 client_pid=""
-echo "== uninstall with the daemon (pid ${daemon_pid:-unknown}) running"
+[ "$(alive "$daemon_pid")" = True ] || fail "the daemon (pid $daemon_pid) exited with its client, before the uninstall"
+echo "== uninstall with the daemon (pid $daemon_pid) running"
 status=0
 MSYS2_ARG_CONV_EXCL='*' "$install_dir/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART \
 	"/LOG=$(cygpath -w "$logs/uninstall.log")" || status=$?
