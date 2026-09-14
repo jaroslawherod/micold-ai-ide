@@ -667,3 +667,10 @@ failed before the implementation.
 - refactor: none beyond the helper extraction in b5701454.
 - notes: the Windows exes built by a local cross-check carry no icon, since no resource compiler is installed here; `build.rs` prints a cargo warning in that case, and the smoke fails any packaged exe without one.
 - commit: see the follow-up commit
+
+## Cycle 77: A7, A8 and A17 green on both Windows legs
+
+- green (A7, A8, A17): PR #332's CI run 34877448706 (b5701454), `ci complete` succeeded. x64, `build + test (windows-latest)`: `both exes carry an icon`, `== uninstall with the daemon (pid 1120) running`, `uninstalled: no install dir, shortcut, uninstall key or run dir`, `both data markers survived the uninstall`, `== smoke passed`. ARM64, `package + smoke (windows-11-arm)`: `both exes carry an icon`, `== uninstall with the daemon (pid 9888) running`, `uninstalled: no install dir, shortcut, uninstall key or run dir`, `both data markers survived the uninstall`, `== smoke passed`. A7, A8 and A17 are `DONE`. With A6 and A9 already `DONE`, T043 and T045 are ticked, as are T071, T072, T084 and T034.
+- notes: run 34876494804 (0b8f3f68) also showed `both exes carry an icon` on x64 before its uninstall raced, as in cycle 76.
+- refactor: none needed.
+- commit: see the follow-up commit

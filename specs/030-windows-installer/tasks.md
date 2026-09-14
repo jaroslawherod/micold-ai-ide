@@ -189,8 +189,8 @@ description: "Task list for feature 030: Windows installation package"
 
 ### Implementation for User Story 1
 
-- [ ] T084 [US1] [A17] FR-003: in `scripts/windows-install-smoke.sh`, after the presence check, load each installed exe as a data file and fail unless it has at least one `RT_GROUP_ICON` resource. Red on both Windows legs before T034.
-- [ ] T034 [US1] [A17] R11, after T002 vetting: add `embed-resource = "3"` as a `[build-dependencies]` entry in `crates/micold-client/Cargo.toml` and `crates/micold-daemon/Cargo.toml`.
+- [X] T084 [US1] [A17] FR-003: in `scripts/windows-install-smoke.sh`, after the presence check, load each installed exe as a data file and fail unless it has at least one `RT_GROUP_ICON` resource. Red on both Windows legs before T034.
+- [X] T034 [US1] [A17] R11, after T002 vetting: add `embed-resource = "3"` as a `[build-dependencies]` entry in `crates/micold-client/Cargo.toml` and `crates/micold-daemon/Cargo.toml`.
   - Create `crates/micold-client/build.rs` and `crates/micold-daemon/build.rs`. Each compiles `packaging/windows/app-icon.rc` via `embed_resource::compile(..., embed_resource::NONE)` only when `CARGO_CFG_TARGET_OS == "windows"`, and emits `cargo:rerun-if-changed` for the `.rc` and `assets/icon/icon.ico`.
   - Create `packaging/windows/app-icon.rc` containing `1 ICON "../../assets/icon/icon.ico"`, with the path resolved relative to the `.rc`.
   - Verify with `cargo check --target aarch64-apple-darwin` and on Linux that the build script is a no-op there.
@@ -264,7 +264,7 @@ description: "Task list for feature 030: Windows installation package"
   - `[Code]` defines `PrepareToInstall` and `InitializeUninstall`, and each calls `StopDaemon`;
   - `[UninstallDelete]` has exactly one entry, `Type: filesandordirs; Name: "{localappdata}\micold-ai-ide\run"`;
   - no `[UninstallDelete]` or `[InstallDelete]` entry names `{userappdata}` or `{localappdata}\micold-ai-ide\data`, since user data is never deleted.
-- [ ] T043 [P] [US2] [A6] [A7] [A8] [A9] I4 and I5: extend `scripts/windows-install-smoke.sh` with two phases.
+- [X] T043 [P] [US2] [A6] [A7] [A8] [A9] I4 and I5: extend `scripts/windows-install-smoke.sh` with two phases.
   - Before install, seed `$APPDATA/micold-ai-ide/data/smoke-marker` and `$LOCALAPPDATA/micold-ai-ide/data/smoke-marker`.
   - After the launch check, leave the daemon **running** and re-run the same installer silently (repair with a live daemon, I4). Assert exit 0, exactly one `…Uninstall\{1B19A6AC-…}_is1` key (`reg query … /s | grep -c _is1` = 1), and that the old daemon pid is gone.
   - Relaunch the client, wait for the pipe, and leave it running. Run `"$LOCALAPPDATA/Programs/Micold AI IDE/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART`, and wait for the uninstaller's child process to exit.
@@ -279,7 +279,7 @@ description: "Task list for feature 030: Windows installation package"
   - `function PrepareToInstall(var NeedsRestart: Boolean): String` returns `StopDaemon()`.
   - `function InitializeUninstall(): Boolean` calls `StopDaemon()` and shows the message with `MsgBox` on failure. It returns `False` unless in silent mode, so the user can retry.
   - `[Messages]` / `[CustomMessages]` add "Running sessions will be stopped." to the ready-page memo via `UpdateReadyMemo`.
-- [ ] T045 [US2] [A6] [A7] [A8] [A9] Push. Observe T043's repair-with-live-daemon and uninstall assertions go green on both Windows packaging legs. If Restart Manager still reports files in use, diagnose from `install.log` and fix `StopDaemon`; do not relax the assertion.
+- [X] T045 [US2] [A6] [A7] [A8] [A9] Push. Observe T043's repair-with-live-daemon and uninstall assertions go green on both Windows packaging legs. If Restart Manager still reports files in use, diagnose from `install.log` and fix `StopDaemon`; do not relax the assertion.
 - [X] T046 [P] [US2] Docs, US2: add sections to `docs/user-guide/install-windows.md`:
   - **Upgrading**: run the newer installer; open sessions end after you confirm; projects and settings carry over; one entry in Installed apps.
   - **Removing**: Settings → Apps → Installed apps → Micold AI IDE → Uninstall.
@@ -289,8 +289,8 @@ description: "Task list for feature 030: Windows installation package"
 ### Outer loop for User Story 2 (acceptance tests green before the story is complete)
 
 - [X] T070 [US2] [A6] US2-AS1: in the CI smoke run from T043, the repair over a live install exits 0 and leaves exactly one `_is1` uninstall key.
-- [ ] T071 [US2] [A7] US2-AS2: in the same smoke run, uninstall removes the install dir, `.lnk`, uninstall key and `%LOCALAPPDATA%\micold-ai-ide\run`.
-- [ ] T072 [US2] [A8] US2-AS3: in the same smoke run, both seeded data markers survive uninstall.
+- [X] T071 [US2] [A7] US2-AS2: in the same smoke run, uninstall removes the install dir, `.lnk`, uninstall key and `%LOCALAPPDATA%\micold-ai-ide\run`.
+- [X] T072 [US2] [A8] US2-AS3: in the same smoke run, both seeded data markers survive uninstall.
 - [X] T073 [US2] [A9] US2-AS4: in the same smoke run, installing with the daemon running ends with the old daemon pid gone.
 - [ ] T085 [US2] [A16] FR-009: in `scripts/windows-install-smoke.sh`, run the silent uninstall once with the app window open. Expect a non-zero exit with the install dir and uninstall key still in place, then close the window and continue with step 9.
 
