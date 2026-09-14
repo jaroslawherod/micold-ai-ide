@@ -98,3 +98,13 @@ were added to the list as behaviours and written as tests before any change.
 - U11 `clipboard_gestures::motion_past_the_panes_edge_is_a_drag_even_where_it_clamps_to_the_pressed_cell` (new)
   - red: same run -> `panicked at crates/micold-client/src/ui/material/terminal_pane.rs:1775:13` `left: []  right: [(0, 0)]`
 
+## Green: U10 and U11
+
+- change: the pane's wheel `ScrollLocally` arm clears the pressed cell. The `CursorMoved` arm treats
+  a position outside the content area as having left the pressed cell.
+- green: `scripts/build-lock.sh cargo test -p micold-client --lib clipboard_gestures` -> 12 passed;
+  0 failed. `mise run gate` runs the full suite before the push.
+- refactor: none. With the same commit, and at Review B's request, one comment in the copy-chord arm
+  now points at `selection::copy_request` instead of the pane's old release write.
+- commit: the `fix(006)` commit that carries this entry.
+
