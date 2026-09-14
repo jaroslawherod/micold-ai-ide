@@ -255,6 +255,13 @@ pub fn user_sid() -> io::Result<String> {
     imp::user_sid()
 }
 
+/// The SID of the user the process `pid` runs as. Access denied when this user may not query it,
+/// which a process of another account usually is.
+#[cfg(windows)]
+pub fn process_user_sid(pid: u32) -> io::Result<String> {
+    imp::process_user_sid(pid)
+}
+
 #[cfg(windows)]
 mod imp {
     use super::*;
@@ -262,14 +269,17 @@ mod imp {
     use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, HANDLE};
     use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
     use windows_sys::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
-    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+    use windows_sys::Win32::System::Threading::{
+        GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
 
-    /// Closes the process token on every return path.
-    struct Token(HANDLE);
+    /// Closes a process or token handle on every return path.
+    struct Handle(HANDLE);
 
-    impl Drop for Token {
+    impl Drop for Handle {
         fn drop(&mut self) {
-            // SAFETY: the handle came from a successful `OpenProcessToken` and is closed only here.
+            // SAFETY: the handle came from a successful `OpenProcess` or `OpenProcessToken` and is
+            // closed only here.
             unsafe {
                 CloseHandle(self.0);
             }
@@ -291,12 +301,28 @@ mod imp {
     pub(super) fn user_sid() -> io::Result<String> {
         // The token, not `%USERNAME%`: nothing in the environment may choose whose pipe this is
         // (data-model, "No environment variable influences the Windows endpoint").
-        let mut raw: HANDLE = std::ptr::null_mut();
-        // SAFETY: `raw` is a local out pointer; a zero return leaves it unset and is handled.
-        if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw) } == 0 {
+        // SAFETY: `GetCurrentProcess` returns a pseudo-handle that needs no closing.
+        token_user_sid(unsafe { GetCurrentProcess() })
+    }
+
+    pub(super) fn process_user_sid(pid: u32) -> io::Result<String> {
+        // SAFETY: plain call; a null return is handled, and the handle is closed by `Handle`.
+        let raw = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+        if raw.is_null() {
             return Err(io::Error::last_os_error());
         }
-        let token = Token(raw);
+        let process = Handle(raw);
+        token_user_sid(process.0)
+    }
+
+    /// The string SID of the user `process` runs as.
+    fn token_user_sid(process: HANDLE) -> io::Result<String> {
+        let mut raw: HANDLE = std::ptr::null_mut();
+        // SAFETY: `raw` is a local out pointer; a zero return leaves it unset and is handled.
+        if unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut raw) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let token = Handle(raw);
 
         let mut needed = 0u32;
         // SAFETY: a null buffer of length 0 is the documented size query; it fails and sets `needed`.

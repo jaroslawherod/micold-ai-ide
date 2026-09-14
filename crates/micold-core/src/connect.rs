@@ -164,8 +164,27 @@ fn vanished_mid_handshake(e: &io::Error) -> bool {
 /// Refuses a pipe whose server process does not run as `own_sid` (U71, security review D1).
 #[cfg(windows)]
 fn refuse_foreign_server(stream: &Stream, own_sid: &str) -> io::Result<()> {
-    let _ = (stream, own_sid);
-    Ok(())
+    let refuse = |server: &str| {
+        io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!(
+                "the daemon pipe is served as {server}, not as this user {own_sid}; refusing it"
+            ),
+        )
+    };
+    let pid = stream
+        .peer_creds()?
+        .pid()
+        .ok_or_else(|| refuse("an unknown process"))?;
+    match crate::endpoint::process_user_sid(pid) {
+        Ok(server) if server == own_sid => Ok(()),
+        Ok(server) => Err(refuse(&format!("{server} (pid {pid})"))),
+        // A process this user may not even query is not this user's.
+        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => Err(refuse(&format!(
+            "an account this user cannot query (pid {pid})"
+        ))),
+        Err(e) => Err(e),
+    }
 }
 
 /// Open a raw connection to the endpoint, or `None` if nothing is listening.
@@ -179,7 +198,13 @@ pub async fn dial_address(address: &DialAddress) -> io::Result<Option<Transport>
         DialAddress::Local(endpoint) => {
             let name = fs_name(endpoint)?;
             match Stream::connect(name).await {
-                Ok(stream) => Ok(Some(Transport::Local(stream))),
+                Ok(stream) => {
+                    // Anyone may create a pipe by this name first; only this user's daemon is ours
+                    // to talk to (FR-021).
+                    #[cfg(windows)]
+                    refuse_foreign_server(&stream, &crate::endpoint::user_sid()?)?;
+                    Ok(Some(Transport::Local(stream)))
+                }
                 Err(e) if is_absent(&e) => Ok(None),
                 Err(e) => Err(e),
             }
