@@ -31,6 +31,19 @@ After the reviewer returns:
 - Re-dispatch a **new** reviewer. Do not reuse the old one: it has seen the old version.
 - A third round that still returns BLOCKER or MAJOR is an escalation (category 5).
 
+## Bug rubric (Phase 0, after `speckit-bugfix-verify`)
+
+- `bugs/BUG-<k>.md` gives reproduction steps that the reviewer follows on `origin/main`, and they
+  reproduce the failure. If they do not, that is a BLOCKER.
+- The root cause names a file and a mechanism, not a symptom. The reviewer confirms it by reading
+  that code.
+- Every requirement the patch adds to spec.md describes behaviour the spec already intended: a
+  missed edge case, or a conflict resolved in favour of the stated user story. New behaviour is a
+  MAJOR finding, and it sends the flow to Phase 1.
+- Reopened tasks carry `(reopened — BUG-<k>)`, and the fix tasks are few. The first one is a
+  regression test.
+- `speckit-bugfix-verify` reports the BUG as Patched, with no orphaned references.
+
 ## Spec rubric (Phase 1)
 
 - Every user story has a priority, an independent test and Given/When/Then acceptance scenarios.
@@ -80,6 +93,8 @@ subagent, and covers everything A is not asked about:
   cannot be observed, that is a BLOCKER.
 - **Scope.** The diff implements exactly the milestone's tasks. Work belonging to a later milestone
   is MAJOR. A task ticked but not implemented is a BLOCKER.
+- **Regression (bug milestones).** The reviewer runs the regression test against `origin/main` and
+  sees it fail for the reason the BUG record gives. It must then pass on the branch.
 - **Acceptance.** Each listed acceptance scenario has a test that fails without the change.
   `tdd/cycle-log.md` shows red before green for each behaviour.
 - **Constitution:**
