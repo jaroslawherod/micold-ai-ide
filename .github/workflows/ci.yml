@@ -170,6 +170,14 @@ jobs:
       # Ensure the full workspace (client GUI binary + daemon) compiles on every platform.
       - name: Build (workspace)
         run: cargo build --workspace
+      # Feature 030 (FR-025): the daemon's own suite on Windows -- the singleton, the pipe's DACL, the
+      # stop path and the process-tree teardown are all Windows-specific code. Linux already runs it
+      # in the full-workspace step below. `!cancelled()` so a red core step above does not hide
+      # which daemon behaviours differ on this platform.
+      - name: Test (daemon, Windows)
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        shell: bash
+        run: cargo test -p micold-daemon --all-targets
       # Feature 028 (FR-036): the packaging gate. The bundle is composed from the binaries the
       # step above just produced -- no second checkout, no second compile -- signed ad-hoc, and
       # then actually launched. Composition alone would not catch the failure that matters: the
