@@ -120,3 +120,22 @@ The code is in `crates/micold-core/src/endpoint.rs` (name and pid record),
 (job objects), and `crates/micold-core/src/process.rs` (the app mutex).
 
 ## Tests not run on Windows
+
+Every daemon test file runs on the Windows leg except the four below. Each still starts with
+`#![cfg(unix)]`, and the line above it gives the reason (`crates/micold-core/tests/daemon_tests_gate_with_reason.rs`
+fails a gate that has none).
+
+All four have one cause in common. On Unix a test gives each daemon a private endpoint and data
+directory through `XDG_RUNTIME_DIR` and `XDG_DATA_HOME`. On Windows the pipe name comes from the
+user's SID and the data directory is a known folder, and neither reads the environment. A test there
+would bind, or write into, the signed-in user's own daemon and data.
+
+| File | Why it stays Unix |
+|---|---|
+| `crates/micold-daemon/tests/client_restart_input.rs` | Seeds `projects.json` through `XDG_DATA_HOME`, so on Windows it would overwrite the user's own project catalog. It also stops its daemon with `kill` and `fuser`. |
+| `crates/micold-daemon/tests/idle_stop.rs` | Isolates each daemon's endpoint through `XDG_RUNTIME_DIR` and its log through `XDG_DATA_HOME`, so on Windows its concurrently running daemons would share the user's own. It also probes liveness with `libc::kill(pid, 0)`. |
+| `crates/micold-daemon/tests/idle_teardown.rs` | Isolates each daemon's endpoint through `XDG_RUNTIME_DIR`, so on Windows its daemons would bind the user's own. It also probes liveness with `libc::kill`, checks the lock with `libc::flock`, and checks that the socket file is unlinked. |
+| `crates/micold-daemon/tests/pi_launch_wiring.rs` | Keeps the materialised Pi component out of the real data directory through `XDG_DATA_HOME`, so on Windows it would write into the user's own. Its recording `pi` is a `#!/bin/sh` script. |
+
+A test-only override for the Windows endpoint and data directory would let all four run there. Until
+one exists, what they cover is checked on Linux and macOS only.
