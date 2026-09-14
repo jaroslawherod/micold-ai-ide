@@ -268,3 +268,50 @@ Neither was changed in this pass. Both are outside T167–T171's scope and need 
 
 Noticed, not in scope: the in-container daemon does not exit on SIGTERM. `docker stop` always waits
 the full 10s grace and ends in exit 137, which adds 10s to every stop.
+
+## FR-036b re-run at the application — T178 (BUG-004)
+
+Run on **2026-09-14** with the `visual-pass` skill, repeating T172's run B against HEAD `cd7fc151`.
+The client was built from that commit and pinned to `~/vp/bin-t178` (`strings … | grep -c "Trying again: "`
+gave 1, and 0 for the T172 pin). It ran on **Xvfb :95 (the window's default size) with lavapipe**, not
+on a real display. The image was `micold-daemon:dev` `sha256:5bc77699…`, with local-build placement and a
+fresh data home. The pinned client brought the sandbox up from nothing and attached
+(`client attached to daemon … client_window=104583`). Then, from a shell, `docker stop micold-sandbox`.
+Frames were captured from the root window continuously, about 7 per second, so gaps were about 0.15s.
+Times below come from frame mtimes, deduplicated by hash, and the daemon log (local time, UTC+2).
+
+| Time | Source | What the application showed |
+|---|---|---|
+| 07:25:59.5 – 07:26:00.8 | frame | launch: "Checking the container runtime", then "Starting the sandbox", with a bar. **No banner.** |
+| 07:26:00.96 – 07:26:01.6 | frame | red "Not connected to the session service" banner, for about 0.65s |
+| 07:26:01.47 | daemon log | `client attached to daemon` |
+| 07:27:51.8 | shell | `docker stop micold-sandbox`; it returns about 07:28:02.3, after the 10s grace |
+| 07:28:07.77 | frame | red banner |
+| 07:28:07.91 – 07:28:09.87 | frame | banner **plus** the "The sandbox did not start" card, with "Run without it for now", for **about 2.0s** |
+| 07:28:09.87 | client log | `sandbox: service absent, bringing it up again in 0s (2 left) after: The sandbox failed while starting the sandbox. The sandbox container 'micold-sandbox' is no longer running.` |
+| 07:28:09.87 – 07:28:10.2 | frame | "Checking the container runtime", then "Starting the sandbox", with "Trying again: The sandbox failed while starting the sandbox. Th…". **No banner.** |
+| 07:28:10.31 – 07:28:10.85 | frame | red banner again, for about 0.54s |
+| 07:28:10.62 | daemon log | `client attached to daemon … client_window=104583`: the same window |
+| 07:28:10.85 | frame | identical, by hash, to the last frame before the stop |
+
+- **Recovery: automatic.** It took about 8.3s from the container exiting to the client re-attaching, with no user action.
+- **Toasts: 0** in any frame.
+- **The banner is gone while a bring-up is under way.** This is T178's `is_coming_up()` half, which now holds at the application.
+
+![T178: the failure card before the bring-up, the stage during it, and the banner after it](t178-stopped-from-outside.png)
+
+### Verdict: T178 is **not** proven by this pass
+
+1. **The "The sandbox did not start" card and its FR-035a fallback are still shown, for about 2s.** They appear
+   between the liveness check finding the container stopped (`Failed(SandboxStopped)`) and the refused dial
+   that moves the state to `Probing`. `Failed` is not `is_coming_up()`, so T178's unit tests, which cover
+   only the coming-up states, stay green while the card T178 names is on screen. T172 saw it in a single
+   frame (≤1.2s) at a slower capture; this pass saw it for about 2.0s, at about 0.15s resolution.
+2. **The red banner shows around a bring-up, not only during it:** about 0.1s before the card, and about 0.5–0.65s
+   after "Starting the sandbox" ends, before the daemon answers. That happens both at first enable and on
+   recovery. `Running` is not `is_coming_up()` either, so for that half-second the application reports as
+   disconnected a service it has just started (FR-036b, SC-004c).
+3. The attempt line names a stopped container "failed while starting the sandbox", and it is truncated
+   mid-word at this width.
+
+Not assessed: how the banner flicker looks at real frame rates. lavapipe frame pacing says nothing about a GPU.
