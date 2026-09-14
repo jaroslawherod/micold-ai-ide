@@ -234,3 +234,12 @@
 - refactor: none needed
 - commit: `test(031): pin that a declared URI wins over the address its text shows (U20)`
 - notes: taken before U148 (declared run across a soft wrap), which stays next
+
+## Cycle 23: U148 a declared run continues across a soft wrap onto the next row, and stops at a real line break
+
+- test: `crates/micold-core/src/link/line.rs::tests::a_declared_run_continues_across_a_soft_wrap_and_stops_at_a_line_break` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::a_declared_run_continues_across_a_soft_wrap_and_stops_at_a_line_break -- --exact`
+  -> `left: Some(Link { address: "https://a.example", origin: Declared, cells: [CellSpan { row: 0, cols: 9..11 }] })` / `right: ... cells: [CellSpan { row: 0, cols: 9..11 }, CellSpan { row: 1, cols: 0..2 }] })` (1 failed)
+- green: `link_at` builds the `LogicalLine` once for both branches; the new `declared_at` extends the same-URI run over the line's cells instead of one row's columns and maps it back with `spans`. `LogicalLine::index_of` finds the pointer cell for both `declared_at` and `detected_at`. Suite -> 1081 passed, 0 failed
+- refactor: none beyond sharing `index_of` in the green step; `cargo clippy -p micold-core --all-targets -D warnings` clean
+- commit: `feat(031): continue a declared run across a soft wrap (U148)`
