@@ -74,7 +74,7 @@ Filename: "{app}\micold-ai-ide.exe"; Description: "Launch Micold AI IDE"; Flags:
 [UninstallDelete]
 ; Only the daemon's runtime dir (pid record, socket). Settings and session data under
 ; {userappdata} and {localappdata}\micold-ai-ide\data are the user's and stay (FR-007).
-Type: filesandordirs; Name: "{localappdata}\micold-ai-ide\run"
+; MUTANT (A7): the runtime dir entry is removed. Reverted in the next commit.
 
 [Code]
 // Restart Manager closes the app window, but not the windowless daemon, and a live daemon keeps its
