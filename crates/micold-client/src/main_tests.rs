@@ -2149,6 +2149,213 @@ fn a_bring_up_in_flight_offers_no_failure_card_and_no_fallback() {
     }
 }
 
+/// FR-036b where T178's visual pass caught it (finding 1): the liveness check finds the container
+/// stopped, and for the two seconds until a refused dial started the bring-up the screen said "The
+/// sandbox did not start" and offered to run without it. The application is about to bring the
+/// sandbox back on its own, so there is no failure to stand behind yet.
+#[test]
+fn a_container_found_stopped_is_brought_up_without_showing_a_failure() {
+    use micold_client::features::connection::ConnectionStatus;
+    use micold_core::sandbox::runtime::ContainerId;
+    let mut app = app_with_a_failed_sandbox();
+    app.sandbox.state =
+        micold_core::sandbox::lifecycle::SandboxState::Running(ContainerId("abc".into()));
+    let _ = update_inner(&mut app, Message::Connection(ConnectionMsg::Disconnected));
+
+    let work = update_inner(&mut app, Message::Sandbox(SandboxMsg::Lost));
+
+    assert!(
+        work.units() > 0,
+        "a stopped container with attempts left is brought up at once (FR-036a)"
+    );
+    assert_eq!(
+        app.sandbox.persistent_notice(),
+        None,
+        "the standing sandbox card is for a sandbox that did not start (FR-036b)"
+    );
+    assert_eq!(
+        app.sandbox.fallback_offer(),
+        None,
+        "the host fallback is offered for a failure, not a bring-up (FR-035a)"
+    );
+    assert_ne!(
+        connection_status(&app),
+        ConnectionStatus::Disconnected,
+        "the service is being brought up, and the sandbox view says so (FR-036b)"
+    );
+}
+
+/// What a bring-up reports when it has started the container.
+fn a_started_sandbox() -> micold_core::sandbox::lifecycle::Started {
+    use micold_core::sandbox::runtime::{
+        ContainerId, IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
+    };
+    micold_core::sandbox::lifecycle::Started {
+        id: ContainerId("abc".into()),
+        capabilities: RuntimeCapabilities {
+            kind: RuntimeKind::Docker,
+            version: "27.0".into(),
+            cpus: LimitSupport::Supported,
+            memory: LimitSupport::Supported,
+            pids: LimitSupport::Supported,
+            storage: LimitSupport::Supported,
+            identity_mapping: IdentityMapping::ExplicitUidGid,
+        },
+        unsatisfiable: Vec::new(),
+    }
+}
+
+/// FR-036b where T178's visual pass caught it (finding 2): `Started` means the container is up,
+/// not that the service inside it is listening yet. For the half-second between the two the
+/// banner said "Not connected to the session service" about a service the application had just
+/// started — at first enable and on every recovery.
+#[test]
+fn a_started_sandbox_whose_service_has_not_answered_yet_is_not_a_lost_connection() {
+    use micold_client::features::connection::ConnectionStatus;
+    let mut app = app_with_a_failed_sandbox();
+    let _ = connection_failed(&mut app);
+
+    let _ = update_inner(
+        &mut app,
+        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
+    );
+
+    assert_ne!(
+        connection_status(&app),
+        ConnectionStatus::Disconnected,
+        "the service was started a moment ago and has not been dialled since (FR-036b)"
+    );
+}
+
+/// The daemon answered: the connection is up, with an empty catalog and default settings.
+fn the_service_answers(app: &mut App) {
+    let (tx, _rx) = iced::futures::channel::mpsc::unbounded();
+    let _ = update_inner(
+        app,
+        Message::Connection(ConnectionMsg::Connected {
+            outbox: micold_client::daemon::Outbox::new(tx),
+            catalog: snapshot_with("/repo/demo", Vec::new()),
+            settings: micold_core::protocol::messages::DaemonSettings {
+                default_ai_cli: AiCli::ClaudeCode,
+                scrollback_lines: 10_000,
+                env_include_enabled: false,
+                env_include_script_path: String::new(),
+                env_include_timeout_secs: 30,
+            },
+        }),
+    );
+}
+
+/// The other side of the grace above: once the started service has answered, the bring-up is
+/// over, and losing that connection is a lost connection like any other (FR-027) until the
+/// liveness check says the container went with it.
+#[test]
+fn a_started_service_that_answered_and_went_away_is_a_lost_connection() {
+    use micold_client::features::connection::ConnectionStatus;
+    let mut app = app_with_a_failed_sandbox();
+    let _ = connection_failed(&mut app);
+    let _ = update_inner(
+        &mut app,
+        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
+    );
+    the_service_answers(&mut app);
+
+    let _ = update_inner(&mut app, Message::Connection(ConnectionMsg::Disconnected));
+
+    assert_eq!(
+        connection_status(&app),
+        ConnectionStatus::Disconnected,
+        "a service that answered is no longer coming up; its disconnect is reported (FR-027)"
+    );
+}
+
+/// The grace is bounded: a container that is up with a service inside it that never listens is
+/// a failure, and hiding the banner for as long as the dials are refused would hide it for ever.
+/// A second refused dial after `Started` is past the one reconnect a daemon takes to listen.
+#[test]
+fn a_started_service_that_keeps_refusing_is_reported() {
+    use micold_client::features::connection::ConnectionStatus;
+    let mut app = app_with_a_failed_sandbox();
+    let _ = connection_failed(&mut app);
+    let _ = update_inner(
+        &mut app,
+        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
+    );
+
+    let _ = connection_failed(&mut app);
+    let _ = connection_failed(&mut app);
+
+    assert_eq!(
+        connection_status(&app),
+        ConnectionStatus::Disconnected,
+        "a service still refusing after its grace is not coming up any more (FR-027)"
+    );
+    assert!(
+        a_connection_failure_was_reported(&app),
+        "a started service that never listens is reported, not waited on for ever"
+    );
+}
+
+/// Where the bound sits: the container is up before the daemon inside it listens, and on a slow
+/// machine the reconnect after `Started` lands in that gap. One refused dial there is the
+/// bring-up still finishing, and is neither reported nor shown as a lost connection (FR-036b).
+#[test]
+fn the_first_refused_dial_after_start_is_the_service_still_starting() {
+    use micold_client::features::connection::ConnectionStatus;
+    let mut app = app_with_a_failed_sandbox();
+    let _ = connection_failed(&mut app);
+    let _ = update_inner(
+        &mut app,
+        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
+    );
+
+    let _ = connection_failed(&mut app);
+
+    assert_ne!(
+        connection_status(&app),
+        ConnectionStatus::Disconnected,
+        "one reconnect is how long a started daemon may take to listen (FR-036b)"
+    );
+    assert!(
+        nothing_was_reported(&app),
+        "a service still starting is progress, not a failure to report (FR-036b)"
+    );
+}
+
+/// The grace belongs to a started sandbox. One whose container stopped before its service
+/// answered is brought up again, and when that attempt fails the failure has to show — not stay
+/// hidden behind a grace left over from a container that is no longer there.
+#[test]
+fn a_failure_after_start_is_not_still_waiting_for_the_service() {
+    use micold_client::features::connection::ConnectionStatus;
+    use micold_core::sandbox::lifecycle::SandboxState;
+    let mut app = app_with_a_failed_sandbox();
+    let SandboxState::Failed(failure) = failed_sandbox_state() else {
+        unreachable!("the fixture's sandbox is failed")
+    };
+    let _ = connection_failed(&mut app);
+    let _ = update_inner(
+        &mut app,
+        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
+    );
+    let _ = update_inner(&mut app, Message::Sandbox(SandboxMsg::Lost));
+
+    let _ = update_inner(
+        &mut app,
+        Message::Sandbox(SandboxMsg::Failed(Box::new(failure))),
+    );
+
+    assert!(
+        matches!(app.sandbox.state, SandboxState::Failed(_)),
+        "setup: the attempt after the lost container ended in a failure"
+    );
+    assert_eq!(
+        connection_status(&app),
+        ConnectionStatus::Disconnected,
+        "a failed sandbox is not coming up, whatever it was waiting for before (FR-036b)"
+    );
+}
+
 /// FR-036a / US6 scenario 9, "each attempt MUST report why it failed": the refused dial that
 /// starts the next attempt moves `Failed(reason)` to `Probing`, and the reason has to survive
 /// the move. Otherwise the user watches "Checking the container runtime" come round again with
@@ -2318,10 +2525,7 @@ fn a_reported_stage_becomes_the_sandbox_state() {
 
 #[test]
 fn a_sandbox_that_came_up_earns_its_unattended_bring_ups_back() {
-    use micold_core::sandbox::lifecycle::{Started, UnattendedBringUps};
-    use micold_core::sandbox::runtime::{
-        ContainerId, IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
-    };
+    use micold_core::sandbox::lifecycle::UnattendedBringUps;
     let mut app = app_with_a_failed_sandbox();
     let _ = connection_failed(&mut app);
     assert_ne!(
@@ -2331,19 +2535,7 @@ fn a_sandbox_that_came_up_earns_its_unattended_bring_ups_back() {
     );
     let _ = update_inner(
         &mut app,
-        Message::Sandbox(SandboxMsg::Started(Box::new(Started {
-            id: ContainerId("abc".into()),
-            capabilities: RuntimeCapabilities {
-                kind: RuntimeKind::Docker,
-                version: "27.0".into(),
-                cpus: LimitSupport::Supported,
-                memory: LimitSupport::Supported,
-                pids: LimitSupport::Supported,
-                storage: LimitSupport::Supported,
-                identity_mapping: IdentityMapping::ExplicitUidGid,
-            },
-            unsatisfiable: Vec::new(),
-        }))),
+        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
     );
 
     assert_eq!(

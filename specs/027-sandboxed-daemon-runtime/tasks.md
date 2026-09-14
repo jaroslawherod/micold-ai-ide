@@ -1177,6 +1177,17 @@ a new test fails with that mutant applied, and the full suite (`mise run test`) 
 - [X] T186 [BUG-004] Finding 8 — record the test-first evidence with the work, not in a session
       scratchpad: write `tdd/test-list.md` for Phase 18/19, and commit T173–T179 with their red output,
       so a re-run of `/speckit.tdd.verify` can grade ordering from history.
+- [X] T187 [BUG-004] T178's visual finding 1 (`evidence/performance.md`) — FR-036b / FR-035a. Test
+      first, in `main.rs` `mod tests`: after the liveness check reports the container stopped
+      (`SandboxMsg::Lost`) with unattended attempts left, a bring-up is scheduled in the same update, and
+      neither "The sandbox did not start" nor the fallback nor the `Disconnected` banner is shown. Red
+      today: `Failed(SandboxStopped)` stands until the next refused dial (~2s). Proven by
+      `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+- [X] T188 [BUG-004] T178's visual finding 2 — FR-036b / SC-004c. Test first: after `Started`, and
+      until the service answers, `connection_status(&app)` is not `Disconnected`; bounded, so a service
+      that never answers is still reported, and a service that answered and then went away is still a
+      lost connection. Red today (~0.5s banner at first enable and on recovery). Proven by
+      `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`, then T178's visual re-run.
 
 **Order**: T173 first; T174 and T175 build on the task it exposes. T176 and T177 are independent.
 T178 and T179 change behavior and follow T173–T176, whose tests cover the code they touch. Then

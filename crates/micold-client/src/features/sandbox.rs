@@ -223,7 +223,18 @@ pub struct Sandbox {
     /// own (FR-036a). Taken from `Failed` as it moves to `Probing`, which is otherwise where the
     /// reason is lost; retired when a sandbox comes up.
     pub previous_attempt: Option<Failure>,
+    /// While the sandbox has been started and its service has not answered yet, how many more
+    /// refused dials that gap may still absorb (FR-036b). `None` outside that gap.
+    ///
+    /// `Started` is the container being up, not the daemon inside it listening; the gap between the
+    /// two is still the bring-up, and a banner saying the service is gone would call it broken. It is
+    /// bounded, so a service that never listens is still reported.
+    pub awaiting_service: Option<u8>,
 }
+
+/// Refused dials a just-started service may take before it is overdue: one reconnect
+/// (`daemon::RECONNECT_BACKOFF`) is how long the daemon inside the container may take to listen.
+pub const REFUSALS_WHILE_STARTING: u8 = 1;
 
 impl Default for Sandbox {
     fn default() -> Self {
@@ -234,6 +245,7 @@ impl Default for Sandbox {
             fallback: None,
             unattended: UnattendedBringUps::default(),
             previous_attempt: None,
+            awaiting_service: None,
         }
     }
 }
@@ -266,6 +278,25 @@ impl Sandbox {
         // A successful start retires the fallback: the sandbox is working again, and continuing to
         // show "running unsandboxed" would be a lie the banner keeps telling.
         self.fallback = None;
+        self.awaiting_service = Some(REFUSALS_WHILE_STARTING);
+    }
+
+    /// Whether a bring-up is under way, including a started sandbox whose service has not answered
+    /// yet (FR-036b).
+    pub fn is_coming_up(&self) -> bool {
+        self.state.is_coming_up()
+            || (matches!(self.state, SandboxState::Running(_)) && self.awaiting_service.is_some())
+    }
+
+    /// Adopt a dial the started service refused, spending one the gap may absorb; past the last, the
+    /// service is overdue and no longer coming up.
+    pub fn service_refused(&mut self) {
+        self.awaiting_service = self.awaiting_service.and_then(|left| left.checked_sub(1));
+    }
+
+    /// Adopt the service answering: the bring-up, if there was one, is over.
+    pub fn answered(&mut self) {
+        self.awaiting_service = None;
     }
 
     /// Adopt a failure.
