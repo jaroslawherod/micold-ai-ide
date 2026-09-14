@@ -271,3 +271,13 @@
 - green: the forward walk stops before an unavailable row, and `cut_below` is set whenever the last joined row has `wrapped`; `cut_above` is also set when the row above the first joined row is unavailable. Suite -> 1084 passed, 0 failed
 - refactor: `LogicalLine::around` finds `first` and `last` with two symmetric loops, then builds the text and cells once, so `cut_above` = the row above is unavailable or wraps, `cut_below` = the last row wraps; the field docs now name both cuts. Suite re-run green (1084), clippy clean. Mutant check on the column-0 assertion (`cut_above` ignoring an unavailable row) -> `assertion failed: the row above the first available row is unknown, so an address at column 0 may have started there`, reverted
 - commit: `feat(031): drop a detected address cut by an unavailable row (U24)`
+
+## Cycle 27: U149 a candidate at a cut is dropped even when only trailing punctuation separates it from the cut
+
+- test: `crates/micold-core/src/link/line.rs::tests::a_candidate_only_punctuation_away_from_a_cut_is_dropped` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::a_candidate_only_punctuation_away_from_a_cut_is_dropped -- --exact`
+  -> `assertion failed: the full stop may be the middle of an address going on below, so the address is cut` / `left: Some(Link { address: "https://a.example/x", origin: Detected, cells: [CellSpan { row: 0, cols: 4..23 }] })` / `right: None` (1 failed)
+- green: under `cut_below`, a candidate reaches the cut when every char after its end is trailing punctuation (none at all included); `detect::TRAILING_PUNCTUATION` became `pub(super)` so both files share the one list. Contract L7 now words the drop that way and says it applies at the L4 cap. Suite -> 1085 passed, 0 failed
+- refactor: none needed; clippy clean
+- commit: `feat(031): drop an address only punctuation away from a cut (U149)`
+- notes: only the lower edge needs this. The upper edge compares the candidate's exact start, and a closing bracket or quote before a cut ends an address whatever follows

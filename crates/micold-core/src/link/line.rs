@@ -2,7 +2,10 @@
 
 use std::ops::Range;
 
-use super::{detect::detect, CellSpan, Link, LinkOrigin, LinkRows};
+use super::{
+    detect::{detect, TRAILING_PUNCTUATION},
+    CellSpan, Link, LinkOrigin, LinkRows,
+};
 
 /// How many rows a logical line reaches above and below the pointer row (research R4; contract L4).
 const MAX_ROWS_EACH_WAY: i64 = 64;
@@ -114,8 +117,11 @@ fn detected_at(line: &LogicalLine, row: i64, col: u16) -> Option<Link> {
     let range = detect(&text)
         .into_iter()
         .find(|range| range.contains(&index))?;
-    let reaches_a_cut =
-        (line.cut_above && range.start == 0) || (line.cut_below && range.end == line.text.len());
+    let reaches_a_cut = (line.cut_above && range.start == 0)
+        || (line.cut_below
+            && line.text[range.end..]
+                .iter()
+                .all(|c| TRAILING_PUNCTUATION.contains(c)));
     if reaches_a_cut {
         return None;
     }
@@ -434,6 +440,27 @@ mod tests {
             link_at(&rows, 0, 3),
             None,
             "the row above the first available row is unknown, so an address at column 0 may have started there"
+        );
+    }
+
+    #[test]
+    fn a_candidate_only_punctuation_away_from_a_cut_is_dropped() {
+        let rows = Rows::new(0, vec![row("See https://a.example/x.").wrapped()]);
+        assert_eq!(
+            link_at(&rows, 0, 6),
+            None,
+            "the full stop may be the middle of an address going on below, so the address is cut"
+        );
+
+        let rows = Rows::new(0, vec![row("See https://a.example/x. ").wrapped()]);
+        assert_eq!(
+            link_at(&rows, 0, 6),
+            Some(Link {
+                address: "https://a.example/x".to_string(),
+                origin: LinkOrigin::Detected,
+                cells: vec![span(0, 4..23)],
+            }),
+            "a space after the punctuation ends the address before the cut"
         );
     }
 }

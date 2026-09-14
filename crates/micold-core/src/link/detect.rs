@@ -3,7 +3,7 @@
 use std::ops::Range;
 
 /// Punctuation that ends a sentence rather than an address (research R3 rule 3).
-const TRAILING_PUNCTUATION: [char; 8] = ['.', ',', ';', ':', '!', '?', '\'', '*'];
+pub(super) const TRAILING_PUNCTUATION: [char; 8] = ['.', ',', ';', ':', '!', '?', '\'', '*'];
 
 /// The char-index ranges of every address in `text` (FR-001, FR-005).
 pub fn detect(text: &str) -> Vec<Range<usize>> {
