@@ -16,7 +16,13 @@
 //! runtime has already been dropped. It sets a non-zero status for a daemon that could not start;
 //! it does not cut a shutdown short.
 
+// A release build on Windows opens no console window of its own, for the app or for the daemon it
+// starts (feature 030, FR-005). Debug builds keep the console so `cargo run` output stays visible.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 fn main() {
+    // Held for the whole process: the installer's `AppMutex` check sees the daemon while it runs.
+    let _running = micold_core::process::announce_running();
     if let Err(e) = start() {
         let line = format!("micold-daemon: fatal: {e}");
         // A detached daemon (and on Windows, a GUI-subsystem one) has no stderr anyone reads, so
