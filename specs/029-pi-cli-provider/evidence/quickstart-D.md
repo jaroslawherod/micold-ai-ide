@@ -44,8 +44,18 @@ The scripted half of §D, `mise run test-sandbox`, is recorded in [`quickstart-C
    - A Pi conversation cannot continue on another CLI.
    - *restart* fails the same way until the image changes.
 
-   The settings notices already give the right wording (`isn't in <image>`). The start error does not
-   use the availability source that feeds them. Not fixed here.
+   The settings notices already give the right wording (`isn't in <image>`). The start error did not
+   use the availability source that feeds them.
+
+   **Fixed** after this pass, not re-run in the application. The daemon now words the refusal by
+   where sessions run (its `MICOLD_IMAGE_REFERENCE`) and by whether it is a resume. This case now
+   reads `Pi Coding Agent isn't in micold-daemon:vp029d-nopi, where sessions run, and this
+   conversation can only continue in it. Choose an image that provides it, then restart this
+   session.` A fresh start on the host keeps the old sentence. The pane no longer appends *Choose
+   restart below* to a refused start (`attempts: 0`), since each refusal says what to change. It
+   still does for a crash-loop give-up. Pinned by
+   `session_start.rs::a_missing_cli_is_advised_on_where_sessions_run_and_on_what_is_being_started`
+   and `ui::terminal`'s `a_refused_start_is_not_pointed_at_restart`.
 2. **Carried over from §B, finding 2.** Pi's yellow `Warning: No project session found with id …`
    opens every new session, in the sandbox as on the host.
 

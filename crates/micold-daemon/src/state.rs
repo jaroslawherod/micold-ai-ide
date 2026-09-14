@@ -263,6 +263,34 @@ fn materialise_pi_activity_component() -> io::Result<PathBuf> {
     Ok(path)
 }
 
+/// What a start refused for a missing AI CLI tells the user (FR-010), as advice that works where
+/// sessions run and for what is being started (`029` quickstart §D, finding 1).
+///
+/// `cli` is the provider's `display_name()`, not its `command()`: this is a sentence, and "copilot
+/// isn't installed" reads as a shell error rather than as something to go and fix. `image` is the
+/// service's `MICOLD_IMAGE_REFERENCE`, empty on the host. In a container, installing on this
+/// computer changes nothing, so the image is named instead, as the settings notices name it. A
+/// resume continues a conversation only the same CLI holds, so it is not offered another one.
+fn missing_cli_reason(cli: &str, image: &str, launch: LaunchMode) -> String {
+    match (image.is_empty(), launch) {
+        (true, LaunchMode::Fresh) => {
+            format!("{cli} isn't installed. Install it, or start this session on another AI CLI.")
+        }
+        (true, LaunchMode::Resume) => format!(
+            "{cli} isn't installed, and this conversation can only continue in it. Install it, \
+             then restart this session."
+        ),
+        (false, LaunchMode::Fresh) => format!(
+            "{cli} isn't in {image}, where sessions run. Choose an image that provides it, or \
+             start this session on another AI CLI."
+        ),
+        (false, LaunchMode::Resume) => format!(
+            "{cli} isn't in {image}, where sessions run, and this conversation can only continue \
+             in it. Choose an image that provides it, then restart this session."
+        ),
+    }
+}
+
 fn new_proc(pty: Arc<PtySession>, id: SessionId) -> Proc {
     Proc {
         pty,
@@ -1595,11 +1623,10 @@ impl DaemonState {
         if plan.mode == TerminalMode::AiCli {
             let provider = plan.provider.provider();
             if !provider.is_available() {
-                // `display_name()`, not `command()`: this is a sentence, and "copilot isn't
-                // installed" reads as a shell error rather than as something to go and fix.
-                let reason = format!(
-                    "{} isn't installed. Install it, or start this session on another AI CLI.",
-                    provider.display_name()
+                let reason = missing_cli_reason(
+                    provider.display_name(),
+                    &std::env::var("MICOLD_IMAGE_REFERENCE").unwrap_or_default(),
+                    launch,
                 );
                 tracing::warn!(session = %id.0, cli = provider.command(), "AI CLI not on PATH; not starting");
                 self.lock().start_failures.insert(id, reason.clone());
