@@ -182,3 +182,14 @@
 - refactor: none needed
 - commit: `feat(031): return the whole declared run under a cell (U17)`
 - notes: the run is one row for now; joining soft-wrapped rows into the logical line arrives with U21. T004 ticked in this commit: all of U1–U16 are DONE
+
+## Cycle 18: U18 two same-URI runs separated by an undeclared cell are two links
+
+- test: `crates/micold-core/src/link/line.rs::tests::two_same_uri_runs_apart_are_two_links` (new)
+- red: none on arrival. `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::two_same_uri_runs_apart_are_two_links -- --exact`
+  -> `1 passed`: U17's extension already stops at the first cell without the URI.
+  Deliberate mutant: the run spans from the row's first to its last cell with the URI -> `left: ... cols: 0..13` / `right: ... cols: 0..4` (1 failed). Mutant removed, file restored.
+- green: no implementation change. Suite -> 1076 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin that separated same-URI runs are two links (U18)`
+- notes: green on arrival; contract L6

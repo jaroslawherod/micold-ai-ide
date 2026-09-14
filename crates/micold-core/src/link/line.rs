@@ -117,4 +117,24 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn two_same_uri_runs_apart_are_two_links() {
+        let rows = Rows::new(
+            0,
+            vec![row("docs and docs")
+                .declare(0..4, ADDRESS)
+                .declare(9..13, ADDRESS)],
+        );
+        assert_eq!(
+            link_at(&rows, 0, 1),
+            declared(vec![span(0, 0..4)]),
+            "the first run ends at the undeclared cell after it"
+        );
+        assert_eq!(
+            link_at(&rows, 0, 10),
+            declared(vec![span(0, 9..13)]),
+            "the second run starts after the undeclared cell before it, though its URI is the same"
+        );
+    }
 }
