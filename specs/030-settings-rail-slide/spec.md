@@ -52,7 +52,7 @@ frame.
 6. **Given** the worktree sidebar's panel and the settings rail, **When** each is hidden and shown,
    **Then** both take the same time to move and follow the same curve: each starts and finishes
    gently, and neither moves at a constant speed.
-7. **Given** the rail is sliding, **When** the user looks at its rows, **Then** no label wraps onto a
+7. **Given** the settings rail is sliding, **When** the user looks at its rows, **Then** no label wraps onto a
    second line and no row changes height. What does not fit is cut off at the rail's edge, and no
    icon jumps sideways at any point in the slide.
 
@@ -104,8 +104,11 @@ hover and press land only on controls that are drawn.
   whichever form the row is drawn (FR-015).
 - **A destination with no icon**: the rail component keeps such a destination's name even when
   collapsed, so that it stays pressable. Settings has none, but another screen built on the same
-  rail might. Mid-slide, that row is cut off at the rail's edge like the others and is never drawn
-  empty.
+  rail might. Mid-slide, that row follows the rail's current width instead of being cut off like
+  the others: its name may wrap, its badge stays in view (FR-015), and it is never drawn empty
+  (FR-013's exemption). Such a row's two rest heights already differ, since its name wraps in the
+  collapsed rail, so no slide can keep its height; the rows below it move up or down with it, and the
+  rail's column is never taller than at the taller of its two rest states.
 - **Empty or minimal rails**: a rail with no destinations, one destination, no badges or no icons
   slides the same way and settles at the same two widths. Nothing about the slide depends on how many
   rows there are.
@@ -160,7 +163,10 @@ hover and press land only on controls that are drawn.
   slide. The control itself was never documented when feature 027 added it, so this covers both.
 - **FR-013**: On every frame of a slide before it settles, the rail's rows MUST NOT reflow. No label
   wraps, no row changes height, and content wider than the rail's current width is cut off at its
-  edge. A row with no icon, which keeps its name when collapsed, is exempt from the no-wrap clause.
+  edge. A row with no icon, which keeps its name when collapsed, is exempt from this requirement:
+  it follows the rail's current width, so its name may wrap and its height may change, and its badge
+  is not cut off. The rows below such a row move vertically with it; that movement is part of the
+  same exemption.
 - **FR-014**: An icon in the rail MUST NOT jump because of the slide. Across a slide, each icon's
   horizontal position MUST change continuously from where it sits at rest in the starting state to
   where it sits at rest in the final state. That includes the moment the rows change between their
@@ -193,7 +199,8 @@ hover and press land only on controls that are drawn.
 - **SC-005**: With the rail settled in either state, every visible control and region of the
   settings surface has the rectangle it has today.
 - **SC-006**: Opening Settings shows the rail at its final width on the first frame.
-- **SC-007**: On every frame of a slide, every row of the rail has its rest height. Between
+- **SC-007**: On every frame of a slide, every row of the rail that has an icon, and the collapse
+  control, has its rest height. Between
   consecutive frames, each icon in a row whose selection did not change over those frames moves
   sideways by no more than the difference between its two rest positions times the fraction of the
   rail's full width change made over those frames, plus 0.5dp, and never away from the rest position
