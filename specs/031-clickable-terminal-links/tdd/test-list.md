@@ -109,7 +109,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | U147 | A detected address on one row returns its cells on that row (split from U21 before its cycle) | FR-001, L2 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_detected_address_on_one_row_returns_its_cells` |
 | U148 | A declared run continues across a soft wrap onto the next row, and stops at a real line break | FR-002, FR-007, L1 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_declared_run_continues_across_a_soft_wrap_and_stops_at_a_line_break` |
 | U149 | A candidate at a cut (the cap, or an unavailable row) is dropped even when only trailing punctuation separates it from the cut, since the address may continue past it | FR-003, L4, L7 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_candidate_only_punctuation_away_from_a_cut_is_dropped` |
-| U150 | The padding cell a wide char leaves at a row's end when it wraps onto the next row is not text: an address reads across it and the padding is covered by the link | FR-003, FR-007, L5 | example | PENDING | |
+| U150 | The padding cell a wide char leaves at a row's end when it wraps onto the next row is not text: an address reads across it and the padding is covered by the link | FR-003, FR-007, L5 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_wide_char_wrapped_onto_the_next_row_leaves_padding_the_address_reads_across` |
 
 ### `crates/micold-core/src/link/address.rs`
 
