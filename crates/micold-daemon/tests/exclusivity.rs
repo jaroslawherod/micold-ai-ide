@@ -289,7 +289,7 @@ mod one_conversation_one_session {
     use micold_core::session::{
         AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
     };
-    use micold_core::settings::JsonFileSettingsStore;
+    use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
     use micold_core::store::{JsonFileStore, ProjectStore};
     use micold_core::workspace::Workspace;
     use uuid::Uuid;
@@ -353,6 +353,20 @@ mod one_conversation_one_session {
                 .map(|body| body.lines().count())
                 .unwrap_or(0)
         }
+
+        /// Wait until at least one `pi` has recorded its launch, or give up.
+        ///
+        /// A live session means the daemon has spawned the process, not that the script has run its
+        /// first line: the shell still has to start before it appends to the file.
+        async fn wait_for_a_launch(&self) {
+            for _ in 0..200 {
+                if self.launch_count() > 0 {
+                    return;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+            }
+            panic!("the live session's `pi` never recorded a launch");
+        }
     }
 
     impl Drop for PiInstalled {
@@ -377,6 +391,15 @@ mod one_conversation_one_session {
                 AiCli::Pi,
             )],
         );
+        // No environment include. It is on by default and sources `~/.bashrc`, whose `PATH` replaces
+        // the one this process carries — so the session ran whichever `pi` the machine had (or none)
+        // instead of the guard's, and nothing was ever recorded (macOS CI, and any host with Pi).
+        JsonFileSettingsStore::at(store_dir.join("settings.json"))
+            .save(&Settings {
+                env_include_enabled: false,
+                ..Settings::default()
+            })
+            .unwrap();
         let projects_path = store_dir.join("projects.json");
         JsonFileStore::at(projects_path.clone())
             .save(&Workspace {
@@ -432,6 +455,7 @@ mod one_conversation_one_session {
         .await
         .unwrap();
         let held = wait_for_live(&state, session_id()).await;
+        pi.wait_for_a_launch().await;
         assert_eq!(
             pi.launch_count(),
             1,
