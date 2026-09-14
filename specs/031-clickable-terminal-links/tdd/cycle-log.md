@@ -224,3 +224,13 @@
 - refactor: the test module's explicit `Range`/`CellSpan`/`LinkOrigin` imports dropped, since `use super::*` already brings them; suite re-run green (1079), `cargo clippy -p micold-core --all-targets -D warnings` clean
 - commit: `feat(031): detect an address across soft-wrapped rows (U21)`
 - notes: no cap yet (U23) and no unavailable-row drop yet (U24). The declared run is still per row: contract L1 and research R5 say it continues across a soft wrap, which no listed behavior pinned, so U148 was appended for it
+
+## Cycle 22: U20 a declared URI wins over address-shaped visible text in the same cells
+
+- test: `crates/micold-core/src/link/line.rs::tests::a_declared_uri_wins_over_the_address_its_text_shows` (new)
+- red: passed on arrival (`test ... ok`, 1 passed), since the declared branch already returns before detection. Deliberate mutant: `link_at` consults `detected_at` first and returns its link when found. `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::a_declared_uri_wins_over_the_address_its_text_shows -- --exact`
+  -> `left: Some(Link { address: "https://b.example/x", origin: Detected, cells: [CellSpan { row: 0, cols: 0..19 }] })` / `right: Some(Link { address: "https://a.example", origin: Declared, ... })` (1 failed). Mutant reverted from the backup
+- green: no implementation change. Suite -> 1080 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin that a declared URI wins over the address its text shows (U20)`
+- notes: taken before U148 (declared run across a soft wrap), which stays next
