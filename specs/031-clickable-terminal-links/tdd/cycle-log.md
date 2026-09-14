@@ -112,3 +112,14 @@
   candidate advances the scan by one character. Suite -> 1068 passed, 0 failed
 - refactor: `cargo fmt` only
 - commit: `feat(031): recognise a web address only when it names a host (U10)`
+
+## Cycle 11: U11 rejects `https://` alone and `http://exa mple`
+
+- test: `crates/micold-core/src/link/detect.rs::tests::rejects_a_scheme_alone_and_a_host_broken_by_a_space` (new)
+- red: none on arrival. `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::rejects_a_scheme_alone_and_a_host_broken_by_a_space -- --exact`
+  -> `1 passed`: U10's host rule already rejects an empty host and the dotless, portless `exa`.
+  Deliberate mutant: `well_formed` returns `true` first -> `left: ["https://", "http://exa"]` / `right: []` (1 failed). Mutant removed, file restored.
+- green: no implementation change. Suite -> 1069 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin that a scheme alone or a broken host is not an address (U11)`
+- notes: green on arrival; U10 made the rule this behavior pins
