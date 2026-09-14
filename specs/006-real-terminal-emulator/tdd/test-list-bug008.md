@@ -54,6 +54,8 @@ GUI. A1 is therefore held by T076's recorded visual pass on Xvfb (the `visual-pa
 | U7  | After a left press, motion into another cell and back onto the pressed cell publishes a `TerminalSelectUpdate` for each | FR-013a, D2 | example (mutant: the pane never publishes an update) | DONE | `clipboard_gestures::motion_into_another_cell_and_back_extends_the_selection_each_time` |
 | U8  | With a selection already held, a left press and release delivered together write nothing to the clipboard | FR-013e, D4 | example | DONE | `clipboard_gestures::a_tap_over_a_held_selection_writes_nothing_to_the_clipboard` |
 | U9  | A left release publishes `TerminalSelectionReleased`, after its press's `TerminalSelectStart` | FR-013, D4 | example | DONE | `clipboard_gestures::a_release_asks_for_the_copy_after_its_press_starts_the_selection` |
+| U10 | After a left press, a wheel scroll and then motion inside the pressed screen cell publish a `TerminalSelectUpdate` | FR-013e, D8 | example | RED | `clipboard_gestures::motion_after_a_scroll_while_held_is_a_drag_even_in_the_pressed_screen_cell` |
+| U11 | After a left press in an edge cell, motion outside the pane, which clamps back onto the pressed cell, publishes a `TerminalSelectUpdate` | FR-013e, D8 | example | RED | `clipboard_gestures::motion_past_the_panes_edge_is_a_drag_even_where_it_clamps_to_the_pressed_cell` |
 
 ## Invariants and edge cases still to place
 

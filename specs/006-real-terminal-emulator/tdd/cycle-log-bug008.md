@@ -85,3 +85,16 @@ and no sender), was added with the tests.
   and a synthetic click after a drag leaves another client's `OTHER-TEXT` on the clipboard (green).
 - commit: the `docs(006)` T076 commit that carries this entry.
 
+## Red: U10 and U11, found by code review A (one Red commit)
+
+Review A (the `code-review` skill at `high`) reported two ways the pane's pressed-cell check (U6)
+treats a drag as a click. First, a wheel scroll while the button is held puts other text under an
+unmoved pointer. Second, a position outside the pane clamps back onto a pressed edge cell. Both
+were added to the list as behaviours and written as tests before any change.
+
+- U10 `terminal_pane.rs::tests::clipboard_gestures::motion_after_a_scroll_while_held_is_a_drag_even_in_the_pressed_screen_cell` (new)
+  - red: `scripts/build-lock.sh cargo test -p micold-client --lib clipboard_gestures`
+    -> `panicked at crates/micold-client/src/ui/material/terminal_pane.rs:1751:13` `left: []  right: [(6, 0)]` (10 passed; 2 failed)
+- U11 `clipboard_gestures::motion_past_the_panes_edge_is_a_drag_even_where_it_clamps_to_the_pressed_cell` (new)
+  - red: same run -> `panicked at crates/micold-client/src/ui/material/terminal_pane.rs:1775:13` `left: []  right: [(0, 0)]`
+
