@@ -48,15 +48,14 @@ The descriptor is built once per bind. It is never stored.
 |---|---|
 | Content | Decimal pid followed by a newline (same as Unix) |
 | Writer | The daemon, after `Acquisition::Bound` |
-| Removed | On clean daemon exit, and by the uninstaller (`[UninstallDelete]`) |
+| Removed | Only by the uninstaller (`[UninstallDelete]`). The daemon has no clean exit, so a stopped daemon leaves a stale record, which readers ignore |
 | Readers | `spawn::running_daemon_pid` (Restart service), and the installer's `[Code]` section |
 
 **State transitions**:
 
 ```text
 absent ──daemon binds──> present(pid, live)
-present(pid, live) ──daemon exits cleanly──> absent
-present(pid, live) ──daemon crashes / killed──> present(pid, stale)
+present(pid, live) ──daemon stopped / crashes──> present(pid, stale)
 present(pid, stale) ──next daemon binds──> present(newpid, live)   (overwrite)
 ```
 

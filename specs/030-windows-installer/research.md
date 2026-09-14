@@ -120,8 +120,9 @@ with `GetSecurityInfo` and asserts it holds exactly one ACE, for the current use
 - On Windows, `Endpoint.lock_path` becomes
   `%LOCALAPPDATA%\micold-ai-ide\run\micold-daemon.pid`. It is derived from `ProjectDirs` `data_local_dir`'s
   parent plus `run`, and the directory is created on resolve.
-- The daemon writes its pid after a successful bind, as `server.rs` already does, and removes the
-  file on clean exit.
+- The daemon writes its pid after a successful bind, as `server.rs` already does, and leaves the
+  file in place when it stops. It has no clean exit, and on Unix the file is also the `flock` file,
+  so unlinking it would let a second daemon lock a new inode (user decision 2026-09-14, U9 dropped).
 - `running_daemon_pid` treats a pid as current only when both hold:
   1. the pipe is live (`is_live`), and
   2. the process image for that pid is `micold-daemon.exe` (see R5).

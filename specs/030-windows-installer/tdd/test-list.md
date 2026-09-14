@@ -43,7 +43,7 @@ The entry points are:
 | A13 | On the x64 Windows CI leg, `scripts/windows-installer.sh --arch x64` produces `micold-ai-ide-<version>-x64-setup.exe` | US3-AS4, FR-016, FR-018, SC-007 | example | win | DONE | `.github/workflows/ci.yml` job `test` step "Package the Windows installer" |
 | A14 | `docs/install.md` no longer says there is no packaged build for Windows | US4-AS1, FR-017, SC-006 | example | any | DONE | `crates/micold-core/tests/install_guide_windows.rs::install_page_no_longer_says_windows_has_no_package` |
 | A15 | `docs/user-guide/install-windows.md` states that sessions do not survive logging out unless the service runs in a container | US4-AS2, FR-017 | example | any | DONE | `crates/micold-core/tests/install_guide_windows.rs::windows_guide_limits_say_sessions_end_at_logout` |
-| A16 | A silent uninstall while the app window is open exits non-zero and leaves the install dir and uninstall key in place (added in cycle 74, from A7's first run) | US2-AS4, FR-009, I7 | example | win | PENDING | |
+| A16 | A silent uninstall while the app window is open exits non-zero and leaves the install dir and uninstall key in place (added in cycle 74, from A7's first run) | US2-AS4, FR-009, I7 | example | win | DONE | `scripts/windows-install-smoke.sh` step 9a |
 | A17 | Both installed exes carry an `RT_GROUP_ICON` resource, so Explorer and the taskbar show the project icon, not the generic exe icon (placed in cycle 75, from the unplaced FR-003 note) | US1-AS1, FR-003 | example | win | DONE | `scripts/windows-install-smoke.sh` step 2a |
 
 ## Inner loop: unit behaviors
@@ -84,7 +84,7 @@ The entry points are:
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
 | U8  | While the real daemon runs, `lock_path` holds its pid followed by a newline | FR-023, E4.1 | example | any | DONE | `crates/micold-daemon/tests/daemon_stop.rs::pid_record_lifecycle` |
-| U9  | After the daemon exits cleanly, `lock_path` no longer exists | FR-023, E4.1 | example | any | BLOCKED | no clean-exit path exists to observe, and unlinking the Unix `flock` file is unsafe (cycle-log cycle 6) |
+| U9 | After the daemon exits cleanly, `lock_path` no longer exists | FR-023, E4.1 | example | any | DROPPED | user decision 2026-09-14: no clean exit exists to observe, and unlinking the Unix `flock` file is unsafe (cycle 6); a stale record is already harmless (U12) |
 
 ### `crates/micold-core/src/spawn.rs` (stop)
 
