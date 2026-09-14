@@ -1,7 +1,7 @@
 ---
 name: speckit-autopilot
-description: Use when the user hands over a feature idea or a bug report and wants the whole Spec Kit flow run end to end with as little of their involvement as possible — "autopilot", "run it autonomously", "take it all the way to main", "only ask me when you must" — or says to resume an autopilot run for a feature number.
-argument-hint: "<feature description> | bug: <report> | resume <NNN> [BUG-<k>]"
+description: Use when the user hands over a feature idea or a bug report and wants the whole Spec Kit flow run end to end with as little of their involvement as possible — "autopilot", "run it autonomously", "take it all the way to main", "only ask me when you must" — or says to resume or continue an interrupted autopilot run.
+argument-hint: "<feature description> | bug: <report> | resume"
 user-invocable: true
 ---
 
@@ -25,14 +25,36 @@ the phase needs them.
 
 | Argument | Start at |
 |---|---|
-| `resume <NNN>` or `resume <NNN> BUG-<k>` | Read the ledger (`specs/<NNN>-*/autopilot.md`, or `specs/<NNN>-*/bugs/BUG-<k>.autopilot.md`), confirm each recorded PR's `state` with `gh pr view`, and continue at the first unfinished step. **Never** reconstruct progress from `gh pr list` or from memory. |
+| `resume` | Find this worktree's ledger (see *Resuming* below), confirm each recorded PR's `state` with `gh pr view`, and continue at the first unfinished step. **Never** reconstruct progress from `gh pr list` or from memory. |
 | `bug: …`, or wording describing broken behaviour | Phase 0 (bug path) |
 | anything else | Phase 1 |
 
 Before any phase, run `git fetch origin` and check the worktree is clean. Copy
 [templates/autopilot-ledger.md](templates/autopilot-ledger.md) into place the moment its directory
 exists: `autopilot.md` in the feature directory, or `bugs/BUG-<k>.autopilot.md` beside the BUG
-record. Update the ledger **before** every commit.
+record. Fill its **Worktree branch** with `git branch --show-current` exactly: that is how `resume`
+finds it. Update the ledger **before** every commit.
+
+### Resuming
+
+The ledger that belongs to this worktree records this worktree's branch and is not `done`:
+
+```bash
+b=$(git branch --show-current)
+grep -lxF -- "- **Worktree branch**: $b" specs/*/autopilot.md specs/*/bugs/*.autopilot.md 2>/dev/null \
+  | xargs -r grep -LxF -- '- **Phase**: done'
+```
+
+Search the working tree, not `origin/main`. A ledger that has not been committed or pushed yet is
+still there, and it is the newest copy.
+
+- **One match**: resume it.
+- **None**: run `git fetch origin` and repeat the search with
+  `git grep -lF -- "- **Worktree branch**: $b" origin/main -- 'specs/'`. Resume only a match whose
+  Phase on `origin/main` is not `done`. If that finds nothing too, say there is no run to resume in
+  this worktree, and stop.
+- **Several**: this is a real decision. Ask with one `AskUserQuestion` whose options name each
+  ledger's feature, phase and next step. Recommend the most recently committed one.
 
 Debug notes, probe scripts and logs go in the session scratchpad, never the worktree, so nothing
 but deliverables is ever there to commit.

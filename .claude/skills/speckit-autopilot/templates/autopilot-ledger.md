@@ -1,11 +1,11 @@
 # Autopilot ledger — <NNN>-<slug> [BUG-<k>]
 
 Maintained by the `speckit-autopilot` skill. It is the record of what this flow owns and how far it
-has got. `resume <NNN>` reads this file. Keep it true.
+has got. `resume` finds this file by its **Worktree branch** line and reads it. Keep it true.
 
 - **Input**: <the user's original prompt, verbatim>
 - **Kind**: feature | bug
-- **Worktree branch**: <branch>
+- **Worktree branch**: <exactly `git branch --show-current`>
 - **Started**: <YYYY-MM-DD>
 - **Phase**: 1-spec | 2-clarify | 3-design | 4-milestones | 5-close | done
 - **Next step**: <the one concrete action a resumed session takes first>
