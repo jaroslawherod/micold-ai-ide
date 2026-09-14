@@ -15,3 +15,26 @@ existed and failed before the implementation.
   Both launch `pi` on this host; CI on `main` is green (latest `CI` runs `success`). Neither touches
   code this feature changes, so every red this feature records is read from its own test, not the
   suite total. Task T001 rechecks them on fresh `main`.
+
+## Recheck on fresh main (T001)
+
+- suite: `mise run gate` in a detached worktree at `b27ffe62` -> fmt and both clippy passes clean;
+  `cargo test --workspace` stopped at `micold-daemon --test exclusivity`
+  (`a_second_open_of_a_held_pi_conversation_starts_nothing`, `exclusivity.rs:435`). Re-run with
+  `scripts/build-lock.sh cargo test --workspace --no-fail-fast` -> 3074 passed, 1 failed, 6 ignored;
+  all 13 `scripts/tests/*.test.sh` pass
+- the one red is one of the two recorded at the baseline; `pi_launch_wiring` now passes. No other test
+  fails, so the loop continues on it (D17)
+
+## Cycle 1: U1 the sidebar slides on the emphasized curve
+
+- test: `crates/micold-client/src/ui/material/navigation_drawer.rs::tests::the_sidebar_slides_on_the_emphasized_curve` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-client --lib ui::material::navigation_drawer::tests::the_sidebar_slides_on_the_emphasized_curve -- --exact`
+  -> `panicked at crates/micold-client/src/ui/material/navigation_drawer.rs:497:9: the sidebar moved linearly: 0.25 at a quarter of the slide` (1 failed)
+- green: `NavigationDrawer::state` builds its `Progress` with `.easing(EMPHASIZED.x1, EMPHASIZED.y1, EMPHASIZED.x2, EMPHASIZED.y2)`
+  (`navigation_drawer.rs:114`). Test -> 1 passed. Suite `cargo test --workspace --no-fail-fast`
+  -> 3075 passed, 1 failed (the local-only `exclusivity` red above), 6 ignored; fmt and clippy clean
+- refactor: none needed, one builder call on an existing constructor
+- commit: uncommitted at the time of writing (`--no-commit`; the milestone commits after its reviews)
+- notes: the single-test command is the profile's `--lib` form; the profile's `--test {file}` form
+  names integration-test files and this test is in-crate (`ui::material` is `pub(crate)`)
