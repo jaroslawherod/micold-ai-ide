@@ -1985,12 +1985,51 @@ fn nothing_was_reported(app: &App) -> bool {
     queue.visible().is_none() && queue.pending() == 0
 }
 
+/// The first message the work an update returned produces, running it only that far. A bring-up
+/// run here reaches a recording runner (`BringUp::task`), never the host's container runtime.
+fn first_message(work: Task<Message>) -> Option<Message> {
+    use iced::futures::StreamExt;
+    let stream = iced_runtime::task::into_stream(work)?;
+    let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
+    runtime.block_on(
+        stream
+            .filter_map(|action| {
+                std::future::ready(match action {
+                    iced_runtime::Action::Output(message) => Some(message),
+                    _ => None,
+                })
+            })
+            .next(),
+    )
+}
+
+/// Whether `message` is a bring-up reporting the first stage it enters.
+fn is_probing(message: Option<&Message>) -> bool {
+    matches!(
+        message,
+        Some(Message::Sandbox(SandboxMsg::Progress(stage)))
+            if **stage == micold_core::sandbox::lifecycle::SandboxState::Probing
+    )
+}
+
+/// The failed sandbox, with its boot plan's state under `state_dir`: running a bring-up writes a
+/// token there.
+fn app_with_a_failed_sandbox_in(state_dir: &std::path::Path) -> App {
+    let mut app = app_with_a_failed_sandbox();
+    app.sandbox_boot
+        .as_mut()
+        .expect("setup: the failed sandbox has a boot plan")
+        .state_dir = state_dir.to_path_buf();
+    app
+}
+
 /// The report itself: switched to the sandbox, the bring-up failed once (the runtime was busy,
 /// the port was a moment late), and from then on every dial was refused and nothing but a
 /// restart the user did not know they needed could bring the daemon up.
 #[test]
 fn a_failed_sandbox_the_client_cannot_reach_is_brought_up_again() {
-    let mut app = app_with_a_failed_sandbox();
+    let state_dir = tempfile::tempdir().expect("tempdir");
+    let mut app = app_with_a_failed_sandbox_in(state_dir.path());
 
     let work = connection_failed(&mut app);
 
@@ -2009,6 +2048,12 @@ fn a_failed_sandbox_the_client_cannot_reach_is_brought_up_again() {
         shell::sandbox::BringUp::live_tasks(),
         1,
         "the work handed back has to be the bring-up itself, not other work beside a dropped one"
+    );
+    let first = first_message(work);
+    assert!(
+        is_probing(first.as_ref()),
+        "the work handed back has to report the bring-up's stages — one whose messages are \
+             discarded starts a sandbox the view never hears of, which is BUG-004: {first:?}"
     );
     assert_eq!(
         app.sandbox.state,
@@ -2156,7 +2201,8 @@ fn a_bring_up_in_flight_offers_no_failure_card_and_no_fallback() {
 fn a_container_found_stopped_is_brought_up_without_showing_a_failure() {
     use micold_client::features::connection::ConnectionStatus;
     use micold_core::sandbox::runtime::ContainerId;
-    let mut app = app_with_a_failed_sandbox();
+    let state_dir = tempfile::tempdir().expect("tempdir");
+    let mut app = app_with_a_failed_sandbox_in(state_dir.path());
     app.sandbox.state =
         micold_core::sandbox::lifecycle::SandboxState::Running(ContainerId("abc".into()));
     let _ = update_inner(&mut app, Message::Connection(ConnectionMsg::Disconnected));
@@ -2179,6 +2225,13 @@ fn a_container_found_stopped_is_brought_up_without_showing_a_failure() {
         1,
         "the work handed back has to be the bring-up itself — one swapped for other work leaves \
              `Probing` with nothing running, which is BUG-004"
+    );
+    let first = first_message(work);
+    assert!(
+        is_probing(first.as_ref()),
+        "the work handed back has to report the bring-up's stages — one whose messages are \
+             discarded starts the container while the view stays on `Probing`, which is BUG-004: \
+             {first:?}"
     );
     assert_eq!(
         app.sandbox.persistent_notice(),

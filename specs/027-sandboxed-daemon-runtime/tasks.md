@@ -1310,7 +1310,7 @@ Findings 2–5 need no task here. Finding 2 (two older save tests write the deve
 
 ### Blocking (HIGH)
 
-- [ ] T201 [BUG-004] *(test)* Finding 1 — `crates/micold-client/src/shell/sandbox.rs:215-232`
+- [X] T201 [BUG-004] *(test)* Finding 1 — `crates/micold-client/src/shell/sandbox.rs:215-232`
       (`BringUp::task`), `:457` (`Msg::Lost`), `crates/micold-client/src/shell/daemon_sync.rs:293`, and
       A1/U24 at `crates/micold-client/src/main.rs:3024-3050` and `:3188-3218`. No test runs a bring-up
       task. `scheduled()`, `units()` and `live_tasks()` all hold for `task().discard()`. Make A1 and U24
