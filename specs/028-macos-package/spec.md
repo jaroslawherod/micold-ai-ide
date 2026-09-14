@@ -4,7 +4,13 @@
 
 **Created**: 2026-08-27
 
-**Status**: Draft
+**Status**: Closed 2026-09-14 — implemented and shipped in PR #284 (merged 2026-09-13); 59 of the 60
+tasks in [tasks.md](./tasks.md) are done, and the universal disk image ships with every release from
+v0.13.0. The one open task, T059 — quickstart §C, the manual pass on a real Mac — is split out to
+issue #317, since no Mac is available here. Until it runs, the §C rows are unobserved: CI shows the
+package builds, verifies, and starts its daemon on a macOS runner, but not that a window draws, that
+Gatekeeper blocks and clears as documented, or the permission and lifecycle behaviour
+(FR-022–026, FR-028/029).
 
 **Input**: User description: "Prepare a package for macos which should cover the specifics for that system"
 
