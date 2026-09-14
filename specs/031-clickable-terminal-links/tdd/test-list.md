@@ -74,7 +74,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U1  | Finds `https://example.com/docs/page.html` inside a sentence, without the final full stop | FR-001, FR-005 | example | PENDING | |
+| U1  | Finds `https://example.com/docs/page.html` inside a sentence, without the final full stop | FR-001, FR-005 | example | DONE | `crates/micold-core/src/link/detect.rs::tests::finds_an_address_inside_a_sentence` |
 | U2  | Trims trailing `.,;:!?'*` repeatedly (`…page.html?!.` ends at `html`) | FR-005 | example | PENDING | |
 | U3  | Keeps a closing bracket balanced inside the address (`https://example.com/a_(b)`) | FR-005, US1.4 | example | PENDING | |
 | U4  | Stops before an unbalanced closing bracket (`(https://example.com/a)` excludes `)`) | FR-005, US1.4 | example | PENDING | |

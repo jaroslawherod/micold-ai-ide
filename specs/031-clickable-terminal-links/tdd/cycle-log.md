@@ -12,3 +12,14 @@
     (`pi_launch_wiring.rs:130`, "launch 0 never reached `pi`")
 - both pass in CI on `main` (run `CI` on `b27ffe62`, success), so they are local to this machine. The loop
   treats them as pre-existing: a cycle is green when nothing else fails, and they are not fixed here.
+
+## Cycle 1: U1 finds an address inside a sentence
+
+- test: `crates/micold-core/src/link/detect.rs::tests::finds_an_address_inside_a_sentence` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::finds_an_address_inside_a_sentence -- --exact`
+  -> `left: []` / `right: ["https://example.com/docs/page.html"]` (0 passed; 1 failed), against a `detect` stub returning no ranges
+- green: `detect` scans for `http://` and `https://` and extends to the next whitespace. Suite
+  `scripts/build-lock.sh cargo test -p micold-core --all-targets` -> 1059 passed, 0 failed
+- refactor: none needed
+- commit: `feat(031): find a web address inside a sentence (U1)`
+- notes: per ledger decision 14, a cycle's suite is the core fast subset; the workspace suite runs at the milestone's end
