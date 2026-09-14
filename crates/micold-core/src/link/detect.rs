@@ -24,6 +24,10 @@ pub fn detect(text: &str) -> Vec<Range<usize>> {
         while end > body && TRAILING_PUNCTUATION.contains(&chars[end - 1]) {
             end -= 1;
         }
+        if !well_formed(&chars[body..end]) {
+            start += 1;
+            continue;
+        }
         found.push(start..end);
         start = end;
     }
@@ -50,6 +54,26 @@ fn scan_end(chars: &[char], from: usize, quote: Option<char>) -> usize {
         }
     }
     chars.len()
+}
+
+/// Whether the text after a web scheme names a host: `localhost`, a dotted name, a bracketed IPv6
+/// literal, or any name followed by a port (research R3 rule 6).
+fn well_formed(rest: &[char]) -> bool {
+    let authority: String = rest
+        .iter()
+        .take_while(|c| !matches!(c, '/' | '?' | '#'))
+        .collect();
+    let host_and_port = authority.rsplit('@').next().unwrap_or_default();
+    if host_and_port.starts_with('[') {
+        return host_and_port.contains(']');
+    }
+    let (host, port) = match host_and_port.split_once(':') {
+        Some((host, port)) => (host, Some(port)),
+        None => (host_and_port, None),
+    };
+    let has_port =
+        port.is_some_and(|port| !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()));
+    !host.is_empty() && (host.eq_ignore_ascii_case("localhost") || host.contains('.') || has_port)
 }
 
 /// A character no address contains (research R3 rule 2).
@@ -186,5 +210,24 @@ mod tests {
                 "{stop:?} cannot appear in an address, so the address ends before it"
             );
         }
+    }
+
+    #[test]
+    fn accepts_a_web_host_only_when_it_is_localhost_dotted_bracketed_or_has_a_port() {
+        assert_eq!(
+            found("http://localhost/ https://a.example http://[::1]/x http://intranet:8080/x"),
+            [
+                "http://localhost/",
+                "https://a.example",
+                "http://[::1]/x",
+                "http://intranet:8080/x"
+            ],
+            "localhost, a dotted name, a bracketed IPv6 literal and a name with a port are hosts"
+        );
+        assert_eq!(
+            found("http://intranet/x"),
+            Vec::<String>::new(),
+            "a dotless name with no port is too likely to be prose to be an address"
+        );
     }
 }
