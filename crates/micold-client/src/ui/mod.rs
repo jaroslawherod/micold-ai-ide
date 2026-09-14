@@ -33,7 +33,7 @@ pub use material::target_offset_delta;
 /// The bring-up indicator, and the wording it shows. Named individually — like the ripple
 /// below — because `tests/sandbox_progress.rs` checks both halves and the module itself has
 /// no reason to be public.
-pub use sandbox_status::{stage_line, view as sandbox_indicator, StageLine};
+pub use sandbox_status::{attempt_line, stage_line, view as sandbox_indicator, StageLine};
 pub(crate) mod project_selector;
 pub(crate) mod rename;
 mod sandbox_status;
@@ -341,7 +341,7 @@ pub fn view<'a>(
             // Same reasoning as the banners above it, and the same slot: a bring-up in flight is a
             // condition of the whole window, not of whichever body branch happens to be taken
             // (T043, SC-004).
-            sandbox_status::view(&sandbox.state, roles),
+            sandbox_status::indicator(sandbox_status::attempt_line(sandbox), roles),
             body
         ],
         material::SurfaceKind::Window,

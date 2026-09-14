@@ -114,6 +114,20 @@ impl SandboxState {
     pub fn accepts_sessions(&self) -> bool {
         matches!(self, SandboxState::Running(_) | SandboxState::Stale(_))
     }
+
+    /// Whether a bring-up is under way — the daemon is not listening *yet* (FR-036b).
+    ///
+    /// A refused connection in one of these states is the bring-up still running, not a failure,
+    /// and reporting it as one is half of BUG-004.
+    pub fn is_coming_up(&self) -> bool {
+        match self {
+            SandboxState::Probing | SandboxState::Acquiring(_) | SandboxState::Starting => true,
+            SandboxState::Disabled
+            | SandboxState::Running(_)
+            | SandboxState::Stale(_)
+            | SandboxState::Failed(_) => false,
+        }
+    }
 }
 
 /// What a successful bring-up produced.
@@ -414,8 +428,10 @@ pub fn survive_logout_changed(state: &SandboxState) -> SandboxState {
 /// The user asked, in so many words, for the sandbox to be restarted.
 ///
 /// A marker rather than a bare call, for the same reason [`ConsentedFallback`] is one: it makes
-/// the *only* edge back into bring-up carry evidence that a person asked for it, so "nothing
-/// restarts on its own" is a property of the type rather than a rule a caller is trusted to keep.
+/// the only edge back into bring-up *from a sandbox that has a container* carry evidence that a
+/// person asked for it, so "nothing restarts on its own" is a property of the type rather than a
+/// rule a caller is trusted to keep. The other edge, [`service_absent`], leaves only `Failed`,
+/// where there is no container and no session for R9 to protect (S-7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RestartRequested;
 
@@ -433,6 +449,96 @@ pub fn restart(state: &SandboxState, _: RestartRequested) -> Option<SandboxState
         | SandboxState::Probing
         | SandboxState::Acquiring(_)
         | SandboxState::Starting => None,
+    }
+}
+
+/// How long each unattended bring-up waits before it starts, in order (S-6, FR-036a).
+///
+/// The length is the bound. The first goes at once: the service is missing *now*, and a user who
+/// stopped the container by hand, or whose launch-time bring-up hit a runtime still starting, wants
+/// it back without a pause. The rest wait longer than the connection's one-second retry, because
+/// that retry is what reports the absence — spaced by it, a runtime that is not installed would
+/// spend every attempt in three seconds and leave nothing on screen long enough to read.
+pub const UNATTENDED_BRING_UP_DELAYS: [std::time::Duration; 3] = [
+    std::time::Duration::ZERO,
+    std::time::Duration::from_secs(5),
+    std::time::Duration::from_secs(15),
+];
+
+/// The unattended bring-ups the application has left (S-6, FR-036a).
+///
+/// Carried by value and handed back spent by [`service_absent`], so the only way to make another
+/// attempt is to have stored the result of the last one — a caller cannot forget to count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct UnattendedBringUps {
+    spent: usize,
+}
+
+impl UnattendedBringUps {
+    /// How many are left.
+    pub fn remaining(self) -> usize {
+        UNATTENDED_BRING_UP_DELAYS.len().saturating_sub(self.spent)
+    }
+}
+
+/// A bring-up the application starts on its own, because the service it needs is not there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BringUpAgain {
+    /// Always [`SandboxState::Probing`]. Entered *before* the wait rather than after it, so a
+    /// second absence reported during the wait finds a bring-up in flight and starts nothing.
+    pub state: SandboxState,
+    /// The budget with this attempt paid for.
+    pub budget: UnattendedBringUps,
+    /// How long to wait before starting it.
+    pub after: std::time::Duration,
+}
+
+/// What finding the sandboxed service absent does to the sandbox (S-6, FR-002a, FR-036a).
+///
+/// The host placement has always had this: `connect_or_spawn` starts a daemon on every attempt
+/// that finds none. The sandboxed placement had three one-shot triggers — a launch, a placement
+/// change, a person pressing Restart — and none of them covers the application being open while
+/// the service is not there, which is BUG-004.
+///
+/// # Why this is not [`restart`]
+///
+/// [`RestartRequested`] exists to say a person asked, and this edge exists because nobody has to.
+/// Borrowing the marker would make it mean nothing on both edges.
+///
+/// # What it refuses
+///
+/// Only [`SandboxState::Failed`] is brought up again:
+///
+/// - `Probing`, `Acquiring` and `Starting` are a bring-up in flight, and the connection keeps
+///   failing at 1 Hz while one runs. Starting another would abandon the attempt the user is
+///   watching and begin it again from the top, once a second.
+/// - `Running` and `Stale` have a container, and R9 protects the sessions inside it (S-7). A
+///   service that stopped answering in front of a container that is still there is
+///   [`container_lost`]'s question, asked first; it turns the state into `Failed` when the answer
+///   is no, and *then* this edge applies.
+/// - `Disabled` is the host placement, which starts its own.
+///
+/// And nothing is brought up once the budget is spent: the failure stands with its reason and
+/// remedy, and FR-034's manual restart is the way out (S-2). There is still no edge here to an
+/// unsandboxed daemon — this returns to `Probing`, never to a fallback.
+pub fn service_absent(state: &SandboxState, budget: UnattendedBringUps) -> Option<BringUpAgain> {
+    match state {
+        SandboxState::Failed(_) => {
+            let after = *UNATTENDED_BRING_UP_DELAYS.get(budget.spent)?;
+            Some(BringUpAgain {
+                state: SandboxState::Probing,
+                budget: UnattendedBringUps {
+                    spent: budget.spent + 1,
+                },
+                after,
+            })
+        }
+        SandboxState::Disabled
+        | SandboxState::Probing
+        | SandboxState::Acquiring(_)
+        | SandboxState::Starting
+        | SandboxState::Running(_)
+        | SandboxState::Stale(_) => None,
     }
 }
 

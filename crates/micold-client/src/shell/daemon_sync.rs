@@ -293,13 +293,43 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
 }
 
 pub fn on_connect_failed(app: &mut App, reason: String) -> Task<Message> {
+    refused_dial(app, &reason).map_or_else(Task::none, crate::shell::sandbox::BringUp::task)
+}
+
+/// What a refused dial changes, and the bring-up it decided to run, if any.
+///
+/// Split from [`on_connect_failed`] so the decision can be read back: a `Task` cannot be.
+pub fn refused_dial(app: &mut App, reason: &str) -> Option<crate::shell::sandbox::BringUp> {
     // The other half of `attach_log_line`'s job (`010` BUG-013): "never attached" and "attached and
     // got nothing" are different bugs, so the log has to be able to say the first one too.
     crate::log_line(&format!("attach: failed reason={reason}"));
     app.disconnected = true;
+    // A sandboxed service that is not there is brought up, not reported (FR-002a, BUG-004). Only
+    // for the sandbox placement: consent to run on the host is never undone from here (FR-035).
+    if app.placement.kind == micold_core::sandbox::placement::PlacementKind::LocalSandbox {
+        if let Some(plan) = app.sandbox_boot.clone() {
+            if let Some(after) = app.sandbox.service_absent() {
+                crate::log_line(&format!(
+                    "sandbox: service absent, bringing it up again in {}s ({} left) after: {}",
+                    after.as_secs(),
+                    app.sandbox.unattended.remaining(),
+                    app.sandbox.previous_attempt.as_ref().map_or_else(
+                        || "no recorded failure".to_string(),
+                        micold_core::sandbox::lifecycle::Failure::reason,
+                    )
+                ));
+                return Some(crate::shell::sandbox::BringUp { plan, after });
+            }
+        }
+        if app.sandbox.state.is_coming_up() {
+            // Not listening *yet*. The sandbox view shows the stage; a notification saying the
+            // daemon could not be reached would call a working bring-up broken (FR-036b).
+            return None;
+        }
+    }
     app.core
         .notify_error(format!("Could not connect to the session daemon: {reason}"));
-    Task::none()
+    None
 }
 
 /// The user chose to take the active project back after being displaced (FR-024): re-attach

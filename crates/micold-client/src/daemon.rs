@@ -462,7 +462,27 @@ async fn report_connect_failure(output: &mut mpsc::Sender<Message>, reason: Stri
 
 #[cfg(test)]
 mod tests {
-    use super::{stale_dev_image_advice, ConnectFailures};
+    use super::{stale_dev_image_advice, ConnectFailures, RECONNECT_BACKOFF};
+
+    /// S-6 against the real retry rather than a copy of it: an unattended bring-up after a failed
+    /// one must not arrive on the next connection tick, or the whole budget is spent in the seconds
+    /// it takes the reconnect loop to come round a few times. The first may go at once — the
+    /// service is missing *now*.
+    #[test]
+    fn unattended_bring_ups_after_the_first_wait_longer_than_a_reconnect() {
+        let delays = micold_core::sandbox::lifecycle::UNATTENDED_BRING_UP_DELAYS;
+        assert!(
+            delays.len() >= 2,
+            "spacing needs at least two attempts to be between: {delays:?}"
+        );
+        for (i, delay) in delays.iter().enumerate().skip(1) {
+            assert!(
+                *delay > RECONNECT_BACKOFF,
+                "attempt {} waits {delay:?}, no longer than the {RECONNECT_BACKOFF:?} reconnect (S-6)",
+                i + 1
+            );
+        }
+    }
 
     /// §4.15 (feature 028) — one transient connect failure must not reach the user.
     ///

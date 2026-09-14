@@ -66,6 +66,23 @@ pub fn stage_line(state: &SandboxState) -> Option<StageLine> {
     }
 }
 
+/// What the sandbox is doing, including why the application is trying again, or `None` when it is
+/// not coming up.
+///
+/// The reason goes on the detail line after whatever the runtime last said, so a pull's progress
+/// and the failure that led to it are both on screen.
+pub fn attempt_line(sandbox: &crate::features::sandbox::Sandbox) -> Option<StageLine> {
+    let mut line = stage_line(&sandbox.state)?;
+    if let Some(failed) = &sandbox.previous_attempt {
+        let again = format!("Trying again: {}", failed.reason());
+        line.detail = Some(match line.detail {
+            Some(detail) => format!("{detail} — {again}"),
+            None => again,
+        });
+    }
+    Some(line)
+}
+
 /// The runtime's line, assembled from whatever parts it gave.
 ///
 /// Built by appending rather than by formatting a fixed shape, because a runtime reports the parts
@@ -85,7 +102,12 @@ fn acquisition_detail(progress: &micold_core::sandbox::runtime::Progress) -> Str
 
 /// The indicator itself, or nothing at all.
 pub fn view<'a>(state: &SandboxState, roles: Roles) -> Element<'a, Message> {
-    match stage_line(state) {
+    indicator(stage_line(state), roles)
+}
+
+/// The indicator for `line`, or nothing at all.
+pub(crate) fn indicator<'a>(line: Option<StageLine>, roles: Roles) -> Element<'a, Message> {
+    match line {
         Some(line) => material::Surface::new(
             material::StageProgress::new(line.label, roles).detail(line.detail),
             material::SurfaceKind::Window,
