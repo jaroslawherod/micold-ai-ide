@@ -77,7 +77,7 @@ The entry points are:
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
 | U71 | Connecting refuses a pipe whose server process runs as an account other than the expected user SID, with an error naming both SIDs (security review D1) | FR-021, E2.1 | example | win | DONE | `crates/micold-core/src/connect.rs::tests::a_pipe_served_as_another_account_is_refused_naming_both_sids` (run 34874692453) |
-| U72 | The client opens the pipe with `SECURITY_SQOS_PRESENT \| SECURITY_IDENTIFICATION`, so the server cannot impersonate it beyond identification (security review D2) | FR-021, E2.1 | example | win | PENDING | |
+| U72 | The client opens the pipe with `SECURITY_SQOS_PRESENT \| SECURITY_IDENTIFICATION`, so the server cannot impersonate it beyond identification (security review D2) | FR-021, E2.1 | example | win | DONE | `crates/micold-core/src/connect.rs::tests::the_daemon_pipe_lets_its_server_identify_the_client_but_not_impersonate_it` |
 
 ### `crates/micold-daemon/src/server.rs` (pid record)
 
