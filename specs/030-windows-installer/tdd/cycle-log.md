@@ -550,3 +550,11 @@ failed before the implementation.
 - green (U68): pending CI. `PtySession::spawn_ai_cli` and `spawn_shell` put the daemon's `PATH` ahead of the child's on Windows (`prefer_process_path`).
 - notes: portable-pty 0.9 `get_base_env` seeds a Windows child's `PATH` from the registry (HKLM plus HKCU `Environment`), not from the process. Its `search_path` then misses the stub `copilot.cmd` the test put on the process `PATH`. `is_available` reads the process `PATH`, so the daemon said the CLI was there and then failed to start it. Users hit this too, whenever a CLI is on the daemon's `PATH` but not in the registry. Added mid-loop as its own behavior.
 - commit: see the follow-up commit
+
+## Cycle 65: U20 green; the Windows daemon step times out in mutation_semantics
+
+- test: `.github/workflows/ci.yml`, step "Release exes are GUI-subsystem (Windows)", unchanged since cycle 63.
+- red: cycle 63, not re-run.
+- green (U20): PR #332's CI run 34832258196 (d6a84794), `build + test (windows-latest)`, step "Release exes are GUI-subsystem (Windows)" succeeded, printing `micold-ai-ide.exe subsystem 2 (GUI)` and `micold-daemon.exe subsystem 2 (GUI)`. U20 is `DONE`; T024 is ticked.
+- notes: in the same run, `Test (daemon, Windows)` hit its 20-minute timeout inside `mutation_semantics.rs`, one of the nine suites e9d6f4d1 un-gated (T027). `worktree_delete_with_stop_sessions_archives_and_removes` failed (its message was never printed, because the step was killed first). `including_a_worktree_lists_it_and_touches_nothing_on_disk` and `including_and_excluding_are_both_idempotent_and_reversible` hung: `expect_control` waited without a bound for an `OperationOk` that never came. Targets after it alphabetically, `session_start.rs` among them, never ran, so U68 and U24 have no Windows result yet. Before it, `catalog_join`, `drive_loop`, `idle_race` and `mutation_atomicity` passed. `expect_control` is now bounded at 30 s and prints the replies it skipped. The assertions are unchanged. The installer package and launch steps were skipped after the timeout.
+- commit: see the follow-up commit
