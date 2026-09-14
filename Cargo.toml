@@ -89,7 +89,7 @@ ttf-parser = "0.25.1"
 # and their semver does not track the `iced` facade — pinned to the exact version `iced` uses.
 iced_renderer = "=0.14.0"
 iced_tiny_skia = "=0.14.1"
-# Feature 027 (BUG-004) only, and dev-only. A `Task` is opaque through the `iced` facade;
+# Feature 027 (BUG-005) only, and dev-only. A `Task` is opaque through the `iced` facade;
 # `iced_runtime::task::into_stream` is what lets a test run the work an update returned. Pinned
 # like the two above.
 iced_runtime = "=0.14.0"

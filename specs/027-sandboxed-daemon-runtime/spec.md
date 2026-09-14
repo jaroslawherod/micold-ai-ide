@@ -226,7 +226,7 @@ reboot the host with session survival opted out and opted in and confirm each be
 9. **Given** sandboxed mode is on and the application is already open, **When** the sandbox is not
    running — stopped from the host, lost to a runtime restart, or never successfully started — **Then**
    the application brings it back up without being restarted and without the user pressing anything,
-   reporting each attempt's reason if it cannot (FR-002a, FR-036a). *(Added 2026-09-12 — BUG-004.)*
+   reporting each attempt's reason if it cannot (FR-002a, FR-036a). *(Added 2026-09-12 — BUG-005.)*
 
 ---
 
@@ -659,7 +659,7 @@ asked, what declining costs, and that confirming acts now rather than at the nex
 - **FR-038**: The service's own diagnostics from inside the sandbox MUST be retrievable through the
   application.
 
-**Bugfix**: 2026-09-12 — BUG-004. FR-002a, FR-036a and FR-036b added. FR-014a said the sandbox
+**Bugfix**: 2026-09-12 — BUG-005. FR-002a, FR-036a and FR-036b added. FR-014a said the sandbox
 starts *when the application launches* and nothing said what happens at any other moment, so the
 sandboxed placement got auto-start once per launch while the host placement got it on every
 connection attempt — and a user switching to container mode was left dialling a service nobody
@@ -667,9 +667,9 @@ would start. FR-002a states the parity that was assumed rather than written; FR-
 FR-036's "recover to a defined state" past reporting; FR-036b covers the half that made a working
 bring-up read as a failure. **SC-004c** and US6's ninth acceptance scenario are added alongside
 them: the first says where SC-004's progress has to be measured, the second is the flow this bug
-is. See `bugs/BUG-004.md`.
+is. See `bugs/BUG-005.md`.
 
-**Bugfix**: 2026-09-14 — BUG-004, FR-036b clarified for a sandbox marked stale. A bring-up is still in
+**Bugfix**: 2026-09-14 — BUG-005, FR-036b clarified for a sandbox marked stale. A bring-up is still in
 flight after the container starts, until its service first answers. A sandbox marked stale in that
 gap, because settings the container was created under were saved while it started, is still coming
 up: the container is running and its service is still on its way to listening, so a refused dial

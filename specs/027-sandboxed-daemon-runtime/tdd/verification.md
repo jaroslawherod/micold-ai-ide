@@ -1,6 +1,6 @@
 ---
 feature: 027-sandboxed-daemon-runtime
-scope: BUG-004 increment (Phases 18–23, T167–T201), committed
+scope: BUG-005 increment (Phases 18–23, T167–T201), committed
 verdict: FAIL
 standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md # no override or preset resolved
 verified_at: b983395e
@@ -13,12 +13,12 @@ not_applicable: 4
 high_smells: 1
 criteria_total: 8
 criteria_covered: 8 # every criterion has a test through update_inner or core; none end to end through the app with a real runtime
-mutation_score: 90 # 28 of 31 deliberate mutants caught, all run at b983395e; scope: the 6 source files BUG-004 changed; no mutation tool in the profile
+mutation_score: 90 # 28 of 31 deliberate mutants caught, all run at b983395e; scope: the 6 source files BUG-005 changed; no mutation tool in the profile
 mutants_survived: 3 # X7, X8, X9; not equivalent
 suite: 2964 passed, 0 failed, 2 ignored, 512s wall incl. build and a wait for another worktree's build lock # cargo test --workspace after X7–X9 restored
 ---
 
-# TDD Verification: 027 sandboxed daemon runtime — BUG-004 increment (sixth audit)
+# TDD Verification: 027 sandboxed daemon runtime — BUG-005 increment (sixth audit)
 
 **Verdict: FAIL.** A bring-up that delivers its first message and drops how it ended still passes every
 test. T201 made A1 and U24 run the work an update returns, which catches a silenced bring-up (X3, X5, X6)
@@ -82,7 +82,7 @@ The entry is explicit that the red came from mutants, not from a failing first r
 | # | Severity | Finding | Evidence |
 | --- | --- | --- | --- |
 | 1 | HIGH | **Survivors inside `DONE` A1 and U24: a bring-up that delivers its first message and drops the rest passes.** `first_message` runs the returned work only until its first `Action::Output`, and `is_probing` checks that one message. X7 (`iced::Task::stream(StreamExt::take(stream, 1))` in `BringUp::task()`), X8 (`bring_up.task().then(..)` keeping only `SandboxMsg::Progress` in `Msg::Lost`) and X9 (the same filter on the refused-dial path) each leave all 138 client tests green. U20 checks that the *stream* ends with `Started` or `Failed`. Nothing checks that the task hands that ending to `update`. The fix needs no new dependency. Run the returned work to its end, and assert what U20 asserts of the stream: `Progress(Probing)` first and `Started` or `Failed` last. The recording runner ends a bring-up in well under a second (both tests take 0.00s). | `crates/micold-client/src/main.rs:3022-3045` (`first_message`, `is_probing`), `:3084-3089` (A1), `:3261-3267` (U24); `crates/micold-client/src/shell/sandbox.rs:215-238` (`task`), `:462` (`Msg::Lost`), `:618` (U20's last-message assertion); `crates/micold-client/src/shell/daemon_sync.rs:293` |
-| 2 | MED | **Two save tests write the developer's real `settings.json` on every client test run (outside this increment).** Unchanged. The file's mtime moved again during this audit (20:05:21 during mutant runs, 20:13:30 during the suite). No task added: the tests predate feature 027's BUG-004 work. The fix is `app.caps = Capabilities::real().without_settings()`, as U30 does. | `crates/micold-client/src/main.rs:2583`, `:2630`; `main.rs:1694` (`base_app`) |
+| 2 | MED | **Two save tests write the developer's real `settings.json` on every client test run (outside this increment).** Unchanged. The file's mtime moved again during this audit (20:05:21 during mutant runs, 20:13:30 during the suite). No task added: the tests predate feature 027's BUG-005 work. The fix is `app.caps = Capabilities::real().without_settings()`, as U30 does. | `crates/micold-client/src/main.rs:2583`, `:2630`; `main.rs:1694` (`base_app`) |
 | 3 | LOW | **Test awareness in production code, and the production runner is untested by construction.** Three `cfg(test)` hooks sit in `BringUp::task()`: the recorder, the runner swap and the `live_tasks` token (`shell/sandbox.rs:198-252`). A fourth is `log_line`'s `cfg!(test)` return (`main.rs:959`). The runner swap is justified: without it a test that runs a bring-up would start a container on the developer's host. It also means the `SystemRunner` arm is compiled out of every unit test, so replacing it would pass them all. That was equally true before T201, when no test ran the task at all. Only T181 (core, real runtime) and T178 (manual) cover that arm. `live_tasks()` is now subsumed by finding 1's run of the work, and T201's log says so. | as cited |
 | 4 | LOW | **No automated test crosses the application with a real runtime; documented, not closed.** Unchanged (T192). Findings 1 and 3 are both cases such a test would catch. | `crates/micold-core/tests/sandbox_real_lifecycle.rs:652-668`; `evidence/us6-failures.md` |
 | 5 | LOW | **T194's margin is an inference from frames.** Unchanged; the entry states its limits. | `evidence/performance.md`, T194 section |

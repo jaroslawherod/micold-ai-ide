@@ -1,4 +1,4 @@
-# Cycle Log: BUG-004 — a sandbox the application finds absent is brought up again
+# Cycle Log: BUG-005 — a sandbox the application finds absent is brought up again
 
 Append only. Newest last. Every entry's `red` block is the evidence that the test existed and failed
 before the implementation — or, for a behavior the code already had, that the test fails with the
@@ -7,7 +7,7 @@ named deliberate mutant applied (`tdd-loop-playbook.md` step 3).
 ## Baseline
 
 - suite: `scripts/build-lock.sh cargo test --workspace` -> 2947 passed, 0 failed, 2 ignored (135s)
-- commit: `b53e3449` plus the uncommitted Phase 18 (BUG-004) diff
+- commit: `b53e3449` plus the uncommitted Phase 18 (BUG-005) diff
 - recorded: cycle 0, 2026-09-13, before any Phase 19 change
 
 ## Phase 18 (T167–T171): recorded after the fact
@@ -479,7 +479,7 @@ Appended rather than edited in place. The log is append-only.
   Test-only; no production change
 - proof (`python3 mutants.py T191a T191b N12 N13`, each restored, sha verified):
   N13 fails U24 at `main.rs:3198` "the bring-up has to be handed back to run — one built and dropped leaves `Probing`
-  with nothing running, which is BUG-004 left: 0 right: 1"; N12 fails A1 at `main.rs:3035` "the bring-up has to be
+  with nothing running, which is BUG-005 left: 0 right: 1"; N12 fails A1 at `main.rs:3035` "the bring-up has to be
   handed back to run, not built and dropped left: 0 right: 1"; T191a still fails A1 (`:3029`), T191b still fails U24 (`:3193`)
 - commit: not committed
 
@@ -527,7 +527,7 @@ Appended rather than edited in place. The log is append-only.
   assertion removed):
   `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide -- tests::a_failed_sandbox_the_client_cannot_reach_is_brought_up_again tests::a_container_found_stopped_is_brought_up_without_showing_a_failure`
   -> `panicked at crates/micold-client/src/main.rs:3040:9: ... the work handed back has to be the bring-up itself, not other work beside a dropped one  left: 0  right: 1`
-  and `panicked at crates/micold-client/src/main.rs:3209:9: ... one swapped for other work leaves `Probing` with nothing running, which is BUG-004  left: 0  right: 1` (0 passed; 2 failed)
+  and `panicked at crates/micold-client/src/main.rs:3209:9: ... one swapped for other work leaves `Probing` with nothing running, which is BUG-005  left: 0  right: 1` (0 passed; 2 failed)
 - green: the token and the count. -> 138 passed; serial (`--test-threads=1`) 138 passed
 - proof (`python3 mutants.py X1 X2 N12 N13 T191a T191b`, each restored, sha verified): X1 fails U24 at `main.rs:3209`;
   X2 fails A1 at `main.rs:3040`; N12 still fails A1 (`:3035`), N13 still fails U24 (`:3203`), T191a still fails A1
@@ -556,9 +556,9 @@ Appended rather than edited in place. The log is append-only.
   sha verified):
   X3 (`iced::Task::stream(stream).discard()` in `task`) fails A1 at `main.rs:3085` and U24 at `main.rs:3262`;
   X5 (`return bring_up.task().discard();`) fails U24 at `main.rs:3262` "... one whose messages are discarded starts the
-  container while the view stays on `Probing`, which is BUG-004: None";
+  container while the view stays on `Probing`, which is BUG-005: None";
   X6 (`map_or_else(Task::none, |b| b.task().discard())`) fails A1 at `main.rs:3085` "... starts a sandbox the view never
-  hears of, which is BUG-004: None";
+  hears of, which is BUG-005: None";
   X4 (`mem::forget` the task, return `Task::done(EscapePressed)`) fails U24 at `main.rs:3262` "...: Some(EscapePressed)".
   Still caught where they were: X1 U24 `:3255`, X2 A1 `:3079`, N12 A1 `:3074`, N13 U24 `:3249`, T191a A1 `:3068`,
   T191b U24 `:3244`

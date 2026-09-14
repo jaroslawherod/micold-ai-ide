@@ -346,7 +346,7 @@ impl Sandbox {
         }
     }
 
-    /// Bring the sandbox up again because its service is not there (FR-002a, BUG-004).
+    /// Bring the sandbox up again because its service is not there (FR-002a, BUG-005).
     ///
     /// Moves a failed sandbox back to `Probing`, spends one of the unattended attempts, and returns
     /// how long to wait before starting it. `None` — nothing moved — for a sandbox that has not

@@ -269,7 +269,7 @@ micold-daemon was never built and the stale file was copied out as if it were fr
 proved the fix (the client did move to a host process and did reach a daemon) but reported it as
 "The session service is a different version". Build the two in separate `cargo build` invocations.
 
-## US6 scenario 9 — what covers the unattended recovery (T192, BUG-004)
+## US6 scenario 9 — what covers the unattended recovery (T192, BUG-005)
 
 Three layers prove a sandbox stopped under the application comes back without the user. None of them runs
 the application's own message handling against a real runtime.

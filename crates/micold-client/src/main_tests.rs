@@ -1956,7 +1956,7 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
     );
 }
 
-// --- BUG-004 (T168, FR-002a/FR-036b): a sandbox the client finds absent is brought up --------
+// --- BUG-005 (T168, FR-002a/FR-036b): a sandbox the client finds absent is brought up --------
 
 /// A refused dial, and the work the application scheduled in answer to it.
 fn connection_failed(app: &mut App) -> Task<Message> {
@@ -2037,7 +2037,7 @@ fn a_failed_sandbox_the_client_cannot_reach_is_brought_up_again() {
         shell::sandbox::BringUp::scheduled().len(),
         1,
         "the state says a bring-up started, so one has to be scheduled — `Probing` with nothing \
-             running is BUG-004 with a different banner"
+             running is BUG-005 with a different banner"
     );
     assert_eq!(
         work.units(),
@@ -2053,13 +2053,13 @@ fn a_failed_sandbox_the_client_cannot_reach_is_brought_up_again() {
     assert!(
         is_probing(first.as_ref()),
         "the work handed back has to report the bring-up's stages — one whose messages are \
-             discarded starts a sandbox the view never hears of, which is BUG-004: {first:?}"
+             discarded starts a sandbox the view never hears of, which is BUG-005: {first:?}"
     );
     assert_eq!(
         app.sandbox.state,
         micold_core::sandbox::lifecycle::SandboxState::Probing,
         "a refused dial to a sandbox that is not running has to start one — waiting for the \
-             user to find Restart is BUG-004"
+             user to find Restart is BUG-005"
     );
     assert!(
         nothing_was_reported(&app),
@@ -2218,19 +2218,19 @@ fn a_container_found_stopped_is_brought_up_without_showing_a_failure() {
         work.units(),
         1,
         "the bring-up has to be handed back to run — one built and dropped leaves `Probing` with \
-             nothing running, which is BUG-004"
+             nothing running, which is BUG-005"
     );
     assert_eq!(
         shell::sandbox::BringUp::live_tasks(),
         1,
         "the work handed back has to be the bring-up itself — one swapped for other work leaves \
-             `Probing` with nothing running, which is BUG-004"
+             `Probing` with nothing running, which is BUG-005"
     );
     let first = first_message(work);
     assert!(
         is_probing(first.as_ref()),
         "the work handed back has to report the bring-up's stages — one whose messages are \
-             discarded starts the container while the view stays on `Probing`, which is BUG-004: \
+             discarded starts the container while the view stays on `Probing`, which is BUG-005: \
              {first:?}"
     );
     assert_eq!(

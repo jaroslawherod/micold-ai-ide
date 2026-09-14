@@ -179,7 +179,7 @@ is called closed for a new contributor's machine.
 
 ---
 
-## SC-004 / SC-004c at the application — T172 (BUG-004)
+## SC-004 / SC-004c at the application — T172 (BUG-005)
 
 > *SC-004c: "SC-004's progress is measured **at the application**… no two consecutive stage changes
 > the application displays are more than 10 seconds apart, and the application reports no connection
@@ -269,7 +269,7 @@ Neither was changed in this pass. Both are outside T167–T171's scope and need 
 Noticed, not in scope: the in-container daemon does not exit on SIGTERM. `docker stop` always waits
 the full 10s grace and ends in exit 137, which adds 10s to every stop.
 
-## FR-036b re-run at the application — T178 (BUG-004)
+## FR-036b re-run at the application — T178 (BUG-005)
 
 Run on **2026-09-14** with the `visual-pass` skill, repeating T172's run B against HEAD `cd7fc151`.
 The client was built from that commit and pinned to `~/vp/bin-t178` (`strings … | grep -c "Trying again: "`
@@ -357,7 +357,7 @@ Findings 1 and 2 of the first pass no longer reproduce. Two limits remain.
 
 Not assessed: how the stage transitions look at real frame rates. lavapipe frame pacing says nothing about a GPU.
 
-## `Started` to listening, against the reconnect backoff — T194 (BUG-004)
+## `Started` to listening, against the reconnect backoff — T194 (BUG-005)
 
 **Date**: 2026-09-14 · **Source**: the logs and frame timestamps of the T178 re-run above. No new run was made.
 Frame times are local (UTC+2), and daemon log times are UTC shifted to local here.

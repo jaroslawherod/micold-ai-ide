@@ -510,7 +510,7 @@ fn a_sandbox_that_never_ran_cannot_be_lost() {
     }
 }
 
-// --- BUG-004 (T167, S-6/S-7, FR-002a, FR-036a): a sandbox found absent is brought up again -------
+// --- BUG-005 (T167, S-6/S-7, FR-002a, FR-036a): a sandbox found absent is brought up again -------
 
 fn failed() -> SandboxState {
     SandboxState::Failed(micold_core::sandbox::lifecycle::Failure {
@@ -523,7 +523,7 @@ fn failed() -> SandboxState {
 
 /// FR-002a. The host placement has always started its service when it found none there; this is the
 /// same promise for the container, and it carries no `RestartRequested` because nobody pressed
-/// anything — which is exactly the situation BUG-004 left without a way out.
+/// anything — which is exactly the situation BUG-005 left without a way out.
 #[test]
 fn a_failed_sandbox_found_absent_is_brought_up_again_without_anyone_asking() {
     let budget = UnattendedBringUps::default();

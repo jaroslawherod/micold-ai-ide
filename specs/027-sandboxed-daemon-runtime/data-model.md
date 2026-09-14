@@ -252,10 +252,10 @@ because this table said they were covered. S-1's own citation was the tell — i
 continuous progress alongside SC-004, which is the requirement that actually says it. The corrected
 rows are above; FR-033 had been cited nowhere at all and now has a row of its own.
 
-**Bugfix**: 2026-09-12 — BUG-004. §7 gained rules S-6 and S-7 and the two edges above the rule list;
+**Bugfix**: 2026-09-12 — BUG-005. §7 gained rules S-6 and S-7 and the two edges above the rule list;
 S-1 gained the clause that says where the progress has to arrive. The lifecycle had exactly three
 ways into `Probing` — a launch, a placement change, and a person pressing Restart — and none of them
 covers "the application is open and the service is not there", so the sandboxed placement started
 its service once per launch while the host placement started it on every attempt. S-7 records why
 R9 was not the reason for that: R9 is about a *running* sandbox, and it had been read as a rule
-about every sandbox. See `bugs/BUG-004.md`.
+about every sandbox. See `bugs/BUG-005.md`.

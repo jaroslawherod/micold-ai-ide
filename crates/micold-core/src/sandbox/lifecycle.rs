@@ -118,7 +118,7 @@ impl SandboxState {
     /// Whether a bring-up is under way — the daemon is not listening *yet* (FR-036b).
     ///
     /// A refused connection in one of these states is the bring-up still running, not a failure,
-    /// and reporting it as one is half of BUG-004.
+    /// and reporting it as one is half of BUG-005.
     pub fn is_coming_up(&self) -> bool {
         match self {
             SandboxState::Probing | SandboxState::Acquiring(_) | SandboxState::Starting => true,
@@ -498,7 +498,7 @@ pub struct BringUpAgain {
 /// The host placement has always had this: `connect_or_spawn` starts a daemon on every attempt
 /// that finds none. The sandboxed placement had three one-shot triggers — a launch, a placement
 /// change, a person pressing Restart — and none of them covers the application being open while
-/// the service is not there, which is BUG-004.
+/// the service is not there, which is BUG-005.
 ///
 /// # Why this is not [`restart`]
 ///
