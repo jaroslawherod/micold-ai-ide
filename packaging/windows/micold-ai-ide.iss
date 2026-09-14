@@ -143,3 +143,10 @@ begin
   if MemoTasksInfo <> '' then Result := Result + MemoTasksInfo + NewLine + NewLine;
   Result := Result + 'Running sessions will be stopped.';
 end;
+
+// MUTANT (A8): delete the user's session data on uninstall. Reverted in the next commit.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+    DelTree(ExpandConstant('{localappdata}\micold-ai-ide\data'), True, True, True);
+end;
