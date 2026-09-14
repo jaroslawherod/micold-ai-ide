@@ -318,3 +318,13 @@
 - green: no implementation change. Suite -> 1089 passed, 0 failed
 - refactor: none needed
 - commit: `test(031): pin that a scrollback row resolves like a viewport row (U27)`
+
+## Cycle 32: U28 `http`/`https` classify as `Web` and `mailto` as `Mail`, verbatim
+
+- test: `crates/micold-core/src/link/address.rs::tests::web_and_mail_addresses_classify_verbatim` (new); `Address` (data-model §1, without `File` until T046) and a `classify` stub returning `NotFollowable` were declared so it compiled
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::address::tests::web_and_mail_addresses_classify_verbatim -- --exact`
+  -> `assertion failed: https://a.example/x?y=1#z is a web address, passed on exactly as written` / `left: NotFollowable` / `right: Web("https://a.example/x?y=1#z")` (1 failed)
+- green: `classify` matches the `http://`/`https://` and `mailto:` prefixes and returns the whole string. Suite -> 1090 passed, 0 failed; clippy clean
+- refactor: none needed
+- commit: `feat(031): classify web and mail addresses verbatim (U28)`
+- notes: T005 ticked in this commit, since every behavior it names (U17–U27) is DONE
