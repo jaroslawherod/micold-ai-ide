@@ -34,6 +34,18 @@ followable with a deliberate gesture, and opened in whatever the user's system u
 address — a browser for a web page, the mail client for an address, the default application for a
 document.
 
+## Clarifications
+
+### Session 2026-09-14
+
+- Q: Which gesture opens a link in the terminal? → A: Ctrl+click on Linux and Windows, Cmd+click on
+  macOS; plain clicks keep selecting and focusing as today. _(decided by user)_
+- Q: Should sessions tell the programs they run that the terminal can show hyperlinks? → A: No;
+  programs behave as today, and the user guide documents opting in with `FORCE_HYPERLINK=1` in the
+  session environment-include script. _(decided by user)_
+- Q: May links using another application's own address type (`vscode://`, `slack://`, `zoommtg://`)
+  be opened? → A: Never; only `http`, `https`, `mailto` and `file` are followable. _(decided by user)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Follow a web address printed in the terminal (Priority: P1)
@@ -182,8 +194,8 @@ the complete address arrived; right-click again and choose open, and confirm it 
 
 - **Accidental activation during selection.** A press that begins a drag selection on a link, or a
   double-/triple-click to select a word or line that contains a link, MUST select rather than open.
-- **Click to focus.** A press on a link in an unfocused terminal focuses it as today; it opens the
-  link only if the press was the link gesture (FR-004).
+- **Click to focus.** A plain press on a link in an unfocused terminal focuses it as today and opens
+  nothing; a modifier-click there focuses the terminal and opens the link (FR-004).
 - **Mouse-reporting programs.** When the running program has turned on mouse reporting (a full-screen
   editor, a TUI), presses keep reaching the program as today; links are reached with Shift, the
   terminal's existing "the terminal, not the program" override (FR-016).
@@ -227,8 +239,7 @@ the complete address arrived; right-click again and choose open, and confirm it 
   on Linux and macOS): every file there counts as runnable under FR-013, so its links reveal the file
   rather than open it. This errs towards never running anything. A symbolic link is judged by the
   file it points to.
-- **Pending opens.** When an open is waiting — for the double-click interval (FR-004) or for the
-  sandbox confirmation (FR-018a) — it acts on the link captured at activation. If that link's session
+- **Pending opens.** When an open is waiting for the sandbox confirmation (FR-018a), it acts on the link captured at activation. If that link's session
   is closed or its sandbox has stopped before the open completes, nothing opens and the user is told
   why.
 - **`localhost` addresses from a sandboxed session.** A dev server started inside the sandbox prints
@@ -247,8 +258,7 @@ the complete address arrived; right-click again and choose open, and confirm it 
 - **Repeated activation.** A single activation opens the link exactly once.
 - **Cross-platform.** The link gesture, the pointer feedback, revealing files in the file manager and
   opening with the system's default application behave equivalently on Linux, macOS and Windows,
-  using each platform's conventions for the gesture (for example its modifier key, if FR-004 chooses
-  one), for what counts as a runnable file, and for opening an address.
+  using each platform's conventions for the link modifier (Ctrl or Cmd), for what counts as a runnable file, and for opening an address.
 
 ## Requirements *(mandatory)*
 
@@ -265,34 +275,26 @@ the complete address arrived; right-click again and choose open, and confirm it 
 - **FR-003**: A plain-text address that the terminal soft-wrapped across rows because it did not fit
   the pane's width MUST be recognised as a single link spanning those rows. Text on two rows separated
   by a real line break MUST NOT be joined.
-- **FR-004**: The link gesture MUST be [NEEDS CLARIFICATION: which gesture opens a link? (a) a plain
-  left click — because double-click word selection and triple-click line selection stay as they are
-  (fixed below), a single click cannot be told from the start of a double-click, so opening waits
-  until the double-click interval passes with no second press, pointer motion off the link before then
-  cancels the pending open, and every link opens after that short delay; or (b) a modifier-click — Ctrl+click on Linux/Windows, Cmd+click on macOS —
-  which opens immediately and leaves plain clicks exactly as they are today]. Fixed in either case: a
-  link opens on release of a press on the link with no drag motion, and never from a drag selection, a
-  double- or triple-click selection, or a middle-click paste. A gesture press on a link starts no
-  selection unless the pointer then moves (FR-014). The moment of activation is that release.
+- **FR-004**: The link gesture MUST be a left click with the platform's link modifier held — Ctrl on
+  Linux and Windows, Cmd on macOS. A plain left click, with no modifier, MUST behave exactly as today
+  (focus, selection) and MUST NOT open a link. A link opens on release of a modifier-press on the link
+  with no drag motion, and never from a drag selection, a double- or triple-click selection, or a
+  middle-click paste. A modifier-press on a link starts no selection unless the pointer then moves
+  (FR-014). The moment of activation is that release, and the open is not delayed.
 - **FR-005**: Trailing sentence punctuation and enclosing quotes or unbalanced brackets MUST be
   excluded from a detected plain-text address; balanced brackets inside it MUST be kept.
 - **FR-006**: Programs decide whether to declare hyperlinks from how the terminal identifies itself.
   The common detection rules (as implemented by the `supports-hyperlinks` libraries that Node and Rust
   command-line tools share) recognise only a fixed list of named terminals, or an explicit "force
-  hyperlinks" setting. A session's terminal MUST [NEEDS CLARIFICATION: how should sessions advertise
-  hyperlink support? (a) not at all — declared links appear only from programs that emit them
-  unconditionally or when the user opts in themselves (for example through a program's own setting, or
-  by setting the force-hyperlinks variable in the session environment script); plain-text
-  addresses (FR-001) carry the rest, but an AI CLI that breaks its own lines (Claude Code does) shows
-  any address longer than a row as a first-row piece that opens truncated; (b) set the explicit force-hyperlinks setting, so detecting programs emit declared
-  links — including, for some programs, into output piped to a file, where the escape codes then
-  appear as clutter; or (c) identify itself as a known hyperlink-capable terminal, which makes
-  detecting programs emit links only to the terminal but may also make them assume that terminal's
-  other capabilities]. Whatever is chosen, the terminal-identity variables such programs inspect
-  (for example `TERM_PROGRAM`, `VTE_VERSION`, `WT_SESSION`) MUST have the same values in every
-  session — sandboxed or not, AI CLI or Regular Terminal — whatever environment the app was started
-  in, so a program's detection gives the same answer in each; the user guide MUST say what those
-  values are.
+  hyperlinks" setting (`FORCE_HYPERLINK`). Sessions MUST NOT advertise hyperlink support: the app
+  MUST NOT set the force-hyperlinks variable or identify the terminal as a named hyperlink-capable
+  terminal. The terminal-identity variables such programs inspect (for example `TERM_PROGRAM`,
+  `VTE_VERSION`, `WT_SESSION`, `TERMINAL_EMULATOR`) and `FORCE_HYPERLINK`, when merely inherited from
+  the environment the app was started in, MUST NOT reach any session, so a program's detection gives
+  the same answer in every session — sandboxed or not, AI CLI or Regular Terminal. A value the user
+  sets for a session through the environment-include script (feature 011) MUST reach that session as
+  any other variable does; this is the documented opt-in. Without it, an AI CLI that breaks its own
+  lines shows an address longer than a row as a first-row piece that opens truncated (Edge Cases).
 
 **Showing links**
 
@@ -315,11 +317,10 @@ the complete address arrived; right-click again and choose open, and confirm it 
 - **FR-010**: Activating an `http`, `https` or `mailto` link, a `file` link to a document, or a `file`
   link to a folder MUST ask the operating system to open it with the default application for that
   address type, on Linux, macOS and Windows.
-- **FR-011**: Exactly these address types are followable: `http`, `https`, `mailto` and `file`, plus
-  [NEEDS CLARIFICATION: may other address types that a program declares — an application's own scheme
-  such as `vscode://`, `slack://` or `zoommtg://` — also be opened: (a) never, (b) after a
-  confirmation naming the application, or (c) freely like web links?]. Every other address type,
-  including `javascript`, `data`, `vbscript` and any type not listed, MUST NOT be followable.
+- **FR-011**: Exactly these address types are followable: `http`, `https`, `mailto` and `file`. Every
+  other address type — including an application's own scheme such as `vscode://`, `slack://` or
+  `zoommtg://`, and `javascript`, `data`, `vbscript` or any type not listed — MUST NOT be followable,
+  whether detected or declared.
 - **FR-012**: A `file` link MUST be followable only when its host part is empty, `localhost`, this
   machine's own hostname, or — for a link printed in a sandboxed session — the sandbox's hostname. A
   `file` link naming any other host MUST NOT be followable, and deciding that MUST NOT touch the
@@ -351,8 +352,9 @@ the complete address arrived; right-click again and choose open, and confirm it 
   not share with this machine — the user MUST see a notification that names the address and the
   reason, and nothing else MUST happen.
 - **FR-016**: When the running program has turned on mouse reporting, a press without Shift MUST
-  continue to reach the program exactly as today — including a modifier-click. With Shift held, the
-  link gesture (FR-004) on a link MUST open it, and a Shift-drag MUST select as today.
+  continue to reach the program exactly as today — including a Ctrl- or Cmd-click. With Shift held,
+  the link gesture (Shift plus the link modifier, click) on a link MUST open it, and a Shift-drag MUST
+  select as today.
 - **FR-017**: For the link gesture, the link that opens MUST be the one under the pointer at the moment
   of activation, as the terminal shows it at that moment. For the right-click menu, it is the link
   that was under the pointer when the menu opened (FR-020).
@@ -384,7 +386,7 @@ the complete address arrived; right-click again and choose open, and confirm it 
   pointer; no session's output may open a link without the user's gesture in that session's pane.
 - **FR-023**: The user guide's terminal section MUST describe how to recognise, open and copy links,
   the gesture on each platform and under mouse-driven programs, what happens to runnable files and to
-  file links from sandboxed sessions, how sessions advertise hyperlink support (FR-006), and what
+  file links from sandboxed sessions, how to opt in to declared hyperlinks (FR-006), and what
   happens when a link cannot be opened.
 
 ### Key Entities
@@ -411,9 +413,8 @@ the complete address arrived; right-click again and choose open, and confirm it 
   it passes only if no scheme-less text is recognised, a hard-broken address is recognised on its
   first row alone (when that piece is well-formed) and on no continuation row, and the hover display
   for that piece shows exactly the piece that would open.
-- **SC-003**: With a modifier-click gesture the operating system receives the open request within
-  1 second of release; with a plain-click gesture, within 1 second after the double-click interval
-  ends. For a link that needs confirmation (FR-018a) the bound runs from the confirmation. This holds
+- **SC-003**: The operating system receives the open request within 1 second of the gesture's
+  release. For a link that needs confirmation (FR-018a) the bound runs from the confirmation. This holds
   on all three platforms.
 - **SC-004**: In a scripted run of 100 drag, double-click and triple-click selections that start on
   links, zero links are opened.
@@ -437,7 +438,7 @@ the complete address arrived; right-click again and choose open, and confirm it 
   Edge Cases).
 - Addresses that a program breaks across rows with real line breaks — as AI CLIs that draw their own
   layout do — are not joined: the terminal cannot tell a broken address from two lines of text. When
-  such a program emits declared hyperlinks (FR-006), the whole address is still reachable through the
+  such a program emits declared hyperlinks (for example after the user opts in, FR-006), the whole address is still reachable through the
   declared link.
 - Scheme-less paths such as `src/main.rs:42` and bare domains or email addresses are not links in this
   feature; they are too easily confused with ordinary text, and a path would need a base directory
