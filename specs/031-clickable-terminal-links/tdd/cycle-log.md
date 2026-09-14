@@ -172,3 +172,13 @@
 - green: `starts_with` compares each character with `eq_ignore_ascii_case`; `scheme_at` still returns the lower-case constant, so `well_formed` needs no change. Suite -> 1074 passed, 0 failed
 - refactor: `starts_with` zips the prefix's characters directly instead of collecting them into a `Vec`; suite re-run green (1074 passed, 0 failed)
 - commit: `feat(031): match an address's scheme in any case (U16)`
+
+## Cycle 17: U17 any cell of a maximal same-URI declared run returns that whole run as one link
+
+- test: `crates/micold-core/src/link/line.rs::tests::any_cell_of_a_declared_run_returns_the_whole_run` (new), over a fake `LinkRows` (`Rows`/`Row` in the test module)
+- red: `link_at` stubbed to `None` so the test compiles. `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::any_cell_of_a_declared_run_returns_the_whole_run -- --exact`
+  -> `left: None` / `right: Some(Link { address: "https://a.example", origin: Declared, cells: [CellSpan { row: 0, cols: 5..13 }] })` (1 failed)
+- green: `link_at` takes the pointer cell's declared URI and extends left and right along the row while the neighbouring cells carry the same URI. Suite -> 1075 passed, 0 failed
+- refactor: none needed
+- commit: `feat(031): return the whole declared run under a cell (U17)`
+- notes: the run is one row for now; joining soft-wrapped rows into the logical line arrives with U21. T004 ticked in this commit: all of U1–U16 are DONE
