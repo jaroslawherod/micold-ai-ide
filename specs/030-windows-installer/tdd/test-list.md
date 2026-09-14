@@ -44,6 +44,7 @@ The entry points are:
 | A14 | `docs/install.md` no longer says there is no packaged build for Windows | US4-AS1, FR-017, SC-006 | example | any | DONE | `crates/micold-core/tests/install_guide_windows.rs::install_page_no_longer_says_windows_has_no_package` |
 | A15 | `docs/user-guide/install-windows.md` states that sessions do not survive logging out unless the service runs in a container | US4-AS2, FR-017 | example | any | DONE | `crates/micold-core/tests/install_guide_windows.rs::windows_guide_limits_say_sessions_end_at_logout` |
 | A16 | A silent uninstall while the app window is open exits non-zero and leaves the install dir and uninstall key in place (added in cycle 74, from A7's first run) | US2-AS4, FR-009, I7 | example | win | PENDING | |
+| A17 | Both installed exes carry an `RT_GROUP_ICON` resource, so Explorer and the taskbar show the project icon, not the generic exe icon (placed in cycle 75, from the unplaced FR-003 note) | US1-AS1, FR-003 | example | win | PENDING | |
 
 ## Inner loop: unit behaviors
 
@@ -227,7 +228,7 @@ These tests already exist and pass on Unix. On Windows they are compiled out tod
 
 ## Invariants and edge cases still to place
 
-- **FR-003 icon.** The installed exe shows the project icon. Embedding it is build glue (T034). The only observation today is manual quickstart M1. A smoke check for an `RT_GROUP_ICON` resource would make this automatic; it is not in tasks.md yet.
+- **FR-003 icon.** Placed as A17 in cycle 75: the smoke checks each installed exe for an `RT_GROUP_ICON` resource. Manual quickstart M1 still checks what Windows actually draws.
 - **I8.** An install path with spaces or non-ASCII characters still resolves the sibling daemon. Covered by manual quickstart M3 only.
 
 ## Out of scope

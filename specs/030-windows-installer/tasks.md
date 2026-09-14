@@ -189,7 +189,8 @@ description: "Task list for feature 030: Windows installation package"
 
 ### Implementation for User Story 1
 
-- [ ] T034 [US1] R11, after T002 vetting: add `embed-resource = "3"` as a `[build-dependencies]` entry in `crates/micold-client/Cargo.toml` and `crates/micold-daemon/Cargo.toml`.
+- [ ] T084 [US1] [A17] FR-003: in `scripts/windows-install-smoke.sh`, after the presence check, load each installed exe as a data file and fail unless it has at least one `RT_GROUP_ICON` resource. Red on both Windows legs before T034.
+- [ ] T034 [US1] [A17] R11, after T002 vetting: add `embed-resource = "3"` as a `[build-dependencies]` entry in `crates/micold-client/Cargo.toml` and `crates/micold-daemon/Cargo.toml`.
   - Create `crates/micold-client/build.rs` and `crates/micold-daemon/build.rs`. Each compiles `packaging/windows/app-icon.rc` via `embed_resource::compile(..., embed_resource::NONE)` only when `CARGO_CFG_TARGET_OS == "windows"`, and emits `cargo:rerun-if-changed` for the `.rc` and `assets/icon/icon.ico`.
   - Create `packaging/windows/app-icon.rc` containing `1 ICON "../../assets/icon/icon.ico"`, with the path resolved relative to the `.rc`.
   - Verify with `cargo check --target aarch64-apple-darwin` and on Linux that the build script is a no-op there.
@@ -291,6 +292,7 @@ description: "Task list for feature 030: Windows installation package"
 - [ ] T071 [US2] [A7] US2-AS2: in the same smoke run, uninstall removes the install dir, `.lnk`, uninstall key and `%LOCALAPPDATA%\micold-ai-ide\run`.
 - [ ] T072 [US2] [A8] US2-AS3: in the same smoke run, both seeded data markers survive uninstall.
 - [X] T073 [US2] [A9] US2-AS4: in the same smoke run, installing with the daemon running ends with the old daemon pid gone.
+- [ ] T085 [US2] [A16] FR-009: in `scripts/windows-install-smoke.sh`, run the silent uninstall once with the app window open. Expect a non-zero exit with the install dir and uninstall key still in place, then close the window and continue with step 9.
 
 **Checkpoint**: CI proves repair over a live daemon and uninstall with user data preserved, on both architectures.
 
