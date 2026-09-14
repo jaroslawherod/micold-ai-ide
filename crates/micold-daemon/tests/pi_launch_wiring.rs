@@ -6,7 +6,7 @@
 //! hand with `ps` and `/proc/<pid>/environ`. So a `pi` on `PATH` records its own arguments and the
 //! environment it was given, and the test reads that record.
 
-// unix-only: puts a `#!/bin/sh` `pi` on `PATH`, made executable with `PermissionsExt`; pending Windows triage (030 T027)
+// unix-only: keeps the materialised Pi component out of the real data directory through `XDG_DATA_HOME`, which the Windows data directory (a known folder) ignores, so it would write into the signed-in user's own; its recording `pi` is a `#!/bin/sh` script
 #![cfg(unix)]
 
 use std::collections::BTreeMap;
