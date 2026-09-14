@@ -1,22 +1,14 @@
 //! Which link is under a cell (research R4, R5; contract link-recognition §2).
 
+use std::ops::Range;
+
 use super::{detect::detect, CellSpan, Link, LinkOrigin, LinkRows};
 
 /// The link under the cell at `row`, `col`, if any (contract link-recognition §2).
 pub fn link_at(rows: &impl LinkRows, row: i64, col: u16) -> Option<Link> {
     let text = rows.text(row)?;
     let Some(uri) = rows.hyperlink(row, col) else {
-        let range = detect(text)
-            .into_iter()
-            .find(|range| range.contains(&usize::from(col)))?;
-        return Some(Link {
-            address: text.chars().skip(range.start).take(range.len()).collect(),
-            origin: LinkOrigin::Detected,
-            cells: vec![CellSpan {
-                row,
-                cols: range.start as u16..range.end as u16,
-            }],
-        });
+        return detected_at(&LogicalLine::around(rows, row), row, col);
     };
     let width = text.chars().count() as u16;
     let same = |col: u16| rows.hyperlink(row, col) == Some(uri);
@@ -40,12 +32,72 @@ pub fn link_at(rows: &impl LinkRows, row: i64, col: u16) -> Option<Link> {
     })
 }
 
+/// The rows joined by soft wraps around one row, as one string (research R4).
+struct LogicalLine {
+    text: Vec<char>,
+    /// The cell each char of `text` sits in.
+    cells: Vec<(i64, u16)>,
+}
+
+impl LogicalLine {
+    /// The logical line holding `row`: back while the row above soft-wraps into this one, then
+    /// forward while this row soft-wraps into the next.
+    fn around(rows: &impl LinkRows, row: i64) -> Self {
+        let mut first = row;
+        while rows.wrapped(first - 1) && rows.text(first - 1).is_some() {
+            first -= 1;
+        }
+        let mut line = Self {
+            text: Vec::new(),
+            cells: Vec::new(),
+        };
+        let mut current = first;
+        while let Some(text) = rows.text(current) {
+            for (col, c) in text.chars().enumerate() {
+                line.text.push(c);
+                line.cells.push((current, col as u16));
+            }
+            if !rows.wrapped(current) {
+                break;
+            }
+            current += 1;
+        }
+        line
+    }
+
+    /// The cells the chars in `range` sit in, one span per row.
+    fn spans(&self, range: Range<usize>) -> Vec<CellSpan> {
+        let mut spans: Vec<CellSpan> = Vec::new();
+        for &(row, col) in &self.cells[range] {
+            match spans.last_mut() {
+                Some(span) if span.row == row => span.cols.end = col + 1,
+                _ => spans.push(CellSpan {
+                    row,
+                    cols: col..col + 1,
+                }),
+            }
+        }
+        spans
+    }
+}
+
+/// The detected address in `line` holding the cell at `row`, `col` (contract L2).
+fn detected_at(line: &LogicalLine, row: i64, col: u16) -> Option<Link> {
+    let index = line.cells.iter().position(|&cell| cell == (row, col))?;
+    let text: String = line.text.iter().collect();
+    let range = detect(&text)
+        .into_iter()
+        .find(|range| range.contains(&index))?;
+    Some(Link {
+        address: line.text[range.clone()].iter().collect(),
+        origin: LinkOrigin::Detected,
+        cells: line.spans(range),
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use std::ops::Range;
-
     use super::*;
-    use crate::link::{CellSpan, LinkOrigin};
 
     const ADDRESS: &str = "https://a.example";
 
@@ -65,6 +117,11 @@ mod tests {
     }
 
     impl Row {
+        fn wrapped(mut self) -> Self {
+            self.wrapped = true;
+            self
+        }
+
         fn declare(mut self, cols: Range<u16>, uri: &'static str) -> Self {
             self.declared.push((cols, uri));
             self
@@ -185,6 +242,29 @@ mod tests {
                 cells: vec![span(0, 4..23)],
             }),
             "a cell inside a recognised address gives that address and the cells it covers"
+        );
+    }
+
+    #[test]
+    fn a_detected_address_over_soft_wrapped_rows_covers_every_row() {
+        let rows = Rows::new(
+            0,
+            vec![row("See https://a.exa").wrapped(), row("mple/x now")],
+        );
+        let link = Some(Link {
+            address: "https://a.example/x".to_string(),
+            origin: LinkOrigin::Detected,
+            cells: vec![span(0, 4..17), span(1, 0..6)],
+        });
+        assert_eq!(
+            link_at(&rows, 0, 6),
+            link,
+            "from the first row, the address continues onto the row it soft-wraps into"
+        );
+        assert_eq!(
+            link_at(&rows, 1, 2),
+            link,
+            "from the second row, the address is the same link, starting on the row above"
         );
     }
 }

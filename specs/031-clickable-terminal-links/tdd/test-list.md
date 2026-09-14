@@ -99,7 +99,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | U18 | Two same-URI runs separated by an undeclared cell are two links | US2.4, L6 | example | DONE | `crates/micold-core/src/link/line.rs::tests::two_same_uri_runs_apart_are_two_links` |
 | U19 | Adjacent runs with different URIs are two links with their own addresses | US2.3 | example | DONE | `crates/micold-core/src/link/line.rs::tests::adjacent_runs_with_different_uris_are_two_links` |
 | U20 | A declared URI wins over address-shaped visible text in the same cells | US2.5 | example | PENDING | |
-| U21 | A detected address over rows joined by `wrapped = true` returns cells on every row it covers | FR-003, US1.3, L2 | example | PENDING | |
+| U21 | A detected address over rows joined by `wrapped = true` returns cells on every row it covers | FR-003, US1.3, L2 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_detected_address_over_soft_wrapped_rows_covers_every_row` |
 | U22 | Rows separated by a real line break are never joined; only the first row's well-formed piece is a link | FR-003 | example | PENDING | |
 | U23 | A wrapped logical line within 64 rows each way is joined; a candidate reaching the 64-row cap is dropped | FR-003, L4 | example | PENDING | |
 | U24 | A candidate touching a row whose `text` is `None` is dropped | L7 | example | PENDING | |
@@ -107,6 +107,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | U26 | A plain-text cell returns `None` | L3 | example | PENDING | |
 | U27 | A negative (scrollback) row resolves exactly as a viewport row with the same content | US1.6 | example | PENDING | |
 | U147 | A detected address on one row returns its cells on that row (split from U21 before its cycle) | FR-001, L2 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_detected_address_on_one_row_returns_its_cells` |
+| U148 | A declared run continues across a soft wrap onto the next row, and stops at a real line break | FR-002, FR-007, L1 | example | PENDING | |
 
 ### `crates/micold-core/src/link/address.rs`
 

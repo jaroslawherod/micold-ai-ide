@@ -214,3 +214,13 @@
 - refactor: none; U21 reshapes `link_at` around the logical line
 - commit: `feat(031): return a detected address under a cell on one row (U147)`
 - notes: split before its cycle. U21 (detection over soft-wrapped rows) needed both detection in `link_at` and the logical line, two new behaviors at once. This one-row step was appended to the list as U147 and run first, so U20's precedence rule can also be proven against real detection. Order now U147, U21, U20, U22…U27
+
+## Cycle 21: U21 a detected address over rows joined by `wrapped = true` returns cells on every row it covers
+
+- test: `crates/micold-core/src/link/line.rs::tests::a_detected_address_over_soft_wrapped_rows_covers_every_row` (new); the fake `Row` gained `wrapped()`
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::a_detected_address_over_soft_wrapped_rows_covers_every_row -- --exact`
+  -> `left: Some(Link { address: "https://a.exa", origin: Detected, cells: [CellSpan { row: 0, cols: 4..17 }] })` / `right: Some(Link { address: "https://a.example/x", ..., cells: [CellSpan { row: 0, cols: 4..17 }, CellSpan { row: 1, cols: 0..6 }] })` (1 failed)
+- green: a `LogicalLine` joins the rows around the pointer row (back while the row above has `wrapped`, forward while the current row has it), keeping each char's cell. `detected_at` runs `detect` on the joined text and maps the range back to one span per row. Suite -> 1079 passed, 0 failed
+- refactor: the test module's explicit `Range`/`CellSpan`/`LinkOrigin` imports dropped, since `use super::*` already brings them; suite re-run green (1079), `cargo clippy -p micold-core --all-targets -D warnings` clean
+- commit: `feat(031): detect an address across soft-wrapped rows (U21)`
+- notes: no cap yet (U23) and no unavailable-row drop yet (U24). The declared run is still per row: contract L1 and research R5 say it continues across a soft wrap, which no listed behavior pinned, so U148 was appended for it
