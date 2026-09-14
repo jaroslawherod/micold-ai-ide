@@ -33,11 +33,46 @@ pub fn no_window(cmd: &mut Command) -> &mut Command {
 pub const APP_MUTEX_NAME: &str = "Local\\MicoldAIIDE";
 
 /// Proof that this process announced itself to the installer. The announcement ends on drop.
-pub struct RunningMarker;
+pub struct RunningMarker {
+    #[cfg(windows)]
+    mutex: windows_sys::Win32::Foundation::HANDLE,
+}
 
-/// Announce that an app process is running, for the installer's `AppMutex` check.
+/// Announce that an app process is running, for the installer's `AppMutex` check. `None` off
+/// Windows, and on Windows when the mutex cannot be created -- the app still runs, the installer
+/// just cannot see it.
+#[cfg(windows)]
 pub fn announce_running() -> Option<RunningMarker> {
-    todo!()
+    use windows_sys::Win32::System::Threading::CreateMutexW;
+
+    let name: Vec<u16> = APP_MUTEX_NAME.encode_utf16().chain(Some(0)).collect();
+    // SAFETY: `name` is NUL-terminated and outlives the call; null security attributes are the
+    // documented default. Opening an existing mutex (the other binary holds it) also succeeds and
+    // returns a handle of our own, which is what keeps the name alive while either process runs.
+    let mutex = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
+    if mutex.is_null() {
+        return None;
+    }
+    Some(RunningMarker { mutex })
+}
+
+/// Announce that an app process is running, for the installer's `AppMutex` check. `None` off
+/// Windows, and on Windows when the mutex cannot be created -- the app still runs, the installer
+/// just cannot see it.
+#[cfg(not(windows))]
+pub fn announce_running() -> Option<RunningMarker> {
+    None
+}
+
+#[cfg(windows)]
+impl Drop for RunningMarker {
+    fn drop(&mut self) {
+        // SAFETY: the handle came from a successful `CreateMutexW` and is closed only here. The
+        // name disappears with its last handle.
+        unsafe {
+            windows_sys::Win32::Foundation::CloseHandle(self.mutex);
+        }
+    }
 }
 
 #[cfg(test)]
