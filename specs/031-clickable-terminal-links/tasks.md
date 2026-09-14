@@ -41,14 +41,14 @@ the `env_include.rs` builders (plan, Target Platform).
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the render-free module `crates/micold-core/src/link/`, with `mod.rs`, `detect.rs`, `line.rs`, `address.rs` and `resolve.rs` declared and empty, and add `pub mod link;` to `crates/micold-core/src/lib.rs`
+- [X] T001 Create the render-free module `crates/micold-core/src/link/`, with `mod.rs`, `detect.rs`, `line.rs`, `address.rs` and `resolve.rs` declared and empty, and add `pub mod link;` to `crates/micold-core/src/lib.rs`
 - [ ] T002 [P] Write `specs/031-clickable-terminal-links/scripts/links-fixture.sh`. It prints the quickstart §B.0 lines, emitting the OSC 8 runs with `printf '\e]8;;%s\e\\%s\e]8;;\e\\'`. It creates `/tmp/031-fixture/readme.txt`, `/tmp/031-fixture/run.sh` (`chmod +x`) and `/tmp/031-fixture/folder/`. It uses `$(hostname)` in the `file://` host line
 
 ---
 
 ## Phase 2: Foundational
 
-- [ ] T003 Define the shared core types from data-model §1. `LinkRows` and `Link` go in `crates/micold-core/src/link/mod.rs`; the rest go in `crates/micold-core/src/link/resolve.rs` and are re-exported from `link`.
+- [X] T003 Define the shared core types from data-model §1. `LinkRows` and `Link` go in `crates/micold-core/src/link/mod.rs`; the rest go in `crates/micold-core/src/link/resolve.rs` and are re-exported from `link`.
   - `trait LinkRows { fn text(&self, row: i64) -> Option<&str>; fn wrapped(&self, row: i64) -> bool; fn hyperlink(&self, row: i64, col: u16) -> Option<&str>; }`. `row` is relative to the viewport top and may be negative.
   - `Link { address: String, origin: LinkOrigin, cells: Vec<CellSpan> }`, with `LinkOrigin { Detected, Declared }` and `CellSpan { row: i64, cols: Range<u16> }`. "Two `Link`s are the same link when `address`, `origin` and `cells` are equal" (derive `PartialEq, Eq`).
   - `LinkContext { host_names: Vec<String>, windows_host: bool, sandbox: Option<SandboxLinkContext> }`.
