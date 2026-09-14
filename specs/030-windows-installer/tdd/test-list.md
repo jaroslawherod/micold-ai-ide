@@ -68,6 +68,14 @@ The entry points are:
 | U5  | The bound pipe's DACL has exactly one ACE, allowing the current token's user SID | FR-021, SC-009, E2.1 | example | win | DONE | `crates/micold-daemon/tests/windows_pipe_acl.rs::the_bound_pipe_dacl_allows_only_the_current_user` |
 | U6  | Of two simultaneous starters on one endpoint, exactly one is `Bound` and the other `AlreadyRunning` | FR-022, E3.1 | example | any | DONE | `crates/micold-daemon/tests/daemon_singleton.rs::two_simultaneous_starters_converge_on_one_daemon` (Unix and Windows, run 34823596152) |
 | U7  | Acquiring after the previous listener is dropped returns `Bound` | FR-020, FR-022, E3.2 | example | any | DONE | `crates/micold-daemon/tests/daemon_singleton.rs::acquire_after_drop_rebinds` (Unix and Windows, run 34823596152) |
+| U73 | Binding when the pipe name exists but its DACL refuses this user (someone else created it) is an error naming the pipe, not `AlreadyRunning` (security review D1) | FR-021, E2.1 | example | win | PENDING | |
+
+### `crates/micold-core/src/connect.rs` (client side of the pipe, from the T061 security review)
+
+| id  | behavior | traces | kind | where | state | test |
+| --- | --- | --- | --- | --- | --- | --- |
+| U71 | Connecting refuses a pipe whose server process runs as an account other than the expected user SID, with an error naming both SIDs (security review D1) | FR-021, E2.1 | example | win | PENDING | |
+| U72 | The client opens the pipe with `SECURITY_SQOS_PRESENT \| SECURITY_IDENTIFICATION`, so the server cannot impersonate it beyond identification (security review D2) | FR-021, E2.1 | example | win | PENDING | |
 
 ### `crates/micold-daemon/src/server.rs` (pid record)
 
