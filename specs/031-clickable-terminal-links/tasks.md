@@ -70,7 +70,7 @@ the `env_include.rs` builders (plan, Target Platform).
 
 ### Tests for US1: recognition in core ⚠️ write first, must fail
 
-- [ ] T004 [P] [US1] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] [U16] Unit tests for `detect(text) -> Vec<Range<usize>>` (char-index ranges) in `crates/micold-core/src/link/detect.rs`.
+- [X] T004 [P] [US1] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] [U16] Unit tests for `detect(text) -> Vec<Range<usize>>` (char-index ranges) in `crates/micold-core/src/link/detect.rs`.
   - Every row of contract link-recognition §3.
   - Each rule of research R3:
     - A prefix preceded by `[A-Za-z0-9]` is rejected.
