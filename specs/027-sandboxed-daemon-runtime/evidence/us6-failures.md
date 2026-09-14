@@ -268,3 +268,19 @@ worktree's binary, sitting in the shared `target-shared/debug/`, that a `cargo b
 micold-daemon was never built and the stale file was copied out as if it were fresh. The run still
 proved the fix (the client did move to a host process and did reach a daemon) but reported it as
 "The session service is a different version". Build the two in separate `cargo build` invocations.
+
+## US6 scenario 9 — what covers the unattended recovery (T192, BUG-004)
+
+Three layers prove a sandbox stopped under the application comes back without the user. None of them runs
+the application's own message handling against a real runtime.
+
+| layer | what it runs | what it cannot show |
+| --- | --- | --- |
+| `main.rs` `mod tests` (A1–A4, U5–U31) | the client's `update_inner`, the real entry point, with the bring-up's task recorded instead of run | that a real runtime and daemon answer the way the messages assume |
+| `sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_without_user_action` (T181, `sandbox_real_lifecycle.rs`) | the core decisions (`container_lost`, `service_absent`, `bring_up`, a dial) in the client's order, against Docker | the wiring: its loop at `:652–668` re-states that order, so a client that stopped calling one of them would still pass |
+| T178's visual pass (`performance.md`) | the built application on Xvfb, `docker stop` from outside, frames and logs | anything but the one path it drove, once, on one machine |
+
+The gap is therefore the wiring between `update_inner` and a real runtime. A regression that sends the
+right messages but acts on them wrongly against Docker is caught only by re-running T178. Driving
+`update_inner` against a real runtime needs the client binary's test harness to run a task's stream, and
+it rebuilds the shared `micold-daemon:dev` image. It was not done.

@@ -79,6 +79,8 @@ FR-036b, SC-004c, US6 scenario 9, S-6, S-7 (`data-model.md` §7), and C-8's call
 | U27 | A started service that keeps refusing is reported                                 | FR-027, FR-036b | example | DONE | `main::tests::a_started_service_that_keeps_refusing_is_reported` |
 | U28 | The first refused dial after `Started` is neither reported nor shown              | FR-036b      | example | DONE | `main::tests::the_first_refused_dial_after_start_is_the_service_still_starting` |
 | U29 | A failure after `Started` is not still waiting for the service                    | FR-036b      | example | DONE | `main::tests::a_failure_after_start_is_not_still_waiting_for_the_service` |
+| U30 | A started sandbox marked `Stale` before its service answered is still coming up   | FR-036b      | example | DONE | `main::tests::a_started_sandbox_marked_stale_before_its_service_answered_is_still_coming_up` |
+| U31 | A service that answered with a changed mount set, marked `Stale`, is a lost connection when it goes away | FR-027 | example | DONE | `main::tests::a_service_that_answered_with_a_changed_mount_set_and_went_away_is_a_lost_connection` (pin; red by mutant N3) |
 
 ## Invariants and edge cases still to place
 
@@ -87,7 +89,9 @@ FR-036b, SC-004c, US6 scenario 9, S-6, S-7 (`data-model.md` §7), and C-8's call
 ## Out of scope
 
 - A real-runtime recovery test (T181): needs `mise run image`, which replaces the `micold-daemon:dev`
-  tag every worktree shares; tracked in `tasks.md`, not on this list.
+  tag every worktree shares; tracked in `tasks.md`, not on this list. It runs the core decisions in
+  the client's order, not the client: the app-level wiring is covered only by the `update_inner`
+  tests above plus T178's visual pass (T192, `evidence/us6-failures.md`).
 - Test-only refactors T182–T185 (notification level, the real `RECONNECT_BACKOFF`, loop guards,
   renames): structural, recorded in the cycle log's notes rather than as behaviors.
 - The rest of feature 027: see the scope note above.

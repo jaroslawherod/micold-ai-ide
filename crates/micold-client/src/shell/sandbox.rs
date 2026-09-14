@@ -195,6 +195,11 @@ pub struct BringUp {
     pub after: std::time::Duration,
 }
 
+#[cfg(test)]
+thread_local! {
+    static SCHEDULED: std::cell::RefCell<Vec<BringUp>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
 impl BringUp {
     /// A bring-up that starts at once.
     pub fn now(plan: BootPlan) -> Self {
@@ -206,7 +211,16 @@ impl BringUp {
 
     /// Run it against the real container runtime.
     pub fn task(self) -> iced::Task<micold_client::app::Message> {
+        #[cfg(test)]
+        SCHEDULED.with(|scheduled| scheduled.borrow_mut().push(self.clone()));
         iced::Task::stream(self.stream(SystemRunner))
+    }
+
+    /// The bring-ups this test's thread turned into tasks, oldest first, and forgets them. A `Task`
+    /// cannot be read back, so this is how a test tells the bring-up apart from any other work.
+    #[cfg(test)]
+    pub fn scheduled() -> Vec<BringUp> {
+        SCHEDULED.with(|scheduled| scheduled.take())
     }
 
     /// The messages the bring-up produces, driving the runtime through `runner`.
