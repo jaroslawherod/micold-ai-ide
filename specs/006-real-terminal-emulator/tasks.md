@@ -572,20 +572,23 @@ selection model has no empty selection. The pane sends same-cell pointer jitter 
 pane's release copies from its pre-batch view, so a press and release delivered together copy the
 previous selection.
 
-- [X] T074 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] Failing regression tests. In `src/selection.rs` (`mod tests`): a `Char`
+- [X] T074 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] [U11] [U12] [U13] Failing regression tests. In `src/selection.rs` (`mod tests`): a `Char`
   selection started and never updated `contains` no cell and yields empty `text`; one updated onto
   its own start anchor selects that cell, and so does one dragged into another cell and back; `Word`
   and `Line` selections started without motion still select the word and the line. In `tests/clipboard_request.rs`: a click-only selection over text produces no copy
   request (FR-013e, FR-013c). In `src/ui/material/terminal_pane.rs` (`clipboard_gestures`): after a
   left press, a `CursorMoved` inside the pressed cell publishes no `TerminalSelectUpdate` and one
-  into another cell does. With a selection already held, a left press and release delivered in one
+  into another cell does. So does one after a wheel turn that scrolled the view, or one outside the
+  pane; a press and jitter in the focus gutter beside an edge cell, or after a wheel turn that
+  cannot scroll, publishes none. With a selection already held, a left press and release delivered in one
   batch write nothing to the clipboard, and the release publishes `TerminalSelectionReleased` after
   its `TerminalSelectStart`.
-- [X] T075 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] In `Selection` (`src/selection.rs`), a `Char` selection is empty until its first
+- [X] T075 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] [U11] [U12] [U13] In `Selection` (`src/selection.rs`), a `Char` selection is empty until its first
   `update`, whatever that update's anchor is. Until then `contains` returns false and `text` returns
   an empty string. `Word`/`Line` behaviour and every existing selection test are unchanged. In
   `TerminalPane`, remember the pressed viewport cell and publish no
-  `TerminalSelectUpdate` until the pointer has entered another cell. In the left-release arm,
+  `TerminalSelectUpdate` until the pointer has entered another cell; a local scroll that moves the
+  view, or a position outside the pane, counts as having left it. In the left-release arm,
   publish a new `SessionMsg::TerminalSelectionReleased` instead of writing `selectable_content()`,
   and handle it in the shell (`shell::clipboard`) with `selection::copy_request` on the current
   `app.selection`, without closing the context menu. Make T074 pass.
