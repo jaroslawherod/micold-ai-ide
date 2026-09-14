@@ -1358,6 +1358,8 @@ pub enum Msg {
     TerminalResized { cols: u16, rows: u16 },
     /// Copy the current terminal selection to the clipboard (binary handles clipboard) (FR-013).
     TerminalCopyRequested,
+    /// A left-button selection gesture ended (BUG-007 stub, T074).
+    TerminalSelectionReleased,
     /// Paste clipboard text into the focused session's PTY (binary handles clipboard) (FR-013).
     TerminalPasteRequested,
     /// The user activated this link (feature 031, FR-010). Emits `Outcome::OpenLink`; the shell
@@ -1460,6 +1462,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         | Msg::TerminalScrolledTo(_)
         | Msg::TerminalResized { .. }
         | Msg::TerminalCopyRequested
+        | Msg::TerminalSelectionReleased
         | Msg::TerminalPasteRequested => {}
         Msg::LinkActivated(link) => return link_activated(link),
         Msg::LinkOpenFinished { address, result } => link_open_finished(state, &address, result),
