@@ -2319,6 +2319,7 @@ fn the_service_answers_with(
                 env_include_enabled: false,
                 env_include_script_path: String::new(),
                 env_include_timeout_secs: 30,
+                pi_activity_component: false,
             },
         }),
     );
