@@ -291,4 +291,15 @@ mod tests {
             "text that only looks like an address, with no scheme in front, is not one"
         );
     }
+
+    #[test]
+    fn never_finds_a_script_or_data_address() {
+        assert_eq!(
+            found(
+                r#"javascript:alert(document.cookie) data:text/html;base64,PHNjcmlwdD4= vbscript:msgbox("x")"#
+            ),
+            Vec::<String>::new(),
+            "an address that runs code or carries its own content is never offered as a link"
+        );
+    }
 }
