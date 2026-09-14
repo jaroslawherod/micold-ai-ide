@@ -53,3 +53,13 @@
   opener. Suite -> 1062 passed, 0 failed (U3 still green)
 - refactor: none needed; the scan already moved into its own function in the green step
 - commit: `feat(031): end an address before an unbalanced closing bracket (U4)`
+
+## Cycle 5: U5 excludes an enclosing quote
+
+- test: `crates/micold-core/src/link/detect.rs::tests::excludes_an_enclosing_quote` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::excludes_an_enclosing_quote -- --exact`
+  -> `left: ["https://example.com\""]` / `right: ["https://example.com"]` (1 failed)
+- green: a `"` or `'` right before the scheme is passed to `scan_end`, which ends the address at
+  that quote. Suite -> 1063 passed, 0 failed
+- refactor: none needed
+- commit: `feat(031): end a quoted address before its closing quote (U5)`
