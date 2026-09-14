@@ -309,3 +309,12 @@
 - green: no implementation change. Suite -> 1088 passed, 0 failed
 - refactor: none needed
 - commit: `test(031): pin that a plain-text cell is no link (U26)`
+
+## Cycle 31: U27 a negative (scrollback) row resolves exactly as a viewport row with the same content
+
+- test: `crates/micold-core/src/link/line.rs::tests::a_scrollback_row_resolves_like_a_viewport_row` (new)
+- red: the first run did not compile (`the method concat exists for array [Vec<Row>; 2], but its trait bounds were not satisfied`: the fake `Row` is not `Clone`), so no red was recorded from it; the rows are now built with `chain`. It then passed on arrival (`test ... ok`), since rows are `i64` throughout. Deliberate mutant: the walk back never goes above row 0 (`(row - MAX_ROWS_EACH_WAY).max(0)`). `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::a_scrollback_row_resolves_like_a_viewport_row -- --exact`
+  -> `assertion failed: the same rows three lines up, in scrollback, give the same link on the rows above` / `left: None` / `right: Some(Link { address: "https://a.example/x", ..., cells: [CellSpan { row: -2, cols: 4..17 }, CellSpan { row: -1, cols: 0..6 }] })` (1 failed). Mutant reverted from the backup
+- green: no implementation change. Suite -> 1089 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin that a scrollback row resolves like a viewport row (U27)`
