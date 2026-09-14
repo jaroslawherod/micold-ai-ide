@@ -68,6 +68,11 @@ Canvas render over `content.grid.display_iter()`:
     (SGR/normal encoding as in iced_term `backend.rs`). (FR-013a)
   - Else left-press/drag → `SelectStart`/`SelectUpdate` (single/double/triple = simple/semantic/
     lines). Holding **Shift** forces selection even under mouse mode. (FR-013, FR-013b)
+    *(Bugfix BUG-007: a simple selection is empty — nothing highlighted, nothing auto-copied — until
+    its first `SelectUpdate`, and the pane publishes no `SelectUpdate` while the pointer is still in
+    the pressed viewport cell, so a click without a drag only clears the previous selection. The release's auto-copy is `TerminalSelectionReleased`,
+    resolved against the selection as updated by the same batch's messages, never the pane's
+    pre-batch view. FR-013e.)*
   - Wheel → `TerminalAction(Scroll(lines))`; the binary forwards to the PTY on
     `ALT_SCREEN|ALTERNATE_SCROLL`, else scrolls local scrollback. (FR-016 + wheel edge case)
   - **Delta → lines (BUG-002, FR-016b).** Scroll deltas arrive in two units and both MUST scroll:
