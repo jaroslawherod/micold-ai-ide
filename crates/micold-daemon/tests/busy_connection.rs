@@ -19,9 +19,6 @@
 //! stronger than proving it for one particular multiple of the deadline, and it does not put a
 //! 90-second sleep in the suite.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
@@ -80,9 +77,14 @@ fn make_worktree_add_slow(repo: &Path, how_long: Duration) {
         format!("#!/bin/sh\nsleep {}\n", how_long.as_secs_f32()),
     )
     .unwrap();
-    let mut perms = std::fs::metadata(&hook).unwrap().permissions();
-    std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
-    std::fs::set_permissions(&hook, perms).unwrap();
+    // Git for Windows runs hooks through its own `sh`, so the same script works there; only Unix
+    // needs the execute bit.
+    #[cfg(unix)]
+    {
+        let mut perms = std::fs::metadata(&hook).unwrap().permissions();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
+        std::fs::set_permissions(&hook, perms).unwrap();
+    }
 }
 
 /// A catalog holding one git-repo project rooted at `project_dir`, persisted to `store_dir`.

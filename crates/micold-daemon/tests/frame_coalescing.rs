@@ -15,9 +15,6 @@
 //! proves the framer's arithmetic; only a real child writing as fast as it can proves the tick
 //! survives contact with a process that never pauses.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -45,11 +42,24 @@ const COLS: u16 = 80;
 /// A shell that prints `<marker>_1 … <marker>_<count>` as fast as it can, then idles so the PTY
 /// stays open (EOF would end the stream and stop the clock early).
 fn flood(marker: &str, count: usize) -> CommandBuilder {
-    let mut cmd = CommandBuilder::new("sh");
-    cmd.arg("-c");
-    cmd.arg(format!(
-        "i=1; while [ $i -le {count} ]; do echo {marker}_$i; i=$((i+1)); done; sleep 60"
-    ));
+    #[cfg(unix)]
+    let mut cmd = {
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg(format!(
+            "i=1; while [ $i -le {count} ]; do echo {marker}_$i; i=$((i+1)); done; sleep 60"
+        ));
+        cmd
+    };
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut cmd = CommandBuilder::new("cmd");
+        cmd.arg("/c");
+        cmd.arg(format!(
+            "(for /l %i in (1,1,{count}) do @echo {marker}_%i)& ping -n 61 127.0.0.1 >nul"
+        ));
+        cmd
+    };
     cmd.cwd(std::env::temp_dir());
     cmd
 }

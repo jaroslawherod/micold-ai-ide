@@ -21,9 +21,6 @@
 //! seam, so the question here is the same one — does the client hear about it — asked of a path
 //! the missing-binary case cannot reach.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::Duration;
@@ -296,13 +293,23 @@ struct PiInstalled {
 
 impl PiInstalled {
     fn new() -> Self {
-        use std::os::unix::fs::PermissionsExt;
-
         let guard = env_lock();
         let bin = tempfile::tempdir().unwrap();
-        let command = bin.path().join(AiCli::Pi.provider().command());
-        std::fs::write(&command, "#!/bin/sh\nexit 0\n").unwrap();
-        std::fs::set_permissions(&command, std::fs::Permissions::from_mode(0o755)).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let command = bin.path().join(AiCli::Pi.provider().command());
+            std::fs::write(&command, "#!/bin/sh\nexit 0\n").unwrap();
+            std::fs::set_permissions(&command, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        // A `.cmd` beside the command name, which `PATHEXT` resolves.
+        #[cfg(windows)]
+        std::fs::write(
+            bin.path()
+                .join(format!("{}.cmd", AiCli::Pi.provider().command())),
+            "@exit 0\r\n",
+        )
+        .unwrap();
 
         let previous_path = std::env::var_os("PATH");
         let mut dirs = vec![bin.path().to_path_buf()];
