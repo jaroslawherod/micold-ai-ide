@@ -119,11 +119,23 @@ table — all three fail while the same commands against the project succeed.
 - [X] T038 [US1] Implement `ImageRef` parsing, moving-tag detection and the pull/import/build decision in `crates/micold-core/src/sandbox/image.rs` (FR-024, FR-024a–c)
 - [X] T039 [US1] Implement `acquire_image` with progress reporting, and `create`/`start`/`stop`/`remove`/`inspect` over the exec shim in `crates/micold-core/src/sandbox/runtime.rs` (C-7, C-8)
 - [X] T040 [US1] Implement the sandbox lifecycle side of `connect_or_start` in `crates/micold-core/src/connect.rs` — probe, acquire, start, handshake — returning classified failures rather than falling back (P-2)
-- [X] T041 [US1] Add the client-side sandbox lifecycle state in `crates/micold-client/src/features/sandbox.rs` and the off-thread runtime calls, progress and failure-to-`Message` glue in `crates/micold-client/src/shell/sandbox.rs`
+- [X] T041 ⚠️ Reopened [US1] Add the client-side sandbox lifecycle state in `crates/micold-client/src/features/sandbox.rs` and the off-thread runtime calls, progress and failure-to-`Message` glue in `crates/micold-client/src/shell/sandbox.rs`
+      *(reopened — BUG-004)* The failure-to-`Message` glue landed; the **progress** glue did not.
+      `boot()` passes `&mut |_| {}` and says so: *"threading a channel through boot for the sake of
+      the first release's progress bar would buy less than the settings view (US3) will"*. So
+      `Acquiring` and `Starting` are computed by the core and reach nothing, and the app sits on the
+      `Probing` that `Sandbox::for_placement` set for the whole bring-up. Completed by T170.
+      *(closed 2026-09-13 by T170)*
 - [X] T042 [US1] Add the enable/disable control and the restart confirmation to the existing settings surface in `crates/micold-client/src/ui/settings_form.rs`, as a temporary home until US3 replaces it
-- [X] T043 [US1] Show `StageProgress` during image acquisition in `crates/micold-client/src/ui/`, driven by the T039 callbacks (SC-004)
+- [X] T043 ⚠️ Reopened [US1] Show `StageProgress` during image acquisition in `crates/micold-client/src/ui/`, driven by the T039 callbacks (SC-004)
+      *(reopened — BUG-004)* `ui/sandbox_status.rs` is complete and needs **no edit**: it renders
+      `Probing`, `Acquiring(progress)` and `Starting`, and tests its own wording. It is driven by
+      nothing, because T041 dropped the callbacks this task names. Reopened for its second clause
+      only — closing it is T170 landing, then seeing this view move under §B.1 (T172).
+      *(closed 2026-09-13 by T172)* Seen moving at the application: "Checking the container runtime" →
+      "Getting the sandbox image" with bar and per-layer lines → "Starting the sandbox".
 - [X] T044 [P] [US1] Write `docs/user-guide/sandboxed-daemon.md` — enabling, what the sandbox can and cannot see, the credential opt-ins and their default-off posture, and offline image import (Principle VII, FR-024a)
-- [X] T045 [US1] Ran quickstart.md **§B.2** (plus §B.3 and §B.4) against Docker 29.5.1 and recorded it in `specs/027-sandboxed-daemon-runtime/evidence/us1-isolation.md` — the boundary, file ownership, network posture, limits and token non-leakage all hold. **§B.1 (first enable, cold, through the GUI) is still outstanding**: it needs the application running at a display, and it depends on T043's progress indicator to be meaningful
+- [X] T045 [US1] Ran quickstart.md **§B.2** (plus §B.3 and §B.4) against Docker 29.5.1 and recorded it in `specs/027-sandboxed-daemon-runtime/evidence/us1-isolation.md` — the boundary, file ownership, network posture, limits and token non-leakage all hold. **§B.1 (first enable, cold, through the GUI) is still outstanding**: it needs the application running at a display, and it depends on T043's progress indicator to be meaningful *(the outstanding half is T172 — BUG-004; T043 is reopened again, so that dependency is live)*
 
 **Checkpoint**: the feature's core claim is demonstrable. This is the MVP.
 
@@ -391,11 +403,18 @@ does a session start unsandboxed without an explicit choice.
       Three earlier revisions of the measurement passed while measuring nothing (an unmounted catalogue, a snapshot
       mistaken for a prompt, and two different shells); each is written up in the evidence, because a green comparative
       benchmark is exactly the kind that hides its own vacuity.
-- [x] T117 [P] Measure SC-004 — first-time enable under 5 minutes with continuous progress, from a cold image state — into `specs/027-sandboxed-daemon-runtime/evidence/performance.md`
+- [X] T117 ⚠️ Reopened [P] Measure SC-004 — first-time enable under 5 minutes with continuous progress, from a cold image state — into `specs/027-sandboxed-daemon-runtime/evidence/performance.md`
       — **851ms** against a 300,000ms budget (acquire 419ms, create 258ms, start 123ms, daemon answering 50ms), plus
       **9s** for SC-004b's source-change loop. The *duration* half is measured; the **continuity** half is not, and the
       evidence says so: the only acquisition route runnable here is the file import, which finished too fast to have
       any silence in it, and the route that would (a registry pull) has nothing published to pull.
+      *(reopened — BUG-004)* And it is measured in the wrong **place**, which is the more useful
+      finding: the clock and the progress counter both sit in `micold-core`, around `acquire_image`.
+      The evidence file says the clock covers *"the application's whole enable sequence"*; it covers
+      the core's. That is below the level the defect lives at, so the measurement passed over a
+      client that discards every report it is given. SC-004c now says where to measure. Re-measure
+      through the app once T170 lands — the registry route it could not take then is publishable
+      now (Phase 15 shipped it), so the long case is finally runnable.
 - [x] T118 Audit that no code path logs, prints, or includes the authentication token in argv or an error message (P-3), adding the grep-the-argv-and-log test to `crates/micold-core/tests/protocol_auth.rs`
       — the audit found a live vector, not a clean bill. `auth::Token` redacts its own `Debug`, but
       the token stops being a `Token` the moment it goes on the wire: `ClientMsg::Hello`,
@@ -987,6 +1006,182 @@ they left open.
 annotated in place, because the defect is a task that was never written rather than one that
 drifted. See `bugs/BUG-003.md`.
 
+## Phase 18: Bugfix BUG-004 — switching to a container left the client dialling a sandbox nobody starts
+
+**Goal**: Give the sandboxed placement the availability guarantee the host placement has always had.
+Choose *In a container* and the client starts dialling 127.0.0.1:7727 once a second; if the container
+is not up — no image pulled yet, the user stopped it, the bring-up failed once at launch — nothing
+ever starts it. `connect_or_spawn` does exactly this for the host process on every attempt;
+`connect_at` does not, and no caller makes up the difference. The sandboxed bring-up has three
+triggers, all one-shot: launch (`shell/startup.rs:307`), a placement change
+(`shell/persist.rs:391`), and a person pressing Restart (`Msg::RestartRequested`). Miss all three
+and the only remedy is relaunching the application.
+
+Underneath it a second defect makes the first one unreadable: `shell/sandbox.rs::boot` passes
+`&mut |_| {}` as the progress callback, so a bring-up that is working sits on `Probing` for its whole
+duration while `on_connect_failed` posts "Could not connect to the session daemon" once a second.
+A working bring-up looks identical to a failed one, and louder. `ui/sandbox_status.rs` renders every
+stage correctly and is driven by nothing.
+
+FR-002a, FR-036a and FR-036b settle the first; SC-004c and `data-model.md` §7's S-1 clause settle
+the second — T117's measurement passed over it because it ran in `micold-core`, around
+`acquire_image`, below the level the dropped callback lives at.
+
+### Tests for BUG-004 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T167 [BUG-004] *(test)* `crates/micold-core/src/sandbox/lifecycle.rs` (`mod tests`) — the
+      `service_absent` edge: from `Failed` with attempts remaining it yields `Probing`; from
+      `Probing`, `Acquiring` or `Starting` it yields `None`, so a bring-up already in flight is never
+      started a second time; from `Running` and `Stale` it yields `None`, which is S-7's scope line —
+      R9 protects a *running* sandbox and this edge never touches one; and once the bound is spent it
+      yields `None` for good, leaving `Failed` standing for FR-034's manual remedy (S-6, S-2,
+      FR-036a). The bound and the spacing are values the caller reads, not sleeps, so this stays a
+      pure test — the same division S-5 draws.
+      *Deviation:* written in `crates/micold-core/tests/sandbox_state.rs` rather than `mod tests`,
+      beside the other lifecycle edges and the `every_state()` helper the scope assertion needs.
+      Red against a stub returning `None`: three of the four failed on their own assertions; the
+      fourth (`absence_only_brings_up_a_sandbox_that_has_failed`) was confirmed by a mutant that
+      admitted `Probing`.
+- [X] T168 [BUG-004] *(test)* `crates/micold-client/src/main.rs` (`mod tests` — `App`,
+      `shell::daemon_sync` and `app.sandbox_boot` live in the binary and are not reachable from
+      `tests/*.rs`, the same reason T162 sits there) — a connect failure under a `LocalSandbox`
+      placement that holds a `BootPlan` yields the bring-up task **and** moves the state off
+      `Probing` as its stages arrive, rather than notifying a connection failure (FR-002a, FR-036a,
+      FR-036b, SC-004c); a second failure while that bring-up is in flight yields nothing; and with
+      no plan, or with the attempts spent, it reports the failure exactly as it does today. Confirmed
+      red against `on_connect_failed`, which returns `Task::none()` in every one of those cases, and
+      against `boot`, whose `&mut |_| {}` makes the stage assertion unsatisfiable.
+      *Deviation:* the stage-ordering assertion lives in `shell/sandbox.rs`'s `mod tests`
+      (`every_stage_a_bring_up_enters_is_reported_before_how_it_ended`, over the extracted
+      `reported` stream), since `update_inner` does not run the tasks it returns; `main.rs` asserts
+      the `Msg::Progress` arm moves the state. Added: a sandbox that came up earns its attempts back,
+      and a `HostProcess` placement never brings one up (FR-035). Five were red against the stubs;
+      the three that already passed (no plan, spent, host placement) were each confirmed by a mutant.
+
+### Implementation for BUG-004
+
+- [X] T169 [BUG-004] `crates/micold-core/src/sandbox/lifecycle.rs` — the `service_absent` transition
+      and the attempt budget guarding it, beside `bring_up` and `container_lost`. It is a distinct
+      witness from `RestartRequested`, which exists to say a person asked; this edge exists because
+      nobody has to (S-6). `container_lost` stays as it is — it answers a different question (the
+      container we were *using* went away) and returns `None` for `Probing`, which is why the FR-036
+      machinery is inert exactly when it is needed.
+      *Landed as* `service_absent`, `UnattendedBringUps` and `UNATTENDED_BRING_UP_DELAYS` (0s, 5s,
+      15s), plus `SandboxState::is_coming_up` for T171's FR-036b check; `Sandbox::service_absent`
+      applies it client-side and `Sandbox::started` restores the budget.
+- [X] T170 [BUG-004] `crates/micold-client/src/shell/sandbox.rs::boot` — thread `observe` through to
+      the application instead of discarding it, so `StageProgress` reaches `Msg::Progress` and the
+      view moves. The comment there deferred this on the grounds that a `Task::future` yields one
+      message and the settings view would be worth more; `Task::stream` over a channel the `start`
+      callback feeds is the shape that fits. Closes T041's progress half and T043's first clause.
+      *Landed as* `reported(after, work)` (the stream) under `boot_after(plan, after)`; `boot` is
+      `boot_after(plan, ZERO)`.
+- [X] T171 [BUG-004] `crates/micold-client/src/shell/daemon_sync.rs::on_connect_failed` — consult
+      `app.sandbox_boot`, which already holds the plan, and ask T169's edge whether to bring the
+      sandbox up; on a yes, return `sandbox::boot(plan)` and report the stage rather than the dial
+      failure (FR-036b). Bounded and spaced by the budget, never by the connection's 1 Hz retry, and
+      never a silent fall back to the host process — FR-035a's consented fallback is the only way out
+      and it stays a user decision (FR-036a, S-2).
+      *Landed as* `boot_after(plan, delay)` — the budget's spacing is the wait — and a refused dial
+      while `is_coming_up()` is silent. `LocalSandbox` placements only.
+- [X] T172 [BUG-004] Re-run `quickstart.md` §B.1 with the sandbox stopped from outside while the
+      application is open, and re-measure SC-004/SC-004c **at the application** — cold image state,
+      the registry route Phase 15 published, stage changes no more than 10s apart — into
+      `specs/027-sandboxed-daemon-runtime/evidence/performance.md`. Closes T043's second clause and
+      T117, whose numbers were taken in `micold-core` and therefore could not see the dropped
+      callback.
+      *Result (2026-09-13, Xvfb + lavapipe)*: registry route ~23s from launch, stage changes ≤2.37s
+      apart; stopped from outside → re-attached unattended ~7.7s after the container exited; zero
+      "Could not connect" toasts. **SC-004c's FR-036b clause still fails**: the red "Not connected to
+      the session service · Reconnecting..." banner outranks the stage for the whole bring-up, and a
+      "The sandbox did not start … Restart the sandbox" card flashes before the automatic bring-up.
+      Not fixed here — needs its own task. Registry route stops at the v10/v9 handshake refusal (no
+      v10 image published); attach was shown on the local-build route. See `evidence/performance.md`.
+
+**Bugfix**: 2026-09-12 — BUG-004. **Requirements added**: FR-002a, FR-036a, FR-036b, SC-004c and
+US6 scenario 9 — see `spec.md`. **Design corrected**: `data-model.md` §7 gained rules S-6 and S-7 and
+the two `Failed` edges; `contracts/container-runtime.md` C-8 gained the caller's half of the
+guarantee; `plan.md` gained the increment. **Three tasks reopened**: T041 and T043, whose progress
+glue never landed, and T117, which measured SC-004 a layer below where the defect lives. See
+`bugs/BUG-004.md`.
+
+
+## Phase 19: TDD remediation — BUG-004
+
+**Goal**: Clear the findings of `tdd/verification.md` (2026-09-13, verdict **FAIL**). **BUG-004 is not
+done until T173–T179 are cleared**: T171's "bounded and spaced", T168's "yields the bring-up task" and
+T170's progress wiring each survive a mutant that removes them, and FR-036b and FR-036a's per-attempt
+reason are untested. Each task names the mutant from the report's *Mutation results* table. Done means
+a new test fails with that mutant applied, and the full suite (`mise run test`) is green without it.
+
+### Blocking (HIGH)
+
+- [X] T173 [BUG-004] *(test)* Finding 2 — `crates/micold-client/src/main.rs:2981` (`connection_failed`
+      discards the task). Return the `Task` and assert that a refused dial on a failed sandbox yields a
+      bring-up; a refused dial during one (`:3020`), with no plan (`:3068`), or on the host placement
+      (`:3080`) yields none. Proven when M13 (`daemon_sync.rs:307` → `Task::none()`) fails it:
+      `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+- [X] T174 [BUG-004] *(test)* Finding 1 — `crates/micold-client/src/shell/sandbox.rs:221` and
+      `crates/micold-client/src/shell/daemon_sync.rs:307`. Pin that an unattended bring-up waits the
+      budget's delay before starting (paused tokio clock over `reported`/`boot_after`, or an equivalent
+      observable), and that `on_connect_failed` passes the delay it was given. Proven when M10 (wait
+      removed) and M11 (`boot_after(plan, ZERO)`) each fail it: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+- [X] T175 [BUG-004] *(test)* Finding 3 — `crates/micold-client/src/features/sandbox.rs:317`. Drive
+      the budget through messages alone (`ConnectFailed`, then `SandboxMsg::Failed`, repeated) without
+      writing `app.sandbox.unattended` in setup (`main.rs:3052`, `:3118`). Assert exactly
+      `UNATTENDED_BRING_UP_DELAYS.len()` bring-ups, then the failure reported and `Failed` left standing.
+      Proven when M14 (budget write dropped) fails it: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+- [X] T176 [BUG-004] *(test)* Finding 4 — `crates/micold-core/src/sandbox/lifecycle.rs:122`. An
+      `every_state()` test of `is_coming_up` in `crates/micold-core/tests/sandbox_state.rs`, and B6
+      (`main.rs:3020`) extended over `Probing`, `Acquiring` and `Starting`. Proven when M15 (`Probing`,
+      `Starting` → false) fails both: `scripts/build-lock.sh cargo test -p micold-core --test
+      sandbox_state` and `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+- [X] T177 [BUG-004] *(test)* Finding 5 — `crates/micold-client/src/shell/sandbox.rs:200`, test at
+      `:492-497`. Exercise the production bring-up closure, not one the test writes. Extract it (for
+      example `boot_work(plan, runtime)`), feed it a `CliRuntime` over `RecordingRunner`, and assert that
+      `Progress(Probing)` arrives first and the outcome last. Proven when M16 (`observe` → `&mut |_| {}`)
+      fails it: `scripts/build-lock.sh cargo test -p micold-client`.
+- [ ] T178 [BUG-004] Finding 6 — FR-036b / SC-004c. Test first, in `main.rs` `mod tests`: after a
+      refused dial starts a bring-up, and for every `is_coming_up()` state, `connection_status(&app)` is
+      not `Disconnected`, and no "The sandbox did not start" card offering FR-035a's fallback is shown.
+      Both are red today (`daemon_sync.rs:296` sets `disconnected` unconditionally; `ui/mod.rs:118-122`,
+      `:231`). Replace the toast-only FR-036b assertions at `main.rs:3013` and `:3037`, then fix until
+      green. Proven by `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide` and by re-running T172's stopped-from-outside pass with the banner
+      absent from the frames (`evidence/performance.md`).
+- [X] T179 [BUG-004] Finding 7 — FR-036a / US6 scenario 9, "each attempt MUST report why it failed".
+      Test first: after a failed attempt and the refused dial that starts the next one
+      (`features/sandbox.rs:315-318` moves `Failed(reason)` to `Probing`), the previous attempt's reason
+      is still reported — in the log line at `daemon_sync.rs:303-306` and where the user can see it.
+      Red today; fix until green. Proven by `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+
+### Non-blocking (MED, LOW)
+
+- [X] T180 [BUG-004] Finding 10 — test `ConnectFailed` arriving while the state is still `Running`,
+      before `check_alive`'s `Lost` (`daemon_sync.rs:286-289`, `:302-317`). Decide and pin whether it
+      is silent or reported; today it notifies "Could not connect". `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+- [X] T181 [BUG-004] Finding 9 — a `sandbox_real_*` test behind `sandbox-real-runtime`: stop the
+      container from outside with a client attached and assert re-attachment without user action within
+      the budget. `mise run image && mise run test-sandbox`.
+- [X] T182 [BUG-004] Finding 11 — `main.rs:2990-2996`: assert on notification level and on both
+      visible and pending, not on prose in `visible()`. Proven by rewording `daemon_sync.rs:317` in a
+      scratch change and seeing the negative cases (`:3013`, `:3037`) still meaningful. `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+- [X] T183 [BUG-004] Finding 12 — `crates/micold-core/tests/sandbox_state.rs:590`: check S-6 against
+      the real `RECONNECT_BACKOFF` (`crates/micold-client/src/daemon.rs:127`), not a copy, and name the
+      `10` ceiling (`:570`, `:597`). `mise run test`.
+- [X] T184 [BUG-004] Finding 13 — `sandbox_state.rs:615`: move the length assertion out of the spacing
+      test (the bound test owns it) and guard the `.skip(1)` loop at `:603` with `waits.len() >= 2`.
+      `scripts/build-lock.sh cargo test -p micold-core --test sandbox_state`.
+- [X] T185 [BUG-004] Findings 14–16 — rename `main.rs:3094` (it asserts state, not display) and
+      `sandbox_state.rs:434` (`only` is no longer true for `Failed`); guard the setup loop at `main.rs:3049`;
+      add rule messages to `main.rs:3078-3079`, `:3089-3090`. `mise run test`.
+- [X] T186 [BUG-004] Finding 8 — record the test-first evidence with the work, not in a session
+      scratchpad: write `tdd/test-list.md` for Phase 18/19, and commit T173–T179 with their red output,
+      so a re-run of `/speckit.tdd.verify` can grade ordering from history.
+
+**Order**: T173 first; T174 and T175 build on the task it exposes. T176 and T177 are independent.
+T178 and T179 change behavior and follow T173–T176, whose tests cover the code they touch. Then
+re-run `/speckit.tdd.verify`.
+
 ---
 
 ## Parallel Opportunities
@@ -1031,6 +1226,11 @@ the two are strictly ordered.
 binary's own `mod tests`, because `App`, `shell::persist` and `app.placement` are not reachable from
 `tests/*.rs` — so it is parallel with the three, as is T163. T164 and T166 touch disjoint modules
 and are parallel; T165 needs T164's message to exist before it can raise anything.
+
+**Phase 18**: T167 and T168 are different crates and are parallel. T169 and T170 are disjoint —
+one is the core edge, the other the client's progress glue — and are parallel; T171 needs T169's
+transition to exist before it can ask anything. T172 is a manual pass and a measurement, and follows
+all four.
 
 ## Implementation Strategy
 

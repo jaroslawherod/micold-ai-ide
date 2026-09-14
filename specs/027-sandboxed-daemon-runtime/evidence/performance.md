@@ -176,3 +176,95 @@ Not measured: a genuinely cold machine, where the dependency graph compiles from
 belongs to the existing build-and-run loop, not to sandboxing, but it is the one case where a first
 enable on this repository could exceed five minutes, and it should be measured before the criterion
 is called closed for a new contributor's machine.
+
+---
+
+## SC-004 / SC-004c at the application — T172 (BUG-004)
+
+> *SC-004c: "SC-004's progress is measured **at the application**… no two consecutive stage changes
+> the application displays are more than 10 seconds apart, and the application reports no connection
+> failure for the service it is starting while it is starting it (FR-036b)."*
+
+Run on **2026-09-13**, after T167–T171 landed, with the `visual-pass` skill. It ran on **Xvfb (1600×1400) with
+lavapipe**, not on a real display. The client was built from this branch and pinned outside
+`target-shared`. Docker 29.5.1. Frames were captured from the root window about every 1.2s, and
+timestamps come from file mtimes. The stage the user sees is read off those frames, not off the
+callbacks. That difference is the whole point of SC-004c.
+
+### Run A — first enable, cold image, registry route
+
+Setup: the user's `micold-sandbox` container was removed, and both `ghcr.io/jaroslawherod/micold-daemon:0.12.1`
+and `:0.12.0` were deleted with `docker rmi`. A fresh data home was used with `placement: local_sandbox` and
+`image: registry ghcr.io/jaroslawherod/micold-daemon:0.12.1`. The pinned client was then launched.
+
+| t from launch | What the application showed |
+|---|---|
+| 2.6s | window up; "Checking the container runtime" |
+| 3.8s – 22.6s | "Getting the sandbox image", with a moving bar and per-layer lines (`Pull — cb1ce99b7834: Pull complete`, `Download — 24eb14f0f4c2: Download complete`) |
+| 23.8s | sandbox up, daemon answering; the handshake refused it (see below) |
+
+- **Duration: about 23s** from launch to a running, answering sandbox. The budget is 300s.
+- **Continuity: every captured frame from 2.6s to 23.8s differed from the one before it.** The longest
+  interval between visible changes was **2.37s**. That bound comes from the capture cadence, and capture
+  gaps reached 1.4s. The limit is 10s.
+- **Connection-failure notifications ("Could not connect to the session daemon…"): 0.**
+
+![Run A: acquisition at 12.0s, and the version banner at 23.8s](t172-registry-bring-up.png)
+
+Where this is weaker than it looks:
+
+- **Not fully cold.** One base layer is shared with `micold-daemon:dev`, which stayed in the store. The
+  remaining layers were pulled over the network.
+- **It does not reach a working session.** This branch speaks contract v10, and the published 0.12.1
+  image speaks v9, so the handshake refuses it ("The session service is a different version"). That is
+  correct behaviour, but a registry-route enable that ends in a terminal cannot be demonstrated until an
+  image built from this contract is published. Run B covers attach, using the local-build route.
+
+### Run B — the sandbox stopped from outside while the application is open (§B.1, FR-036a)
+
+Setup: a fresh data home with `image: local_build micold-daemon:dev`, built by `mise run image` from
+this tree. The client attached (`client attached to daemon … client_window=1057405`). Then, from a shell:
+`docker stop micold-sandbox`.
+
+| t from `docker stop` | Source | Event |
+|---|---|---|
+| 0.0s – 10.2s | docker | `docker stop` waits out its 10s grace; the container exits **137** |
+| ≤15.1s | frame | red "Not connected to the session service · Reconnecting..." banner |
+| 16.3s | frame | a second card: "The sandbox did not start — The sandbox container 'micold-sandbox' is no longer running. Restart the sandbox." |
+| — | client log | `attach: failed reason=no sandboxed daemon is listening on 127.0.0.1:7727`, then `sandbox: service absent, bringing it up again in 0s (2 left)` |
+| 17.5s | frame | "Starting the sandbox", with a bar, under the red banner |
+| 17.5s (09:42:05.03Z) | daemon log | `micold-daemon starting` in a newly created container |
+| 17.9s (09:42:05.37Z) | daemon log | `client attached to daemon … client_window=1057405`: the **same** client window, re-attached |
+| 18.7s | frame | back to the attached view, identical to the frame before the stop |
+
+- **Recovery: automatic.** It took about 7.7s from the container exiting to the client re-attaching, with no user action.
+- **Connection-failure notifications: 0.** No toast appears in any frame.
+- **Longest interval between visible changes: ≤4.9s**, from the container exiting to the first banner frame.
+
+![Run B: the three frames between the service disappearing and re-attaching](t172-stopped-from-outside.png)
+
+### Verdict against SC-004c and FR-036b
+
+| Clause | Result |
+|---|---|
+| SC-004: under 5 minutes | **Pass.** About 23s on the registry route. |
+| SC-004c: stage changes at the application ≤10s apart | **Pass.** ≤2.37s (run A) and ≤4.9s (run B). |
+| SC-004c / FR-036b: no connection failure reported for the service being started | **Fail**, in two ways (below). |
+| FR-036a: recover by bringing the sandbox up | **Pass.** Run B. |
+
+1. **The "Not connected to the session service" banner stays up throughout a working bring-up.** In run A
+   it was on screen for the whole 21s acquisition, as a full-width red error banner. The stage sits beneath
+   it in small grey text. The removed toast was only one of the two ways a connection failure gets
+   presented. This banner is the other, and it is the louder of the two, which is exactly what FR-036b
+   forbids ("the one that is working MUST NOT be the louder of the two").
+2. **A failure card flashes before the automatic bring-up starts.** For one frame (≤1.2s) in run B, the
+   application showed "The sandbox did not start … Restart the sandbox." with "Run without it for now".
+   That was the `Failed(SandboxStopped)` state set by the liveness check, before the refused dial moved
+   it to `Probing`. The headline is wrong for a sandbox that was stopped rather than failing to start. The
+   advice asks the user to do what the application does a second later. Offering the FR-035a fallback
+   during that second invites the user to abandon a recovery that is about to succeed.
+
+Neither was changed in this pass. Both are outside T167–T171's scope and need their own task.
+
+Noticed, not in scope: the in-container daemon does not exit on SIGTERM. `docker stop` always waits
+the full 10s grace and ends in exit 137, which adds 10s to every stop.
