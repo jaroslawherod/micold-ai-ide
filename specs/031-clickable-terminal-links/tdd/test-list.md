@@ -100,7 +100,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | U19 | Adjacent runs with different URIs are two links with their own addresses | US2.3 | example | DONE | `crates/micold-core/src/link/line.rs::tests::adjacent_runs_with_different_uris_are_two_links` |
 | U20 | A declared URI wins over address-shaped visible text in the same cells | US2.5 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_declared_uri_wins_over_the_address_its_text_shows` |
 | U21 | A detected address over rows joined by `wrapped = true` returns cells on every row it covers | FR-003, US1.3, L2 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_detected_address_over_soft_wrapped_rows_covers_every_row` |
-| U22 | Rows separated by a real line break are never joined; only the first row's well-formed piece is a link | FR-003 | example | PENDING | |
+| U22 | Rows separated by a real line break are never joined; only the first row's well-formed piece is a link | FR-003 | example | DONE | `crates/micold-core/src/link/line.rs::tests::rows_apart_by_a_line_break_are_never_joined` |
 | U23 | A wrapped logical line within 64 rows each way is joined; a candidate reaching the 64-row cap is dropped | FR-003, L4 | example | PENDING | |
 | U24 | A candidate touching a row whose `text` is `None` is dropped | L7 | example | PENDING | |
 | U25 | A wide character's spacer cell belongs to the link | FR-007, L5 | example | PENDING | |

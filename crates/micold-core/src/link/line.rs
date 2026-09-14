@@ -319,4 +319,23 @@ mod tests {
             "a real line break ends the run, though the next row starts with the same URI"
         );
     }
+
+    #[test]
+    fn rows_apart_by_a_line_break_are_never_joined() {
+        let rows = Rows::new(0, vec![row("See https://a.example/do"), row("cs now")]);
+        assert_eq!(
+            link_at(&rows, 0, 6),
+            Some(Link {
+                address: "https://a.example/do".to_string(),
+                origin: LinkOrigin::Detected,
+                cells: vec![span(0, 4..24)],
+            }),
+            "the address ends at the line break; the next row's text is not part of it"
+        );
+        assert_eq!(
+            link_at(&rows, 1, 1),
+            None,
+            "the row after a line break starts a new line, with no address on it"
+        );
+    }
 }

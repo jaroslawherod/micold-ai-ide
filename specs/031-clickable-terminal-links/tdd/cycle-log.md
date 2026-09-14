@@ -243,3 +243,12 @@
 - green: `link_at` builds the `LogicalLine` once for both branches; the new `declared_at` extends the same-URI run over the line's cells instead of one row's columns and maps it back with `spans`. `LogicalLine::index_of` finds the pointer cell for both `declared_at` and `detected_at`. Suite -> 1081 passed, 0 failed
 - refactor: none beyond sharing `index_of` in the green step; `cargo clippy -p micold-core --all-targets -D warnings` clean
 - commit: `feat(031): continue a declared run across a soft wrap (U148)`
+
+## Cycle 24: U22 rows separated by a real line break are never joined; only the first row's well-formed piece is a link
+
+- test: `crates/micold-core/src/link/line.rs::tests::rows_apart_by_a_line_break_are_never_joined` (new)
+- red: passed on arrival (`test ... ok`, 1 passed), since U21's `LogicalLine` already joins only across `wrapped`. Deliberate mutant: `LogicalLine::around` joins every available row, ignoring `wrapped` in both directions. `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::rows_apart_by_a_line_break_are_never_joined -- --exact`
+  -> `left: Some(Link { address: "https://a.example/docs", origin: Detected, cells: [CellSpan { row: 0, cols: 4..24 }, CellSpan { row: 1, cols: 0..2 }] })` / `right: Some(Link { address: "https://a.example/do", ..., cells: [CellSpan { row: 0, cols: 4..24 }] })` (1 failed). Mutant reverted from the backup
+- green: no implementation change. Suite -> 1082 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin that rows apart by a line break are never joined (U22)`
