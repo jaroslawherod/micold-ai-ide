@@ -1981,15 +1981,19 @@ impl DaemonState {
             // The name comes from the conversation, so from the AI CLI and nothing else (feature
             // 029, FR-011): the `Primary` of an `AiCli` session. A shell tab is attached to the
             // same session but titles itself `user@host: ~/dir`, and a Regular Terminal session's
-            // primary *is* a shell — neither has a conversation to name. And the CLI's own
-            // startup title is its product name, not the session's (FR-004).
+            // primary *is* a shell — neither has a conversation to name. And only the part of the
+            // title the CLI means as the name counts: not its product name, not its decoration
+            // (FR-004).
             let title = workspace
                 .find_session(*id)
                 .filter(|(_, session)| session.mode == TerminalMode::AiCli)
-                .and_then(|(_, session)| {
+                .and_then(|(project, session)| {
                     let proc = live.procs.get(&SessionProcess::Primary)?;
-                    let startup = session.provider.provider().startup_title();
-                    proc.pty.signals().title().filter(|t| t.as_str() != startup)
+                    let title = proc.pty.signals().title()?;
+                    session
+                        .provider
+                        .provider()
+                        .name_in_terminal_title(&title, &session.location.cwd(project))
                 });
             // Debounced: only a real change is a push — and only a real change is a durable
             // write. A spinner cycling through glyph frames on an otherwise stable title produces

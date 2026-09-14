@@ -168,14 +168,16 @@ pub trait AiCliProvider {
     /// the session (FR-017).
     fn read_title(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> Option<String>;
 
-    /// The terminal title this CLI gives itself before any conversation has a name — its own
-    /// product name, glyph-stripped. Observed 2026-09-13: `claude` 2.1.270 emits `"✳ Claude Code"`,
-    /// `copilot` emits `"GitHub Copilot"`.
+    /// The conversation name carried by `title`, the (glyph-stripped) terminal title this CLI set
+    /// while running in `cwd` — or `None` when the title names no conversation.
     ///
-    /// The daemon learns a session's name from the OSC-0 title, so it has to know this one is not
-    /// a name (feature 029, FR-004): recorded, it would label every never-named session with the
-    /// CLI's product name, and name recovery would then skip that session as already named.
-    fn startup_title(&self) -> &'static str;
+    /// The daemon learns a session's name from the OSC-0 title, so it has to know which titles are
+    /// not names (feature 029, FR-004): recorded, a CLI's own product name would label every
+    /// never-named session with it, and name recovery would then skip that session as already
+    /// named. Each CLI decorates differently. Observed 2026-09-13: `claude` 2.1.270 starts as
+    /// `"✳ Claude Code"` and `copilot` as `"GitHub Copilot"`, then each shows the bare name; `pi`
+    /// shows `π - <folder>` until the conversation has a name and `π - <name> - <folder>` after.
+    fn name_in_terminal_title(&self, title: &str, cwd: &Path) -> Option<String>;
 
     // --- durable close/remove suppression ---
 
@@ -427,8 +429,8 @@ impl AiCliProvider for ClaudeProvider {
         self.parse_title(&contents)
     }
 
-    fn startup_title(&self) -> &'static str {
-        "Claude Code"
+    fn name_in_terminal_title(&self, title: &str, _cwd: &Path) -> Option<String> {
+        (title != "Claude Code").then(|| title.to_string())
     }
 
     fn mark_archived(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> io::Result<()> {
@@ -659,8 +661,8 @@ impl AiCliProvider for CopilotProvider {
         Self::read_yaml_scalar(&contents, "name")
     }
 
-    fn startup_title(&self) -> &'static str {
-        "GitHub Copilot"
+    fn name_in_terminal_title(&self, title: &str, _cwd: &Path) -> Option<String> {
+        (title != "GitHub Copilot").then(|| title.to_string())
     }
 
     fn mark_archived(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> io::Result<()> {
@@ -867,8 +869,15 @@ impl AiCliProvider for PiProvider {
         "pi"
     }
 
-    fn startup_title(&self) -> &'static str {
-        "π"
+    fn name_in_terminal_title(&self, title: &str, cwd: &Path) -> Option<String> {
+        // `π - <name> - <folder>`; the unnamed `π - <folder>` leaves no ` - ` to strip. A title of
+        // any other shape — an extension's `setTitle`, a `piConfigName` build — names nothing.
+        let folder = cwd.file_name()?.to_str()?;
+        let name = title
+            .strip_prefix("π - ")?
+            .strip_suffix(folder)?
+            .strip_suffix(" - ")?;
+        (!name.is_empty()).then(|| name.to_string())
     }
 
     fn is_available(&self) -> bool {
@@ -1170,8 +1179,8 @@ impl AiCliProvider for FakeAiCliProvider {
         inner.titles.get(contents).cloned()
     }
 
-    fn startup_title(&self) -> &'static str {
-        "Fake AI CLI"
+    fn name_in_terminal_title(&self, title: &str, _cwd: &Path) -> Option<String> {
+        (title != "Fake AI CLI").then(|| title.to_string())
     }
 
     fn mark_archived(&self, _config_dir: &Path, cwd: &Path, session_id: Uuid) -> io::Result<()> {
