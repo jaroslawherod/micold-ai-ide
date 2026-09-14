@@ -631,3 +631,12 @@ failed before the implementation.
 - refactor: none needed.
 - notes: the row's "new exes in place" is not asserted beyond step 2's presence check. A repair installs the same version, so the old and new binaries cannot be told apart. The check covers what FR-009 is about: the old daemon is not left running over replaced files. Step 8's `ci complete` result for 1d0e4c0a is pending, together with A7 and A8.
 - commit: see the follow-up commit
+
+## Cycle 74: A7's first run was the test's fault; the smoke uninstalls with the window closed
+
+- test: `scripts/windows-install-smoke.sh`, step 9 (3d8e5fe6). It relaunched the client, left the window open, ran `unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART`, and expected exit 0 and no install dir, shortcut, uninstall key or run dir.
+- red, not valid for A7: PR #332's CI run 34873308487 (1d14386c), `package + smoke (windows-11-arm)`: `== uninstall with the client (pid 5720) open`, then `windows-install-smoke.sh: FAIL: the silent uninstall exited 1, want 0 (I7)`. The uninstall log: `Defaulting to Cancel for suppressed message box (OK/Cancel): Uninstall has detected that Micold AI IDE is currently running.` That is FR-009 working: an uninstall proceeds only after confirmation or once the app is closed, and a silent run has no one to confirm. The failure is in the test's precondition, not in A7's behavior.
+- test correction (89f0976f): step 9 now closes the window as step 8 does (`taskkill` without `/T`), so the uninstall runs with only the daemon running, as I5 describes. The assertions are unchanged. The window-open case becomes its own behavior, A16, `PENDING`.
+- green: pending CI (5171de5f). A8's markers were not reached in that run.
+- notes: the same run's `Test (render-free core, no GUI)` step on x64 failed, as U71's red expects; its evidence is recorded once the job's log is available. A7 and A8 stay `PENDING`. The icon check planned as A16 before this cycle takes the next free id instead.
+- commit: see the follow-up commit
