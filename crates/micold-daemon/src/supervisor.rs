@@ -773,4 +773,29 @@ mod windows_tests {
             "grandchild {grandchild} survived the session kill by {REAP_BUDGET:?}"
         );
     }
+
+    /// How long dropping a session may take once its child is gone.
+    const DROP_BUDGET: Duration = Duration::from_secs(10);
+
+    /// FR-020: tearing a session down must return. On Windows the reader thread's pipe reaches EOF
+    /// only once the pseudoconsole is closed, not when the child exits, so a `Drop` that waits on
+    /// the reader first never finishes.
+    #[test]
+    fn dropping_a_session_returns() {
+        let mut cmd = CommandBuilder::new("cmd");
+        cmd.args(["/c", "ping -n 300 127.0.0.1"]);
+        let session = PtySession::spawn(SessionId::new(), cmd, 100, None).unwrap();
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        // A drop that hangs leaves this thread blocked; the assertion below still fails the test.
+        std::thread::spawn(move || {
+            drop(session);
+            let _ = done_tx.send(());
+        });
+
+        assert!(
+            done_rx.recv_timeout(DROP_BUDGET).is_ok(),
+            "dropping the session did not return within {DROP_BUDGET:?}"
+        );
+    }
 }
