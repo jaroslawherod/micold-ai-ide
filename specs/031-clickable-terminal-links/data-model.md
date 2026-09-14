@@ -21,6 +21,7 @@ relative to the viewport's top line (`i64`, negative in scrollback):
 | `text(row)` | `Option<&str>` | One `char` per cell, wide-char spacer cells included (as `CachedLine.text`); `None` when the line is not cached |
 | `wrapped(row)` | `bool` | This row soft-wraps into the next |
 | `hyperlink(row, col)` | `Option<&str>` | Declared URI at a cell (`CachedExtra.hyperlink`) |
+| `spacer(row, col)` | `bool` | The cell holds no char of its own: its style run carries `WIDE_CHAR_SPACER` or `LEADING_WIDE_CHAR_SPACER`. The wire's spacer char is a space, so `text` alone cannot tell |
 
 ### `Link` — a followable span under the pointer
 

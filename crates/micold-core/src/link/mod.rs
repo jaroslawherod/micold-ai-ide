@@ -23,6 +23,9 @@ pub trait LinkRows {
     fn wrapped(&self, row: i64) -> bool;
     /// The URI a program declared at this cell (OSC 8).
     fn hyperlink(&self, row: i64, col: u16) -> Option<&str>;
+    /// The cell holds no char of its own: the second cell of a wide char, or the padding left at a
+    /// row's end when a wide char wrapped onto the next row. Its `text` char means nothing.
+    fn spacer(&self, row: i64, col: u16) -> bool;
 }
 
 /// A followable span under the pointer.

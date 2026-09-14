@@ -23,8 +23,8 @@ pub fn link_at(rows: &impl LinkRows, row: i64, col: u16) -> Option<Link> {
 /// The rows joined by soft wraps around one row, as one string (research R4).
 struct LogicalLine {
     text: Vec<char>,
-    /// The cell each char of `text` sits in.
-    cells: Vec<(i64, u16)>,
+    /// The cells each char of `text` covers: one, or two for a wide char with its spacer.
+    cells: Vec<(i64, Range<u16>)>,
     /// The line may go on above its first row: the cap stopped the walk, or the row above is
     /// unavailable (contract L4, L7).
     cut_above: bool,
@@ -47,11 +47,17 @@ impl LogicalLine {
             last += 1;
         }
         let mut text = Vec::new();
-        let mut cells = Vec::new();
+        let mut cells: Vec<(i64, Range<u16>)> = Vec::new();
         for current in first..=last {
-            for (col, c) in rows.text(current).unwrap_or_default().chars().enumerate() {
-                text.push(c);
-                cells.push((current, col as u16));
+            for (col, c) in (0u16..).zip(rows.text(current).unwrap_or_default().chars()) {
+                if !rows.spacer(current, col) {
+                    text.push(c);
+                    cells.push((current, col..col + 1));
+                } else if let Some((_, cols)) = cells.last_mut().filter(|(row, _)| *row == current)
+                {
+                    // A spacer is the second half of the char before it on its row (contract L5).
+                    cols.end = col + 1;
+                }
             }
         }
         Self {
@@ -64,18 +70,20 @@ impl LogicalLine {
 
     /// Where the char in the cell at `row`, `col` sits in `text`.
     fn index_of(&self, row: i64, col: u16) -> Option<usize> {
-        self.cells.iter().position(|&cell| cell == (row, col))
+        self.cells
+            .iter()
+            .position(|(r, cols)| *r == row && cols.contains(&col))
     }
 
     /// The cells the chars in `range` sit in, one span per row.
     fn spans(&self, range: Range<usize>) -> Vec<CellSpan> {
         let mut spans: Vec<CellSpan> = Vec::new();
-        for &(row, col) in &self.cells[range] {
+        for (row, cols) in &self.cells[range] {
             match spans.last_mut() {
-                Some(span) if span.row == row => span.cols.end = col + 1,
+                Some(span) if span.row == *row => span.cols.end = cols.end,
                 _ => spans.push(CellSpan {
-                    row,
-                    cols: col..col + 1,
+                    row: *row,
+                    cols: cols.clone(),
                 }),
             }
         }
@@ -94,8 +102,8 @@ fn declared_at(
 ) -> Option<Link> {
     let index = line.index_of(row, col)?;
     let same = |index: &usize| {
-        let (row, col) = line.cells[*index];
-        rows.hyperlink(row, col) == Some(uri)
+        let (row, ref cols) = line.cells[*index];
+        rows.hyperlink(row, cols.start) == Some(uri)
     };
     let start = (0..index).rev().take_while(same).last().unwrap_or(index);
     let end = (index..line.cells.len())
@@ -143,6 +151,7 @@ mod tests {
         text: String,
         wrapped: bool,
         declared: Vec<(Range<u16>, &'static str)>,
+        spacers: Vec<u16>,
     }
 
     fn row(text: &str) -> Row {
@@ -150,6 +159,7 @@ mod tests {
             text: text.to_string(),
             wrapped: false,
             declared: Vec::new(),
+            spacers: Vec::new(),
         }
     }
 
@@ -161,6 +171,11 @@ mod tests {
 
         fn declare(mut self, cols: Range<u16>, uri: &'static str) -> Self {
             self.declared.push((cols, uri));
+            self
+        }
+
+        fn spacer(mut self, col: u16) -> Self {
+            self.spacers.push(col);
             self
         }
     }
@@ -198,6 +213,10 @@ mod tests {
                 .iter()
                 .find(|(cols, _)| cols.contains(&col))
                 .map(|(_, uri)| *uri)
+        }
+
+        fn spacer(&self, row: i64, col: u16) -> bool {
+            self.get(row).is_some_and(|row| row.spacers.contains(&col))
         }
     }
 
@@ -461,6 +480,35 @@ mod tests {
                 cells: vec![span(0, 4..23)],
             }),
             "a space after the punctuation ends the address before the cut"
+        );
+    }
+
+    #[test]
+    fn a_wide_characters_spacer_cell_belongs_to_the_link() {
+        // One char per cell: each wide char's second cell is a spacer holding a space.
+        let rows = Rows::new(
+            0,
+            vec![
+                row("See https://例 え .jp now").spacer(13).spacer(15),
+                row("日 本 docs").spacer(1).spacer(3).declare(0..4, ADDRESS),
+            ],
+        );
+        let detected = Some(Link {
+            address: "https://例え.jp".to_string(),
+            origin: LinkOrigin::Detected,
+            cells: vec![span(0, 4..19)],
+        });
+        for col in [6, 13, 15] {
+            assert_eq!(
+                link_at(&rows, 0, col),
+                detected,
+                "column {col}: the address reads past the wide chars' spacers and covers them"
+            );
+        }
+        assert_eq!(
+            link_at(&rows, 1, 3),
+            declared(vec![span(1, 0..4)]),
+            "the spacer after the last wide char of a declared run is part of the run"
         );
     }
 }
