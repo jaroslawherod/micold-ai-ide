@@ -501,3 +501,11 @@ failed before the implementation.
 - green: n/a.
 - notes: the user chose to merge PR #314 with A3 still red. `ci-complete` is required and `--admin` cannot bypass it, so both "Install and launch" steps in `.github/workflows/ci.yml` carry `continue-on-error: true`. The x64 build was split into its own blocking step, "Package the Windows installer", so a broken setup exe still fails CI. T040 now says to remove both `continue-on-error`s. This is a deliberate, user-approved gate relaxation, not a green.
 - commit: see the follow-up commit
+
+## Cycle 59: U67 dropping a session returns on Windows
+
+- test: `crates/micold-daemon/src/supervisor.rs::windows_tests::dropping_a_session_returns` (new)
+- red: PR #332's CI run 34819876930 (41915aef), `build + test (windows-latest)`, step `Test (daemon, Windows)`: `test supervisor::windows_tests::dropping_a_session_returns ... FAILED`, then `test supervisor::windows_tests::kill_reaps_grandchild has been running for over 60 seconds` and `The action 'Test (daemon, Windows)' has timed out after 20 minutes.` The failure message itself was not printed, because libtest prints it at the end and the step timed out first. The test's only assertion is `dropping the session did not return within 10s`.
+- green: `PtySession`'s `Drop` closes the PTY master before it joins the reader thread; `master` is now `Mutex<Option<..>>`. Linux: `cargo test -p micold-daemon --lib supervisor` -> 6 passed. Windows green is pending the next CI run.
+- notes: found by the hang in run 34813428322 (353214b5), where U13 never finished. Under ConPTY the reader's pipe reaches EOF only when the pseudoconsole closes, not when the child exits. `Drop` joined first, so every Windows session teardown hung, and U13 hung while unwinding. Added mid-loop as its own behavior. The Windows daemon step gained `timeout-minutes: 20`.
+- commit: see the follow-up commit
