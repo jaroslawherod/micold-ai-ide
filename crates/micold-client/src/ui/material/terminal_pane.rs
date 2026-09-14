@@ -1601,6 +1601,8 @@ mod tests {
             Press(u16, u16, f32, f32),
             Move(u16, u16, f32, f32),
             Release(u16, u16, f32, f32),
+            /// A wheel turn of `lines` lines with the pointer at the middle of cell `(col, line)`.
+            Wheel(u16, u16, f32),
         }
 
         /// Deliver a whole gesture to one focused pane, built once with `selection`, and return
@@ -1647,6 +1649,12 @@ mod tests {
                     Pointer::Release(c, l, fx, fy) => (
                         Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
                         in_cell(bounds, c, l, fx, fy),
+                    ),
+                    Pointer::Wheel(c, l, lines) => (
+                        Event::Mouse(mouse::Event::WheelScrolled {
+                            delta: mouse::ScrollDelta::Lines { x: 0.0, y: lines },
+                        }),
+                        in_cell(bounds, c, l, 0.5, 0.5),
                     ),
                 };
                 let mut shell = Shell::new(&mut messages);
@@ -1721,6 +1729,54 @@ mod tests {
                 vec![(7, 0), (6, 0)],
                 "once the pointer has left the pressed cell it is a drag, and every cell it \
                  enters — including the pressed one again — extends the selection (FR-013a)"
+            );
+        }
+
+        #[test]
+        fn motion_after_a_scroll_while_held_is_a_drag_even_in_the_pressed_screen_cell() {
+            let grid = grid(0);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            let published = gesture(
+                &grid,
+                None,
+                &[
+                    Pointer::Press(6, 0, 0.5, 0.5),
+                    Pointer::Wheel(6, 0, 3.0),
+                    Pointer::Move(6, 0, 0.7, 0.5),
+                ],
+                &mut clipboard,
+            );
+
+            assert_eq!(
+                select_updates(&published),
+                vec![(6, 0)],
+                "scrolling while the button is held puts other text under the pointer, so the \
+                 pressed screen cell no longer holds the pressed text and motion there is a drag \
+                 (FR-013e)"
+            );
+        }
+
+        #[test]
+        fn motion_past_the_panes_edge_is_a_drag_even_where_it_clamps_to_the_pressed_cell() {
+            let grid = grid(0);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            let published = gesture(
+                &grid,
+                None,
+                &[
+                    Pointer::Press(0, 0, 0.5, 0.5),
+                    Pointer::Move(0, 0, -2.0, 0.5),
+                ],
+                &mut clipboard,
+            );
+
+            assert_eq!(
+                select_updates(&published),
+                vec![(0, 0)],
+                "a pointer that has left the pane has left the pressed cell, even though the \
+                 position clamps back onto it (FR-013e)"
             );
         }
 
