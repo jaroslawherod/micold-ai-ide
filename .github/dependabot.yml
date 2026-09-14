@@ -1,8 +1,8 @@
-# Keeps the workflows' actions current. Every action is pinned to a full commit SHA with the version in
-# a trailing comment; Dependabot bumps both together, so a pin never drifts from the version it names.
-# Grouped into one weekly PR so an update lands as a single CI run rather than one per action.
+# Weekly dependency updates, grouped so a week's bumps land as a few CI runs rather than one per package.
 version: 2
 updates:
+  # Every action is pinned to a full commit SHA with the version in a trailing comment; Dependabot bumps
+  # both together, so a pin never drifts from the version it names.
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -13,3 +13,30 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  # The Rust workspace: one manifest and one Cargo.lock at the root cover all three crates.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    # `deps` is release-please's "Dependencies" changelog section; these bumps change what ships.
+    commit-message:
+      prefix: deps
+    groups:
+      # iced's internal crates are pinned with `=` to the version the facade uses (see Cargo.toml), so
+      # the three have to move in one PR or the pins cannot resolve.
+      iced:
+        patterns:
+          - "iced"
+          - "iced_*"
+      # Everything else that is not a major bump, in one PR. Majors stay one PR each, since they tend to
+      # need code changes. Dependabot ranks a version by position, so for a 0.x crate a breaking 0.x → 0.y
+      # counts as "minor" and still lands here; if that turns this PR red, peel the crate out with an
+      # `ignore` entry and take it by hand.
+      cargo:
+        update-types:
+          - minor
+          - patch
+        exclude-patterns:
+          - "iced"
+          - "iced_*"
