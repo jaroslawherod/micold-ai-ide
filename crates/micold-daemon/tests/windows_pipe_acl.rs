@@ -16,14 +16,21 @@ use micold_daemon::singleton::{self, Acquisition};
 use windows_sys::Win32::Foundation::{
     CloseHandle, LocalFree, ERROR_SUCCESS, HANDLE, INVALID_HANDLE_VALUE,
 };
-use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_KERNEL_OBJECT};
+use windows_sys::Win32::Security::Authorization::{
+    ConvertStringSecurityDescriptorToSecurityDescriptorW, GetSecurityInfo, SDDL_REVISION_1,
+    SE_KERNEL_OBJECT,
+};
 use windows_sys::Win32::Security::{
     EqualSid, GetAce, GetSecurityDescriptorControl, GetTokenInformation, TokenUser,
     ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
-    SE_DACL_PROTECTED, TOKEN_QUERY, TOKEN_USER,
+    SECURITY_ATTRIBUTES, SE_DACL_PROTECTED, TOKEN_QUERY, TOKEN_USER,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING, READ_CONTROL,
+    CreateFileW, FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    PIPE_ACCESS_DUPLEX, READ_CONTROL,
+};
+use windows_sys::Win32::System::Pipes::{
+    CreateNamedPipeW, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES,
 };
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
@@ -36,6 +43,59 @@ fn test_endpoint(dir: &Path, case: &str) -> Endpoint {
     Endpoint {
         socket_path: format!(r"\\.\pipe\Micold.Test.Acl.{case}.{}", std::process::id()).into(),
         lock_path: dir.join("micold-daemon.pid"),
+    }
+}
+
+/// A pipe instance someone else holds at `pipe`, created with the DACL in `sddl`. Dropping it closes the
+/// only instance, so the name goes away.
+struct SquattedPipe(HANDLE);
+
+impl SquattedPipe {
+    fn create(pipe: &Path, sddl: &str) -> Self {
+        let wide: Vec<u16> = pipe.as_os_str().encode_wide().chain(Some(0)).collect();
+        let sddl: Vec<u16> = sddl.encode_utf16().chain(Some(0)).collect();
+        // SAFETY: both strings are NUL-terminated and outlive the calls; the descriptor is freed once
+        // the pipe holds its own copy, and the handle is closed in `Drop`.
+        unsafe {
+            let mut sd: PSECURITY_DESCRIPTOR = null_mut();
+            assert_ne!(
+                ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                    sddl.as_ptr(),
+                    SDDL_REVISION_1,
+                    &mut sd,
+                    null_mut(),
+                ),
+                0,
+                "ConvertStringSecurityDescriptorToSecurityDescriptorW: {}",
+                std::io::Error::last_os_error()
+            );
+            let attributes = SECURITY_ATTRIBUTES {
+                nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+                lpSecurityDescriptor: sd,
+                bInheritHandle: 0,
+            };
+            let handle = CreateNamedPipeW(
+                wide.as_ptr(),
+                PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE,
+                PIPE_TYPE_BYTE,
+                PIPE_UNLIMITED_INSTANCES,
+                4096,
+                4096,
+                0,
+                &attributes,
+            );
+            let created = std::io::Error::last_os_error();
+            LocalFree(sd);
+            assert_ne!(handle, INVALID_HANDLE_VALUE, "create {pipe:?}: {created}");
+            SquattedPipe(handle)
+        }
+    }
+}
+
+impl Drop for SquattedPipe {
+    fn drop(&mut self) {
+        // SAFETY: the handle came from a successful `CreateNamedPipeW` and is closed only here.
+        unsafe { CloseHandle(self.0) };
     }
 }
 
@@ -186,4 +246,26 @@ async fn the_bound_pipe_dacl_allows_only_the_current_user() {
         dacl.first_ace_allows_current_user,
         "the pipe's one ACE must be ACCESS_ALLOWED for the current token's user SID"
     );
+}
+
+#[tokio::test]
+async fn binding_over_a_pipe_that_refuses_this_user_is_an_error_naming_it() {
+    // U73 (security review D1): another account got to this user's pipe name first. Its pipe lets
+    // only SYSTEM in, so this user can neither connect nor add an instance. That is not a running
+    // daemon of this user, and quietly exiting as if it were would leave the squatter serving.
+    let dir = tempfile::tempdir().unwrap();
+    let ep = test_endpoint(dir.path(), "Squatted");
+    let _squatter = SquattedPipe::create(&ep.socket_path, "D:P(A;;GA;;;SY)");
+
+    match singleton::acquire(&ep).await {
+        Err(e) => assert!(
+            e.to_string().contains(&*ep.socket_path.to_string_lossy()),
+            "the error must name the pipe {:?}, got: {e}",
+            ep.socket_path
+        ),
+        Ok(Acquisition::AlreadyRunning) => {
+            panic!("a pipe this user cannot open was taken for this user's running daemon")
+        }
+        Ok(Acquisition::Bound(_)) => panic!("bound over a pipe another account holds"),
+    }
 }
