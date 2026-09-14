@@ -9,9 +9,6 @@
 //! wiring — that an Applied batch actually lands on the PTY, and in order. The client transport half
 //! (opening a connection and stamping via `InputSeq`) lands with the client retarget, T041/T044.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::time::{Duration, Instant};
 
 use alacritty_terminal::grid::Dimensions;
@@ -48,11 +45,29 @@ fn wait_until(timeout: Duration, mut cond: impl FnMut() -> bool) -> bool {
     cond()
 }
 
-/// A `cat` session echoes back exactly what is written to its PTY — a deterministic sink for
-/// asserting that driven input reached the process.
+/// The key a terminal sends for Enter: a tty maps it to a newline, and `cmd` needs the return itself.
+#[cfg(unix)]
+const ENTER: &str = "\n";
+#[cfg(windows)]
+const ENTER: &str = "\r";
+
+/// A process that echoes whatever is typed into its PTY: `cat` on Unix; an interactive `cmd`, whose
+/// console line editor echoes, on Windows.
+#[cfg(unix)]
+fn echo_sink() -> CommandBuilder {
+    CommandBuilder::new("cat")
+}
+#[cfg(windows)]
+fn echo_sink() -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("cmd");
+    cmd.arg("/q");
+    cmd
+}
+
+/// An echoing session — a deterministic sink for asserting that driven input reached the process.
 fn spawn_cat(state: &DaemonState) -> (SessionId, std::sync::Arc<PtySession>) {
     let id = SessionId::new();
-    let mut cmd = CommandBuilder::new("cat");
+    let mut cmd = echo_sink();
     cmd.cwd(std::env::temp_dir());
     let session = PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("spawn cat session");
     let handle = state.register_session(session);
@@ -65,7 +80,7 @@ fn driven_input_reaches_the_live_session_pty() {
     let (id, session) = spawn_cat(&state);
 
     // Stamp exactly as the client would: the first per-session serial is 0.
-    state.session_input(id, 0, b"driveloop_marker\n");
+    state.session_input(id, 0, format!("driveloop_marker{ENTER}").as_bytes());
 
     assert!(
         wait_until(Duration::from_secs(5), || visible_text(&session)
@@ -84,7 +99,7 @@ fn in_order_input_batches_arrive_in_order() {
 
     // Three contiguous, in-order batches. The append-only log must preserve their order on the PTY.
     for (serial, ch) in [(0u64, "AAA"), (1, "BBB"), (2, "CCC")] {
-        state.session_input(id, serial, format!("{ch}\n").as_bytes());
+        state.session_input(id, serial, format!("{ch}{ENTER}").as_bytes());
     }
 
     assert!(

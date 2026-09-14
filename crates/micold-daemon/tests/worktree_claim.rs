@@ -15,9 +15,6 @@
 //! 3. **It does nothing on disk** (FR-003). Directory contents and branch, unchanged.
 //! 4. **A persistence failure is reported as `IoFailed`** — the one error this message has.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::path::Path;
 use std::process::Command;
 

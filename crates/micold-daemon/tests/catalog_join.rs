@@ -21,9 +21,6 @@
 //! `micold-daemon` dev-depends on `micold-client` (see the manifest; not a cycle — the client never
 //! depends on the daemon), which is what lets one test hold both ends.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
@@ -161,7 +158,15 @@ fn a_shell_the_daemon_hosts_reaches_the_clients_state_alive_and_then_exited() {
     let state = DaemonState::new(catalog_with_session(project.path(), store.path(), sid));
 
     // The session's AI CLI primary. `cat` so it stays up and is plainly a different process.
+    #[cfg(unix)]
     let mut cmd = CommandBuilder::new("cat");
+    // Windows has no `cat`; `ping -n 300` to loopback stays up just as plainly.
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut cmd = CommandBuilder::new("cmd");
+        cmd.args(["/c", "ping -n 300 127.0.0.1 >nul"]);
+        cmd
+    };
     cmd.cwd(std::env::temp_dir());
     let primary = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn primary");
     let primary = state.register_session(primary);
@@ -199,7 +204,11 @@ fn a_shell_the_daemon_hosts_reaches_the_clients_state_alive_and_then_exited() {
 
     // End it the way a user ends one: not `close_shell`, which removes the process and is exactly
     // the shortcut that let the incomplete fix through.
+    // A tty maps Enter to a newline; `cmd` needs the carriage return itself.
+    #[cfg(unix)]
     state.session_input(sid, 0, b"exit\n");
+    #[cfg(windows)]
+    state.session_input(sid, 0, b"exit\r");
     assert!(
         wait_until(Duration::from_secs(10), || !shell.is_alive()),
         "the shell must actually exit for this test to be testing anything"
