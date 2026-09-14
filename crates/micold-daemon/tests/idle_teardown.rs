@@ -31,12 +31,17 @@ fn spawn_daemon(dir: &Path, idle_stop: &str) -> Child {
 }
 
 fn endpoint_in(dir: &Path) -> micold_core::endpoint::Endpoint {
-    let previous = std::env::var_os("XDG_RUNTIME_DIR");
-    std::env::set_var("XDG_RUNTIME_DIR", dir);
+    // Both variables, as `spawn_daemon` sets both: macOS keys the endpoint on `$HOME`.
+    let previous = ["XDG_RUNTIME_DIR", "HOME"].map(|var| (var, std::env::var_os(var)));
+    for (var, _) in &previous {
+        std::env::set_var(var, dir);
+    }
     let resolved = micold_core::endpoint::resolve().expect("resolve isolated endpoint");
-    match previous {
-        Some(v) => std::env::set_var("XDG_RUNTIME_DIR", v),
-        None => std::env::remove_var("XDG_RUNTIME_DIR"),
+    for (var, value) in previous {
+        match value {
+            Some(v) => std::env::set_var(var, v),
+            None => std::env::remove_var(var),
+        }
     }
     resolved
 }
