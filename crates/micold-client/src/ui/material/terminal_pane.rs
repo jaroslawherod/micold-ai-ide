@@ -1445,19 +1445,25 @@ mod tests {
 
         /// A three-row grid whose top line reads `hello world`, with the given terminal mode bits.
         fn grid(mode: u32) -> GridCache {
+            grid_with_history(mode, 0)
+        }
+
+        /// [`grid`] with `history` lines of scrollback above the screen, viewed at the live bottom.
+        fn grid_with_history(mode: u32, history: i64) -> GridCache {
             let text = "hello world";
+            let top = LineId(history);
             let mut cache = GridCache::default();
             cache.apply(&GridFrame {
                 session: SessionId::new(),
                 seq: 1,
                 generation: 1,
                 full: true,
-                viewport_top: LineId(0),
+                viewport_top: top,
                 oldest_available: LineId(0),
                 cols: 20,
                 rows: 3,
                 cursor: WireCursor {
-                    line: LineId(0),
+                    line: top,
                     col: 0,
                     shape: WireCursorShape::Block,
                     visible: false,
@@ -1466,7 +1472,7 @@ mod tests {
                 styles: vec![DEFAULT_STYLE],
                 hyperlinks: Vec::new(),
                 lines: vec![WireLine {
-                    id: LineId(0),
+                    id: top,
                     text: text.to_string(),
                     runs: vec![StyleRun {
                         len: text.len() as u16,
@@ -1738,7 +1744,8 @@ mod tests {
 
         #[test]
         fn motion_after_a_scroll_while_held_is_a_drag_even_in_the_pressed_screen_cell() {
-            let grid = grid(0);
+            // Scrollback to scroll into, so the wheel turn really moves the view.
+            let grid = grid_with_history(0, 10);
             let mut clipboard = RecordingClipboard::holding(PRIOR);
 
             let published = gesture(
@@ -1781,6 +1788,59 @@ mod tests {
                 vec![(0, 0)],
                 "a pointer that has left the pane has left the pressed cell, even though the \
                  position clamps back onto it (FR-013e)"
+            );
+        }
+
+        #[test]
+        fn jitter_in_the_focus_gutter_beside_the_pressed_edge_cell_is_not_a_drag() {
+            let grid = grid(0);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            // A fifth of a cell left of column 0 is inside the pane's focus gutter, where a press
+            // still belongs to the pane and lands on the edge cell.
+            let published = gesture(
+                &grid,
+                None,
+                &[
+                    Pointer::Press(0, 0, -0.1, 0.5),
+                    Pointer::Move(0, 0, -0.2, 0.5),
+                    Pointer::Move(0, 0, 0.3, 0.5),
+                ],
+                &mut clipboard,
+            );
+
+            assert_eq!(
+                select_updates(&published),
+                Vec::<(u16, u16)>::new(),
+                "a press in the gutter belongs to the edge cell beside it, and motion that stays \
+                 in that gutter or that cell never entered another cell (FR-013e)"
+            );
+        }
+
+        #[test]
+        fn a_wheel_turn_that_cannot_scroll_leaves_jitter_a_click() {
+            // No scrollback: the view is already at both ends, so the text under the pointer
+            // stays where it was.
+            let grid = grid(0);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+
+            let published = gesture(
+                &grid,
+                None,
+                &[
+                    Pointer::Press(6, 0, 0.5, 0.5),
+                    Pointer::Wheel(6, 0, 3.0),
+                    Pointer::Wheel(6, 0, -3.0),
+                    Pointer::Move(6, 0, 0.7, 0.5),
+                ],
+                &mut clipboard,
+            );
+
+            assert_eq!(
+                select_updates(&published),
+                Vec::<(u16, u16)>::new(),
+                "a wheel turn that moves nothing leaves the pressed text under the pointer, so \
+                 motion inside the pressed cell is still a click (FR-013e)"
             );
         }
 

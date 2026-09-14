@@ -108,3 +108,21 @@ were added to the list as behaviours and written as tests before any change.
   now points at `selection::copy_request` instead of the pane's old release write.
 - commit: the `fix(006)` commit that carries this entry.
 
+## Red: U12 and U13, found by code reviews A and B, round 2 (one Red commit)
+
+Round 2 of both reviews found that the U11 fix treats every position outside the character area
+as having left the pressed cell. A press in the pane's focus gutter, which the pane still accepts
+and `grid_at` clamps onto the edge cell, therefore became a drag on the first jitter. Review A also
+found that the U10 fix clears the pressed cell on a wheel turn that cannot move the view. Both were
+added to the list and written as tests before any change.
+
+- test fixture (a stated test change, taken before the implementation): U10 now runs over
+  `grid_with_history(0, 10)`, because its premise is a wheel turn that moves the view. On a grid with
+  no scrollback that turn moves nothing, which is U13. `grid(mode)` delegates to the new helper
+  unchanged. U10 still passes on the unchanged code.
+- U12 `terminal_pane.rs::tests::clipboard_gestures::jitter_in_the_focus_gutter_beside_the_pressed_edge_cell_is_not_a_drag` (new)
+  - red: `scripts/build-lock.sh cargo test -p micold-client --lib clipboard_gestures`
+    -> `panicked at crates/micold-client/src/ui/material/terminal_pane.rs:1812:13` `left: [(0, 0), (0, 0)]  right: []` (12 passed; 2 failed)
+- U13 `clipboard_gestures::a_wheel_turn_that_cannot_scroll_leaves_jitter_a_click` (new)
+  - red: same run -> `panicked at crates/micold-client/src/ui/material/terminal_pane.rs:1839:13` `left: [(6, 0)]  right: []`
+
