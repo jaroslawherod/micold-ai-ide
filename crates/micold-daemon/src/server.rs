@@ -1338,17 +1338,35 @@ where
                     })
                     .await;
                     match result {
-                        Ok(Ok((branch_delete_failed, leftovers))) => {
+                        Ok(Ok((branch_delete_failed, mut leftovers))) => {
                             // Gated on the git delete having succeeded (main `d88c7a1`): only now archive
                             // the worktree's sessions durably and kill their live procs (outside the lock).
-                            match state.archive_and_remove_worktree_sessions(&project, &dir_name) {
+                            let killed_any = match state
+                                .archive_and_remove_worktree_sessions(&project, &dir_name)
+                            {
                                 Ok(ptys) => {
+                                    let killed_any = !ptys.is_empty();
                                     for pty in ptys {
                                         let _ = pty.kill();
                                     }
+                                    killed_any
                                 }
                                 Err(e) => {
-                                    tracing::warn!(%e, "archiving deleted worktree's sessions failed")
+                                    tracing::warn!(%e, "archiving deleted worktree's sessions failed");
+                                    false
+                                }
+                            };
+                            // Windows cannot delete a directory that a running process has as its
+                            // working directory, so the removal above leaves the worktree behind while
+                            // its sessions still run in it. They are reaped now; remove it once more.
+                            if killed_any && !leftovers.is_empty() {
+                                let target = cache_path.clone();
+                                if let Ok(retried) = tokio::task::spawn_blocking(move || {
+                                    remove_worktree_dir(&target)
+                                })
+                                .await
+                                {
+                                    leftovers = retried;
                                 }
                             }
                             state.invalidate_env_include(&cache_path);
