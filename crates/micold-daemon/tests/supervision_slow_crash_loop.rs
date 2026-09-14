@@ -12,12 +12,11 @@
 //! between two crashes — the seam `supervision.rs`'s unit tests, which drive the policy directly,
 //! cannot reach.
 //!
-//! Its own binary: it points `SHELL` at a script that fails slowly, and that is process-global.
-
-// unix-only: points `SHELL` at a `#!/bin/sh` script made executable with `PermissionsExt`; pending Windows triage (030 T027)
-#![cfg(unix)]
+//! Its own binary: it points `SHELL` (on Windows, `COMSPEC`) at a script that fails slowly, and
+//! that is process-global.
 
 use std::collections::BTreeMap;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::Arc;
@@ -41,11 +40,42 @@ use portable_pty::CommandBuilder;
 /// The daemon's real supervision cadence (`server.rs`'s `SUPERVISION_INTERVAL`).
 const TICK: Duration = Duration::from_millis(250);
 
+#[cfg(unix)]
 fn sh(script: &str) -> CommandBuilder {
     let mut cmd = CommandBuilder::new("sh");
     cmd.arg("-c");
     cmd.arg(script);
     cmd
+}
+/// `cmd /c` reads `exit <status>` the same way, which is all this script does on Windows.
+#[cfg(windows)]
+fn sh(script: &str) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("cmd");
+    cmd.arg("/c");
+    cmd.arg(script);
+    cmd
+}
+
+/// Make the platform shell, which every respawn runs, one that lives about a second and exits 1.
+/// On Unix that is `SHELL`; on Windows, `COMSPEC`, pointed at a batch file that waits out two
+/// `ping` echoes one second apart.
+///
+/// Both variables are process-global; the caller is the only test in this binary, so nothing reads
+/// either one concurrently.
+fn shell_that_fails_after_a_second(bin: &Path) {
+    #[cfg(unix)]
+    {
+        let slow_failure = bin.join("fails-after-a-second");
+        std::fs::write(&slow_failure, "#!/bin/sh\nsleep 1\nexit 1\n").unwrap();
+        std::fs::set_permissions(&slow_failure, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::env::set_var("SHELL", &slow_failure);
+    }
+    #[cfg(windows)]
+    {
+        let slow_failure = bin.join("fails-after-a-second.cmd");
+        std::fs::write(&slow_failure, "@ping -n 2 127.0.0.1 >nul\r\n@exit 1\r\n").unwrap();
+        std::env::set_var("COMSPEC", &slow_failure);
+    }
 }
 
 fn state_with_regular_session(project: &Path) -> (Arc<DaemonState>, SessionId) {
@@ -96,11 +126,7 @@ fn a_respawn_that_outlives_a_tick_but_not_the_window_still_counts_toward_failed(
     // Every respawn is a shell that comes up, lives a second, and exits 1 — BUG-004's `claude
     // --resume` with nothing to resume, minus the CLI.
     let bin = tempfile::tempdir().unwrap();
-    let slow_failure = bin.path().join("fails-after-a-second");
-    std::fs::write(&slow_failure, "#!/bin/sh\nsleep 1\nexit 1\n").unwrap();
-    std::fs::set_permissions(&slow_failure, std::fs::Permissions::from_mode(0o755)).unwrap();
-    // SAFETY: this is the only test in this binary, so nothing reads `SHELL` concurrently.
-    std::env::set_var("SHELL", &slow_failure);
+    shell_that_fails_after_a_second(bin.path());
 
     let project = tempfile::tempdir().unwrap();
     let (state, id) = state_with_regular_session(project.path());
