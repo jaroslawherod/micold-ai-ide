@@ -38,7 +38,7 @@ PrivilegesRequired=lowest
 ; The app window holds this mutex (micold_core::process::APP_MUTEX_NAME); setup asks the user to
 ; close it first (FR-009). The daemon does not hold it, since no one can close a windowless process:
 ; [Code] StopDaemon stops it.
-AppMutex=Local\MicoldAIIDE
+; MUTANT for A16: no AppMutex
 ; When the user continues, Restart Manager closes a still-open app window (FR-009).
 CloseApplications=force
 ; Never relaunch the app setup closed; the installer starts nothing on its own (FR-011).
