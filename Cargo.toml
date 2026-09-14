@@ -35,7 +35,14 @@ libc = "0.2.189"
 # needs and nothing else.
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
+    # Feature 030 (research R1, R2, R5): the user SID the pipe is keyed on and its protected DACL,
+    # the pid record's image check, and the pipe handle the ACL test inspects.
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
     "Win32_System_JobObjects",
+    "Win32_System_Pipes",
+    "Win32_System_ProcessStatus",
     # `GetTickCount64` for the suspend-inclusive clock (feature 028, research R3) — the Windows
     # counterpart of Linux's `CLOCK_BOOTTIME`, and the reason no new dependency was needed.
     "Win32_System_SystemInformation",
