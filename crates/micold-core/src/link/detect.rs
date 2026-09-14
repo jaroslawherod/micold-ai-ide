@@ -57,15 +57,18 @@ fn scan_end(chars: &[char], from: usize, quote: Option<char>) -> usize {
 }
 
 /// Whether the text after `scheme` is enough to be an address (research R3 rule 6): a mail address
-/// has text on both sides of its `@`, and a web address names a host.
+/// has text on both sides of its `@`, a file address has a path starting with `/` after an optional
+/// host, and a web address names a host.
 fn well_formed(scheme: &str, rest: &[char]) -> bool {
-    if scheme == "mailto:" {
-        let rest: String = rest.iter().collect();
-        return rest
-            .split_once('@')
-            .is_some_and(|(mailbox, domain)| !mailbox.is_empty() && !domain.is_empty());
+    match scheme {
+        "mailto:" => {
+            let rest: String = rest.iter().collect();
+            rest.split_once('@')
+                .is_some_and(|(mailbox, domain)| !mailbox.is_empty() && !domain.is_empty())
+        }
+        "file://" => rest.contains(&'/'),
+        _ => names_a_host(rest),
     }
-    names_a_host(rest)
 }
 
 /// Whether the text after a web scheme names a host: `localhost`, a dotted name, a bracketed IPv6
@@ -98,7 +101,7 @@ fn ends_an_address(c: char) -> bool {
 /// The scheme prefix an address starts with at `start`, unless a letter or digit right before it
 /// makes it the end of a word (research R3 rule 1).
 fn scheme_at(chars: &[char], start: usize) -> Option<&'static str> {
-    const SCHEMES: [&str; 3] = ["http://", "https://", "mailto:"];
+    const SCHEMES: [&str; 4] = ["http://", "https://", "mailto:", "file://"];
     if start > 0 && chars[start - 1].is_ascii_alphanumeric() {
         return None;
     }
@@ -263,6 +266,20 @@ mod tests {
             found("mailto:@example.com mailto:team@"),
             Vec::<String>::new(),
             "a mail address needs a mailbox before the at sign and a domain after it"
+        );
+    }
+
+    #[test]
+    fn finds_a_file_address_only_when_its_path_starts_with_a_slash() {
+        assert_eq!(
+            found("Saved to file:///tmp/x and file://localhost/tmp/y."),
+            ["file:///tmp/x", "file://localhost/tmp/y"],
+            "a file address is a path starting with a slash, after an optional host"
+        );
+        assert_eq!(
+            found("file:// file://tmp"),
+            Vec::<String>::new(),
+            "a file address with no path, or a host with no path after it, is not an address"
         );
     }
 }
