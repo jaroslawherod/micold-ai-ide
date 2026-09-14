@@ -420,6 +420,45 @@ mod tests {
     }
 
     #[test]
+    fn a_click_without_a_drag_selects_nothing() {
+        let p = provider(&[(100, "hello world")]);
+        // A single left press on the 'l' at col 2, released without moving.
+        let sel = Selection::start(a(100, 2), SelectGranularity::Char, &p);
+        assert!(
+            !sel.contains(LineId(100), 2),
+            "a click is not a drag: no cell may be highlighted (FR-013e)"
+        );
+        assert_eq!(sel.text(&p), "", "a click must leave nothing to auto-copy");
+    }
+
+    #[test]
+    fn an_update_onto_the_start_anchor_selects_that_cell() {
+        // The pane only sends an update once the pointer has left the pressed cell, so an update
+        // that lands on the start anchor is a drag that came back: one character stays selectable.
+        let p = provider(&[(100, "hello world")]);
+        let mut sel = Selection::start(a(100, 2), SelectGranularity::Char, &p);
+        sel.update(a(100, 2), &p);
+        assert!(
+            sel.contains(LineId(100), 2),
+            "a drag that ends on its start cell selects that cell (FR-013e)"
+        );
+        assert_eq!(sel.text(&p), "l");
+    }
+
+    #[test]
+    fn a_drag_out_and_back_selects_the_pressed_cell() {
+        let p = provider(&[(100, "hello world")]);
+        let mut sel = Selection::start(a(100, 2), SelectGranularity::Char, &p);
+        sel.update(a(100, 5), &p);
+        sel.update(a(100, 2), &p);
+        assert!(
+            sel.contains(LineId(100), 2),
+            "returning to the pressed cell must not turn a drag back into a click (FR-013e)"
+        );
+        assert_eq!(sel.text(&p), "l");
+    }
+
+    #[test]
     fn degenerate_missing_and_empty_lines_do_not_panic() {
         // Provider knows nothing: every line is treated as empty.
         let empty = provider(&[]);
