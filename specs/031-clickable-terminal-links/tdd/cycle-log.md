@@ -92,3 +92,12 @@
 - green: a scheme whose previous character is an ASCII letter or digit is skipped. Suite -> 1066 passed, 0 failed
 - refactor: moved the scheme lookup and the glued-word check into `scheme_at`; suite re-run -> 1066 passed
 - commit: `feat(031): ignore a scheme glued to the end of a word (U8)`
+
+## Cycle 9: U9 stops the scan at whitespace, control characters and `< > " ` { } | \ ^`
+
+- test: `crates/micold-core/src/link/detect.rs::tests::stops_at_whitespace_control_characters_and_characters_no_address_contains` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::stops_at_whitespace_control_characters_and_characters_no_address_contains -- --exact`
+  -> `'\u{7}' cannot appear in an address` / `left: ["https://a.example/x\u{7}y"]` / `right: ["https://a.example/x"]` (1 failed)
+- green: `ends_an_address` stops at whitespace, any control character and the nine listed characters. Suite -> 1067 passed, 0 failed
+- refactor: re-wrapped the `scan_end` doc comment to name rule 2; `cargo fmt`; suite re-run -> 1067 passed
+- commit: `feat(031): end an address at characters no address contains (U9)`
