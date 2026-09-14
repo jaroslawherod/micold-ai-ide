@@ -81,7 +81,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | U5  | Excludes an enclosing quote (`"https://example.com"`) | FR-005, US1.4 | example | DONE | `crates/micold-core/src/link/detect.rs::tests::excludes_an_enclosing_quote` |
 | U6  | In `[text](https://x.example)` only the address is found | FR-005 | example | DONE | `crates/micold-core/src/link/detect.rs::tests::finds_only_the_address_of_a_markdown_link` |
 | U7  | In `<https://x.example>` only the address is found | FR-005 | example | DONE | `crates/micold-core/src/link/detect.rs::tests::finds_only_the_address_inside_angle_brackets` |
-| U8  | Rejects a scheme preceded by a letter or digit (`xhttps://a.example`) | FR-001 | example | PENDING | |
+| U8  | Rejects a scheme preceded by a letter or digit (`xhttps://a.example`) | FR-001 | example | DONE | `crates/micold-core/src/link/detect.rs::tests::rejects_a_scheme_preceded_by_a_letter_or_digit` |
 | U9  | Stops the scan at whitespace, control characters and each of `< > " \` { } \| \ ^` | FR-001 | example | PENDING | |
 | U10 | Accepts web hosts `localhost`, `a.example`, `[::1]` and `intranet:8080`; rejects `http://intranet` (no dot, no port) | FR-001 | example | PENDING | |
 | U11 | Rejects `https://` alone and `http://exa mple` | FR-001 | example | PENDING | |
