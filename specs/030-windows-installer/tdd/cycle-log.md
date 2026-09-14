@@ -541,3 +541,12 @@ failed before the implementation.
 - green: pending T024.
 - notes: in the same run, "Install and launch the Windows installer" failed with exit code 1. It is still `continue-on-error`, and a console subsystem is what its conhost assertion catches. The daemon test step passed.
 - commit: see the follow-up commit
+
+## Cycle 64: U22, U23, U25, U26 green on Windows; U68 red in session_start
+
+- test: the five files d4bde1ad un-gated (T026). U68 is new, and its tests are three existing `session_start.rs` cases.
+- red (U68): PR #332's CI run 34825425160 (d4bde1ad), `build + test (windows-latest)`, step `Test (daemon, Windows)`, `session_start.rs`: `test result: FAILED. 14 passed; 3 failed`. Each of the three failed with `Couldn't start this session: CreateProcessW \`"copilot --resume=... --no-remote\0"\` ... failed: The system cannot find the file specified.` U68 is `RED`.
+- green (U22, U23, U25, U26): same run and step. `autospawn.rs`, `session_survival.rs`, `stream_view.rs` and `session_isolation.rs` ran and passed. U24 stays `PENDING` on U68.
+- green (U68): pending CI. `PtySession::spawn_ai_cli` and `spawn_shell` put the daemon's `PATH` ahead of the child's on Windows (`prefer_process_path`).
+- notes: portable-pty 0.9 `get_base_env` seeds a Windows child's `PATH` from the registry (HKLM plus HKCU `Environment`), not from the process. Its `search_path` then misses the stub `copilot.cmd` the test put on the process `PATH`. `is_available` reads the process `PATH`, so the daemon said the CLI was there and then failed to start it. Users hit this too, whenever a CLI is on the daemon's `PATH` but not in the registry. Added mid-loop as its own behavior.
+- commit: see the follow-up commit
