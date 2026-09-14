@@ -47,15 +47,25 @@ The scripted half of §D, `mise run test-sandbox`, is recorded in [`quickstart-C
    The settings notices already give the right wording (`isn't in <image>`). The start error did not
    use the availability source that feeds them.
 
-   **Fixed** after this pass, not re-run in the application. The daemon now words the refusal by
-   where sessions run (its `MICOLD_IMAGE_REFERENCE`) and by whether it is a resume. This case now
-   reads `Pi Coding Agent isn't in micold-daemon:vp029d-nopi, where sessions run, and this
-   conversation can only continue in it. Choose an image that provides it, then restart this
-   session.` A fresh start on the host keeps the old sentence. The pane no longer appends *Choose
-   restart below* to a refused start (`attempts: 0`), since each refusal says what to change. It
-   still does for a crash-loop give-up. Pinned by
+   **Fixed** after this pass. The daemon now words the refusal by where sessions run (its
+   `MICOLD_IMAGE_REFERENCE`) and by whether it is a resume. A fresh start on the host keeps the old
+   sentence. The pane no longer appends *Choose restart below* to a refused start (`attempts: 0`),
+   since each refusal says what to change. It still does for a crash-loop give-up. Pinned by
    `session_start.rs::a_missing_cli_is_advised_on_where_sessions_run_and_on_what_is_being_started`
    and `ui::terminal`'s `a_refused_start_is_not_pointed_at_restart`.
+
+   **Re-run in the application** on 2026-09-14, against `main` at `01588407`, with the same setup:
+   Xvfb and lavapipe, and client, daemon and both images rebuilt from that tree. The D.1 session was
+   still resumable, and the app started with `micold-daemon:vp029d-nopi`. The daemon logged
+   `AI CLI not on PATH; not starting … cli="pi"`. The row and the bar read failed. The pane and the
+   toast both read `Pi Coding Agent isn't in micold-daemon:vp029d-nopi, where sessions run, and this
+   conversation can only continue in it. Choose an image that provides it, then restart this
+   session.` The pane adds no *Choose restart below*
+   ([`quickstart-D-resume-missing-cli.png`](quickstart-D-resume-missing-cli.png)). Pressing
+   *restart* failed again with the same sentence and no second toast, as `announce_start_failures`
+   documents: an identical refusal is announced once. The toast in the image comes from relaunching
+   the client, which announces it again. The toast from the first launch had closed before the
+   first capture.
 2. **Carried over from §B, finding 2.** Pi's yellow `Warning: No project session found with id …`
    opens every new session, in the sandbox as on the host.
 
