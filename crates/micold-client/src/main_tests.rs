@@ -2006,6 +2006,11 @@ fn a_failed_sandbox_the_client_cannot_reach_is_brought_up_again() {
         "the bring-up has to be handed back to run, not built and dropped"
     );
     assert_eq!(
+        shell::sandbox::BringUp::live_tasks(),
+        1,
+        "the work handed back has to be the bring-up itself, not other work beside a dropped one"
+    );
+    assert_eq!(
         app.sandbox.state,
         micold_core::sandbox::lifecycle::SandboxState::Probing,
         "a refused dial to a sandbox that is not running has to start one — waiting for the \
@@ -2168,6 +2173,12 @@ fn a_container_found_stopped_is_brought_up_without_showing_a_failure() {
         1,
         "the bring-up has to be handed back to run — one built and dropped leaves `Probing` with \
              nothing running, which is BUG-004"
+    );
+    assert_eq!(
+        shell::sandbox::BringUp::live_tasks(),
+        1,
+        "the work handed back has to be the bring-up itself — one swapped for other work leaves \
+             `Probing` with nothing running, which is BUG-004"
     );
     assert_eq!(
         app.sandbox.persistent_notice(),
