@@ -267,4 +267,14 @@ mod tests {
             "from the second row, the address is the same link, starting on the row above"
         );
     }
+
+    #[test]
+    fn a_declared_uri_wins_over_the_address_its_text_shows() {
+        let rows = Rows::new(0, vec![row("https://b.example/x").declare(0..19, ADDRESS)]);
+        assert_eq!(
+            link_at(&rows, 0, 3),
+            declared(vec![span(0, 0..19)]),
+            "the program chose the target, so the declared URI opens, not the address the text shows"
+        );
+    }
 }
