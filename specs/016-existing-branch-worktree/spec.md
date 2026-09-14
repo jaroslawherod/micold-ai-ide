@@ -13,6 +13,10 @@ already exists), FR-027–FR-033 for it and FR-034–FR-035 for refusals that mu
 six Edge Cases, the "Included worktree" entity, SC-009–SC-011, and three Assumptions; annotated
 FR-007, FR-012, and FR-021a.
 
+**Bugfix**: 2026-09-14 — [BUG-004](./bugs/BUG-004.md) said what a worktree's location is: two paths
+reaching the same directory name the same worktree. Annotated FR-027 and FR-030 and added one Edge
+Case.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Continue work on a branch that already exists (Priority: P1)
@@ -166,6 +170,7 @@ session, and is byte-for-byte unchanged on disk.
 - **A directory under the app's own worktree directory that git no longer knows about**: already listed as an invalid worktree, and not what inclusion covers — git holds no branch for it, so it never produces the block that offers inclusion. Repairing such a directory is out of scope.
 - **The holder is the project's own checkout**: inclusion is not offered. The project checkout is already the project; there is nothing to add.
 - **The holder is an assistant worktree the app manages but is currently hiding**: inclusion is not offered either, for the opposite reason — it is already included. The explanation says how to reveal it (FR-021b).
+- **A worktree is named by a path that passes through a symbolic link** (a linked parent directory, or macOS's `/var`, which is `/private/var`): it is the same worktree. Including it succeeds and records the location the repository reports, so the row shows one location however it was reached; stopping by either spelling stops it (BUG-004).
 
 ## Requirements *(mandatory)*
 
@@ -215,9 +220,15 @@ session, and is byte-for-byte unchanged on disk.
 #### Including a worktree that already exists *(added by BUG-002)*
 
 - **FR-027**: When a branch is blocked because it is checked out in a worktree the app does not manage (FR-021a), the system MUST offer to include that worktree in the app, from the same explanation that reports the block.
+  *Clarified by BUG-004*: a worktree is identified by its location, not by how a path spells it. A
+  path that reaches the worktree through a symbolic link names that worktree, and the system records
+  and shows it at the location the repository reports.
 - **FR-028**: Including a worktree MUST NOT move, copy, rename, re-register, check out, or otherwise modify it, and MUST NOT modify the repository. The system records that it also shows this location, and does no more.
 - **FR-029**: An included worktree MUST appear in the worktree list and behave as any other worktree in subsequent use — listing, sessions, selection, deletion — and MUST show its location, since it does not live where the app's own worktrees do and its folder name alone would not say where it is.
 - **FR-030**: Inclusion MUST persist per project across restarts, and MUST be reversible: the user can stop including a worktree, which removes it from the list and leaves it exactly as it was on disk.
+  *Clarified by BUG-004*: stopping follows the same rule — any path that names the included
+  worktree's location stops including it. A worktree no longer on disk is stopped by the location
+  its row shows.
 - **FR-031**: An included worktree that has since been removed from disk, or that the repository no longer registers, MUST be reported as such in the list rather than silently dropped or shown as if it were intact.
 - **FR-032**: Once a worktree is included, the explanation for a branch it holds MUST describe it as one of the app's worktrees (FR-021) rather than as one outside the app (FR-021a). The two descriptions MUST follow from the same test that decides what the list shows, so "described as yours" and "shown in your list" cannot disagree — the rule BUG-001 established, extended to cover inclusion.
 - **FR-033**: Inclusion MUST NOT be offered for a holder that is the project's own checkout, or a worktree the app already manages (including one it is currently hiding); and deleting an included worktree from the app MUST state that it lives outside the directory the app manages, and give its location, before anything is removed.

@@ -1547,6 +1547,134 @@ async fn including_and_excluding_are_both_idempotent_and_reversible() {
     );
 }
 
+/// 016 BUG-004: a worktree named through a symlink is still that worktree. Git reports its
+/// canonical location, so a spelling through a linked directory — macOS's `/var`, which is
+/// `/private/var` — was refused as "not one of this repository's worktrees", and excluding by that
+/// spelling matched nothing.
+#[tokio::test]
+async fn a_worktree_named_through_a_symlink_is_included_and_excluded_as_itself() {
+    let project = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let links = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+
+    let real = std::fs::canonicalize(elsewhere.path()).unwrap();
+    let outside = real.join("olx");
+    add_worktree_outside(project.path(), &outside, "fix/olx");
+    let link = links.path().join("elsewhere");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let through_link = link.join("olx");
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    client
+        .send(Frame::Control(ClientMsg::WorktreeInclude {
+            req: 1,
+            project: project.path().to_path_buf(),
+            path: through_link.clone(),
+        }))
+        .await
+        .unwrap();
+    let reply = expect_control(&mut client, |m| {
+        matches!(
+            m,
+            DaemonMsg::OperationOk { req: 1, .. } | DaemonMsg::OperationError { req: 1, .. }
+        )
+    })
+    .await;
+    match reply {
+        DaemonMsg::OperationOk {
+            result: OperationResult::WorktreeIncluded { worktree },
+            ..
+        } => assert_eq!(
+            worktree.path, outside,
+            "the row is the worktree as git reports it, not the spelling it was asked for by"
+        ),
+        other => panic!("expected WorktreeIncluded, got {other:?}"),
+    }
+    let (after, _) = state.welcome_payload();
+    assert!(
+        worktree_paths_for(&after, project.path()).contains(&outside),
+        "listed once, at its own location"
+    );
+
+    client
+        .send(Frame::Control(ClientMsg::WorktreeExclude {
+            req: 2,
+            project: project.path().to_path_buf(),
+            path: through_link,
+        }))
+        .await
+        .unwrap();
+    expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationOk { req: 2, .. })
+    })
+    .await;
+    let (excluded, _) = state.welcome_payload();
+    assert!(
+        !worktree_paths_for(&excluded, project.path()).contains(&outside),
+        "and the same spelling stops showing it (FR-030)"
+    );
+}
+
+/// 016 BUG-004: matching by location must not strand a worktree that is no longer on disk — there is
+/// no location left to resolve, and its row (FR-031) is still the user's to stop showing.
+#[tokio::test]
+async fn an_included_worktree_removed_from_disk_is_still_excluded_by_its_rows_path() {
+    let project = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+
+    let outside = std::fs::canonicalize(elsewhere.path()).unwrap().join("olx");
+    add_worktree_outside(project.path(), &outside, "fix/olx");
+
+    let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
+        project.path(),
+        store.path(),
+        vec![],
+    )));
+    let mut client = connect_and_attach(&state, project.path()).await;
+
+    client
+        .send(Frame::Control(ClientMsg::WorktreeInclude {
+            req: 1,
+            project: project.path().to_path_buf(),
+            path: outside.clone(),
+        }))
+        .await
+        .unwrap();
+    expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationOk { req: 1, .. })
+    })
+    .await;
+
+    std::fs::remove_dir_all(&outside).unwrap();
+    client
+        .send(Frame::Control(ClientMsg::WorktreeExclude {
+            req: 2,
+            project: project.path().to_path_buf(),
+            path: outside.clone(),
+        }))
+        .await
+        .unwrap();
+    expect_control(&mut client, |m| {
+        matches!(m, DaemonMsg::OperationOk { req: 2, .. })
+    })
+    .await;
+
+    assert!(
+        !state.included_worktrees(project.path()).contains(&outside),
+        "a worktree gone from disk is stopped by the path its row shows"
+    );
+}
+
 /// Feature 027, research R2 part 2: the daemon answers the open-project gate for a client that
 /// cannot see its filesystem at the same paths.
 ///
