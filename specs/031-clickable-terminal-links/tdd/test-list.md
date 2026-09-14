@@ -107,7 +107,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | U26 | A plain-text cell returns `None` | L3 | example | PENDING | |
 | U27 | A negative (scrollback) row resolves exactly as a viewport row with the same content | US1.6 | example | PENDING | |
 | U147 | A detected address on one row returns its cells on that row (split from U21 before its cycle) | FR-001, L2 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_detected_address_on_one_row_returns_its_cells` |
-| U148 | A declared run continues across a soft wrap onto the next row, and stops at a real line break | FR-002, FR-007, L1 | example | PENDING | |
+| U148 | A declared run continues across a soft wrap onto the next row, and stops at a real line break | FR-002, FR-007, L1 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_declared_run_continues_across_a_soft_wrap_and_stops_at_a_line_break` |
 
 ### `crates/micold-core/src/link/address.rs`
 

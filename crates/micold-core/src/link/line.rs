@@ -6,30 +6,12 @@ use super::{detect::detect, CellSpan, Link, LinkOrigin, LinkRows};
 
 /// The link under the cell at `row`, `col`, if any (contract link-recognition §2).
 pub fn link_at(rows: &impl LinkRows, row: i64, col: u16) -> Option<Link> {
-    let text = rows.text(row)?;
-    let Some(uri) = rows.hyperlink(row, col) else {
-        return detected_at(&LogicalLine::around(rows, row), row, col);
-    };
-    let width = text.chars().count() as u16;
-    let same = |col: u16| rows.hyperlink(row, col) == Some(uri);
-    let start = (0..col)
-        .rev()
-        .take_while(|&col| same(col))
-        .last()
-        .unwrap_or(col);
-    let end = (col..width)
-        .take_while(|&col| same(col))
-        .last()
-        .unwrap_or(col)
-        + 1;
-    Some(Link {
-        address: uri.to_string(),
-        origin: LinkOrigin::Declared,
-        cells: vec![CellSpan {
-            row,
-            cols: start..end,
-        }],
-    })
+    rows.text(row)?;
+    let line = LogicalLine::around(rows, row);
+    match rows.hyperlink(row, col) {
+        Some(uri) => declared_at(rows, &line, uri, row, col),
+        None => detected_at(&line, row, col),
+    }
 }
 
 /// The rows joined by soft wraps around one row, as one string (research R4).
@@ -65,6 +47,11 @@ impl LogicalLine {
         line
     }
 
+    /// Where the char in the cell at `row`, `col` sits in `text`.
+    fn index_of(&self, row: i64, col: u16) -> Option<usize> {
+        self.cells.iter().position(|&cell| cell == (row, col))
+    }
+
     /// The cells the chars in `range` sit in, one span per row.
     fn spans(&self, range: Range<usize>) -> Vec<CellSpan> {
         let mut spans: Vec<CellSpan> = Vec::new();
@@ -81,9 +68,36 @@ impl LogicalLine {
     }
 }
 
+/// The maximal run of cells in `line` declaring `uri` that holds the cell at `row`, `col` (contract
+/// L1).
+fn declared_at(
+    rows: &impl LinkRows,
+    line: &LogicalLine,
+    uri: &str,
+    row: i64,
+    col: u16,
+) -> Option<Link> {
+    let index = line.index_of(row, col)?;
+    let same = |index: &usize| {
+        let (row, col) = line.cells[*index];
+        rows.hyperlink(row, col) == Some(uri)
+    };
+    let start = (0..index).rev().take_while(same).last().unwrap_or(index);
+    let end = (index..line.cells.len())
+        .take_while(same)
+        .last()
+        .unwrap_or(index)
+        + 1;
+    Some(Link {
+        address: uri.to_string(),
+        origin: LinkOrigin::Declared,
+        cells: line.spans(start..end),
+    })
+}
+
 /// The detected address in `line` holding the cell at `row`, `col` (contract L2).
 fn detected_at(line: &LogicalLine, row: i64, col: u16) -> Option<Link> {
-    let index = line.cells.iter().position(|&cell| cell == (row, col))?;
+    let index = line.index_of(row, col)?;
     let text: String = line.text.iter().collect();
     let range = detect(&text)
         .into_iter()
@@ -275,6 +289,34 @@ mod tests {
             link_at(&rows, 0, 3),
             declared(vec![span(0, 0..19)]),
             "the program chose the target, so the declared URI opens, not the address the text shows"
+        );
+    }
+
+    #[test]
+    fn a_declared_run_continues_across_a_soft_wrap_and_stops_at_a_line_break() {
+        let rows = Rows::new(
+            0,
+            vec![
+                row("Open the do").wrapped().declare(9..11, ADDRESS),
+                row("cs now").declare(0..2, ADDRESS),
+                row("cs again").declare(0..2, ADDRESS),
+            ],
+        );
+        let link = declared(vec![span(0, 9..11), span(1, 0..2)]);
+        assert_eq!(
+            link_at(&rows, 0, 10),
+            link,
+            "from the first row, the run continues onto the row it soft-wraps into"
+        );
+        assert_eq!(
+            link_at(&rows, 1, 0),
+            link,
+            "from the second row, the run is the same link, starting on the row above"
+        );
+        assert_eq!(
+            link_at(&rows, 2, 1),
+            declared(vec![span(2, 0..2)]),
+            "a real line break ends the run, though the next row starts with the same URI"
         );
     }
 }
