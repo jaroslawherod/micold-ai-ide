@@ -420,6 +420,13 @@ The approach:
 
 **Bugfix**: 2026-09-12 — BUG-004. Section added; nothing above it changed. See `bugs/BUG-004.md`.
 
+**Bugfix**: 2026-09-14 — BUG-004. The start grace (`Sandbox::is_coming_up`,
+`features/sandbox.rs`) runs from `Started` to the service's first answer, and counts a sandbox that
+is `Running` or `Stale` in that gap. A settings save during the start marks the container `Stale`
+without stopping it, and its service is still coming up (FR-036b). `on_connected` ends the grace
+(`answered()`) before `adopt_mount_set` can mark it `Stale`, so a mount-set change is always
+past it (FR-027). See the FR-036b note in `spec.md` and U30/U31.
+
 ## Complexity Tracking
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |

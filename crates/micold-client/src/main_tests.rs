@@ -1992,13 +1992,18 @@ fn nothing_was_reported(app: &App) -> bool {
 fn a_failed_sandbox_the_client_cannot_reach_is_brought_up_again() {
     let mut app = app_with_a_failed_sandbox();
 
-    let _ = connection_failed(&mut app);
+    let work = connection_failed(&mut app);
 
     assert_eq!(
         shell::sandbox::BringUp::scheduled().len(),
         1,
         "the state says a bring-up started, so one has to be scheduled — `Probing` with nothing \
              running is BUG-004 with a different banner"
+    );
+    assert_eq!(
+        work.units(),
+        1,
+        "the bring-up has to be handed back to run, not built and dropped"
     );
     assert_eq!(
         app.sandbox.state,
@@ -2151,12 +2156,18 @@ fn a_container_found_stopped_is_brought_up_without_showing_a_failure() {
         micold_core::sandbox::lifecycle::SandboxState::Running(ContainerId("abc".into()));
     let _ = update_inner(&mut app, Message::Connection(ConnectionMsg::Disconnected));
 
-    let _ = update_inner(&mut app, Message::Sandbox(SandboxMsg::Lost));
+    let work = update_inner(&mut app, Message::Sandbox(SandboxMsg::Lost));
 
     assert_eq!(
         shell::sandbox::BringUp::scheduled().len(),
         1,
         "a stopped container with attempts left is brought up at once (FR-036a)"
+    );
+    assert_eq!(
+        work.units(),
+        1,
+        "the bring-up has to be handed back to run — one built and dropped leaves `Probing` with \
+             nothing running, which is BUG-004"
     );
     assert_eq!(
         app.sandbox.persistent_notice(),
@@ -2406,12 +2417,20 @@ fn a_started_sandbox_marked_stale_before_its_service_answered_is_still_coming_up
     use micold_client::features::connection::ConnectionStatus;
     use micold_core::sandbox::lifecycle::SandboxState;
     let mut app = app_with_a_failed_sandbox();
+    // The save below goes through the real route, so it must not reach the developer's own
+    // `settings.json`.
+    app.caps = Capabilities::real().without_settings();
     let _ = connection_failed(&mut app);
     let _ = update_inner(
         &mut app,
         Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
     );
-    app.sandbox.survive_logout_changed();
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::SurviveLogoutToggled(true)),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
     assert!(
         matches!(app.sandbox.state, SandboxState::Stale(_)),
         "setup: the settings saved during the start marked the running sandbox out of date"
