@@ -15,9 +15,6 @@
 //! so the whole `route()` path is under test — including the `spawn_blocking` git hop — rather than
 //! a hand-rolled stand-in.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;

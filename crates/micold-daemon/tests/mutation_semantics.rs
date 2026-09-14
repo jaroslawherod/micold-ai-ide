@@ -5,9 +5,6 @@
 //! `handshake_flow` does, so the whole `route()` path — spawn_blocking git, error mapping, catalog
 //! reconcile, broadcast — is under test, not a hand-rolled stand-in.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;

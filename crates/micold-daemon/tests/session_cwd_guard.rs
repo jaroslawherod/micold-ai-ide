@@ -12,9 +12,6 @@
 //! Uses Regular (shell) sessions so no `claude` binary is needed; both modes go through the same
 //! guard.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 
 use micold_core::project::{Availability, Project};
