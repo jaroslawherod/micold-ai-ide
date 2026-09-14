@@ -23,3 +23,12 @@
 - refactor: none needed
 - commit: `feat(031): find a web address inside a sentence (U1)`
 - notes: per ledger decision 14, a cycle's suite is the core fast subset; the workspace suite runs at the milestone's end
+
+## Cycle 2: U2 trims trailing punctuation repeatedly
+
+- test: `crates/micold-core/src/link/detect.rs::tests::trims_trailing_punctuation_repeatedly` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::trims_trailing_punctuation_repeatedly -- --exact`
+  -> `left: ["https://example.com/docs/page.html?!."]` / `right: ["https://example.com/docs/page.html"]` (1 failed)
+- green: `detect` drops `.,;:!?'*` from the end while any remains. Suite -> 1060 passed, 0 failed
+- refactor: folded the scan end into the trimmed end; suite re-run -> 1060 passed
+- commit: `feat(031): trim sentence punctuation from an address's end (U2)`
