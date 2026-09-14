@@ -93,10 +93,17 @@ Record the PR number in the ledger right away.
 `ci complete` is the only required check. Watch it in the background instead of polling:
 
 ```bash
-gh pr checks <n> --required --watch --fail-fast
+until gh pr checks <n> --required 2>/dev/null | grep -q 'ci complete'; do sleep 15; done
+gh pr checks <n> --required --watch --fail-fast; echo "CHECKS_EXIT=$?"
 ```
 
 Run it with `run_in_background`. You are notified when it exits.
+
+- **Wait for the check to appear first.** Right after `gh pr create` or a push, CI has not
+  registered yet. `--watch` then prints `no required checks reported` and exits **0**, which looks
+  like green but is not.
+- **Only merge on the check itself.** Merge only when `ci complete` reads `pass`. A PR that still
+  lists no checks after about 5 minutes is checkless (see below).
 
 | Result | Action |
 |---|---|
