@@ -8,6 +8,6 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.1",
-    "playwright": "^1.50.1"
+    "playwright": "^1.63.0"
   }
 }
