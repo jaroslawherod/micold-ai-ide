@@ -35,8 +35,9 @@ OutputBaseFilename=micold-ai-ide-{#AppVersion}-{#Arch}-setup
 ; Per user: installs under %LOCALAPPDATA%\Programs with no UAC prompt, and never offers an
 ; all-users install (FR-004). PrivilegesRequiredOverridesAllowed stays absent for that reason.
 PrivilegesRequired=lowest
-; A running app holds this mutex (micold_core::process::APP_MUTEX_NAME); setup asks the user to
-; close it first (FR-009).
+; The app window holds this mutex (micold_core::process::APP_MUTEX_NAME); setup asks the user to
+; close it first (FR-009). The daemon does not hold it, since no one can close a windowless process:
+; [Code] StopDaemon stops it.
 AppMutex=Local\MicoldAIIDE
 ; When the user continues, Restart Manager closes a still-open app window (FR-009).
 CloseApplications=force

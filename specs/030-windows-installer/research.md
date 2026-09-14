@@ -379,8 +379,10 @@ embed-resource v3.0.11 MIT
 
 **Decision**, in three layers:
 
-1. **`AppMutex=Local\MicoldAIIDE`**. Both the client and the daemon create this named mutex at
-   startup, in a Windows-only `micold-core::process::announce_running()`. The installer then says
+1. **`AppMutex=Local\MicoldAIIDE`**. The client creates this named mutex at startup, in a
+   Windows-only `micold-core::process::announce_running()`. (Revised after A6: the daemon held it
+   too at first, and a repair with only the daemon running cancelled at the prompt, before
+   `PrepareToInstall` could stop the daemon. See layer 3.) The installer then says
    "Micold AI IDE is running, close it first" and offers Retry or Cancel.
    `Local\` scopes the mutex to the session, so another account's running app does not block this
    account's install.
