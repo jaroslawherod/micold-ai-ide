@@ -30,14 +30,14 @@ pub fn detect(text: &str) -> Vec<Range<usize>> {
     found
 }
 
-/// Where the characters of an address starting at `from` end: at whitespace, at a closing
-/// bracket that no opener inside the address balances (research R3 rule 4), or at the `quote`
-/// that opened right before the address (rule 5).
+/// Where the characters of an address starting at `from` end: at a character no address contains
+/// (research R3 rule 2), at a closing bracket that no opener inside the address balances (rule 4),
+/// or at the `quote` that opened right before the address (rule 5).
 fn scan_end(chars: &[char], from: usize, quote: Option<char>) -> usize {
     let mut open = Vec::new();
     for (index, &c) in chars.iter().enumerate().skip(from) {
         match c {
-            c if c.is_whitespace() || c == '>' || Some(c) == quote => return index,
+            c if ends_an_address(c) || Some(c) == quote => return index,
             '(' | '[' => open.push(c),
             ')' | ']' => {
                 let opener = if c == ')' { '(' } else { '[' };
@@ -50,6 +50,13 @@ fn scan_end(chars: &[char], from: usize, quote: Option<char>) -> usize {
         }
     }
     chars.len()
+}
+
+/// A character no address contains (research R3 rule 2).
+fn ends_an_address(c: char) -> bool {
+    c.is_whitespace()
+        || c.is_control()
+        || matches!(c, '<' | '>' | '"' | '`' | '{' | '}' | '|' | '\\' | '^')
 }
 
 /// The scheme prefix an address starts with at `start`, unless a letter or digit right before it
@@ -166,5 +173,18 @@ mod tests {
             Vec::<String>::new(),
             "a scheme glued to the end of a word is part of that word, not the start of an address"
         );
+    }
+
+    #[test]
+    fn stops_at_whitespace_control_characters_and_characters_no_address_contains() {
+        for stop in [
+            ' ', '\t', '\u{7}', '\u{1b}', '<', '>', '"', '`', '{', '}', '|', '\\', '^',
+        ] {
+            assert_eq!(
+                found(&format!("https://a.example/x{stop}y")),
+                ["https://a.example/x"],
+                "{stop:?} cannot appear in an address, so the address ends before it"
+            );
+        }
     }
 }
