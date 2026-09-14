@@ -115,7 +115,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U28 | `http`/`https` classify as `Web` and `mailto` as `Mail`, verbatim | FR-010, C1, C2 | example | PENDING | |
+| U28 | `http`/`https` classify as `Web` and `mailto` as `Mail`, verbatim | FR-010, C1, C2 | example | DONE | `crates/micold-core/src/link/address.rs::tests::web_and_mail_addresses_classify_verbatim` |
 | U29 | Scheme classification is ASCII case-insensitive | FR-011 | example | PENDING | |
 | U30 | `vscode:`, `slack:`, `zoommtg:`, `javascript:`, `data:`, `vbscript:` and an unknown scheme classify as `NotFollowable` | FR-011, C3 | example | PENDING | |
 | U31 | `file://host/path` classifies as `File { host, path }` with `%20` decoded to a space | FR-012, C9 | example | PENDING | |

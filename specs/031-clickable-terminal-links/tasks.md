@@ -82,7 +82,7 @@ the `env_include.rs` builders (plan, Target Platform).
     - A web host must be "`localhost`, dotted, a bracketed IPv6 literal, or carry a port".
     - `file` needs a path starting with `/`.
     - `mailto:` needs `@` with text on both sides.
-- [ ] T005 [P] [US1] [U17] [U18] [U19] [U20] [U21] [U22] [U23] [U24] [U25] [U26] [U27] Unit tests for `link_at(rows, row, col) -> Option<Link>` in `crates/micold-core/src/link/line.rs`, over a fake `LinkRows`.
+- [X] T005 [P] [US1] [U17] [U18] [U19] [U20] [U21] [U22] [U23] [U24] [U25] [U26] [U27] Unit tests for `link_at(rows, row, col) -> Option<Link>` in `crates/micold-core/src/link/line.rs`, over a fake `LinkRows`.
   - Contract §2 L1–L7:
     - A declared run over the logical line.
     - A detected range mapped back to cells on every row.
