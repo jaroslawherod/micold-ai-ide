@@ -13,6 +13,7 @@ pub trait LinkRows {
     fn text(&self, row: i64) -> Option<&str>;                 // None: row not available
     fn wrapped(&self, row: i64) -> bool;                      // this row soft-wraps into row + 1
     fn hyperlink(&self, row: i64, col: u16) -> Option<&str>;  // declared URI at a cell
+    fn spacer(&self, row: i64, col: u16) -> bool;             // the cell holds no char of its own
 }
 pub fn link_at(rows: &impl LinkRows, row: i64, col: u16) -> Option<Link>
 pub fn detect(text: &str) -> Vec<Range<usize>>          // char-index ranges, FR-001/FR-005
@@ -33,7 +34,7 @@ viewport height (below it). The client implements `LinkRows` over `GridCache` as
 | L2 | the cell carries no URI and lies inside a `detect` range of the logical line's text | that range mapped back to cells; `origin = Detected` |
 | L3 | neither | `None` |
 | L4 | the logical line | rows joined while the upper row has `wrapped`, at most 64 rows before and after the pointer row, reading beyond the viewport when the line continues there; a candidate reaching the cap is dropped |
-| L5 | a wide character | its spacer cell belongs to the same link as its lead cell |
+| L5 | a wide character | its spacer cell belongs to the same link as its lead cell. A spacer (`spacer` is `true`: `WIDE_CHAR_SPACER`, or `LEADING_WIDE_CHAR_SPACER` at a row's end) is left out of the logical line's text and covered by the char before it on its row |
 | L6 | two runs with the same URI separated by any other cell | two links |
 | L7 | the walk stops at a row whose `text` is `None`: below a row that has `wrapped`, or above the first available row | a candidate touching that boundary is dropped: nothing but trailing punctuation (research R3 rule 3) lies between its end and the last column of the lower row, or it starts in column 0 of the upper row. The same drop applies at the L4 cap. A truncated address is never recognised (FR-003) |
 

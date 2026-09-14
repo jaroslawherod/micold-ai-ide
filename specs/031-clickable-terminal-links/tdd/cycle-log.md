@@ -281,3 +281,13 @@
 - refactor: none needed; clippy clean
 - commit: `feat(031): drop an address only punctuation away from a cut (U149)`
 - notes: only the lower edge needs this. The upper edge compares the candidate's exact start, and a closing bracket or quote before a cut ends an address whatever follows
+
+## Cycle 28: U25 a wide character's spacer cell belongs to the link
+
+- test: `crates/micold-core/src/link/line.rs::tests::a_wide_characters_spacer_cell_belongs_to_the_link` (new). Before it could compile, `LinkRows` gained `spacer(row, col) -> bool` (minimal declaration) and the fake `Row` a `spacer(col)` builder
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::a_wide_characters_spacer_cell_belongs_to_the_link -- --exact`
+  -> `assertion failed: column 6: the address reads past the wide chars' spacers and covers them` / `left: None` / `right: Some(Link { address: "https://例え.jp", origin: Detected, cells: [CellSpan { row: 0, cols: 4..19 }] })` (1 failed)
+- green: `LogicalLine.cells` holds each char's cell range; a spacer cell adds no char to the text and extends the range of the char before it on its row. `index_of` finds the char whose range holds the cell, `spans` joins ranges, and `declared_at` compares URIs at each char's lead cell. Suite -> 1086 passed, 0 failed
+- refactor: the spacer branch reduced to one `if`/`else if`; suite re-run green (1086), clippy clean
+- commit: `feat(031): read an address past wide-char spacer cells (U25)`
+- notes: design gap found here and resolved as ledger decision 15. The wire's spacer char is a space (alacritty 0.26 writes `' '`), so `text` alone made detection stop inside `https://例え.jp`. Contract §1 and L5, data-model §1 and T028 now carry `spacer`, which the client answers from `WIDE_CHAR_SPACER | LEADING_WIDE_CHAR_SPACER`. Appended U150 for the leading spacer a wide char leaves at a row's end when it wraps

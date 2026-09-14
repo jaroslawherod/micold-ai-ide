@@ -211,7 +211,7 @@ the `env_include.rs` builders (plan, Target Platform).
 ### Implementation for US1: the pane
 
 - [ ] T028 [US1] [U118] [U119] [U120] [U121] [U122] [U123] [U124] [U129] [A1] [A7] [A9] [A10] [A11] Hover in `crates/micold-client/src/ui/material/terminal_pane.rs`.
-  - A `LinkRows` adapter over `GridCache`: `line(LineId(viewport_top - display_offset + row))`, with `text`, `wrapped` and `CachedExtra.hyperlink`.
+  - A `LinkRows` adapter over `GridCache`: `line(LineId(viewport_top - display_offset + row))`, with `text`, `wrapped`, `CachedExtra.hyperlink`, and `spacer` from the cell's style-run flags (`WIDE_CHAR_SPACER | LEADING_WIDE_CHAR_SPACER`; ledger decision 15).
   - `PaneState.hover: Option<HoverCache { session, context, cell, grid_version: (u64, u64), rows_hash: u64, resolved: Option<ResolvedLink> }>`.
   - The pure invalidation function.
   - In `update`, recompute on `CursorMoved`, `ModifiersChanged` and `window::Event::RedrawRequested`, which reads `GridCache::generation()`/`seq()`. Request a redraw when `resolved` changes.
