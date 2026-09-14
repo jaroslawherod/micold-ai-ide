@@ -61,8 +61,9 @@ impl Drop for Env {
     }
 }
 
-/// A `pi` that appends one line per launch: its arguments, then the variables under test, `|`
-/// separated. It then waits on its terminal, so it is still a live session when the record is read.
+/// A `pi` that appends one line per launch: its arguments, tab separated, then the variables under
+/// test, `|` separated. It then waits on its terminal, so it is still a live session when the record
+/// is read. Tabs, because the macOS data directory is `Application Support`.
 fn install_recording_pi(bin: &Path) -> PathBuf {
     use std::os::unix::fs::PermissionsExt;
 
@@ -71,9 +72,10 @@ fn install_recording_pi(bin: &Path) -> PathBuf {
     std::fs::write(
         &command,
         format!(
-            "#!/bin/sh\nprintf '%s|%s|%s|%s|%s\\n' \"$*\" \"${{MICOLD_PI_ACTIVITY_LOG-unset}}\" \
+            "#!/bin/sh\nIFS=\"$(printf '\\t')\"\n\
+             printf '%s|%s|%s|%s|%s\\n' \"$*\" \"${{MICOLD_PI_ACTIVITY_LOG-unset}}\" \
              \"${{PI_OFFLINE-unset}}\" \"${{PI_SKIP_VERSION_CHECK-unset}}\" \"${{PI_TELEMETRY-unset}}\" \
-             >> {}\ncat > /dev/null\n",
+             >> '{}'\ncat > /dev/null\n",
             launches.display()
         ),
     )
@@ -152,8 +154,10 @@ fn a_pi_session_carries_the_component_only_while_the_switch_is_on() {
     let _env = Env::set(&[
         ("PATH", std::env::join_paths(path).unwrap()),
         ("PI_CODING_AGENT_DIR", pi_home.path().into()),
-        // The component is materialised under the data directory; keep it out of the real one.
+        // The component is materialised under the data directory; keep it out of the real one. That
+        // is `$XDG_DATA_HOME` on Linux and under `$HOME/Library` on macOS.
         ("XDG_DATA_HOME", data_home.path().into()),
+        ("HOME", data_home.path().into()),
     ]);
     assert!(AiCli::Pi.provider().is_available());
 
@@ -163,7 +167,7 @@ fn a_pi_session_carries_the_component_only_while_the_switch_is_on() {
     let on = SessionId::from_uuid(Uuid::from_u128(WITH_COMPONENT));
     state.start_session(on, LaunchMode::Fresh).expect("starts");
     let fields = launch(&launches, 0);
-    let args: Vec<&str> = fields[0].split(' ').collect();
+    let args: Vec<&str> = fields[0].split('\t').collect();
     let ActivitySource::Extension { log } =
         AiCli::Pi
             .provider()
@@ -207,7 +211,7 @@ fn a_pi_session_carries_the_component_only_while_the_switch_is_on() {
     let fields = launch(&launches, 1);
     assert_eq!(
         fields[0],
-        format!("--session-id {}", off.0),
+        format!("--session-id\t{}", off.0),
         "no `-e` and nothing else"
     );
     assert_eq!(fields[1], "unset", "no activity log variable");
