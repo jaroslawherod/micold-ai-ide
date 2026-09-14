@@ -4,7 +4,7 @@ loop: outside-in
 profile: .specify/memory/tdd-profile.md
 spec_criteria: 1 # scoped to BUG-007: FR-013e / SC-014 only — see "Out of scope"
 planned_at: 226d3a8b
-updated_at: 2c8c5ae3 # the Red commit; states updated with the Green commit
+updated_at: fadb8e9f # the origin/main this branch was last rebased onto; states match the branch head
 suite_baseline: green # CI run on origin/main 226d3a8b concluded success; see cycle-log.md
 ---
 
