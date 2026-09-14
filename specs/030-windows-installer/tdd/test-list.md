@@ -92,6 +92,7 @@ The entry points are:
 | U67 | Dropping a session whose child is still running returns within 10 s | FR-020 | example | win | DONE | `crates/micold-daemon/src/supervisor.rs::windows_tests::dropping_a_session_returns` |
 | U68 | An AI CLI found on the daemon's own `PATH` is spawned on Windows, not refused by CreateProcessW as not found | FR-020, FR-025 | example | win | DONE | `crates/micold-daemon/tests/session_start.rs::{a_cli_that_refuses_the_resume_is_reported_and_leaves_nothing_running, a_session_that_never_recorded_a_conversation_is_not_told_its_conversation_is_gone, resuming_a_conversation_another_terminal_may_hold_is_attempted_like_any_other}` (Windows CI run 34834904463) |
 | U69 | Deleting a worktree with `stop_sessions` removes its directory on Windows, where a session still running in it holds it open | FR-020, FR-025 | example | win | RED | `crates/micold-daemon/tests/mutation_semantics.rs::worktree_delete_with_stop_sessions_archives_and_removes` (added in cycle 66) |
+| U70 | A worktree directory whose contents are all removed but which itself survives is reported as a leftover, naming the directory | FR-020, FR-023d | example | all | DONE | `crates/micold-core/tests/worktree_leftovers.rs::a_directory_that_empties_but_survives_is_named_itself` |
 
 ### `crates/micold-core/src/process.rs`
 
