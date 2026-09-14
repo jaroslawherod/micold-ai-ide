@@ -398,6 +398,7 @@ mod tests {
     #[test]
     fn in_a_content_sized_parent_a_lead_wider_than_the_line_takes_only_what_the_cluster_leaves() {
         // The cluster is measured first, so the lead cannot take its width however much it holds.
+        // An unsized parent gives the same rectangles: this pins the cap, not the shrinking.
         let (own, lead, trail) = laid_out_shrunk(1000.0, 400.0);
         assert_eq!(own.size(), Size::new(400.0, 40.0));
         assert_eq!(

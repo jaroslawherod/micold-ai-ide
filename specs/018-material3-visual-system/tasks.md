@@ -288,7 +288,7 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [X] T049 [US4] Apply the linear progress anatomy in `crates/micold-client/src/ui/material/progress.rs` — `secondary_container` track, `primary` indicator, 4dp thickness, fully rounded (FR-031e)
 - [X] T050 [US4] Replace the static 0.4 fill in `crates/micold-client/src/ui/material/progress.rs` with Material's indeterminate presentation, so the bar stops asserting a completion fraction the application cannot know (FR-031f)
 - [X] T051 [US4] Implement the notification queue in `crates/micold-core/src/notify.rs` — one visible, ordered pending queue, severity-derived duration, dedup and cap preserved (FR-032a, FR-032b)
-- [ ] ⚠️ Reopened T052 [US4] Create the `Snackbar` component in `crates/micold-client/src/ui/material/snackbar.rs` per `contracts/component-api.md` §2.2 (FR-032, Principle VIII) *(reopened 2026-09-14 — BUG-015: past §7.8's maximum width the message took the line and left `Dismiss` under 20dp, its label drawn past the container. Closed by T185.)*
+- [X] ⚠️ Reopened T052 [US4] Create the `Snackbar` component in `crates/micold-client/src/ui/material/snackbar.rs` per `contracts/component-api.md` §2.2 (FR-032, Principle VIII) *(reopened 2026-09-14 — BUG-015: past §7.8's maximum width the message took the line and left `Dismiss` under 20dp, its label drawn past the container. Closed by T185.)*
 - [X] T053 [US4] Replace the inline notification strip in `crates/micold-client/src/ui/mod.rs` with the floating snackbar overlay, above the dialog scrim and not obstructing a dialog's action row (FR-032)
 - [X] T053a [P] [US4] Assert the connection-status banner stayed a separate component: a test confirming `ConnectionBanner` still renders as a full-width, non-dismissible, non-queued strip and does not route through the snackbar queue. Material treats banners and snackbars as different components, and folding one into the other is the specific mistake this requirement forbids (FR-032c)
 - [X] T054 [US4] Rework `crates/micold-client/src/ui/material/toolbar.rs` to the small app bar anatomy — 64dp height, 16dp padding, `title_large` title, 48dp icon targets — and add `.elevated(bool)` (FR-025)
@@ -1797,7 +1797,7 @@ content (FR-032, US4 acceptance scenario 19).
 
 - [X] T186 Run the workspace gate (`mise run gate`) and record the result here
 
-- [ ] T187 Confirm on a rendered frame that a long launch notification draws `Dismiss` whole inside the snackbar, beside a short one that stays content-sized; record what was captured
+- [X] T187 Confirm on a rendered frame that a long launch notification draws `Dismiss` whole inside the snackbar, beside a short one that stays content-sized; record what was captured
 
 **Red record (T184)** — 2026-09-14, against the unfixed snackbar (`origin/main` at `226d3a8b`),
 `cargo test -p micold-client --lib snackbar::tests`: `a_long_message_leaves_the_action_its_width_inside_the_container`
@@ -1819,5 +1819,19 @@ It is not this change's: that test binary does not use `micold-client`, and this
 client's layout. `origin/main`'s CI at `226d3a8b` passed it. Left as a follow-up. The nine snackbar and
 `Reflow` tests pass, `anatomy_size`'s width-cap gate and `known_projects_reflow` pass unchanged, and no
 snapshot moved.
+
+**Rendered-frame record (T187)** — 2026-09-14, on Xvfb (1600×1400) with lavapipe, not a real GPU, from
+`micold-ai-ide`, `micold-daemon` and `micold-showcase` built together from this branch and run from a
+private copy (the daemon log shows `client attached to daemon`). The app was opened on a seeded catalog
+whose last-active project's folder is gone, the long path BUG-004's pass used, so it raised the same
+error notification. It wrapped to three lines, and `Dismiss` sat whole at its natural width inside the
+snackbar's right padded edge. Before the fix it read "Dismis", straddling that edge
+(`specs/002-project-workspace-management/evidence/bug004-launch-gone-last-active.png`). The showcase's
+Snackbar section shows the other half: "Rebuild index" with `Dismiss`, the
+one-line error with `Dismiss` and the no-action pose all stay as wide as their content, well short of
+the 600dp cap. The app frame is the dark scheme and the showcase the light one. Not exercised: a window narrow enough to narrow the message to a few
+words, and the enter and exit motion, none of which this fix touches. Crop:
+[`evidence/BUG-015-dismiss-whole.png`](evidence/BUG-015-dismiss-whole.png). The top strip is the app's
+long notification and the bottom strip is the showcase's three poses.
 
 **Bugfix**: 2026-09-14 — BUG-015 Updated from bugfix patch: reopened T052 and added Phase 27 (T184–T187).
