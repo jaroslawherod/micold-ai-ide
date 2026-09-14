@@ -7,20 +7,21 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature (entered as a bug, [BUG-004](../027-sandboxed-daemon-runtime/bugs/BUG-004.md); switched to Phase 1, see D6)
 - **Worktree branch**: fix/settings-side-bar-should-be-animated
 - **Started**: 2026-09-14
-- **Phase**: 3-design
-- **Next step**: commit and PR 2 (plan), then Phase 4 M1
+- **Phase**: 4-implement
+- **Next step**: M1 reviews A and B, then commit and PR 3 (M1)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #334 | PR 1: spec | merged | a9f54e77 |
+| #339 | PR 2: plan | merged | b27ffe62 |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T004 | The worktree sidebar hides and shows on `emphasized` over `medium_4` | — | pending |
+| M1 | T001–T004 | The worktree sidebar hides and shows on `emphasized` over `medium_4` | — | in review |
 | M2 | T005–T044 | The settings rail slides, with icons on their line, badges marked, focus kept, pointer confined | — | pending |
 
 ## Decisions
@@ -62,4 +63,5 @@ None.
 - The local suite on 9275a357 and a9f54e77 fails in `micold-daemon --test exclusivity`
   (`a_second_open_of_a_held_pi_conversation_starts_nothing`) and `--test pi_launch_wiring`
   (`a_pi_session_carries_the_component_only_while_the_switch_is_on`), in code this flow does not
-  touch; CI on main is green (D17). Recheck in T001; escalate only if CI fails too.
+  touch; CI on main is green (D17). T001 rechecked on b27ffe62: only `exclusivity` fails (3074 passed,
+  1 failed, shell suites pass), so the flow continues; not this feature's to fix.

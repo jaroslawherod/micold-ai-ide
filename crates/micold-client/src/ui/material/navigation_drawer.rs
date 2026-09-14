@@ -23,7 +23,7 @@ use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::{Element, Event, Length, Rectangle, Size, Vector};
 
 use crate::ui::cdk::motion::Progress;
-use micold_core::tokens::motion::duration;
+use micold_core::tokens::motion::{duration, EMPHASIZED};
 
 /// Below this the panel is gone and the rail has taken over. Not zero: a track converges *toward*
 /// its target, and a drawer that only swaps at exactly zero would leave a sliver of panel on screen
@@ -108,9 +108,15 @@ where
 
     fn state(&self) -> tree::State {
         // Built at its destination, not animating toward it: a drawer that starts open must not
-        // slide open on the first frame of the session.
+        // slide open on the first frame of the session. On `emphasized`, the curve 018 §6.3's
+        // *sidebar slide* row names.
         tree::State::new(Track {
-            progress: Progress::new(if self.open { 1.0 } else { 0.0 }),
+            progress: Progress::new(if self.open { 1.0 } else { 0.0 }).easing(
+                EMPHASIZED.x1,
+                EMPHASIZED.y1,
+                EMPHASIZED.x2,
+                EMPHASIZED.y2,
+            ),
         })
     }
 
@@ -460,5 +466,47 @@ mod tests {
         let closed = drawer().open(false);
         let state = Widget::<(), iced::Theme, iced::Renderer>::state(&closed);
         assert_eq!(state.downcast_ref::<Track>().progress.value(), 0.0);
+    }
+
+    /// `cubic-bezier(0.2, 0, 0, 1)` — the *emphasized* curve — at x = 0.25, solved by bisection.
+    /// Stated rather than computed because `cdk::motion::ease` is private.
+    const EMPHASIZED_AT_A_QUARTER: f32 = 0.607;
+
+    /// The sidebar slide is `medium_4` on `emphasized` (018 §6.3, FR-003), not linear. Instants 0,
+    /// +64 ms and +84 ms are a quarter of the way in linear time: a track's first frame steps one
+    /// `FRAME` (16 ms), and later gaps are measured, capped at 64 ms.
+    #[test]
+    fn the_sidebar_slides_on_the_emphasized_curve() {
+        let closed = drawer().open(false);
+        let mut state = Widget::<(), iced::Theme, iced::Renderer>::state(&closed);
+        let track = state.downcast_mut::<Track>();
+        let mut linear = Progress::new(0.0);
+
+        let start = std::time::Instant::now();
+        let mut messages = Vec::<()>::new();
+        for at in [0, 64, 84] {
+            let frame = Event::Window(iced::window::Event::RedrawRequested(
+                start + Duration::from_millis(at),
+            ));
+            track
+                .progress
+                .on_frame(&frame, 1.0, SLIDE, &mut Shell::new(&mut messages));
+            linear.on_frame(&frame, 1.0, SLIDE, &mut Shell::new(&mut messages));
+        }
+
+        assert!(
+            (linear.value() - 0.25).abs() <= 0.001,
+            "the instants are a quarter of the slide in linear time, got {}",
+            linear.value()
+        );
+        let sidebar = track.progress.value();
+        assert!(
+            (sidebar - 0.25).abs() > 0.05,
+            "the sidebar moved linearly: {sidebar} at a quarter of the slide"
+        );
+        assert!(
+            (sidebar - EMPHASIZED_AT_A_QUARTER).abs() <= 0.01,
+            "expected the emphasized curve's {EMPHASIZED_AT_A_QUARTER}, got {sidebar}"
+        );
     }
 }

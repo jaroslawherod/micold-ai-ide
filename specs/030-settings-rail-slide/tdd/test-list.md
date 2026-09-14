@@ -4,7 +4,7 @@ loop: outside-in
 profile: .specify/memory/tdd-profile.md
 spec_criteria: 11 # US1 scenarios 1–7, US2 scenarios 1–4
 planned_at: a9f54e77
-updated_at: a9f54e77
+updated_at: b27ffe62
 suite_baseline: red # local only: two daemon `pi` tests fail on this host, CI on main is green; see cycle-log.md
 ---
 
@@ -54,7 +54,7 @@ own message.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U1  | Driven at instants 0, +64 ms and +84 ms, a drawer's track is within 0.01 of `EMPHASIZED` at a linear twin's value (0.25 ± 0.001) and not within 0.25 ± 0.05 | FR-003 | example | PENDING | |
+| U1  | Driven at instants 0, +64 ms and +84 ms, a drawer's track is within 0.01 of `EMPHASIZED` at a linear twin's value (0.25 ± 0.001) and not within 0.25 ± 0.05 | FR-003 | example | DONE | `navigation_drawer.rs::tests::the_sidebar_slides_on_the_emphasized_curve` |
 
 ### `crates/micold-client/src/ui/material/section_list.rs` — derived values
 
