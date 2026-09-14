@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/settings-side-bar-should-be-animated
 - **Started**: 2026-09-14
 - **Phase**: 4-implement
-- **Next step**: M1 reviews A and B, then commit and PR 3 (M1)
+- **Next step**: M1 review round 2 (fresh A and B) on the round-1 fixes, then PR 3 (M1)
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T004 | The worktree sidebar hides and shows on `emphasized` over `medium_4` | — | in review |
+| M1 | T001–T004, T045 | The worktree sidebar hides and shows on `emphasized` over `medium_4`, never narrower than its rail | — | in review (round 2) |
 | M2 | T005–T044 | The settings rail slides, with icons on their line, badges marked, focus kept, pointer confined | — | pending |
 
 ## Decisions
@@ -47,11 +47,13 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | D17 | tasks | The TDD baseline is red: 2 of 3081 fail. Stop the loop? | No. Both are daemon `pi` launch tests (`exclusivity`, `pi_launch_wiring`) that fail on this host only; CI `main` is green and 030 touches no daemon code. Recorded as a local-only red; T001 rechecks on fresh main and escalates only if CI fails too or another test fails | agent-resolved | tdd/cycle-log.md *Baseline*; `gh run list --branch main` |
 | D18 | tasks | Tasks and milestone review still had MAJOR findings after 3 rounds (r1 3, r2 4, r3 2 MAJOR; all fixed). Run a 4th round or open PR 2? | Run a 4th round | decided by user | escalation, category 5 |
 | D19 | tasks | Tasks review r4 returned 1 MAJOR (T017 expected Escape to close Settings, which it does not: Settings is not a registered surface) and nothing else. Review again? | No. Fixed as the reviewer proposed (Save and Cancel are Settings' only exits). D18 approved one more round, not an open-ended loop; r4 confirmed every earlier fix holds (same reasoning as D9, D14) | agent-resolved | tasks review r4; app.rs `EscapePressed`, overlay/registry.rs |
+| D20 | implement | M1 review r1 (B, MAJOR): on `emphasized` the closing drawer spends ~150 ms (linear ~33 ms) laid out narrower than its 31 px rail, so the main pane creeps left and jumps back at the swap. Accept it or fix it? | Fix it in M1: `NavigationDrawer::layout` floors the revealed width at the rail's width less the handle's (clamped to the panel's), test-first as U23/T045. The swap itself (at `CLOSED`) is unchanged. A regression the curve introduced is FR-003's to carry, and the fix is three lines | agent-resolved | navigation_drawer.rs `layout`; sidebar.rs:33,262; resize_handle.rs:30 |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | code r1 (B) | MINOR: drive U1 at `start + FRAME · i` instead of instants that restate the private `MAX_STEP` | T003 and T019 (M2) both specify 0, +64, +84 ms so the rail and drawer tests share instants; the test's comment states why those instants are a quarter. Revisit if `MAX_STEP` changes |
 | — (spec) | spec r2 | F6 part: file a bug against 018 for the sidebar's linear curve | Writing into 018's directory is outside this flow (the only allowed edit to another spec is the bug path's patch). 030 carries the fix as FR-003 and cites 018 SC-010 in its assumptions; the rest of F6 was fixed |
 
 ## Open escalation
