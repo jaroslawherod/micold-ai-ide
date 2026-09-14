@@ -62,6 +62,9 @@ fn blend(base: Color, over: Color, t: f32) -> Color {
 /// which is the *selected* opacity: close enough to look reasonable, and wrong enough that a
 /// selected row and a pressed one were indistinguishable.
 pub fn state_layer(container: Color, content: Color, opacity: f32) -> Color {
+    if yield_to_ripple(opacity) {
+        return container;
+    }
     blend(container, content, opacity)
 }
 
@@ -70,7 +73,53 @@ pub fn state_layer(container: Color, content: Color, opacity: f32) -> Color {
 /// Left semi-transparent rather than composited, so it works over whatever it happens to sit on —
 /// a text button in a dialog and the same button on a card get a layer that suits each.
 pub fn state_fill(content: Color, opacity: f32) -> Color {
+    if yield_to_ripple(opacity) {
+        return Color::TRANSPARENT;
+    }
     alpha(content, opacity)
+}
+
+thread_local! {
+    /// `Some` while a running ripple draws the surface beneath it: the heaviest layer that surface
+    /// asked for so far, which it does not get to draw (FR-024h, BUG-014).
+    static BENEATH_RIPPLE: std::cell::Cell<Option<f32>> = const { std::cell::Cell::new(None) };
+}
+
+/// Whether the layer being asked for belongs to a running ripple instead, noting it if so.
+fn yield_to_ripple(opacity: f32) -> bool {
+    BENEATH_RIPPLE.with(|cell| match cell.get() {
+        Some(heaviest) => {
+            cell.set(Some(heaviest.max(opacity)));
+            true
+        }
+        None => false,
+    })
+}
+
+/// Draw `content` as the surface under a running ripple: at its resting fill, whatever its status.
+/// Returns the heaviest state layer it would otherwise have drawn — the one it resumes once the
+/// ripple is over, and so the one the ripple fades to (FR-024h, BUG-014).
+///
+/// §5 says layers never sum, and a ripple is a layer. It is drawn by a wrapper that cannot see its
+/// child's status — iced picks `button::Status` inside the button's own `update` — and the child's
+/// style cannot see the ripple, so neither could decide alone which one shows. Every rippling style
+/// already composes its layer through [`state_layer`] or [`state_fill`], and draws synchronously
+/// inside its wrapper's `draw`, so this is scoped to exactly the subtree being drawn and to nothing
+/// else on the thread.
+pub fn beneath_ripple(content: impl FnOnce()) -> f32 {
+    /// Restores the enclosing scope even if drawing unwinds, so one panic cannot strip every later
+    /// frame's state layers on this thread.
+    struct Restore(Option<f32>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            BENEATH_RIPPLE.with(|cell| cell.set(self.0));
+        }
+    }
+    let restore = Restore(BENEATH_RIPPLE.with(|cell| cell.replace(Some(0.0))));
+    content();
+    let heaviest = BENEATH_RIPPLE.with(|cell| cell.get()).unwrap_or(0.0);
+    drop(restore);
+    heaviest
 }
 
 /// `layer` composited over `base`, both opaque afterwards.

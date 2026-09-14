@@ -108,6 +108,9 @@ pub(crate) mod style;
 /// same reason as the snapshots above.
 #[cfg(test)]
 mod ripple_clipping;
+/// A press draws one state layer with its ripple, read back from rendered frames (BUG-014).
+#[cfg(test)]
+mod ripple_layers;
 /// The reference scene's ripple, and the rule it presses by. In-crate for the same reason.
 #[cfg(test)]
 mod ripple_pulse;
