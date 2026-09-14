@@ -123,3 +123,12 @@
 - refactor: none needed
 - commit: `test(031): pin that a scheme alone or a broken host is not an address (U11)`
 - notes: green on arrival; U10 made the rule this behavior pins
+
+## Cycle 12: U12 finds `mailto:team@example.com`; rejects `mailto:@example.com` and `mailto:team@`
+
+- test: `crates/micold-core/src/link/detect.rs::tests::finds_a_mail_address_only_with_text_on_both_sides_of_the_at_sign` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::finds_a_mail_address_only_with_text_on_both_sides_of_the_at_sign -- --exact`
+  -> `left: []` / `right: ["mailto:team@example.com"]` (1 failed)
+- green: `mailto:` joins the recognised schemes; `well_formed` takes the scheme and, for `mailto:`, requires text on both sides of the first `@`. Suite -> 1070 passed, 0 failed
+- refactor: the web host rule moved unchanged into `names_a_host`, so `well_formed` reads as one rule per scheme; suite re-run green
+- commit: `feat(031): recognise a mail address with a mailbox and a domain (U12)`
