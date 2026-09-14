@@ -356,3 +356,34 @@ Findings 1 and 2 of the first pass no longer reproduce. Two limits remain.
   stopped from outside, truncated mid-word. It is not part of FR-036b and is left open.
 
 Not assessed: how the stage transitions look at real frame rates. lavapipe frame pacing says nothing about a GPU.
+
+## `Started` to listening, against the reconnect backoff — T194 (BUG-004)
+
+**Date**: 2026-09-14 · **Source**: the logs and frame timestamps of the T178 re-run above. No new run was made.
+Frame times are local (UTC+2), and daemon log times are UTC shifted to local here.
+
+`REFUSALS_WHILE_STARTING = 1` (`features/sandbox.rs`) lets one refused dial after `Started` pass as the service
+still starting. It rests on the daemon listening within one `RECONNECT_BACKOFF` (1s, `daemon.rs:127`) of `Started`.
+
+| moment (local) | source | event |
+| --- | --- | --- |
+| 08:12:06.67 – 08:12:06.95 | frame | "Starting the sandbox": `Started` has not reached the application |
+| 08:12:06.849893 | daemon log | `micold-daemon starting` |
+| 08:12:06.850161 | daemon log | `listening (sandboxed) addr=0.0.0.0:7727` |
+| 08:12:07.08 | frame | the attached view: `Started` arrived between 08:12:06.95 and this frame |
+| 08:12:07.351126 | daemon log | `client attached to daemon` |
+
+- **Process start to listening: 0.27ms** on the restart. At first enable (08:11:35.993 → .997) it was 3.8ms.
+  T178's first pass measured 3.3ms and 0.36ms.
+- **`Started` to listening: at most 0ms here.** The daemon was listening at 08:12:06.850, and the application was
+  still drawing "Starting the sandbox" at 08:12:06.95, 0.1s later. `runtime.start` returns after the container's
+  process is running, so `Started` cannot precede the process start by more than the CLI round trip.
+- **Listening to attached: 0.50s**, inside one backoff. The client log has no `attach: failed` line for this recovery,
+  so the grace was not spent at all.
+
+**Result:** the gap the grace covers is milliseconds, against a 1s backoff. One refusal is enough, with margin.
+
+**Limits.** The client log carries no timestamps, so `Started` is bounded by frames 0.13s apart rather than read
+from a log line. One machine and one runtime (Docker, a warm `:dev` image) were measured. A slow host, or a
+daemon whose startup grows (catalog load, migrations), would narrow the margin. U27 still reports a service
+that stays unreachable, so a wrong constant shows as a banner, not as a silent hang.

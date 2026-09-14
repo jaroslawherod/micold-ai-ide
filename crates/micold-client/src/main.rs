@@ -961,6 +961,11 @@ fn scroll_view(app: &mut App, f: impl FnOnce(usize, usize) -> usize) {
 /// Silently does nothing if the directory cannot be resolved or the file cannot be opened. A
 /// diagnostic that can itself fail the thing it is diagnosing is worse than no diagnostic.
 fn log_line(message: &str) {
+    // A test run is not the developer's session: its refused dials and saves are not theirs to find
+    // in the log they read when the application misbehaves.
+    if cfg!(test) {
+        return;
+    }
     let Some(dirs) = directories::ProjectDirs::from("", "", "micold-ai-ide") else {
         return;
     };

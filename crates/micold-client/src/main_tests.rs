@@ -1992,10 +1992,11 @@ fn nothing_was_reported(app: &App) -> bool {
 fn a_failed_sandbox_the_client_cannot_reach_is_brought_up_again() {
     let mut app = app_with_a_failed_sandbox();
 
-    let work = connection_failed(&mut app);
+    let _ = connection_failed(&mut app);
 
-    assert!(
-        work.units() > 0,
+    assert_eq!(
+        shell::sandbox::BringUp::scheduled().len(),
+        1,
         "the state says a bring-up started, so one has to be scheduled — `Probing` with nothing \
              running is BUG-004 with a different banner"
     );
@@ -2040,10 +2041,10 @@ fn the_bring_up_after_a_failed_attempt_waits_the_budgets_delay() {
     );
 }
 
-#[test]
-fn a_refused_dial_during_a_bring_up_is_not_reported_as_a_failure() {
+/// One state from each stage of a bring-up in flight: the states `is_coming_up` is true for.
+fn bring_up_stages() -> [micold_core::sandbox::lifecycle::SandboxState; 3] {
     use micold_core::sandbox::lifecycle::SandboxState;
-    let in_flight = [
+    [
         SandboxState::Probing,
         SandboxState::Acquiring(micold_core::sandbox::runtime::Progress {
             stage: "Downloading".into(),
@@ -2051,7 +2052,12 @@ fn a_refused_dial_during_a_bring_up_is_not_reported_as_a_failure() {
             percent: Some(40),
         }),
         SandboxState::Starting,
-    ];
+    ]
+}
+
+#[test]
+fn a_refused_dial_during_a_bring_up_is_not_reported_as_a_failure() {
+    let in_flight = bring_up_stages();
 
     for stage in in_flight {
         let mut app = app_with_a_failed_sandbox();
@@ -2091,15 +2097,7 @@ fn a_bring_up_in_flight_is_not_shown_as_a_lost_connection() {
         SandboxState::Probing,
         "setup: the refused dial has to start a bring-up"
     );
-    let in_flight = [
-        SandboxState::Probing,
-        SandboxState::Acquiring(micold_core::sandbox::runtime::Progress {
-            stage: "Downloading".into(),
-            detail: None,
-            percent: Some(40),
-        }),
-        SandboxState::Starting,
-    ];
+    let in_flight = bring_up_stages();
 
     for stage in in_flight {
         app.sandbox.state = stage.clone();
@@ -2119,18 +2117,9 @@ fn a_bring_up_in_flight_is_not_shown_as_a_lost_connection() {
 /// user to give up isolation for nothing.
 #[test]
 fn a_bring_up_in_flight_offers_no_failure_card_and_no_fallback() {
-    use micold_core::sandbox::lifecycle::SandboxState;
     let mut app = app_with_a_failed_sandbox();
     let _ = connection_failed(&mut app);
-    let in_flight = [
-        SandboxState::Probing,
-        SandboxState::Acquiring(micold_core::sandbox::runtime::Progress {
-            stage: "Downloading".into(),
-            detail: None,
-            percent: Some(40),
-        }),
-        SandboxState::Starting,
-    ];
+    let in_flight = bring_up_stages();
 
     for stage in in_flight {
         app.sandbox.state = stage.clone();
@@ -2162,10 +2151,11 @@ fn a_container_found_stopped_is_brought_up_without_showing_a_failure() {
         micold_core::sandbox::lifecycle::SandboxState::Running(ContainerId("abc".into()));
     let _ = update_inner(&mut app, Message::Connection(ConnectionMsg::Disconnected));
 
-    let work = update_inner(&mut app, Message::Sandbox(SandboxMsg::Lost));
+    let _ = update_inner(&mut app, Message::Sandbox(SandboxMsg::Lost));
 
-    assert!(
-        work.units() > 0,
+    assert_eq!(
+        shell::sandbox::BringUp::scheduled().len(),
+        1,
         "a stopped container with attempts left is brought up at once (FR-036a)"
     );
     assert_eq!(
@@ -2228,13 +2218,26 @@ fn a_started_sandbox_whose_service_has_not_answered_yet_is_not_a_lost_connection
 }
 
 /// The daemon answered: the connection is up, with an empty catalog and default settings.
+/// Empty, like the boot plan's project set: a catalog sharing other projects marks the sandbox
+/// `Stale` on connect (see `the_service_answers_with`).
 fn the_service_answers(app: &mut App) {
+    the_service_answers_with(
+        app,
+        micold_core::protocol::messages::CatalogSnapshot::default(),
+    );
+}
+
+/// The daemon answered with `catalog`, and default settings.
+fn the_service_answers_with(
+    app: &mut App,
+    catalog: micold_core::protocol::messages::CatalogSnapshot,
+) {
     let (tx, _rx) = iced::futures::channel::mpsc::unbounded();
     let _ = update_inner(
         app,
         Message::Connection(ConnectionMsg::Connected {
             outbox: micold_client::daemon::Outbox::new(tx),
-            catalog: snapshot_with("/repo/demo", Vec::new()),
+            catalog,
             settings: micold_core::protocol::messages::DaemonSettings {
                 default_ai_cli: AiCli::ClaudeCode,
                 scrollback_lines: 10_000,
@@ -2259,6 +2262,14 @@ fn a_started_service_that_answered_and_went_away_is_a_lost_connection() {
         Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
     );
     the_service_answers(&mut app);
+    assert!(
+        matches!(
+            app.sandbox.state,
+            micold_core::sandbox::lifecycle::SandboxState::Running(_)
+        ),
+        "setup: the sandbox that answered is running, not marked stale by a catalog that differs \
+             from the plan"
+    );
 
     let _ = update_inner(&mut app, Message::Connection(ConnectionMsg::Disconnected));
 
@@ -2267,6 +2278,36 @@ fn a_started_service_that_answered_and_went_away_is_a_lost_connection() {
         ConnectionStatus::Disconnected,
         "a service that answered is no longer coming up; its disconnect is reported (FR-027)"
     );
+}
+
+/// `Stale` reached the other way: the service answered with a catalog whose projects differ from
+/// the ones the container was started with, so the mount set is out of date. That answer still
+/// ends the grace `Started` opened — being out of date is not being on the way up.
+#[test]
+fn a_service_that_answered_with_a_changed_mount_set_and_went_away_is_a_lost_connection() {
+    use micold_client::features::connection::ConnectionStatus;
+    let mut app = app_with_a_failed_sandbox();
+    let _ = connection_failed(&mut app);
+    let _ = update_inner(
+        &mut app,
+        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
+    );
+    the_service_answers_with(&mut app, snapshot_with("/repo/demo", Vec::new()));
+    assert!(
+        matches!(
+            app.sandbox.state,
+            micold_core::sandbox::lifecycle::SandboxState::Stale(_)
+        ),
+        "setup: a catalog sharing a project the container was not started with marks it stale"
+    );
+
+    let _ = update_inner(&mut app, Message::Connection(ConnectionMsg::Disconnected));
+
+    assert_eq!(
+            connection_status(&app),
+            ConnectionStatus::Disconnected,
+            "an out-of-date service that answered is not coming up; its disconnect is reported (FR-027)"
+        );
 }
 
 /// The grace is bounded: a container that is up with a service inside it that never listens is
@@ -2356,6 +2397,39 @@ fn a_failure_after_start_is_not_still_waiting_for_the_service() {
     );
 }
 
+/// `Stale` is a container that is still up, only created under settings that have since changed
+/// (the keep-running opt-in saved while it started, feature 028 FR-022a). Its service is still on
+/// its way to listening, so the grace `Started` opened holds: a refused dial in that gap is the
+/// bring-up finishing, not a lost connection (FR-036b).
+#[test]
+fn a_started_sandbox_marked_stale_before_its_service_answered_is_still_coming_up() {
+    use micold_client::features::connection::ConnectionStatus;
+    use micold_core::sandbox::lifecycle::SandboxState;
+    let mut app = app_with_a_failed_sandbox();
+    let _ = connection_failed(&mut app);
+    let _ = update_inner(
+        &mut app,
+        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
+    );
+    app.sandbox.survive_logout_changed();
+    assert!(
+        matches!(app.sandbox.state, SandboxState::Stale(_)),
+        "setup: the settings saved during the start marked the running sandbox out of date"
+    );
+
+    let _ = connection_failed(&mut app);
+
+    assert_ne!(
+        connection_status(&app),
+        ConnectionStatus::Disconnected,
+        "an out-of-date container is still up, and its service still starting (FR-036b)"
+    );
+    assert!(
+        nothing_was_reported(&app),
+        "a service still starting is progress, not a failure to report (FR-036b)"
+    );
+}
+
 /// FR-036a / US6 scenario 9, "each attempt MUST report why it failed": the refused dial that
 /// starts the next attempt moves `Failed(reason)` to `Probing`, and the reason has to survive
 /// the move. Otherwise the user watches "Checking the container runtime" come round again with
@@ -2407,7 +2481,10 @@ fn a_refused_dial_while_the_sandbox_reads_running_is_reported() {
         0,
         "only the liveness check may conclude a running sandbox is gone (FR-036)"
     );
-    assert_eq!(app.sandbox.state, running);
+    assert_eq!(
+        app.sandbox.state, running,
+        "a refused dial is no evidence the running container went away (FR-036)"
+    );
     assert!(
         a_connection_failure_was_reported(&app),
         "a running sandbox the client cannot reach is a connection failure, until shown otherwise"

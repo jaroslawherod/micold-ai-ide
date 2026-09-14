@@ -373,3 +373,98 @@ is copied here verbatim so it outlives the session. `verification.md` classifies
   behavior change -> clean
 - `cargo fmt --all -- --check` -> clean
 - `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide` after the collapse -> 136 passed
+
+## Test repair: U26's connect no longer marks the sandbox `Stale` (T189, re-audit finding 1)
+
+- test: `main.rs::tests::a_started_service_that_answered_and_went_away_is_a_lost_connection`
+- why: the re-audit's mutant N3 (drop `app.sandbox.answered();` in `on_connected`) survived. The fixture's
+  catalog (`/repo/demo`) differed from the boot plan's empty `projects`, so `adopt_mount_set` marked the
+  sandbox `Stale`, and a stale sandbox was not coming up whether the service had answered or not
+- red (setup assertion added first, fixture unchanged): `... -- --exact tests::a_started_service_that_answered_and_went_away_is_a_lost_connection`
+  -> `panicked at crates/micold-client/src/main.rs:3289:9: setup: the sandbox that answered is running — a stale one is not coming up either, and would pass this test without the answer ending the grace` (0 passed; 1 failed)
+- green: `the_service_answers` connects with `CatalogSnapshot::default()`, matching the plan. The assertion
+  under test is unchanged. -> 136 passed
+- proof: N3 re-applied -> `panicked at crates/micold-client/src/main.rs:3302:9: assertion left == right failed: a service that answered is no longer coming up; its disconnect is reported (FR-027)  left: Connected  right: Disconnected`; restored, sha verified
+- refactor: the setup message reworded once U30 made "a stale one is not coming up" untrue; the helper
+  split into `the_service_answers` / `the_service_answers_with(catalog)` for U31
+- commit: not committed
+
+## Deliberate-mutant red for U4, which passed on its first run (T190, re-audit finding 2)
+
+- test: `sandbox_state::absence_only_brings_up_a_sandbox_that_has_failed`
+- mutant M3: `SandboxState::Failed(_) | SandboxState::Stale(_)` in `lifecycle.rs` `service_absent`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test sandbox_state`
+  -> `panicked at crates/micold-core/tests/sandbox_state.rs:552:9: assertion left == right failed: Stale(ContainerId("9f2b")) was brought up again on a failed connection  left: Some(BringUpAgain { state: Probing, budget: UnattendedBringUps { spent: 1 }, after: 0ns })  right: None` (19 passed; 1 failed)
+- restored from snapshot, sha verified; `... --test sandbox_state` green again in the gates below
+- notes: this is the playbook's red for a test that passes first time, taken after the fact. The test was
+  still written after its implementation; whether this lifts U4 out of `TEST_AFTER` is the next audit's call
+- commit: not committed
+
+## Cycle 19: U30 a started sandbox marked `Stale` before its service answered is still coming up (T193)
+
+- test: `main.rs::tests::a_started_sandbox_marked_stale_before_its_service_answered_is_still_coming_up`
+- red (real): `... -- --exact tests::a_started_sandbox_marked_stale_before_its_service_answered_is_still_coming_up`
+  -> `panicked at crates/micold-client/src/main.rs:3418:9: assertion left != right failed: an out-of-date container is still up, and its service still starting (FR-036b)  left: Disconnected  right: Disconnected` (1 failed)
+- green: `Sandbox::is_coming_up` honours the wait for `Running | Stale`. -> 137 passed
+- proof: N11 (back to `Running` only) fails this test at `main.rs:3461`; restored, sha verified
+- refactor: none
+- notes: **deviates from T193's wording.** T193 says a sandbox that goes `Stale` in the grace is *not* coming
+  up. Two routes reach `Stale`. The keep-running opt-in saved during the start (`survive_logout_changed`)
+  leaves the container up with its service still starting, so FR-036b says it is still coming up, and that is
+  what U30 pins. A catalog that differs is only seen once the service has answered (`on_connected` calls
+  `answered()` before `adopt_mount_set`), so that route is past the grace. U31 pins it as T193 asked
+- commit: not committed
+
+## Cycle 20: U31 a service that answered with a changed mount set and went away is a lost connection (T193)
+
+- test: `main.rs::tests::a_service_that_answered_with_a_changed_mount_set_and_went_away_is_a_lost_connection`
+- passed on its first run (a pin: Cycle 15's `answered()` already covers it). Deliberate-mutant red, N3
+  (drop `app.sandbox.answered();`): `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`
+  -> `panicked at crates/micold-client/src/main.rs:3345:9: assertion left == right failed: an out-of-date service that answered is not coming up; its disconnect is reported (FR-027)  left: Connected  right: Disconnected` (136 passed; 2 failed, with U26)
+- restored, sha verified -> 138 passed
+- refactor: none
+- commit: not committed
+
+## Test strength: A1 and U24 name the bring-up, not "some task" (T191, re-audit finding 3)
+
+- tests: `a_failed_sandbox_the_client_cannot_reach_is_brought_up_again`, `a_container_found_stopped_is_brought_up_without_showing_a_failure`
+- seam: a `Task` cannot be read back (iced 0.14 does not re-export `into_stream`, and no dependency was
+  added). `BringUp::task` records the bring-up in a `#[cfg(test)]` thread-local, and `BringUp::scheduled()`
+  takes the list. Each test runs on its own thread, so the lists do not mix
+- red (`scheduled()` declared, `task()` not yet recording; `units() > 0` replaced by `scheduled().len() == 1`):
+  `... -- tests::a_failed_sandbox_the_client_cannot_reach_is_brought_up_again tests::a_container_found_stopped_is_brought_up_without_showing_a_failure`
+  -> `panicked at crates/micold-client/src/main.rs:3024:9: assertion left == right failed: the state says a bring-up started, so one has to be scheduled — ...  left: 0  right: 1`
+  and `panicked at crates/micold-client/src/main.rs:3195:9: assertion left == right failed: a stopped container with attempts left is brought up at once (FR-036a)  left: 0  right: 1` (0 passed; 2 failed)
+- green: `task()` pushes a clone before building the stream. -> 137 passed
+- proof: T191a (`daemon_sync.rs` `refused_dial(..).map_or_else(Task::none, |_| Task::done(Message::EscapePressed))`)
+  fails A1 at `:3024`, `left: 0 right: 1`. T191b (`Msg::Lost` returns `Task::done(Message::EscapePressed)`) fails
+  U24 at `:3195`. Both restored, sha verified. `Task::done` has one unit, so the old `units() > 0` passed both
+  (by construction, not re-run)
+- commit: not committed
+
+## Refactor: shared bring-up stages, a rule message, no writes to the real client log (T195, re-audit findings 7–8)
+
+- `bring_up_stages()` replaces the three copies of `[Probing, Acquiring(..), Starting]`
+- `a_refused_dial_while_the_sandbox_reads_running_is_reported`: the bare `assert_eq!(app.sandbox.state, running)`
+  now says why ("a refused dial is no evidence the running container went away (FR-036)")
+- `log_line` returns at once under `cfg(test)`. Count of `attach: failed reason=Connection refused (os error 111)`
+  in `~/.local/share/micold-ai-ide/micold-client.log` before and after a client test run: 1395 and 1395
+- suite: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide` -> 138 passed
+- commit: not committed
+
+## Note: the commits behind the entries above that name none (T196, re-audit finding 9)
+
+Appended rather than edited in place. The log is append-only.
+
+- Cycles 1–12, the Phase 18 record, the structural step, the T182–T185 refactors and T181's first entry say
+  "not committed". They landed together in `eb3edf21` (fix(027): bring a missing or stopped sandbox up without
+  user action). Their evidence landed in `cd7fc151`.
+- Cycles 13–18 and their gates say "see git history". They are `f8f12e4a` (fix(027): no failure card or banner
+  around a sandbox bring-up), with this log's entries in the same commit.
+- One commit per behavior was not kept. Ordering inside each commit rests on this log alone.
+
+## Gates after Phase 20 (T189–T196)
+
+- `scripts/build-lock.sh cargo test --workspace` -> 2964 passed, 0 failed, 2 ignored
+- `cargo clippy --workspace --all-targets -- -D warnings` -> clean
+- `cargo fmt --all -- --check` -> clean

@@ -1193,6 +1193,53 @@ a new test fails with that mutant applied, and the full suite (`mise run test`) 
 T178 and T179 change behavior and follow T173–T176, whose tests cover the code they touch. Then
 re-run `/speckit.tdd.verify`.
 
+## Phase 20: TDD remediation — BUG-004 (re-audit)
+
+**Goal**: Clear the findings of the re-audit `tdd/verification.md` (2026-09-14, at `139bd640`, verdict
+**FAIL**). **BUG-004 is not done until T189 and T190 are cleared.** U26 passes with the behavior it
+names deleted (mutant N3), and U4 has no recorded red. Everything the previous audit found is cleared.
+
+### Blocking (HIGH)
+
+- [X] T189 [BUG-004] *(test)* Finding 1 — `crates/micold-client/src/main.rs:3264` / `:1746`. U26's
+      connect uses a catalog (`/repo/demo`) that differs from the boot plan's `projects`, so
+      `adopt_mount_set` (`daemon_sync.rs:439-443`) marks the sandbox `Stale`, and the test passes without
+      `answered()`. Make the catalog match the plan (or assert `Running` before the disconnect), keeping
+      the assertion as it is. Proven when N3 (drop `app.sandbox.answered();` in `on_connected`) fails
+      U26, and the suite is green without it: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+- [X] T190 [BUG-004] Finding 2 — `crates/micold-core/tests/sandbox_state.rs:547` (U4, S-7). Record the
+      loop's red for a test that passes on its first run: apply M3 (`SandboxState::Failed(_) |
+      SandboxState::Stale(_)` in `lifecycle.rs` `service_absent`), capture the failure verbatim in
+      `tdd/cycle-log.md`, restore, and re-run
+      `scripts/build-lock.sh cargo test -p micold-core --test sandbox_state` green. The playbook
+      sanctions this deliberate-mutant red; whether it lifts U4 out of `TEST_AFTER` is the next audit's call.
+
+### Non-blocking (MED, LOW)
+
+- [X] T191 [BUG-004] Finding 3 — `main.rs:3025`, `:3195`: replace `work.units() > 0` with an assertion
+      that identifies the bring-up, not merely some task. Proven when a mutant returning a
+      non-empty task other than the bring-up (in place of `BringUp::task` at its call sites) fails
+      A1 and U24: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+- [X] T192 [BUG-004] Finding 4 — `crates/micold-core/tests/sandbox_real_lifecycle.rs:652-668`
+      re-implements the client loop. Either drive the recovery through the client's own message handling
+      against a real runtime, or record in `tdd/test-list.md` and `evidence/` that the app-level wiring is
+      covered only by `update_inner` tests plus the manual T178 pass. `mise run image && mise run test-sandbox`.
+- [X] T193 [BUG-004] Finding 5 — `features/sandbox.rs:303-309`, `:317-319`: pin that a sandbox that
+      goes `Stale` (mount set changed) during the start grace is not coming up, as its own test with a
+      catalog that deliberately differs. `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide`.
+- [X] T194 [BUG-004] Finding 6 — `features/sandbox.rs:237`: record the measured time from `Started`
+      to the daemon listening (log timestamps from a T178-style run) against the reconnect backoff, in
+      `evidence/performance.md`, so `REFUSALS_WHILE_STARTING = 1` is justified by a number.
+- [X] T195 [BUG-004] Findings 7–8 — `main.rs:3073`, `:3121`, `:3152`: share the `in_flight` states in
+      one helper; add a rule message to `main.rs:3437`. Keep `connection_failed` (`:2989`) from appending
+      to the developer's real client log through `log_line` (`:956`). `mise run test`.
+- [X] T196 [BUG-004] Finding 9 — `tdd/cycle-log.md:311`, `:324`, `:333`, `:342`, `:353`, `:366` and
+      cycles 1–12: name the commit each cycle landed in (`eb3edf21`, `f8f12e4a`) in a new appended
+      note. The log is append only, so past entries are not edited.
+
+**Order**: T189 and T190 first, and independent of each other. T193 follows T189 (both touch the
+start-grace fixtures). The rest are independent. Then re-run `/speckit.tdd.verify`.
+
 ---
 
 ## Parallel Opportunities

@@ -282,10 +282,13 @@ impl Sandbox {
     }
 
     /// Whether a bring-up is under way, including a started sandbox whose service has not answered
-    /// yet (FR-036b).
+    /// yet (FR-036b). `Stale` counts: that container is still up, only out of date.
     pub fn is_coming_up(&self) -> bool {
         self.state.is_coming_up()
-            || (matches!(self.state, SandboxState::Running(_)) && self.awaiting_service.is_some())
+            || (matches!(
+                self.state,
+                SandboxState::Running(_) | SandboxState::Stale(_)
+            ) && self.awaiting_service.is_some())
     }
 
     /// Adopt a dial the started service refused, spending one the gap may absorb; past the last, the
