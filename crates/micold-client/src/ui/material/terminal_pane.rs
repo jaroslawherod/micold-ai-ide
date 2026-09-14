@@ -956,9 +956,10 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 let (col, line) = grid_at(*position, content, metrics);
                 // Jitter inside the pressed cell is still a click (FR-013e). Once the pointer has
                 // left it, every cell counts — the pressed one included, so one character stays
-                // selectable by dragging out and back. A position outside the pane has left it,
-                // even where `grid_at` clamps it back onto a pressed edge cell.
-                if content.contains(*position) && state.press_cell == Some((col, line)) {
+                // selectable by dragging out and back. The focus gutter belongs to the edge cell
+                // it clamps onto, as a press there does; a position outside the pane has left the
+                // pressed cell even where `grid_at` clamps it back onto it.
+                if bounds.contains(*position) && state.press_cell == Some((col, line)) {
                     shell.capture_event();
                     return;
                 }
@@ -1068,8 +1069,13 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     }
                     WheelRouting::ScrollLocally { lines } => {
                         // Scrolling under a held button puts other text under the pointer, so
-                        // the pressed screen cell no longer holds the pressed text (FR-013e).
-                        state.press_cell = None;
+                        // the pressed screen cell no longer holds the pressed text (FR-013e). A
+                        // turn the shell's clamp absorbs moves nothing and ends nothing.
+                        let offset = self.display_offset as i64;
+                        let history = self.history_size() as i64;
+                        if (offset + i64::from(lines)).clamp(0, history) != offset {
+                            state.press_cell = None;
+                        }
                         shell.publish(Message::Session(SessionMsg::TerminalScrolled(lines)));
                         shell.capture_event();
                         return;

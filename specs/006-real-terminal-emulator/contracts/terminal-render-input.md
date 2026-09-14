@@ -70,7 +70,8 @@ Canvas render over `content.grid.display_iter()`:
     lines). Holding **Shift** forces selection even under mouse mode. (FR-013, FR-013b)
     *(Bugfix BUG-007: a simple selection is empty — nothing highlighted, nothing auto-copied — until
     its first `SelectUpdate`, and the pane publishes no `SelectUpdate` while the pointer is still in
-    the pressed viewport cell, so a click without a drag only clears the previous selection. The release's auto-copy is `TerminalSelectionReleased`,
+    the pressed viewport cell (the focus gutter counting as its edge cell; a local scroll that moves
+    the view, or leaving the pane, ends that), so a click without a drag only clears the previous selection. The release's auto-copy is `TerminalSelectionReleased`,
     resolved against the selection as updated by the same batch's messages, never the pane's
     pre-batch view. FR-013e.)*
   - Wheel → `TerminalAction(Scroll(lines))`; the binary forwards to the PTY on
