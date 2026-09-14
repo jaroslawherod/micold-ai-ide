@@ -7,7 +7,7 @@
 **Status**: Closed 2026-09-13 — implemented and shipped in PR #73 (merged 2026-08-07); all 205 tasks
 in [tasks.md](./tasks.md) are done, and all fourteen bugs in [bugs/](./bugs/) are fixed, the last four
 being BUG-012 in PR #293, BUG-011 in PR #297 (both merged 2026-09-13), BUG-013 in PR #315 (merged
-2026-09-14) and BUG-014. The manual passes closed on
+2026-09-14) and BUG-014 in PR #329. The manual passes closed on
 2026-08-07. Later bugfix passes ran on Xvfb with lavapipe, not a real GPU; they record as unrun the
 mid-flight look of the panel fade and the terminal tab strip's instance menu. Cross-platform parity
 rests on CI (T075).
