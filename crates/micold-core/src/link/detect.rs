@@ -24,7 +24,7 @@ pub fn detect(text: &str) -> Vec<Range<usize>> {
         while end > body && TRAILING_PUNCTUATION.contains(&chars[end - 1]) {
             end -= 1;
         }
-        if !well_formed(&chars[body..end]) {
+        if !well_formed(scheme, &chars[body..end]) {
             start += 1;
             continue;
         }
@@ -56,9 +56,21 @@ fn scan_end(chars: &[char], from: usize, quote: Option<char>) -> usize {
     chars.len()
 }
 
+/// Whether the text after `scheme` is enough to be an address (research R3 rule 6): a mail address
+/// has text on both sides of its `@`, and a web address names a host.
+fn well_formed(scheme: &str, rest: &[char]) -> bool {
+    if scheme == "mailto:" {
+        let rest: String = rest.iter().collect();
+        return rest
+            .split_once('@')
+            .is_some_and(|(mailbox, domain)| !mailbox.is_empty() && !domain.is_empty());
+    }
+    names_a_host(rest)
+}
+
 /// Whether the text after a web scheme names a host: `localhost`, a dotted name, a bracketed IPv6
-/// literal, or any name followed by a port (research R3 rule 6).
-fn well_formed(rest: &[char]) -> bool {
+/// literal, or any name followed by a port.
+fn names_a_host(rest: &[char]) -> bool {
     let authority: String = rest
         .iter()
         .take_while(|c| !matches!(c, '/' | '?' | '#'))
@@ -86,7 +98,7 @@ fn ends_an_address(c: char) -> bool {
 /// The scheme prefix an address starts with at `start`, unless a letter or digit right before it
 /// makes it the end of a word (research R3 rule 1).
 fn scheme_at(chars: &[char], start: usize) -> Option<&'static str> {
-    const SCHEMES: [&str; 2] = ["http://", "https://"];
+    const SCHEMES: [&str; 3] = ["http://", "https://", "mailto:"];
     if start > 0 && chars[start - 1].is_ascii_alphanumeric() {
         return None;
     }
@@ -237,6 +249,20 @@ mod tests {
             found("https:// and http://exa mple"),
             Vec::<String>::new(),
             "a scheme with no host, and a host cut short by a space, are not addresses"
+        );
+    }
+
+    #[test]
+    fn finds_a_mail_address_only_with_text_on_both_sides_of_the_at_sign() {
+        assert_eq!(
+            found("Write to mailto:team@example.com."),
+            ["mailto:team@example.com"],
+            "a mail address is found like a web one, without the sentence's full stop"
+        );
+        assert_eq!(
+            found("mailto:@example.com mailto:team@"),
+            Vec::<String>::new(),
+            "a mail address needs a mailbox before the at sign and a domain after it"
         );
     }
 }
