@@ -6,9 +6,6 @@
 //! bytes travel the real socket: view a session → get a full snapshot → type "hello" → get a delta
 //! that shows it echoed back.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -28,6 +25,41 @@ use tokio_util::codec::Framed;
 
 fn frame_has_text(frame: &GridFrame, needle: &str) -> bool {
     frame.lines.iter().any(|l| l.text.contains(needle))
+}
+
+/// A process that echoes whatever is typed into its PTY: a deterministic sink for proving typed
+/// bytes come back as rendered output.
+#[cfg(unix)]
+fn echo_sink() -> CommandBuilder {
+    CommandBuilder::new("cat")
+}
+
+/// Windows has no `cat`; an interactive `cmd` echoes typed input through the console's line editor.
+#[cfg(windows)]
+fn echo_sink() -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("cmd");
+    cmd.arg("/q");
+    cmd
+}
+
+/// Print `scrollback_line_1` to `scrollback_line_100`, then idle for about a minute.
+#[cfg(unix)]
+fn hundred_lines_then_idle() -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("sh");
+    cmd.arg("-c");
+    cmd.arg("i=1; while [ $i -le 100 ]; do echo scrollback_line_$i; i=$((i+1)); done; sleep 60");
+    cmd
+}
+
+/// `cmd` has no `sleep`; `ping -n 61` to loopback waits about a minute.
+#[cfg(windows)]
+fn hundred_lines_then_idle() -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("cmd");
+    cmd.args([
+        "/c",
+        "(for /l %i in (1,1,100) do @echo scrollback_line_%i)& ping -n 61 127.0.0.1 >nul",
+    ]);
+    cmd
 }
 
 /// Read frames until one is a `Grid` frame satisfying `pred`, or the deadline passes. Returns
@@ -58,10 +90,9 @@ async fn a_viewing_client_receives_frames_and_can_drive_the_session() {
     let (server_io, client_io) = tokio::io::duplex(256 * 1024);
     let state = std::sync::Arc::new(DaemonState::new(Catalog::ephemeral()));
 
-    // A live `cat` session: it echoes whatever input is written to its PTY — a deterministic sink
-    // for proving typed bytes come back as rendered output.
+    // A live echoing session: whatever input is written to its PTY comes back as output.
     let sid = SessionId::new();
-    let mut cmd = CommandBuilder::new("cat");
+    let mut cmd = echo_sink();
     cmd.cwd(std::env::temp_dir());
     let session = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn cat session");
     state.register_session(session);
@@ -143,7 +174,7 @@ async fn session_resize_reframes_at_the_new_size() {
     let (server_io, client_io) = tokio::io::duplex(256 * 1024);
     let state = std::sync::Arc::new(DaemonState::new(Catalog::ephemeral()));
     let sid = SessionId::new();
-    let mut cmd = CommandBuilder::new("cat");
+    let mut cmd = echo_sink();
     cmd.cwd(std::env::temp_dir());
     let session = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn");
     state.register_session(session);
@@ -234,9 +265,7 @@ async fn a_client_can_fetch_scrollback_history_over_the_wire() {
     let (server_io, client_io) = tokio::io::duplex(256 * 1024);
     let state = std::sync::Arc::new(DaemonState::new(Catalog::ephemeral()));
     let sid = SessionId::new();
-    let mut cmd = CommandBuilder::new("sh");
-    cmd.arg("-c");
-    cmd.arg("i=1; while [ $i -le 100 ]; do echo scrollback_line_$i; i=$((i+1)); done; sleep 60");
+    let mut cmd = hundred_lines_then_idle();
     cmd.cwd(std::env::temp_dir());
     let session = PtySession::spawn(sid, cmd, 10_000, Some((80, 24))).expect("spawn");
     state.register_session(session);
