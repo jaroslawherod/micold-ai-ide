@@ -215,7 +215,12 @@ impl BringUp {
     pub fn task(self) -> iced::Task<micold_client::app::Message> {
         #[cfg(test)]
         SCHEDULED.with(|scheduled| scheduled.borrow_mut().push(self.clone()));
+        #[cfg(not(test))]
         let stream = self.stream(SystemRunner);
+        // A test runs the work an update returns to see what it reports, and must never reach the
+        // host's container runtime by doing so.
+        #[cfg(test)]
+        let stream = self.stream(micold_core::sandbox::exec::RecordingRunner::new());
         // The task carries a token, so a test holding the work an update returned can tell a
         // bring-up handed back from one built and dropped inside the update.
         #[cfg(test)]

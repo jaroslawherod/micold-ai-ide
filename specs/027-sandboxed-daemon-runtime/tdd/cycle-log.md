@@ -540,3 +540,35 @@ Appended rather than edited in place. The log is append-only.
 - `scripts/build-lock.sh cargo test --workspace` -> 2964 passed, 0 failed, 2 ignored (56s)
 - `cargo clippy --workspace --all-targets -- -D warnings` -> clean
 - `cargo fmt --all -- --check` -> clean
+
+## Test strength: A1 and U24 run the work the update returns (T201, fifth-audit finding 1)
+
+- tests: `a_failed_sandbox_the_client_cannot_reach_is_brought_up_again`, `a_container_found_stopped_is_brought_up_without_showing_a_failure`
+- dependency (approved by the user 2026-09-14): `iced_runtime = "=0.14.0"` as a `micold-client` dev-dependency, for
+  `iced_runtime::task::into_stream`. Already in `Cargo.lock` at `iced`'s version; the lock gains one dependency-list line
+- seam: under `cfg(test)`, `BringUp::task()` drives `RecordingRunner` instead of `SystemRunner`, so running a returned
+  bring-up in a test never reaches the host's container runtime. Release builds are unchanged
+- test change: both tests take their boot plan's `state_dir` from a `tempdir` (running the bring-up writes a token
+  there), and gain `assert!(is_probing(first_message(work).as_ref()), ..)` after the `live_tasks()` assertion.
+  `first_message` runs the work's stream on a tokio runtime until its first `Action::Output`. No assertion removed
+- red: none of its own — the production code already delivers the stages, so the new assertion passed on first run.
+  Deliberate-mutant check instead (`python3 mutants.py X3 X4 X5 X6 X1 X2 N12 N13 T191a T191b`, each rebuilt, restored,
+  sha verified):
+  X3 (`iced::Task::stream(stream).discard()` in `task`) fails A1 at `main.rs:3085` and U24 at `main.rs:3262`;
+  X5 (`return bring_up.task().discard();`) fails U24 at `main.rs:3262` "... one whose messages are discarded starts the
+  container while the view stays on `Probing`, which is BUG-004: None";
+  X6 (`map_or_else(Task::none, |b| b.task().discard())`) fails A1 at `main.rs:3085` "... starts a sandbox the view never
+  hears of, which is BUG-004: None";
+  X4 (`mem::forget` the task, return `Task::done(EscapePressed)`) fails U24 at `main.rs:3262` "...: Some(EscapePressed)".
+  Still caught where they were: X1 U24 `:3255`, X2 A1 `:3079`, N12 A1 `:3074`, N13 U24 `:3249`, T191a A1 `:3068`,
+  T191b U24 `:3244`
+- green: 2 passed targeted; client 138 passed
+- refactor: none. The `live_tasks()` token is now subsumed by the new assertion but was left in place: removing an
+  assertion is a test change of its own, not part of this cycle
+- commit: not committed
+
+## Gates after Phase 23 (T201)
+
+- `scripts/build-lock.sh cargo test --workspace` -> 2964 passed, 0 failed, 2 ignored (165s)
+- `cargo clippy --workspace --all-targets -- -D warnings` -> clean
+- `cargo fmt --all -- --check` -> clean
