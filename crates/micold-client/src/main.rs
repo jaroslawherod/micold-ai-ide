@@ -7,6 +7,10 @@
 //! runtime that cannot live in the pure (Clone/Eq) core `State` — the per-session grid caches,
 //! the input stamper, and the daemon outbox.
 
+// A release build on Windows opens no console window of its own, for the app or for the daemon it
+// starts (feature 030, FR-005). Debug builds keep the console so `cargo run` output stays visible.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 use iced::Task;
 mod shell;
 
@@ -367,6 +371,8 @@ impl App {
 }
 
 pub fn main() -> iced::Result {
+    // Held for the whole process: the installer's `AppMutex` check sees the app while it runs.
+    let _running = micold_core::process::announce_running();
     // Before anything connects or spawns (packaging contract §2.7). An upgrade from a release that
     // shipped the units leaves a per-user enablement behind that dpkg cannot reach, and a stale
     // enablement plus a unit file the upgrade deleted is a socket activation that starts nothing.
