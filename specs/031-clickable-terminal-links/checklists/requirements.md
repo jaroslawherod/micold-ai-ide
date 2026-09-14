@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,9 +31,10 @@
 
 ## Notes
 
-- Three `[NEEDS CLARIFICATION]` markers remain and are deferred to `/speckit-clarify` (the autopilot
-  triages them in Phase 2 rather than asking during specify): FR-004 (the link gesture), FR-006 (how
-  sessions advertise hyperlink support) and FR-011 (application-specific address types).
+- FR-006 names `FORCE_HYPERLINK` and `TERM_PROGRAM` on purpose: they are what a user types into the session environment-include script to opt in (clarify decision), so they are user-facing configuration, not implementation detail. Tasks review round 2 (2026-09-14) raised this against the two content-quality items; they stay ticked on that basis.
+- Clarify (2026-09-14) resolved the three markers by user decision: FR-004 is Ctrl/Cmd+click, FR-006
+  advertises nothing (opt-in documented, inherited identity variables stripped), FR-011 allows no
+  application-specific schemes. A second clarify scan found no further critical ambiguities.
 - Review round 4 (2026-09-14) made FR-006's identity rule checkable (same identity variables in every
   session, sandboxed included), defined what hover shows for sandboxed `file` links (FR-008, SC-006),
   defined a declared link's extent (FR-007, US2 scenario 4), and added edge cases for encoded and
