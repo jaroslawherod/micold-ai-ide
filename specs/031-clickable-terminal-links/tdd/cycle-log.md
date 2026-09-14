@@ -152,3 +152,14 @@
 - refactor: none needed
 - commit: `test(031): pin that text without a scheme is never an address (U14)`
 - notes: green on arrival; the scheme list from U1/U12/U13 already excludes it (FR-001, SC-002)
+
+## Cycle 15: U15 never finds `javascript:…`, `data:…` or `vbscript:…`
+
+- test: `crates/micold-core/src/link/detect.rs::tests::never_finds_a_script_or_data_address` (new)
+- red: none on arrival. `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::never_finds_a_script_or_data_address -- --exact`
+  -> `1 passed`: none of the three is a recognised scheme.
+  Deliberate mutant: `"javascript:"` added to `SCHEMES` -> `left: ["javascript:alert(document.cookie)"]` / `right: []` (1 failed). Mutant removed, file restored.
+- green: no implementation change. Suite -> 1073 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin that script and data addresses are never found (U15)`
+- notes: green on arrival; FR-011's exclusion follows from the closed scheme list. The fixture's `javascript:` address contains a dot on purpose, so the mutant cannot be masked by the host rule
