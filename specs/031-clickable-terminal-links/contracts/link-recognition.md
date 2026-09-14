@@ -35,7 +35,7 @@ viewport height (below it). The client implements `LinkRows` over `GridCache` as
 | L4 | the logical line | rows joined while the upper row has `wrapped`, at most 64 rows before and after the pointer row, reading beyond the viewport when the line continues there; a candidate reaching the cap is dropped |
 | L5 | a wide character | its spacer cell belongs to the same link as its lead cell |
 | L6 | two runs with the same URI separated by any other cell | two links |
-| L7 | the walk stops at a row whose `text` is `None`: below a row that has `wrapped`, or above the first available row | a candidate touching that boundary is dropped: it ends in the last column of the lower row, or starts in column 0 of the upper row. A truncated address is never recognised (FR-003) |
+| L7 | the walk stops at a row whose `text` is `None`: below a row that has `wrapped`, or above the first available row | a candidate touching that boundary is dropped: nothing but trailing punctuation (research R3 rule 3) lies between its end and the last column of the lower row, or it starts in column 0 of the upper row. The same drop applies at the L4 cap. A truncated address is never recognised (FR-003) |
 
 ## 3. `detect` — examples (all in the SC-002 corpus)
 
