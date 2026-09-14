@@ -22,6 +22,9 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::index::{Column, Line};
+
 use micold_core::clock::Uptime;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::WireLifecycle;
@@ -116,6 +119,29 @@ fn wait_dead(pty: &PtySession) {
     }
 }
 
+/// The visible screen as one string, so a respawn that died early says what it printed.
+fn visible_text(session: &PtySession) -> String {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while !session.output_ended() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let term = session.term().lock();
+    let grid = term.grid();
+    let (cols, rows) = (grid.columns(), grid.screen_lines());
+    let mut out = String::new();
+    for line in 0..rows {
+        let text: String = (0..cols)
+            .map(|col| grid[Line(line as i32)][Column(col)].c)
+            .collect();
+        let text = text.trim_end();
+        if !text.is_empty() {
+            out.push_str(text);
+            out.push('\n');
+        }
+    }
+    out
+}
+
 fn later(reading: Uptime, by: Duration) -> Uptime {
     let nanos = reading.saturating_sub(Uptime::from_nanos(0)) + by;
     Uptime::from_nanos(nanos.as_nanos() as u64)
@@ -151,7 +177,9 @@ fn a_respawn_that_outlives_a_tick_but_not_the_window_still_counts_toward_failed(
             .expect("a crash under budget is respawned");
         assert!(
             respawn.is_alive(),
-            "the respawn lives a second; it has to be alive for the next tick to observe"
+            "the respawn lives a second; it has to be alive for the next tick to observe. It exited {:?}, showing:\n{}",
+            respawn.exit_outcome(),
+            visible_text(&respawn)
         );
 
         // The next tick, 250 ms later, sees it still up. That is not recovery: it has been up for
