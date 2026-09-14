@@ -875,3 +875,125 @@ fn with_the_component_declined_a_pi_session_is_not_watched_and_reads_unknown() {
 
     session.kill().expect("kill");
 }
+
+/// One supervisor tick, as far as a session's name goes: drain the terminal signals, record the
+/// names they carried, and look again for the names of sessions that gave a reason to.
+fn tick(state: &DaemonState) {
+    let drained = state.drain_signals();
+    state.record_observed_names(&drained.names);
+    state.recover_live_session_names();
+}
+
+/// Append one line to a file, creating it and its directory.
+fn append_line(path: &std::path::Path, line: &str) {
+    use std::io::Write as _;
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .unwrap();
+    writeln!(f, "{line}").unwrap();
+}
+
+#[test]
+fn a_running_pi_row_reads_its_first_message_until_it_is_named() {
+    // Feature 029 (Pi), FR-011, quickstart §B finding 1. Pi's terminal title carries a name only
+    // once `/name` has run, so the terminal alone takes a running row from the placeholder
+    // straight to the name. The first message, which Pi has recorded by the end of the first
+    // turn, must show in between — without waiting for a refresh to recover it.
+    let home = PiHome::new();
+    let root = tempfile::tempdir().unwrap();
+    let project = root.path().join("demo");
+    std::fs::create_dir(&project).unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
+    let named = root.path().join(".named");
+
+    let state = Arc::new(DaemonState::new(catalog_with_session(
+        &project,
+        store.path(),
+        AiCli::Pi,
+    )));
+    // Pi's own two titles, in order: the second only once `/name` has run. `π` is U+03C0.
+    let mut cmd = CommandBuilder::new("sh");
+    cmd.arg("-c");
+    cmd.arg(format!(
+        r"printf '\033]0;\317\200 - demo\007'; while [ ! -e '{}' ]; do sleep 0.05; done; printf '\033]0;\317\200 - my task - demo\007'; sleep 10",
+        named.display()
+    ));
+    cmd.cwd(std::env::temp_dir());
+    let session = state.register_session(
+        PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("spawn emitter session"),
+    );
+
+    assert!(
+        wait_until(Duration::from_secs(5), || session
+            .signals()
+            .title()
+            .is_some()),
+        "the terminal title must have been emitted, or this proves nothing"
+    );
+    for _ in 0..3 {
+        tick(&state);
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert_eq!(
+        summary_of(&state, id).title,
+        SessionLabel::Pending,
+        "before any message Pi has recorded nothing, so the row is the placeholder"
+    );
+
+    // The first exchange lands in Pi's store, and the turn moving is what says so.
+    let encoded = format!(
+        "--{}--",
+        project
+            .to_string_lossy()
+            .trim_start_matches('/')
+            .replace('/', "-")
+    );
+    let conversation = home
+        .path()
+        .join("sessions")
+        .join(encoded)
+        .join(format!("2026-09-14T10-00-00-000Z_{}.jsonl", id.0));
+    append_line(
+        &conversation,
+        &format!(
+            r#"{{"type":"session","version":3,"id":"{}","timestamp":"2026-09-14T10:00:00.000Z","cwd":"{}"}}"#,
+            id.0,
+            project.display()
+        ),
+    );
+    append_line(
+        &conversation,
+        r#"{"type":"message","id":"1","parentId":null,"timestamp":"2026-09-14T10:00:01.000Z","message":{"role":"user","content":"why is the row wrong"}}"#,
+    );
+    state.note_activity(id, ActivityEvent::Hook(HookKind::UserPromptSubmit));
+    state.note_activity(id, ActivityEvent::Hook(HookKind::Stop));
+    assert!(
+        wait_until(Duration::from_secs(5), || {
+            tick(&state);
+            summary_of(&state, id).title == SessionLabel::Named("why is the row wrong".into())
+        }),
+        "with no name recorded, the running row reads the first message; got {:?}",
+        summary_of(&state, id).title
+    );
+
+    // `/name`: Pi records the name and retitles its terminal.
+    append_line(
+        &conversation,
+        r#"{"type":"session_info","id":"2","parentId":"1","timestamp":"2026-09-14T10:00:02.000Z","name":"my task"}"#,
+    );
+    std::fs::write(&named, "").unwrap();
+    assert!(
+        wait_until(Duration::from_secs(5), || {
+            tick(&state);
+            summary_of(&state, id).title == SessionLabel::Named("my task".into())
+        }),
+        "then the name wins; got {:?}",
+        summary_of(&state, id).title
+    );
+
+    session.kill().expect("kill");
+}
