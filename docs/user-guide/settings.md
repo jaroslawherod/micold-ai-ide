@@ -47,8 +47,11 @@ scrollback](./worktrees-and-sessions.md)).
 
 Which AI coding CLI a new session runs when you don't choose one for it.
 
-- **The choices** are the CLIs you actually have installed. If only one is installed, that is the
-  only option — and nothing else about starting a session changes for you.
+- **The choices** are the CLIs you actually have installed where sessions run: on this computer, or
+  in the container's image when the [session service](#session-service) runs in one. If only one is
+  installed, that is the only option — and nothing else about starting a session changes for you.
+- **A note under the field names any CLI that is missing** from there, so you know before you start a
+  session rather than when it fails.
 - **Default**: Claude Code.
 - **Changing it affects new sessions only.** A session's CLI is fixed when the session is created
   and never changes afterwards, so sessions you already have keep running the CLI they started on.
@@ -161,7 +164,11 @@ it up again.
 - **Image source** — pull from a registry, load from a local archive (the fully offline path), or
   build from this checkout.
 - **Image reference** — a digest or an exact tag. A moving tag like `:latest` can't be named in a
-  bug report, so the app will tell you when you're on one.
+  bug report, so the app will tell you when you're on one. Sessions run in this image, so it has to
+  provide every AI CLI you want to use. The image this app publishes, and one built from this
+  checkout, ships Claude Code, GitHub Copilot and Pi Coding Agent. If the running image lacks one, a
+  note under the field names it. That note describes the image the service is running now, not an
+  unsaved or not-yet-started reference: a new image is used from the next time the service starts.
 - **Image file** — the archive to load, when the image comes from a file.
 
 ### Credentials

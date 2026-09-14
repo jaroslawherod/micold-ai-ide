@@ -92,6 +92,15 @@ exist.
 
 Files a session creates in a project come out owned by **you**, not by root.
 
+### The AI CLIs come from the image
+
+A session runs its AI CLI inside the container. That means the CLI comes from the image, and the one
+installed on your computer is not used. The published image, and one built from this checkout, ship
+Claude Code, GitHub Copilot and Pi Coding Agent at pinned versions. If you choose an image that
+lacks one, that CLI is not offered, and **Settings → Session service** names it under *Image
+reference*. A session that already runs it fails to start and says to choose an image that provides
+it — see [When a CLI isn't installed](worktrees-and-sessions.md#when-a-cli-isnt-installed).
+
 ## Credentials
 
 Nothing of yours is shared unless you say so. Each item is a separate opt-in:
