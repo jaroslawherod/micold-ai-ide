@@ -161,6 +161,25 @@ impl Supervised {
     }
 }
 
+/// Put this process's `PATH` in front of the one a Windows child would otherwise get.
+///
+/// portable-pty seeds a Windows child's environment from the registry, so its `PATH` is the
+/// system and user `PATH` as stored, not the daemon's own. `AiCliProvider::is_available` checks
+/// the daemon's `PATH`, so without this a CLI found there could still fail to spawn with
+/// "cannot find the file specified". The registry entries stay behind, so a CLI installed since
+/// the daemon started is still found. An env-include `PATH` is applied later and still wins.
+#[cfg(windows)]
+fn prefer_process_path(cmd: &mut CommandBuilder) {
+    let Some(mut path) = std::env::var_os("PATH") else {
+        return;
+    };
+    if let Some(registry) = cmd.get_env("PATH").filter(|registry| !registry.is_empty()) {
+        path.push(";");
+        path.push(registry);
+    }
+    cmd.env("PATH", path);
+}
+
 impl PtySession {
     /// Spawn `spec`'s AI CLI as a daemon-owned session (FR-006). `scrollback_lines` sets the VT
     /// history depth; `initial_size` seeds the grid (falls back to the standard seed).
@@ -179,6 +198,8 @@ impl PtySession {
     ) -> io::Result<Self> {
         ensure_cwd_exists(&spec.cwd)?;
         let mut cmd = CommandBuilder::new(spec.provider.provider().command());
+        #[cfg(windows)]
+        prefer_process_path(&mut cmd);
         cmd.cwd(&spec.cwd);
         for (k, v) in &spec.env {
             cmd.env(k, v);
@@ -213,6 +234,8 @@ impl PtySession {
         let comspec = std::env::var("COMSPEC").ok();
         let command = default_shell_command(shell.as_deref(), comspec.as_deref());
         let mut cmd = CommandBuilder::new(command);
+        #[cfg(windows)]
+        prefer_process_path(&mut cmd);
         cmd.cwd(cwd);
         for (k, v) in env {
             cmd.env(k, v);
