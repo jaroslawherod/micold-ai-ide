@@ -226,6 +226,17 @@ Where-Object { \$_.ProcessName -eq 'micold-daemon' })")"
 echo "the old daemon (pid $daemon_pid) is gone"
 daemon_pid=""
 
+# unins000.exe hands over to a copy of itself in %TEMP% and exits before the removal is done; wait for
+# that copy. Inno Setup 6.7 names it _unins.tmp (older releases _iu*.tmp), and a wait that matches no
+# process returns at once, so the checks after it race the removal.
+wait_for_uninstaller() {
+	local started=$SECONDS
+	until [ "$(win "@(Get-CimInstance Win32_Process | Where-Object { \$_.Name -like '_unins*' -or \$_.Name -like '_iu*' -or \$_.Name -eq 'unins000.exe' }).Count")" = 0 ]; do
+		[ $((SECONDS - started)) -lt "$uninstall_wait_secs" ] || fail "the uninstaller still runs after ${uninstall_wait_secs}s"
+		sleep 1
+	done
+}
+
 # 9. Uninstall as Installed apps would run it, with the daemon running (I5, I7, FR-006). Relaunch the
 # client so it spawns a daemon, then close the window as in step 8. A silent uninstall with the
 # window still open cancels at the app-mutex prompt, as FR-009 requires with no one to confirm.
@@ -248,13 +259,7 @@ status=0
 MSYS2_ARG_CONV_EXCL='*' "$install_dir/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART \
 	"/LOG=$(cygpath -w "$logs/uninstall.log")" || status=$?
 [ "$status" -eq 0 ] || fail "the silent uninstall exited $status, want 0 (I7)"
-# unins000.exe hands over to a copy of itself in %TEMP% (_iu*.tmp) and exits before the removal is
-# done; wait for that copy.
-started=$SECONDS
-until [ "$(win "@(Get-CimInstance Win32_Process | Where-Object { \$_.Name -like '_iu*' -or \$_.Name -eq 'unins000.exe' }).Count")" = 0 ]; do
-	[ $((SECONDS - started)) -lt "$uninstall_wait_secs" ] || fail "the uninstaller still runs after ${uninstall_wait_secs}s"
-	sleep 1
-done
+wait_for_uninstaller
 [ ! -e "$install_dir" ] || fail "$install_dir is still there after the uninstall (I5): $(ls -A "$install_dir" | tr '\n' ' ')"
 [ ! -e "$shortcut" ] || fail "the Start menu shortcut $shortcut is still there after the uninstall (I5)"
 [ "$(win "Test-Path -LiteralPath '$key'")" = False ] || fail "the uninstall key $key is still there after the uninstall (I5)"
