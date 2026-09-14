@@ -538,4 +538,19 @@ mod tests {
             "from the next row, the address is the same link"
         );
     }
+
+    #[test]
+    fn a_plain_text_cell_is_no_link() {
+        let rows = Rows::new(
+            0,
+            vec![row("See https://a.example and docs").declare(26..30, ADDRESS)],
+        );
+        for col in [1, 3, 21, 24] {
+            assert_eq!(
+                link_at(&rows, 0, col),
+                None,
+                "column {col} is plain text beside a detected address and a declared run"
+            );
+        }
+    }
 }

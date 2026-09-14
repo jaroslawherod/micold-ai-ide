@@ -104,7 +104,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | U23 | A wrapped logical line within 64 rows each way is joined; a candidate reaching the 64-row cap is dropped | FR-003, L4 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_line_is_joined_64_rows_each_way_and_a_candidate_reaching_the_cap_is_dropped` |
 | U24 | A candidate touching a row whose `text` is `None` is dropped | L7 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_candidate_touching_an_unavailable_row_is_dropped` |
 | U25 | A wide character's spacer cell belongs to the link | FR-007, L5 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_wide_characters_spacer_cell_belongs_to_the_link` |
-| U26 | A plain-text cell returns `None` | L3 | example | PENDING | |
+| U26 | A plain-text cell returns `None` | L3 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_plain_text_cell_is_no_link` |
 | U27 | A negative (scrollback) row resolves exactly as a viewport row with the same content | US1.6 | example | PENDING | |
 | U147 | A detected address on one row returns its cells on that row (split from U21 before its cycle) | FR-001, L2 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_detected_address_on_one_row_returns_its_cells` |
 | U148 | A declared run continues across a soft wrap onto the next row, and stops at a real line break | FR-002, FR-007, L1 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_declared_run_continues_across_a_soft_wrap_and_stops_at_a_line_break` |
