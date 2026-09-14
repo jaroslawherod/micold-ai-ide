@@ -16,12 +16,14 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|
 | #334 | PR 1: spec | merged | a9f54e77 |
 | #339 | PR 2: plan | merged | b27ffe62 |
+| #340 | PR 3: M1, the sidebar curve | open, rebasing onto ce4fe7ba (D24) | — |
+| #344 | Side PR (D24): the held-Pi daemon test keeps its session on the guard's `PATH` | merged | ce4fe7ba |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T004, T045–T046 | The worktree sidebar hides and shows on `emphasized` over `medium_4`, never narrower than its rail, handing over to it once no wider | — | PR 3 opening (D23) |
+| M1 | T001–T004, T045–T046 | The worktree sidebar hides and shows on `emphasized` over `medium_4`, never narrower than its rail, handing over to it once no wider | #340 | open; rebased after #344 (D24) |
 | M2 | T005–T044 | The settings rail slides, with icons on their line, badges marked, focus kept, pointer confined | — | pending |
 
 ## Decisions
@@ -51,6 +53,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | D21 | implement | M1 review r2 (B, MINOR): closing, the drawer's width reaches its floor at p ≈ 0.087 (~224 ms) but the rail swaps in at `CLOSED` (~379 ms), so the slide visibly ends ~155 ms before the strip appears. Fix in M1? | No: recorded under *Follow-ups not done*. The swap time is unchanged from `main` (not a regression), and swapping at the floor moves `showing_rail` off progress alone into state `layout` computes, a change to the drawer's swap that the spec scopes out. **Superseded by D22** | agent-resolved | M1 review r2 B F2; spec.md *Scope* |
 | D22 | implement | M1 review r3 (A, MAJOR): D21's "not a regression" was wrong. What the user sees is how long nothing moves before the strip appears: 17–57 ms on `main` (linear, panels 600–180 px), 108–192 ms with the curve and floor, showing a still sliver of the *Hide sidebar* button. Fix in M1? | Yes, test-first as U24/T046: `layout` swaps to the rail once a closing panel's `full · p` is no wider than the floor (or at `CLOSED`), stores the decision in `Track`, and `update`, `draw`, `mouse_interaction` and `overlay` read it, so they always match the layout they get. Opening never swaps early; a zero floor (settings view, T019) keeps `CLOSED`. D20's rule applies: a regression the curve introduced is FR-003's. Spec (Assumptions, Scope, SC-002), contract §2/§6, plan, research R7, quickstart §A.2 and tasks amended; U23 re-cut | agent-resolved | M1 review r3 A F1; navigation_drawer.rs `layout`; tdd/cycle-log.md cycle 3 |
 | D23 | implement | M1 review round 3 had a MAJOR (fixed as D22, gate green on 507dda7a). Run a 4th round or open PR 3? | Open PR 3 (M1) | decided by user | escalation, category 5 |
+| D24 | implement | PR #340's macOS `build + test` failed 3 of 3 on `micold-daemon` `exclusivity.rs:435` (`a_second_open_of_a_held_pi_conversation_starts_nothing`, 0 launches): first read as a race (the test reads the fake `pi`'s launch file as soon as the session is live); corrected on probing: the fixture left environment-include on, which sources `~/.bashrc` and replaces the session's `PATH`, so the real `pi` (or none) ran and the stub never did. Main's first macOS daemon run (`ac8444ec`) also failed, on `idle_race.rs:71`, and every push since was docs-only. Not 030's code. How to proceed? | Fix the test in a separate PR (#344: env-include off in the fixture, plus wait for the launch record), merge it on green, then rebase #340 and merge | decided by user | escalation, red main |
 
 ## Declined review findings
 
