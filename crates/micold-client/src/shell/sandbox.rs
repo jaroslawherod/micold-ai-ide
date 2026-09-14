@@ -409,7 +409,13 @@ pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
             iced::Task::none()
         }
         Msg::Lost => {
-            app.sandbox.container_lost(CONTAINER_NAME);
+            // Brought back in the same update, so `Failed` is never drawn: the card and its
+            // fallback would otherwise stand for as long as the next refused dial took (FR-036b).
+            if app.sandbox.container_lost(CONTAINER_NAME) {
+                if let Some(bring_up) = crate::shell::daemon_sync::bring_up_again(app) {
+                    return bring_up.task();
+                }
+            }
             iced::Task::none()
         }
         Msg::Progress(state) => {

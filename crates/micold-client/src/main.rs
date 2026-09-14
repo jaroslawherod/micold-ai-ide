@@ -892,7 +892,7 @@ fn connection_status(app: &App) -> micold_client::features::connection::Connecti
         hold,
         // Not listening *yet* is not disconnected: the sandbox view shows the stage, and a banner
         // saying the service is gone would call a working bring-up broken (FR-036b).
-        app.disconnected && !app.sandbox.state.is_coming_up(),
+        app.disconnected && !app.sandbox.is_coming_up(),
     )
 }
 

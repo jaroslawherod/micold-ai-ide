@@ -297,3 +297,79 @@ is copied here verbatim so it outlives the session. `verification.md` classifies
   or not, on each bring-up; (2) `argv::create`'s `{p}:{p}` publish works only when `p` equals the
   image's fixed listen port 7727
 - commit: not committed
+
+## Cycle 13: U24 a container found stopped is brought up without showing a failure (T187, T178 visual finding 1)
+
+- test: `main.rs::tests::a_container_found_stopped_is_brought_up_without_showing_a_failure`
+- red (real, no mutant): `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide a_container_found_stopped_is_brought_up_without_showing_a_failure`
+  -> `panicked at crates/micold-client/src/main.rs:3194:9: a stopped container with attempts left is brought up at once (FR-036a)` (1 failed)
+- green: `daemon_sync.rs` gains `bring_up_again(app)`, the unattended bring-up decision taken out of
+  `refused_dial` unchanged; `shell/sandbox.rs` `Msg::Lost` calls it when `container_lost` changed the
+  state, so `Failed(SandboxStopped)` becomes `Probing` in the same update and is never drawn.
+  `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide` -> 131 passed, 0 failed
+- refactor: the extraction above was the refactor; `refused_dial` calls the helper
+- commit: see git history
+
+## Cycle 14: U25 a started sandbox whose service has not answered is not a lost connection (T188, T178 visual finding 2)
+
+- test: `main.rs::tests::a_started_sandbox_whose_service_has_not_answered_yet_is_not_a_lost_connection`
+- red (real): `... --bin micold-ai-ide -- --exact tests::a_started_sandbox_whose_service_has_not_answered_yet_is_not_a_lost_connection`
+  -> `panicked at crates/micold-client/src/main.rs:3250:9: assertion left != right failed: the service was started a moment ago and has not been dialled since (FR-036b)  left: Disconnected  right: Disconnected` (1 failed)
+- green (fake it): `Sandbox::awaiting_service`, set by `started()`; `Sandbox::is_coming_up()` =
+  `state.is_coming_up() || awaiting_service`; `connection_status` reads it. -> 132 passed.
+  Hides the banner for ever after a start; the next three cycles bound it
+- notes: the first suite run after this change was killed (exit 137, memory pressure) before a result;
+  rerun detached -> 132 passed
+- refactor: none
+- commit: see git history
+
+## Cycle 15: U26 a started service that answered and went away is a lost connection (T188)
+
+- test: `main.rs::tests::a_started_service_that_answered_and_went_away_is_a_lost_connection`
+- red: `... -- --exact tests::a_started_service_that_answered_and_went_away_is_a_lost_connection`
+  -> `panicked at crates/micold-client/src/main.rs:3292:9: assertion left == right failed: a service that answered is no longer coming up; its disconnect is reported (FR-027)  left: Connected  right: Disconnected` (1 failed)
+- green: `Sandbox::answered()`, called from `on_connected`, ends the wait. -> 133 passed
+- refactor: none
+- commit: see git history
+
+## Cycle 16: U27 a started service that keeps refusing is reported (T188)
+
+- test: `main.rs::tests::a_started_service_that_keeps_refusing_is_reported`
+- red: `... -- --exact tests::a_started_service_that_keeps_refusing_is_reported`
+  -> `panicked at crates/micold-client/src/main.rs:3315:9: assertion left == right failed: a service still refusing after its grace is not coming up any more (FR-027)  left: Connected  right: Disconnected` (1 failed)
+- green: `Sandbox::service_refused()`, called at the top of `refused_dial`, ends the wait. -> 134 passed
+- refactor: none
+- commit: see git history
+
+## Cycle 17: U28 the first refused dial after start is the service still starting (T188)
+
+- test: `main.rs::tests::the_first_refused_dial_after_start_is_the_service_still_starting`
+- red: `... -- --exact tests::the_first_refused_dial_after_start_is_the_service_still_starting`
+  -> `panicked at crates/micold-client/src/main.rs:3341:9: assertion left != right failed: one reconnect is how long a started daemon may take to listen (FR-036b)  left: Disconnected  right: Disconnected` (1 failed)
+- green (triangulated from U27): `awaiting_service: Option<u8>`, `started()` sets
+  `Some(REFUSALS_WHILE_STARTING)` (= 1), `service_refused` spends one and ends at the last; `refused_dial`'s
+  silence check reads `app.sandbox.is_coming_up()` instead of the bare state. -> 135 passed
+- refactor: none
+- commit: see git history
+
+## Cycle 18: U29 a failure after start is not still waiting for the service (T188)
+
+- test: `main.rs::tests::a_failure_after_start_is_not_still_waiting_for_the_service`
+- first draft set the budget spent with a constructor that does not exist; `Started` resets the budget,
+  so that path is unreachable. Rewritten to the reachable one before any run: `Started` -> `Lost`
+  (brings it up) -> `Failed`
+- red: `... -- --exact tests::a_failure_after_start_is_not_still_waiting_for_the_service`
+  -> `panicked at crates/micold-client/src/main.rs:3379:9: assertion left == right failed: a failed sandbox is not coming up, whatever it was waiting for before (FR-036b)  left: Connected  right: Disconnected` (1 failed)
+- green: `Sandbox::is_coming_up` honours the wait only while the state is `Running`. -> 136 passed
+- refactor: `a_started_sandbox()` fixture shared with `a_sandbox_that_came_up_earns_its_unattended_bring_ups_back`,
+  which built the same `Started` inline; `cargo fmt --all`. -> 136 passed (in the gates below)
+- commit: see git history
+
+## Gates after Cycles 13–18 (T187, T188)
+
+- `scripts/build-lock.sh cargo test --workspace` -> 2962 passed, 0 failed, 2 ignored
+- `cargo clippy --workspace --all-targets -- -D warnings` first failed on `clippy::collapsible_if` in
+  `daemon_sync.rs::refused_dial` (the `LocalSandbox` / `is_coming_up` nesting); collapsed with no
+  behavior change -> clean
+- `cargo fmt --all -- --check` -> clean
+- `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide` after the collapse -> 136 passed

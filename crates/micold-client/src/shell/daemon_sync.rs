@@ -304,32 +304,44 @@ pub fn refused_dial(app: &mut App, reason: &str) -> Option<crate::shell::sandbox
     // got nothing" are different bugs, so the log has to be able to say the first one too.
     crate::log_line(&format!("attach: failed reason={reason}"));
     app.disconnected = true;
-    // A sandboxed service that is not there is brought up, not reported (FR-002a, BUG-004). Only
-    // for the sandbox placement: consent to run on the host is never undone from here (FR-035).
-    if app.placement.kind == micold_core::sandbox::placement::PlacementKind::LocalSandbox {
-        if let Some(plan) = app.sandbox_boot.clone() {
-            if let Some(after) = app.sandbox.service_absent() {
-                crate::log_line(&format!(
-                    "sandbox: service absent, bringing it up again in {}s ({} left) after: {}",
-                    after.as_secs(),
-                    app.sandbox.unattended.remaining(),
-                    app.sandbox.previous_attempt.as_ref().map_or_else(
-                        || "no recorded failure".to_string(),
-                        micold_core::sandbox::lifecycle::Failure::reason,
-                    )
-                ));
-                return Some(crate::shell::sandbox::BringUp { plan, after });
-            }
-        }
-        if app.sandbox.state.is_coming_up() {
-            // Not listening *yet*. The sandbox view shows the stage; a notification saying the
-            // daemon could not be reached would call a working bring-up broken (FR-036b).
-            return None;
-        }
+    app.sandbox.service_refused();
+    if let Some(bring_up) = bring_up_again(app) {
+        return Some(bring_up);
+    }
+    if app.placement.kind == micold_core::sandbox::placement::PlacementKind::LocalSandbox
+        && app.sandbox.is_coming_up()
+    {
+        // Not listening *yet*. The sandbox view shows the stage; a notification saying the
+        // daemon could not be reached would call a working bring-up broken (FR-036b).
+        return None;
     }
     app.core
         .notify_error(format!("Could not connect to the session daemon: {reason}"));
     None
+}
+
+/// The unattended bring-up for a sandbox whose service is not there, if one may start.
+///
+/// A sandboxed service that is not there is brought up, not reported (FR-002a, BUG-004). Only for
+/// the sandbox placement: consent to run on the host is never undone from here (FR-035). Shared by
+/// the two ways the application learns it is gone — a refused dial, and the liveness check finding
+/// the container stopped — so neither leaves a failure on screen the other would have cleared.
+pub fn bring_up_again(app: &mut App) -> Option<crate::shell::sandbox::BringUp> {
+    if app.placement.kind != micold_core::sandbox::placement::PlacementKind::LocalSandbox {
+        return None;
+    }
+    let plan = app.sandbox_boot.clone()?;
+    let after = app.sandbox.service_absent()?;
+    crate::log_line(&format!(
+        "sandbox: service absent, bringing it up again in {}s ({} left) after: {}",
+        after.as_secs(),
+        app.sandbox.unattended.remaining(),
+        app.sandbox.previous_attempt.as_ref().map_or_else(
+            || "no recorded failure".to_string(),
+            micold_core::sandbox::lifecycle::Failure::reason,
+        )
+    ));
+    Some(crate::shell::sandbox::BringUp { plan, after })
 }
 
 /// The user chose to take the active project back after being displaced (FR-024): re-attach
@@ -850,6 +862,7 @@ pub fn on_connected(
     // disconnected/displaced flags. If a project is still held by another window, the
     // re-attach below is refused and the displaced state is re-established from that reply.
     app.disconnected = false;
+    app.sandbox.answered();
     app.displaced.clear();
     app.version_mismatch = None;
     app.build_mismatch = None;

@@ -73,6 +73,12 @@ FR-036b, SC-004c, US6 scenario 9, S-6, S-7 (`data-model.md` §7), and C-8's call
 | U21 | During a bring-up the connection banner is not `Disconnected`                     | FR-036b      | example | DONE | `main::tests::a_bring_up_in_flight_is_not_shown_as_a_lost_connection` |
 | U22 | During a bring-up no "The sandbox did not start" card, and no fallback, is offered | FR-036b, FR-035a | example | DONE | `main::tests::a_bring_up_in_flight_offers_no_failure_card_and_no_fallback` |
 | U23 | The previous attempt's reason stays visible while the next attempt runs           | FR-036a, US6-9 | example | DONE | `main::tests::the_previous_attempts_reason_stays_visible_while_the_next_one_runs` |
+| U24 | A container found stopped is brought up in the same update, with no failure card, fallback or banner | FR-036b, FR-035a | example | DONE | `main::tests::a_container_found_stopped_is_brought_up_without_showing_a_failure` |
+| U25 | After `Started`, until the service answers, the banner is not `Disconnected`      | FR-036b      | example | DONE | `main::tests::a_started_sandbox_whose_service_has_not_answered_yet_is_not_a_lost_connection` |
+| U26 | Once the started service has answered, losing it is a lost connection            | FR-027       | example | DONE | `main::tests::a_started_service_that_answered_and_went_away_is_a_lost_connection` |
+| U27 | A started service that keeps refusing is reported                                 | FR-027, FR-036b | example | DONE | `main::tests::a_started_service_that_keeps_refusing_is_reported` |
+| U28 | The first refused dial after `Started` is neither reported nor shown              | FR-036b      | example | DONE | `main::tests::the_first_refused_dial_after_start_is_the_service_still_starting` |
+| U29 | A failure after `Started` is not still waiting for the service                    | FR-036b      | example | DONE | `main::tests::a_failure_after_start_is_not_still_waiting_for_the_service` |
 
 ## Invariants and edge cases still to place
 
