@@ -307,6 +307,16 @@ jobs:
       - name: Test (daemon Windows process supervision)
         if: runner.os == 'Windows'
         run: cargo test -p micold-daemon --test windows_process_tree
+      # Feature 010's SC-013. Every daemon test that starts a session is Unix-only and ran in the
+      # Linux full-workspace step below alone, so the macOS arms of `platform/unix.rs` were compiled
+      # here and run nowhere -- among them the `waitid(WNOWAIT)` exit check and the `kill(-pid)`
+      # group signal, which differ from Linux in what `getpgid` answers for a zombie.
+      - name: Test (daemon)
+        if: runner.os == 'macOS'
+        # Several of these start a real daemon and wait on it; a test that cannot find the one it
+        # started waits forever, and a job's own limit is six hours.
+        timeout-minutes: 20
+        run: cargo test -p micold-daemon --no-fail-fast
       # Run the client + daemon test suites where the iced system deps are present.
       - name: Test (full workspace)
         if: runner.os == 'Linux'
