@@ -163,3 +163,12 @@
 - refactor: none needed
 - commit: `test(031): pin that script and data addresses are never found (U15)`
 - notes: green on arrival; FR-011's exclusion follows from the closed scheme list. The fixture's `javascript:` address contains a dot on purpose, so the mutant cannot be masked by the host rule
+
+## Cycle 16: U16 matches the scheme ASCII case-insensitively (`HTTPS://EXAMPLE.COM`)
+
+- test: `crates/micold-core/src/link/detect.rs::tests::matches_the_scheme_whatever_its_case` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::detect::tests::matches_the_scheme_whatever_its_case -- --exact`
+  -> `left: []` / `right: ["HTTPS://EXAMPLE.COM", "Mailto:Team@Example.com", "FILE:///TMP/X"]` (1 failed)
+- green: `starts_with` compares each character with `eq_ignore_ascii_case`; `scheme_at` still returns the lower-case constant, so `well_formed` needs no change. Suite -> 1074 passed, 0 failed
+- refactor: `starts_with` zips the prefix's characters directly instead of collecting them into a `Vec`; suite re-run green (1074 passed, 0 failed)
+- commit: `feat(031): match an address's scheme in any case (U16)`

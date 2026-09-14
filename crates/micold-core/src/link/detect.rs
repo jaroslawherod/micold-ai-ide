@@ -110,9 +110,13 @@ fn scheme_at(chars: &[char], start: usize) -> Option<&'static str> {
         .find(|scheme| starts_with(&chars[start..], scheme))
 }
 
+/// Whether `chars` starts with the ASCII `prefix`, ignoring ASCII case.
 fn starts_with(chars: &[char], prefix: &str) -> bool {
-    let prefix: Vec<char> = prefix.chars().collect();
-    chars.len() >= prefix.len() && chars[..prefix.len()] == prefix[..]
+    chars.len() >= prefix.len()
+        && prefix
+            .chars()
+            .zip(chars)
+            .all(|(p, c)| c.eq_ignore_ascii_case(&p))
 }
 
 #[cfg(test)]
@@ -300,6 +304,15 @@ mod tests {
             ),
             Vec::<String>::new(),
             "an address that runs code or carries its own content is never offered as a link"
+        );
+    }
+
+    #[test]
+    fn matches_the_scheme_whatever_its_case() {
+        assert_eq!(
+            found("HTTPS://EXAMPLE.COM Mailto:Team@Example.com FILE:///TMP/X"),
+            ["HTTPS://EXAMPLE.COM", "Mailto:Team@Example.com", "FILE:///TMP/X"],
+            "a scheme is recognised in any mix of upper and lower case, and the address keeps its case"
         );
     }
 }
