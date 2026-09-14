@@ -17,7 +17,11 @@ pub fn detect(text: &str) -> Vec<Range<usize>> {
             continue;
         };
         let body = start + scheme.chars().count();
-        let mut end = scan_end(&chars, body);
+        let quote = start
+            .checked_sub(1)
+            .map(|before| chars[before])
+            .filter(|c| matches!(c, '"' | '\''));
+        let mut end = scan_end(&chars, body, quote);
         while end > body && TRAILING_PUNCTUATION.contains(&chars[end - 1]) {
             end -= 1;
         }
@@ -27,13 +31,14 @@ pub fn detect(text: &str) -> Vec<Range<usize>> {
     found
 }
 
-/// Where the characters of an address starting at `from` end: at whitespace, or at a closing
-/// bracket that no opener inside the address balances (research R3 rule 4).
-fn scan_end(chars: &[char], from: usize) -> usize {
+/// Where the characters of an address starting at `from` end: at whitespace, at a closing
+/// bracket that no opener inside the address balances (research R3 rule 4), or at the `quote`
+/// that opened right before the address (rule 5).
+fn scan_end(chars: &[char], from: usize, quote: Option<char>) -> usize {
     let mut open = Vec::new();
     for (index, &c) in chars.iter().enumerate().skip(from) {
         match c {
-            c if c.is_whitespace() => return index,
+            c if c.is_whitespace() || Some(c) == quote => return index,
             '(' | '[' => open.push(c),
             ')' | ']' => {
                 let opener = if c == ')' { '(' } else { '[' };
@@ -108,6 +113,20 @@ mod tests {
             found("(https://example.com/a_(b))"),
             ["https://example.com/a_(b)"],
             "only the unbalanced closer is excluded, not the balanced one before it"
+        );
+    }
+
+    #[test]
+    fn excludes_an_enclosing_quote() {
+        assert_eq!(
+            found(r#"url = "https://example.com""#),
+            ["https://example.com"],
+            "an address opened right after a double quote ends before the closing quote"
+        );
+        assert_eq!(
+            found("'https://example.com/a'b'"),
+            ["https://example.com/a"],
+            "an address opened right after a single quote ends at the next one, not the last"
         );
     }
 }
