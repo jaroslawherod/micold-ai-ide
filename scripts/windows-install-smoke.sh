@@ -188,8 +188,9 @@ Where-Object { \$_.ProcessName -eq 'micold-daemon' })")"
 echo "the old daemon (pid $daemon_pid) is gone"
 daemon_pid=""
 
-# 9. Uninstall with the app open, as Installed apps would run it (I5, I7, FR-006). Relaunch the client
-# and wait for its daemon, so the uninstaller has both to stop.
+# 9. Uninstall as Installed apps would run it, with the daemon running (I5, I7, FR-006). Relaunch the
+# client so it spawns a daemon, then close the window as in step 8. A silent uninstall with the
+# window still open cancels at the app-mutex prompt, as FR-009 requires with no one to confirm.
 client_pid="$(win "(Start-Process -FilePath '$(cygpath -w "$install_dir/micold-ai-ide.exe")' -PassThru).Id")"
 [ -n "$client_pid" ] || fail "the repaired client did not start"
 started=$SECONDS
@@ -198,7 +199,13 @@ until [ "$(win "Test-Path -LiteralPath '$pipe'")" = True ]; do
 	[ $((SECONDS - started)) -lt "$pipe_wait_secs" ] || fail "$pipe did not come back within ${pipe_wait_secs}s"
 	sleep 1
 done
-echo "== uninstall with the client (pid $client_pid) open"
+daemon_pid="$(win "(Get-CimInstance Win32_Process |
+Where-Object { \$_.ParentProcessId -eq $client_pid -and \$_.Name -eq 'micold-daemon.exe' } |
+Select-Object -First 1).ProcessId")"
+MSYS2_ARG_CONV_EXCL='*' taskkill.exe /PID "$client_pid" /F >/dev/null 2>&1 ||
+	fail "could not stop the repaired client (pid $client_pid)"
+client_pid=""
+echo "== uninstall with the daemon (pid ${daemon_pid:-unknown}) running"
 status=0
 MSYS2_ARG_CONV_EXCL='*' "$install_dir/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART \
 	"/LOG=$(cygpath -w "$logs/uninstall.log")" || status=$?
@@ -216,7 +223,6 @@ done
 [ ! -e "$local_app_data/micold-ai-ide/run" ] ||
 	fail "$local_app_data/micold-ai-ide/run is still there after the uninstall (I5)"
 echo "uninstalled: no install dir, shortcut, uninstall key or run dir"
-client_pid=""
 for marker in "${markers[@]}"; do
 	[ -f "$marker" ] || fail "the uninstall removed user data: $marker is gone (I5, FR-007)"
 done
