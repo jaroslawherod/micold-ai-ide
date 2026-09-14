@@ -511,4 +511,31 @@ mod tests {
             "the spacer after the last wide char of a declared run is part of the run"
         );
     }
+
+    #[test]
+    fn a_wide_char_wrapped_onto_the_next_row_leaves_padding_the_address_reads_across() {
+        // The last cell of the first row is padding: the wide char did not fit, so it wrapped.
+        let rows = Rows::new(
+            0,
+            vec![
+                row("See https://a.example/ ").spacer(22).wrapped(),
+                row("例 え  now").spacer(1).spacer(3),
+            ],
+        );
+        let link = Some(Link {
+            address: "https://a.example/例え".to_string(),
+            origin: LinkOrigin::Detected,
+            cells: vec![span(0, 4..23), span(1, 0..4)],
+        });
+        assert_eq!(
+            link_at(&rows, 0, 22),
+            link,
+            "the padding is not a space ending the address, and it is covered by the link"
+        );
+        assert_eq!(
+            link_at(&rows, 1, 2),
+            link,
+            "from the next row, the address is the same link"
+        );
+    }
 }

@@ -291,3 +291,12 @@
 - refactor: the spacer branch reduced to one `if`/`else if`; suite re-run green (1086), clippy clean
 - commit: `feat(031): read an address past wide-char spacer cells (U25)`
 - notes: design gap found here and resolved as ledger decision 15. The wire's spacer char is a space (alacritty 0.26 writes `' '`), so `text` alone made detection stop inside `https://例え.jp`. Contract §1 and L5, data-model §1 and T028 now carry `spacer`, which the client answers from `WIDE_CHAR_SPACER | LEADING_WIDE_CHAR_SPACER`. Appended U150 for the leading spacer a wide char leaves at a row's end when it wraps
+
+## Cycle 29: U150 the padding a wide char leaves at a row's end when it wraps is not text, and the link covers it
+
+- test: `crates/micold-core/src/link/line.rs::tests::a_wide_char_wrapped_onto_the_next_row_leaves_padding_the_address_reads_across` (new)
+- red: the first run failed for a broken fixture, not for the behavior: the second row `"例 え now"` put `now` right after the spacer, so `left` read `"https://a.example/例えnow"`. Not counted as red; the fixture was corrected to `"例 え  now"`. It then passed on arrival (`test ... ok`), since U25's mapping already covers a spacer with the char before it on its row. Deliberate mutant: a spacer in the last column of a wrapped row is kept as text. `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::a_wide_char_wrapped_onto_the_next_row_leaves_padding_the_address_reads_across -- --exact`
+  -> `assertion failed: the padding is not a space ending the address, and it is covered by the link` / `left: None` / `right: Some(Link { address: "https://a.example/例え", ..., cells: [CellSpan { row: 0, cols: 4..23 }, CellSpan { row: 1, cols: 0..4 }] })` (1 failed). Mutant reverted from the backup
+- green: no implementation change. Suite -> 1087 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin that an address reads across a wrapped wide char's padding (U150)`
