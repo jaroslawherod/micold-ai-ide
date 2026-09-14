@@ -300,3 +300,12 @@
 - green: no implementation change. Suite -> 1087 passed, 0 failed
 - refactor: none needed
 - commit: `test(031): pin that an address reads across a wrapped wide char's padding (U150)`
+
+## Cycle 30: U26 a plain-text cell returns `None`
+
+- test: `crates/micold-core/src/link/line.rs::tests::a_plain_text_cell_is_no_link` (new)
+- red: passed on arrival (`test ... ok`). Deliberate mutant: `detected_at` takes the line's first detected range whether or not it holds the cell. `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::a_plain_text_cell_is_no_link -- --exact`
+  -> `assertion failed: column 1 is plain text beside a detected address and a declared run` / `left: Some(Link { address: "https://a.example", origin: Detected, cells: [CellSpan { row: 0, cols: 4..21 }] })` / `right: None` (1 failed). Mutant reverted from the backup
+- green: no implementation change. Suite -> 1088 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin that a plain-text cell is no link (U26)`
