@@ -288,7 +288,7 @@ than discovered. Run §B0 at the end of this phase, not after Phase 1.
 - [X] T049 [US4] Apply the linear progress anatomy in `crates/micold-client/src/ui/material/progress.rs` — `secondary_container` track, `primary` indicator, 4dp thickness, fully rounded (FR-031e)
 - [X] T050 [US4] Replace the static 0.4 fill in `crates/micold-client/src/ui/material/progress.rs` with Material's indeterminate presentation, so the bar stops asserting a completion fraction the application cannot know (FR-031f)
 - [X] T051 [US4] Implement the notification queue in `crates/micold-core/src/notify.rs` — one visible, ordered pending queue, severity-derived duration, dedup and cap preserved (FR-032a, FR-032b)
-- [X] T052 [US4] Create the `Snackbar` component in `crates/micold-client/src/ui/material/snackbar.rs` per `contracts/component-api.md` §2.2 (FR-032, Principle VIII)
+- [ ] ⚠️ Reopened T052 [US4] Create the `Snackbar` component in `crates/micold-client/src/ui/material/snackbar.rs` per `contracts/component-api.md` §2.2 (FR-032, Principle VIII) *(reopened 2026-09-14 — BUG-015: past §7.8's maximum width the message took the line and left `Dismiss` under 20dp, its label drawn past the container. Closed by T185.)*
 - [X] T053 [US4] Replace the inline notification strip in `crates/micold-client/src/ui/mod.rs` with the floating snackbar overlay, above the dialog scrim and not obstructing a dialog's action row (FR-032)
 - [X] T053a [P] [US4] Assert the connection-status banner stayed a separate component: a test confirming `ConnectionBanner` still renders as a full-width, non-dismissible, non-queued strip and does not route through the snackbar queue. Material treats banners and snackbars as different components, and folding one into the other is the specific mistake this requirement forbids (FR-032c)
 - [X] T054 [US4] Rework `crates/micold-client/src/ui/material/toolbar.rs` to the small app bar anatomy — 64dp height, 16dp padding, `title_large` title, 48dp icon targets — and add `.elevated(bool)` (FR-025)
@@ -1784,3 +1784,40 @@ this record's. Crop:
 hovered, held mid-ripple, held settled, clicked mid-ripple, clicked settled.
 
 **Bugfix**: 2026-09-14 — BUG-014 added Phase 26 (T180–T183). **No task is reopened.** T032 drew what FR-024c asked for; the clause is struck, and FR-024h is the requirement it now meets.
+
+## Phase 27: BUG-015 — a long snackbar message squeezed `Dismiss` past the snackbar's edge
+
+**Goal**: a dismissible snackbar keeps its action whole, at its natural width and inside the container's
+padded edge, at every message length and window width; below the maximum width it stays sized by its
+content (FR-032, US4 acceptance scenario 19).
+
+- [X] T184 Failing test first: in `crates/micold-client/src/ui/material/snackbar.rs`, lay a dismissible snackbar out headlessly with a message longer than one 600dp line, in a 1200dp and a 400dp window, and assert the action's node is at least the width the same button takes alone and ends inside the container's padded edge; beside it, assert a one-word snackbar stays narrower than §7.8's cap. Red today on the first (FR-032)
+
+- [X] T185 In `crates/micold-client/src/ui/cdk/reflow.rs`, let `Reflow` honour a content-sized (`Shrink`) parent — measure the lead at its intrinsic width and resolve to lead + spacing + trail — with unit tests beside the existing ones; in `crates/micold-client/src/ui/material/snackbar.rs`, arrange the message and the action through it so the action is laid out first, keeping §7.8's 48dp floor (the height-only spacer) beside the message. T184 goes green; the `Reflow` call site in `ui/shell.rs` is unchanged (FR-032)
+
+- [X] T186 Run the workspace gate (`mise run gate`) and record the result here
+
+- [ ] T187 Confirm on a rendered frame that a long launch notification draws `Dismiss` whole inside the snackbar, beside a short one that stays content-sized; record what was captured
+
+**Red record (T184)** — 2026-09-14, against the unfixed snackbar (`origin/main` at `226d3a8b`),
+`cargo test -p micold-client --lib snackbar::tests`: `a_long_message_leaves_the_action_its_width_inside_the_container`
+failed with "at a 1200dp window the Dismiss button is 18.950195dp wide but its label needs 74.086914dp";
+`a_short_message_still_sizes_the_snackbar_to_its_content` passed, as it should before the fix. A first draft
+that asserted only the action's right edge passed on the unfixed code — the squeezed node stays inside while
+its label does not — so the test reads the node's width against the button laid out alone. T185's
+`Reflow` tests were red first too: `in_a_content_sized_parent_it_is_as_wide_as_what_it_holds` failed on
+`left: Size { width: 400.0, height: 40.0 }` / `right: Size { width: 228.0, height: 40.0 }`, and the stacked
+case on a 250dp lead where 120dp was expected. `…a_lead_wider_than_the_line_takes_only_what_the_cluster_leaves`
+passed before the change, as it should: it holds the cap the change must keep.
+
+**Pass record (T186)** — 2026-09-14: `cargo fmt --all -- --check`, `cargo clippy -p micold-core` and
+`cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace --no-fail-fast`
+3079 passed, 1 failed, 6 ignored (summed over every `test result` line); all 14 `scripts/tests/*.test.sh`
+pass. The one failure is `micold-daemon`'s `exclusivity::one_conversation_one_session::a_second_open_of_a_held_pi_conversation_starts_nothing`
+("exactly one `pi` for one conversation", left 0), five runs out of five on this machine, sandboxed or not.
+It is not this change's: that test binary does not use `micold-client`, and this change touches only the
+client's layout. `origin/main`'s CI at `226d3a8b` passed it. Left as a follow-up. The nine snackbar and
+`Reflow` tests pass, `anatomy_size`'s width-cap gate and `known_projects_reflow` pass unchanged, and no
+snapshot moved.
+
+**Bugfix**: 2026-09-14 — BUG-015 Updated from bugfix patch: reopened T052 and added Phase 27 (T184–T187).
