@@ -6,7 +6,9 @@
 
 **Created**: 2026-07-20
 
-**Status**: Implemented — all tasks closed 2026-08-25; open defects tracked in `bugs/`
+**Status**: Closed 2026-09-15 — implemented and shipped; all 169 tasks in [tasks.md](./tasks.md) are
+done (closed 2026-08-25), and every defect in [bugs/](./bugs/) — BUG-001 through BUG-025 — is fixed,
+resolved or settled; the last, BUG-025, was fixed 2026-09-12.
 
 **Input**: Re-architect micold-ai-ide so AI CLI sessions run in a user-space background service that outlives the UI. The UI becomes a thin client that attaches on demand to drive sessions forward, and terminal/agent processes keep running when no UI is attached.
 
