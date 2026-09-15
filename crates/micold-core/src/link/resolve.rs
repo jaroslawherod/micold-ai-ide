@@ -144,4 +144,31 @@ mod tests {
             "file links open nothing until their resolution exists"
         );
     }
+
+    #[test]
+    fn what_the_hint_shows_is_exactly_what_opens() {
+        let addresses = [
+            "https://a.example/x?y=1#z",
+            "HTTP://LOCALHOST:8080/",
+            "mailto:team@example.com?subject=Hi%20there",
+            "vscode://file/home/u/a.rs",
+            "file:///tmp/x",
+        ];
+        let mut followable = 0;
+        for address in addresses {
+            let Some(resolved) = resolve(detected(address), &local()) else {
+                continue;
+            };
+            followable += 1;
+            let opens = match &resolved.target {
+                Target::Url(opens) | Target::HostPath(opens) => opens,
+                Target::Unreachable(_) => continue,
+            };
+            assert_eq!(
+                &resolved.display, opens,
+                "{address}: the hint shows exactly the string handed to the opener (SC-006)"
+            );
+        }
+        assert_eq!(followable, 3, "the sample holds three followable links");
+    }
 }
