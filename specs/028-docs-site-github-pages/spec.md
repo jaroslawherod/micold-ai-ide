@@ -4,7 +4,10 @@
 
 **Created**: 2026-08-27
 
-**Status**: Draft
+**Status**: Closed 2026-09-15 — implemented and shipped in PR #268 (merged 2026-08-31); the site
+publishes on each release. 84 of the 86 tasks in [tasks.md](./tasks.md) are done. The two open ones,
+T082 and T085 — quickstart Part B, a reader's judgement of the published site — are unrun, so the
+judgement halves of SC-001 and SC-006 are unobserved and `evidence/quickstart-b.md` does not exist.
 
 **Input**: User description: "GitHub Pages documentation site for the project, published automatically on each release, built from the in-repo docs (primarily the user guide), and including screenshots and animated GIFs captured from the running application."
 
