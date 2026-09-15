@@ -351,11 +351,16 @@ pub struct TerminalDefaults {
     pub background: Rgb,
 }
 
-/// The terminal's default colours under `scheme`.
-pub fn terminal_defaults(_scheme: ColorScheme) -> TerminalDefaults {
+/// The terminal's default colours under `scheme`: text on the page's surface.
+///
+/// One definition for both sides of the wire. The client paints the pane from it, and the daemon
+/// answers a program's `OSC 10`/`11`/`12` query from it, so what a program is told is what it is
+/// drawn on (`006` FR-003a).
+pub fn terminal_defaults(scheme: ColorScheme) -> TerminalDefaults {
+    let r = roles(scheme);
     TerminalDefaults {
-        foreground: DARK.on_surface,
-        background: DARK.surface,
+        foreground: r.on_surface,
+        background: r.surface,
     }
 }
 
