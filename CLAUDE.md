@@ -11,6 +11,19 @@ make the change and report only what changed and any follow-up the user needs to
 without wrapping explanation unless the user asks how or why. Prefer one line over a paragraph, and
 a paragraph over a bulleted essay, when either communicates the same information.
 
+## Keep the context small: read with Read, wait without polling
+
+Every tool call re-reads the whole conversation, so call count and output size are what cost.
+
+- **Read files with the Read tool, not `sed -n`, `cat`, `head`, or `tail`.** Find the lines with
+  Grep first, then Read with `offset`/`limit`. Session history showed ~9,400 `sed -n 'X,Yp'` chunk
+  reads — `main.rs` alone over 300 times — each a separate round-trip that Read would have
+  collapsed.
+- **Never poll with `sleep` loops or repeated `gh pr checks`.** Run the wait as one Bash call with
+  `run_in_background` (an `until …; do sleep 30; done` that exits on the terminal state) or a
+  Monitor, and act when its notification arrives. ~7,000 polling calls each re-read the full
+  context for no new information.
+
 ## Use `mise` tasks, not raw `cargo` commands
 
 Prefer `mise run <task>` over invoking `cargo` directly — the tasks in `mise.toml` are the
