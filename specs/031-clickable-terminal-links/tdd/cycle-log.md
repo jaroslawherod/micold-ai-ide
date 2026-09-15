@@ -386,3 +386,13 @@
 - refactor: none needed
 - commit: `test(031): pin that link recognition does no I/O (U49)`
 - notes: T007 ticked in this commit. T043 adds `runnable.rs` to `SOURCES`, as the second mutant shows it must
+
+## Cycle 39: U132 every expected link in the ≥50-line corpus is found with its exact span, and no scheme-less text is found
+
+- test: `crates/micold-core/tests/link_corpus.rs::every_address_in_the_corpus_is_found_with_its_exact_span_and_nothing_else` (new), over the new `crates/micold-core/tests/fixtures/link_corpus.txt` (78 output lines: help text from gh, mise, docker, jq, wget, grep, gpg and cargo-deb as printed on this machine; git push, gh, dev-server, build-tool and AI CLI session output; contract §3's rows; five soft-wrapped entries; three hard-broken entries, which this test skips and U133 reads). Expected links are delimited inline with `⟦…⟧`; every cell of every entry is asked for its link, so scheme-less text is checked as "no link" cell by cell. Each expected link is also resolved: its hint shows exactly what opens, and a web or mail link opens exactly as marked
+- red: passed on arrival (`test ... ok`): T009 and T010's rules already cover the corpus. Deliberate mutants, each run with `scripts/build-lock.sh cargo test -p micold-core --test link_corpus every_address_in_the_corpus_is_found_with_its_exact_span_and_nothing_else -- --exact` and reverted from the backup:
+  - `detect` never trims trailing punctuation -> `corpus line 24, char 36 ('h'): the link under it is exactly the one marked, or none` / `left: Some(Link { address: "https://jqlang.org/.", ... cols: 36..56 })` / `right: Some(Link { address: "https://jqlang.org/", ... cols: 36..55 })` (1 failed)
+  - `link_at` never joins a soft-wrapped row below -> `corpus line 101, char 14 ('h'): ...` / `left: None` / `right: Some(Link { address: "http://localhost:5173/some/very/long/route/that/wraps", ..., cells: [CellSpan { row: 1, cols: 14..40 }, CellSpan { row: 2, cols: 0..27 }] })` (1 failed). Line 101 was the `@wrap` directive's number, not the output line's, which the refactor fixed
+- green: no implementation change. Suite (`cargo test -p micold-core --all-targets`) -> 1098 passed, 0 failed; clippy clean
+- refactor: test only. Each output line carries its own corpus line number for failure messages instead of its entry's first line plus an offset (wrong for `@wrap` and `@hard` entries); the resolve check asserts SC-006 over `Url` and `HostPath` targets alike, so file links resolving in T047 do not break it for the wrong reason. Suite green after each move
+- commit: `test(031): check links over a 78-line corpus of real output (U132)`
