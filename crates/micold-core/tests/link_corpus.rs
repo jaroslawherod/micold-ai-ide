@@ -212,3 +212,55 @@ fn every_address_in_the_corpus_is_found_with_its_exact_span_and_nothing_else() {
         }
     }
 }
+
+#[test]
+fn a_hard_broken_address_is_found_on_its_first_row_only() {
+    let corpus = corpus();
+    let entries: Vec<&Entry> = corpus.iter().filter(|entry| entry.hard).collect();
+    assert!(
+        entries.iter().any(|entry| !entry.lines[0].links.is_empty()),
+        "the corpus holds a hard-broken address whose first piece is well-formed"
+    );
+
+    for entry in entries {
+        let rows = Rows::of(entry);
+        let (first, continuation) = entry.lines.split_first().expect("an entry has lines");
+        assert!(
+            continuation.iter().all(|line| line.links.is_empty()),
+            "corpus line {}: a continuation row marks no link",
+            first.at
+        );
+        for (i, &(row, col)) in rows.cells[0].iter().enumerate() {
+            let expected = first
+                .links
+                .iter()
+                .find(|range| range.contains(&i))
+                .map(|range| rows.expected(entry, 0, range));
+            assert_eq!(
+                link_at(&rows, row, col),
+                expected,
+                "corpus line {}, char {i}: the first row's piece is a link on that row alone",
+                first.at
+            );
+            if let Some(link) = expected {
+                let piece = link.address.clone();
+                let resolved = resolve(link, &local()).expect("a web piece resolves");
+                assert_eq!(
+                    resolved.display, piece,
+                    "the hint shows exactly the piece that opens"
+                );
+            }
+        }
+        for (index, line) in entry.lines.iter().enumerate().skip(1) {
+            for (i, &(row, col)) in rows.cells[index].iter().enumerate() {
+                assert_eq!(
+                    link_at(&rows, row, col),
+                    None,
+                    "corpus line {}, char {i} ({:?}): the rest of a broken address is no link",
+                    line.at,
+                    line.text[i]
+                );
+            }
+        }
+    }
+}

@@ -158,7 +158,7 @@ U49 is a guard: it is green on arrival. Its red is shown by adding `use std::fs;
 | id   | behavior | traces | kind | state | test |
 | ---- | -------- | ------ | ---- | ----- | ---- |
 | U132 | Every expected link in the ≥50-line corpus is found with its exact span, and no scheme-less text is found | SC-002 | approval | DONE | `crates/micold-core/tests/link_corpus.rs::every_address_in_the_corpus_is_found_with_its_exact_span_and_nothing_else` |
-| U133 | A corpus address hard-broken across real line breaks is found on its first row only | SC-002, FR-003 | example | PENDING | |
+| U133 | A corpus address hard-broken across real line breaks is found on its first row only | SC-002, FR-003 | example | DONE | `crates/micold-core/tests/link_corpus.rs::a_hard_broken_address_is_found_on_its_first_row_only` |
 
 `approval` here is a committed fixture with inline expected spans, not a regenerated snapshot.
 

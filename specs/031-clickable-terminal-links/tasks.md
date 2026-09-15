@@ -98,7 +98,7 @@ the `env_include.rs` builders (plan, Target Platform).
   - `file:` gives `None` until T047 (the test is named so T042 replaces it).
   - The SC-006 invariant, checked over every case above (the profile has no property library): `display` equals the string the target carries.
 - [X] T007 [P] [US1] [U49] A no-I/O test in `crates/micold-core/src/link/mod.rs`. It reads every `link/*.rs` source through `include_str!` and fails if any names `std::net`, `std::fs` or `std::process` (FR-019, quickstart §A.2). The test builds its needles at runtime (for example `["std", "fs"].join("::")`) so its own source never matches them. It also asserts that its `include_str!` list names exactly the modules `link/mod.rs` declares, so a module added later (T043's `runnable.rs`) cannot escape it.
-- [ ] T008 [US1] [U132] [U133] The SC-002 corpus.
+- [X] T008 [US1] [U132] [U133] The SC-002 corpus.
   - `crates/micold-core/tests/fixtures/link_corpus.txt` holds at least 50 real lines of AI CLI and command-line output. A header documents the format: expected links are delimited inline, and groups of soft-wrapped rows are declared with a column width.
   - It includes punctuation, brackets, quotes, Markdown and angle forms, `localhost` ports, soft-wrapped addresses, scheme-less text, and addresses hard-broken across real line breaks.
   - `crates/micold-core/tests/link_corpus.rs` asserts:
@@ -109,8 +109,8 @@ the `env_include.rs` builders (plan, Target Platform).
 
 ### Implementation for US1: recognition in core
 
-- [ ] T009 [US1] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] [U16] [U132] [U133] Implement `detect` (research R3, rules 1–6, hand-written, no new crate) in `crates/micold-core/src/link/detect.rs`
-- [ ] T010 [US1] [U17] [U18] [U19] [U20] [U21] [U22] [U23] [U24] [U25] [U26] [U27] [U133] Implement `link_at` in `crates/micold-core/src/link/line.rs`, per research R4 and R5.
+- [X] T009 [US1] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] [U16] [U132] [U133] Implement `detect` (research R3, rules 1–6, hand-written, no new crate) in `crates/micold-core/src/link/detect.rs`
+- [X] T010 [US1] [U17] [U18] [U19] [U20] [U21] [U22] [U23] [U24] [U25] [U26] [U27] [U133] Implement `link_at` in `crates/micold-core/src/link/line.rs`, per research R4 and R5.
   - Build the logical line by walking back while the previous row is `wrapped`, then forward, capped at 64 rows each way.
   - Map char indices to cells, keeping wide-char spacers.
   - Take the declared maximal run first.
