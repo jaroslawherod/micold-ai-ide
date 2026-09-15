@@ -1,5 +1,4 @@
 installed:
-- assess
 - bugfix
 - docguard
 - tdd

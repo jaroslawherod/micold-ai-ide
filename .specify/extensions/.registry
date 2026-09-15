@@ -45,30 +45,6 @@
       ],
       "installed_at": "2026-09-03T18:02:01.639478+00:00"
     },
-    "assess": {
-      "version": "1.0.0",
-      "source": "local",
-      "manifest_hash": "sha256:6eba1ffbc264c7aa43e31b34303a8312ddad5b979772d2785c808179b402d9f2",
-      "enabled": true,
-      "priority": 10,
-      "registered_commands": {
-        "claude": [
-          "speckit.assess.intake",
-          "speckit.assess.research",
-          "speckit.assess.define",
-          "speckit.assess.shape",
-          "speckit.assess.decide"
-        ]
-      },
-      "registered_skills": [
-        "speckit-assess-intake",
-        "speckit-assess-research",
-        "speckit-assess-define",
-        "speckit-assess-shape",
-        "speckit-assess-decide"
-      ],
-      "installed_at": "2026-09-03T18:02:35.073531+00:00"
-    },
     "docguard": {
       "version": "0.34.9",
       "source": "local",
