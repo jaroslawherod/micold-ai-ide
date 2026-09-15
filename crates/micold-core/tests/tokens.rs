@@ -315,3 +315,18 @@ fn a_dark_terminal_defaults_to_on_surface_over_surface() {
         "a dark pane's default text and fill are the dark scheme's on_surface and surface"
     );
 }
+
+/// …and a light one to the light scheme's. The two schemes' pairs differ, so a terminal that answered
+/// with one pair whatever the scheme would fail one of these two tests.
+#[test]
+fn a_light_terminal_defaults_to_on_surface_over_surface() {
+    let light = roles(ColorScheme::Light);
+    assert_eq!(
+        terminal_defaults(ColorScheme::Light),
+        TerminalDefaults {
+            foreground: light.on_surface,
+            background: light.surface,
+        },
+        "a light pane's default text and fill are the light scheme's on_surface and surface"
+    );
+}

@@ -54,7 +54,7 @@ Tests in `crates/micold-daemon/tests/vt_color_queries.rs`: a `Term` wired with a
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
 | U8  | The default foreground and background are `on_surface` and `surface` of the dark roles under Dark | FR-003, FR-003a | example | DONE | `crates/micold-core/tests/tokens.rs::a_dark_terminal_defaults_to_on_surface_over_surface` |
-| U9  | …and of the light roles under Light | FR-003, FR-003a | example | PENDING | |
+| U9  | …and of the light roles under Light | FR-003, FR-003a | example | DONE | `crates/micold-core/tests/tokens.rs::a_light_terminal_defaults_to_on_surface_over_surface` |
 
 ### `crates/micold-core/src/protocol/messages.rs` — `ClientMsg::TerminalColorScheme`
 

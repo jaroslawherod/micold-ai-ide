@@ -26,3 +26,14 @@ before the implementation.
 - refactor: none — the fake is the cycle's intended state
 - notes: the first attempt at this cycle hit `ENOSPC` (disk at 2 MB free) before compiling; space was
   reclaimed (shared `target-shared/debug/incremental`) and the cycle re-run from the start.
+
+## Cycle 2: U9 a light terminal defaults to on_surface over surface
+
+- test: `crates/micold-core/tests/tokens.rs::a_light_terminal_defaults_to_on_surface_over_surface` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test tokens a_light_terminal_defaults_to_on_surface_over_surface -- --exact`
+  -> `assertion left == right failed … left: TerminalDefaults { foreground: Rgb { r: 230, g: 225, b: 230 }, background: Rgb { r: 20, g: 19, b: 22 } }`
+  (1 failed — the U8 fake answers dark)
+- green: `crates/micold-core/src/tokens/mod.rs` `terminal_defaults` reads `roles(scheme)`. Suite
+  `scripts/build-lock.sh cargo test -p micold-core --all-targets` -> 1060 passed, 0 failed
+- refactor: separate structural commit — `TermPalette::from_scheme` (client) takes its `fg`/`bg` from
+  `terminal_defaults` instead of naming the roles itself (T075)
