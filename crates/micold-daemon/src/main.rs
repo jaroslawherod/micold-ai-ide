@@ -16,7 +16,14 @@
 //! runtime has already been dropped. It sets a non-zero status for a daemon that could not start;
 //! it does not cut a shutdown short.
 
+// A release build on Windows opens no console window of its own, for the app or for the daemon it
+// starts (feature 030, FR-005). Debug builds keep the console so `cargo run` output stays visible.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 fn main() {
+    // No `announce_running` here: the installer's `AppMutex` prompt asks the user to close the app,
+    // and a windowless daemon cannot be closed, so setup would never get past it. Setup stops the
+    // daemon itself instead, in `[Code] PrepareToInstall` (feature 030, research R12).
     if let Err(e) = start() {
         let line = format!("micold-daemon: fatal: {e}");
         // A detached daemon (and on Windows, a GUI-subsystem one) has no stderr anyone reads, so

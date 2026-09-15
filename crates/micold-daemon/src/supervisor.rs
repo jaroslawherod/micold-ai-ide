@@ -161,6 +161,25 @@ impl Supervised {
     }
 }
 
+/// Put this process's `PATH` in front of the one a Windows child would otherwise get.
+///
+/// portable-pty seeds a Windows child's environment from the registry, so its `PATH` is the
+/// system and user `PATH` as stored, not the daemon's own. `AiCliProvider::is_available` checks
+/// the daemon's `PATH`, so without this a CLI found there could still fail to spawn with
+/// "cannot find the file specified". The registry entries stay behind, so a CLI installed since
+/// the daemon started is still found. An env-include `PATH` is applied later and still wins.
+#[cfg(windows)]
+fn prefer_process_path(cmd: &mut CommandBuilder) {
+    let Some(mut path) = std::env::var_os("PATH") else {
+        return;
+    };
+    if let Some(registry) = cmd.get_env("PATH").filter(|registry| !registry.is_empty()) {
+        path.push(";");
+        path.push(registry);
+    }
+    cmd.env("PATH", path);
+}
+
 impl PtySession {
     /// Spawn `spec`'s AI CLI as a daemon-owned session (FR-006). `scrollback_lines` sets the VT
     /// history depth; `initial_size` seeds the grid (falls back to the standard seed).
@@ -179,6 +198,8 @@ impl PtySession {
     ) -> io::Result<Self> {
         ensure_cwd_exists(&spec.cwd)?;
         let mut cmd = CommandBuilder::new(spec.provider.provider().command());
+        #[cfg(windows)]
+        prefer_process_path(&mut cmd);
         cmd.cwd(&spec.cwd);
         for (k, v) in &spec.env {
             cmd.env(k, v);
@@ -213,6 +234,8 @@ impl PtySession {
         let comspec = std::env::var("COMSPEC").ok();
         let command = default_shell_command(shell.as_deref(), comspec.as_deref());
         let mut cmd = CommandBuilder::new(command);
+        #[cfg(windows)]
+        prefer_process_path(&mut cmd);
         cmd.cwd(cwd);
         for (k, v) in env {
             cmd.env(k, v);
@@ -705,6 +728,97 @@ mod tests {
         assert_gone(
             grandchild,
             "grandchild of an exited child survived teardown",
+        );
+    }
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, TerminateProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
+    };
+
+    /// How long the grandchild may take to go once its session is killed (E5.1).
+    const REAP_BUDGET: Duration = Duration::from_secs(5);
+
+    /// FR-020 / E5.1, the Windows counterpart of `kill_reaps_the_whole_process_group`: a process the
+    /// session's shell started must not outlive the session.
+    #[test]
+    fn kill_reaps_grandchild() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join("grandchild.pid");
+        // PowerShell starts `ping` as its own child (the session's grandchild), records its pid, then
+        // waits on it. `-n 300` bounds a leak to five minutes if the test fails before cleanup.
+        let script = format!(
+            "$p = Start-Process ping -ArgumentList '-n','300','127.0.0.1' -NoNewWindow -PassThru; \
+             Set-Content -Encoding ascii -Path '{}' -Value $p.Id; Wait-Process -Id $p.Id",
+            pidfile.display()
+        );
+        let mut cmd = CommandBuilder::new("powershell");
+        cmd.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+        let session = PtySession::spawn(SessionId::new(), cmd, 100, None).unwrap();
+
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let grandchild: u32 = loop {
+            if let Ok(text) = std::fs::read_to_string(&pidfile) {
+                if let Ok(pid) = text.trim().parse() {
+                    break pid;
+                }
+            }
+            assert!(Instant::now() < deadline, "grandchild pid never recorded");
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        // SAFETY: a plain handle open on a pid; it is closed below on every path that reaches it.
+        let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE | PROCESS_TERMINATE, 0, grandchild) };
+        assert!(
+            !handle.is_null(),
+            "grandchild {grandchild} should be alive before teardown: {}",
+            io::Error::last_os_error()
+        );
+
+        session.kill().unwrap();
+
+        // SAFETY: `handle` is a live process handle opened with SYNCHRONIZE and TERMINATE above.
+        let reaped = unsafe { WaitForSingleObject(handle, REAP_BUDGET.as_millis() as u32) };
+        if reaped != WAIT_OBJECT_0 {
+            // Do not leave the survivor behind for the rest of the suite.
+            // SAFETY: as above.
+            unsafe { TerminateProcess(handle, 1) };
+        }
+        // SAFETY: closed exactly once.
+        unsafe { CloseHandle(handle) };
+        assert_eq!(
+            reaped, WAIT_OBJECT_0,
+            "grandchild {grandchild} survived the session kill by {REAP_BUDGET:?}"
+        );
+    }
+
+    /// How long dropping a session may take once its child is gone.
+    const DROP_BUDGET: Duration = Duration::from_secs(10);
+
+    /// FR-020: tearing a session down must return. On Windows the reader thread's pipe reaches EOF
+    /// only once the pseudoconsole is closed, not when the child exits, so a `Drop` that waits on
+    /// the reader first never finishes.
+    #[test]
+    fn dropping_a_session_returns() {
+        let mut cmd = CommandBuilder::new("cmd");
+        cmd.args(["/c", "ping -n 300 127.0.0.1"]);
+        let session = PtySession::spawn(SessionId::new(), cmd, 100, None).unwrap();
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        // A drop that hangs leaves this thread blocked; the assertion below still fails the test.
+        std::thread::spawn(move || {
+            drop(session);
+            let _ = done_tx.send(());
+        });
+
+        assert!(
+            done_rx.recv_timeout(DROP_BUDGET).is_ok(),
+            "dropping the session did not return within {DROP_BUDGET:?}"
         );
     }
 }

@@ -80,18 +80,21 @@ fn point_the_resolver_at(home: &Path) {
     std::env::set_var("HOME", home);
 }
 
-/// Wait until `lock_path` holds something, and return it.
+/// Wait until `lock_path` holds a record naming *this* daemon, and return it verbatim.
+///
+/// Any record is not enough: the Windows endpoint is shared, so the file can still hold the pid of
+/// an earlier case's daemon, and acting on it would race this daemon's bind.
 async fn recorded_pid_text(daemon: &SpawnedDaemon) -> String {
     let deadline = Instant::now() + STARTUP_BUDGET;
     loop {
         if let Ok(text) = std::fs::read_to_string(&daemon.endpoint.lock_path) {
-            if !text.is_empty() {
+            if text.trim().parse::<u32>().ok() == Some(daemon.child.id()) {
                 return text;
             }
         }
         assert!(
             Instant::now() < deadline,
-            "the daemon wrote no pid to {} within {STARTUP_BUDGET:?}",
+            "the daemon wrote no record of its own pid to {} within {STARTUP_BUDGET:?}",
             daemon.endpoint.lock_path.display()
         );
         tokio::time::sleep(POLL_INTERVAL).await;

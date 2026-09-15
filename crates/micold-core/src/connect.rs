@@ -15,6 +15,7 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use interprocess::local_socket::tokio::prelude::*;
 use interprocess::local_socket::tokio::Stream;
+#[cfg(not(windows))]
 use interprocess::local_socket::{GenericFilePath, Name, ToFsName};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio_util::codec::Framed;
@@ -121,6 +122,7 @@ pub enum Connected {
 /// How long to wait for a freshly-spawned daemon to start accepting.
 pub const SPAWN_TIMEOUT: Duration = Duration::from_secs(10);
 
+#[cfg(not(windows))]
 fn fs_name(endpoint: &Endpoint) -> io::Result<Name<'_>> {
     endpoint
         .socket_path
@@ -161,6 +163,94 @@ fn vanished_mid_handshake(e: &io::Error) -> bool {
     )
 }
 
+/// Refuses a pipe whose server process does not run as `own_sid` (U71, security review D1).
+#[cfg(windows)]
+fn refuse_foreign_server(stream: &Stream, own_sid: &str) -> io::Result<()> {
+    let refuse = |server: &str| {
+        io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!(
+                "the daemon pipe is served as {server}, not as this user {own_sid}; refusing it"
+            ),
+        )
+    };
+    let pid = stream
+        .peer_creds()?
+        .pid()
+        .ok_or_else(|| refuse("an unknown process"))?;
+    match crate::endpoint::process_user_sid(pid) {
+        Ok(server) if server == own_sid => Ok(()),
+        Ok(server) => Err(refuse(&format!("{server} (pid {pid})"))),
+        // A process this user may not even query is not this user's.
+        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => Err(refuse(&format!(
+            "an account this user cannot query (pid {pid})"
+        ))),
+        Err(e) => Err(e),
+    }
+}
+
+/// Connects to the endpoint's pipe at `SecurityIdentification` (U72, security review D2).
+///
+/// `interprocess` opens the pipe with no quality of service, which lets its server impersonate the
+/// client fully. Whoever serves the pipe needs to learn who connected, and nothing more. Otherwise
+/// this is `interprocess`'s own connect: a busy pipe is waited for, unbounded.
+#[cfg(windows)]
+async fn connect_pipe(endpoint: &Endpoint) -> io::Result<Stream> {
+    use interprocess::os::windows::named_pipe::local_socket::tokio::Stream as PipeStream;
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::io::{FromRawHandle, OwnedHandle};
+    use windows_sys::Win32::Foundation::{
+        ERROR_PIPE_BUSY, GENERIC_READ, GENERIC_WRITE, INVALID_HANDLE_VALUE,
+    };
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_FLAG_OVERLAPPED, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+        SECURITY_IDENTIFICATION, SECURITY_SQOS_PRESENT,
+    };
+    use windows_sys::Win32::System::Pipes::{WaitNamedPipeW, NMPWAIT_WAIT_FOREVER};
+
+    let path: Vec<u16> = endpoint
+        .socket_path
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    loop {
+        // SAFETY: `path` is NUL-terminated and outlives the call; every other argument is a plain
+        // flag or null, as `CreateFileW` allows.
+        let handle = unsafe {
+            CreateFileW(
+                path.as_ptr(),
+                GENERIC_READ | GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                std::ptr::null(),
+                OPEN_EXISTING,
+                FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION,
+                std::ptr::null_mut(),
+            )
+        };
+        if handle != INVALID_HANDLE_VALUE {
+            // SAFETY: a valid handle `CreateFileW` just returned, owned by nothing else.
+            let handle = unsafe { OwnedHandle::from_raw_handle(handle) };
+            let pipe = PipeStream::try_from(handle)?;
+            return Ok(pipe.into());
+        }
+        let error = io::Error::last_os_error();
+        if error.raw_os_error() != Some(ERROR_PIPE_BUSY as i32) {
+            return Err(error);
+        }
+        let path = path.clone();
+        // SAFETY: `path` is NUL-terminated and owned by the closure for the whole call.
+        let waited = tokio::task::spawn_blocking(move || unsafe {
+            WaitNamedPipeW(path.as_ptr(), NMPWAIT_WAIT_FOREVER)
+        })
+        .await
+        .map_err(io::Error::other)?;
+        if waited == 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+}
+
 /// Open a raw connection to the endpoint, or `None` if nothing is listening.
 pub async fn dial(endpoint: &Endpoint) -> io::Result<Option<Transport>> {
     dial_address(&DialAddress::Local(endpoint.clone())).await
@@ -170,9 +260,18 @@ pub async fn dial(endpoint: &Endpoint) -> io::Result<Option<Transport>> {
 pub async fn dial_address(address: &DialAddress) -> io::Result<Option<Transport>> {
     match address {
         DialAddress::Local(endpoint) => {
-            let name = fs_name(endpoint)?;
-            match Stream::connect(name).await {
-                Ok(stream) => Ok(Some(Transport::Local(stream))),
+            #[cfg(windows)]
+            let connected = connect_pipe(endpoint).await;
+            #[cfg(not(windows))]
+            let connected = Stream::connect(fs_name(endpoint)?).await;
+            match connected {
+                Ok(stream) => {
+                    // Anyone may create a pipe by this name first; only this user's daemon is ours
+                    // to talk to (FR-021).
+                    #[cfg(windows)]
+                    refuse_foreign_server(&stream, &crate::endpoint::user_sid()?)?;
+                    Ok(Some(Transport::Local(stream)))
+                }
                 Err(e) if is_absent(&e) => Ok(None),
                 Err(e) => Err(e),
             }
@@ -382,6 +481,8 @@ pub async fn connect_or_spawn(
 mod tests {
     use super::*;
     use crate::protocol::codec::CodecError;
+    #[cfg(windows)]
+    use interprocess::local_socket::{GenericFilePath, ToFsName};
 
     /// FR-016, §4.14: a reset that arrives through the codec is still a reset.
     ///
@@ -422,5 +523,104 @@ mod tests {
             CodecError::ControlNotJson(crate::protocol::envelope::Encoding::Postcard).into();
         assert_eq!(wrapped.kind(), io::ErrorKind::Other);
         assert!(!vanished_mid_handshake(&wrapped));
+    }
+
+    /// U71 (security review D1): the pipe name is predictable, so another account can create it
+    /// first. A client that checks nothing hands that account its session traffic. No second
+    /// account exists on CI, so the server here runs as this user and the client is told to expect
+    /// SYSTEM instead; the same client expecting this user still connects.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn a_pipe_served_as_another_account_is_refused_naming_both_sids() {
+        use interprocess::local_socket::ListenerOptions;
+
+        const SYSTEM: &str = "S-1-5-18";
+        let path = format!(
+            r"\\.\pipe\Micold.Test.Connect.Foreign.{}",
+            std::process::id()
+        );
+        let name = || path.as_str().to_fs_name::<GenericFilePath>().unwrap();
+        let _listener = ListenerOptions::new().name(name()).create_tokio().unwrap();
+        let stream = Stream::connect(name()).await.unwrap();
+        let own = crate::endpoint::user_sid().unwrap();
+
+        let refused = refuse_foreign_server(&stream, SYSTEM)
+            .expect_err("a pipe served as this user was accepted as SYSTEM's");
+        assert_eq!(refused.kind(), io::ErrorKind::PermissionDenied);
+        let message = refused.to_string();
+        assert!(
+            message.contains(SYSTEM) && message.contains(&own),
+            "the refusal must name the expected SID {SYSTEM} and the server's {own}, got: {message}"
+        );
+        refuse_foreign_server(&stream, &own).expect("this user's own server must be accepted");
+    }
+
+    /// U72, security review D2: whoever serves the pipe learns who connected, and nothing more. A
+    /// pipe opened without a quality of service lets its server act as the client
+    /// (`SecurityImpersonation`), so a pipe squatter could reach whatever this user can.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn the_daemon_pipe_lets_its_server_identify_the_client_but_not_impersonate_it() {
+        use interprocess::local_socket::traits::tokio::Listener as _;
+        use interprocess::local_socket::ListenerOptions;
+        use std::os::windows::io::{AsHandle, AsRawHandle};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use windows_sys::Win32::Security::{
+            GetTokenInformation, RevertToSelf, SecurityIdentification, TokenImpersonationLevel,
+            SECURITY_IMPERSONATION_LEVEL, TOKEN_QUERY,
+        };
+        use windows_sys::Win32::System::Pipes::ImpersonateNamedPipeClient;
+        use windows_sys::Win32::System::Threading::{GetCurrentThread, OpenThreadToken};
+
+        let path = format!(r"\\.\pipe\Micold.Test.Connect.Sqos.{}", std::process::id());
+        let name = path.as_str().to_fs_name::<GenericFilePath>().unwrap();
+        let listener = ListenerOptions::new().name(name).create_tokio().unwrap();
+        let endpoint = Endpoint {
+            socket_path: path.clone().into(),
+            lock_path: Default::default(),
+        };
+        let (served, dialed) = tokio::join!(listener.accept(), dial(&endpoint));
+        let mut served = served.unwrap();
+        let mut client = dialed.unwrap().expect("the test pipe is listening");
+        // A server may impersonate only once it has read from the client.
+        client.write_all(b"?").await.unwrap();
+        served.read_exact(&mut [0u8]).await.unwrap();
+        let Stream::NamedPipe(pipe) = &served;
+        let server_handle = pipe.as_handle().as_raw_handle();
+
+        // SAFETY: the handle is the accepted pipe, alive for this whole block. The thread token is
+        // read into a correctly sized local and closed before `RevertToSelf` ends the impersonation.
+        let level = unsafe {
+            assert_ne!(
+                ImpersonateNamedPipeClient(server_handle),
+                0,
+                "ImpersonateNamedPipeClient: {}",
+                io::Error::last_os_error()
+            );
+            let mut token = std::ptr::null_mut();
+            let opened = OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, 1, &mut token);
+            let opened_error = io::Error::last_os_error();
+            let mut level: SECURITY_IMPERSONATION_LEVEL = -1;
+            let mut written = 0u32;
+            let read = opened != 0
+                && GetTokenInformation(
+                    token,
+                    TokenImpersonationLevel,
+                    (&mut level as *mut SECURITY_IMPERSONATION_LEVEL).cast(),
+                    std::mem::size_of::<SECURITY_IMPERSONATION_LEVEL>() as u32,
+                    &mut written,
+                ) != 0;
+            if opened != 0 {
+                windows_sys::Win32::Foundation::CloseHandle(token);
+            }
+            RevertToSelf();
+            assert!(opened != 0, "OpenThreadToken: {opened_error}");
+            assert!(read, "GetTokenInformation(TokenImpersonationLevel) failed");
+            level
+        };
+        assert_eq!(
+            level, SecurityIdentification,
+            "the client must open the pipe at SecurityIdentification (1); 2 is SecurityImpersonation"
+        );
     }
 }

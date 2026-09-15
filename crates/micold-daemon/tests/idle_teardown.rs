@@ -10,7 +10,7 @@
 //! passes even when each stop leaks something, and the shape of the failure — the tenth start being
 //! slower, or the twentieth failing outright — is exactly what a one-shot test cannot see (SC-007).
 
-// unix-only: probes liveness with `libc::kill` and the lock with `libc::flock`, and checks the socket file is unlinked; pending Windows triage (030 T027)
+// unix-only: isolates each daemon's endpoint through `XDG_RUNTIME_DIR`, which the Windows endpoint (one per user) takes no input from, so its daemons would bind the signed-in user's own; probes liveness with `libc::kill`, the lock with `libc::flock`, and checks the socket file is unlinked
 #![cfg(unix)]
 
 use std::path::Path;

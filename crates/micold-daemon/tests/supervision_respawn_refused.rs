@@ -14,9 +14,6 @@
 //! Its own binary, like `supervision_giveup.rs`: it deletes the project directory out from under a
 //! live session, and that is not something to do beside tests sharing a process.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -35,9 +32,18 @@ use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
 
+#[cfg(unix)]
 fn sh(script: &str) -> CommandBuilder {
     let mut cmd = CommandBuilder::new("sh");
     cmd.arg("-c");
+    cmd.arg(script);
+    cmd
+}
+/// `cmd /c` reads `exit <status>` the same way, which is all these scripts do on Windows.
+#[cfg(windows)]
+fn sh(script: &str) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("cmd");
+    cmd.arg("/c");
     cmd.arg(script);
     cmd
 }

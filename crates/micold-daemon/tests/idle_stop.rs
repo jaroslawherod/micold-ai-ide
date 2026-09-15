@@ -20,7 +20,7 @@
 //! it, and `idle.rs`'s own unit tests assert the real constant is thirty minutes (T006) — so the
 //! number that ships is pinned in one place and no test pays for it.
 
-// unix-only: probes daemon liveness with `libc::kill(pid, 0)`; pending Windows triage (030 T027)
+// unix-only: isolates each daemon's endpoint through `XDG_RUNTIME_DIR` and its log through `XDG_DATA_HOME`, neither of which the Windows endpoint (one per user) or data directory (a known folder) reads, so its concurrently running daemons would share the signed-in user's own; probes liveness with `libc::kill(pid, 0)`
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

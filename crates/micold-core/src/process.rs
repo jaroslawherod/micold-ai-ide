@@ -3,8 +3,8 @@
 //! - [`no_window`]: a GUI-subsystem app that spawns a console program (`git`, `powershell`, `docker`)
 //!   gets a console window flashed up for every call unless the spawn says otherwise.
 //! - [`announce_running`]: the installer asks the user to close the app before it replaces the
-//!   exes. It finds a running app through a named mutex, so both binaries hold one for their whole
-//!   lifetime.
+//!   exes. It finds a running app through a named mutex, which the client holds for its whole
+//!   lifetime. The daemon does not: nobody can close a windowless process, so setup stops it itself.
 //!
 //! Both are no-ops off Windows, so call sites stay free of `cfg`.
 
@@ -33,11 +33,46 @@ pub fn no_window(cmd: &mut Command) -> &mut Command {
 pub const APP_MUTEX_NAME: &str = "Local\\MicoldAIIDE";
 
 /// Proof that this process announced itself to the installer. The announcement ends on drop.
-pub struct RunningMarker;
+pub struct RunningMarker {
+    #[cfg(windows)]
+    mutex: windows_sys::Win32::Foundation::HANDLE,
+}
 
-/// Announce that an app process is running, for the installer's `AppMutex` check.
+/// Announce that an app process is running, for the installer's `AppMutex` check. `None` off
+/// Windows, and on Windows when the mutex cannot be created -- the app still runs, the installer
+/// just cannot see it.
+#[cfg(windows)]
 pub fn announce_running() -> Option<RunningMarker> {
-    todo!()
+    use windows_sys::Win32::System::Threading::CreateMutexW;
+
+    let name: Vec<u16> = APP_MUTEX_NAME.encode_utf16().chain(Some(0)).collect();
+    // SAFETY: `name` is NUL-terminated and outlives the call; null security attributes are the
+    // documented default. Opening an existing mutex (the other binary holds it) also succeeds and
+    // returns a handle of our own, which is what keeps the name alive while either process runs.
+    let mutex = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
+    if mutex.is_null() {
+        return None;
+    }
+    Some(RunningMarker { mutex })
+}
+
+/// Announce that an app process is running, for the installer's `AppMutex` check. `None` off
+/// Windows, and on Windows when the mutex cannot be created -- the app still runs, the installer
+/// just cannot see it.
+#[cfg(not(windows))]
+pub fn announce_running() -> Option<RunningMarker> {
+    None
+}
+
+#[cfg(windows)]
+impl Drop for RunningMarker {
+    fn drop(&mut self) {
+        // SAFETY: the handle came from a successful `CreateMutexW` and is closed only here. The
+        // name disappears with its last handle.
+        unsafe {
+            windows_sys::Win32::Foundation::CloseHandle(self.mutex);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -57,6 +92,61 @@ mod tests {
         assert!(
             status.success(),
             "`cmd /c exit 0` must still run and exit 0, got {status:?}"
+        );
+    }
+
+    /// The app mutex is machine-session-wide, so the two cases below take turns rather than see each
+    /// other's marker.
+    #[cfg(windows)]
+    static APP_MUTEX_CASES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Whether a mutex named [`APP_MUTEX_NAME`] exists right now, as the installer's `AppMutex` asks.
+    #[cfg(windows)]
+    fn app_mutex_exists() -> bool {
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::Threading::{OpenMutexW, SYNCHRONIZATION_SYNCHRONIZE};
+
+        let name: Vec<u16> = APP_MUTEX_NAME.encode_utf16().chain(Some(0)).collect();
+        // SAFETY: `name` is NUL-terminated and outlives the call; a non-null handle is closed at once.
+        unsafe {
+            let handle = OpenMutexW(SYNCHRONIZATION_SYNCHRONIZE, 0, name.as_ptr());
+            if handle.is_null() {
+                return false;
+            }
+            CloseHandle(handle);
+            true
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn announce_running_holds_the_app_mutex() {
+        // E7.1: the installer finds a running app by this mutex and asks the user to close it.
+        let _turn = APP_MUTEX_CASES.lock().unwrap_or_else(|e| e.into_inner());
+        let marker = announce_running();
+
+        assert!(
+            app_mutex_exists(),
+            "while the marker is held, OpenMutexW({APP_MUTEX_NAME:?}) must succeed"
+        );
+        drop(marker);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn dropping_the_marker_releases_the_app_mutex() {
+        // E7.1: once the app exits, the installer must not keep asking the user to close it.
+        let _turn = APP_MUTEX_CASES.lock().unwrap_or_else(|e| e.into_inner());
+        let marker = announce_running();
+        assert!(
+            marker.is_some(),
+            "announce_running must return a marker on Windows"
+        );
+        drop(marker);
+
+        assert!(
+            !app_mutex_exists(),
+            "after the marker is dropped, OpenMutexW({APP_MUTEX_NAME:?}) must fail"
         );
     }
 

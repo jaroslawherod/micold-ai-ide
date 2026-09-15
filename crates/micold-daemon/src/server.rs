@@ -223,9 +223,11 @@ pub async fn run() -> io::Result<()> {
             // "restart service" action (FR-022): a mismatched client can't handshake, so a control
             // message can't reach us — a recorded pid is the version-agnostic stop handle. Writing
             // through a separate fd does not disturb the daemon's held `flock` (advisory, per-OFD).
+            // On Windows the record is the only stop handle there is, so a failed write is an error:
+            // "Restart service" cannot work without it (feature 030, R4).
             if let Err(e) = std::fs::write(&endpoint.lock_path, format!("{}\n", std::process::id()))
             {
-                tracing::warn!(error = %e, "could not record daemon pid in the lock file");
+                tracing::error!(error = %e, path = %endpoint.lock_path.display(), "could not record daemon pid");
             }
             serve_interprocess(state, bound).await
         }
@@ -1336,17 +1338,35 @@ where
                     })
                     .await;
                     match result {
-                        Ok(Ok((branch_delete_failed, leftovers))) => {
+                        Ok(Ok((branch_delete_failed, mut leftovers))) => {
                             // Gated on the git delete having succeeded (main `d88c7a1`): only now archive
                             // the worktree's sessions durably and kill their live procs (outside the lock).
-                            match state.archive_and_remove_worktree_sessions(&project, &dir_name) {
+                            let killed_any = match state
+                                .archive_and_remove_worktree_sessions(&project, &dir_name)
+                            {
                                 Ok(ptys) => {
+                                    let killed_any = !ptys.is_empty();
                                     for pty in ptys {
                                         let _ = pty.kill();
                                     }
+                                    killed_any
                                 }
                                 Err(e) => {
-                                    tracing::warn!(%e, "archiving deleted worktree's sessions failed")
+                                    tracing::warn!(%e, "archiving deleted worktree's sessions failed");
+                                    false
+                                }
+                            };
+                            // Windows cannot delete a directory that a running process has as its
+                            // working directory, so the removal above leaves the worktree behind while
+                            // its sessions still run in it. They are reaped now; remove it once more.
+                            if killed_any && !leftovers.is_empty() {
+                                let target = cache_path.clone();
+                                if let Ok(retried) = tokio::task::spawn_blocking(move || {
+                                    remove_worktree_dir(&target)
+                                })
+                                .await
+                                {
+                                    leftovers = retried;
                                 }
                             }
                             state.invalidate_env_include(&cache_path);

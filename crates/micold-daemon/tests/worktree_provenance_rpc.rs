@@ -15,9 +15,6 @@
 //!    already carries `user_created: true`, so a worktree the user just made never appears as
 //!    something the app would hide.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;

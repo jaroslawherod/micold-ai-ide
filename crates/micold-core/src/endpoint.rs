@@ -248,29 +248,145 @@ mod imp {
     }
 }
 
+/// The current user's SID as a string (`S-1-5-21-...`): what the Windows pipe name is keyed on and
+/// what its DACL grants (research R1, R2).
+#[cfg(windows)]
+pub fn user_sid() -> io::Result<String> {
+    imp::user_sid()
+}
+
+/// The SID of the user the process `pid` runs as. Access denied when this user may not query it,
+/// which a process of another account usually is.
+#[cfg(windows)]
+pub fn process_user_sid(pid: u32) -> io::Result<String> {
+    imp::process_user_sid(pid)
+}
+
 #[cfg(windows)]
 mod imp {
     use super::*;
 
-    /// The current user's SID as a string (e.g. `S-1-5-21-...`).
-    fn user_sid() -> io::Result<String> {
-        // Minimal, dependency-light: shell out to whoami is undesirable; use the USERNAME-derived
-        // pipe name is insufficient for isolation. The protected DACL (protocol.md §1) is applied at
-        // bind time and verified by the Windows CI gate (T083/W5). Until then we key the pipe on the
-        // SID via the `windows-sys` LookupAccountName path added with that gate.
-        Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "Windows endpoint resolution lands with the Windows CI gate (T083/W5)",
-        ))
+    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, HANDLE};
+    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+    use windows_sys::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
+    use windows_sys::Win32::System::Threading::{
+        GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    /// Closes a process or token handle on every return path.
+    struct Handle(HANDLE);
+
+    impl Drop for Handle {
+        fn drop(&mut self) {
+            // SAFETY: the handle came from a successful `OpenProcess` or `OpenProcessToken` and is
+            // closed only here.
+            unsafe {
+                CloseHandle(self.0);
+            }
+        }
+    }
+
+    /// Frees the string `ConvertSidToStringSidW` allocated.
+    struct LocalString(*mut u16);
+
+    impl Drop for LocalString {
+        fn drop(&mut self) {
+            // SAFETY: the pointer came from `ConvertSidToStringSidW`, whose contract is `LocalFree`.
+            unsafe {
+                LocalFree(self.0.cast());
+            }
+        }
+    }
+
+    pub(super) fn user_sid() -> io::Result<String> {
+        // The token, not `%USERNAME%`: nothing in the environment may choose whose pipe this is
+        // (data-model, "No environment variable influences the Windows endpoint").
+        // SAFETY: `GetCurrentProcess` returns a pseudo-handle that needs no closing.
+        token_user_sid(unsafe { GetCurrentProcess() })
+    }
+
+    pub(super) fn process_user_sid(pid: u32) -> io::Result<String> {
+        // SAFETY: plain call; a null return is handled, and the handle is closed by `Handle`.
+        let raw = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+        if raw.is_null() {
+            return Err(io::Error::last_os_error());
+        }
+        let process = Handle(raw);
+        token_user_sid(process.0)
+    }
+
+    /// The string SID of the user `process` runs as.
+    fn token_user_sid(process: HANDLE) -> io::Result<String> {
+        let mut raw: HANDLE = std::ptr::null_mut();
+        // SAFETY: `raw` is a local out pointer; a zero return leaves it unset and is handled.
+        if unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut raw) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let token = Handle(raw);
+
+        let mut needed = 0u32;
+        // SAFETY: a null buffer of length 0 is the documented size query; it fails and sets `needed`.
+        unsafe { GetTokenInformation(token.0, TokenUser, std::ptr::null_mut(), 0, &mut needed) };
+        if needed == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        // u64 words keep the buffer aligned for TOKEN_USER's pointer field.
+        let mut buffer = vec![0u64; (needed as usize).div_ceil(8)];
+        // SAFETY: `buffer` holds at least `needed` bytes and outlives every use of the SID below.
+        let ok = unsafe {
+            GetTokenInformation(
+                token.0,
+                TokenUser,
+                buffer.as_mut_ptr().cast(),
+                needed,
+                &mut needed,
+            )
+        };
+        if ok == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        // SAFETY: a successful `TokenUser` query wrote a TOKEN_USER at the start of `buffer`.
+        let sid = unsafe { (*(buffer.as_ptr() as *const TOKEN_USER)).User.Sid };
+
+        let mut wide: *mut u16 = std::ptr::null_mut();
+        // SAFETY: `sid` points into `buffer`; `wide` is a local out pointer freed by `LocalString`.
+        if unsafe { ConvertSidToStringSidW(sid, &mut wide) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let wide = LocalString(wide);
+        // SAFETY: the string is NUL-terminated and stays allocated until `wide` drops.
+        let len = (0..)
+            .take_while(|&i| unsafe { *wide.0.add(i) } != 0)
+            .count();
+        let chars = unsafe { std::slice::from_raw_parts(wide.0, len) };
+        String::from_utf16(chars).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 
     pub(super) fn resolve() -> io::Result<Endpoint> {
         let sid = user_sid()?;
         Ok(Endpoint {
             socket_path: PathBuf::from(format!(r"\\.\pipe\Micold.Daemon.{sid}")),
-            // Windows uses FILE_FLAG_FIRST_PIPE_INSTANCE (atomic create), not a lock file.
-            lock_path: PathBuf::new(),
+            // The pipe itself is the single-instance guard (interprocess creates it with
+            // FILE_FLAG_FIRST_PIPE_INSTANCE). This path is the pid record the stop path reads
+            // (FR-023), beside the app's local data: `%LOCALAPPDATA%\micold-ai-ide\run`.
+            lock_path: run_dir()?.join("micold-daemon.pid"),
         })
+    }
+
+    fn run_dir() -> io::Result<PathBuf> {
+        let dirs = directories::ProjectDirs::from("", "", "micold-ai-ide").ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "no local app data directory for this user",
+            )
+        })?;
+        // `data_local_dir` is `...\micold-ai-ide\data`; the run directory is its sibling.
+        let base = dirs.data_local_dir().parent().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "local app data has no parent")
+        })?;
+        let run = base.join("run");
+        std::fs::create_dir_all(&run)?;
+        Ok(run)
     }
 }
 
@@ -278,14 +394,52 @@ mod imp {
 mod tests {
     use super::*;
 
+    /// The pipe name's prefix; the user's SID follows it (contracts/windows-endpoint.md, E1).
+    #[cfg(windows)]
+    const PIPE_PREFIX: &str = r"\\.\pipe\Micold.Daemon.";
+
     #[cfg(windows)]
     #[test]
     fn resolve_creates_a_usable_endpoint_pair() {
-        // Windows endpoint resolution is a deliberate stub until the Windows CI gate (T083/W5): it
-        // must fail loudly as `Unsupported` rather than bind a half-configured pipe. Asserting the
-        // stub contract keeps CI honest without pretending Windows is done.
-        let err = resolve().expect_err("windows resolve is a planned stub (T083/W5)");
-        assert_eq!(err.kind(), std::io::ErrorKind::Unsupported);
+        // E1.1: the pipe is keyed on the user's SID, so two users on one machine never share it.
+        let ep = resolve().expect("resolve endpoint");
+        let name = ep.socket_path.to_str().expect("a pipe name is UTF-8");
+        let sid = name
+            .strip_prefix(PIPE_PREFIX)
+            .unwrap_or_else(|| panic!("pipe name {name:?} should start with {PIPE_PREFIX:?}"));
+        let digits = sid.strip_prefix("S-1-").unwrap_or("");
+        assert!(
+            !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit() || c == '-'),
+            "pipe name {name:?} should end in a string SID matching ^S-1-[0-9-]+$"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolve_puts_the_pid_record_in_the_local_run_dir() {
+        // E1.2: the pid record the stop path reads (FR-023), beside the app's local data.
+        let ep = resolve().expect("resolve endpoint");
+        let tail = std::path::Path::new(r"micold-ai-ide\run\micold-daemon.pid");
+        assert!(
+            ep.lock_path.ends_with(tail),
+            "lock path {:?} should end in {tail:?}",
+            ep.lock_path
+        );
+        assert!(
+            ep.lock_path.parent().is_some_and(|dir| dir.is_dir()),
+            "resolve must create the directory of {:?}",
+            ep.lock_path
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolve_is_stable() {
+        // E1.3: the client and the daemon resolve independently and must meet at one pipe.
+        assert_eq!(
+            resolve().expect("first resolve"),
+            resolve().expect("second resolve")
+        );
     }
 
     #[cfg(unix)]

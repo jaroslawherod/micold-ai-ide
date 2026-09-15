@@ -501,3 +501,185 @@ failed before the implementation.
 - green: n/a.
 - notes: the user chose to merge PR #314 with A3 still red. `ci-complete` is required and `--admin` cannot bypass it, so both "Install and launch" steps in `.github/workflows/ci.yml` carry `continue-on-error: true`. The x64 build was split into its own blocking step, "Package the Windows installer", so a broken setup exe still fails CI. T040 now says to remove both `continue-on-error`s. This is a deliberate, user-approved gate relaxation, not a green.
 - commit: see the follow-up commit
+
+## Cycle 59: U67 dropping a session returns on Windows
+
+- test: `crates/micold-daemon/src/supervisor.rs::windows_tests::dropping_a_session_returns` (new)
+- red: PR #332's CI run 34819876930 (41915aef), `build + test (windows-latest)`, step `Test (daemon, Windows)`: `test supervisor::windows_tests::dropping_a_session_returns ... FAILED`, then `test supervisor::windows_tests::kill_reaps_grandchild has been running for over 60 seconds` and `The action 'Test (daemon, Windows)' has timed out after 20 minutes.` The failure message itself was not printed, because libtest prints it at the end and the step timed out first. The test's only assertion is `dropping the session did not return within 10s`.
+- green: `PtySession`'s `Drop` closes the PTY master before it joins the reader thread; `master` is now `Mutex<Option<..>>`. Linux: `cargo test -p micold-daemon --lib supervisor` -> 6 passed. Windows green is pending the next CI run.
+- notes: found by the hang in run 34813428322 (353214b5), where U13 never finished. Under ConPTY the reader's pipe reaches EOF only when the pseudoconsole closes, not when the child exits. `Drop` joined first, so every Windows session teardown hung, and U13 hung while unwinding. Added mid-loop as its own behavior. The Windows daemon step gained `timeout-minutes: 20`.
+- commit: see the follow-up commit
+
+## Cycle 60: U67 green on Windows; U13 red on its assertion; the daemon step runs every target
+
+- test: `crates/micold-daemon/src/supervisor.rs::windows_tests::dropping_a_session_returns` (U67), `::kill_reaps_grandchild` (U13)
+- red (U13): PR #332's CI run 34821852718 (df1932da), `build + test (windows-latest)`, step `Test (daemon, Windows)`: `assertion \`left == right\` failed: grandchild 2668 survived the session kill by 5s` / `left: 258` / `right: 0` (`WAIT_TIMEOUT`). U13 is `RED`.
+- green (U67): same run, `micold_daemon` lib tests -> `59 passed; 1 failed` (only `kill_reaps_grandchild`), with no hang. U67 is `DONE`.
+- notes: the lib failure stopped cargo before the integration test binaries, so U4/U5 and the ungated daemon test files had not run on Windows. The step now passes `--no-fail-fast`, so the next run records the whole T006 baseline. No production code changed in this cycle.
+- commit: see the follow-up commit
+
+## Cycle 61: the Windows red baseline (T006)
+
+- test: none changed.
+- red: recorded in PR #332's description. Core, run 34813428322 (353214b5): U1, U2, U3, U11, U16 and U17 failed, 170 passed. Daemon, run 34822221519 (68df318f): U13; `daemon_singleton.rs` ×3 and `windows_pipe_acl.rs` ×2 (`acquire: Os { code: 3, kind: NotFound, message: "The system cannot find the path specified." }`); `daemon_stop.rs` ×2 (`resolve the test endpoint: Custom { kind: Unsupported, ... }`). Every other daemon target passes on Windows.
+- green: n/a.
+- notes: U4 and U5 are red on `acquire` failing, not yet on their DACL assertions. The Windows `acquire` opens a lock file under a directory that does not exist. Binding the pipe and setting its DACL land in the same change (T017), so the DACL assertions are first exercised at green. T003 is ticked: after the `win_job` move, the `env_include` cases stay green on Windows in the same core run. T006 is ticked.
+- commit: see the follow-up commit
+
+## Cycle 62: the Windows endpoint, stop, job object and app mutex go green (U1-U5, U11, U13, U14, U16, U17)
+
+- test: the reds recorded in cycles 60 and 61. U1-U3 `crates/micold-core/src/endpoint.rs::tests::{resolve_creates_a_usable_endpoint_pair, resolve_puts_the_pid_record_in_the_local_run_dir, resolve_is_stable}`; U4, U5 `crates/micold-daemon/tests/windows_pipe_acl.rs`; U11 `spawn.rs::tests::terminate_refuses_foreign_image`; U13 `supervisor.rs::windows_tests::kill_reaps_grandchild`; U16, U17 `process.rs::tests::{announce_running_holds_the_app_mutex, dropping_the_marker_releases_the_app_mutex}`.
+- red: cycle 60 (U13) and cycle 61 (the rest), not re-run.
+- green: one commit per behavior: ed6b89b4 (Windows `user_sid()` and `resolve()`, U1-U3), d3b1a362 (`RunningMarker` holds `Local\MicoldAIIDE`, U16, U17), 42719213 (Windows `terminate_daemon`, refusing a foreign image, U11), 5cad2d49 (`ProcessTree` job object per session, U13), d0e44b1b (pipe bound with `D:P(A;;GA;;;<sid>)`, U4, U5), d1d9e896 (a failed pid write logs at error, T018). Each commit was checked alone with `cargo check --target x86_64-pc-windows-msvc -p micold-core -p micold-daemon --all-targets`. PR #332's CI run 34823596152 (69bdaefb), `build + test (windows-latest)`: `Test (render-free core, no GUI)` 1077 passed, 0 failed; `Test (daemon, Windows)` 168 passed, 0 failed; the Windows installer package, install and launch steps and the component-library step also passed. ubuntu-latest passed in the same run, and macOS in run 34823052814 (d1d9e896).
+- notes: U14 (`no_window_sets_flag`) was compile-checked only (cycle 8) and ran green on Windows for the first time in this run, so it is `DONE`. U6, U7, U8 and U10 also ran green on Windows in this run. The first run on d1d9e896 (34823052814) failed only `daemon_stop.rs::stop_running_daemon_ends_endpoint` with `got Ok(false)`. The Windows endpoint is shared across cases, so `lock_path` still held `pid_record_lifecycle`'s pid, and the stop ran before the new daemon bound its pipe. 69bdaefb makes the test helper wait for a record naming the spawned daemon's own pid. The assertions are unchanged, and the Unix run was unaffected because each case has a private tempdir. `cargo test -p micold-daemon --test exclusivity` fails locally on this machine (`exactly one \`pi\``, left 0) on 68df318f as well as on this branch, and passes on CI ubuntu-latest. Not in scope, not fixed. Tasks ticked: T007, T008, T011, T012, T014, T016, T017, T019, T020, T021. T010 and T018 stay open on U9 (`BLOCKED`).
+- commit: see the follow-up commit
+
+## Cycle 63: U20 red on both release exes
+
+- test: `.github/workflows/ci.yml`, step "Release exes are GUI-subsystem (Windows)" (cf25a26e) reads the PE optional header's subsystem field of both release exes.
+- red: PR #332's CI run 34824867581 (cf25a26e), `build + test (windows-latest)`: `##[error]micold-ai-ide.exe has PE subsystem 3, expected 2 (GUI) (FR-005)` and `##[error]micold-daemon.exe has PE subsystem 3, expected 2 (GUI) (FR-005)`. U20 is `RED`.
+- green: pending T024.
+- notes: in the same run, "Install and launch the Windows installer" failed with exit code 1. It is still `continue-on-error`, and a console subsystem is what its conhost assertion catches. The daemon test step passed.
+- commit: see the follow-up commit
+
+## Cycle 64: U22, U23, U25, U26 green on Windows; U68 red in session_start
+
+- test: the five files d4bde1ad un-gated (T026). U68 is new, and its tests are three existing `session_start.rs` cases.
+- red (U68): PR #332's CI run 34825425160 (d4bde1ad), `build + test (windows-latest)`, step `Test (daemon, Windows)`, `session_start.rs`: `test result: FAILED. 14 passed; 3 failed`. Each of the three failed with `Couldn't start this session: CreateProcessW \`"copilot --resume=... --no-remote\0"\` ... failed: The system cannot find the file specified.` U68 is `RED`.
+- green (U22, U23, U25, U26): same run and step. `autospawn.rs`, `session_survival.rs`, `stream_view.rs` and `session_isolation.rs` ran and passed. U24 stays `PENDING` on U68.
+- green (U68): pending CI. `PtySession::spawn_ai_cli` and `spawn_shell` put the daemon's `PATH` ahead of the child's on Windows (`prefer_process_path`).
+- notes: portable-pty 0.9 `get_base_env` seeds a Windows child's `PATH` from the registry (HKLM plus HKCU `Environment`), not from the process. Its `search_path` then misses the stub `copilot.cmd` the test put on the process `PATH`. `is_available` reads the process `PATH`, so the daemon said the CLI was there and then failed to start it. Users hit this too, whenever a CLI is on the daemon's `PATH` but not in the registry. Added mid-loop as its own behavior.
+- commit: see the follow-up commit
+
+## Cycle 65: U20 green; the Windows daemon step times out in mutation_semantics
+
+- test: `.github/workflows/ci.yml`, step "Release exes are GUI-subsystem (Windows)", unchanged since cycle 63.
+- red: cycle 63, not re-run.
+- green (U20): PR #332's CI run 34832258196 (d6a84794), `build + test (windows-latest)`, step "Release exes are GUI-subsystem (Windows)" succeeded, printing `micold-ai-ide.exe subsystem 2 (GUI)` and `micold-daemon.exe subsystem 2 (GUI)`. U20 is `DONE`; T024 is ticked.
+- notes: in the same run, `Test (daemon, Windows)` hit its 20-minute timeout inside `mutation_semantics.rs`, one of the nine suites e9d6f4d1 un-gated (T027). `worktree_delete_with_stop_sessions_archives_and_removes` failed (its message was never printed, because the step was killed first). `including_a_worktree_lists_it_and_touches_nothing_on_disk` and `including_and_excluding_are_both_idempotent_and_reversible` hung: `expect_control` waited without a bound for an `OperationOk` that never came. Targets after it alphabetically, `session_start.rs` among them, never ran, so U68 and U24 have no Windows result yet. Before it, `catalog_join`, `drive_loop`, `idle_race` and `mutation_atomicity` passed. `expect_control` is now bounded at 30 s and prints the replies it skipped. The assertions are unchanged. The installer package and launch steps were skipped after the timeout.
+- commit: see the follow-up commit
+
+## Cycle 66: U68 and U24 green on Windows; the include fixture corrected; U69 red
+
+- test: U68 and U24 as in cycle 64. U69 is new; its test is the existing `mutation_semantics.rs::worktree_delete_with_stop_sessions_archives_and_removes`.
+- red (U69): PR #332's CI run 34834904463 (76d47e49), `build + test (windows-latest)`, step `Test (daemon, Windows)`, `mutation_semantics.rs`: `test result: FAILED. 21 passed; 3 failed`. U69's case panicked at `mutation_semantics.rs:604:5` with `the worktree directory was removed`. U69 is `RED`.
+- green (U68, U24): same run and step. `session_start.rs` passed 17 of 17, U68's three cases among them. U68 and U24 are `DONE`, and T026 is ticked since U22-U26 are all `DONE`. Every other suite b26b61ed and f0b98bfe un-gated (T027) passed too. That includes `supervision_giveup.rs` and `resume_failure_reported.rs`, so a `.cmd` works both as `COMSPEC` and as a CLI stub, and `activity_pipeline.rs` (9 passed), so ConPTY forwards a console title as OSC 0.
+- green (U69): pending CI. The daemon killed a worktree's sessions only after removing its directory. Unix lets a process's working directory be unlinked; Windows does not, so the directory survived as a leftover. Once those sessions are reaped, the delete handler now removes the directory again when the first attempt left anything behind. The archive still comes after git's removal, per `d88c7a1`.
+- notes: the other two failures were a wrong fixture, not a product defect, and are corrected as their own step. `including_a_worktree_lists_it_and_touches_nothing_on_disk` and `including_and_excluding_are_both_idempotent_and_reversible` got `OperationError { kind: NotFound, ... detail: Some("C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\.tmpm2LZEw\\olx") }`. Their fixture asked to include the tempdir's 8.3 spelling, while git lists the long name, and the daemon's `rec.path == probe` compares the two literally. In the product, the path a client asks to include comes only from the daemon's own git discovery (`BlockReason::CheckedOutOutsideApp`), so it is always git's spelling. `add_worktree_outside` now returns the path as `git worktree list --porcelain` reports it, and both tests include that. Their assertions are unchanged. On Linux, git's spelling equals the tempdir's.
+- commit: see the follow-up commit
+
+## Cycle 67: U69 still red on Windows; U70 red and green
+
+- test (U70, new): `crates/micold-core/tests/worktree_leftovers.rs::a_directory_that_empties_but_survives_is_named_itself`.
+- red (U69, again): PR #332's CI runs 34836228383 (076d99ce) and 34836464234 (1134ff92), `build + test (windows-latest)`, step `Test (daemon, Windows)`: `worktree_delete_with_stop_sessions_archives_and_removes` panicked at `mutation_semantics.rs:604:5` with `the worktree directory was removed`, both times. U69 stays `RED`.
+- red (U70): `scripts/build-lock.sh cargo test -p micold-core --test worktree_leftovers a_directory_that_empties_but_survives_is_named_itself` failed with `assertion \`left == right\` failed: the surviving directory itself must be reported (FR-023d)`, `left: []`, `right: ["/tmp/.tmpuevwJP/worktrees/feat-held"]`.
+- green (U70): `remove_worktree_dir` names the directory itself when the removal failed, nothing inside it survived, and it still exists. `worktree_leftovers.rs` passed 5 of 5.
+- green (U69): pending CI. Cycle 66's retry never ran. `remove_dir_all` deleted everything inside the worktree and then failed on the directory, the one a running session had as its working directory. `collect_leftovers` found the emptied directory had no entries and returned none, so the handler's `!leftovers.is_empty()` guard skipped the retry, and the delete reported success with the directory still there. U70 makes the first attempt return a leftover, so the retry after the sessions are reaped now runs. The handler is unchanged.
+- notes: U70 was added mid-loop as its own behavior. It is reachable on Unix too, as a directory that empties but whose parent refuses its removal, and the test builds that case. Also in run 34836464234, `supervision_slow_crash_loop.rs`, which 1e37a5de un-gated (T027), failed on Windows: `the respawn lives a second; it has to be alive for the next tick to observe`. The whole run took 0.05 s, so the respawned `COMSPEC` batch file was dead within milliseconds rather than a second. The message did not say why, so the assertion now also prints the respawn's exit outcome and screen. Its condition is unchanged. The cause is still open. Cycle 66 concluded that "a `.cmd` works as `COMSPEC`" from `supervision_giveup.rs`, but that only showed a batch file exits non-zero. A batch file that fails to start at all would pass that test too.
+- commit: see the follow-up commit
+
+## Cycle 68: U69 green on Windows; the slow crash loop's Windows shell corrected
+
+- test: U69 as in cycle 66. `supervision_slow_crash_loop.rs::a_respawn_that_outlives_a_tick_but_not_the_window_still_counts_toward_failed`, unchanged in what it asserts.
+- red: cycle 67, not re-run.
+- green (U69): PR #332's CI run 34840058051 (bbaa2dab), `build + test (windows-latest)`, step `Test (daemon, Windows)`: `test worktree_delete_with_stop_sessions_archives_and_removes ... ok`. U69 is `DONE`.
+- notes: in the same run, cycle 67's diagnostic printed the slow crash loop's cause: `It exited Some(Crashed { how: "exit status 1" }), showing:` with an empty screen. The batch file never printed or waited. Windows starts a batch file by running it through `COMSPEC`, and the test had pointed `COMSPEC` at that same batch file, so it could not start. The product is not at fault: a real `COMSPEC` is `cmd.exe`. The test's Windows shell is corrected as its own step. `COMSPEC` now points at the test binary itself, with `MICOLD_TEST_SLOW_FAILURE` set in the environment the respawn inherits (portable-pty seeds a Windows child from the process environment, then overlays the registry). Started that way, the binary's one test sleeps a second and exits 1 before doing anything else. The Unix script, the assertions and the walk bound are unchanged. That leaves cycle 66's claim that a `.cmd` works as `COMSPEC` false: `supervision_giveup.rs` passes only because a batch file that fails to start also exits non-zero.
+- commit: see the follow-up commit
+
+## Cycle 69: A2 and A3 green on both architectures; the smoke gates `ci-complete`
+
+- test: `scripts/windows-install-smoke.sh`, steps 6 and 7, run by `.github/workflows/ci.yml` on `build + test (windows-latest)` and `package + smoke (windows-11-arm)`.
+- red (A3): the earlier runs recorded while the endpoint was a stub, when the pipe never appeared. Not re-run.
+- green (A2, A3): PR #332's CI run 34841225620 (e002ec1b). x64: `\\.\pipe\Micold.Daemon.S-1-5-21-3699639565-2515463329-295617607-500 appeared after 0s` and `no console for the client (pid 8496) or the daemon (pid 7656)`. ARM64: `\\.\pipe\Micold.Daemon.S-1-5-21-2750905264-1129093905-494693804-500 appeared after 1s` and `no console for the client (pid 4212) or the daemon (pid 8720)`. `ci complete` succeeded. A2 and A3 are `DONE`, so A1-A4 and A13 all are, and T033, T038, T039, T066 and T067 are ticked with T040.
+- refactor: `continue-on-error: true` and its "Non-blocking until the Windows endpoint lands" comment are removed from both "Install and launch" steps, so a failed smoke now fails `ci-complete` (T040). The pipe times are recorded in research.md, R14.
+- notes: T027 (the PR description lists the four files still wholly gated), T028 and T060 are ticked. For T028, `mise run test` on this machine fails two Pi tests, `exclusivity::one_conversation_one_session::a_second_open_of_a_held_pi_conversation_starts_nothing` and `pi_launch_wiring::a_pi_session_carries_the_component_only_while_the_switch_is_on`. The cause is this machine, not the branch: a real `pi` is installed through mise, and env-include sources `~/.bashrc`, whose mise activation puts that `pi` ahead of the tests' fake one on a session's `PATH`. Both pass on CI's Linux and macOS legs.
+- commit: see the follow-up commit
+
+## Cycle 70: A6 red on Windows; the daemon stops holding the app mutex
+
+- test: `scripts/windows-install-smoke.sh`, step 8 (a95d0d74), run by `.github/workflows/ci.yml`. It stops the client, leaves its daemon running, re-runs the same setup silently, and expects exit 0 and one Installed apps entry.
+- red (A6): PR #332's CI run 34844103001 (81fc302e), `package + smoke (windows-11-arm)`: `windows-install-smoke.sh: FAIL: the repair with the daemon running exited 1, want 0 (I4)`. The repair log: `Defaulting to Cancel for suppressed message box (OK/Cancel): Setup has detected that Micold AI IDE is currently running.` then `Got EAbort exception.` The same run's `build + test (windows-latest)` failed the same way: `== repair dist/micold-ai-ide-0.14.0-x64-setup.exe with the daemon (pid 1804) running`, then `windows-install-smoke.sh: FAIL: the repair with the daemon running exited 1, want 0 (I4)`. A6 is `RED`.
+- green (A6): pending CI (b8459a95). The daemon held `Local\MicoldAIIDE` (research R12, layer 1), so Inno's `AppMutex` check stopped setup before `PrepareToInstall` could run `StopDaemon`. Interactively the same prompt could never be passed either, since no user can close a windowless process. `micold-daemon`'s `main` no longer calls `announce_running`; the client's still does. R12, E7.2, the `.iss` comment, `process.rs` and `docs/development/windows-packaging.md` say so.
+- notes: the assertion is unchanged. The x64 leg's smoke runs after `Test (daemon, Windows)` in the same job, so it is skipped while U73's test is red (cycle 71); ARM64 observes A6 on its own.
+- commit: see the follow-up commit
+- green (A6, ARM64): PR #332's CI run 34844763570 (b8459a95), `package + smoke (windows-11-arm)`: `== repair dist/micold-ai-ide-0.14.0-arm64-setup.exe with the daemon (pid 7140) running`, `repaired, one Installed apps entry`, `== smoke passed`. A6 stays `RED` until the x64 leg shows the same.
+
+## Cycle 71: U73 red on Windows; a refused bind is told apart from a lost race
+
+- test (U73, new, from the T061 security review, D1): `crates/micold-daemon/tests/windows_pipe_acl.rs::binding_over_a_pipe_that_refuses_this_user_is_an_error_naming_it`. A `SquattedPipe` creates the endpoint's pipe first with `D:P(A;;GA;;;SY)`, so this user can neither connect nor add an instance.
+- red (U73): PR #332's CI run 34844477210 (6bf5a473), `build + test (windows-latest)`, step `Test (daemon, Windows)`: panicked at `crates\micold-daemon\tests\windows_pipe_acl.rs:267:13` with `a pipe this user cannot open was taken for this user's running daemon`; `test result: FAILED. 2 passed; 1 failed`. U73 is `RED`.
+- green (U73): pending CI. `acquire` on Windows no longer maps `PermissionDenied` straight to `AlreadyRunning`. Losing the first-instance race to this user's own daemon also fails with access denied, so it connects once more: a connection means this user's daemon is live (`AlreadyRunning`, U6 unchanged), and a `PermissionDenied` connect is an error naming the pipe. Any other connect failure keeps the old `AlreadyRunning`.
+- notes: the U73 row was reworded before its test, to keep U6's race case explicit. U71 and U72 (D1's client side, D2) are still `PENDING`.
+- commit: see the follow-up commit
+
+## Cycle 72: U73 and A6 green on both Windows legs
+
+- test: U73, `crates/micold-daemon/tests/windows_pipe_acl.rs::binding_over_a_pipe_that_refuses_this_user_is_an_error_naming_it`; A6, `scripts/windows-install-smoke.sh` step 8.
+- red: cycles 70 and 71, not re-run.
+- green (U73): PR #332's CI run 34845626478 (d196c1cd), `build + test (windows-latest)`, step `Test (daemon, Windows)`: `test binding_over_a_pipe_that_refuses_this_user_is_an_error_naming_it ... ok`, `test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s`. U6 still holds in the same step: `test two_simultaneous_starters_converge_on_one_daemon ... ok`. U73 is `DONE`.
+- green (A6): the same run. x64: `== repair dist/micold-ai-ide-0.14.0-x64-setup.exe with the daemon (pid 4672) running`, `repaired, one Installed apps entry`, `== smoke passed`. ARM64: `== repair dist/micold-ai-ide-0.14.0-arm64-setup.exe with the daemon (pid 10160) running`, `repaired, one Installed apps entry`, `== smoke passed`. `ci complete` succeeded. A6 is `DONE`, so T070 and T076 are ticked. T043 and T045 wait on A7-A9.
+- refactor: none needed.
+- commit: see the follow-up commit
+
+## Cycle 73: A9 passes first time; the mutant needs Restart Manager off too
+
+- test: `scripts/windows-install-smoke.sh`, step 8, after the repair (39eea574). The daemon pid recorded before the repair must no longer be a `micold-daemon` process.
+- red: none. The check passed on first run in PR #332's CI run 34847141077 (39eea574). x64: `the old daemon (pid 5896) is gone`. ARM64: `the old daemon (pid 2408) is gone`.
+- mutant 1 (59244b0d): `StopDaemon` exits at once, and `micold-daemon.exe` gets `onlyifdoesntexist`. It survived in run 34848432359. x64: `the old daemon (pid 616) is gone`, `== smoke passed`. ARM64: `the old daemon (pid 3624) is gone`, `== smoke passed`. With `CloseApplications=force`, Restart Manager also closed the running daemon, so `StopDaemon` is not the only thing that stops it on a repair.
+- mutant 2 (2458d976, 6a5135b8): mutant 1 plus `CloseApplications=no`. Killed in run 34871836361. ARM64: `windows-install-smoke.sh: FAIL: the old daemon (pid 5448) is still running after the repair (I4)`. x64 stopped earlier, at `crates\micold-core\tests\windows_installer_in_use.rs:58:5`, `setup must close a still-open app window through Restart Manager, not leave its exe locked (FR-009)`, `left: ["no"]`, `right: ["force"]`. The mutants are reverted in 1d0e4c0a, and the `.iss` is again byte-identical to 39eea574's.
+- green (A9): run 34847141077, above. A9 is `DONE`.
+- refactor: none needed.
+- notes: the row's "new exes in place" is not asserted beyond step 2's presence check. A repair installs the same version, so the old and new binaries cannot be told apart. The check covers what FR-009 is about: the old daemon is not left running over replaced files. Step 8's `ci complete` result for 1d0e4c0a is pending, together with A7 and A8.
+- commit: see the follow-up commit
+
+## Cycle 74: A7's first run was the test's fault; the smoke uninstalls with the window closed
+
+- test: `scripts/windows-install-smoke.sh`, step 9 (3d8e5fe6). It relaunched the client, left the window open, ran `unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART`, and expected exit 0 and no install dir, shortcut, uninstall key or run dir.
+- red, not valid for A7: PR #332's CI run 34873308487 (1d14386c), `package + smoke (windows-11-arm)`: `== uninstall with the client (pid 5720) open`, then `windows-install-smoke.sh: FAIL: the silent uninstall exited 1, want 0 (I7)`. The uninstall log: `Defaulting to Cancel for suppressed message box (OK/Cancel): Uninstall has detected that Micold AI IDE is currently running.` That is FR-009 working: an uninstall proceeds only after confirmation or once the app is closed, and a silent run has no one to confirm. The failure is in the test's precondition, not in A7's behavior.
+- test correction (89f0976f): step 9 now closes the window as step 8 does (`taskkill` without `/T`), so the uninstall runs with only the daemon running, as I5 describes. The assertions are unchanged. The window-open case becomes its own behavior, A16, `PENDING`.
+- green: pending CI (5171de5f). A8's markers were not reached in that run.
+- notes: the same run's `Test (render-free core, no GUI)` step on x64 failed, as U71's red expects; its evidence is recorded once the job's log is available. A7 and A8 stay `PENDING`. The icon check planned as A16 before this cycle takes the next free id instead.
+- commit: see the follow-up commit
+
+## Cycle 75: U71 and U72 red on x64; A7 and A8 pass first time on ARM64, and A8's mutant is killed
+
+- test (U71): `crates/micold-core/src/connect.rs::tests::a_pipe_served_as_another_account_is_refused_naming_both_sids`.
+- red (U71): PR #332's CI run 34873308487 (1d14386c), `build + test (windows-latest)`, step `Test (render-free core, no GUI)`: `thread 'connect::tests::a_pipe_served_as_another_account_is_refused_naming_both_sids' (812) panicked at crates\micold-core\src\connect.rs:454:14:`, `a pipe served as this user was accepted as SYSTEM's: ()`, `test result: FAILED. 176 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s`. U71 is `RED`.
+- test (U72, 5171de5f): `crates/micold-core/src/connect.rs::tests::the_daemon_pipe_lets_its_server_identify_the_client_but_not_impersonate_it`. The server impersonates the client through `ImpersonateNamedPipeClient` and reads the thread token's `TokenImpersonationLevel`.
+- red (U72): PR #332's CI run 34874019863 (5171de5f), same step: `thread 'connect::tests::the_daemon_pipe_lets_its_server_identify_the_client_but_not_impersonate_it' (6416) panicked at crates\micold-core\src\connect.rs:527:9:`, ``assertion `left == right` failed: the client must open the pipe at SecurityIdentification (1); 2 is SecurityImpersonation``, `left: 2`, `right: 1`, `test result: FAILED. 176 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s`. U72 is `RED`.
+- green (U71): PR #332's CI run 34874692453 (51324979, which carries 0231a531), same step: `test connect::tests::a_pipe_served_as_another_account_is_refused_naming_both_sids ... ok`, with `test result: FAILED. 177 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s`, the one failure being U72's. U71 is `DONE`. Before the handshake, the client takes the server's pid from the pipe's peer credentials and compares that process's token user SID with its own. A different SID, or a process this user cannot query, is `PermissionDenied` naming both.
+- A7 and A8, first run after cycle 74's correction: the same run, `package + smoke (windows-11-arm)`: `== uninstall with the daemon (pid 720) running`, `uninstalled: no install dir, shortcut, uninstall key or run dir`, `both data markers survived the uninstall`, `== smoke passed`. Both passed first time, so each needs a mutant. The x64 smoke was skipped behind the red core step.
+- mutant (A8, 51324979): `CurUninstallStepChanged` deletes `{localappdata}\micold-ai-ide\data` at `usPostUninstall`. Killed in run 34874692453, `package + smoke (windows-11-arm)`: `== uninstall with the daemon (pid 6660) running`, then `windows-install-smoke.sh: FAIL: the uninstall removed user data: /c/Users/runneradmin/AppData/Local/micold-ai-ide/data/smoke-marker is gone (I5, FR-007)`. Reverted in 5e1f3b83.
+- green (U72): pending CI (e865359b). On Windows the client opens the pipe itself with `CreateFileW` and `FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION`, waits with `WaitNamedPipeW` on `ERROR_PIPE_BUSY` as `interprocess` does, and hands the handle to `interprocess`'s named-pipe stream. U71's check still runs on the result.
+- refactor: none needed for U71. For U72, `fs_name` and its imports are compiled only off Windows, where they are still used; the Windows tests import `GenericFilePath` and `ToFsName` themselves.
+- notes: A7 still needs its mutant, pushed on its own so its Linux guard does not also fail the x64 core step and hide U72's result. `tasks.md` holds two T074s and two T075s (US3's A10 and A11, and the security section's U71 and U72); they are told apart by their markers.
+- commit: see the follow-up commit
+
+## Cycle 76: U72 green; A7's mutant is killed; A17 red, then green on ARM64; the smoke's uninstaller wait matched no process
+
+- green (U72): PR #332's CI run 34875873860 (83ae55bf, which carries e865359b), `build + test (windows-latest)`, step `Test (render-free core, no GUI)`: `test connect::tests::the_daemon_pipe_lets_its_server_identify_the_client_but_not_impersonate_it ... ok`, `test connect::tests::a_pipe_served_as_another_account_is_refused_naming_both_sids ... ok`, `test result: ok. 178 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s`. U72 is `DONE`.
+- mutant (A7, 000cca7d): the `[UninstallDelete]` entry for `{localappdata}\micold-ai-ide\run` is commented out. Killed in run 34875934633, `package + smoke (windows-11-arm)`: `== uninstall with the daemon (pid 896) running`, then `windows-install-smoke.sh: FAIL: /c/Users/runneradmin/AppData/Local/micold-ai-ide/run is still there after the uninstall (I5)`. The Linux guard failed too: `uninstall_removes_only_the_runtime_dir` panicked at `crates/micold-core/tests/windows_installer_in_use.rs:141:5`, `uninstall must remove the daemon's runtime dir and nothing else of the user's (FR-007)`. Reverted in be0f4ebf.
+- test (A17, b484e09e): `scripts/windows-install-smoke.sh` step 2a loads each installed exe as a data file and counts its `RT_GROUP_ICON` resources.
+- red (A17): run 34876049803 (b484e09e), `package + smoke (windows-11-arm)`: `windows-install-smoke.sh: FAIL: micold-ai-ide.exe has no icon resource (found '0'), so Windows shows a generic icon (FR-003)`. A17 is `RED`.
+- green (A17, ARM64): run 34876494804 (0b8f3f68), `package + smoke (windows-11-arm)`: `both exes carry an icon`, and later `== uninstall with the daemon (pid 2296) running`, `uninstalled: no install dir, shortcut, uninstall key or run dir`, `both data markers survived the uninstall`, `== smoke passed`. Both build scripts compile `packaging/windows/app-icon.rc` through `embed-resource` when the target OS is Windows. The x64 leg is pending.
+- x64 smoke failure, the harness's fault: run 34875873860, `build + test (windows-latest)`, step `Install and launch the Windows installer`: `== uninstall with the daemon (pid 8184) running`, then `windows-install-smoke.sh: FAIL: /c/Users/runneradmin/AppData/Local/Programs/Micold AI IDE is still there after the uninstall (I5): unins000.exe`. The dumped `uninstall.log` stops at `Deleting Uninstall data files.`, with no `Log closed.`, so the uninstaller was still running when the check fired. ARM64's complete log names the second phase `Current Uninstall EXE: C:\Users\RUNNER~1\AppData\Local\Temp\is-U4YCE33LJV-uninstall.tmp\_unins.tmp`. The wait looked for `_iu*` processes (older Inno Setup releases), matched nothing, and returned at once. ARM64 was slow enough to finish first.
+- harness fix (b5701454): the wait is now `wait_for_uninstaller` and also matches `_unins*`. The assertions are unchanged. A7, A8 and A17 wait on the x64 leg of that run.
+- refactor: none beyond the helper extraction in b5701454.
+- notes: the Windows exes built by a local cross-check carry no icon, since no resource compiler is installed here; `build.rs` prints a cargo warning in that case, and the smoke fails any packaged exe without one.
+- commit: see the follow-up commit
+
+## Cycle 77: A7, A8 and A17 green on both Windows legs
+
+- green (A7, A8, A17): PR #332's CI run 34877448706 (b5701454), `ci complete` succeeded. x64, `build + test (windows-latest)`: `both exes carry an icon`, `== uninstall with the daemon (pid 1120) running`, `uninstalled: no install dir, shortcut, uninstall key or run dir`, `both data markers survived the uninstall`, `== smoke passed`. ARM64, `package + smoke (windows-11-arm)`: `both exes carry an icon`, `== uninstall with the daemon (pid 9888) running`, `uninstalled: no install dir, shortcut, uninstall key or run dir`, `both data markers survived the uninstall`, `== smoke passed`. A7, A8 and A17 are `DONE`. With A6 and A9 already `DONE`, T043 and T045 are ticked, as are T071, T072, T084 and T034.
+- notes: run 34876494804 (0b8f3f68) also showed `both exes carry an icon` on x64 before its uninstall raced, as in cycle 76.
+- refactor: none needed.
+- commit: see the follow-up commit
+
+## Cycle 78: A16 passes first time; its mutant is killed on both legs; U9 dropped
+
+- test (A16, df776782): `scripts/windows-install-smoke.sh` step 9a runs the silent uninstall while the client window is open, waits for the uninstaller, and expects a non-zero exit with `micold-ai-ide.exe` and the uninstall key still in place.
+- first run (A16): PR #332's CI run 34879161807 (df776782), passed first time on both legs. x64, `build + test (windows-latest)`: `== uninstall with the client (pid 8980) open`, `refused with the window open (exit 1); install dir and uninstall key in place`, then `== smoke passed`. ARM64, `package + smoke (windows-11-arm)`: `== uninstall with the client (pid 10476) open`, `refused with the window open (exit 1); install dir and uninstall key in place`, `== smoke passed`.
+- mutant (A16, 0bda3770): `AppMutex=Local\MicoldAIIDE` removed from `packaging/windows/micold-ai-ide.iss`. Killed in run 34879198563. ARM64, `package + smoke (windows-11-arm)`: `== uninstall with the client (pid 7964) open`, then `windows-install-smoke.sh: FAIL: the silent uninstall with the window open exited 0, want non-zero (FR-009, I7)`. x64, `build + test (windows-latest)`: the core guard failed first, `test app_mutex_matches_the_running_app ... FAILED`, panicked at `crates\micold-core\tests\windows_installer_in_use.rs:47:5`, so that leg's smoke was skipped. Reverted in 9e05e5ca. A16 is `DONE`; T085 is ticked.
+- U9: `DROPPED` by user decision (AskUserQuestion, 2026-09-14), for cycle 6's reasons. E4.1, data-model.md and R4 no longer promise removal on exit. With U8 and U10 `DONE`, T010 and T018 are ticked.
+- refactor: none needed.
+- commit: see the follow-up commit

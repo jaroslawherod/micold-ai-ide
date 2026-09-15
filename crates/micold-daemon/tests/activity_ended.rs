@@ -6,9 +6,6 @@
 //! fired. These gates drive the real supervision tick over a real process and read the signal off
 //! the snapshot the daemon actually publishes.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -24,12 +21,27 @@ use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
 
+#[cfg(unix)]
 fn sh(script: &str) -> CommandBuilder {
     let mut cmd = CommandBuilder::new("sh");
     cmd.arg("-c");
     cmd.arg(script);
     cmd
 }
+/// `cmd /c` reads `exit <status>` the same way, which is all these scripts do on Windows.
+#[cfg(windows)]
+fn sh(script: &str) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("cmd");
+    cmd.arg("/c");
+    cmd.arg(script);
+    cmd
+}
+
+/// A script that stays alive long enough to be stopped by the test.
+#[cfg(unix)]
+const IDLE_30S: &str = "sleep 30";
+#[cfg(windows)]
+const IDLE_30S: &str = "ping -n 31 127.0.0.1 >nul";
 
 /// A project with two Regular sessions: one we will run and stop, one we will never start.
 fn state_with_two_sessions(project: &Path) -> (DaemonState, SessionId, SessionId) {
@@ -125,8 +137,7 @@ fn a_new_run_does_not_inherit_the_previous_run_s_ending() {
 
     // Run it again. `Ended` is absorbing within the run it describes, not across runs. The handle
     // is held rather than dropped so the live entry is what the snapshot sees.
-    let _handle =
-        state.register_session(PtySession::spawn(ran, sh("sleep 30"), 100, None).unwrap());
+    let _handle = state.register_session(PtySession::spawn(ran, sh(IDLE_30S), 100, None).unwrap());
     assert_eq!(
         summary(&state.catalog_snapshot(), ran).activity,
         ActivitySignal::Unknown,

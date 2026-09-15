@@ -7,9 +7,6 @@
 //! daemon applies each mutation to its durable catalog **before** it replies, so whether or not the
 //! reply is delivered, the next connection's welcome snapshot reflects the true, completed outcome.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;

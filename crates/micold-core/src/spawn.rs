@@ -147,13 +147,90 @@ fn terminate_daemon(pid: u32) -> io::Result<()> {
     }
 }
 
-/// Windows daemon termination lands with the Windows CI gate (T083/W5), alongside the rest of the
-/// deliberately-deferred Windows process control.
-#[cfg(not(unix))]
+/// Terminate the daemon by pid on Windows (research R5). There is no `SIGTERM` to send, so this is a
+/// hard stop; the pipe goes with the process and the pid record is superseded by the next daemon.
+///
+/// The pid comes from a file, and a pid is reused once its process is gone, so the image is checked
+/// first: anything that is not `micold-daemon.exe` is refused with `InvalidData` rather than killed
+/// (E4.3).
+#[cfg(windows)]
+fn terminate_daemon(pid: u32) -> io::Result<()> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, WAIT_FAILED};
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, TerminateProcess, WaitForSingleObject,
+        PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
+        PROCESS_TERMINATE,
+    };
+
+    /// How long to wait for the terminated process to actually exit.
+    const EXIT_WAIT_MS: u32 = 5_000;
+
+    struct Process(HANDLE);
+    impl Drop for Process {
+        fn drop(&mut self) {
+            // SAFETY: the handle came from a successful `OpenProcess` and is closed only here.
+            unsafe {
+                CloseHandle(self.0);
+            }
+        }
+    }
+
+    // SAFETY: plain call; a null return is the failure signal and is handled.
+    let raw = unsafe {
+        OpenProcess(
+            PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE,
+            0,
+            pid,
+        )
+    };
+    if raw.is_null() {
+        return Err(io::Error::last_os_error());
+    }
+    let process = Process(raw);
+
+    let mut buf = [0u16; 1024];
+    let mut len = buf.len() as u32;
+    // SAFETY: `buf` holds `len` UTF-16 units; the call writes at most that and updates `len`.
+    if unsafe {
+        QueryFullProcessImageNameW(process.0, PROCESS_NAME_WIN32, buf.as_mut_ptr(), &mut len)
+    } == 0
+    {
+        return Err(io::Error::last_os_error());
+    }
+    let image = PathBuf::from(OsString::from_wide(&buf[..len as usize]));
+    let is_daemon = image
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.eq_ignore_ascii_case("micold-daemon.exe"));
+    if !is_daemon {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "pid {pid} is {}, not the daemon; refusing to stop it",
+                image.display()
+            ),
+        ));
+    }
+
+    // SAFETY: `process` holds PROCESS_TERMINATE and PROCESS_SYNCHRONIZE for this pid.
+    unsafe {
+        if TerminateProcess(process.0, 1) == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if WaitForSingleObject(process.0, EXIT_WAIT_MS) == WAIT_FAILED {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}
+
+/// Stopping the daemon is not implemented on platforms that are neither Unix nor Windows.
+#[cfg(not(any(unix, windows)))]
 fn terminate_daemon(_pid: u32) -> io::Result<()> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
-        "stopping the daemon is not yet implemented on this platform",
+        "stopping the daemon is not implemented on this platform",
     ))
 }
 
@@ -292,5 +369,28 @@ mod tests {
             matches!(stopped, Ok(false)),
             "a pid record whose endpoint is not live is a leftover, not a daemon to stop; got {stopped:?}"
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn terminate_refuses_foreign_image() {
+        // E4.3: a recorded pid can be reused by an unrelated process between the check and the stop,
+        // so only a process whose image is `micold-daemon.exe` is ever terminated.
+        let mut foreign = Command::new("cmd")
+            .args(["/c", "ping", "-n", "30", "127.0.0.1"])
+            .stdout(Stdio::null())
+            .spawn()
+            .expect("spawn a foreign process");
+
+        let refused = terminate_daemon(foreign.id());
+        let still_running = matches!(foreign.try_wait(), Ok(None));
+        let _ = foreign.kill();
+        let _ = foreign.wait();
+
+        assert!(
+            matches!(&refused, Err(e) if e.kind() == io::ErrorKind::InvalidData),
+            "terminating a pid whose image is not micold-daemon.exe must be refused as InvalidData; got {refused:?}"
+        );
+        assert!(still_running, "the foreign process must be left running");
     }
 }

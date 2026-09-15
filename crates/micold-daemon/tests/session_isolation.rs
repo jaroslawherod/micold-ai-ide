@@ -4,9 +4,6 @@
 //! replaces the old in-memory `SessionRouter` byte-routing approximation (removed in T030) with an
 //! end-to-end check against two real VT sessions.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::time::{Duration, Instant};
 
 use alacritty_terminal::grid::Dimensions;
@@ -41,11 +38,21 @@ fn wait_for(session: &PtySession, needle: &str) -> bool {
     visible_text(session).contains(needle)
 }
 
+/// Print a distinctive marker, then idle so the session stays alive for inspection.
+#[cfg(unix)]
 fn echo_then_idle(marker: &str) -> CommandBuilder {
     let mut cmd = CommandBuilder::new("sh");
     cmd.arg("-c");
-    // Print a distinctive marker, then idle so the session stays alive for inspection.
     cmd.arg(format!("echo {marker}; sleep 5"));
+    cmd
+}
+
+/// Print a distinctive marker, then idle so the session stays alive for inspection. `cmd` has no
+/// `sleep`; `ping -n 6` to loopback waits about five seconds.
+#[cfg(windows)]
+fn echo_then_idle(marker: &str) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("cmd");
+    cmd.args(["/c", &format!("echo {marker}& ping -n 6 127.0.0.1 >nul")]);
     cmd
 }
 

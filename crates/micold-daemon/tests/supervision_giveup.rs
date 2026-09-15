@@ -1,11 +1,8 @@
 //! Phase 6 (US4) — a crash loop gives up in a durable `Failed` state, unattended (T059, FR-005).
 //!
-//! This owns its own test binary because it sets `SHELL` to a crashing command (`/bin/false`) so
+//! This owns its own test binary because it sets `SHELL` to a crashing command (`/bin/false`; on Windows, `COMSPEC` to a batch file that exits 1) so
 //! every *respawn* also crashes — the only way to exercise the give-up path end to end. A separate
 //! binary keeps that process-global env off every other test.
-
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -27,9 +24,18 @@ use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
 
+#[cfg(unix)]
 fn sh(script: &str) -> CommandBuilder {
     let mut cmd = CommandBuilder::new("sh");
     cmd.arg("-c");
+    cmd.arg(script);
+    cmd
+}
+/// `cmd /c` reads `exit <status>` the same way, which is all these scripts do on Windows.
+#[cfg(windows)]
+fn sh(script: &str) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("cmd");
+    cmd.arg("/c");
     cmd.arg(script);
     cmd
 }
@@ -74,14 +80,25 @@ fn wait_dead(pty: &PtySession) {
 
 #[test]
 fn a_crash_loop_settles_failed_and_drops_the_session() {
-    // Force every respawn to crash immediately: the platform shell is `/bin/false` (exits nonzero).
-    // SAFETY: this is the only test in this binary, so nothing reads `SHELL` concurrently.
+    // Force every respawn to crash immediately: the platform shell exits 1. On Unix that is
+    // `/bin/false` through `SHELL`; on Windows, a batch file through `COMSPEC`.
+    // SAFETY: this is the only test in this binary, so nothing reads `SHELL` or `COMSPEC`
+    // concurrently.
+    #[cfg(unix)]
     std::env::set_var("SHELL", "/bin/false");
+    #[cfg(windows)]
+    let crashing_shell = tempfile::tempdir().unwrap();
+    #[cfg(windows)]
+    {
+        let script = crashing_shell.path().join("false.cmd");
+        std::fs::write(&script, "@exit 1\r\n").unwrap();
+        std::env::set_var("COMSPEC", &script);
+    }
 
     let project = tempfile::tempdir().unwrap();
     let (state, id) = state_with_regular_session(project.path());
 
-    // The initial primary crashes; every respawn (a `/bin/false` shell) crashes again.
+    // The initial primary crashes; every respawn (the crashing shell) crashes again.
     let handle = state.register_session(PtySession::spawn(id, sh("exit 1"), 100, None).unwrap());
     wait_dead(&handle);
 
@@ -100,7 +117,7 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
             "supervision never settled Failed: {:?}",
             lifecycle(&state, project.path(), id)
         );
-        // Let the just-respawned /bin/false exit before the next cycle observes it.
+        // Let the just-respawned crashing shell exit before the next cycle observes it.
         std::thread::sleep(Duration::from_millis(60));
     };
 
@@ -117,7 +134,7 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
         !reason.trim().is_empty(),
         "a give-up with no reason tells the user only that it failed"
     );
-    // And it has to name the exit it gave up on. `/bin/false` exits 1, so a reason that does not
+    // And it has to name the exit it gave up on. The crashing shell exits 1, so a reason that does not
     // mention that status is a sentence about the budget with the diagnosis left out.
     assert!(
         reason.contains('1'),
@@ -164,5 +181,6 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
         "the give-up the daemon recorded is what the user is told"
     );
 
+    #[cfg(unix)]
     std::env::remove_var("SHELL");
 }

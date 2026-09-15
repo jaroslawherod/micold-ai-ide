@@ -5,9 +5,6 @@
 //! Uses a Regular (shell) session so the test spawns the platform shell — no `claude` binary needed.
 //! The AI-CLI spawn path is compile-covered by the same `start_session` code.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::Path;
@@ -196,11 +193,22 @@ fn a_daemon_spawned_session_sees_env_include_resolved_variables() {
     let store = tempfile::tempdir().unwrap();
 
     // A plain, unconditional export — no interactive guard (BUG-001), no directory-dependent hook
-    // (BUG-002): the simplest case env-include is supposed to handle unconditionally.
-    let script_path = project.path().join("env-include-script.sh");
+    // (BUG-002): the simplest case env-include is supposed to handle unconditionally. Windows
+    // dot-sources the script in PowerShell, so there it is a PowerShell assignment.
+    #[cfg(unix)]
+    let (script_name, script) = (
+        "env-include-script.sh",
+        "export BUG003_MARKER=daemon_env_include_works\n",
+    );
+    #[cfg(windows)]
+    let (script_name, script) = (
+        "env-include-script.ps1",
+        "$env:BUG003_MARKER = 'daemon_env_include_works'\r\n",
+    );
+    let script_path = project.path().join(script_name);
     std::fs::File::create(&script_path)
         .unwrap()
-        .write_all(b"export BUG003_MARKER=daemon_env_include_works\n")
+        .write_all(script.as_bytes())
         .unwrap();
 
     JsonFileSettingsStore::at(store.path().join("settings.json"))
@@ -225,7 +233,12 @@ fn a_daemon_spawned_session_sees_env_include_resolved_variables() {
 
     // Drive the live shell to echo the variable back, proving it is actually in the spawned
     // process's own environment (not just resolvable in the abstract).
-    state.session_input(id, 0, b"echo SEEN:$BUG003_MARKER\n");
+    // `cmd` expands `%NAME%` and takes Enter as a carriage return.
+    #[cfg(unix)]
+    let echo_marker: &[u8] = b"echo SEEN:$BUG003_MARKER\n";
+    #[cfg(windows)]
+    let echo_marker: &[u8] = b"echo SEEN:%BUG003_MARKER%\r";
+    state.session_input(id, 0, echo_marker);
     assert!(
         wait_until(Duration::from_secs(5), || visible_text(&live)
             .contains("SEEN:daemon_env_include_works")),
@@ -632,7 +645,10 @@ static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// checks that before anything else (FR-010), and on a runner with no `copilot` these tests would
 /// be asserting the missing-CLI message instead of their own. It also **records the argv it was
 /// given**, so a test can say what the daemon ran, how it ran it, and how many times. The real
-/// `PATH` stays appended so the shell-session tests running beside these still find `sh`.
+/// `PATH` stays appended so the shell-session tests running beside these still find their shell.
+///
+/// `body` is written as a `sh` script on Unix and a batch file on Windows, so it has to be a line
+/// both read the same way (`exit 1`, `echo … >&2`).
 struct StubOnPath {
     _dir: tempfile::TempDir,
     previous: Option<std::ffi::OsString>,
@@ -652,23 +668,13 @@ impl StubOnPath {
         let guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         let log = dir.path().join("argv.log");
-        let stub = dir.path().join(command);
-        // One line per invocation, so "was it run twice?" is a question the test can ask.
-        std::fs::write(
-            &stub,
-            format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\n{body}\n",
-                log.display()
-            ),
+        write_stub(dir.path(), command, &log, body);
+        let previous = std::env::var_os("PATH");
+        let joined = std::env::join_paths(
+            std::iter::once(dir.path().to_path_buf())
+                .chain(previous.iter().flat_map(std::env::split_paths)),
         )
         .unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let previous = std::env::var_os("PATH");
-        let joined = match &previous {
-            Some(existing) => format!("{}:{}", dir.path().display(), existing.to_string_lossy()),
-            None => dir.path().display().to_string(),
-        };
         std::env::set_var("PATH", joined);
         Self {
             _dir: dir,
@@ -685,6 +691,35 @@ impl StubOnPath {
             Err(_) => Vec::new(),
         }
     }
+}
+
+/// Write an executable `command` into `dir` that appends its arguments to `log`, one line per
+/// invocation, then runs `body`.
+#[cfg(unix)]
+fn write_stub(dir: &Path, command: &str, log: &Path, body: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    let stub = dir.join(command);
+    std::fs::write(
+        &stub,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\n{body}\n",
+            log.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+/// A `.cmd` beside the command name, which `PATHEXT` resolves. `echo(` rather than `echo ` so an
+/// invocation with no arguments logs an empty line instead of `ECHO is off.`.
+#[cfg(windows)]
+fn write_stub(dir: &Path, command: &str, log: &Path, body: &str) {
+    let body = body.replace('\n', "\r\n");
+    std::fs::write(
+        dir.join(format!("{command}.cmd")),
+        format!("@echo off\r\necho(%*>>\"{}\"\r\n{body}\r\n", log.display()),
+    )
+    .unwrap();
 }
 
 impl Drop for StubOnPath {
@@ -1111,7 +1146,7 @@ impl NoCliOnPath {
         let kept: Vec<std::path::PathBuf> = previous
             .iter()
             .flat_map(std::env::split_paths)
-            .filter(|dir| !commands.iter().any(|command| dir.join(command).is_file()))
+            .filter(|dir| !commands.iter().any(|command| holds_command(dir, command)))
             .collect();
         std::env::set_var("PATH", std::env::join_paths(kept).unwrap());
         let hidden = Self {
@@ -1127,6 +1162,19 @@ impl NoCliOnPath {
         }
         hidden
     }
+}
+
+/// Whether `dir` holds `command`, under its bare name or any `PATHEXT` extension (Windows).
+fn holds_command(dir: &Path, command: &str) -> bool {
+    let extensions = std::env::var("PATHEXT").unwrap_or_default();
+    std::iter::once(String::new())
+        .chain(
+            extensions
+                .split(';')
+                .filter(|ext| !ext.is_empty())
+                .map(str::to_string),
+        )
+        .any(|ext| dir.join(format!("{command}{ext}")).is_file())
 }
 
 impl Drop for NoCliOnPath {

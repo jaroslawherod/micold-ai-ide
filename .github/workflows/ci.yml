@@ -170,6 +170,16 @@ jobs:
       # Ensure the full workspace (client GUI binary + daemon) compiles on every platform.
       - name: Build (workspace)
         run: cargo build --workspace
+      # Feature 030 (FR-025): the daemon's own suite on Windows -- the singleton, the pipe's DACL, the
+      # stop path and the process-tree teardown are all Windows-specific code. Linux already runs it
+      # in the full-workspace step below. `!cancelled()` so a red core step above does not hide
+      # which daemon behaviours differ on this platform. The timeout bounds a hung test: libtest has
+      # none of its own, and a hang otherwise holds the runner until GitHub's six-hour limit.
+      - name: Test (daemon, Windows)
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        timeout-minutes: 20
+        shell: bash
+        run: cargo test -p micold-daemon --all-targets --no-fail-fast
       # Feature 028 (FR-036): the packaging gate. The bundle is composed from the binaries the
       # step above just produced -- no second checkout, no second compile -- signed ad-hoc, and
       # then actually launched. Composition alone would not catch the failure that matters: the
@@ -243,11 +253,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: scripts/windows-installer.sh --arch x64 --out-dir dist
-      # Non-blocking until the Windows endpoint lands (030 T016-T021): the daemon's pipe cannot appear
-      # while `resolve()` is a stub, so A3 is red by design. Remove `continue-on-error` in T040.
       - name: Install and launch the Windows installer
         if: runner.os == 'Windows'
-        continue-on-error: true
         shell: bash
         run: scripts/windows-install-smoke.sh dist/micold-ai-ide-*-x64-setup.exe
       - name: Keep the Windows setup executable
@@ -340,6 +347,31 @@ jobs:
         # started waits forever, and a job's own limit is six hours.
         timeout-minutes: 20
         run: cargo test -p micold-daemon --no-fail-fast
+      # Feature 030 (FR-005, SC-005, contract E6.1): a console-subsystem exe gets a console window
+      # whenever Explorer or the Start menu launches it, so both shipped exes must be GUI-subsystem
+      # (2) in release. Read straight from the PE optional header: `e_lfanew` at 0x3C, and the
+      # `Subsystem` u16 at `e_lfanew + 0x5C`. Last among the Windows steps and run even after an
+      # earlier failure, so a red here never hides the others.
+      - name: Release exes are GUI-subsystem (Windows)
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          cargo build --release -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $target = (cargo metadata --format-version 1 --no-deps | ConvertFrom-Json).target_directory
+          $failed = $false
+          foreach ($exe in 'micold-ai-ide.exe', 'micold-daemon.exe') {
+            $bytes = [System.IO.File]::ReadAllBytes((Join-Path $target "release\$exe"))
+            $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+            $subsystem = [BitConverter]::ToUInt16($bytes, $peOffset + 0x5C)
+            if ($subsystem -eq 2) {
+              Write-Output "$exe subsystem $subsystem (GUI)"
+            } else {
+              Write-Output "::error::$exe has PE subsystem $subsystem, expected 2 (GUI) (FR-005)"
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
       # Run the client + daemon test suites where the iced system deps are present.
       - name: Test (full workspace)
         if: runner.os == 'Linux'
@@ -369,10 +401,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Build the setup executable
         run: scripts/windows-installer.sh --arch arm64 --out-dir dist
-      # Non-blocking until the Windows endpoint lands (030 T016-T021), as on the x64 leg. Remove
-      # `continue-on-error` in T040.
       - name: Install and launch it
-        continue-on-error: true
         run: scripts/windows-install-smoke.sh dist/micold-ai-ide-*-arm64-setup.exe
       - name: Keep the setup executable
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -540,6 +569,9 @@ jobs:
           # account, and what a Developer ID would change. A packaging process nobody but CI can
           # run is one nobody can fix (FR-033).
           test -f docs/development/macos-packaging.md
+          # Feature 030: how the Windows setup executables are built and smoke-tested, and how the daemon's
+          # pipe is protected (T053).
+          test -f docs/development/windows-packaging.md
 
       # Constitution Principle VII, the half that was not mechanical. "Every user-facing feature
       # MUST ship with corresponding user-guide documentation in the same change" was enforced by

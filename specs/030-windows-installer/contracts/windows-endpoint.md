@@ -40,7 +40,7 @@ Covers FR-020 to FR-025. Each row names the test that proves it. Every test must
 
 | # | Guarantee | Test |
 |---|---|---|
-| E4.1 | The daemon writes `lock_path` after binding and removes it on clean exit. | `micold-daemon/tests/daemon_stop.rs::pid_record_lifecycle` (new file, all platforms) |
+| E4.1 | The daemon writes `lock_path` after binding. It leaves the file in place when it stops: it has no clean exit, and a leftover record is ignored (E4.4). | `micold-daemon/tests/daemon_stop.rs::pid_record_lifecycle` (new file, all platforms) |
 | E4.2 | `spawn::stop_running_daemon(&endpoint)` terminates a live daemon, and the endpoint stops accepting connections within 5 s. | `daemon_stop.rs::stop_running_daemon_ends_endpoint`. It spawns the real daemon binary and calls the same `spawn::stop_running_daemon` that `micold-client/src/shell/service_control.rs:57` (Restart service) calls. |
 | E4.3 | `terminate_daemon(pid)` refuses (`ErrorKind::InvalidData`) when the pid's image is not `micold-daemon.exe`, and the process survives. | `spawn::tests::terminate_refuses_foreign_image` (spawns a harmless `cmd /c timeout` child it owns, then kills it itself) |
 | E4.4 | A stale pid record (the pipe is not live) is ignored. `stop_running_daemon` returns "not running", not an error. | `spawn::tests::stale_pid_record_is_ignored` |
@@ -67,7 +67,7 @@ Covers FR-020 to FR-025. Each row names the test that proves it. Every test must
 | # | Guarantee | Test |
 |---|---|---|
 | E7.1 | `process::announce_running()` creates `Local\MicoldAIIDE`. A second call in another process succeeds (it is shared, not exclusive), and `OpenMutexW` sees it while either process holds it. | `process::tests::announce_running_is_visible` (`#[cfg(windows)]`) |
-| E7.2 | Both `main`s call it before anything else can fail. | Code review. The binaries are GUI glue under the constitution's Principle I exception, and E7.1 covers the logic. |
+| E7.2 | The client's `main` calls it before anything else can fail. The daemon's does not (revised after A6: a daemon holding it cancelled a silent repair at the prompt, before setup's `StopDaemon` ran). | Code review. The binaries are GUI glue under the constitution's Principle I exception, and E7.1 covers the logic. |
 
 ## Un-gating the daemon suite (FR-025)
 

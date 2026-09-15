@@ -12,16 +12,19 @@
 //! between two crashes — the seam `supervision.rs`'s unit tests, which drive the policy directly,
 //! cannot reach.
 //!
-//! Its own binary: it points `SHELL` at a script that fails slowly, and that is process-global.
-
-// unix-only: points `SHELL` at a `#!/bin/sh` script made executable with `PermissionsExt`; pending Windows triage (030 T027)
-#![cfg(unix)]
+//! Its own binary, with this one test: it points `SHELL` (on Windows, `COMSPEC`) at something that
+//! fails slowly, and that is process-global. On Windows that something is this binary, so a second
+//! test here would run inside every respawn.
 
 use std::collections::BTreeMap;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::index::{Column, Line};
 
 use micold_core::clock::Uptime;
 use micold_core::project::{Availability, Project};
@@ -41,11 +44,57 @@ use portable_pty::CommandBuilder;
 /// The daemon's real supervision cadence (`server.rs`'s `SUPERVISION_INTERVAL`).
 const TICK: Duration = Duration::from_millis(250);
 
+#[cfg(unix)]
 fn sh(script: &str) -> CommandBuilder {
     let mut cmd = CommandBuilder::new("sh");
     cmd.arg("-c");
     cmd.arg(script);
     cmd
+}
+/// `cmd /c` reads `exit <status>` the same way, which is all this script does on Windows.
+#[cfg(windows)]
+fn sh(script: &str) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("cmd");
+    cmd.arg("/c");
+    cmd.arg(script);
+    cmd
+}
+
+/// Make the platform shell, which every respawn runs, one that lives about a second and exits 1.
+/// On Unix that is `SHELL`, pointed at a script. On Windows it is `COMSPEC`, pointed at this test
+/// binary with [`SLOW_FAILURE_ROLE`] set: a batch file cannot stand in there, because Windows runs
+/// a batch file through `COMSPEC` itself, and it exits 1 without ever starting.
+///
+/// Both variables are process-global; the caller is the only test in this binary, so nothing reads
+/// either one concurrently.
+fn shell_that_fails_after_a_second(bin: &Path) {
+    #[cfg(unix)]
+    {
+        let slow_failure = bin.join("fails-after-a-second");
+        std::fs::write(&slow_failure, "#!/bin/sh\nsleep 1\nexit 1\n").unwrap();
+        std::fs::set_permissions(&slow_failure, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::env::set_var("SHELL", &slow_failure);
+    }
+    #[cfg(windows)]
+    {
+        let _ = bin;
+        std::env::set_var(SLOW_FAILURE_ROLE, "1");
+        std::env::set_var("COMSPEC", std::env::current_exe().unwrap());
+    }
+}
+
+/// Set in the environment a Windows respawn inherits, so this binary, started as `COMSPEC` with no
+/// arguments, runs its one test as the slow failure instead of as the test.
+#[cfg(windows)]
+const SLOW_FAILURE_ROLE: &str = "MICOLD_TEST_SLOW_FAILURE";
+
+/// This process is a respawned shell, not the test: live about a second, then exit 1.
+#[cfg(windows)]
+fn fail_after_a_second_if_respawned() {
+    if std::env::var_os(SLOW_FAILURE_ROLE).is_some() {
+        std::thread::sleep(Duration::from_secs(1));
+        std::process::exit(1);
+    }
 }
 
 fn state_with_regular_session(project: &Path) -> (Arc<DaemonState>, SessionId) {
@@ -86,6 +135,29 @@ fn wait_dead(pty: &PtySession) {
     }
 }
 
+/// The visible screen as one string, so a respawn that died early says what it printed.
+fn visible_text(session: &PtySession) -> String {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while !session.output_ended() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let term = session.term().lock();
+    let grid = term.grid();
+    let (cols, rows) = (grid.columns(), grid.screen_lines());
+    let mut out = String::new();
+    for line in 0..rows {
+        let text: String = (0..cols)
+            .map(|col| grid[Line(line as i32)][Column(col)].c)
+            .collect();
+        let text = text.trim_end();
+        if !text.is_empty() {
+            out.push_str(text);
+            out.push('\n');
+        }
+    }
+    out
+}
+
 fn later(reading: Uptime, by: Duration) -> Uptime {
     let nanos = reading.saturating_sub(Uptime::from_nanos(0)) + by;
     Uptime::from_nanos(nanos.as_nanos() as u64)
@@ -93,14 +165,13 @@ fn later(reading: Uptime, by: Duration) -> Uptime {
 
 #[test]
 fn a_respawn_that_outlives_a_tick_but_not_the_window_still_counts_toward_failed() {
+    #[cfg(windows)]
+    fail_after_a_second_if_respawned();
+
     // Every respawn is a shell that comes up, lives a second, and exits 1 — BUG-004's `claude
     // --resume` with nothing to resume, minus the CLI.
     let bin = tempfile::tempdir().unwrap();
-    let slow_failure = bin.path().join("fails-after-a-second");
-    std::fs::write(&slow_failure, "#!/bin/sh\nsleep 1\nexit 1\n").unwrap();
-    std::fs::set_permissions(&slow_failure, std::fs::Permissions::from_mode(0o755)).unwrap();
-    // SAFETY: this is the only test in this binary, so nothing reads `SHELL` concurrently.
-    std::env::set_var("SHELL", &slow_failure);
+    shell_that_fails_after_a_second(bin.path());
 
     let project = tempfile::tempdir().unwrap();
     let (state, id) = state_with_regular_session(project.path());
@@ -125,7 +196,9 @@ fn a_respawn_that_outlives_a_tick_but_not_the_window_still_counts_toward_failed(
             .expect("a crash under budget is respawned");
         assert!(
             respawn.is_alive(),
-            "the respawn lives a second; it has to be alive for the next tick to observe"
+            "the respawn lives a second; it has to be alive for the next tick to observe. It exited {:?}, showing:\n{}",
+            respawn.exit_outcome(),
+            visible_text(&respawn)
         );
 
         // The next tick, 250 ms later, sees it still up. That is not recovery: it has been up for

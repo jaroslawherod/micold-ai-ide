@@ -35,12 +35,23 @@ libc = "0.2.189"
 # needs and nothing else.
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
+    # Feature 030 (research R1, R2, R5): the user SID the pipe is keyed on and its protected DACL,
+    # the pid record's image check, and the pipe handle the ACL test inspects.
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
     "Win32_System_JobObjects",
+    "Win32_System_Pipes",
+    "Win32_System_ProcessStatus",
     # `GetTickCount64` for the suspend-inclusive clock (feature 028, research R3) — the Windows
     # counterpart of Linux's `CLOCK_BOOTTIME`, and the reason no new dependency was needed.
     "Win32_System_SystemInformation",
     "Win32_System_Threading",
 ] }
+# Build-time only: compiles `packaging/windows/app-icon.rc` into the Windows exes, so Explorer and the
+# taskbar show the project icon (feature 030, FR-003, research R11, vetted there). A no-op for any
+# other target.
+embed-resource = "3"
 # --- transport / async (daemon; the client already has tokio via iced) — plan W1 ---
 # The shared framing codec lives in micold-core; the runtime + IPC live in the daemon/client.
 tokio = { version = "1.53", features = [

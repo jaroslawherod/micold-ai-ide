@@ -120,8 +120,9 @@ with `GetSecurityInfo` and asserts it holds exactly one ACE, for the current use
 - On Windows, `Endpoint.lock_path` becomes
   `%LOCALAPPDATA%\micold-ai-ide\run\micold-daemon.pid`. It is derived from `ProjectDirs` `data_local_dir`'s
   parent plus `run`, and the directory is created on resolve.
-- The daemon writes its pid after a successful bind, as `server.rs` already does, and removes the
-  file on clean exit.
+- The daemon writes its pid after a successful bind, as `server.rs` already does, and leaves the
+  file in place when it stops. It has no clean exit, and on Unix the file is also the `flock` file,
+  so unlinking it would let a second daemon lock a new inode (user decision 2026-09-14, U9 dropped).
 - `running_daemon_pid` treats a pid as current only when both hold:
   1. the pipe is live (`is_live`), and
   2. the process image for that pid is `micold-daemon.exe` (see R5).
@@ -341,12 +342,54 @@ touches `~/.local/share`.
 - **`winresource`**: rejected. It needs a manual target-OS guard and is less maintained.
 - **Hand-invoking `rc.exe`**: rejected, because it is not portable to cross builds.
 
+#### Dependency vetting
+
+Recorded for T002 on 2026-09-14, before the dependency is added. `cargo tree -e build -i
+embed-resource --target x86_64-pc-windows-msvc`, run in a scratch crate with only
+`[build-dependencies] embed-resource = "3"`, printed this with `-f '{p} {l}'` and `-e normal,build`
+to show licenses (the crate's own root line omitted):
+
+```text
+embed-resource v3.0.11 MIT
+├── cc v1.4.6 MIT OR Apache-2.0
+│   ├── find-msvc-tools v0.1.12 MIT OR Apache-2.0
+│   └── shlex v2.0.1 MIT OR Apache-2.0
+├── memchr v2.8.3 Unlicense OR MIT
+├── rustc_version v0.4.1 MIT OR Apache-2.0
+│   └── semver v1.0.28 MIT OR Apache-2.0
+└── toml v1.1.6+spec-1.1.0 MIT OR Apache-2.0
+    ├── serde_core v1.0.229 MIT OR Apache-2.0
+    ├── serde_spanned v1.1.1 MIT OR Apache-2.0
+    │   └── serde_core v1.0.229 MIT OR Apache-2.0
+    ├── toml_datetime v1.1.1+spec-1.1.0 MIT OR Apache-2.0
+    │   └── serde_core v1.0.229 MIT OR Apache-2.0
+    ├── toml_parser v1.1.3+spec-1.1.0 MIT OR Apache-2.0
+    │   └── winnow v1.0.4 MIT
+    ├── toml_writer v1.1.2+spec-1.1.0 MIT OR Apache-2.0
+    └── winnow v1.0.4 MIT
+```
+
+- **Last release**: 3.0.11 on 2026-07-02, after 3.0.9 (2026-04-24), 3.0.8 (2026-03-23) and 3.0.7
+  (2026-03-15). The repository is `nabijaczleweli/rust-embed-resource`.
+- **New to `Cargo.lock`**: `embed-resource`, `toml`, `serde_spanned` and `toml_writer`, all MIT or
+  MIT OR Apache-2.0. Every other crate above is already locked, some at an older patch version that
+  Cargo may unify upward. No license outside MIT, Apache-2.0 and Unlicense enters.
+- **Build time only**: nothing reaches the shipped binaries' runtime code.
+- **Added with T034**: adding the dependency also locked `vswhom` 0.1.0, `vswhom-sys` 0.1.3 and
+  `winreg` 0.55.0, all MIT. They are `embed-resource`'s dependencies on a Windows MSVC build host,
+  which the tree above, resolved on a Linux host, did not show. They find `rc.exe` on the CI
+  Windows runners. `toml_parser` moved from 1.1.2 to 1.1.3. A host with no resource compiler (this
+  repository's Linux cross-checks) builds the Windows exes without an icon and prints a
+  `cargo:warning`; the packaging smoke's A17 check fails such an exe.
+
 ### R12. Upgrading or uninstalling while the app or daemon runs (FR-008, FR-009, edge cases)
 
 **Decision**, in three layers:
 
-1. **`AppMutex=Local\MicoldAIIDE`**. Both the client and the daemon create this named mutex at
-   startup, in a Windows-only `micold-core::process::announce_running()`. The installer then says
+1. **`AppMutex=Local\MicoldAIIDE`**. The client creates this named mutex at startup, in a
+   Windows-only `micold-core::process::announce_running()`. (Revised after A6: the daemon held it
+   too at first, and a repair with only the daemon running cancelled at the prompt, before
+   `PrepareToInstall` could stop the daemon. See layer 3.) The installer then says
    "Micold AI IDE is running, close it first" and offers Retry or Cancel.
    `Local\` scopes the mutex to the session, so another account's running app does not block this
    account's install.
@@ -421,6 +464,11 @@ the rule.
 - Silent install exercises the real installer logic, the same code path a user takes, without a
   desktop.
 - Pipe appearance is the observable proof that FR-020 holds in an installed layout.
+
+**Evidence** (T040): in PR #332's CI run 34841225620 (e002ec1b), the daemon's pipe appeared **0 s**
+after the installed client started on x64 (`build + test (windows-latest)`) and **1 s** after on
+ARM64 (`package + smoke (windows-11-arm)`), against the 20 s bound. Run 34840058051 (bbaa2dab) also
+saw 1 s on ARM64. Both legs found no `conhost.exe` under the client or the daemon.
 
 **Alternatives considered**:
 

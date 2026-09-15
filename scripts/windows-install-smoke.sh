@@ -5,7 +5,7 @@
 #   scripts/windows-install-smoke.sh <micold-ai-ide-<version>-<arch>-setup.exe>
 #
 # CI runs it on both Windows packaging legs, and the release runs it before each upload. Contract:
-# specs/030-windows-installer/contracts/windows-installer.md, rows I1, I2 and I7. Its host and
+# specs/030-windows-installer/contracts/windows-installer.md, rows I1, I2, I4, I5 and I7. Its host and
 # argument checks are driven by scripts/tests/windows-install-smoke.test.sh; the rest only runs on
 # Windows.
 
@@ -33,6 +33,8 @@ fi
 app_id='{1B19A6AC-4C91-4033-88EA-F7F283127C8A}'
 # How long the daemon's pipe may take to appear after the client starts (I2).
 pipe_wait_secs=20
+# How long the uninstaller may take to remove the install once it is started (I5).
+uninstall_wait_secs=60
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' "$root/Cargo.toml")"
@@ -56,6 +58,8 @@ local_app_data="$(cygpath -u "$LOCALAPPDATA")"
 app_data="$(cygpath -u "$APPDATA")"
 install_dir="$local_app_data/Programs/Micold AI IDE"
 logs="$(mktemp -d)"
+# What stands in for a user's projects and settings, which an uninstall keeps (I5, FR-007).
+markers=("$app_data/micold-ai-ide/data/smoke-marker" "$local_app_data/micold-ai-ide/data/smoke-marker")
 client_pid=""
 daemon_pid=""
 
@@ -68,13 +72,14 @@ clean_up() {
 	if [ -n "$daemon_pid" ]; then
 		win "Stop-Process -Id $daemon_pid -Force -ErrorAction SilentlyContinue" || true
 	fi
+	rm -f "${markers[@]}"
 	rm -rf "$logs"
 }
 trap clean_up EXIT
 
 fail() {
 	echo "${0##*/}: FAIL: $*" >&2
-	for log in "$logs/install.log" "$local_app_data/micold-ai-ide/data/micold-daemon.log"; do
+	for log in "$logs/install.log" "$logs/repair.log" "$logs/uninstall-open.log" "$logs/uninstall.log" "$local_app_data/micold-ai-ide/data/micold-daemon.log"; do
 		if [ -f "$log" ]; then
 			echo "---- $log" >&2
 			cat "$log" >&2
@@ -82,6 +87,11 @@ fail() {
 	done
 	exit 1
 }
+
+for marker in "${markers[@]}"; do
+	mkdir -p "$(dirname "$marker")"
+	echo "seeded by ${0##*/}" >"$marker"
+done
 
 # 1. The silent install succeeds (I7).
 echo "== install $exe"
@@ -94,6 +104,44 @@ MSYS2_ARG_CONV_EXCL='*' "$exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART "/LOG=$(
 for bin in micold-ai-ide.exe micold-daemon.exe; do
 	[ -f "$install_dir/$bin" ] || fail "$bin is not in $install_dir (I1)"
 done
+
+# 2a. Each exe carries an icon group resource, which is what Explorer, the taskbar and Installed apps
+# show for it (FR-003). Without one Windows draws its generic exe icon.
+cat >"$logs/group-icons.ps1" <<'PS1'
+param([string]$Path)
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class MicoldResources {
+    delegate bool EnumNames(IntPtr module, IntPtr type, IntPtr name, IntPtr param);
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern IntPtr LoadLibraryExW(string path, IntPtr file, uint flags);
+    [DllImport("kernel32.dll")]
+    static extern bool EnumResourceNamesW(IntPtr module, IntPtr type, EnumNames callback, IntPtr param);
+    [DllImport("kernel32.dll")]
+    static extern bool FreeLibrary(IntPtr module);
+    // RT_GROUP_ICON resources in the image at path, or -1 if it cannot be loaded as a data file.
+    public static int GroupIcons(string path) {
+        IntPtr module = LoadLibraryExW(path, IntPtr.Zero, 0x22); // AS_DATAFILE | AS_IMAGE_RESOURCE
+        if (module == IntPtr.Zero) return -1;
+        int count = 0;
+        try {
+            EnumResourceNamesW(module, (IntPtr)14, (m, t, n, p) => { count++; return true; }, IntPtr.Zero);
+        } finally {
+            FreeLibrary(module);
+        }
+        return count;
+    }
+}
+'@
+[MicoldResources]::GroupIcons($Path)
+PS1
+for bin in micold-ai-ide.exe micold-daemon.exe; do
+	icons="$(MSYS2_ARG_CONV_EXCL='*' powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass \
+		-File "$(cygpath -w "$logs/group-icons.ps1")" "$(cygpath -w "$install_dir/$bin")" | tr -d '\r')"
+	[ "$icons" -ge 1 ] 2>/dev/null || fail "$bin has no icon resource (found '$icons'), so Windows shows a generic icon (FR-003)"
+done
+echo "both exes carry an icon"
 
 # 3. The Start menu entry (I1).
 shortcut="$app_data/Microsoft/Windows/Start Menu/Programs/Micold AI IDE.lnk"
@@ -125,16 +173,19 @@ until [ "$(win "Test-Path -LiteralPath '$pipe'")" = True ]; do
 done
 echo "$pipe appeared after $((SECONDS - started))s"
 
-# The daemon: the pid it records, else the micold-daemon.exe the client spawned.
+# The daemon: the live pid it records, else the micold-daemon.exe the client spawned. A record can
+# still name the daemon a repair stopped, so a pid that is not running does not count.
 pid_record="$local_app_data/micold-ai-ide/run/micold-daemon.pid"
-if [ -f "$pid_record" ]; then
-	daemon_pid="$(tr -dc '0-9' <"$pid_record")"
-fi
-if [ -z "$daemon_pid" ]; then
-	daemon_pid="$(win "(Get-CimInstance Win32_Process |
+find_daemon_pid() {
+	local pid=""
+	[ ! -f "$pid_record" ] || pid="$(tr -dc '0-9' <"$pid_record")"
+	[ -z "$pid" ] || [ "$(alive "$pid")" = True ] || pid=""
+	[ -n "$pid" ] || pid="$(win "(Get-CimInstance Win32_Process |
 Where-Object { \$_.ParentProcessId -eq $client_pid -and \$_.Name -eq 'micold-daemon.exe' } |
 Select-Object -First 1).ProcessId")"
-fi
+	printf '%s' "$pid"
+}
+daemon_pid="$(find_daemon_pid)"
 [ -n "$daemon_pid" ] || fail "$pipe is up, but no micold-daemon.exe process was found behind it"
 
 # 7. No console for the client or its daemon (FR-005, SC-005). Checked while both are still running:
@@ -153,5 +204,86 @@ for pid in "$client_pid" "$daemon_pid"; do
 	[ "$(alive "$pid")" = True ] || fail "pid $pid exited after $pipe appeared"
 done
 
-# 8. clean_up stops both on exit.
+# 8. Repair over a live install (I4, FR-008). A user closes the window and runs the installer again,
+# while the daemon outlives the window by design. Stopping the client without /T leaves the daemon,
+# which the client spawned, running.
+MSYS2_ARG_CONV_EXCL='*' taskkill.exe /PID "$client_pid" /F >/dev/null 2>&1 ||
+	fail "could not stop the client (pid $client_pid)"
+client_pid=""
+[ "$(alive "$daemon_pid")" = True ] || fail "the daemon (pid $daemon_pid) exited with its client, before the repair"
+echo "== repair $exe with the daemon (pid $daemon_pid) running"
+status=0
+MSYS2_ARG_CONV_EXCL='*' "$exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART "/LOG=$(cygpath -w "$logs/repair.log")" ||
+	status=$?
+[ "$status" -eq 0 ] || fail "the repair with the daemon running exited $status, want 0 (I4)"
+entries="$(win "@(Get-ChildItem -LiteralPath 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall' |
+Where-Object { \$_.GetValue('DisplayName') -like 'Micold AI IDE*' }).Count")"
+[ "$entries" = 1 ] || fail "$entries Installed apps entries for Micold AI IDE after the repair, want 1 (I4)"
+echo "repaired, one Installed apps entry"
+
+# The repair stopped the old daemon rather than replacing its files underneath it (I4, FR-009). Its
+# pid counts as gone once no micold-daemon.exe holds it, so a pid Windows reuses does not fail this.
+survivor="$(win "[bool](Get-Process -Id $daemon_pid -ErrorAction SilentlyContinue |
+Where-Object { \$_.ProcessName -eq 'micold-daemon' })")"
+[ "$survivor" = False ] || fail "the old daemon (pid $daemon_pid) is still running after the repair (I4)"
+echo "the old daemon (pid $daemon_pid) is gone"
+daemon_pid=""
+
+# unins000.exe hands over to a copy of itself in %TEMP% and exits before the removal is done; wait for
+# that copy. Inno Setup 6.7 names it _unins.tmp (older releases _iu*.tmp), and a wait that matches no
+# process returns at once, so the checks after it race the removal.
+wait_for_uninstaller() {
+	local started=$SECONDS
+	until [ "$(win "@(Get-CimInstance Win32_Process | Where-Object { \$_.Name -like '_unins*' -or \$_.Name -like '_iu*' -or \$_.Name -eq 'unins000.exe' }).Count")" = 0 ]; do
+		[ $((SECONDS - started)) -lt "$uninstall_wait_secs" ] || fail "the uninstaller still runs after ${uninstall_wait_secs}s"
+		sleep 1
+	done
+}
+
+# 9. Uninstall as Installed apps would run it, with the daemon running (I5, I7, FR-006). Relaunch the
+# client so it spawns a daemon, then close the window as in step 8.
+client_pid="$(win "(Start-Process -FilePath '$(cygpath -w "$install_dir/micold-ai-ide.exe")' -PassThru).Id")"
+[ -n "$client_pid" ] || fail "the repaired client did not start"
+started=$SECONDS
+until [ "$(win "Test-Path -LiteralPath '$pipe'")" = True ]; do
+	[ "$(alive "$client_pid")" = True ] || fail "the repaired client (pid $client_pid) exited before $pipe appeared"
+	[ $((SECONDS - started)) -lt "$pipe_wait_secs" ] || fail "$pipe did not come back within ${pipe_wait_secs}s"
+	sleep 1
+done
+# 9a. With the window still open, the same silent uninstall refuses and removes nothing (A16, FR-009,
+# I7). An uninstall proceeds only once the app is closed or someone confirms, and a silent run has
+# no one to confirm.
+echo "== uninstall with the client (pid $client_pid) open"
+status=0
+MSYS2_ARG_CONV_EXCL='*' "$install_dir/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART \
+	"/LOG=$(cygpath -w "$logs/uninstall-open.log")" || status=$?
+wait_for_uninstaller
+[ "$status" -ne 0 ] || fail "the silent uninstall with the window open exited 0, want non-zero (FR-009, I7)"
+[ -f "$install_dir/micold-ai-ide.exe" ] || fail "the refused uninstall removed $install_dir/micold-ai-ide.exe (FR-009)"
+[ "$(win "Test-Path -LiteralPath '$key'")" = True ] || fail "the refused uninstall removed the uninstall key $key (FR-009)"
+echo "refused with the window open (exit $status); install dir and uninstall key in place"
+daemon_pid="$(find_daemon_pid)"
+[ -n "$daemon_pid" ] || fail "$pipe is up, but no micold-daemon.exe process was found behind it"
+MSYS2_ARG_CONV_EXCL='*' taskkill.exe /PID "$client_pid" /F >/dev/null 2>&1 ||
+	fail "could not stop the repaired client (pid $client_pid)"
+client_pid=""
+[ "$(alive "$daemon_pid")" = True ] || fail "the daemon (pid $daemon_pid) exited with its client, before the uninstall"
+echo "== uninstall with the daemon (pid $daemon_pid) running"
+status=0
+MSYS2_ARG_CONV_EXCL='*' "$install_dir/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART \
+	"/LOG=$(cygpath -w "$logs/uninstall.log")" || status=$?
+[ "$status" -eq 0 ] || fail "the silent uninstall exited $status, want 0 (I7)"
+wait_for_uninstaller
+[ ! -e "$install_dir" ] || fail "$install_dir is still there after the uninstall (I5): $(ls -A "$install_dir" | tr '\n' ' ')"
+[ ! -e "$shortcut" ] || fail "the Start menu shortcut $shortcut is still there after the uninstall (I5)"
+[ "$(win "Test-Path -LiteralPath '$key'")" = False ] || fail "the uninstall key $key is still there after the uninstall (I5)"
+[ ! -e "$local_app_data/micold-ai-ide/run" ] ||
+	fail "$local_app_data/micold-ai-ide/run is still there after the uninstall (I5)"
+echo "uninstalled: no install dir, shortcut, uninstall key or run dir"
+for marker in "${markers[@]}"; do
+	[ -f "$marker" ] || fail "the uninstall removed user data: $marker is gone (I5, FR-007)"
+done
+echo "both data markers survived the uninstall"
+
+# clean_up stops what is still running on exit.
 echo "== smoke passed"

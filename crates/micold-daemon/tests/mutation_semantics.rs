@@ -5,11 +5,8 @@
 //! `handshake_flow` does, so the whole `route()` path — spawn_blocking git, error mapping, catalog
 //! reconcile, broadcast — is under test, not a hand-rolled stand-in.
 
-// unix-only: pending Windows triage (030 T026/T027)
-#![cfg(unix)]
-
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use futures_util::{SinkExt, StreamExt};
@@ -27,7 +24,7 @@ use micold_core::session::{
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
-use micold_core::worktree::{CreateMode, CreateStage};
+use micold_core::worktree::{parse_worktrees, CreateMode, CreateStage};
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use tokio_util::codec::Framed;
@@ -1344,7 +1341,12 @@ async fn worktree_create_streams_its_stages_before_the_terminal_reply() {
 
 /// Add a worktree at `path` on a new branch, using git directly — i.e. the way the worktrees this
 /// app does not manage come to exist in the first place.
-fn add_worktree_outside(repo: &Path, path: &Path, branch: &str) {
+///
+/// Returns the path as git reports it, because that is the spelling a client holds when it asks to
+/// include one: the only offer to include comes from the daemon's own discovery
+/// (`BlockReason::CheckedOutOutsideApp`). The two spellings differ wherever the temp directory
+/// does — a Windows runner's `%TEMP%` is the 8.3 `C:\Users\RUNNER~1\...`, git's is the long name.
+fn add_worktree_outside(repo: &Path, path: &Path, branch: &str) -> PathBuf {
     let ok = Command::new("git")
         .arg("-C")
         .arg(repo)
@@ -1355,6 +1357,19 @@ fn add_worktree_outside(repo: &Path, path: &Path, branch: &str) {
         .status
         .success();
     assert!(ok, "git worktree add {} failed", path.display());
+    let porcelain = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["worktree", "list", "--porcelain"])
+        .output()
+        .expect("git runs")
+        .stdout;
+    let added = std::fs::canonicalize(path).expect("the worktree git just added exists");
+    parse_worktrees(&String::from_utf8_lossy(&porcelain))
+        .into_iter()
+        .map(|rec| rec.path)
+        .find(|reported| std::fs::canonicalize(reported).is_ok_and(|p| p == added))
+        .expect("git lists the worktree it just added")
 }
 
 /// The paths the daemon reports for `project`.
@@ -1374,10 +1389,7 @@ async fn including_a_worktree_lists_it_and_touches_nothing_on_disk() {
     let store = tempfile::tempdir().unwrap();
     init_git_repo(project.path());
 
-    // Canonical, because git reports worktree paths that way and the daemon matches them exactly:
-    // on macOS the temp dir is under `/var`, a symlink to `/private/var`.
-    let outside = std::fs::canonicalize(elsewhere.path()).unwrap().join("olx");
-    add_worktree_outside(project.path(), &outside, "fix/olx");
+    let outside = add_worktree_outside(project.path(), &elsewhere.path().join("olx"), "fix/olx");
     let head_before = std::fs::read_to_string(project.path().join(".git/HEAD")).unwrap();
 
     let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
@@ -1485,8 +1497,7 @@ async fn including_and_excluding_are_both_idempotent_and_reversible() {
     let store = tempfile::tempdir().unwrap();
     init_git_repo(project.path());
 
-    let outside = std::fs::canonicalize(elsewhere.path()).unwrap().join("olx");
-    add_worktree_outside(project.path(), &outside, "fix/olx");
+    let outside = add_worktree_outside(project.path(), &elsewhere.path().join("olx"), "fix/olx");
 
     let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
         project.path(),

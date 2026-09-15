@@ -4,7 +4,7 @@ loop: outside-in
 profile: .specify/memory/tdd-profile.md
 spec_criteria: 15
 planned_at: 61cc0318
-updated_at: 61cc0318
+updated_at: 69bdaefb
 suite_baseline: green
 ---
 
@@ -29,20 +29,22 @@ The entry points are:
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
 | A1  | A silent per-user install of the setup exe exits 0. It leaves `micold-ai-ide.exe` and `micold-daemon.exe` in `%LOCALAPPDATA%\Programs\Micold AI IDE\` and a Start menu `Micold AI IDE.lnk`. | US1-AS1, FR-002, FR-003, FR-004, I1, I7 | example | win | DONE | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
-| A2  | The installed client, launched detached, has no `conhost.exe` child | US1-AS2, FR-005, SC-005 | example | win | PENDING | |
-| A3  | Launching the installed client makes `\\.\pipe\Micold.Daemon.<SID>` appear within 20 s, and the daemon has no `conhost.exe` child | US1-AS3, FR-005, FR-020, I2 | example | win | RED | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
+| A2  | The installed client, launched detached, has no `conhost.exe` child | US1-AS2, FR-005, SC-005 | example | win | DONE | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
+| A3  | Launching the installed client makes `\\.\pipe\Micold.Daemon.<SID>` appear within 20 s, and the daemon has no `conhost.exe` child | US1-AS3, FR-005, FR-020, I2 | example | win | DONE | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
 | A4  | The HKCU uninstall key's `DisplayVersion` equals the workspace version | US1-AS4, FR-006, FR-013 | example | win | DONE | `scripts/windows-install-smoke.sh` via `.github/workflows/ci.yml` (both Windows legs) |
 | A5  | The committed `packaging/windows/micold-ai-ide.iss` passes `windows_violations`: its `[Files]` ship exactly the two exes | US1-AS5, FR-012 | example | any | DONE | `crates/micold-client/tests/packaging_excludes_showcase.rs::the_windows_installer_contains_no_showcase` |
-| A6  | Re-running the installer over a running install exits 0 and leaves exactly one `{1B19A6AC-…}_is1` uninstall key | US2-AS1, FR-008, I4 | example | win | PENDING | |
-| A7  | A silent uninstall removes the install dir, `.lnk`, uninstall key and `%LOCALAPPDATA%\micold-ai-ide\run` | US2-AS2, FR-006, SC-003, I5 | example | win | PENDING | |
-| A8  | After uninstall, the markers seeded in `%APPDATA%\micold-ai-ide\data` and `%LOCALAPPDATA%\micold-ai-ide\data` still exist | US2-AS3, FR-007, I5 | example | win | PENDING | |
-| A9  | Installing while the daemon runs ends with the old daemon pid gone and the new exes in place | US2-AS4, FR-009, FR-023, I4 | example | win | PENDING | |
+| A6  | Re-running the installer over a running install exits 0 and leaves exactly one `{1B19A6AC-…}_is1` uninstall key | US2-AS1, FR-008, I4 | example | win | DONE | `scripts/windows-install-smoke.sh` step 8, run by `.github/workflows/ci.yml` on both Windows legs (run 34845626478) |
+| A7  | A silent uninstall removes the install dir, `.lnk`, uninstall key and `%LOCALAPPDATA%\micold-ai-ide\run` | US2-AS2, FR-006, SC-003, I5 | example | win | DONE | `scripts/windows-install-smoke.sh` step 9 |
+| A8  | After uninstall, the markers seeded in `%APPDATA%\micold-ai-ide\data` and `%LOCALAPPDATA%\micold-ai-ide\data` still exist | US2-AS3, FR-007, I5 | example | win | DONE | `scripts/windows-install-smoke.sh` step 9, data markers |
+| A9  | Installing while the daemon runs ends with the old daemon pid gone and the new exes in place | US2-AS4, FR-009, FR-023, I4 | example | win | DONE | `scripts/windows-install-smoke.sh` step 8, the old-daemon check (runs 34847141077 green, 34871836361 mutant killed) |
 | A10 | `release.yml` has a `windows` job whose matrix covers `x64`/`windows-latest` and `arm64`/`windows-11-arm`, and it runs `gh release upload` | US3-AS1, FR-014, FR-015 | example | any | DONE | `crates/micold-core/tests/release_publishes_complete_sets.rs::a_windows_job_uploads_both_setup_executables` |
 | A11 | `release.yml` `publish.needs` contains `windows` | US3-AS2, FR-014, SC-002 | example | any | DONE | `crates/micold-core/tests/release_publishes_complete_sets.rs::publish_waits_for_the_windows_job` |
 | A12 | `site/stage.sh` fails and names the asset when `install-windows.md` links a setup exe missing from `MICOLD_RELEASE_ASSETS` | US3-AS3, FR-017 | example | any | DONE | `scripts/tests/site-stage.test.sh`, "a Windows guide linking a setup exe the release lacks fails the stage" + "the failure names the missing setup exe" |
 | A13 | On the x64 Windows CI leg, `scripts/windows-installer.sh --arch x64` produces `micold-ai-ide-<version>-x64-setup.exe` | US3-AS4, FR-016, FR-018, SC-007 | example | win | DONE | `.github/workflows/ci.yml` job `test` step "Package the Windows installer" |
 | A14 | `docs/install.md` no longer says there is no packaged build for Windows | US4-AS1, FR-017, SC-006 | example | any | DONE | `crates/micold-core/tests/install_guide_windows.rs::install_page_no_longer_says_windows_has_no_package` |
 | A15 | `docs/user-guide/install-windows.md` states that sessions do not survive logging out unless the service runs in a container | US4-AS2, FR-017 | example | any | DONE | `crates/micold-core/tests/install_guide_windows.rs::windows_guide_limits_say_sessions_end_at_logout` |
+| A16 | A silent uninstall while the app window is open exits non-zero and leaves the install dir and uninstall key in place (added in cycle 74, from A7's first run) | US2-AS4, FR-009, I7 | example | win | DONE | `scripts/windows-install-smoke.sh` step 9a |
+| A17 | Both installed exes carry an `RT_GROUP_ICON` resource, so Explorer and the taskbar show the project icon, not the generic exe icon (placed in cycle 75, from the unplaced FR-003 note) | US1-AS1, FR-003 | example | win | DONE | `scripts/windows-install-smoke.sh` step 2a |
 
 ## Inner loop: unit behaviors
 
@@ -56,48 +58,60 @@ The entry points are:
 
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
-| U1  | The Windows `socket_path` is `\\.\pipe\Micold.Daemon.<SID>`, where `<SID>` matches `^S-1-[0-9-]+$` | FR-020, FR-022, E1 | example | win | PENDING | |
-| U2  | The Windows `lock_path` ends in `micold-ai-ide\run\micold-daemon.pid`, and its parent directory exists after resolving | FR-023, E1 | example | win | PENDING | |
-| U3  | Resolving the endpoint twice yields equal endpoints (win: on Unix the test would race parallel tests that set `XDG_RUNTIME_DIR`) | FR-020, FR-022, E1 | example | win | PENDING | |
+| U1  | The Windows `socket_path` is `\\.\pipe\Micold.Daemon.<SID>`, where `<SID>` matches `^S-1-[0-9-]+$` | FR-020, FR-022, E1 | example | win | DONE | `crates/micold-core/src/endpoint.rs::tests::resolve_creates_a_usable_endpoint_pair` (Windows arm) |
+| U2  | The Windows `lock_path` ends in `micold-ai-ide\run\micold-daemon.pid`, and its parent directory exists after resolving | FR-023, E1 | example | win | DONE | `crates/micold-core/src/endpoint.rs::tests::resolve_puts_the_pid_record_in_the_local_run_dir` |
+| U3  | Resolving the endpoint twice yields equal endpoints (win: on Unix the test would race parallel tests that set `XDG_RUNTIME_DIR`) | FR-020, FR-022, E1 | example | win | DONE | `crates/micold-core/src/endpoint.rs::tests::resolve_is_stable` |
 
 ### `crates/micold-daemon/src/singleton.rs`
 
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
-| U4  | The bound pipe's DACL is protected (`SE_DACL_PROTECTED`) | FR-021, SC-009, E2.1 | example | win | PENDING | |
-| U5  | The bound pipe's DACL has exactly one ACE, allowing the current token's user SID | FR-021, SC-009, E2.1 | example | win | PENDING | |
-| U6  | Of two simultaneous starters on one endpoint, exactly one is `Bound` and the other `AlreadyRunning` | FR-022, E3.1 | example | any | DONE | `crates/micold-daemon/tests/daemon_singleton.rs::two_simultaneous_starters_converge_on_one_daemon` (Unix; Windows run pending T028) |
-| U7  | Acquiring after the previous listener is dropped returns `Bound` | FR-020, FR-022, E3.2 | example | any | DONE | `crates/micold-daemon/tests/daemon_singleton.rs::acquire_after_drop_rebinds` (Unix; Windows run pending T028) |
+| U4  | The bound pipe's DACL is protected (`SE_DACL_PROTECTED`) | FR-021, SC-009, E2.1 | example | win | DONE | `crates/micold-daemon/tests/windows_pipe_acl.rs::the_bound_pipe_dacl_is_protected` |
+| U5  | The bound pipe's DACL has exactly one ACE, allowing the current token's user SID | FR-021, SC-009, E2.1 | example | win | DONE | `crates/micold-daemon/tests/windows_pipe_acl.rs::the_bound_pipe_dacl_allows_only_the_current_user` |
+| U6  | Of two simultaneous starters on one endpoint, exactly one is `Bound` and the other `AlreadyRunning` | FR-022, E3.1 | example | any | DONE | `crates/micold-daemon/tests/daemon_singleton.rs::two_simultaneous_starters_converge_on_one_daemon` (Unix and Windows, run 34823596152) |
+| U7  | Acquiring after the previous listener is dropped returns `Bound` | FR-020, FR-022, E3.2 | example | any | DONE | `crates/micold-daemon/tests/daemon_singleton.rs::acquire_after_drop_rebinds` (Unix and Windows, run 34823596152) |
+| U73 | Binding over a pipe name that already exists but refuses this user (another account created it, so neither connecting nor adding an instance is allowed) is an error naming the pipe, not `AlreadyRunning`; a bind that loses the race to a live daemon of this user stays `AlreadyRunning` (U6) (security review D1) | FR-021, E2.1 | example | win | DONE | `crates/micold-daemon/tests/windows_pipe_acl.rs::binding_over_a_pipe_that_refuses_this_user_is_an_error_naming_it` (run 34845626478) |
+
+### `crates/micold-core/src/connect.rs` (client side of the pipe, from the T061 security review)
+
+| id  | behavior | traces | kind | where | state | test |
+| --- | --- | --- | --- | --- | --- | --- |
+| U71 | Connecting refuses a pipe whose server process runs as an account other than the expected user SID, with an error naming both SIDs (security review D1) | FR-021, E2.1 | example | win | DONE | `crates/micold-core/src/connect.rs::tests::a_pipe_served_as_another_account_is_refused_naming_both_sids` (run 34874692453) |
+| U72 | The client opens the pipe with `SECURITY_SQOS_PRESENT \| SECURITY_IDENTIFICATION`, so the server cannot impersonate it beyond identification (security review D2) | FR-021, E2.1 | example | win | DONE | `crates/micold-core/src/connect.rs::tests::the_daemon_pipe_lets_its_server_identify_the_client_but_not_impersonate_it` |
 
 ### `crates/micold-daemon/src/server.rs` (pid record)
 
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
 | U8  | While the real daemon runs, `lock_path` holds its pid followed by a newline | FR-023, E4.1 | example | any | DONE | `crates/micold-daemon/tests/daemon_stop.rs::pid_record_lifecycle` |
-| U9  | After the daemon exits cleanly, `lock_path` no longer exists | FR-023, E4.1 | example | any | BLOCKED | no clean-exit path exists to observe, and unlinking the Unix `flock` file is unsafe (cycle-log cycle 6) |
+| U9 | After the daemon exits cleanly, `lock_path` no longer exists | FR-023, E4.1 | example | any | DROPPED | user decision 2026-09-14: no clean exit exists to observe, and unlinking the Unix `flock` file is unsafe (cycle 6); a stale record is already harmless (U12) |
 
 ### `crates/micold-core/src/spawn.rs` (stop)
 
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
-| U10 | `stop_running_daemon` on a live daemon returns `Ok(true)`, and the endpoint refuses connections within 5 s | FR-023, E4.2 | example | any | DONE | `crates/micold-daemon/tests/daemon_stop.rs::stop_running_daemon_ends_endpoint` (Unix; Windows run pending) |
-| U11 | `terminate_daemon` on a pid whose image is not `micold-daemon.exe` returns `InvalidData` and leaves the process running | FR-023, E4.3 | example | win | PENDING | |
+| U10 | `stop_running_daemon` on a live daemon returns `Ok(true)`, and the endpoint refuses connections within 5 s | FR-023, E4.2 | example | any | DONE | `crates/micold-daemon/tests/daemon_stop.rs::stop_running_daemon_ends_endpoint` (Unix and Windows, run 34823596152) |
+| U11 | `terminate_daemon` on a pid whose image is not `micold-daemon.exe` returns `InvalidData` and leaves the process running | FR-023, E4.3 | example | win | DONE | `crates/micold-core/src/spawn.rs::tests::terminate_refuses_foreign_image` |
 | U12 | `stop_running_daemon` with a pid record for a non-live endpoint returns `Ok(false)` | FR-023, E4.4 | example | any | DONE | `crates/micold-core/src/spawn.rs::tests::stale_pid_record_is_ignored` |
 
 ### `crates/micold-daemon/src/platform/windows.rs` and `crates/micold-daemon/src/supervisor.rs`
 
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
-| U13 | Killing a Regular session ends a grandchild its shell started, within 5 s | FR-020, E5.1 | example | win | PENDING | |
+| U13 | Killing a Regular session ends a grandchild its shell started, within 5 s | FR-020, E5.1 | example | win | DONE | `crates/micold-daemon/src/supervisor.rs::windows_tests::kill_reaps_grandchild` |
+| U67 | Dropping a session whose child is still running returns within 10 s | FR-020 | example | win | DONE | `crates/micold-daemon/src/supervisor.rs::windows_tests::dropping_a_session_returns` |
+| U68 | An AI CLI found on the daemon's own `PATH` is spawned on Windows, not refused by CreateProcessW as not found | FR-020, FR-025 | example | win | DONE | `crates/micold-daemon/tests/session_start.rs::{a_cli_that_refuses_the_resume_is_reported_and_leaves_nothing_running, a_session_that_never_recorded_a_conversation_is_not_told_its_conversation_is_gone, resuming_a_conversation_another_terminal_may_hold_is_attempted_like_any_other}` (Windows CI run 34834904463) |
+| U69 | Deleting a worktree with `stop_sessions` removes its directory on Windows, where a session still running in it holds it open | FR-020, FR-025 | example | win | DONE | `crates/micold-daemon/tests/mutation_semantics.rs::worktree_delete_with_stop_sessions_archives_and_removes` (added in cycle 66) |
+| U70 | A worktree directory whose contents are all removed but which itself survives is reported as a leftover, naming the directory | FR-020, FR-023d | example | all | DONE | `crates/micold-core/tests/worktree_leftovers.rs::a_directory_that_empties_but_survives_is_named_itself` |
 
 ### `crates/micold-core/src/process.rs`
 
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
-| U14 | On Windows, a command passed through `no_window` still spawns and exits 0, and the pinned `CREATE_NO_WINDOW` equals `0x0800_0000` | FR-024, E6.3 | example | win | BLOCKED | `crates/micold-core/src/process.rs::tests::no_window_sets_flag`, compile-checked; implemented before any Windows run (cycle 8 notes), awaiting the CI leg |
+| U14 | On Windows, a command passed through `no_window` still spawns and exits 0, and the pinned `CREATE_NO_WINDOW` equals `0x0800_0000` | FR-024, E6.3 | example | win | DONE | `crates/micold-core/src/process.rs::tests::no_window_sets_flag` (Windows, run 34823596152) |
 | U15 | On Unix, a command passed through `no_window` spawns and exits 0 | FR-024 (parity, Principle VI) | example | any | DONE | `crates/micold-core/src/process.rs::tests::no_window_is_noop_elsewhere` |
-| U16 | While the `announce_running` marker is held, `OpenMutexW("Local\\MicoldAIIDE")` succeeds | FR-009, E7.1 | example | win | PENDING | |
-| U17 | After the marker is dropped, `OpenMutexW("Local\\MicoldAIIDE")` fails | FR-009, E7.1 | example | win | PENDING | |
+| U16 | While the `announce_running` marker is held, `OpenMutexW("Local\\MicoldAIIDE")` succeeds | FR-009, E7.1 | example | win | DONE | `crates/micold-core/src/process.rs::tests::announce_running_holds_the_app_mutex` |
+| U17 | After the marker is dropped, `OpenMutexW("Local\\MicoldAIIDE")` fails | FR-009, E7.1 | example | win | DONE | `crates/micold-core/src/process.rs::tests::dropping_the_marker_releases_the_app_mutex` |
 
 ### `crates/micold-core/tests/background_spawns_hide_console.rs` (guard over `crates/*/src`)
 
@@ -110,7 +124,7 @@ The entry points are:
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
 | U19 | A daemon that fails at startup exits non-zero, and its log file contains a `fatal:` line | FR-005, E6.4 | example | any | DONE | `crates/micold-daemon/tests/fatal_startup_is_logged.rs::fatal_startup_error_reaches_the_log_file` |
-| U20 | Release builds of `micold-ai-ide.exe` and `micold-daemon.exe` both have PE subsystem 2 (GUI) | FR-005, SC-005, E6.1 | example | win | PENDING | |
+| U20 | Release builds of `micold-ai-ide.exe` and `micold-daemon.exe` both have PE subsystem 2 (GUI) | FR-005, SC-005, E6.1 | example | win | DONE | `.github/workflows/ci.yml` step "Release exes are GUI-subsystem (Windows)" |
 
 ### Existing daemon tests un-gated on Windows (`crates/micold-daemon/tests/`)
 
@@ -118,11 +132,11 @@ These tests already exist and pass on Unix. On Windows they are compiled out tod
 
 | id  | behavior | traces | kind | where | state | test |
 | --- | --- | --- | --- | --- | --- | --- |
-| U22 | A client cold-starts a real daemon that outlives the client (`autospawn.rs`) | FR-020, FR-025, E3.3 | example | win | PENDING | |
-| U23 | A session survives the client disconnecting and is reattached (`session_survival.rs`) | FR-020, FR-025, SC-008 | example | win | PENDING | |
-| U24 | A started session streams output to the attached client (`session_start.rs`) | FR-020, FR-025 | example | win | PENDING | |
-| U25 | A second view of a running session receives its stream (`stream_view.rs`) | FR-020, FR-025 | example | win | PENDING | |
-| U26 | Sessions of different projects do not see each other's output (`session_isolation.rs`) | FR-020, FR-025 | example | win | PENDING | |
+| U22 | A client cold-starts a real daemon that outlives the client (`autospawn.rs`) | FR-020, FR-025, E3.3 | example | win | DONE | `crates/micold-daemon/tests/autospawn.rs` (all cases, Windows CI run 34825425160) |
+| U23 | A session survives the client disconnecting and is reattached (`session_survival.rs`) | FR-020, FR-025, SC-008 | example | win | DONE | `crates/micold-daemon/tests/session_survival.rs` (all cases, Windows CI run 34825425160) |
+| U24 | A started session streams output to the attached client (`session_start.rs`) | FR-020, FR-025 | example | win | DONE | `crates/micold-daemon/tests/session_start.rs` (all cases, Windows CI run 34834904463) |
+| U25 | A second view of a running session receives its stream (`stream_view.rs`) | FR-020, FR-025 | example | win | DONE | `crates/micold-daemon/tests/stream_view.rs` (all cases, Windows CI run 34825425160) |
+| U26 | Sessions of different projects do not see each other's output (`session_isolation.rs`) | FR-020, FR-025 | example | win | DONE | `crates/micold-daemon/tests/session_isolation.rs` (all cases, Windows CI run 34825425160) |
 
 ### `packaging/windows/micold-ai-ide.iss`, guarded by `crates/micold-client/tests/packaging_excludes_showcase.rs`
 
@@ -214,7 +228,7 @@ These tests already exist and pass on Unix. On Windows they are compiled out tod
 
 ## Invariants and edge cases still to place
 
-- **FR-003 icon.** The installed exe shows the project icon. Embedding it is build glue (T034). The only observation today is manual quickstart M1. A smoke check for an `RT_GROUP_ICON` resource would make this automatic; it is not in tasks.md yet.
+- **FR-003 icon.** Placed as A17 in cycle 75: the smoke checks each installed exe for an `RT_GROUP_ICON` resource. Manual quickstart M1 still checks what Windows actually draws.
 - **I8.** An install path with spaces or non-ASCII characters still resolves the sibling daemon. Covered by manual quickstart M3 only.
 
 ## Out of scope
