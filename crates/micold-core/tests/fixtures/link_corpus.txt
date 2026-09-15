@@ -123,5 +123,9 @@ Docs: (⟦https://en.wikipedia.org/wiki/Rust_(programming_language)⟧).
   terminal-links/contracts/link-recognition.md
 
 @hard
+⟦https://ci.example.com/builds/2026/09/14/run-⟧
+48213/logs?step=test
+
+@hard
 Open https://
 example.com/docs/page.html
