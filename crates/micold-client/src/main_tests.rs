@@ -1985,30 +1985,40 @@ fn nothing_was_reported(app: &App) -> bool {
     queue.visible().is_none() && queue.pending() == 0
 }
 
-/// The first message the work an update returned produces, running it only that far. A bring-up
-/// run here reaches a recording runner (`BringUp::task`), never the host's container runtime.
-fn first_message(work: Task<Message>) -> Option<Message> {
+/// Every message the work an update returned produces, running it to its end. A bring-up run
+/// here reaches a recording runner (`BringUp::task`), never the host's container runtime.
+fn messages(work: Task<Message>) -> Vec<Message> {
     use iced::futures::StreamExt;
-    let stream = iced_runtime::task::into_stream(work)?;
+    let Some(stream) = iced_runtime::task::into_stream(work) else {
+        return Vec::new();
+    };
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
-    runtime.block_on(
-        stream
+    runtime.block_on(async {
+        let outputs = stream
             .filter_map(|action| {
                 std::future::ready(match action {
                     iced_runtime::Action::Output(message) => Some(message),
                     _ => None,
                 })
             })
-            .next(),
-    )
+            .collect::<Vec<_>>();
+        tokio::time::timeout(std::time::Duration::from_secs(10), outputs)
+            .await
+            .expect("the work an update returned has to finish")
+    })
 }
 
-/// Whether `message` is a bring-up reporting the first stage it enters.
-fn is_probing(message: Option<&Message>) -> bool {
+/// Whether `messages` is a bring-up reported whole: the first stage it enters, then how it ended.
+fn reports_the_bring_up(messages: &[Message]) -> bool {
     matches!(
-        message,
+        messages.first(),
         Some(Message::Sandbox(SandboxMsg::Progress(stage)))
             if **stage == micold_core::sandbox::lifecycle::SandboxState::Probing
+    ) && matches!(
+        messages.last(),
+        Some(Message::Sandbox(
+            SandboxMsg::Started(_) | SandboxMsg::Failed(_)
+        ))
     )
 }
 
@@ -2049,11 +2059,13 @@ fn a_failed_sandbox_the_client_cannot_reach_is_brought_up_again() {
         1,
         "the work handed back has to be the bring-up itself, not other work beside a dropped one"
     );
-    let first = first_message(work);
+    let reported = messages(work);
     assert!(
-        is_probing(first.as_ref()),
-        "the work handed back has to report the bring-up's stages — one whose messages are \
-             discarded starts a sandbox the view never hears of, which is BUG-005: {first:?}"
+        reports_the_bring_up(&reported),
+        "the work handed back has to report the bring-up's first stage and how it ended — one \
+             whose messages are discarded starts a sandbox the view never hears of, and one that \
+             drops its ending never records a failure or counts the attempt, which is BUG-005: \
+             {reported:?}"
     );
     assert_eq!(
         app.sandbox.state,
@@ -2226,12 +2238,12 @@ fn a_container_found_stopped_is_brought_up_without_showing_a_failure() {
         "the work handed back has to be the bring-up itself — one swapped for other work leaves \
              `Probing` with nothing running, which is BUG-005"
     );
-    let first = first_message(work);
+    let reported = messages(work);
     assert!(
-        is_probing(first.as_ref()),
-        "the work handed back has to report the bring-up's stages — one whose messages are \
-             discarded starts the container while the view stays on `Probing`, which is BUG-005: \
-             {first:?}"
+        reports_the_bring_up(&reported),
+        "the work handed back has to report the bring-up's first stage and how it ended — one \
+             that stops short leaves the view on `Probing` and a failed restart unrecorded, which \
+             is BUG-005: {reported:?}"
     );
     assert_eq!(
         app.sandbox.persistent_notice(),
