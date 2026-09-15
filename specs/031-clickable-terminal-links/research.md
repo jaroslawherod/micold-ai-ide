@@ -119,7 +119,7 @@ truncation.
 Because only `wrapped` joins rows, a hard-broken address is detected on its first row alone, and its
 continuation rows contain no scheme prefix. This gives the SC-002 behaviour with no special case.
 
-Core reads rows through a trait, `LinkRows { text(row), wrapped(row), hyperlink(row, col) }`, with
+Core reads rows through a trait, `LinkRows { text(row), wrapped(row), hyperlink(row, col), spacer(row, col) }`, with
 rows relative to the viewport top, so it never sees `CachedLine`. The client implements it over
 `GridCache::line(LineId)`. That reaches cached scrollback and lines below the viewport as well as
 the visible screen. So an address that wraps past a viewport edge is joined whole when the cache holds the
