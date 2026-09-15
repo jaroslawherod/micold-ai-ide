@@ -40,3 +40,19 @@ before the implementation.
   — done: `crates/micold-client/src/ui/terminal.rs` `TermPalette::from_scheme`; suite
   `scripts/build-lock.sh cargo test -p micold-client` -> 1696 passed, 0 failed (`style_snapshot`
   unchanged, no regeneration). T075 ticked (U8, U9 DONE).
+
+## Cycle 3: U1 a dark pane answers a background query with the dark surface
+
+- test: `crates/micold-daemon/tests/vt_color_queries.rs::a_dark_pane_answers_a_background_query_with_the_dark_surface` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test vt_color_queries a_dark_pane_answers_a_background_query_with_the_dark_surface -- --exact`
+  -> `left: "\u{1b}]11;rgb:e5e5/e5e5/e5e5\u{7}"  right: "\u{1b}]11;rgb:1414/1313/1616\u{7}"` (1 failed —
+  the reported reason: xterm entry 7 for a dark pane). `TerminalColors` and the new
+  `DaemonListener::new` parameter were added first as a stub the listener ignored, with its two
+  callers (`supervisor.rs`, `tests/support/mod.rs`) passing `TerminalColors::default()`, so the red
+  is the assertion and not a compile error (T074).
+- green: `crates/micold-daemon/src/terminal.rs` — `TerminalColors` holds the scheme in an
+  `Arc<AtomicBool>`; the `ColorRequest` arm answers `NamedColor::Background` from
+  `tokens::terminal_defaults(scheme).background`, read at reply time. Suite
+  `scripts/build-lock.sh cargo test -p micold-daemon` -> 331 passed, 0 failed
+- refactor: none yet — the `tokens::Rgb` → `vte::Rgb` conversion is written once; extract it when a
+  second role needs it

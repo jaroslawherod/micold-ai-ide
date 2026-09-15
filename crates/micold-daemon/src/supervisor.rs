@@ -26,7 +26,7 @@ use micold_core::terminal::{default_shell_command, launch_args, LaunchSpec};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 
 use crate::supervision::ExitOutcome;
-use crate::terminal::{DaemonListener, SharedTerm, SharedWriter, VtSignals};
+use crate::terminal::{DaemonListener, SharedTerm, SharedWriter, TerminalColors, VtSignals};
 
 /// The grid size a session starts with before any client reports its real pane dimensions
 /// (bugfix: a new terminal must not start at 1×1). Matches the client's historical seed.
@@ -301,7 +301,12 @@ impl PtySession {
         }));
         let signals = VtSignals::default();
 
-        let listener = DaemonListener::new(Arc::clone(&writer), Arc::clone(&size), signals.clone());
+        let listener = DaemonListener::new(
+            Arc::clone(&writer),
+            Arc::clone(&size),
+            signals.clone(),
+            TerminalColors::default(),
+        );
         let dims = TermDimensions {
             rows: rows as usize,
             cols: cols as usize,

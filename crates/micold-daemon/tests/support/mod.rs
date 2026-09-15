@@ -8,7 +8,9 @@ use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::sync::FairMutex;
 use alacritty_terminal::term::{Config, Term};
 use alacritty_terminal::vte::ansi::Processor;
-use micold_daemon::terminal::{DaemonListener, SharedTerm, SharedWriter, VtSignals};
+use micold_daemon::terminal::{
+    DaemonListener, SharedTerm, SharedWriter, TerminalColors, VtSignals,
+};
 
 struct Dims {
     rows: usize,
@@ -44,7 +46,12 @@ impl DrivenTerm {
             cell_width: 0,
             cell_height: 0,
         }));
-        let listener = DaemonListener::new(writer, size, VtSignals::default());
+        let listener = DaemonListener::new(
+            writer,
+            size,
+            VtSignals::default(),
+            TerminalColors::default(),
+        );
         let config = Config {
             scrolling_history: scrollback,
             ..Config::default()
