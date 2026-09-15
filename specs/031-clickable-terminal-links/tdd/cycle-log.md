@@ -418,3 +418,13 @@
 - refactor: none needed
 - commit: `feat(031): drop an address that may sit inside one cut above (U151)`
 - notes: T005 and T010 re-ticked
+
+## Review fixes: M1 review B strengthens the U49 and U132 tests (no behavior added)
+
+- origin: review B (conformance) on M1, MINOR F3 and F4
+- U49, `crates/micold-core/src/link/mod.rs::tests::link_performs_no_io`: the module list now also reads private and `pub(…)` `mod x;` declarations, and every `std::{…}` import group (nested groups included) is searched for `net`, `fs` and `process`. It stayed green on the tree. Mutants, each run with `scripts/build-lock.sh cargo test -p micold-core --lib link::tests::link_performs_no_io -- --exact` and reverted from the backup:
+  - `use std::{fs, io};` in `line.rs`, which the old needles missed -> `link/line.rs imports ["fs", "io"] from std: recognising and resolving a link does no I/O (FR-019)` (1 failed)
+  - a private `mod runnable;` in `mod.rs` with an empty `runnable.rs` -> `assertion `left == right` failed: the scan reads exactly the modules link/mod.rs declares` / `left: ["address", "detect", "line", "resolve"]` / `right: [..., "runnable"]` (1 failed)
+- U132, `crates/micold-core/tests/link_corpus.rs::every_address_in_the_corpus_is_found_with_its_exact_span_and_nothing_else`: the size check counts lines carrying a marked link, as SC-002 says ("50 real lines … containing addresses"), not every output line. With the bound raised to 500 as a probe the run printed `the corpus holds at least 50 real lines containing addresses, not 58`; the bound was restored to 50
+- Suite (`cargo test -p micold-core --all-targets`) -> 1100 passed, 0 failed; clippy clean; `cargo fmt --all -- --check` clean
+- commit: `test(031): tighten the no-I/O guard and the corpus size check`

@@ -73,8 +73,9 @@ mod tests {
     fn link_performs_no_io() {
         let declared: Vec<&str> = include_str!("mod.rs")
             .lines()
-            .filter_map(|line| line.strip_prefix("pub mod "))
-            .filter_map(|line| line.strip_suffix(';'))
+            .filter_map(|line| line.split_once("mod "))
+            .filter(|(visibility, _)| visibility.is_empty() || visibility.starts_with("pub"))
+            .filter_map(|(_, name)| name.strip_suffix(';'))
             .collect();
         let listed: Vec<&str> = SOURCES[1..].iter().map(|(name, _)| *name).collect();
         assert_eq!(
@@ -83,14 +84,43 @@ mod tests {
         );
 
         // Built at run time so this file's own source never matches them.
-        let needles = ["net", "fs", "process"].map(|module| ["std", module].join("::"));
+        const IO: [&str; 3] = ["net", "fs", "process"];
+        let group = ["std", "{"].join("::");
         for (name, source) in SOURCES {
-            for needle in &needles {
+            for module in IO {
+                let needle = ["std", module].join("::");
                 assert!(
-                    !source.contains(needle.as_str()),
+                    !source.contains(&needle),
                     "link/{name}.rs names {needle}: recognising and resolving a link does no I/O (FR-019)"
                 );
             }
+            for (start, _) in source.match_indices(&group) {
+                let names = grouped_import(&source[start + group.len()..]);
+                assert!(
+                    !names.iter().any(|name| IO.contains(name)),
+                    "link/{name}.rs imports {names:?} from std: recognising and resolving a link does no I/O (FR-019)"
+                );
+            }
         }
+    }
+
+    /// The names inside a `std::{…}` import, nested groups included, given the text after its `{`.
+    fn grouped_import(after_brace: &str) -> Vec<&str> {
+        let mut depth = 1;
+        let end = after_brace
+            .char_indices()
+            .find(|&(_, c)| {
+                depth += match c {
+                    '{' => 1,
+                    '}' => -1,
+                    _ => 0,
+                };
+                depth == 0
+            })
+            .map_or(after_brace.len(), |(end, _)| end);
+        after_brace[..end]
+            .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .filter(|name| !name.is_empty())
+            .collect()
     }
 }

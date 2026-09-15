@@ -160,10 +160,14 @@ fn local() -> LinkContext {
 #[test]
 fn every_address_in_the_corpus_is_found_with_its_exact_span_and_nothing_else() {
     let entries = corpus();
-    let output_lines: usize = entries.iter().map(|entry| entry.lines.len()).sum();
+    let lines_with_links = entries
+        .iter()
+        .flat_map(|entry| &entry.lines)
+        .filter(|line| !line.links.is_empty())
+        .count();
     assert!(
-        output_lines >= 50,
-        "the corpus holds at least 50 real lines, not {output_lines}"
+        lines_with_links >= 50,
+        "the corpus holds at least 50 real lines containing addresses, not {lines_with_links}"
     );
     assert!(
         entries
