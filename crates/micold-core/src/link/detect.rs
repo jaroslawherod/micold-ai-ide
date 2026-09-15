@@ -92,7 +92,7 @@ fn names_a_host(rest: &[char]) -> bool {
 }
 
 /// A character no address contains (research R3 rule 2).
-fn ends_an_address(c: char) -> bool {
+pub(super) fn ends_an_address(c: char) -> bool {
     c.is_whitespace()
         || c.is_control()
         || matches!(c, '<' | '>' | '"' | '`' | '{' | '}' | '|' | '\\' | '^')
