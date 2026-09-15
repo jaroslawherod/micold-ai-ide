@@ -98,6 +98,12 @@ is representable; when a backend approximates, nearest-color is acceptable (spec
 programs assume conventional ANSI colors, and remapping them harms fidelity (SC-002). Only the
 *defaults* follow the theme.
 
+**Bugfix BUG-007 (2026-09-14)**: "follow the theme" covers what the terminal *reports* as well as what
+it draws. Since feature 010 the `Term` — and so the `OSC 10/11/12` colour queries — lives in the
+daemon, which answered from an xterm table. The default pair now lives in `micold-core`
+(`tokens::terminal_defaults`), read by the client to draw and by the daemon to answer, from the
+scheme the client reports over the wire (`ClientMsg::TerminalColorScheme`).
+
 ## R4 — Streaming & redraw coalescing (responsiveness)
 
 **Decision**: Keep 005's model — a per-session reader thread appends PTY bytes to a shared

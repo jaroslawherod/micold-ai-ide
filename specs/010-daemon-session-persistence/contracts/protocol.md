@@ -388,6 +388,19 @@ trip to terminal-internal handshakes:
 | `Title`, `ResetTitle`, `Bell`, `ChildExit`, `ClipboardStore` | Forward to client as control messages |
 | `PtyWrite`, `ColorRequest`, `TextAreaSizeRequest` | **Daemon answers by writing to the PTY itself** |
 
+**What a `ColorRequest` is answered with** (`006-real-terminal-emulator` BUG-007, FR-003a). Where it
+is answered was settled above; what it answers was not, and a fixed xterm table answered the dynamic
+colours — `OSC 10` foreground, `OSC 11` background, `OSC 12` cursor — with light grey for all three,
+so a background-adaptive program in a dark pane chose a light palette and drew black text. Those three
+**MUST** be answered with the colours the client paints under its resolved scheme — foreground,
+background, and foreground for the cursor — derived from `micold-core`'s
+`tokens::terminal_defaults(scheme)`, the same definition the client draws with. The daemon learns the
+scheme from `ClientMsg::TerminalColorScheme` (`contracts/messages.md`), which a client **MUST** send
+on every connection before its `Attach` and again whenever its resolved scheme changes. The daemon
+keeps the last scheme reported by any client, reads it at reply time — so sessions already running
+answer a change — and answers for the light scheme until a client has reported. Palette indices below
+256 (`OSC 4`) are still answered from the xterm table.
+
 ---
 
 ## 9. Error semantics

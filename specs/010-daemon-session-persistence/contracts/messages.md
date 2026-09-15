@@ -24,10 +24,15 @@ Hello { protocol_version: u32, schema_hash: [u8; 32], client_build: String,
 Attach { project: PathBuf, force: bool }      // force = confirmed takeover (FR-023)
 Detach { project: PathBuf }
 Goodbye                                        // clean disconnect; does NOT stop sessions
+TerminalColorScheme { scheme: ColorScheme }    // the client's resolved light/dark scheme (006 BUG-007)
 ```
 
 `Attach { force: false }` on an occupied project is **refused**, not queued. `force: true` is only
 ever sent after explicit user confirmation.
+
+`TerminalColorScheme` is sent on every connection **before** `Attach`, and again whenever the client's
+resolved scheme changes. The daemon keeps the last one any client sent and answers the dynamic-colour
+queries (`OSC 10/11/12`) from it (protocol.md §8, `006` FR-003a); it is never acknowledged.
 
 ### Session commands (fire-and-forget)
 
@@ -298,6 +303,7 @@ secrets (FR-047). They reference sessions by identity and state only.
 | FR-016d list-level indicator | `SessionChanged` for every session |
 | FR-017 scrollback by range | `ScrollbackRequest` / `ScrollbackResponse` |
 | FR-019 client-side keymap | `SessionInput { bytes }` |
+| `006` FR-003a default-colour queries | `TerminalColorScheme` |
 | FR-021/022 version handshake | `Hello`, `Refused::VersionMismatch` |
 | FR-023/024 exclusivity, takeover | `Attach { force }`, `Refused::ProjectBusy`, `Displaced` |
 | FR-031/034 error semantics | `OperationError`, `ErrorKind::GitFailed.detail` |
