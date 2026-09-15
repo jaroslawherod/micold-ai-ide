@@ -42,7 +42,7 @@ the `env_include.rs` builders (plan, Target Platform).
 ## Phase 1: Setup
 
 - [X] T001 Create the render-free module `crates/micold-core/src/link/`, with `mod.rs`, `detect.rs`, `line.rs`, `address.rs` and `resolve.rs` declared and empty, and add `pub mod link;` to `crates/micold-core/src/lib.rs`
-- [ ] T002 [P] Write `specs/031-clickable-terminal-links/scripts/links-fixture.sh`. It prints the quickstart §B.0 lines, emitting the OSC 8 runs with `printf '\e]8;;%s\e\\%s\e]8;;\e\\'`. It creates `/tmp/031-fixture/readme.txt`, `/tmp/031-fixture/run.sh` (`chmod +x`) and `/tmp/031-fixture/folder/`. It uses `$(hostname)` in the `file://` host line
+- [X] T002 [P] Write `specs/031-clickable-terminal-links/scripts/links-fixture.sh`. It prints the quickstart §B.0 lines, emitting the OSC 8 runs with `printf '\e]8;;%s\e\\%s\e]8;;\e\\'`. It creates `/tmp/031-fixture/readme.txt`, `/tmp/031-fixture/run.sh` (`chmod +x`) and `/tmp/031-fixture/folder/`. It uses `$(hostname)` in the `file://` host line
 
 ---
 
