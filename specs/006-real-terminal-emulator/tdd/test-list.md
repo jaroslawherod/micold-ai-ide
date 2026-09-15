@@ -41,7 +41,7 @@ Tests in `crates/micold-daemon/tests/vt_color_queries.rs`: a `Term` wired with a
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U1  | Under Dark, `OSC 11 ; ?` is answered with the dark `surface` | FR-003a | example | PENDING | |
+| U1  | Under Dark, `OSC 11 ; ?` is answered with the dark `surface` | FR-003a | example | DONE | `crates/micold-daemon/tests/vt_color_queries.rs::a_dark_pane_answers_a_background_query_with_the_dark_surface` |
 | U2  | Under Dark, `OSC 10 ; ?` is answered with the dark `on_surface` | FR-003a | example | PENDING | |
 | U3  | Under Dark, `OSC 12 ; ?` is answered with the dark `on_surface` (the cursor block is drawn in the foreground) | FR-003a | example | PENDING | |
 | U4  | Under Light, `OSC 11 ; ?` is answered with the light `surface` | FR-003a | example | PENDING | |

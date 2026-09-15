@@ -20,8 +20,10 @@ use std::sync::{Arc, Mutex};
 use alacritty_terminal::event::{Event, EventListener, WindowSize};
 use alacritty_terminal::sync::FairMutex;
 use alacritty_terminal::term::Term;
-use alacritty_terminal::vte::ansi::Rgb;
+use alacritty_terminal::vte::ansi::{NamedColor, Rgb};
 use micold_core::protocol::grid::LineId;
+use micold_core::theme::ColorScheme;
+use micold_core::tokens;
 
 use std::io::Write;
 
@@ -99,16 +101,47 @@ pub struct DaemonListener {
     size: Arc<Mutex<WindowSize>>,
     palette: StandardPalette,
     signals: VtSignals,
+    colors: TerminalColors,
+}
+
+/// The light/dark scheme a client last reported, shared by every session's [`DaemonListener`]
+/// (`006` FR-003a, BUG-007). Clones share one value.
+#[derive(Clone, Default)]
+pub struct TerminalColors {
+    dark: Arc<AtomicBool>,
+}
+
+impl TerminalColors {
+    /// Record `scheme` as the one to answer colour queries for.
+    pub fn set(&self, scheme: ColorScheme) {
+        self.dark
+            .store(scheme == ColorScheme::Dark, Ordering::Release);
+    }
+
+    /// The scheme last set.
+    pub fn scheme(&self) -> ColorScheme {
+        if self.dark.load(Ordering::Acquire) {
+            ColorScheme::Dark
+        } else {
+            ColorScheme::Light
+        }
+    }
 }
 
 impl DaemonListener {
     /// Build a listener sharing `writer` with the input path and `size` with the resize path.
-    pub fn new(writer: SharedWriter, size: Arc<Mutex<WindowSize>>, signals: VtSignals) -> Self {
+    pub fn new(
+        writer: SharedWriter,
+        size: Arc<Mutex<WindowSize>>,
+        signals: VtSignals,
+        colors: TerminalColors,
+    ) -> Self {
         Self {
             writer,
             size,
             palette: StandardPalette::xterm(),
             signals,
+            colors,
         }
     }
 
@@ -127,7 +160,16 @@ impl EventListener for DaemonListener {
             // VT control replies — answered here, never forwarded (protocol.md §8, T034).
             Event::PtyWrite(text) => self.reply(text.as_bytes()),
             Event::ColorRequest(index, format) => {
-                let rgb = self.palette.color(index);
+                let rgb = if index == NamedColor::Background as usize {
+                    let bg = tokens::terminal_defaults(self.colors.scheme()).background;
+                    Rgb {
+                        r: bg.r,
+                        g: bg.g,
+                        b: bg.b,
+                    }
+                } else {
+                    self.palette.color(index)
+                };
                 self.reply(format(rgb).as_bytes());
             }
             Event::TextAreaSizeRequest(format) => {
