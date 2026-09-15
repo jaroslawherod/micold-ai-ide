@@ -72,12 +72,15 @@ impl TermPalette {
     /// Build a palette whose default fg/bg follow the active light/dark scheme (FR-003), with
     /// the scheme's `secondary` as the focus-indicator accent — the 018 focus ring's role, so the
     /// focused terminal is outlined the way every other focused control is (FR-010b, BUG-005).
+    ///
+    /// The default pair comes from [`tokens::terminal_defaults`], the definition the daemon answers
+    /// colour queries from, so the pane is painted with what programs are told (FR-003a, BUG-007).
     pub fn from_scheme(scheme: ColorScheme) -> Self {
-        let r = tokens::roles(scheme);
+        let defaults = tokens::terminal_defaults(scheme);
         Self {
-            fg: rgb_to_color(r.on_surface),
-            bg: rgb_to_color(r.surface),
-            accent: rgb_to_color(r.secondary),
+            fg: rgb_to_color(defaults.foreground),
+            bg: rgb_to_color(defaults.background),
+            accent: rgb_to_color(tokens::roles(scheme).secondary),
             ansi16: STANDARD_ANSI16,
         }
     }

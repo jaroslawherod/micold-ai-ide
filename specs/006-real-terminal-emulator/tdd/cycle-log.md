@@ -37,3 +37,6 @@ before the implementation.
   `scripts/build-lock.sh cargo test -p micold-core --all-targets` -> 1060 passed, 0 failed
 - refactor: separate structural commit — `TermPalette::from_scheme` (client) takes its `fg`/`bg` from
   `terminal_defaults` instead of naming the roles itself (T075)
+  — done: `crates/micold-client/src/ui/terminal.rs` `TermPalette::from_scheme`; suite
+  `scripts/build-lock.sh cargo test -p micold-client` -> 1696 passed, 0 failed (`style_snapshot`
+  unchanged, no regeneration). T075 ticked (U8, U9 DONE).

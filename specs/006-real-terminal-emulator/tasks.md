@@ -512,7 +512,7 @@ Test-first: each failing test is its own Red commit before the change that turns
   ignores — its two existing callers (`PtySession::spawn` in `supervisor.rs` and
   `tests/support/mod.rs`'s `DrivenTerm`) pass `TerminalColors::default()` for now; the first dark
   assertion then fails on `rgb:e5e5/e5e5/e5e5`.
-- [ ] T075 [BUG-007] [U8] [U9] Add `tokens::terminal_defaults(scheme)` to `crates/micold-core/src/tokens/`
+- [X] T075 [BUG-007] [U8] [U9] Add `tokens::terminal_defaults(scheme)` to `crates/micold-core/src/tokens/`
   returning the default foreground (`on_surface`) and background (`surface`), with a core test
   pinning both schemes to those roles; make `TermPalette::from_scheme` read its `fg`/`bg` from it.
   No colour the client draws changes (`style_snapshot` stays green without regeneration).
