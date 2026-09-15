@@ -10,7 +10,9 @@ use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 // `contrast` comes from the crate that owns the colours, not from a copy here — see
 // the note in `tokens_contrast.rs`.
-use micold_core::tokens::{contrast, roles, typography, Rgb, Roles, AA_TEXT};
+use micold_core::tokens::{
+    contrast, roles, terminal_defaults, typography, Rgb, Roles, TerminalDefaults, AA_TEXT,
+};
 
 /// The foreground/surface pairs that carry text and must meet AA. Includes the worktree tag
 /// chips (feature 008): every per-type fill and the issue fill, paired with `on_tag`.
@@ -296,4 +298,20 @@ fn the_selects_state_layers_stay_legible() {
             }
         }
     }
+}
+
+/// `006` BUG-007 (FR-003a): the pair a dark terminal paints where output names no colour. The daemon
+/// answers `OSC 10`/`OSC 11` from this same pair, so it has to be the one the pane is drawn with —
+/// the dark scheme's text-on-surface roles.
+#[test]
+fn a_dark_terminal_defaults_to_on_surface_over_surface() {
+    let dark = roles(ColorScheme::Dark);
+    assert_eq!(
+        terminal_defaults(ColorScheme::Dark),
+        TerminalDefaults {
+            foreground: dark.on_surface,
+            background: dark.surface,
+        },
+        "a dark pane's default text and fill are the dark scheme's on_surface and surface"
+    );
 }

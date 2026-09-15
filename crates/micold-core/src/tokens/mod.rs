@@ -342,6 +342,23 @@ pub fn roles(scheme: ColorScheme) -> Roles {
     }
 }
 
+/// The colours a terminal paints where output names none (`006` FR-003, FR-003a, BUG-007).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TerminalDefaults {
+    /// Default text colour; also the cursor block's.
+    pub foreground: Rgb,
+    /// Default fill behind text.
+    pub background: Rgb,
+}
+
+/// The terminal's default colours under `scheme`.
+pub fn terminal_defaults(_scheme: ColorScheme) -> TerminalDefaults {
+    TerminalDefaults {
+        foreground: DARK.on_surface,
+        background: DARK.surface,
+    }
+}
+
 /// Spacing scale, in logical pixels. All padding/gaps use these steps (SC-007).
 pub mod spacing {
     pub const XS: f32 = 4.0;
