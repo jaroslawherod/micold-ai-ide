@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M1 (T001–T012): all tasks done; `mise run gate`, reviews A and B, PR
+- **Next step**: M1 (T001–T012): review round 1 fixed (A: U151; B: F1–F4); gate and review round 2, then PR
 
 ## Pull requests
 
@@ -55,6 +55,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | B | F5 (MINOR): contract §3 rows `http://localhost:5173/`, `mailto:team@example.com,`, `file:///home/u/My%20Doc.pdf`, `team@example.com`, `src/main.rs:42`, `data:text/html,x` have no `detect` unit test of their own | Each is a line of the SC-002 corpus (`tests/fixtures/link_corpus.txt`, section "Contract link-recognition §3") checked cell by cell through `link_at`, which calls `detect`; a second table test would pass on arrival and duplicate it |
 
 ## Open escalation
 
