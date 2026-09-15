@@ -13,6 +13,10 @@ can be removed.
 
 The agent follows [SKILL.md](SKILL.md). This page is the human-facing overview.
 
+The session you start only orchestrates: it keeps the ledger, asks you questions and merges. The
+spec, the design, each milestone and the close each run in their own subagent with a fresh
+context, so a long run does not drag every earlier phase along.
+
 ## The flow
 
 ```mermaid
