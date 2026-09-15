@@ -572,3 +572,34 @@ Appended rather than edited in place. The log is append-only.
 - `scripts/build-lock.sh cargo test --workspace` -> 2964 passed, 0 failed, 2 ignored (165s)
 - `cargo clippy --workspace --all-targets -- -D warnings` -> clean
 - `cargo fmt --all -- --check` -> clean
+
+## Test strength: A1 and U24 run the returned work to its end (T202, sixth-audit finding 1)
+
+- tests: `a_failed_sandbox_the_client_cannot_reach_is_brought_up_again`, `a_container_found_stopped_is_brought_up_without_showing_a_failure`
+- test change: `first_message` became `messages`, which collects every `Action::Output` of the returned work under a
+  10s `tokio::time::timeout`. `is_probing` became `reports_the_bring_up`, which asserts what U20 asserts of the stream:
+  `Progress(Probing)` first, `Started` or `Failed` last. No assertion removed, no dependency added
+- red: none of its own — the production code already hands the whole bring-up to `update`, so both tests passed on first
+  run (`scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide -- tests::a_failed_sandbox_the_client_cannot_reach_is_brought_up_again tests::a_container_found_stopped_is_brought_up_without_showing_a_failure`
+  -> `2 passed; 0 failed`). Deliberate-mutant check instead (`python3 mutants.py X7 X8 X9 X1 X2 X3 X4 X5 X6 N12 N13 T191a T191b`,
+  each rebuilt with `Compiling micold-client`, restored, sha verified; the draft diff compared byte-identical afterwards):
+  X7 (`iced::Task::stream(iced::futures::StreamExt::take(stream, 1))` in `task`) fails A1 at `main.rs:3102` and U24 at
+  `main.rs:3281` "... which is BUG-005: [Sandbox(Progress(Probing))]";
+  X8 (`Msg::Lost` returns `bring_up.task().then(..)` keeping only `SandboxMsg::Progress`) fails U24 at `main.rs:3281`
+  "... one that stops short leaves the view on `Probing` and a failed restart unrecorded, which is BUG-005: [Sandbox(Progress(Probing))]";
+  X9 (the same filter at `daemon_sync.rs:296`) fails A1 at `main.rs:3102` "... one that drops its ending never records a
+  failure or counts the attempt, which is BUG-005: [Sandbox(Progress(Probing))]".
+  Still caught: X1 U24 `:3274`, X2 A1 `:3096`, X3 A1 `:3102` and U24 `:3281` (`[]`), X4 U24 `:3281` (`[EscapePressed]`),
+  X5 U24 `:3281` (`[]`), X6 A1 `:3102` (`[]`), N12 A1 `:3091` (and `once_the_unattended_bring_ups_are_spent_the_failure_is_reported`
+  `:3653`), N13 U24 `:3268`, T191a A1 `:3085`, T191b U24 `:3263`
+- green: client target 146 passed, 0 failed, on the unmutated source (in the gate run below)
+- refactor: none. The `live_tasks()` token is now subsumed by `reports_the_bring_up`; removing it is a refactor of its own
+  (sixth-audit finding 3), not part of this cycle
+- commit: `test(027): A1 and U24 run the bring-up to its end (T202)`
+
+## Gates after Phase 24 (T202)
+
+- `mise run gate` -> fmt clean, clippy clean, `cargo test --workspace` 3111 passed, 0 failed, 6 ignored, `scripts/tests/*.test.sh` pass (342s)
+- deviation: the first gate run died with `No space left on device` and `ld terminated with signal 7 [Bus error]` at 2.0M
+  free. `target-shared/debug/incremental` (30G) was deleted and `SWEEP_ARGS='--maxsize 40GB' mise run sweep` run, both with
+  no `cargo`/`rustc` live, then the gate re-ran with `CARGO_INCREMENTAL=0`

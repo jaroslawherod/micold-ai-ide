@@ -1343,7 +1343,7 @@ a successful one leaves the sandbox in `Probing`.
 
 ### Blocking (HIGH)
 
-- [ ] T202 [BUG-005] *(test)* Finding 1 — `crates/micold-client/src/main.rs:3022-3045` (`first_message`,
+- [X] T202 [BUG-005] *(test)* Finding 1 — `crates/micold-client/src/main.rs:3022-3045` (`first_message`,
       `is_probing`), A1 at `:3084-3089`, U24 at `:3261-3267`; `crates/micold-client/src/shell/sandbox.rs:215-236`
       (`BringUp::task`), `:462` (`Msg::Lost`), `crates/micold-client/src/shell/daemon_sync.rs:293`.
       `first_message` stops at the first message, so only `Progress(Probing)` is checked. Make A1 and U24
