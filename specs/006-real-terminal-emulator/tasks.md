@@ -501,7 +501,7 @@ ever generated for bracketed paste (it lived in an assumption), so BUG-006 adds 
 reply is written daemon-side (010 `contracts/protocol.md` §8) from the scheme the client reports.
 Test-first: each failing test is its own Red commit before the change that turns it green.
 
-- [ ] T074 [BUG-007] Failing daemon test in `crates/micold-daemon/tests/vt_color_queries.rs`: a
+- [ ] T074 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] Failing daemon test in `crates/micold-daemon/tests/vt_color_queries.rs`: a
   `Term` wired with a real `DaemonListener` over a capturing writer is fed `ESC]10;?ESC\`,
   `ESC]11;?BEL` and `ESC]12;?BEL`. With the listener's `TerminalColors` set to dark, the replies are
   `tokens::roles(Dark)`'s `on_surface`, `surface` and `on_surface` in `rgb:rrrr/gggg/bbbb` form, with
@@ -512,17 +512,17 @@ Test-first: each failing test is its own Red commit before the change that turns
   ignores — its two existing callers (`PtySession::spawn` in `supervisor.rs` and
   `tests/support/mod.rs`'s `DrivenTerm`) pass `TerminalColors::default()` for now; the first dark
   assertion then fails on `rgb:e5e5/e5e5/e5e5`.
-- [ ] T075 [BUG-007] Add `tokens::terminal_defaults(scheme)` to `crates/micold-core/src/tokens/`
+- [ ] T075 [BUG-007] [U8] [U9] Add `tokens::terminal_defaults(scheme)` to `crates/micold-core/src/tokens/`
   returning the default foreground (`on_surface`) and background (`surface`), with a core test
   pinning both schemes to those roles; make `TermPalette::from_scheme` read its `fg`/`bg` from it.
   No colour the client draws changes (`style_snapshot` stays green without regeneration).
-- [ ] T076 [BUG-007] Make T074 pass in `crates/micold-daemon/src/terminal.rs`: `TerminalColors`
+- [ ] T076 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] Make T074 pass in `crates/micold-daemon/src/terminal.rs`: `TerminalColors`
   holds the scheme atomically (light by default) and `DaemonListener`'s `ColorRequest` arm answers
   `NamedColor::Foreground` and `NamedColor::Cursor` with the foreground and `NamedColor::Background`
   with the background of `tokens::terminal_defaults(scheme)`, read at reply time; indices below 256
   keep `StandardPalette`. Correct `StandardPalette`'s doc, which claims the fixed table keeps VT
   programs correct.
-- [ ] T077 [BUG-007] Wire message: `ClientMsg::TerminalColorScheme { scheme: ColorScheme }` in
+- [ ] T077 [BUG-007] [U10] Wire message: `ClientMsg::TerminalColorScheme { scheme: ColorScheme }` in
   `crates/micold-core/src/protocol/messages.rs`, `Serialize`/`Deserialize` on `ColorScheme`,
   `PROTOCOL_VERSION` 12 → 13 with its doc line, a round-trip case in
   `crates/micold-core/tests/protocol_roundtrip.rs`, and the two tests that pin the number moved with
@@ -530,7 +530,7 @@ Test-first: each failing test is its own Red commit before the change that turns
   `FEATURE_026_PROTOCOL_VERSION`, with their doc lines.
   The contract text is already in 010 `contracts/messages.md` and `contracts/protocol.md` §8 (patched
   with this bug); keep the code's doc comments pointing at it.
-- [ ] T078 [BUG-007] Daemon wiring, test-first: a failing test in `crates/micold-daemon/tests/` that a
+- [ ] T078 [BUG-007] [U11] [A1] [A2] Daemon wiring, test-first: a failing test in `crates/micold-daemon/tests/` that a
   connected client's `TerminalColorScheme { Dark }` changes the scheme on `DaemonState`'s
   `TerminalColors`, and that a session spawned through `DaemonState` answers `OSC 11` with it. To fail on the
   reply rather than to a compile error, first add the `DaemonState` field and accessor and a
@@ -539,7 +539,7 @@ Test-first: each failing test is its own Red commit before the change that turns
   `spawn_ai_cli` / `spawn_shell` from `DaemonState`'s spawn sites in `state.rs`, so sessions started
   before a change answer the new scheme too. `PtySession`'s direct test callers keep compiling through
   a `TerminalColors::default()` (a defaulted constructor or a `Default` argument), not a rewrite.
-- [ ] T079 [BUG-007] Client reporting, test-first in `crates/micold-client/src/shell/daemon_sync.rs`'s
+- [ ] T079 [BUG-007] [U12] [U13] [U14] [U15] Client reporting, test-first in `crates/micold-client/src/shell/daemon_sync.rs`'s
   tests over a real `Outbox`: `on_connected` sends `TerminalColorScheme` with
   `State::color_scheme()` **after** `app.daemon = Some(outbox)` (a send above it is silently dropped)
   and **before** its `Attach`; driven through the binary's `update` (not the helper
@@ -548,7 +548,7 @@ Test-first: each failing test is its own Red commit before the change that turns
   again. Then implement: the scheme last sent on this connection is kept on `App`, cleared by
   `on_connected`/`on_disconnected`, and a `report_color_scheme(app)` called from `on_connected` and
   after every `update_inner` sends when it differs.
-- [ ] T080 [BUG-007] Visual pass on a private Xvfb display (the `visual-pass` skill), real client and
+- [ ] T080 [BUG-007] [A3] Visual pass on a private Xvfb display (the `visual-pass` skill), real client and
   daemon from this branch: in a Regular terminal, a script that sends `ESC]11;?` and prints the reply
   shows the dark `surface` in dark and the light `surface` after toggling to light; and `claude` (theme
   `auto`) started in the dark scheme draws legible body text (SC-014) — required: if it cannot be
