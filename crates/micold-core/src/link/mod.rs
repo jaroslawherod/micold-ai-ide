@@ -56,3 +56,41 @@ pub struct CellSpan {
     pub row: i64,
     pub cols: Range<u16>,
 }
+
+#[cfg(test)]
+mod tests {
+    /// Every source in `link/`, by module name. A module `mod.rs` declares but this list omits
+    /// fails [`link_performs_no_io`] rather than escaping it.
+    const SOURCES: [(&str, &str); 5] = [
+        ("mod", include_str!("mod.rs")),
+        ("address", include_str!("address.rs")),
+        ("detect", include_str!("detect.rs")),
+        ("line", include_str!("line.rs")),
+        ("resolve", include_str!("resolve.rs")),
+    ];
+
+    #[test]
+    fn link_performs_no_io() {
+        let declared: Vec<&str> = include_str!("mod.rs")
+            .lines()
+            .filter_map(|line| line.strip_prefix("pub mod "))
+            .filter_map(|line| line.strip_suffix(';'))
+            .collect();
+        let listed: Vec<&str> = SOURCES[1..].iter().map(|(name, _)| *name).collect();
+        assert_eq!(
+            listed, declared,
+            "the scan reads exactly the modules link/mod.rs declares"
+        );
+
+        // Built at run time so this file's own source never matches them.
+        let needles = ["net", "fs", "process"].map(|module| ["std", module].join("::"));
+        for (name, source) in SOURCES {
+            for needle in &needles {
+                assert!(
+                    !source.contains(needle.as_str()),
+                    "link/{name}.rs names {needle}: recognising and resolving a link does no I/O (FR-019)"
+                );
+            }
+        }
+    }
+}

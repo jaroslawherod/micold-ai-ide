@@ -149,7 +149,7 @@ profile has no property library.
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U49 | No source in `link/` names `std::net`, `std::fs` or `std::process` | FR-019, US3.6 | example | PENDING | |
+| U49 | No source in `link/` names `std::net`, `std::fs` or `std::process` | FR-019, US3.6 | example | DONE | `crates/micold-core/src/link/mod.rs::tests::link_performs_no_io` |
 
 U49 is a guard: it is green on arrival. Its red is shown by adding `use std::fs;` to a `link/` file.
 
