@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.16.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.15.0...micold-ai-ide-v0.16.0) (2026-09-15)
+
+
+### Features
+
+* **030:** Windows installer package ([#314](https://github.com/jaroslawherod/micold-ai-ide/issues/314)) ([81de1f9](https://github.com/jaroslawherod/micold-ai-ide/commit/81de1f95dbabd95f7520890c9aa09e3efc239cfa))
+
+
+### Bug Fixes
+
+* **030:** never lay the sliding sidebar out narrower than its rail (M1) ([7c734de](https://github.com/jaroslawherod/micold-ai-ide/commit/7c734de59dfb0c3e485955bb949f613d9dff33de))
+* **030:** slide the worktree sidebar on the emphasized curve (M1) ([85987e5](https://github.com/jaroslawherod/micold-ai-ide/commit/85987e5b9cbb54541021730cf580e3a42cf27c49))
+* **030:** swap the closing sidebar to its strip once it is no wider (M1) ([c570037](https://github.com/jaroslawherod/micold-ai-ide/commit/c570037db0c2ecc79f27ae678d2b4123646f28c5))
+
+
+### Build & CI
+
+* **claude:** enable the caveman plugin for this project ([c509b44](https://github.com/jaroslawherod/micold-ai-ide/commit/c509b44c02f052a00d8b6ae0224fdb12dbbbbf78))
+* **speckit:** remove the unused assess extension ([86ac0c4](https://github.com/jaroslawherod/micold-ai-ide/commit/86ac0c4723cc1747b043778c896924b09f5e8960))
+
 ## [0.15.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.14.0...micold-ai-ide-v0.15.0) (2026-09-14)
 
 
