@@ -135,7 +135,7 @@ U32 is a guard: `file:` is `NotFollowable` until T046. Its red is shown after T0
 | U38 | In a sandboxed context, the container id's 12-character prefix and the full id are accepted as hosts | FR-018, C11 | example | PENDING | |
 | U39 | A sandboxed path under a shared location resolves to that location's host path, with `needs_confirmation` | FR-018, FR-018a, C11 | example | PENDING | |
 | U41 | A sandboxed path under no shared location resolves to `Unreachable`, displayed as `<path> — not reachable from this machine` | FR-018, C12 | example | PENDING | |
-| U46 | For every resolved link, `display` equals the string its target carries (`Url` and `HostPath`), sampled over every case above | SC-006 | example | PENDING | |
+| U46 | For every resolved link, `display` equals the string its target carries (`Url` and `HostPath`), sampled over every case above | SC-006 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::what_the_hint_shows_is_exactly_what_opens` |
 | U47 | In a sandboxed context, this machine's `host_names` still translate through the shared locations | FR-018, C17 | example | PENDING | |
 | U140 | `host_names_from` lists the full name and its first DNS label (`build.example.com` → both), a dotless name once, an empty name as none | FR-012 | example | PENDING | |
 | U141 | `container_host_names` gives a 64-character id's 12-character prefix and the full id, and a 12- or 8-character id once | FR-018, C11 | example | PENDING | |

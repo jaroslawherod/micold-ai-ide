@@ -365,3 +365,13 @@
 - green: no implementation change. Suite -> 1095 passed, 0 failed
 - refactor: none needed
 - commit: `test(031): pin that a non-followable declared URI resolves to nothing (U34)`
+
+## Cycle 37: U46 for every resolved link, `display` equals the string its target carries
+
+- test: `crates/micold-core/src/link/resolve.rs::tests::what_the_hint_shows_is_exactly_what_opens` (new), sampled by hand over web, upper-case web, mail with a query, an application scheme and a `file:` address, and asserting that three of them resolve
+- red: passed on arrival (`test ... ok`), since U33's `resolve` shows the address it opens. Deliberate mutant: `display` is the address lower-cased. `scripts/build-lock.sh cargo test -p micold-core --lib link::resolve::tests::what_the_hint_shows_is_exactly_what_opens -- --exact`
+  -> `assertion `left == right` failed: HTTP://LOCALHOST:8080/: the hint shows exactly the string handed to the opener (SC-006)` / `left: "http://localhost:8080/"` / `right: "HTTP://LOCALHOST:8080/"` (1 failed). Mutant reverted from the backup
+- green: no implementation change. Suite (`cargo test -p micold-core --all-targets`) -> 1096 passed, 0 failed
+- refactor: none needed
+- commit: `test(031): pin that the hint shows exactly what opens (U46)`
+- notes: T006 and T012 ticked in this commit (U28–U30, U33, U34, U46 DONE). T042 extends the sample to `HostPath`
