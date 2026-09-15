@@ -126,6 +126,22 @@ impl TerminalColors {
             ColorScheme::Light
         }
     }
+
+    /// The answer for a dynamic colour — `alacritty_terminal` puts `OSC 10/11/12` past the 256-entry
+    /// palette — under the current scheme, or `None` for a palette index.
+    fn dynamic(&self, index: usize) -> Option<Rgb> {
+        let defaults = tokens::terminal_defaults(self.scheme());
+        let role = match index {
+            i if i == NamedColor::Foreground as usize => defaults.foreground,
+            i if i == NamedColor::Background as usize => defaults.background,
+            _ => return None,
+        };
+        Some(Rgb {
+            r: role.r,
+            g: role.g,
+            b: role.b,
+        })
+    }
 }
 
 impl DaemonListener {
@@ -160,22 +176,7 @@ impl EventListener for DaemonListener {
             // VT control replies — answered here, never forwarded (protocol.md §8, T034).
             Event::PtyWrite(text) => self.reply(text.as_bytes()),
             Event::ColorRequest(index, format) => {
-                let defaults = tokens::terminal_defaults(self.colors.scheme());
-                let rgb = if index == NamedColor::Background as usize {
-                    Rgb {
-                        r: defaults.background.r,
-                        g: defaults.background.g,
-                        b: defaults.background.b,
-                    }
-                } else if index == NamedColor::Foreground as usize {
-                    Rgb {
-                        r: defaults.foreground.r,
-                        g: defaults.foreground.g,
-                        b: defaults.foreground.b,
-                    }
-                } else {
-                    self.palette.color(index)
-                };
+                let rgb = self.colors.dynamic(index).unwrap_or_else(|| self.palette.color(index));
                 self.reply(format(rgb).as_bytes());
             }
             Event::TextAreaSizeRequest(format) => {
