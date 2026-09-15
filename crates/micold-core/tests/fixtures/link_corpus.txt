@@ -1,0 +1,127 @@
+# SC-002 reference corpus (feature 031): terminal output from AI CLIs and command-line tools,
+# read by `crates/micold-core/tests/link_corpus.rs`.
+#
+# Format
+#
+# - A line starting with `#` is a comment. A blank line ends an entry.
+# - An entry is a run of output lines, each printed with a real line break after it. Every entry is
+#   read on its own, between two empty rows.
+# - An expected link is delimited inline by ⟦ and ⟧. The delimiters are not part of the output.
+#   Every other cell of the entry is no link: that is how the scheme-less addresses below are
+#   checked.
+# - `@wrap <width>` on its own line soft-wraps the output line after it into rows <width> cells wide,
+#   as a terminal that narrow does. Every row but the last soft-wraps into the next.
+# - `@hard` on its own line starts an entry holding one address a program broke itself, with real
+#   line breaks. Its piece on the first row is expected there alone, when that piece is well-formed.
+#
+# Every char is one cell: wide characters and their spacer cells are covered by the unit tests in
+# `link/line.rs`, not here.
+
+# Help text (gh, mise, docker, jq, wget, grep, gpg, cargo-deb), as printed.
+  Read the manual at ⟦https://cli.github.com/manual⟧
+mise prepares your development environment before each command runs. ⟦https://github.com/jdx/mise⟧
+For more help on how to use Docker, head to ⟦https://docs.docker.com/go/guides/⟧
+the jq(1) manpage ("man jq") and/or ⟦https://jqlang.org/⟧.
+and/or open issues at ⟦https://savannah.gnu.org/bugs/?func=additem&group=wget⟧.
+GNU grep home page: <⟦https://www.gnu.org/software/grep/⟧>
+General help using GNU software: <⟦https://www.gnu.org/gethelp/⟧>
+License GNU GPL-3.0-or-later <⟦https://gnu.org/licenses/gpl.html⟧>
+Please report bugs to <⟦https://bugs.gnupg.org⟧>.
+          See ⟦https://wiki.debian.org/Multiarch/HOWTO⟧
+See ⟦https://lib.rs/crates/cargo-deb⟧ for more info
+
+# git push and gh.
+remote:
+remote: Create a pull request for 'feat/links' on GitHub by visiting:
+remote:      ⟦https://github.com/octo-org/octo-repo/pull/new/feat/links⟧
+remote:
+To github.com:octo-org/octo-repo.git
+ * [new branch]      feat/links -> feat/links
+
+✓ Created pull request ⟦https://github.com/octo-org/octo-repo/pull/341⟧
+! First copy your one-time code: 1A2B-3C4D
+Open this URL to continue in your web browser: ⟦https://github.com/login/device⟧
+
+# Dev servers.
+  ➜  Local:   ⟦http://localhost:5173/⟧
+  ➜  Network: use --host to expose
+   - Local:        ⟦http://localhost:3000⟧
+   - Network:      ⟦http://192.168.1.23:3000⟧
+        ⟦http://127.0.0.1:8888/lab?token=3f1c0e8b2a9d4e7f⟧
+Serving HTTP on 0.0.0.0 port 8000 (⟦http://0.0.0.0:8000/⟧) ...
+listening on ⟦http://[::1]:8080/⟧
+Grafana at ⟦http://devbox:3000/d/abc?orgId=1&from=now-6h⟧
+
+# Build and package tools.
+  = note: see issue #44265 <⟦https://github.com/rust-lang/rust/issues/44265⟧> for more information
+  = help: for further information visit ⟦https://rust-lang.github.io/rust-clippy/master/index.html#needless_return⟧
+error: failed to download from ⟦https://crates.io/api/v1/crates/serde/1.0.210/download⟧
+npm notice Changelog: ⟦https://github.com/npm/cli/releases/tag/v10.9.0⟧
+npm notice To update run: npm install -g npm@10.9.0
+npm error A complete log of this run can be found in: /home/u/.npm/_logs/2026-09-14T10_22_31_104Z-debug-0.log
+curl --proto '=https' --tlsv1.2 -sSf ⟦https://sh.rustup.rs⟧ | sh
+-- Docs: ⟦https://docs.pytest.org/en/stable/how-to/capture-warnings.html⟧
+View build details: docker-desktop://dashboard/build/default/default/k2n4
+Report written to ⟦file:///home/u/project/target/criterion/report/index.html⟧
+Location: ⟦HTTPS://EXAMPLE.COM/Redirect⟧
+{"url":"⟦https://api.github.com/repos/o/r/pulls/1⟧","state":"open"}
+
+# AI CLI sessions.
+⏺ I opened a pull request: ⟦https://github.com/octo-org/octo-repo/pull/342⟧.
+  The contract is linked from the plan (see [the contract](⟦https://github.com/octo-org/octo-repo/blob/main/specs/031/contracts/link-recognition.md⟧)).
+⏺ Fetch(⟦https://docs.rs/iced/latest/iced/⟧)
+  ⎿  Received 412.3KB (200 OK)
+⏺ Web Search("alacritty OSC 8 hyperlink")
+  ⎿  Did 1 search in 3s
+     - [Hyperlinks (a.k.a. HTML-like anchors) in terminal emulators](⟦https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda⟧)
+  Sources: ⟦https://alacritty.org/config-alacritty.html⟧, ⟦https://github.com/alacritty/alacritty/pull/7186⟧
+  Contact ⟦mailto:security@example.com⟧, or email security@example.com directly.
+  Reply to ⟦mailto:team@example.com?subject=Build%20failed⟧;
+  Run `curl ⟦https://example.com/install.sh⟧` first, then echo '⟦https://example.com/a?b=1⟧'.
+  See ⟦https://en.wikipedia.org/wiki/Rust_(programming_language)⟧.
+  The page is ⟦https://münchen.de/straße⟧ now.
+  Opening ⟦file://devbox/home/u/My%20Doc.pdf⟧ in the viewer.
+For more info see: ⟦https://aider.chat/docs/troubleshooting/edit-errors.html⟧
+The change is in src/link/detect.rs:42 and docs at example.com/links, from team@example.com.
+
+# Contract link-recognition §3.
+See ⟦https://example.com/docs/page.html⟧ for details.
+(⟦https://example.com/a_(b)⟧)
+"⟦https://example.com⟧"
+[text](⟦https://x.y/z⟧)
+<⟦https://x.y⟧>
+dev server at ⟦http://localhost:5173/⟧
+⟦mailto:team@example.com⟧,
+⟦file:///home/u/My%20Doc.pdf⟧
+example.com, team@example.com, src/main.rs:42
+https://, http://exa mple, javascript:alert(1), data:text/html,x
+xhttps://example.com
+
+# Soft-wrapped by a narrow pane.
+@wrap 40
+  ➜  Local:   ⟦http://localhost:5173/some/very/long/route/that/wraps⟧
+
+@wrap 30
+⏺ Opened ⟦https://github.com/octo-org/octo-repo/pull/341/files#diff-3f1c0e8b2a⟧ for review.
+
+@wrap 24
+See ⟦https://example.com/docs/page.html⟧ for details.
+
+@wrap 10
+Visit now ⟦https://example.com/x⟧ ok
+
+@wrap 16
+Docs: (⟦https://en.wikipedia.org/wiki/Rust_(programming_language)⟧).
+
+# Broken by the program with real line breaks.
+@hard
+⏺ The dashboard is at ⟦https://grafana.example.com/d/abc123/service-⟧
+  overview?orgId=1&from=now-6h&to=now
+
+@hard
+  ⟦https://github.com/octo-org/octo-repo/blob/main/specs/031-clickable-⟧
+  terminal-links/contracts/link-recognition.md
+
+@hard
+Open https://
+example.com/docs/page.html
