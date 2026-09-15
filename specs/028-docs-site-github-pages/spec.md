@@ -5,9 +5,16 @@
 **Created**: 2026-08-27
 
 **Status**: Closed 2026-09-15 — implemented and shipped in PR #268 (merged 2026-08-31); the site
-publishes on each release. 84 of the 86 tasks in [tasks.md](./tasks.md) are done. The two open ones,
-T082 and T085 — quickstart Part B, a reader's judgement of the published site — are unrun, so the
-judgement halves of SC-001 and SC-006 are unobserved and `evidence/quickstart-b.md` does not exist.
+publishes on each release. All 86 tasks in [tasks.md](./tasks.md) are done. Quickstart Part B ran
+2026-09-15 against v0.15.0 ([evidence/quickstart-b.md](./evidence/quickstart-b.md)). An agent drove
+headless Chromium, so the timings are the browser's, not a person's. SC-001 and SC-006 pass. The run
+found three defects, none of them filed yet:
+- Search returns nothing for "about".
+- The header's title sits at the top of the bar, is centred, and uses mdBook's icons instead of the
+  app bar's (FR-029a, FR-031).
+- The site's own transitions keep mdBook's `ease` timings (FR-030a).
+
+B5 ran on emulated phones only, so a real phone is still unrun.
 
 **Input**: User description: "GitHub Pages documentation site for the project, published automatically on each release, built from the in-repo docs (primarily the user guide), and including screenshots and animated GIFs captured from the running application."
 

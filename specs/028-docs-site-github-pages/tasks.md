@@ -236,17 +236,16 @@ and no video bytes were requested until a play control was pressed.
 - [X] T079 Run `cargo fmt --check`, `cargo clippy` and `mise run test` — CI stops at `cargo fmt --check` before any other job, so the local gate is not the CI gate
 - [X] T080 Confirm the merge gate is unchanged: `cargo test -p micold-core --test ci_gate_covers_every_job` and `cargo test -p micold-core --test documentation_is_not_read` both pass with the new checks in place (Principle VI, FR-020)
 - [X] T081 Run the whole of [quickstart.md](./quickstart.md) Part A on a clean checkout, including the prove-they-fail commands for every check — A1–A8 run and green (A6 over all 12 media: 90 files identical across two captures); A9 is a publication and is deferred with T063/T064
-- [ ] T082 Run [quickstart.md](./quickstart.md) Part B against the published site and record the judgement halves of SC-001 and SC-006 in the pass record (FR-023a)
+- [X] T082 Run [quickstart.md](./quickstart.md) Part B against the published site and record the judgement halves of SC-001 and SC-006 in the pass record (FR-023a) *(Run 2026-09-15 against v0.15.0, by an agent in headless Chromium: [evidence/quickstart-b.md](./evidence/quickstart-b.md). SC-001 and SC-006 pass. B3 is partial: the header's title sits at the top of the bar, is centred, and uses mdBook's icons. Search finds nothing for "about". The site's own transitions are mdBook's, not the application's (FR-030a). B5 ran on emulated phones only, so as written it is not run.)*
 - [X] T083 Cross-cutting documentation review: `docs/SUMMARY.md` matches the page set, `docs/README.md` still reads as the repository's documentation index on GitHub, and `docs/development/ci-pipeline.md` mentions the new `docs`-job steps
 
 ---
 
 ## Deferred — needs the live repository and a reader
 
-One task is still open, and a source tree alone cannot complete it:
-
-- **T082** — Part B, the reader's judgement, run against the published site. T085 names the pass
-  record it writes.
+T082, Part B run against the published site, was deferred here too. It ran on 2026-09-15, and
+[evidence/quickstart-b.md](./evidence/quickstart-b.md) is its pass record. Part B is meant to run
+once per release, so later releases still need their own pass.
 
 T036's website field and T063's Pages source were deferred here too, on the belief that this
 checkout's remote was not the upstream repository. It is. Both settings are in place and both tasks
@@ -376,5 +375,5 @@ links, guide captures), one on US4 (checks and workflows). US3 joins once `stage
 ## Phase 8: Convergence
 
 - [X] T084 [US4] Break a check deliberately on a `workflow_dispatch` run of `.github/workflows/pages.yml` and confirm the run fails while the previously published site stays reachable, completing the second half of T064 (quickstart A9) per FR-018, FR-017, FR-020a (missing) — run `34754847522` failed at the internal link check with deploy skipped and the live site byte-identical; see [evidence/t084-deliberate-failure.md](./evidence/t084-deliberate-failure.md)
-- [ ] T085 Run [quickstart.md](./quickstart.md) Part B (B1-B5) against <https://jaroslawherod.github.io/micold-ai-ide/> and write the judgement halves of SC-001 and SC-006 into a pass record at `specs/028-docs-site-github-pages/evidence/quickstart-b.md`, matching the evidence convention of `specs/027-sandboxed-daemon-runtime/` and `specs/028-client-managed-daemon/`, so T082's "pass record" names an actual file per FR-023a (missing)
+- [X] T085 Run [quickstart.md](./quickstart.md) Part B (B1-B5) against <https://jaroslawherod.github.io/micold-ai-ide/> and write the judgement halves of SC-001 and SC-006 into a pass record at `specs/028-docs-site-github-pages/evidence/quickstart-b.md`, matching the evidence convention of `specs/027-sandboxed-daemon-runtime/` and `specs/028-client-managed-daemon/`, so T082's "pass record" names an actual file per FR-023a (missing)
 - [X] T086 Narrow the "Deferred — needs the upstream repository" section of this file to the tasks still genuinely open — T036 and T063 are now `- [X]` and merged, so the section contradicts the checkboxes above it (contradicts)
