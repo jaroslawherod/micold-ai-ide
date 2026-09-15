@@ -3,7 +3,7 @@
 use std::ops::Range;
 
 use super::{
-    detect::{detect, TRAILING_PUNCTUATION},
+    detect::{detect, ends_an_address, TRAILING_PUNCTUATION},
     CellSpan, Link, LinkOrigin, LinkRows,
 };
 
@@ -125,7 +125,8 @@ fn detected_at(line: &LogicalLine, row: i64, col: u16) -> Option<Link> {
     let range = detect(&text)
         .into_iter()
         .find(|range| range.contains(&index))?;
-    let reaches_a_cut = (line.cut_above && range.start == 0)
+    let reaches_a_cut = (line.cut_above
+        && !line.text[..range.start].iter().any(|&c| ends_an_address(c)))
         || (line.cut_below
             && line.text[range.end..]
                 .iter()
@@ -480,6 +481,27 @@ mod tests {
                 cells: vec![span(0, 4..23)],
             }),
             "a space after the punctuation ends the address before the cut"
+        );
+    }
+
+    #[test]
+    fn a_candidate_that_may_sit_inside_an_address_cut_above_is_dropped() {
+        let rows = Rows::new(1, vec![row("=https://b.example/y now")]);
+        assert_eq!(
+            link_at(&rows, 1, 6),
+            None,
+            "the row above is unavailable and only address characters come before the scheme, so it may be the tail of `?next=https://…`"
+        );
+
+        let rows = Rows::new(1, vec![row("x https://b.example/y now")]);
+        assert_eq!(
+            link_at(&rows, 1, 6),
+            Some(Link {
+                address: "https://b.example/y".to_string(),
+                origin: LinkOrigin::Detected,
+                cells: vec![span(1, 2..21)],
+            }),
+            "a space before the scheme ends whatever began above, so the address is whole"
         );
     }
 

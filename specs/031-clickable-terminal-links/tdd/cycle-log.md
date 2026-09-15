@@ -407,3 +407,14 @@
 - refactor: none needed
 - commit: `test(031): pin that a hard-broken address is a link on its first row only (U133)`
 - notes: T008, T009 and T010 ticked in this commit (U1–U27, U132, U133, U147–U150 DONE). Every M1 behavior is DONE
+
+## Cycle 41: U151 above a cut, a candidate preceded only by address characters is dropped
+
+- origin: review A (code-review, high) on M1 found that the top-cut check dropped a candidate only at index 0, so `https://app.example/…` nested in `?next=https://app.example/…` was offered once the outer address's start lay past the cap or above the first available row. The existing cap test passed only because its nested scheme fell on a row start. Added to the list as U151; contract L7's upper edge now reads "nothing but characters an address may contain lies between column 0 of the upper row and its start"; T005 and T010 carry `[U151]` and were unticked until it was DONE
+- test: `crates/micold-core/src/link/line.rs::tests::a_candidate_that_may_sit_inside_an_address_cut_above_is_dropped` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::a_candidate_that_may_sit_inside_an_address_cut_above_is_dropped -- --exact`
+  -> `assertion `left == right` failed: the row above is unavailable and only address characters come before the scheme, so it may be the tail of `?next=https://…`` / `left: Some(Link { address: "https://b.example/y", origin: Detected, cells: [CellSpan { row: 1, cols: 1..20 }] })` / `right: None` (1 failed)
+- green: `detect::ends_an_address` became `pub(super)`, and `detected_at` treats a candidate as reaching the top cut when no char before it on the logical line ends an address. The first run after the change failed on the test's own keep case: `left: ... cols: 2..21` / `right: ... cols: 2..20`. The expected span was miscounted (the address is 19 chars), so the test was corrected to `2..21`, with no implementation change; the drop half's red above was recorded before the implementation. Suite (`cargo test -p micold-core --all-targets`) -> 1100 passed, 0 failed; clippy clean
+- refactor: none needed
+- commit: `feat(031): drop an address that may sit inside one cut above (U151)`
+- notes: T005 and T010 re-ticked
