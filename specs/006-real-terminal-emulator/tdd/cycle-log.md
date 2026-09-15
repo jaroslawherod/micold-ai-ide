@@ -56,3 +56,13 @@ before the implementation.
   `scripts/build-lock.sh cargo test -p micold-daemon` -> 331 passed, 0 failed
 - refactor: none yet — the `tokens::Rgb` → `vte::Rgb` conversion is written once; extract it when a
   second role needs it
+
+## Cycle 4: U2 a dark pane answers a foreground query with the dark on_surface
+
+- test: `crates/micold-daemon/tests/vt_color_queries.rs::a_dark_pane_answers_a_foreground_query_with_the_dark_on_surface` (new; queries with an `ST` terminator)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test vt_color_queries a_dark_pane_answers_a_foreground_query_with_the_dark_on_surface -- --exact`
+  -> `left: "\u{1b}]10;rgb:e5e5/e5e5/e5e5\u{1b}\\"  right: "\u{1b}]10;rgb:e6e6/e1e1/e6e6\u{1b}\\"` (1 failed)
+- green: the `ColorRequest` arm answers `NamedColor::Foreground` from `terminal_defaults(scheme).foreground`.
+  Suite `scripts/build-lock.sh cargo test -p micold-daemon` -> 332 passed, 0 failed
+- refactor: separate structural commit — the `tokens::Rgb` → `vte::Rgb` conversion, now written twice,
+  becomes one function and the `if` chain a `match` on the dynamic index
