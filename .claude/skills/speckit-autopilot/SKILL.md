@@ -84,6 +84,35 @@ Phase 1. Leave them as `[NEEDS CLARIFICATION]` markers and triage them in Phase 
 Each artifact review loops fix → re-review up to **3 rounds**. A fourth round is an escalation. How
 to dispatch a reviewer and the rubrics: [references/review-rubrics.md](references/review-rubrics.md).
 
+## Context: the session orchestrates, subagents run the units
+
+A whole run in one context re-reads every earlier phase on every later call; one such session made
+5,246 calls. So the session that received the prompt is the **orchestrator**. It keeps the ledger,
+asks the human, waits on CI and merges. It does not run phase skills itself.
+
+Each **unit** runs in its own `general-purpose` subagent on the session model (omit `model`):
+
+| Unit | Scope |
+|---|---|
+| Bug | Phase 0 steps 1–5: reproduce, report, patch, verify, bug-rubric review |
+| Spec | Phase 1, through opening PR 1 |
+| Clarify round | one `speckit-clarify` run and its triage |
+| Design | Phase 3, through opening PR 2 |
+| Milestone K | Phase 4 steps 1–5, through opening its PR |
+| Close | Phase 5, through opening the close PR |
+
+- **Prompt:** this file's path and the section to follow, the ledger path, the worktree path and
+  branch, and the unit's scope (for a milestone, its task IDs). A unit dispatches its own reviewer
+  subagents and forked skills.
+- **Return contract:** `STATUS: DONE | ESCALATE | FAILED`, the PR number if one was opened, and a
+  summary of at most five lines. The unit updates the ledger before it returns; the orchestrator
+  reads the ledger, not the unit's transcript.
+- **Subagents have no `AskUserQuestion`.** A unit that reaches a user decision (a clarify triage, an
+  escalation) stops with `ESCALATE` and the questions in the escalation format. The orchestrator
+  asks them, then continues **the same** subagent with `SendMessage` carrying the answers.
+- **Red CI** goes back to the unit that opened the PR, again through `SendMessage` with the failing
+  log: that subagent still holds the change's context.
+
 ### Phase 0: a bug report
 
 1. **Reproduce on `origin/main`** with `systematic-debugging`. Try the report's steps
@@ -152,8 +181,9 @@ For milestone K:
    step 3. A finding that contradicts the spec is declined, with the reason recorded in the ledger.
 5. Tick the milestone's tasks, update the ledger, commit, `git push --force-with-lease`, and open the
    PR from [references/pr-and-merge.md](references/pr-and-merge.md).
-6. Wait for `ci complete`. When it goes red, run `systematic-debugging`, fix, and push
-   (at most 3 attempts). When the PR has no checks, diagnose it (see the reference). When it goes
+6. The orchestrator waits for `ci complete`. When it goes red, it continues the milestone's
+   subagent with the failing log, which runs `systematic-debugging`, fixes, and pushes (at most 3
+   attempts). When the PR has no checks, diagnose it (see the reference). When it goes
    green, run `gh pr merge <n> --rebase` and confirm `state` is `MERGED`.
 
 ## Ownership: only this flow's work
@@ -229,5 +259,6 @@ This worktree has no uncommitted work, no unpushed commits and no open PRs.
 | "That green PR from another session is ready, I'll merge it" | It isn't in the ledger, so it isn't yours. |
 | "main is red, I'll wait until it recovers" | Waiting silently stalls the flow. Escalate as *blocked by work outside my flow*. |
 | "Quick question for the user…" | Batch it, add a recommendation, use the banner, or resolve it from evidence. |
+| "This milestone is small, I'll do it in the orchestrator" | Whatever the orchestrator reads is re-read on every later call of the run. Dispatch the unit. |
 | "I remember where I was" | The ledger and `gh pr view` say where you are. Memory doesn't. |
 | "Everything merged. Done!" | Verify the three checks, then send the WORK COMPLETE handoff with the worktree line. |

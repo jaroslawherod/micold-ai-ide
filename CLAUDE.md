@@ -16,13 +16,20 @@ a paragraph over a bulleted essay, when either communicates the same information
 Every tool call re-reads the whole conversation, so call count and output size are what cost.
 
 - **Read files with the Read tool, not `sed -n`, `cat`, `head`, or `tail`.** There is no Grep tool
-  in this setup: find the lines with `grep -n` in Bash, then Read with `offset`/`limit`. Session history showed ~9,400 `sed -n 'X,Yp'` chunk
-  reads — `main.rs` alone over 300 times — each a separate round-trip that Read would have
-  collapsed.
+  in this setup: find the lines with `grep -n` in Bash, then Read with `offset`/`limit`. Session
+  history showed ~9,400 `sed -n 'X,Yp'` chunk reads — `main.rs` alone over 300 times — each a
+  separate round-trip that Read would have collapsed.
 - **Never poll with `sleep` loops or repeated `gh pr checks`.** Run the wait as one Bash call with
   `run_in_background` (an `until …; do sleep 30; done` that exits on the terminal state) or a
   Monitor, and act when its notification arrives. ~7,000 polling calls each re-read the full
   context for no new information.
+- **Batch probes into one call.** `git status`, `ls`, a `grep -n` and a `gh pr view` that you would
+  run back to back go in one Bash call, and independent Reads go in one message. At a typical
+  ~120k context, every call saved is ~120k cache-read tokens saved.
+- **One session per unit of work.** Context carried across tasks is re-read on every later call:
+  one refactor session made 5,246 calls and alone accounted for 23% of all cache reads. Start a
+  fresh session (or subagent) per feature phase or milestone, and hand state over in a file — a
+  ledger, `tasks.md`, a commit — not in conversation.
 
 ## Put cheap work on a cheaper model, in a fresh context
 

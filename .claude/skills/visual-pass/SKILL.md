@@ -134,7 +134,12 @@ DISPLAY=:77 xdotool windowmove $W 0 0
 DISPLAY=:77 import -window root shot.png
 ```
 
-Then **Read the PNG**. A blank or black frame is a launch failure, not a result.
+Then **Read a downscaled copy, never the full frame**: `convert shot.png -resize 45% small.png` and
+Read `small.png`. A blank or black frame is a launch failure, not a result.
+
+**Every image you Read stays in context for the rest of the run**, and a 1600×1400 frame is the
+most expensive thing this skill does. So the rule has no exceptions: downscale to locate, crop to
+judge (§7), and Read full resolution only as a crop of the region under test.
 
 ### 6. Driving it
 
@@ -153,9 +158,9 @@ If a key appears to do nothing, this is why — not the application.
 | Click | `xdotool mousemove X Y; xdotool click 1` |
 | Key | `xdotool windowfocus $W` first, then `xdotool key Escape` |
 
-**Scrolling is trial and error** and costs turns. Locate cheaply: capture, then
-`convert shot.png -resize 45% small.png` and read the small one. Full resolution is only needed once
-you are on the thing you came to look at.
+**Scrolling is trial and error** and costs turns. Locate on the downscaled copy, and batch the moves:
+one Bash call can scroll, capture and downscale, instead of one call per step. Full resolution is
+only needed once you are on the thing you came to look at, and then only as a crop.
 
 **An open overlay changes what a coordinate means.** A click at the field's own y-position lands on
 whichever list row is now covering it. Close the list first, or aim deliberately — an accidental row
