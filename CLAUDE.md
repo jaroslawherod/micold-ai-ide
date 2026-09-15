@@ -15,14 +15,30 @@ a paragraph over a bulleted essay, when either communicates the same information
 
 Every tool call re-reads the whole conversation, so call count and output size are what cost.
 
-- **Read files with the Read tool, not `sed -n`, `cat`, `head`, or `tail`.** Find the lines with
-  Grep first, then Read with `offset`/`limit`. Session history showed ~9,400 `sed -n 'X,Yp'` chunk
+- **Read files with the Read tool, not `sed -n`, `cat`, `head`, or `tail`.** There is no Grep tool
+  in this setup: find the lines with `grep -n` in Bash, then Read with `offset`/`limit`. Session history showed ~9,400 `sed -n 'X,Yp'` chunk
   reads — `main.rs` alone over 300 times — each a separate round-trip that Read would have
   collapsed.
 - **Never poll with `sleep` loops or repeated `gh pr checks`.** Run the wait as one Bash call with
   `run_in_background` (an `until …; do sleep 30; done` that exits on the terminal state) or a
   Monitor, and act when its notification arrives. ~7,000 polling calls each re-read the full
   context for no new information.
+
+## Put cheap work on a cheaper model, in a fresh context
+
+Session history ran 99% of calls on Opus, subagents included. Move work down a model only where it
+starts a **fresh context**: switching the model mid-conversation re-writes the whole cached context
+for the new model, which costs more than it saves.
+
+- **Explore** agents (locating code, tracing a call path): `model: "haiku"`.
+- **Re-review rounds** (round 2+ of a spec, plan, tasks or diff review) and **conformance checks**:
+  `model: "sonnet"`. First-round reviews stay on the session model.
+- **Forked skills** already set `context: fork` + `model: sonnet` in their frontmatter:
+  `visual-pass`, `speckit-analyze`, `speckit-bugfix-verify`, `speckit-tdd-verify`. They see only
+  their arguments, so pass paths and what to check. A spec-kit upgrade regenerates the `speckit-*`
+  files; re-add those three lines afterwards.
+- **Stay on the session model** for writing specs and plans, debugging, architecture, and
+  non-trivial Rust.
 
 ## Use `mise` tasks, not raw `cargo` commands
 

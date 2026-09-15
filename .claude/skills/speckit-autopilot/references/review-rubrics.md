@@ -7,7 +7,14 @@ never edits.
 
 ## Dispatching a reviewer
 
-Use the `Agent` tool (`subagent_type: general-purpose`). The prompt has these parts, in this order:
+Use the `Agent` tool (`subagent_type: general-purpose`). Choose the model by round:
+
+- **Round 1** of every review, including review B on a milestone's first pass: omit `model`, so
+  the reviewer runs on the session's model. This is the review that has to find the problems.
+- **Round 2 and later**, which check that earlier findings were fixed and nothing regressed:
+  `model: "sonnet"`.
+
+The prompt has these parts, in this order:
 
 1. **Role.** "You are reviewing <artifact> for feature <NNN>. You did not write it. Do not edit any
    file."
@@ -25,8 +32,8 @@ Use the `Agent` tool (`subagent_type: general-purpose`). The prompt has these pa
 
 After the reviewer returns:
 
-- Verify each finding yourself, following `superpowers:receiving-code-review`. If a finding is
-  wrong, decline it and record the reason in the ledger.
+- Verify each finding yourself against the artifact or code. If a finding is wrong, decline it and
+  record the reason in the ledger.
 - Fix every BLOCKER and MAJOR that holds up. Fix a MINOR only when it takes a few minutes.
 - Re-dispatch a **new** reviewer. Do not reuse the old one: it has seen the old version.
 - A third round that still returns BLOCKER or MAJOR is an escalation (category 5).

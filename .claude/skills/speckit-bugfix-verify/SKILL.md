@@ -7,6 +7,9 @@ metadata:
   source: extension:bugfix
 user-invocable: true
 disable-model-invocation: false
+context: fork
+model: sonnet
+background: false
 ---
 
 # Bugfix Verify Skill
