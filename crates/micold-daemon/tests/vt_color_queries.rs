@@ -104,6 +104,7 @@ fn reply(code: u8, rgb: Rgb, terminator: &str) -> String {
 }
 
 const BEL: &str = "\x07";
+const ST: &str = "\x1b\\";
 
 #[test]
 fn a_dark_pane_answers_a_background_query_with_the_dark_surface() {
@@ -113,5 +114,16 @@ fn a_dark_pane_answers_a_background_query_with_the_dark_surface() {
         term.ask("\x1b]11;?\x07"),
         reply(11, terminal_defaults(ColorScheme::Dark).background, BEL),
         "a program asking a dark pane for its background must be told it is dark"
+    );
+}
+
+#[test]
+fn a_dark_pane_answers_a_foreground_query_with_the_dark_on_surface() {
+    let mut term = QueriedTerm::new(colors_for(ColorScheme::Dark));
+
+    assert_eq!(
+        term.ask("\x1b]10;?\x1b\\"),
+        reply(10, terminal_defaults(ColorScheme::Dark).foreground, ST),
+        "a program asking a dark pane for its default text colour must get the text colour drawn on it"
     );
 }

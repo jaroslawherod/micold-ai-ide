@@ -160,12 +160,18 @@ impl EventListener for DaemonListener {
             // VT control replies — answered here, never forwarded (protocol.md §8, T034).
             Event::PtyWrite(text) => self.reply(text.as_bytes()),
             Event::ColorRequest(index, format) => {
+                let defaults = tokens::terminal_defaults(self.colors.scheme());
                 let rgb = if index == NamedColor::Background as usize {
-                    let bg = tokens::terminal_defaults(self.colors.scheme()).background;
                     Rgb {
-                        r: bg.r,
-                        g: bg.g,
-                        b: bg.b,
+                        r: defaults.background.r,
+                        g: defaults.background.g,
+                        b: defaults.background.b,
+                    }
+                } else if index == NamedColor::Foreground as usize {
+                    Rgb {
+                        r: defaults.foreground.r,
+                        g: defaults.foreground.g,
+                        b: defaults.foreground.b,
                     }
                 } else {
                     self.palette.color(index)
