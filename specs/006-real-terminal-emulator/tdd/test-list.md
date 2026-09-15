@@ -43,7 +43,7 @@ Tests in `crates/micold-daemon/tests/vt_color_queries.rs`: a `Term` wired with a
 | --- | -------- | ------ | ---- | ----- | ---- |
 | U1  | Under Dark, `OSC 11 ; ?` is answered with the dark `surface` | FR-003a | example | DONE | `crates/micold-daemon/tests/vt_color_queries.rs::a_dark_pane_answers_a_background_query_with_the_dark_surface` |
 | U2  | Under Dark, `OSC 10 ; ?` is answered with the dark `on_surface` | FR-003a | example | DONE | `crates/micold-daemon/tests/vt_color_queries.rs::a_dark_pane_answers_a_foreground_query_with_the_dark_on_surface` |
-| U3  | Under Dark, `OSC 12 ; ?` is answered with the dark `on_surface` (the cursor block is drawn in the foreground) | FR-003a | example | PENDING | |
+| U3  | Under Dark, `OSC 12 ; ?` is answered with the dark `on_surface` (the cursor block is drawn in the foreground) | FR-003a | example | DONE | `crates/micold-daemon/tests/vt_color_queries.rs::a_dark_pane_answers_a_cursor_query_with_the_dark_on_surface` |
 | U4  | Under Light, `OSC 11 ; ?` is answered with the light `surface` | FR-003a | example | PENDING | |
 | U5  | A scheme changed on a listener already built is what its next query answers | FR-003a | example | PENDING | |
 | U6  | Before any scheme is set, the answer is the light scheme's | FR-003a | example | PENDING | |
