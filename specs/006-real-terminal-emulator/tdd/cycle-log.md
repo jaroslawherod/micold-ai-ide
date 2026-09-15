@@ -12,3 +12,17 @@ before the implementation.
   `-p micold-client`); the whole workspace is re-run before each commit that touches more than one
   crate and by `mise run gate` before the PR. The full suite takes ~6 minutes behind a shared build
   lock, so it is not re-run after every refactor move.
+
+## Cycle 1: U8 a dark terminal defaults to on_surface over surface
+
+- test: `crates/micold-core/tests/tokens.rs::a_dark_terminal_defaults_to_on_surface_over_surface` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --test tokens a_dark_terminal_defaults_to_on_surface_over_surface -- --exact`
+  -> `panicked at crates/micold-core/src/tokens/mod.rs:356:5: not yet implemented: BUG-007 U8` (1 failed).
+  The symbol was declared first as a `todo!()` stub, so the red is the not-implemented signal, not a
+  compile error.
+- green: fake it — `terminal_defaults` returns `DARK.on_surface` / `DARK.surface` for any scheme; U9
+  forces the generalisation. Suite `scripts/build-lock.sh cargo test -p micold-core --all-targets`
+  -> 1059 passed, 0 failed
+- refactor: none — the fake is the cycle's intended state
+- notes: the first attempt at this cycle hit `ENOSPC` (disk at 2 MB free) before compiling; space was
+  reclaimed (shared `target-shared/debug/incremental`) and the cycle re-run from the start.
