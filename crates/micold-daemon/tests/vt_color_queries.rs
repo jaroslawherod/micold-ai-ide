@@ -127,3 +127,15 @@ fn a_dark_pane_answers_a_foreground_query_with_the_dark_on_surface() {
         "a program asking a dark pane for its default text colour must get the text colour drawn on it"
     );
 }
+
+/// The client draws the cursor block in the default foreground, so that is the cursor colour.
+#[test]
+fn a_dark_pane_answers_a_cursor_query_with_the_dark_on_surface() {
+    let mut term = QueriedTerm::new(colors_for(ColorScheme::Dark));
+
+    assert_eq!(
+        term.ask("\x1b]12;?\x07"),
+        reply(12, terminal_defaults(ColorScheme::Dark).foreground, BEL),
+        "a program asking a dark pane for its cursor colour must get the colour the cursor is drawn in"
+    );
+}

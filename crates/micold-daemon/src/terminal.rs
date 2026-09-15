@@ -132,7 +132,10 @@ impl TerminalColors {
     fn dynamic(&self, index: usize) -> Option<Rgb> {
         let defaults = tokens::terminal_defaults(self.scheme());
         let role = match index {
-            i if i == NamedColor::Foreground as usize => defaults.foreground,
+            // The client draws the cursor block in the default foreground.
+            i if i == NamedColor::Foreground as usize || i == NamedColor::Cursor as usize => {
+                defaults.foreground
+            }
             i if i == NamedColor::Background as usize => defaults.background,
             _ => return None,
         };

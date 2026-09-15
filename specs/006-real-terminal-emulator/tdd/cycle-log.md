@@ -66,3 +66,12 @@ before the implementation.
   Suite `scripts/build-lock.sh cargo test -p micold-daemon` -> 332 passed, 0 failed
 - refactor: separate structural commit — the `tokens::Rgb` → `vte::Rgb` conversion, now written twice,
   becomes one function and the `if` chain a `match` on the dynamic index
+
+## Cycle 5: U3 a dark pane answers a cursor query with the dark on_surface
+
+- test: `crates/micold-daemon/tests/vt_color_queries.rs::a_dark_pane_answers_a_cursor_query_with_the_dark_on_surface` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test vt_color_queries a_dark_pane_answers_a_cursor_query_with_the_dark_on_surface -- --exact`
+  -> `left: "\u{1b}]12;rgb:e5e5/e5e5/e5e5\u{7}"  right: "\u{1b}]12;rgb:e6e6/e1e1/e6e6\u{7}"` (1 failed)
+- green: `TerminalColors::dynamic` answers `NamedColor::Cursor` with the foreground. Suite
+  `scripts/build-lock.sh cargo test -p micold-daemon` -> 333 passed, 0 failed
+- refactor: none needed, one match guard widened
