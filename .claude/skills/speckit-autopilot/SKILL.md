@@ -68,12 +68,15 @@ milestone loop. If a commit on `main` reverted it, someone decided against it: e
 
 | # | Phase | Skills driven | Ends with |
 |---|---|---|---|
-| 0 | **Bug**, see below | `superpowers:systematic-debugging` → `speckit-bugfix-report` → `speckit-bugfix-patch` → `speckit-bugfix-verify` → review (bug rubric) | **One PR** carrying the BUG record, the spec patch, a regression test and the fix, merged on green, then the **handoff**. Or a switch to Phase 1. |
+| 0 | **Bug**, see below | `systematic-debugging` → `speckit-bugfix-report` → `speckit-bugfix-patch` → `speckit-bugfix-verify` → review (bug rubric) | **One PR** carrying the BUG record, the spec patch, a regression test and the fix, merged on green, then the **handoff**. Or a switch to Phase 1. |
 | 1 | **Spec** | `speckit-specify` → artifact review (spec rubric) | **PR 1**: the spec, merged on green |
 | 2 | **Clarify** in rounds until a scan finds nothing | `speckit-clarify` | Clarifications written to spec.md (merged with PR 2) |
 | 3 | **Design** | `speckit-plan` → review · `speckit-tasks` → cut milestones · `speckit-analyze` → fix · review (tasks + milestone rubric) · close checklists | **PR 2**: clarified spec, plan, research, contracts, tasks with `## Milestones`, merged on green |
 | 4 | **Milestones**, one at a time | the milestone loop below | One PR per milestone, each merged on green |
 | 5 | **Close**, in this order | `speckit-converge` → `speckit-tdd-verify` → `speckit-docguard-guard` | Unbuilt behaviour from any of the three becomes a new milestone (back to 4, then rerun all three). Test-strength and docs findings that add no behaviour are fixed in the close PR. That PR sets spec `**Status**` to `Closed <date> — shipped in PRs #…`, gets a fresh-subagent review like every diff, merges, then the **handoff** |
+
+`systematic-debugging` is the superpowers skill; where that plugin is enabled instead of the
+personal copy, invoke it as `superpowers:systematic-debugging`.
 
 `speckit-specify` offers up to 3 clarification questions of its own. Do not ask the user them in
 Phase 1. Leave them as `[NEEDS CLARIFICATION]` markers and triage them in Phase 2.
@@ -83,7 +86,7 @@ to dispatch a reviewer and the rubrics: [references/review-rubrics.md](reference
 
 ### Phase 0: a bug report
 
-1. **Reproduce on `origin/main`** with `superpowers:systematic-debugging`. Try the report's steps
+1. **Reproduce on `origin/main`** with `systematic-debugging`. Try the report's steps
    and the obvious variations: another OS arm, a fresh profile, several sessions. If it still does
    not reproduce, escalate (category 5) and ask for the missing detail. Never guess-fix.
 2. **Find the owning spec**, the `specs/<NNN>-*` whose requirements cover the broken behaviour.
@@ -138,17 +141,18 @@ For milestone K:
    task.` Its mandatory `tdd.run` hook drives red → green → refactor.
 3. `mise run gate`. When `cfg(target_os)` code changed, also
    `cargo check --target aarch64-apple-darwin`. When anything visible changed, run the `visual-pass`
-   skill.
+   skill. It runs as a forked Sonnet subagent that sees only its arguments, so pass the worktree
+   path, the quickstart section or change to check, and what counts as a pass.
 4. **Code review. Both reviews run on every milestone, in parallel:**
    - **A** — the `code-review` skill at `high` on `origin/main...HEAD`.
    - **B** — a fresh subagent checks the diff against the milestone's deliverable, its acceptance
      scenarios and the constitution (see the rubric).
 
-   Weigh each finding with `superpowers:receiving-code-review`. Fix the real ones and go back to
+   Verify each finding against the code before acting on it. Fix the real ones and go back to
    step 3. A finding that contradicts the spec is declined, with the reason recorded in the ledger.
 5. Tick the milestone's tasks, update the ledger, commit, `git push --force-with-lease`, and open the
    PR from [references/pr-and-merge.md](references/pr-and-merge.md).
-6. Wait for `ci complete`. When it goes red, run `superpowers:systematic-debugging`, fix, and push
+6. Wait for `ci complete`. When it goes red, run `systematic-debugging`, fix, and push
    (at most 3 attempts). When the PR has no checks, diagnose it (see the reference). When it goes
    green, run `gh pr merge <n> --rebase` and confirm `state` is `MERGED`.
 

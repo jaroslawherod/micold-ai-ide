@@ -108,7 +108,7 @@ Run it with `run_in_background`. You are notified when it exits.
 | Result | Action |
 |---|---|
 | **Green** | Merge (step 6). No confirmation needed. |
-| **Red, in this flow's code** | Read the failing job's log (`gh run view <run-id> --log-failed`). Run `superpowers:systematic-debugging`, fix, re-run the gate, push. After the third failed attempt, escalate (category 5). |
+| **Red, in this flow's code** | Read the failing job's log (`gh run view <run-id> --log-failed`). Run `systematic-debugging`, fix, re-run the gate, push. After the third failed attempt, escalate (category 5). |
 | **Red, outside this flow's code** (a test or file this flow never touched) | First rerun the failed jobs once: `gh run rerun <run-id> --failed`. If it passes, that was a flake, so carry on. If it fails again, look at `main`'s latest completed runs (`gh run list --branch main --status completed --limit 3`). Whether or not `main` shows the same failure, don't fix it. Escalate as *blocked by work outside my flow*, with the evidence. |
 | **No checks at all** | See below. |
 

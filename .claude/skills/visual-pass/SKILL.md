@@ -1,9 +1,18 @@
 ---
 name: visual-pass
 description: Run a spec's manual visual pass (quickstart Part B) against the real GUI without a human — launch the component showcase or the client on a private Xvfb display, drive it with xdotool, screenshot with import, and look at the result. Use whenever a task says "needs eyes at a display", "record the pass", "run quickstart §B", or when a change alters how something *looks* and the geometry gates cannot see it (colour, weight, elevation, glyph collisions, state layers, floated labels, active indicators).
+context: fork
+model: sonnet
+background: false
 ---
 
 # Running the manual visual pass without a human
+
+**This skill runs as a forked Sonnet subagent** (`context: fork`). It sees none of the caller's
+conversation, only the arguments: the worktree path, the quickstart section or the change to check,
+and what counts as a pass. It returns one verdict per check with the paths of the cropped
+screenshots that show it, so the caller can open a crop when a verdict looks doubtful. Screenshots
+stay in this subagent's context, not the caller's.
 
 Spec-kit features here end with tasks nobody can automate: *"§B1 and §B2 are this feature's two
 headline claims and neither can be automated; a green suite is not this feature working."* Those

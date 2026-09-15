@@ -10,6 +10,9 @@ metadata:
   source: extension:tdd
 user-invocable: true
 disable-model-invocation: false
+context: fork
+model: sonnet
+background: false
 ---
 
 # Tdd Verify Skill
