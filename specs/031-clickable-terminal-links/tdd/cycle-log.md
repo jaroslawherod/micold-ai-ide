@@ -375,3 +375,14 @@
 - refactor: none needed
 - commit: `test(031): pin that the hint shows exactly what opens (U46)`
 - notes: T006 and T012 ticked in this commit (U28–U30, U33, U34, U46 DONE). T042 extends the sample to `HostPath`
+
+## Cycle 38: U49 no source in `link/` names `std::net`, `std::fs` or `std::process`
+
+- test: `crates/micold-core/src/link/mod.rs::tests::link_performs_no_io` (new). It reads every `link/*.rs` through `include_str!`, builds its needles at run time, and first asserts that its list names exactly the `pub mod`s `link/mod.rs` declares
+- red: passed on arrival (`test ... ok`), as the list expects of a guard. Deliberate mutants, each run with `scripts/build-lock.sh cargo test -p micold-core --lib link::tests::link_performs_no_io -- --exact` and reverted from the backup:
+  - the list's mutant, `use std::fs;` in `line.rs` -> `link/line.rs names std::fs: recognising and resolving a link does no I/O (FR-019)` (1 failed). The first attempt inserted it above the `//!` header and did not compile (`error[E0753]: expected outer doc comment`), so no red was recorded from it
+  - `pub mod runnable;` declared in `mod.rs` with an empty `runnable.rs` -> `assertion `left == right` failed: the scan reads exactly the modules link/mod.rs declares` / `left: ["address", "detect", "line", "resolve"]` / `right: ["address", "detect", "line", "resolve", "runnable"]` (1 failed)
+- green: no implementation change. Suite (`cargo test -p micold-core --all-targets`) -> 1097 passed, 0 failed; clippy clean
+- refactor: none needed
+- commit: `test(031): pin that link recognition does no I/O (U49)`
+- notes: T007 ticked in this commit. T043 adds `runnable.rs` to `SOURCES`, as the second mutant shows it must
