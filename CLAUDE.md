@@ -15,43 +15,22 @@ a paragraph over a bulleted essay, when either communicates the same information
 
 Prefer `mise run <task>` over invoking `cargo` directly — the tasks in `mise.toml` are the
 canonical way to build, test, and run this project, so use them instead of rediscovering the
-right `cargo` invocation each time:
+right `cargo` invocation each time. `mise tasks` lists every task with its description; the ones
+whose use is not obvious from that:
 
-- `mise run run` — run the GUI client (`cargo run -p micold-client`); it spawns/attaches the
-  session daemon itself.
-- `mise run daemon` — run the session daemon on its own (`cargo run -p micold-daemon`), for when
-  you need it in the foreground instead of auto-spawned.
-- `mise run test` — test the **whole** workspace (core + client + daemon), matching CI
-  (`cargo test --workspace`).
 - `mise run gate` — CI's merge gate locally, in CI's order: `cargo fmt --check`, clippy (core, then
   workspace, `-D warnings`), `cargo test --workspace`, then `scripts/tests/*.test.sh`. Run this, not
   `mise run test`, before pushing — CI stops at fmt before any test runs.
 - `mise run test-core` — test only the render-free core (`cargo test -p micold-core
   --all-targets`); no GUI, no iced, so it is much faster for logic-only changes.
-- `mise run build` — build the release GUI binary (`cargo build --release -p micold-client`).
 - `mise run image` — build the `:dev` sandbox image from the working tree; `mise run test-sandbox`
   then runs the real-runtime sandbox suite against it (both crates, release, one at a time). Those
   tests are off by default, so `mise run test` does not need a container runtime installed.
-- `mise run deb` — build the Debian `.deb` package for the host arch (installs `cargo-deb` first
-  if missing).
-- `mise run app` — build the macOS `.app` bundle for the host arch, ad-hoc signed on macOS. On
-  Linux it stages the bundle unsigned, which is what `scripts/tests/macos-bundle.test.sh` drives.
-- `mise run sweep` — reclaim space in **every** target dir this repo accumulates — the shared one
-  and each worktree's private one (see below) — dropping artifacts unused for 7 days (installs
-  `cargo-sweep` first if missing). It walks `git worktree list` via `scripts/sweep-targets.sh` and
-  lets each checkout resolve its own directory. It refuses to run while a `cargo` build is, since
-  the oldest artifacts in a shared directory are usually dependencies a live build is still linking
-  against; `SWEEP_FORCE=1` overrides. `SWEEP_ARGS` replaces the default, e.g.
-  `SWEEP_ARGS='--dry-run --time 7'` to preview, or `SWEEP_ARGS='--maxsize 50GB'` to bound each
-  directory by size instead of age.
+- `mise run app` — on Linux it stages the macOS bundle unsigned, which is what
+  `scripts/tests/macos-bundle.test.sh` drives.
 
 The first `mise run <task>` in a fresh worktree/clone requires trusting the repo's `mise.toml`
 once via `mise trust` (mise refuses untrusted configs by default).
-
-mise's Rust toolchain and whatever `rustc` is on `PATH` used to resolve to different patch
-releases, and because cargo fingerprints include the compiler version, alternating between
-`mise run <task>` and a bare `cargo` rebuilt every dependency. `rust-toolchain.toml` now pins both
-entry points to `stable`, so they agree and you can move between them freely.
 
 ## One target directory, one build at a time
 
@@ -83,11 +62,5 @@ dir and names the holder while you wait. `MICOLD_NO_BUILD_LOCK=1` skips that loc
 run; cargo's own lock still applies. The interactive tasks (`run`, `showcase`, `daemon`) skip it by
 design, since they stay in the foreground for as long as the app is open.
 
-`.cargo/config.toml` also caps rust-lld at `--threads=4`; it otherwise sizes its pool from the CPU
-count, which put ~68 linker threads on one NVMe queue.
-
-Sharing removes the *multiplication* — one directory instead of one per branch — but only for
-builds that go through `mise run`, and not the growth: every branch that builds here leaves
-artifacts behind and cargo never collects them, so `target-shared/` creeps up on a disk that has
-run out once already. Bare-`cargo` worktree dirs put the multiplication back, quietly, which is how
-that disk reached zero bytes free. `mise run sweep` bounds all of them.
+Target dirs still grow without bound and this disk has run out before — when space is short, use
+the `reclaim-disk` skill (`mise run sweep`).
