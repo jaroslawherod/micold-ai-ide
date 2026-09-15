@@ -49,7 +49,7 @@ the `env_include.rs` builders (plan, Target Platform).
 ## Phase 2: Foundational
 
 - [X] T003 Define the shared core types from data-model §1. `LinkRows` and `Link` go in `crates/micold-core/src/link/mod.rs`; the rest go in `crates/micold-core/src/link/resolve.rs` and are re-exported from `link`.
-  - `trait LinkRows { fn text(&self, row: i64) -> Option<&str>; fn wrapped(&self, row: i64) -> bool; fn hyperlink(&self, row: i64, col: u16) -> Option<&str>; }`. `row` is relative to the viewport top and may be negative.
+  - `trait LinkRows { fn text(&self, row: i64) -> Option<&str>; fn wrapped(&self, row: i64) -> bool; fn hyperlink(&self, row: i64, col: u16) -> Option<&str>; fn spacer(&self, row: i64, col: u16) -> bool; }` (`spacer` added in M1, ledger decision 15). `row` is relative to the viewport top and may be negative.
   - `Link { address: String, origin: LinkOrigin, cells: Vec<CellSpan> }`, with `LinkOrigin { Detected, Declared }` and `CellSpan { row: i64, cols: Range<u16> }`. "Two `Link`s are the same link when `address`, `origin` and `cells` are equal" (derive `PartialEq, Eq`).
   - `LinkContext { host_names: Vec<String>, windows_host: bool, sandbox: Option<SandboxLinkContext> }`.
   - `SandboxLinkContext { host_names: Vec<String>, locations: Vec<SharedLocation>, denied: Vec<String> }`.
@@ -212,6 +212,7 @@ the `env_include.rs` builders (plan, Target Platform).
 
 - [ ] T028 [US1] [U118] [U119] [U120] [U121] [U122] [U123] [U124] [U129] [A1] [A7] [A9] [A10] [A11] Hover in `crates/micold-client/src/ui/material/terminal_pane.rs`.
   - A `LinkRows` adapter over `GridCache`: `line(LineId(viewport_top - display_offset + row))`, with `text`, `wrapped`, `CachedExtra.hyperlink`, and `spacer` from the cell's style-run flags (`WIDE_CHAR_SPACER | LEADING_WIDE_CHAR_SPACER`; ledger decision 15).
+  - A row above the first line the terminal ever printed answers `text = Some("")`, unwrapped, not `None`: `None` means "may continue past here" (contract L7), so it would drop an address at column 0 of a session's first line. Rows trimmed from scrollback (older than `GridCache::oldest_available`) or not yet cached still answer `None` (M1 review B).
   - `PaneState.hover: Option<HoverCache { session, context, cell, grid_version: (u64, u64), rows_hash: u64, resolved: Option<ResolvedLink> }>`.
   - The pure invalidation function.
   - In `update`, recompute on `CursorMoved`, `ModifiersChanged` and `window::Event::RedrawRequested`, which reads `GridCache::generation()`/`seq()`. Request a redraw when `resolved` changes.
