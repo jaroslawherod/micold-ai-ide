@@ -14,6 +14,7 @@
 //! Its own binary, like `supervision_giveup.rs`: it deletes the project directory out from under a
 //! live session, and that is not something to do beside tests sharing a process.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

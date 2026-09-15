@@ -16,6 +16,7 @@
 //! daemon — that is the resolution, not a workaround. What must never happen is a `ConnectFailed`
 //! reaching the user for a gap the client can close itself in under a second.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::path::Path;

@@ -146,3 +146,20 @@ unchecked. None of these were installed — adding one is a separate decision.
 | Watch mode | `cargo-watch` or `bacon` | Nothing correctness-wise — only the convenience of a re-run on save. |
 | Faster runner | `cargo-nextest` | Per-test isolation and a better failure report; libtest's output is adequate. |
 | Contract tests | — | No consumer/provider contract surface exists in this project. |
+
+## Additions from feature 030 (Windows installer)
+
+- **Unit tests in `src/`** run with `--lib` instead of `--test`:
+  `scripts/build-lock.sh cargo test -p {crate} --lib {module}::tests::{name} -- --exact`, for example
+  `-p micold-core --lib spawn::tests::daemon_binary_resolution`. Verified to print `running 1 test`.
+- **Guard tests** are text scans of repo files (workflows, `.iss`, docs, sources) in
+  `crates/micold-core/tests/<rule_as_sentence>.rs`, located from `env!("CARGO_MANIFEST_DIR")`, with
+  reasoned allowlists as `const` slices of `(item, reason)`. Exemplar:
+  `crates/micold-core/tests/ci_gate_covers_every_job.rs`.
+- **Shell-script tests** are plain bash files in `scripts/tests/*.test.sh` with pass/fail counters, run
+  directly; CI loops over them in `ci.yml`.
+- **Windows-only behaviour cannot run on this host.** `cargo check --target x86_64-pc-windows-msvc`
+  compiles `cfg(windows)` code, but there is no Wine or Windows runner. The red and green of a
+  `#[cfg(windows)]` test are observable only on the `windows-latest` CI leg of the pushed branch; such a
+  cycle records the CI run URL and the failing log line as its evidence.
+- Cross-check `cargo check --target aarch64-apple-darwin` before pushing any cfg arm.

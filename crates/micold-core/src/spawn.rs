@@ -86,12 +86,32 @@ pub fn spawn_detached_daemon() -> io::Result<u32> {
 
 /// The pid the running daemon recorded in its lock file, if any (`None` when the file is absent,
 /// empty, or unparseable — e.g. an older daemon that predates pid recording).
+///
+/// A record is only believed while the endpoint accepts connections. A daemon that crashed or was
+/// killed leaves its record behind, and by then the pid may belong to an unrelated process
+/// (feature 030, E4.4).
 pub fn running_daemon_pid(endpoint: &Endpoint) -> Option<u32> {
+    if !endpoint_is_live(endpoint) {
+        return None;
+    }
     std::fs::read_to_string(&endpoint.lock_path)
         .ok()?
         .trim()
         .parse()
         .ok()
+}
+
+/// `true` iff something accepts connections at the endpoint right now.
+fn endpoint_is_live(endpoint: &Endpoint) -> bool {
+    use interprocess::local_socket::{prelude::*, GenericFilePath, Stream};
+    match endpoint
+        .socket_path
+        .as_os_str()
+        .to_fs_name::<GenericFilePath>()
+    {
+        Ok(name) => Stream::connect(name).is_ok(),
+        Err(_) => false,
+    }
 }
 
 /// Stop the running daemon so a matching one can be spawned in its place — the client half of the
@@ -235,5 +255,42 @@ mod tests {
         // Override cleared → a sibling path or the bare name, never empty.
         std::env::remove_var(DAEMON_BIN_ENV);
         assert!(!daemon_binary().is_empty());
+    }
+
+    /// A pid no process can hold (above every platform's pid ceiling), so even a wrong answer
+    /// signals nobody.
+    const UNUSED_PID: u32 = 0x7FFF_FFF0;
+
+    /// An endpoint in `dir` that nothing listens on.
+    fn dead_endpoint(dir: &std::path::Path) -> Endpoint {
+        #[cfg(windows)]
+        let socket_path = format!(
+            r"\\.\pipe\Micold.Test.{}.{}",
+            std::process::id(),
+            dir.file_name()
+                .expect("temp dir has a name")
+                .to_string_lossy()
+        )
+        .into();
+        #[cfg(not(windows))]
+        let socket_path = dir.join("daemon.sock");
+        Endpoint {
+            socket_path,
+            lock_path: dir.join("daemon.lock"),
+        }
+    }
+
+    #[test]
+    fn stale_pid_record_is_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        let endpoint = dead_endpoint(dir.path());
+        std::fs::write(&endpoint.lock_path, format!("{UNUSED_PID}\n")).unwrap();
+
+        let stopped = stop_running_daemon(&endpoint);
+
+        assert!(
+            matches!(stopped, Ok(false)),
+            "a pid record whose endpoint is not live is a leftover, not a daemon to stop; got {stopped:?}"
+        );
     }
 }

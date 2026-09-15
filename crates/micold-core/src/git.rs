@@ -10,6 +10,8 @@ use std::io;
 use std::path::Path;
 use std::process::Command;
 
+use crate::process::no_window;
+
 /// All git side effects the feature needs. See `contracts/git-trait.md`.
 pub trait Git {
     /// Whether `dir` is the ROOT of a git repository — the open-project gate (FR-001a).
@@ -111,7 +113,7 @@ impl GitCli {
 /// Run `git -C <repo> <args...>`, returning stdout on success or an `io::Error` carrying
 /// stderr on a non-zero exit.
 fn run_git(repo: &Path, args: &[&str]) -> io::Result<String> {
-    let output = Command::new("git")
+    let output = no_window(&mut Command::new("git"))
         .arg("-C")
         .arg(repo)
         .args(args)
@@ -159,7 +161,7 @@ impl Git for GitCli {
 
     fn branch_exists(&self, repo: &Path, branch: &str) -> io::Result<bool> {
         let refname = format!("refs/heads/{branch}");
-        let output = Command::new("git")
+        let output = no_window(&mut Command::new("git"))
             .arg("-C")
             .arg(repo)
             .args(["show-ref", "--verify", "--quiet", &refname])
@@ -307,7 +309,7 @@ impl Git for GitCli {
         use std::process::Stdio;
         use std::sync::mpsc;
 
-        let mut child = Command::new("git")
+        let mut child = no_window(&mut Command::new("git"))
             .arg("-C")
             .arg(worktree_path)
             .args(["submodule", "update", "--init", "--recursive"])

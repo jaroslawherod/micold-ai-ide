@@ -34,6 +34,7 @@
 //! state (H1a/A1a). The event log can always overrule the spinner; the spinner can never overrule
 //! the log.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

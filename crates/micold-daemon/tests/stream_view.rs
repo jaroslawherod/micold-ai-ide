@@ -6,6 +6,7 @@
 //! bytes travel the real socket: view a session → get a full snapshot → type "hello" → get a delta
 //! that shows it echoed back.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::path::PathBuf;

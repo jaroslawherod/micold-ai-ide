@@ -26,6 +26,7 @@
 //! idempotence check is folded into the one flow rather than split out — see `autospawn.rs`, which
 //! is one test for the same reason.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::time::Duration;

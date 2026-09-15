@@ -14,6 +14,7 @@
 //! Sessions are Regular (shell) mode so the spawn is the platform shell, with no `claude` binary
 //! needed — the same choice `session_start.rs` makes.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

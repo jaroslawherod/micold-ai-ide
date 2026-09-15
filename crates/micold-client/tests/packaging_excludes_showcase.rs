@@ -432,3 +432,176 @@ fn the_macos_bundle_script_exists() {
         macos_bundle_path().display()
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// The Windows installer (feature 030, FR-002, FR-012)
+// ---------------------------------------------------------------------------------------------
+
+/// What the Windows installer's `[Files]` may ship: exactly the app and its daemon.
+const WINDOWS_SHIPPED: &[&str] = &["micold-ai-ide.exe", "micold-daemon.exe"];
+
+/// The Inno Setup rule for `script`, the text of a `.iss` file.
+///
+/// Inno Setup copies whatever a `[Files]` `Source:` matches, so the showcase would reach users
+/// through a wildcard as easily as through its own name. Wildcards are therefore a violation on
+/// their own, whatever they happen to match on the build machine today.
+fn windows_violations(script: &str, bin: &str, shipped: &[&str]) -> Vec<Violation> {
+    let mut out = Vec::new();
+    let sources = iss_file_sources(script);
+    for name in shipped {
+        if !sources.iter().any(|source| basename(source) == *name) {
+            out.push(Violation(format!(
+                "packaging/windows/micold-ai-ide.iss does not ship `{name}` — the installed app \
+                 would start without it (FR-002)"
+            )));
+        }
+    }
+    for source in sources {
+        if names_showcase(source, bin) {
+            out.push(Violation(format!(
+                "packaging/windows/micold-ai-ide.iss ships `{source}` — the showcase is a \
+                 development tool and MUST NOT reach an end user through an installation \
+                 (FR-012). Remove the entry; do not relax this check."
+            )));
+        } else if source.contains(['*', '?']) {
+            out.push(Violation(format!(
+                "packaging/windows/micold-ai-ide.iss ships `{source}` — a wildcard `Source:` ships \
+                 whatever matches on the build machine, which can include the showcase (FR-012). \
+                 Name each file."
+            )));
+        } else if !shipped.contains(&basename(source)) {
+            out.push(Violation(format!(
+                "packaging/windows/micold-ai-ide.iss ships `{source}`, which is not one of \
+                 {shipped:?} — the installer ships the app and its daemon and nothing else \
+                 (FR-012)"
+            )));
+        }
+    }
+    out
+}
+
+/// The file name at the end of an Inno Setup source path.
+fn basename(source: &str) -> &str {
+    source.rsplit(['\\', '/']).next().unwrap_or(source)
+}
+
+/// The `Source:` values of the `[Files]` section, with `;` comment lines skipped.
+fn iss_file_sources(script: &str) -> Vec<&str> {
+    let mut in_files = false;
+    let mut sources = Vec::new();
+    for line in script.lines().map(str::trim) {
+        if line.is_empty() || line.starts_with(';') {
+            continue;
+        }
+        if line.starts_with('[') {
+            in_files = line.eq_ignore_ascii_case("[Files]");
+            continue;
+        }
+        if !in_files {
+            continue;
+        }
+        let Some(rest) = line.strip_prefix("Source:") else {
+            continue;
+        };
+        let value = rest
+            .split(';')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .trim_matches('"');
+        sources.push(value);
+    }
+    sources
+}
+
+const HEALTHY_ISS: &str = r#"
+[Setup]
+AppName=Micold AI IDE
+
+[Files]
+; the app and the daemon it spawns, nothing else
+Source: "{#BinDir}\micold-ai-ide.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BinDir}\micold-daemon.exe"; DestDir: "{app}"; Flags: ignoreversion
+"#;
+
+#[test]
+fn a_windows_installer_with_a_wildcard_source_fails() {
+    let wildcard = HEALTHY_ISS.replace(r"micold-daemon.exe", r"micold-*.exe");
+
+    let found = windows_violations(&wildcard, SHOWCASE_BIN, WINDOWS_SHIPPED);
+
+    assert!(
+        found.iter().any(|v| v.0.contains("micold-*.exe")),
+        "a wildcard `Source:` must be reported by value, got {found:?}"
+    );
+}
+
+#[test]
+fn a_windows_installer_that_ships_the_showcase_fails() {
+    let shipping = HEALTHY_ISS.replace(
+        "\n; the app",
+        "\nSource: \"{#BinDir}\\micold-showcase.exe\"; DestDir: \"{app}\"; Flags: ignoreversion\n; the app",
+    );
+
+    let found = windows_violations(&shipping, SHOWCASE_BIN, WINDOWS_SHIPPED);
+
+    assert!(
+        found.iter().any(|v| v.0.contains("micold-showcase.exe")),
+        "a `Source:` naming the showcase must be reported, got {found:?}"
+    );
+}
+
+#[test]
+fn a_windows_installer_without_the_daemon_fails() {
+    let without_daemon: String = HEALTHY_ISS
+        .lines()
+        .filter(|line| !line.contains("micold-daemon.exe"))
+        .map(|line| format!("{line}\n"))
+        .collect();
+
+    let found = windows_violations(&without_daemon, SHOWCASE_BIN, WINDOWS_SHIPPED);
+
+    assert!(
+        found.iter().any(|v| v.0.contains("micold-daemon.exe")),
+        "an installer that does not ship the daemon must be reported, got {found:?}"
+    );
+}
+
+#[test]
+fn a_windows_installer_that_ships_an_unlisted_file_fails() {
+    let extra = HEALTHY_ISS.replace(
+        "\n; the app",
+        "\nSource: \"{#BinDir}\\micold-debug.dll\"; DestDir: \"{app}\"; Flags: ignoreversion\n; the app",
+    );
+
+    let found = windows_violations(&extra, SHOWCASE_BIN, WINDOWS_SHIPPED);
+
+    assert!(
+        found.iter().any(|v| v.0.contains("micold-debug.dll")),
+        "a `Source:` outside the shipped set must be reported, got {found:?}"
+    );
+}
+
+/// The committed Windows installer script (feature 030, A5).
+fn iss_path() -> PathBuf {
+    repo_root().join("packaging/windows/micold-ai-ide.iss")
+}
+
+#[test]
+fn the_windows_installer_contains_no_showcase() {
+    let script = fs::read_to_string(iss_path()).unwrap_or_else(|e| {
+        panic!("read {}: {e}", iss_path().display());
+    });
+
+    let found = windows_violations(&script, SHOWCASE_BIN, WINDOWS_SHIPPED);
+
+    assert!(
+        found.is_empty(),
+        "the Windows installer would ship the wrong files (FR-012):\n{}",
+        found
+            .iter()
+            .map(|v| format!("  {}", v.0))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}

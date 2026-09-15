@@ -235,6 +235,14 @@ target="$({{config_root}}/scripts/build-lock.sh --print-target-dir)"
 {{config_root}}/scripts/macos-dmg.sh --bin-dir "$target/release" --out "$target/macos"
 """
 
+# The Windows setup .exe for this PC's architecture (feature 030, FR-016).
+#
+# The counterpart of `deb` and `dmg`, and the same script the release `windows` job runs. Windows
+# only: Inno Setup's compiler has no other host, and the script says so rather than failing later.
+[tasks.windows-installer]
+description = "Build the Windows setup .exe for the host arch (needs Inno Setup 6) [build-locked]"
+run = "{{config_root}}/scripts/windows-installer.sh"
+
 [tasks.site-build]
 description = "Build the documentation site (feature 028): emit theme, capture, stage, render, check"
 run = "{{config_root}}/site/build.sh"

@@ -11,6 +11,7 @@
 //! CLI. The first test is survival with nothing watching; the second is survival with nothing
 //! *running*, where the only thing that crosses the gap is what was written to disk.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::time::{Duration, Instant};

@@ -223,7 +223,8 @@ pub async fn run() -> io::Result<()> {
             // "restart service" action (FR-022): a mismatched client can't handshake, so a control
             // message can't reach us — a recorded pid is the version-agnostic stop handle. Writing
             // through a separate fd does not disturb the daemon's held `flock` (advisory, per-OFD).
-            if let Err(e) = std::fs::write(&endpoint.lock_path, std::process::id().to_string()) {
+            if let Err(e) = std::fs::write(&endpoint.lock_path, format!("{}\n", std::process::id()))
+            {
                 tracing::warn!(error = %e, "could not record daemon pid in the lock file");
             }
             serve_interprocess(state, bound).await

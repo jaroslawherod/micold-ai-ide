@@ -25,6 +25,8 @@ use std::io;
 use std::process::Command;
 use std::sync::Mutex;
 
+use crate::process::no_window;
+
 /// What a runtime invocation produced. Mirrors `std::process::Output`, minus the platform-specific
 /// `ExitStatus`, so a canned response is as constructible as a real one.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,7 +101,7 @@ pub struct SystemRunner;
 
 impl CommandRunner for SystemRunner {
     fn run(&self, program: &OsStr, args: &[OsString]) -> io::Result<CommandOutput> {
-        let out = Command::new(program).args(args).output()?;
+        let out = no_window(&mut Command::new(program)).args(args).output()?;
         Ok(CommandOutput {
             code: out.status.code(),
             // Runtime output is UTF-8 in practice; a lossy conversion keeps a malformed byte from
@@ -118,7 +120,7 @@ impl CommandRunner for SystemRunner {
         use std::io::{BufRead, BufReader};
         use std::process::Stdio;
 
-        let mut child = Command::new(program)
+        let mut child = no_window(&mut Command::new(program))
             .args(args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

@@ -21,6 +21,7 @@
 //! seam, so the question here is the same one — does the client hear about it — asked of a path
 //! the missing-binary case cannot reach.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;

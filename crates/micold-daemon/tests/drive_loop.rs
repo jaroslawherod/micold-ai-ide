@@ -9,6 +9,7 @@
 //! wiring — that an Applied batch actually lands on the PTY, and in order. The client transport half
 //! (opening a connection and stamping via `InputSeq`) lands with the client retarget, T041/T044.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::time::{Duration, Instant};

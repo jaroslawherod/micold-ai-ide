@@ -19,6 +19,7 @@
 //! stronger than proving it for one particular multiple of the deadline, and it does not put a
 //! 90-second sleep in the suite.
 
+// unix-only: pending Windows triage (030 T026/T027)
 #![cfg(unix)]
 
 use std::collections::BTreeMap;
