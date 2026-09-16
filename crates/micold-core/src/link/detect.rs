@@ -8,6 +8,7 @@ pub(super) const TRAILING_PUNCTUATION: [char; 8] = ['.', ',', ';', ':', '!', '?'
 /// The char-index ranges of every address in `text` (FR-001, FR-005).
 pub fn detect(text: &str) -> Vec<Range<usize>> {
     let chars: Vec<char> = text.chars().collect();
+    let scan = Scan::new(&chars);
     let mut found = Vec::new();
     let mut start = 0;
     while start < chars.len() {
@@ -16,15 +17,11 @@ pub fn detect(text: &str) -> Vec<Range<usize>> {
             continue;
         };
         let body = start + scheme.chars().count();
-        let quote = start
+        let quoted = start
             .checked_sub(1)
-            .map(|before| chars[before])
-            .filter(|c| matches!(c, '"' | '\''));
-        let mut end = scan_end(&chars, body, quote);
-        while end > body && TRAILING_PUNCTUATION.contains(&chars[end - 1]) {
-            end -= 1;
-        }
-        if !well_formed(scheme, &chars[body..end]) {
+            .is_some_and(|before| chars[before] == '\'');
+        let end = scan.end(body, quoted);
+        if !scan.well_formed(scheme, body, end) {
             start += 1;
             continue;
         }
@@ -34,40 +31,115 @@ pub fn detect(text: &str) -> Vec<Range<usize>> {
     found
 }
 
-/// Where the characters of an address starting at `from` end: at a character no address contains
-/// (research R3 rule 2), at a closing bracket that no opener inside the address balances (rule 4),
-/// or at the `quote` that opened right before the address (rule 5).
-fn scan_end(chars: &[char], from: usize, quote: Option<char>) -> usize {
-    let mut open = Vec::new();
-    for (index, &c) in chars.iter().enumerate().skip(from) {
-        match c {
-            c if ends_an_address(c) || Some(c) == quote => return index,
-            '(' | '[' => open.push(c),
-            ')' | ']' => {
-                let opener = if c == ')' { '(' } else { '[' };
-                if open.last() != Some(&opener) {
-                    return index;
-                }
-                open.pop();
-            }
-            _ => {}
-        }
-    }
-    chars.len()
+/// What every candidate asks of the text after it, worked out in one pass each way, so a line
+/// packed with schemes that are not addresses costs no more than a plain one (contract L4 bounds
+/// the line, not the candidates in it).
+struct Scan<'a> {
+    chars: &'a [char],
+    /// Where an address whose characters start at `i` stops: at a character no address contains
+    /// (research R3 rule 2), or at a closing bracket that no opener at or after `i` balances
+    /// (rule 4).
+    stop: Vec<usize>,
+    /// The first `'` at or after `i`. A `"` needs none: it already ends an address.
+    next_apostrophe: Vec<usize>,
+    /// The first `@` at or after `i`.
+    next_at: Vec<usize>,
+    /// The first `/` at or after `i`.
+    next_slash: Vec<usize>,
+    /// How many of the characters right before `i` are trailing punctuation (rule 3).
+    punctuation_before: Vec<usize>,
 }
 
-/// Whether the text after `scheme` is enough to be an address (research R3 rule 6): a mail address
-/// has text on both sides of its `@`, a file address has a path starting with `/` after an optional
-/// host, and a web address names a host.
-fn well_formed(scheme: &str, rest: &[char]) -> bool {
-    match scheme {
-        "mailto:" => {
-            let rest: String = rest.iter().collect();
-            rest.split_once('@')
-                .is_some_and(|(mailbox, domain)| !mailbox.is_empty() && !domain.is_empty())
+impl<'a> Scan<'a> {
+    fn new(chars: &'a [char]) -> Self {
+        let len = chars.len();
+        let mut stop = vec![len; len + 1];
+        // Starts whose stop is not yet known, in order, and the openers a scan from them has seen.
+        // A stop ends every scan that reaches it, so both clear there.
+        let mut pending: Vec<usize> = Vec::new();
+        let mut open: Vec<(char, usize)> = Vec::new();
+        for (index, &c) in chars.iter().enumerate() {
+            pending.push(index);
+            // The opener a scan must have seen to read past this character: starts at or before it
+            // carry it on; every other pending start stops here.
+            let carried = match c {
+                c if ends_an_address(c) => None,
+                '(' | '[' => {
+                    open.push((c, index));
+                    continue;
+                }
+                ')' | ']' => {
+                    let opener = if c == ')' { '(' } else { '[' };
+                    match open.last() {
+                        Some(&(last, at)) if last == opener => {
+                            open.pop();
+                            Some(at)
+                        }
+                        _ => None,
+                    }
+                }
+                _ => continue,
+            };
+            if carried.is_none() {
+                open.clear();
+            }
+            while let Some(&from) = pending.last() {
+                if carried.is_some_and(|at| from <= at) {
+                    break;
+                }
+                stop[from] = index;
+                pending.pop();
+            }
         }
-        "file://" => rest.contains(&'/'),
-        _ => names_a_host(rest),
+        let next = |wanted: char| {
+            let mut next = vec![len; len + 1];
+            for index in (0..len).rev() {
+                next[index] = if chars[index] == wanted {
+                    index
+                } else {
+                    next[index + 1]
+                };
+            }
+            next
+        };
+        let mut punctuation_before = vec![0; len + 1];
+        for index in 1..=len {
+            if TRAILING_PUNCTUATION.contains(&chars[index - 1]) {
+                punctuation_before[index] = punctuation_before[index - 1] + 1;
+            }
+        }
+        Self {
+            chars,
+            stop,
+            next_apostrophe: next('\''),
+            next_at: next('@'),
+            next_slash: next('/'),
+            punctuation_before,
+        }
+    }
+
+    /// Where the address whose characters start at `body` ends: where its scan stops, or at the `'`
+    /// that opened right before it (rule 5), less the trailing punctuation before that (rule 3).
+    fn end(&self, body: usize, quoted: bool) -> usize {
+        let mut end = self.stop[body];
+        if quoted {
+            end = end.min(self.next_apostrophe[body]);
+        }
+        end.saturating_sub(self.punctuation_before[end]).max(body)
+    }
+
+    /// Whether `body..end` is enough to be an address after `scheme` (research R3 rule 6): a mail
+    /// address has text on both sides of its `@`, a file address has a path starting with `/`
+    /// after an optional host, and a web address names a host.
+    fn well_formed(&self, scheme: &str, body: usize, end: usize) -> bool {
+        match scheme {
+            "mailto:" => {
+                let at = self.next_at[body];
+                at > body && at + 1 < end
+            }
+            "file://" => self.next_slash[body] < end,
+            _ => names_a_host(&self.chars[body..end]),
+        }
     }
 }
 
@@ -122,6 +194,22 @@ fn starts_with(chars: &[char], prefix: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_line_packed_with_schemes_that_are_not_addresses_is_scanned_in_time() {
+        // The longest logical line `link_at` reads: 129 rows of a 300-column pane.
+        const CHARS: usize = 129 * 300;
+        for unit in ["mailto:", "http://x/"] {
+            let text = unit.repeat(CHARS / unit.len());
+            let started = std::time::Instant::now();
+            assert_eq!(detect(&text), Vec::<Range<usize>>::new(), "{unit} repeated");
+            let elapsed = started.elapsed();
+            assert!(
+                elapsed < std::time::Duration::from_millis(500),
+                "{unit} repeated over {CHARS} chars took {elapsed:?}: every candidate rescans the rest of the line, so a hover stalls"
+            );
+        }
+    }
 
     /// The text of each range `detect` finds, so a failure reads as the addresses themselves.
     fn found(text: &str) -> Vec<String> {

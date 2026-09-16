@@ -70,7 +70,7 @@ the `env_include.rs` builders (plan, Target Platform).
 
 ### Tests for US1: recognition in core ⚠️ write first, must fail
 
-- [X] T004 [P] [US1] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] [U16] Unit tests for `detect(text) -> Vec<Range<usize>>` (char-index ranges) in `crates/micold-core/src/link/detect.rs`.
+- [X] T004 [P] [US1] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] [U16] [U152] Unit tests for `detect(text) -> Vec<Range<usize>>` (char-index ranges) in `crates/micold-core/src/link/detect.rs`.
   - Every row of contract link-recognition §3.
   - Each rule of research R3:
     - A prefix preceded by `[A-Za-z0-9]` is rejected.
@@ -109,7 +109,7 @@ the `env_include.rs` builders (plan, Target Platform).
 
 ### Implementation for US1: recognition in core
 
-- [X] T009 [US1] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] [U16] [U132] [U133] Implement `detect` (research R3, rules 1–6, hand-written, no new crate) in `crates/micold-core/src/link/detect.rs`
+- [X] T009 [US1] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] [U16] [U152] [U132] [U133] Implement `detect` (research R3, rules 1–6, hand-written, no new crate) in `crates/micold-core/src/link/detect.rs`
 - [X] T010 [US1] [U17] [U18] [U19] [U20] [U21] [U22] [U23] [U24] [U25] [U26] [U27] [U133] [U151] Implement `link_at` in `crates/micold-core/src/link/line.rs`, per research R4 and R5.
   - Build the logical line by walking back while the previous row is `wrapped`, then forward, capped at 64 rows each way.
   - Map char indices to cells, keeping wide-char spacers.
