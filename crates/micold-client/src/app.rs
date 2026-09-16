@@ -332,6 +332,25 @@ impl State {
                 .any(|open| open.id() != SurfaceId::new(Self::TERMINAL_CONTEXT_MENU))
     }
 
+    /// Apply a session message and hand back the effect requests it made (feature 031).
+    ///
+    /// [`Self::update`] drains every outcome through [`interpret`], which drops the two that only
+    /// the shell can perform: `ClipboardWrite` and `OpenLink`. A shell half that performs them asks
+    /// here instead, so the root stays the only caller of the session reducer (SC-002); every other
+    /// outcome is drained exactly as `update` drains it.
+    pub fn update_session_for_effects(
+        &mut self,
+        msg: crate::features::session::Msg,
+    ) -> Vec<crate::features::Outcome> {
+        use crate::features::Outcome;
+        let (effects, rest): (Vec<Outcome>, Vec<Outcome>) =
+            crate::features::session::update(self, msg)
+                .into_iter()
+                .partition(|o| matches!(o, Outcome::ClipboardWrite(_) | Outcome::OpenLink(_)));
+        drain(rest, |outcome| interpret(self, outcome));
+        effects
+    }
+
     /// Apply a [`Message`], transitioning the state. Pure and side-effect free.
     pub fn update(&mut self, message: Message) {
         match message {

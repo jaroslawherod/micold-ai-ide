@@ -172,12 +172,16 @@ fn reveal_linux(runner: &dyn CommandRunner, path: &Path) -> Result<(), OpenFailu
 }
 
 /// `file://` and `path`, percent-encoding every byte outside RFC 3986's unreserved set and `/`, so
-/// a comma or a space cannot split the `array:string:` list `dbus-send` parses.
+/// a comma or a space cannot split the `array:string:` list `dbus-send` parses. On Unix the path's
+/// own bytes are encoded, so a name that is not UTF-8 still names the file.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn file_uri(path: &Path) -> String {
-    let text = path.to_string_lossy();
+    #[cfg(unix)]
+    let bytes = std::os::unix::ffi::OsStrExt::as_bytes(path.as_os_str()).to_vec();
+    #[cfg(not(unix))]
+    let bytes = path.to_string_lossy().into_owned().into_bytes();
     let mut uri = String::from("file://");
-    for byte in text.bytes() {
+    for byte in bytes {
         match byte {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => {
                 uri.push(byte as char)
@@ -250,12 +254,26 @@ impl LinkOpener for SystemLinkOpener {
 #[cfg(windows)]
 impl LinkOpener for SystemLinkOpener {
     fn open(&self, target: &str) -> Result<(), OpenFailure> {
+        use windows_sys::Win32::System::Com::{
+            CoInitializeEx, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
+        };
         use windows_sys::Win32::UI::Shell::ShellExecuteW;
         use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
         let wide = |text: &str| -> Vec<u16> { text.encode_utf16().chain(Some(0)).collect() };
         let verb = wide("open");
         let file = wide(target);
+        // `ShellExecuteW` can hand the verb to a shell extension that needs COM, so its documentation
+        // asks for COM on the calling thread. A blocking-pool thread may already have it (then this
+        // is S_FALSE) or have it in another mode (RPC_E_CHANGED_MODE); either way the call proceeds,
+        // and COM stays up for the thread's life rather than being torn down per open.
+        // SAFETY: the reserved pointer must be null.
+        let _ = unsafe {
+            CoInitializeEx(
+                std::ptr::null(),
+                (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32,
+            )
+        };
         // SAFETY: both strings are NUL-terminated UTF-16 buffers that outlive the call, and the
         // null window, parameters and directory are documented as optional.
         let ret = unsafe {
@@ -273,9 +291,12 @@ impl LinkOpener for SystemLinkOpener {
 
     fn reveal(&self, path: &Path) -> Result<(), OpenFailure> {
         use std::os::windows::process::CommandExt;
+        use std::process::Command;
         // Rust's own quoting would wrap the whole `/select,…` argument, which explorer does not
         // parse; a Windows path cannot contain `"`, so quoting it by hand is safe.
-        std::process::Command::new("explorer.exe")
+        // `no_window` for the rule every spawn follows (feature 030, FR-024); explorer is a GUI
+        // program, so the flag changes nothing for it.
+        micold_core::process::no_window(&mut Command::new("explorer.exe"))
             .raw_arg(format!("/select,\"{}\"", path.display()))
             .spawn()
             .map(|_| ())
@@ -380,6 +401,19 @@ mod tests {
                 "the launcher is left to run, not killed at the window's end"
             );
         }
+    }
+
+    /// U155
+    #[cfg(unix)]
+    #[test]
+    fn a_file_name_that_is_not_utf8_is_encoded_from_its_own_bytes() {
+        use std::os::unix::ffi::OsStrExt;
+        let path = Path::new(OsStr::from_bytes(b"/home/u/a b,\xff"));
+        assert_eq!(
+            file_uri(path),
+            "file:///home/u/a%20b%2C%FF",
+            "ShowItems names the file as it is on disk, not a lossy copy of its name"
+        );
     }
 
     /// U139

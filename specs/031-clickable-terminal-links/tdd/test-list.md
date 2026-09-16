@@ -114,6 +114,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | U152 | A logical line at the L4 cap packed with schemes that are not addresses (`mailto:` or `http://x/` repeated) is scanned in time: no candidate rescans the rest of the line | FR-001, L4 | example | DONE | `crates/micold-core/src/link/detect.rs::tests::a_line_packed_with_schemes_that_are_not_addresses_is_scanned_in_time` |
 | U153 | The padding before a wide char that wrapped onto the next row declares what the char before it on its row declares, not the URI the terminal wrote into it: a plain char's padding is no link, and the declared run starts on the next row | FR-002, FR-007, L1, L5 | example | DONE | `crates/micold-core/src/link/line.rs::tests::padding_before_a_wrapped_wide_char_takes_the_link_of_the_char_before_it` |
 | U154 | Below a cut, an address closed by the `'` that opened right before it is kept even when only that quote lies between it and the cut: the quote is a hard end | FR-003, L7 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_quoted_address_whose_closing_quote_ends_a_wrapped_row_is_a_link` |
+| U155 | Linux reveal names the file by its own bytes: a name that is not UTF-8 is percent-encoded as it is on disk, not as a lossy copy | FR-013 | example | DONE | `crates/micold-client/src/shell/link_opener.rs::tests::a_file_name_that_is_not_utf8_is_encoded_from_its_own_bytes` |
 
 ### `crates/micold-core/src/link/address.rs`
 

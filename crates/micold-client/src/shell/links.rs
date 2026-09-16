@@ -14,24 +14,14 @@ use crate::App;
 
 /// Run the session reducer on a link message and perform what it asks for.
 ///
-/// The reducer's outcomes are split: an open goes to [`perform`], a clipboard write to
-/// `shell::clipboard::interpret`, and the rest to the root's drain, which is where every other
-/// feature's outcomes go.
+/// The root applies the message and returns the effect requests: an open goes to [`perform`], a
+/// clipboard write to `shell::clipboard::interpret`.
 pub fn on_link_message(app: &mut App, msg: SessionMsg) -> Task<Message> {
-    let outcomes = micold_client::features::session::update(&mut app.core, msg);
-    let mut effects = Vec::new();
-    let mut rest = Vec::new();
-    for outcome in outcomes {
-        match outcome {
-            Outcome::OpenLink(request) => effects.push(perform(app, request)),
-            write @ Outcome::ClipboardWrite(_) => {
-                effects.push(crate::shell::clipboard::interpret(write))
-            }
-            other => rest.push(other),
-        }
-    }
-    micold_client::app::drain(rest, |o| micold_client::app::interpret(&mut app.core, o));
-    Task::batch(effects)
+    let effects = app.core.update_session_for_effects(msg);
+    Task::batch(effects.into_iter().map(|effect| match effect {
+        Outcome::OpenLink(request) => perform(app, request),
+        other => crate::shell::clipboard::interpret(other),
+    }))
 }
 
 /// Hand `request` to the opener on a blocking task, with nothing in between (SC-003).
