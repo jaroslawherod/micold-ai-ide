@@ -1642,18 +1642,15 @@ async fn a_worktree_named_through_a_symlink_is_included_and_excluded_as_itself()
 /// 016 BUG-004: matching by location must not strand a worktree that is no longer on disk — there is
 /// no location left to resolve, and its row (FR-031) is still the user's to stop showing.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "first run on Windows in #332: git rejects the test's \\\\?\\ canonical path; fix in the #332 review follow-up"
-)]
 async fn an_included_worktree_removed_from_disk_is_still_excluded_by_its_rows_path() {
     let project = tempfile::tempdir().unwrap();
     let elsewhere = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
     init_git_repo(project.path());
 
-    let outside = std::fs::canonicalize(elsewhere.path()).unwrap().join("olx");
-    add_worktree_outside(project.path(), &outside, "fix/olx");
+    // Git's own spelling, as the client holds it. Canonicalizing first would hand git a `\\?\`
+    // path on Windows, which it refuses.
+    let outside = add_worktree_outside(project.path(), &elsewhere.path().join("olx"), "fix/olx");
 
     let state = std::sync::Arc::new(DaemonState::new(catalog_with_project(
         project.path(),
