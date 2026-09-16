@@ -293,7 +293,10 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
 }
 
 pub fn on_connect_failed(app: &mut App, reason: String) -> Task<Message> {
-    refused_dial(app, &reason).map_or_else(Task::none, crate::shell::sandbox::BringUp::task)
+    match refused_dial(app, &reason) {
+        Some(bring_up) => bring_up.run(&mut app.sandbox_bring_up),
+        None => Task::none(),
+    }
 }
 
 /// What a refused dial changes, and the bring-up it decided to run, if any.
