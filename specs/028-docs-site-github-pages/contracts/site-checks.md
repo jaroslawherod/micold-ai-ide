@@ -72,7 +72,7 @@ the render; this asserts the result rather than trusting it. — FR-015c
 
 ### `site/checks/page-checks.mjs <dir>`
 
-One headless browser, four assertions per run:
+One headless browser, one run, these assertions:
 
 | Assertion | Fails when | Covers |
 |---|---|---|
@@ -81,6 +81,9 @@ One headless browser, four assertions per run:
 | Navigation depth | any documentation page is not reachable from any other in ≤2 steps | FR-023a, SC-006 |
 | Search | a query for a guide topic does not return that topic's own page first, driving the site's own search box | FR-023a, SC-006 |
 | Off-origin | any `<img>`, `<link>`, `<script>`, `<source>` or CSS `url()` resolves to another host | FR-031, SC-015 |
+| Search, word by word *(BUG-001)* | any single word of a guide page's title, typed alone into the site's own search box, does not return that page among the first five results | FR-026a |
+| App bar *(BUG-002)* | in either scheme, at the laptop or the phone viewport, the header title's text is not centred vertically on the controls' line (±2 px), or its text is centred across the bar rather than starting after the leading controls; or any element in the header or the previous/next controls is drawn by mdBook's Font Awesome helper (`.fa-svg`) | FR-029a, FR-031 |
+| Transitions *(BUG-003)* | with motion allowed, any element on any page has a non-zero `transition-duration` or a `transition-timing-function` that is not one of the values the emitter writes to `--micold-motion-*` | FR-030a, SC-014 |
 
 ### `site/build.sh` — the completeness assertion
 

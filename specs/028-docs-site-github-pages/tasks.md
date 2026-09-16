@@ -116,7 +116,7 @@ the published release actually contains.
 - [X] T029 [US1] Declare `main-window-light` and `main-window-dark` in `site/media.toml` with alt text and captions (FR-009, FR-012, FR-014)
 - [X] T030 [US1] Add the `<!-- media: main-window-light -->` directive to `docs/README.md` and the dark counterpart to `docs/user-guide/appearance-theming.md`
 - [X] T031 [US1] Add release-asset substitution to `site/stage.sh`: the install page's download links are resolved against the assets of `release_tag`, and staging **fails** if the page names a file the release does not contain (FR-004a)
-- [X] T032 [US1] Implement the app-bar header in `site/theme/index.hbs` and `site/theme/css/site.css` — the application's top-app-bar surface role, elevation and title type, with panels separated by shade and shadow rather than outlines (FR-029, FR-029a); no application component without a documentation counterpart is recreated (FR-029b)
+- [ ] T032 [US1] ⚠️ Reopened — Implement the app-bar header in `site/theme/index.hbs` and `site/theme/css/site.css` — the application's top-app-bar surface role, elevation and title type, with panels separated by shade and shadow rather than outlines (FR-029, FR-029a); no application component without a documentation counterpart is recreated (FR-029b) *(reopened — BUG-002: surface role, elevation and title type shipped, but setting the title-large `line-height` moved the title to the top of the bar, the title stayed centred across it, and every chrome icon is still mdBook's `{{fa}}` Font Awesome. Completed by T091–T094.)*
 - [X] T033 [US1] Add the phone layout to `site/theme/css/site.css`: no horizontal scrolling at 360 px, images fitted to the viewport, the table of contents collapsing to a control (FR-025)
 - [X] T034 [US1] Generate the licences page in `site/stage.sh` from `/LICENSE`, `assets/fonts/LICENSE`, `assets/fonts/LICENSE-Roboto-OFL.txt` and `assets/fonts/PROVENANCE.md`, and add its entry to `docs/SUMMARY.md` (FR-008, FR-031)
 - [X] T035 [US1] Implement `site/checks/page-checks.mjs` with three of its five assertions — axe-core WCAG 2.2 AA over every page in both schemes, the home page's first-viewport facts, and the off-origin scan over `<img>`/`<link>`/`<script>`/`<source>`/CSS `url()` (T024, T025 green)
@@ -150,7 +150,7 @@ each page, and follow every internal link on the built site without reaching a m
 - [X] T041 [US2] Substitute the published version in `site/stage.sh` and render it in `site/theme/index.hbs`, so the identifier is visible on **every** page, not only the home page (FR-006, and the deep-arrival edge case)
 - [X] T042 [US2] Wire the per-page source link through `book.toml`'s `edit-url-template` and `site/theme/index.hbs`, resolving against the published tag so the link lands on the file as published (FR-007)
 - [X] T043 [US2] Make the navigation reachable by keyboard alone with a visible focus indicator in `site/theme/index.hbs` and `site/theme/css/site.css`, using the outline treatment the application reserves for focus (FR-024)
-- [X] T044 [US2] Add the remaining two assertions to `site/checks/page-checks.mjs` — navigation depth (every page reachable from every other in ≤2 steps) and search (a query for each guide topic returns that topic's own page first, driven through the site's own search box) (T039 green, FR-023a, FR-026)
+- [X] T044 [US2] Add the remaining two assertions to `site/checks/page-checks.mjs` — navigation depth (every page reachable from every other in ≤2 steps) and search (a query for each guide topic returns that topic's own page first, driven through the site's own search box) (T039 green, FR-023a, FR-026) *(Bugfix BUG-001: correct as written, but the whole-title query cannot see a single stop word — `Help About` passes on `help`. T087–T089 add the per-word query.)*
 - [X] T045 [P] [US2] Write `site/capture/scenes/worktree-sidebar.sh` — a project open with the worktree sidebar listing three worktrees, the second selected
 - [X] T046 [P] [US2] Write `site/capture/scenes/session-terminal.sh` — a session running in a worktree with the stub provider's coloured output in the application's own terminal (FR-011c)
 - [X] T047 [P] [US2] Write `site/capture/scenes/settings-view.sh` — the settings view showing appearance, scrollback and session-service placement
@@ -231,7 +231,7 @@ and no video bytes were requested until a play control was pressed.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [X] T077 [P] Remove every site transition under `@media (prefers-reduced-motion: reduce)` in `site/theme/css/site.css`, while keeping the motion tokens in force for everyone else (FR-030a, FR-030b)
+- [ ] T077 [P] ⚠️ Reopened — Remove every site transition under `@media (prefers-reduced-motion: reduce)` in `site/theme/css/site.css`, while keeping the motion tokens in force for everyone else (FR-030a, FR-030b) *(reopened — BUG-003: the reduced-motion half holds; "keeping the motion tokens in force for everyone else" was never true for the transitions mdBook's own `chrome.css`/`general.css` declare. Completed by T095–T097.)*
 - [X] T078 [P] Record the decision not to subset `MaterialSymbolsOutlined.ttf` in `site/README.md` and `docs/development/docs-site.md`, with the ~1.2 MB font total it costs and the note that fonts are cached across pages and sit outside the per-page still budget (research §4)
 - [X] T079 Run `cargo fmt --check`, `cargo clippy` and `mise run test` — CI stops at `cargo fmt --check` before any other job, so the local gate is not the CI gate
 - [X] T080 Confirm the merge gate is unchanged: `cargo test -p micold-core --test ci_gate_covers_every_job` and `cargo test -p micold-core --test documentation_is_not_read` both pass with the new checks in place (Principle VI, FR-020)
@@ -267,6 +267,8 @@ quickstart A9, was carried forward as T084 and is now done (run `34754847522`).
 - **US4 (Phase 5)**: depends on Foundational; its pre-merge wiring (T060) expects `links.sh` from US2 (T040) and its pre-deploy step list expects `page-checks.mjs` from US1/US2
 - **US3 (Phase 6)**: depends on Foundational; extends `stage.sh` (T014), `capture.sh` (T022) and `page-checks.mjs` (T035, T044)
 - **Polish (Phase 7)**: depends on all desired stories
+- **Bugfix phases 9–11 (BUG-001, BUG-002, BUG-003)**: independent of each other, except that all three extend `site/checks/page-checks.mjs` and `scripts/tests/page-checks.test.sh`, so they serialize on those two files. T097 touches the header icons' transition after T094 replaces the icons, so do Phase 10 before T097.
+- **Close-out (Phase 12)**: depends on Phases 9–11. T100 also needs a publication.
 
 ### User Story Dependencies
 
@@ -377,3 +379,42 @@ links, guide captures), one on US4 (checks and workflows). US3 joins once `stage
 - [X] T084 [US4] Break a check deliberately on a `workflow_dispatch` run of `.github/workflows/pages.yml` and confirm the run fails while the previously published site stays reachable, completing the second half of T064 (quickstart A9) per FR-018, FR-017, FR-020a (missing) — run `34754847522` failed at the internal link check with deploy skipped and the live site byte-identical; see [evidence/t084-deliberate-failure.md](./evidence/t084-deliberate-failure.md)
 - [X] T085 Run [quickstart.md](./quickstart.md) Part B (B1-B5) against <https://jaroslawherod.github.io/micold-ai-ide/> and write the judgement halves of SC-001 and SC-006 into a pass record at `specs/028-docs-site-github-pages/evidence/quickstart-b.md`, matching the evidence convention of `specs/027-sandboxed-daemon-runtime/` and `specs/028-client-managed-daemon/`, so T082's "pass record" names an actual file per FR-023a (missing)
 - [X] T086 Narrow the "Deferred — needs the upstream repository" section of this file to the tasks still genuinely open — T036 and T063 are now `- [X]` and merged, so the section contradicts the checkboxes above it (contradicts)
+
+## Phase 9: Bugfix BUG-001 — a topic word the search engine drops finds nothing
+
+**Goal**: FR-026a. Each word of a guide page's title, searched on its own, returns that page among
+the first five results. `about` returns *Help & About*.
+
+- [ ] T087 [US2] Test first: extend `scripts/tests/page-checks.test.sh` with a fixture site whose guide page title includes a word the fixture's search drops (a real elasticlunr stop word), and assert that `site/checks/page-checks.mjs` fails on it with a message naming the page and the word. Seen red before T089 (FR-026a, Principle I)
+- [ ] T088 [US2] Settle research §1a against the mdBook version `pages.yml` installs: where the dropped term is lost (index, query pipeline, or both), and which workaround holds at both ends. If the workaround depends on mdBook internals, pin mdBook's version in `pages.yml` and `site/README.md`. Record the decision in `research.md` §1a (Dependency issue, BUG-001)
+- [ ] T089 [US2] Add the per-word search assertion to `site/checks/page-checks.mjs`: every word of every guide page's title, typed alone key by key into the site's own search box, returns that page in the first five results (FR-026a). Run it against a local `site/build.sh` of `main` and confirm it fails for `about`; T087 turns green
+- [ ] T090 [US2] Implement T088's workaround (a post-`mdbook build` step in `site/build.sh`, or a theme override). Drive it from the guide titles, not a hand-kept word list. T089 must pass on a local build
+
+## Phase 10: Bugfix BUG-002 — the header is not the application's app bar
+
+**Goal**: FR-029a and FR-031 as clarified. The title starts after the leading controls and is centred
+vertically on their line, and every chrome icon is a Material Symbols glyph.
+
+- [ ] T091 [US1] Test first: extend `scripts/tests/page-checks.test.sh` with fixture pages whose header title has a line box shorter than the bar (text at the top), whose title is `text-align: center`, and whose header holds an `.fa-svg` icon, and assert that `page-checks.mjs` fails on each, naming it (FR-029a, FR-031, Principle I)
+- [ ] T092 [US1] Add the app-bar assertion to `site/checks/page-checks.mjs` per [contracts/site-checks.md](./contracts/site-checks.md) *App bar*: both schemes, laptop and phone viewports; the title's text centred on the controls' line within ±2 px, its text starting after the leading controls, and no `.fa-svg` in `#mdbook-menu-bar` or `.nav-chapters`. Confirm it fails on a local build of `main`; T091 turns green
+- [ ] T093 [US1] Fix the title in `site/theme/css/site.css`: centre its line box vertically in the bar while keeping the title-large type variables, and align it to the start after the leading controls, at laptop and phone widths. No literal values (SC-014)
+- [ ] T094 [US1] Replace every `{{fa …}}` in `site/theme/index.hbs` — sidebar toggle, theme, search, print, repository, edit, the search spinner and the previous/next chevrons — with Material Symbols glyphs through the site's `@font-face`. Settle the glyph names against the font (research §4), keep each control's `title`/`aria-label`, and hide the glyph text from assistive technology. T092 passes; axe-core stays clean in both schemes
+
+## Phase 11: Bugfix BUG-003 — mdBook's transitions reach the page untouched
+
+**Goal**: FR-030a as clarified. Every transition the rendered page runs uses an emitted
+`--micold-motion-*` duration and easing, and reduced motion still removes them all.
+
+- [ ] T095 [P] Test first: extend `scripts/tests/page-checks.test.sh` with a fixture page whose non-theme stylesheet declares `transition: transform 0.3s ease` on a visible element, and assert that `page-checks.mjs` fails, naming the element, the property and the value (FR-030a, Principle I)
+- [ ] T096 Add the transitions assertion to `site/checks/page-checks.mjs` per [contracts/site-checks.md](./contracts/site-checks.md) *Transitions*: motion allowed, every page, every element with a non-zero `transition-duration` compared against the durations and easings the emitter writes. Confirm it fails on a local build of `main` (`.sidebar`, `.page-wrapper`, `.chapter-fold-toggle div`, `.nav-chapters`, `#mdbook-searchbar`); T095 turns green
+- [ ] T097 Override each mdBook transition in `site/theme/css/site.css` with `--micold-motion-*`: the sidebar and page wrapper on the sidebar-slide row (`medium-4`, `emphasized`; 018 design-tokens §6.3); the section fold toggle, previous/next and search box on the short durations with `standard` easing, matching the header's existing rules. Leave the `prefers-reduced-motion` block as it is. T096 passes; the `site.css` grep (SC-014) stays green
+
+## Phase 12: Bugfix close-out
+
+- [ ] T098 Update `docs/development/docs-site.md` with the three new page checks and the search workaround, and `site/README.md` with any mdBook pin from T088 (Principle VII)
+- [ ] T099 Run `scripts/tests/page-checks.test.sh`, every other `scripts/tests/*.test.sh`, `site/build.sh`, and the pre-deploy checks (`links.sh --built`, `media-budget.sh`, `page-checks.mjs`) over the local build. All green, in both schemes
+- [ ] T100 After the next publication, re-run [quickstart.md](./quickstart.md) Part B's B2 (including `about`), B3 and B4 against the live site, append the results to [evidence/quickstart-b.md](./evidence/quickstart-b.md), and mark BUG-001–003 **Fixed**
+
+**Bugfix**: 2026-09-16 — BUG-001 Updated from bugfix patch. Added Phase 9 (T087–T090): the per-word search check and the stop-word workaround. T044 annotated, not reopened.
+**Bugfix**: 2026-09-16 — BUG-002 Updated from bugfix patch. T032 reopened (the title's placement and the icons); added Phase 10 (T091–T094).
+**Bugfix**: 2026-09-16 — BUG-003 Updated from bugfix patch. T077 reopened (only the reduced-motion half held); added Phase 11 (T095–T097) and close-out Phase 12 (T098–T100).

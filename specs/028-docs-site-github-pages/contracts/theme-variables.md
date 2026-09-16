@@ -50,12 +50,17 @@ easings as complete `cubic-bezier(...)`, elevations as complete `box-shadow` val
 **Permitted** — the two treatments FR-029a names, plus ordinary documentation furniture:
 
 - the header is the application's top app bar: its surface role, its elevation, its title type;
+  *(Bugfix BUG-002)* its title's placement, which starts at the leading edge after the leading
+  controls and is centred vertically on the controls' line; and its icons, which are Material
+  Symbols glyphs and never mdBook's `{{fa}}` helper;
 - panels (the table of contents, code blocks, callouts, figures) are separated by surface shade and
   elevation, never by an outline;
 - outlines appear in exactly the three places the application uses them: a divider, the border of an
   outlined control, and the focus indicator;
 - transitions use `--micold-motion-*`, and are removed under `prefers-reduced-motion: reduce`
-  (FR-030b).
+  (FR-030b). *(Bugfix BUG-003: this includes every transition mdBook's own stylesheets declare.
+  The theme overrides each one, and the rendered-page check in `page-checks.mjs` holds it, because
+  the `site.css` grep cannot see a literal that lives in mdBook's files.)*
 
 **Forbidden**:
 
