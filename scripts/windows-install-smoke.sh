@@ -253,7 +253,9 @@ done
 # 9a. With the window still open, the same silent uninstall refuses and removes nothing (A16, FR-009,
 # I7). An uninstall proceeds only once the app is closed or someone confirms, and a silent run has
 # no one to confirm.
-echo "== uninstall with the client (pid $client_pid) open"
+daemon_pid="$(find_daemon_pid)"
+[ -n "$daemon_pid" ] || fail "$pipe is up, but no micold-daemon.exe process was found behind it"
+echo "== uninstall with the client (pid $client_pid) and the daemon (pid $daemon_pid) running"
 status=0
 MSYS2_ARG_CONV_EXCL='*' "$install_dir/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART \
 	"/LOG=$(cygpath -w "$logs/uninstall-open.log")" || status=$?
@@ -261,9 +263,9 @@ wait_for_uninstaller
 [ "$status" -ne 0 ] || fail "the silent uninstall with the window open exited 0, want non-zero (FR-009, I7)"
 [ -f "$install_dir/micold-ai-ide.exe" ] || fail "the refused uninstall removed $install_dir/micold-ai-ide.exe (FR-009)"
 [ "$(win "Test-Path -LiteralPath '$key'")" = True ] || fail "the refused uninstall removed the uninstall key $key (FR-009)"
-echo "refused with the window open (exit $status); install dir and uninstall key in place"
-daemon_pid="$(find_daemon_pid)"
-[ -n "$daemon_pid" ] || fail "$pipe is up, but no micold-daemon.exe process was found behind it"
+[ "$(alive "$daemon_pid")" = True ] ||
+	fail "the refused uninstall stopped the daemon (pid $daemon_pid) and the user's sessions with it (FR-009)"
+echo "refused with the window open (exit $status); install dir, uninstall key and daemon in place"
 MSYS2_ARG_CONV_EXCL='*' taskkill.exe /PID "$client_pid" /F >/dev/null 2>&1 ||
 	fail "could not stop the repaired client (pid $client_pid)"
 client_pid=""
