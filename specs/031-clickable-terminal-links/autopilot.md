@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M2: PR open, wait for `ci complete` and rebase-merge; then record the merge here
+- **Next step**: M2: PR #361 blocked on red `build + test (windows-latest)` (see Open escalation); once resolved, rerun CI, rebase-merge on green, record the merge here
 
 ## Pull requests
 
@@ -17,13 +17,14 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #336 | Spec | merged | 411711c1 |
 | #341 | Design (clarify, plan, tasks, milestones) | merged | 226d3a8b |
 | #356 | M1 Link recognition core | merged | 33f6491c |
+| #361 | M2 Opening pipeline | open, CI red | — |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
 | M1 | T001–T012 | Link recognition core (`micold_core::link`, SC-002 corpus) | #356 | merged |
-| M2 | T013–T022 | Opening pipeline: `LinkActivated` through `update_inner` to the system opener | — | in review |
+| M2 | T013–T022 | Opening pipeline: `LinkActivated` through `update_inner` to the system opener | #361 | blocked (CI) |
 | M3 | T082, T083, T037, T023–T034 | Clickable web, mail and declared links in the pane | — | pending |
 | M4 | T035, T036, T038–T041 | Session terminal identity and the FORCE_HYPERLINK opt-in | — | pending |
 | M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | — | pending |
@@ -65,7 +66,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 ## Open escalation
 
-None.
+Blocked by work outside my flow. PR #361, run 35136084307: `build + test (windows-latest)` failed on both attempts in step "Install and launch the Windows installer" with `scripts/windows-install-smoke.sh: FAIL: \\.\pipe\Micold.Daemon.<sid> is up, but no micold-daemon.exe process was found behind it` (line 189, `find_daemon_pid`). Attempt 1 failed at the uninstall step and attempt 2 at the repair step. Every other job passed, including windows-11-arm package + smoke. The script belongs to feature 030, and M2 changes nothing in the daemon, the installer or the spawn path; its only Windows-side change is `ShellExecuteW`/`CoInitializeEx`/explorer code that nothing calls yet, plus three `windows-sys` features. main's last 3 CI runs are green (9a6a7738, 33f6491c, 216f8801). The failure looks like a race between the pipe appearing and the pid record or parent-process lookup.
 
 ## Follow-ups not done
 
