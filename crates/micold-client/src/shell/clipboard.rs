@@ -49,6 +49,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::ProjectEntered
         | Outcome::RevealSuppressed(_)
         | Outcome::FieldFocusCleared
+        | Outcome::OpenLink(_)
         | Outcome::SurfaceOpened(_) => Task::none(),
     }
 }

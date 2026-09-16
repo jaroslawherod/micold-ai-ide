@@ -110,6 +110,35 @@ pub enum Outcome {
     /// has focus. The session feature knows the terminal was asked for; the window feature owns
     /// what having focus means.
     FieldFocusCleared,
+    /// Hand this address to the operating system's opener (feature 031, FR-010).
+    ///
+    /// An effect request like [`Outcome::ClipboardWrite`], and performed the same way: the shell's
+    /// `shell/links.rs` takes it out of the queue before the root drains the rest, because opening
+    /// is I/O on a blocking task and its result comes back as `LinkOpenFinished`.
+    OpenLink(OpenRequest),
+}
+
+/// What an activated link asks the operating system to open (feature 031, data-model §3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenRequest {
+    /// A web or mail address, handed over verbatim.
+    Url(String),
+    /// A file or folder on this machine, with the address the program printed for it.
+    Path { path: String, address: String },
+}
+
+/// Why an open did not happen (feature 031, contract link-opening §2, §5).
+///
+/// Here rather than in the shell so a render-free feature can name it in `LinkOpenFinished`;
+/// `shell/link_opener.rs` re-exports it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenFailure {
+    /// Nothing on this machine is set up to open the address.
+    NoApplication,
+    /// The opener could not be started, or reported another failure.
+    LaunchFailed(String),
+    /// The file does not exist. Set by `shell/links.rs`, never by an opener.
+    NotFound,
 }
 
 /// `Outcome::SurfaceOpened` when a toggle left its surface open, and nothing when it closed it.

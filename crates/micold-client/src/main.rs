@@ -678,6 +678,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Session(SessionMsg::RemoveConfirmed) => {
             shell::daemon_sync::on_session_remove_confirmed(app)
         }
+        // Feature 031: opening is I/O on a blocking task, so the reducer's `OpenLink` is performed
+        // here rather than dropped by the root.
+        Message::Session(msg @ SessionMsg::LinkActivated(_)) => {
+            shell::links::on_link_message(app, msg)
+        }
         Message::Session(SessionMsg::TerminalAiCliSelected(id)) => {
             shell::daemon_sync::on_terminal_ai_cli_selected(app, id)
         }

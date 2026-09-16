@@ -282,6 +282,56 @@ fn each_implementation_is_chosen_in_exactly_one_place() {
     );
 }
 
+/// The client-defined link opener (feature 031, T016). The derivation above reads only
+/// `micold-core`, so it cannot see a type the client defines; this names it.
+const SYSTEM_LINK_OPENER: &str = "SystemLinkOpener";
+
+/// The body of `Capabilities::real()`, from its signature to the first line closing it.
+fn real_body(code: &str) -> Option<&str> {
+    let start = code.find("pub fn real() -> Self {")?;
+    let end = code[start..].find("\n    }\n")?;
+    Some(&code[start..start + end])
+}
+
+#[test]
+fn the_system_link_opener_is_named_only_at_its_definition_and_in_capabilities_real() {
+    let sources = client_sources();
+    let definition = sources
+        .get("shell/link_opener.rs")
+        .expect("shell/link_opener.rs defines the link opener");
+    assert!(
+        definition.contains("pub struct SystemLinkOpener"),
+        "the definition exists, so this guard is not vacuous"
+    );
+
+    let capabilities = sources
+        .get("shell/capabilities.rs")
+        .expect("shell/capabilities.rs assembles the capabilities");
+    let in_real = real_body(capabilities).map_or(0, |body| names(body, SYSTEM_LINK_OPENER));
+    assert_eq!(
+        in_real, 1,
+        "`Capabilities::real()` chooses the system link opener, once (FR-018)"
+    );
+
+    let elsewhere: Vec<String> = sources
+        .iter()
+        .filter(|(path, _)| path.as_str() != "shell/link_opener.rs")
+        .filter_map(|(path, code)| {
+            let outside = if path == "shell/capabilities.rs" {
+                names(code, SYSTEM_LINK_OPENER) - in_real
+            } else {
+                names(code, SYSTEM_LINK_OPENER)
+            };
+            (outside > 0).then(|| format!("{path}×{outside}"))
+        })
+        .collect();
+    assert!(
+        elsewhere.is_empty(),
+        "`SystemLinkOpener` is chosen outside `Capabilities::real()`: {elsewhere:?} — take \
+         `caps.link_opener()` instead, so tests can replace it"
+    );
+}
+
 // ---------------------------------------------------------------------------------------
 // FR-022 (feature 026) — the provider rule, across all three crates
 // ---------------------------------------------------------------------------------------
