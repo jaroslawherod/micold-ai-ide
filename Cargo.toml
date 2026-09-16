@@ -49,6 +49,9 @@ windows-sys = { version = "0.61.2", features = [
     # counterpart of Linux's `CLOCK_BOOTTIME`, and the reason no new dependency was needed.
     "Win32_System_SystemInformation",
     "Win32_System_Threading",
+    # Feature 031: `ShellExecuteW` and `SW_SHOWNORMAL`, the Windows link opener.
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
 ] }
 # Build-time only: compiles `packaging/windows/app-icon.rc` into the Windows exes, so Explorer and the
 # taskbar show the project icon (feature 030, FR-003, research R11, vetted there). A no-op for any

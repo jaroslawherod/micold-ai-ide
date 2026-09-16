@@ -122,11 +122,11 @@ the `env_include.rs` builders (plan, Target Platform).
 
 ### Tests for US1: opening ⚠️ write first, must fail
 
-- [ ] T013 [P] [US1] [U73] [U74] [U75] [U76] Create `crates/micold-client/tests/features_session_links.rs` with T5: `SessionMsg::LinkActivated(r)` with `r.target = Url(u)` gives `Outcome::OpenLink(OpenRequest::Url(u))`. Also T12/T13: `LinkOpenFinished { address, result: Err(NoApplication) }` notifies `Couldn't open <address>: no application is set up to open it`, `Err(LaunchFailed(e))` notifies `Couldn't open <address>: <e>`, and `Ok(())` does nothing.
-- [ ] T014 [P] [US1] [U93] [U94] A `#[cfg(test)]` module in `crates/micold-client/src/shell/links.rs`, declared as `pub mod links;` in `crates/micold-client/src/shell/mod.rs` so it compiles and its red is seen, testing the route and SC-003.
+- [X] T013 [P] [US1] [U73] [U74] [U75] [U76] Create `crates/micold-client/tests/features_session_links.rs` with T5: `SessionMsg::LinkActivated(r)` with `r.target = Url(u)` gives `Outcome::OpenLink(OpenRequest::Url(u))`. Also T12/T13: `LinkOpenFinished { address, result: Err(NoApplication) }` notifies `Couldn't open <address>: no application is set up to open it`, `Err(LaunchFailed(e))` notifies `Couldn't open <address>: <e>`, and `Ok(())` does nothing.
+- [X] T014 [P] [US1] [U93] [U94] A `#[cfg(test)]` module in `crates/micold-client/src/shell/links.rs`, declared as `pub mod links;` in `crates/micold-client/src/shell/mod.rs` so it compiles and its red is seen, testing the route and SC-003.
   - `crate::update_inner` on `base_app()` with `caps.with_link_opener(recording)` given `Message::Session(SessionMsg::LinkActivated(url link))`: running the returned task calls `open` with the URL verbatim.
   - No timer or debounce sits between the outcome and the call.
-- [ ] T015 [US1] [U101] [U102] [U103] [U104] [U138] [U139] [U144] Tests in the `#[cfg(test)]` module of `crates/micold-client/src/shell/link_opener.rs`, declaring `pub mod link_opener;` in `crates/micold-client/src/shell/mod.rs` so the module compiles and its red is seen (after T014, which edits the same `mod.rs`). The launch-window cases are `#[cfg(unix)]` and drive the window helper with stub children; the classifier and reveal-fallback cases are not `cfg`-gated.
+- [X] T015 [US1] [U101] [U102] [U103] [U104] [U138] [U139] [U144] Tests in the `#[cfg(test)]` module of `crates/micold-client/src/shell/link_opener.rs`, declaring `pub mod link_opener;` in `crates/micold-client/src/shell/mod.rs` so the module compiles and its red is seen (after T014, which edits the same `mod.rs`). The launch-window cases are `#[cfg(unix)]` and drive the window helper with stub children; the classifier and reveal-fallback cases are not `cfg`-gated.
   - Exit 0 is `Ok`.
   - Exit 3 is `NoApplication`.
   - Another non-zero exit is `LaunchFailed`.
@@ -134,16 +134,16 @@ the `env_include.rs` builders (plan, Target Platform).
   - macOS classification through `classify_macos_open(exit_code, stderr) -> Result<(), OpenFailure>`, which is not behind a macOS `cfg` so the Linux gate runs it: non-zero with stderr naming no application is `NoApplication`, otherwise `LaunchFailed` (contract link-opening §2).
   - Windows classification through `classify_shell_execute(ret: isize) -> Result<(), OpenFailure>`, not `cfg`-gated: 33 is `Ok`; 31 (`SE_ERR_NOASSOC`) and 27 (`SE_ERR_ASSOCINCOMPLETE`) are `NoApplication`; 32 and 2 are `LaunchFailed`.
   - Linux reveal through `reveal_linux(runner: &dyn CommandRunner, path)`, also not `cfg`-gated: when the stub runner fails the `dbus-send` `ShowItems` call, the next command is the opener with the parent folder (FR-013).
-- [ ] T016 [P] [US1] [U105] Add a named client-side check to `crates/micold-client/tests/no_concrete_implementations.rs` (its derivation reads only `micold-core`, so it cannot see a client type): scanning `crates/micold-client/src/`, `SystemLinkOpener` occurs outside `use` lines only in `shell/link_opener.rs` (its definition) and in `Capabilities::real()` in `shell/capabilities.rs`. A vacuity assertion requires the definition to exist, so the test is red until T019 and T020 land
+- [X] T016 [P] [US1] [U105] Add a named client-side check to `crates/micold-client/tests/no_concrete_implementations.rs` (its derivation reads only `micold-core`, so it cannot see a client type): scanning `crates/micold-client/src/`, `SystemLinkOpener` occurs outside `use` lines only in `shell/link_opener.rs` (its definition) and in `Capabilities::real()` in `shell/capabilities.rs`. A vacuity assertion requires the definition to exist, so the test is red until T019 and T020 land
 
 ### Implementation for US1: opening
 
-- [ ] T017 [US1] [U73] Add the effect vocabulary.
+- [X] T017 [US1] [U73] Add the effect vocabulary.
   - `crates/micold-client/src/features/mod.rs` gains `Outcome::OpenLink(OpenRequest)`, with `OpenRequest = Url(String) | Path { path: String, address: String }`, and `OpenFailure { NoApplication, LaunchFailed(String), NotFound }`, both deriving `Clone, Debug, PartialEq, Eq`. `OpenFailure` lives here so that render-free features can name it; `shell/link_opener.rs` re-exports it.
   - Add an empty `Outcome::OpenLink(_)` arm to `app::interpret` in `crates/micold-client/src/app.rs`.
   - Add `Outcome::OpenLink(_)` to the no-op arm of `interpret` in `crates/micold-client/src/shell/clipboard.rs`. `tests/clipboard_request.rs` must still pass.
-- [ ] T018 [US1] [U73] [U74] [U75] [U76] In `crates/micold-client/src/features/session.rs`, add `SessionMsg::LinkActivated(ResolvedLink)` and `SessionMsg::LinkOpenFinished { address: String, result: Result<(), OpenFailure> }`, with reducers: T5 emits `OpenLink(Url(u))`, T12 calls `notify_error` with the §5 texts, and T13 does nothing. Update any gate that enumerates `SessionMsg` variants (for example `tests/features_are_render_free.rs` or `tests/outcome_termination.rs`, if they list them).
-- [ ] T019 [US1] [U101] [U102] [U103] [U104] [U105] [U138] [U139] [U144] Implement `crates/micold-client/src/shell/link_opener.rs` (declared by T015). Every argument is a single argv element and no shell is involved.
+- [X] T018 [US1] [U73] [U74] [U75] [U76] In `crates/micold-client/src/features/session.rs`, add `SessionMsg::LinkActivated(ResolvedLink)` and `SessionMsg::LinkOpenFinished { address: String, result: Result<(), OpenFailure> }`, with reducers: T5 emits `OpenLink(Url(u))`, T12 calls `notify_error` with the §5 texts, and T13 does nothing. Update any gate that enumerates `SessionMsg` variants (for example `tests/features_are_render_free.rs` or `tests/outcome_termination.rs`, if they list them).
+- [X] T019 [US1] [U101] [U102] [U103] [U104] [U105] [U138] [U139] [U144] Implement `crates/micold-client/src/shell/link_opener.rs` (declared by T015). Every argument is a single argv element and no shell is involved.
   - `trait LinkOpener: Send + Sync { fn open(&self, target: &str) -> Result<(), OpenFailure>; fn reveal(&self, path: &Path) -> Result<(), OpenFailure>; }`.
   - `SystemLinkOpener` implements it, with one arm per platform from contract link-opening §2:
     - **Linux**: `open` is `xdg-open`, with null stdio and the 2 s launch window. `reveal` is `dbus-send … org.freedesktop.FileManager1.ShowItems array:string:file://<path> string:""`, falling back to `open(<parent>)`.
@@ -153,14 +153,14 @@ the `env_include.rs` builders (plan, Target Platform).
   - `#[cfg(test)] pub(crate) struct NoopLinkOpener`, whose methods return `Ok(())`, for `base_app()` (T020).
   - `crates/micold-client/Cargo.toml` gains `windows-sys = { workspace = true }` under `[target.'cfg(windows)'.dependencies]`.
   - The workspace `Cargo.toml` `windows-sys` entry gains `Win32_UI_Shell` and `Win32_UI_WindowsAndMessaging`.
-- [ ] T020 [US1] [U93] [U105] Add `link_opener: Arc<dyn LinkOpener>` to `Capabilities` in `crates/micold-client/src/shell/capabilities.rs`. `real()` constructs `SystemLinkOpener`. Add `#[cfg(test)] pub(crate) fn with_link_opener(mut self, opener: Arc<dyn LinkOpener>) -> Self`, modelled on `without_settings`. `base_app()` in `crates/micold-client/src/main.rs` becomes `Capabilities::real().with_link_opener(Arc::new(NoopLinkOpener))`, so no test can reach the system opener, and link tests replace it with a recording opener.
-- [ ] T021 [US1] [U93] [U94] Implement `crates/micold-client/src/shell/links.rs` (declared by T014).
+- [X] T020 [US1] [U93] [U105] Add `link_opener: Arc<dyn LinkOpener>` to `Capabilities` in `crates/micold-client/src/shell/capabilities.rs`. `real()` constructs `SystemLinkOpener`. Add `#[cfg(test)] pub(crate) fn with_link_opener(mut self, opener: Arc<dyn LinkOpener>) -> Self`, modelled on `without_settings`. `base_app()` in `crates/micold-client/src/main.rs` becomes `Capabilities::real().with_link_opener(Arc::new(NoopLinkOpener))`, so no test can reach the system opener, and link tests replace it with a recording opener.
+- [X] T021 [US1] [U93] [U94] Implement `crates/micold-client/src/shell/links.rs` (declared by T014).
   - `on_link_message(app: &mut App, msg: SessionMsg) -> Task<Message>` runs the session reducer, then splits its outcomes:
     - `OpenLink` goes to `perform`;
     - `ClipboardWrite` goes to `shell::clipboard::interpret`;
     - every other outcome goes through `app::drain`/`app::interpret`.
   - `perform(OpenRequest::Url(u))` is `Task::perform` over `tokio::task::spawn_blocking` calling `opener.open(&u)`, and maps the result to `LinkOpenFinished { address: u, result }`.
-- [ ] T022 [US1] [U93] In `update_inner` in `crates/micold-client/src/main.rs`, add a `Message::Session(SessionMsg::LinkActivated(_))` arm ahead of the general `Message::Session` arm, the way `RemoveConfirmed` is routed, calling `shell::links::on_link_message` (glue)
+- [X] T022 [US1] [U93] In `update_inner` in `crates/micold-client/src/main.rs`, add a `Message::Session(SessionMsg::LinkActivated(_))` arm ahead of the general `Message::Session` arm, the way `RemoveConfirmed` is routed, calling `shell::links::on_link_message` (glue)
 
 **Checkpoint (M2)**: a `LinkActivated` for a web or mail address reaches the system opener through `update_inner`, and a failure notifies. Nothing in the UI emits it yet; M3 wires the pane.
 

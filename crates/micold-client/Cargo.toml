@@ -46,6 +46,10 @@ serde_json = { workspace = true }
 # tokio executor; this makes the dependency explicit rather than transitive.
 tokio = { workspace = true }
 
+# Feature 031: `ShellExecuteW`, the Windows arm of the link opener (`shell/link_opener.rs`).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 ttf-parser = { workspace = true }

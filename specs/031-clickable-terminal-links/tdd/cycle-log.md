@@ -459,3 +459,42 @@
 - green: `closed_by_its_quote` (the char before the address and the char at its end are both `'`) exempts the address from the bottom-cut drop. Contract L7 says so. U154 -> `ok`. Suite (`cargo test -p micold-core --all-targets`) -> 1131 passed, 0 failed; clippy clean; fmt clean
 - refactor: none needed
 - commit: `fix(031): keep a quoted address closed at a bottom cut (U154)`
+
+## M2: opening pipeline (T013–T022)
+
+Per ledger decision 14, a cycle's suite is the tests of the files it touches; the workspace suite and `mise run gate` run at the milestone's end. The M2 tests were written together with compiling stubs (`OpenLink`, `OpenFailure`, the two `SessionMsg` variants with empty reducers, a `link_opener.rs` whose functions answer `LaunchFailed("unimplemented")`, a `links.rs` returning `Task::none()`) and committed before any implementation, so each red below is an assertion, not a compile error.
+
+## Cycle 45: U73–U76 the session feature asks to open a URL and reports a failed open
+
+- test: `crates/micold-client/tests/features_session_links.rs` (new): `activating_a_url_link_asks_to_open_that_url_verbatim`, `an_open_with_no_application_notifies_that_nothing_is_set_up`, `a_failed_launch_notifies_the_reason`, `an_open_that_worked_notifies_nothing`
+- red: `scripts/build-lock.sh cargo test -p micold-client --test features_session_links`
+  -> U73 `left: []` / `right: [OpenLink(Url("https://example.com/docs?q=a%20b#top"))]`; U74 `left: []` / `right: [(Error, "Couldn't open https://example.com/docs?q=a%20b#top: no application is set up to open it")]`; U75 `left: []` / `right: [(Error, "Couldn't open …: xdg-open exited with status 4")]` (1 passed; 3 failed)
+- U76 passed on arrival: an empty reducer notifies nothing. It is kept as the guard on T13 (a reducer that notified on `Ok` would fail it)
+- green: `link_activated` maps `Target::Url(u)` to `OpenLink(OpenRequest::Url(u))`; `link_open_finished` calls `notify_error` with the contract §5 texts. -> 4 passed
+- commit: red `test(031): opening pipeline tests against compiling stubs (T013–T016)`; green `feat(031): opening pipeline from LinkActivated to the system opener (U73–U76, U93, U94, U101–U105, U138, U139, U144)`
+
+## Cycle 46: U93–U94 `LinkActivated` through `update_inner` reaches the opener verbatim and at once
+
+- test: `crates/micold-client/src/shell/links.rs::tests::activating_a_url_through_update_inner_opens_it_verbatim_and_without_delay` (new); it runs the returned task through `iced_runtime::task::into_stream` on a tokio runtime (new dev-dependency `iced_runtime = "=0.14.0"`, already in the lock through `iced`)
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide shell::link`
+  -> `left: []` / `right: ["https://example.com/a(b)?q=%20x#frag"]` (the stub route returned no task)
+- green: `shell::links::on_link_message` runs the session reducer, sends `OpenLink` to `perform` (`Task::perform` over `spawn_blocking` calling `opener.open`, answered by `LinkOpenFinished`), `ClipboardWrite` to `shell::clipboard::interpret`, and drains the rest; `update_inner` routes `LinkActivated` to it; `Capabilities` gains `link_opener` and `with_link_opener`, and every test `App` in `main_tests.rs` (not only `base_app()`) holds `NoopLinkOpener`. -> ok (under 250 ms, and one `LinkOpenFinished { address, result: Ok(()) }`)
+- commit: red `test(031): opening pipeline tests against compiling stubs (T013–T016)`; green `feat(031): opening pipeline from LinkActivated to the system opener (U73–U76, U93, U94, U101–U105, U138, U139, U144)`
+
+## Cycle 47: U101–U104, U138, U139, U144 the system opener's launch window and classifiers
+
+- test: `crates/micold-client/src/shell/link_opener.rs::tests` (new): `launch::{a_launcher_exiting_zero_inside_the_window_is_success, xdg_open_exiting_three_inside_the_window_is_no_application, another_non_zero_exit_inside_the_window_is_a_launch_failure, a_launcher_still_running_at_the_end_of_the_window_is_success_and_keeps_running}` (`#[cfg(unix)]`, `sh -c` stub children), `macos_open_failing_names_no_application_only_when_stderr_says_so`, `shell_execute_returns_map_to_success_no_application_and_launch_failure`, `linux_reveal_opens_the_folder_when_the_file_manager_cannot_select_the_item`
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide shell::link`
+  -> U101 `left: Err(LaunchFailed("unimplemented"))` / `right: Ok(())`; U102 `… / right: Err(NoApplication)`; U103 panicked at `link_opener.rs:128` (no status named); U104 `left: Err(LaunchFailed("unimplemented"))` / `right: Ok(())`; U138 `left: 0` / `right: 2` (calls); U139 and U144 `left: Err(LaunchFailed("unimplemented"))` / `right: Ok(())` (8 failed with U93)
+- green: `launch_window` polls `try_wait` every 10 ms up to the window, classifies an exit (stderr read when piped), and hands a still-running child to a reaping thread; `classify_xdg_open` (0, 3, other), `classify_macos_open` (stderr naming no application or -10814), `classify_shell_execute` (> 32, 31/27, other); `reveal_linux` calls `dbus-send --print-reply … ShowItems array:string:<file URI>` and falls back to `xdg-open <parent>`. `SystemLinkOpener` has Linux (`xdg-open`, null stdio), macOS (`open`, stderr piped; `open -R`) and Windows (`ShellExecuteW`; `explorer.exe` with `raw_arg`) arms; `micold-client` gains `windows-sys` for Windows, and the workspace entry `Win32_UI_Shell` and `Win32_UI_WindowsAndMessaging`. -> 8 passed. `cargo clippy -p micold-client --all-targets -- -D warnings` clean on the host, `--target aarch64-apple-darwin` and `--target x86_64-pc-windows-msvc`
+- commit: red `test(031): opening pipeline tests against compiling stubs (T013–T016)`; green `feat(031): opening pipeline from LinkActivated to the system opener (U73–U76, U93, U94, U101–U105, U138, U139, U144)`
+
+## Cycle 48: U105 the system link opener is chosen only in `Capabilities::real()`
+
+- test: `crates/micold-client/tests/no_concrete_implementations.rs::the_system_link_opener_is_named_only_at_its_definition_and_in_capabilities_real` (new)
+- red: none on arrival, since the stub definition and its `Capabilities::real()` site landed with the tests. Two mutants, each run against the built test binary and reverted:
+  - `let _probe = shell::link_opener::SystemLinkOpener;` at the top of `update_inner` -> `` `SystemLinkOpener` is chosen outside `Capabilities::real()`: ["main.rs×1"] `` (1 failed)
+  - the definition renamed to `SystemOpener` -> `the definition exists, so this guard is not vacuous` (1 failed)
+- green: -> 14 passed (whole file)
+- commit: `test(031): opening pipeline tests against compiling stubs (T013–T016)`
+- notes: `tests/clipboard_request.rs`, `tests/outcome_termination.rs` and `tests/features_are_render_free.rs` still pass with the new `Outcome` and `SessionMsg` variants (4, 2 and 6 passed)

@@ -232,10 +232,10 @@ untouched code, and it is recorded as `BASELINE`.
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U73 | `LinkActivated` with `Url(u)` emits `OpenLink(Url(u))` | FR-010, T5 | example | PENDING | |
-| U74 | `LinkOpenFinished` with `NoApplication` notifies `Couldn't open <address>: no application is set up to open it` | FR-015, T12 | example | PENDING | |
-| U75 | `LinkOpenFinished` with `LaunchFailed(e)` notifies `Couldn't open <address>: <e>` | FR-015, T12 | example | PENDING | |
-| U76 | `LinkOpenFinished` with `Ok` notifies nothing | FR-015, T13 | example | PENDING | |
+| U73 | `LinkActivated` with `Url(u)` emits `OpenLink(Url(u))` | FR-010, T5 | example | DONE | `crates/micold-client/tests/features_session_links.rs::activating_a_url_link_asks_to_open_that_url_verbatim` |
+| U74 | `LinkOpenFinished` with `NoApplication` notifies `Couldn't open <address>: no application is set up to open it` | FR-015, T12 | example | DONE | `crates/micold-client/tests/features_session_links.rs::an_open_with_no_application_notifies_that_nothing_is_set_up` |
+| U75 | `LinkOpenFinished` with `LaunchFailed(e)` notifies `Couldn't open <address>: <e>` | FR-015, T12 | example | DONE | `crates/micold-client/tests/features_session_links.rs::a_failed_launch_notifies_the_reason` |
+| U76 | `LinkOpenFinished` with `Ok` notifies nothing | FR-015, T13 | example | DONE | `crates/micold-client/tests/features_session_links.rs::an_open_that_worked_notifies_nothing` |
 | U77 | `LinkOpenFinished` with `NotFound` notifies `Couldn't open <address>: the file doesn't exist on this machine` | FR-015, US3.5 | example | PENDING | |
 | U78 | `LinkActivated` with `HostPath(p)` and no confirmation emits `OpenLink(Path { path: p, address })` | FR-010, T6 | example | PENDING | |
 | U79 | `LinkActivated` with `Unreachable` notifies `Couldn't open <address>: the sandbox doesn't share that location with this machine` and emits no open | FR-015, FR-018, T8 | example | PENDING | |
@@ -263,8 +263,8 @@ untouched code, and it is recorded as `BASELINE`.
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U93 | `LinkActivated` for a URL, through `update_inner`, calls `opener.open` with the URL verbatim | FR-010 | example | PENDING | |
-| U94 | No timer or debounce stands between the `OpenLink` outcome and the opener call | SC-003 | example | PENDING | |
+| U93 | `LinkActivated` for a URL, through `update_inner`, calls `opener.open` with the URL verbatim | FR-010 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::activating_a_url_through_update_inner_opens_it_verbatim_and_without_delay` |
+| U94 | No timer or debounce stands between the `OpenLink` outcome and the opener call | SC-003 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::activating_a_url_through_update_inner_opens_it_verbatim_and_without_delay` |
 | U95 | An `OpenLink(Path)` for a missing path finishes with `NotFound` and calls no opener | FR-015, T11 | example | PENDING | |
 | U96 | An existing document or folder is passed to `opener.open` | FR-010, T11 | example | PENDING | |
 | U97 | On each CI OS, real runnable files of every kind that OS lists (including a symlink to an executable file, the extension-only kinds such as Linux `.desktop`/`.AppImage` and macOS `.command`, and inside a directory whose name has a space) are passed to `reveal` 100%, and `.txt`, `.png`, `.pdf`, `.html` to `open` 100% | FR-013, SC-007 | example | PENDING | |
@@ -277,14 +277,14 @@ untouched code, and it is recorded as `BASELINE`.
 
 | id   | behavior | traces | kind | state | test |
 | ---- | -------- | ------ | ---- | ----- | ---- |
-| U101 | A launcher exiting 0 inside the 2 s window is success | FR-015 | example | PENDING | |
-| U102 | Linux: a launcher exiting 3 inside the window is `NoApplication` | FR-015 | example | PENDING | |
-| U103 | A launcher exiting with another non-zero code inside the window is `LaunchFailed` | FR-015 | example | PENDING | |
-| U104 | A launcher still running at the end of the window is success and is left running | SC-003 | example | PENDING | |
-| U138 | Linux: when the file manager's select-item call fails, reveal opens the containing folder instead | FR-013 | example | PENDING | |
-| U139 | macOS: an `open` exiting non-zero inside the window is `NoApplication` when its stderr names no application, and `LaunchFailed` otherwise | FR-015 | example | PENDING | |
-| U144 | Windows: a `ShellExecuteW` return above 32 is success, 31 and 27 are `NoApplication`, and 32 and 2 are `LaunchFailed` | FR-015 | example | PENDING | |
-| U105 | `SystemLinkOpener` is named in client `src/` only at its definition and in `Capabilities::real()`, and the definition exists | Constitution (capability seams), FR-019 | example | PENDING | |
+| U101 | A launcher exiting 0 inside the 2 s window is success | FR-015 | example | DONE | `crates/micold-client/src/shell/link_opener.rs::tests::launch::a_launcher_exiting_zero_inside_the_window_is_success` |
+| U102 | Linux: a launcher exiting 3 inside the window is `NoApplication` | FR-015 | example | DONE | `crates/micold-client/src/shell/link_opener.rs::tests::launch::xdg_open_exiting_three_inside_the_window_is_no_application` |
+| U103 | A launcher exiting with another non-zero code inside the window is `LaunchFailed` | FR-015 | example | DONE | `crates/micold-client/src/shell/link_opener.rs::tests::launch::another_non_zero_exit_inside_the_window_is_a_launch_failure` |
+| U104 | A launcher still running at the end of the window is success and is left running | SC-003 | example | DONE | `crates/micold-client/src/shell/link_opener.rs::tests::launch::a_launcher_still_running_at_the_end_of_the_window_is_success_and_keeps_running` |
+| U138 | Linux: when the file manager's select-item call fails, reveal opens the containing folder instead | FR-013 | example | DONE | `crates/micold-client/src/shell/link_opener.rs::tests::linux_reveal_opens_the_folder_when_the_file_manager_cannot_select_the_item` |
+| U139 | macOS: an `open` exiting non-zero inside the window is `NoApplication` when its stderr names no application, and `LaunchFailed` otherwise | FR-015 | example | DONE | `crates/micold-client/src/shell/link_opener.rs::tests::macos_open_failing_names_no_application_only_when_stderr_says_so` |
+| U144 | Windows: a `ShellExecuteW` return above 32 is success, 31 and 27 are `NoApplication`, and 32 and 2 are `LaunchFailed` | FR-015 | example | DONE | `crates/micold-client/src/shell/link_opener.rs::tests::shell_execute_returns_map_to_success_no_application_and_launch_failure` |
+| U105 | `SystemLinkOpener` is named in client `src/` only at its definition and in `Capabilities::real()`, and the definition exists | Constitution (capability seams), FR-019 | example | DONE | `crates/micold-client/tests/no_concrete_implementations.rs::the_system_link_opener_is_named_only_at_its_definition_and_in_capabilities_real` |
 
 ### `crates/micold-client/src/ui/material/terminal_pane.rs`
 

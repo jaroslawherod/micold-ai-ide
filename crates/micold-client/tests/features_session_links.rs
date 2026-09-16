@@ -90,7 +90,9 @@ fn a_failed_launch_notifies_the_reason() {
     let mut state = State::default();
     state.update(Message::Session(finished(
         ADDRESS,
-        Err(OpenFailure::LaunchFailed("xdg-open exited with status 4".to_string())),
+        Err(OpenFailure::LaunchFailed(
+            "xdg-open exited with status 4".to_string(),
+        )),
     )));
     assert_eq!(
         notifications(&mut state),
@@ -106,8 +108,7 @@ fn a_failed_launch_notifies_the_reason() {
 #[test]
 fn an_open_that_worked_notifies_nothing() {
     let mut state = State::default();
-    let outcomes =
-        micold_client::features::session::update(&mut state, finished(ADDRESS, Ok(())));
+    let outcomes = micold_client::features::session::update(&mut state, finished(ADDRESS, Ok(())));
     assert!(outcomes.is_empty(), "a finished open asks for nothing more");
     assert!(
         notifications(&mut state).is_empty(),

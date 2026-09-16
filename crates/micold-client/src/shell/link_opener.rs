@@ -1,8 +1,22 @@
 //! The operating system's opener (feature 031, contract link-opening §2).
+//!
+//! One arm per platform. Every argument is a single argv element and no shell is involved, except
+//! explorer's `/select,"<path>"`, which Windows cannot receive any other way.
+//!
+//! # The launch window
+//!
+//! A launcher is waited for at most [`LAUNCH_WINDOW`]. Inside it, its exit says whether the address
+//! was handed on; a launcher still running at its end counts as launched and is left to run, since
+//! `xdg-open`'s generic mode runs the handler in the foreground (plan Risk 10). The request reaches
+//! the operating system at spawn, before any wait, so the window costs SC-003 nothing.
+//!
+//! The classifiers and the Linux reveal are plain functions compiled on every OS, so the Linux gate
+//! tests the macOS and Windows mappings too.
 
 use std::ffi::OsStr;
 use std::path::Path;
-use std::process::{Child, Command};
+#[cfg(unix)]
+use std::process::Child;
 use std::time::Duration;
 
 pub use micold_client::features::OpenFailure;
@@ -12,56 +26,260 @@ pub trait LinkOpener: Send + Sync {
     /// Open a URL, or a host path, in whatever the system has set up for it.
     fn open(&self, target: &str) -> Result<(), OpenFailure>;
     /// Show `path` selected in the file manager, without running it (FR-013).
+    // Called from M5 on (`shell/links.rs`, O4); the capability is whole from the start.
+    #[allow(dead_code)]
     fn reveal(&self, path: &Path) -> Result<(), OpenFailure>;
 }
 
 /// How long a launcher is waited for before it counts as launched (contract §2).
+#[cfg_attr(windows, allow(dead_code))]
 pub const LAUNCH_WINDOW: Duration = Duration::from_secs(2);
 
+/// How often a launcher is checked inside the window.
+#[cfg(unix)]
+const POLL: Duration = Duration::from_millis(10);
+
 /// Wait for a started launcher for at most `window`, and classify how it ended.
+///
+/// `classify` gets the exit code and whatever the launcher wrote to stderr, when stderr was piped.
+/// A launcher still running at the window's end is success, and a thread reaps it when it exits.
+#[cfg(unix)]
 fn launch_window(
-    _child: Child,
-    _window: Duration,
-    _classify: impl Fn(i32, &str) -> Result<(), OpenFailure>,
+    mut child: Child,
+    window: Duration,
+    classify: impl Fn(i32, &str) -> Result<(), OpenFailure>,
 ) -> Result<(), OpenFailure> {
-    Err(OpenFailure::LaunchFailed("unimplemented".to_string()))
+    use std::io::Read;
+
+    let deadline = std::time::Instant::now() + window;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let mut stderr = String::new();
+                if let Some(mut pipe) = child.stderr.take() {
+                    let _ = pipe.read_to_string(&mut stderr);
+                }
+                return match status.code() {
+                    Some(code) => classify(code, stderr.trim()),
+                    None => Err(OpenFailure::LaunchFailed(format!(
+                        "the opener was stopped ({status})"
+                    ))),
+                };
+            }
+            Ok(None) if std::time::Instant::now() >= deadline => {
+                std::thread::spawn(move || {
+                    let _ = child.wait();
+                });
+                return Ok(());
+            }
+            Ok(None) => std::thread::sleep(POLL),
+            Err(e) => return Err(OpenFailure::LaunchFailed(e.to_string())),
+        }
+    }
 }
 
-/// Linux: `xdg-open`'s exit code.
-fn classify_xdg_open(_code: i32, _stderr: &str) -> Result<(), OpenFailure> {
-    Err(OpenFailure::LaunchFailed("unimplemented".to_string()))
+/// Linux: `xdg-open`'s exit code. 3 is its "no tool found to open it".
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn classify_xdg_open(code: i32, _stderr: &str) -> Result<(), OpenFailure> {
+    match code {
+        0 => Ok(()),
+        3 => Err(OpenFailure::NoApplication),
+        other => Err(OpenFailure::LaunchFailed(format!(
+            "xdg-open exited with status {other}"
+        ))),
+    }
+}
+
+/// Any other launcher: zero is success, anything else a launch failure naming the program.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn classify_exit(program: &str, code: i32) -> Result<(), OpenFailure> {
+    match code {
+        0 => Ok(()),
+        other => Err(OpenFailure::LaunchFailed(format!(
+            "{program} exited with status {other}"
+        ))),
+    }
 }
 
 /// macOS: `open`'s exit code and what it wrote to stderr.
-pub fn classify_macos_open(_exit_code: i32, _stderr: &str) -> Result<(), OpenFailure> {
-    Err(OpenFailure::LaunchFailed("unimplemented".to_string()))
+///
+/// `open` exits 1 for every failure, so stderr is what tells "no application knows how to open
+/// this" (Launch Services' `kLSApplicationNotFoundErr`, -10814) from the rest.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn classify_macos_open(exit_code: i32, stderr: &str) -> Result<(), OpenFailure> {
+    if exit_code == 0 {
+        return Ok(());
+    }
+    if stderr.to_ascii_lowercase().contains("no application") || stderr.contains("-10814") {
+        return Err(OpenFailure::NoApplication);
+    }
+    Err(OpenFailure::LaunchFailed(if stderr.is_empty() {
+        format!("open exited with status {exit_code}")
+    } else {
+        stderr.to_string()
+    }))
 }
 
-/// Windows: what `ShellExecuteW` returned.
-pub fn classify_shell_execute(_ret: isize) -> Result<(), OpenFailure> {
-    Err(OpenFailure::LaunchFailed("unimplemented".to_string()))
+/// `SE_ERR_ASSOCINCOMPLETE`: the association is incomplete or invalid.
+const SE_ERR_ASSOCINCOMPLETE: isize = 27;
+/// `SE_ERR_NOASSOC`: no application is associated with the file name extension.
+const SE_ERR_NOASSOC: isize = 31;
+
+/// Windows: what `ShellExecuteW` returned. Above 32 is success.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn classify_shell_execute(ret: isize) -> Result<(), OpenFailure> {
+    match ret {
+        ret if ret > 32 => Ok(()),
+        SE_ERR_NOASSOC | SE_ERR_ASSOCINCOMPLETE => Err(OpenFailure::NoApplication),
+        other => Err(OpenFailure::LaunchFailed(format!(
+            "the system could not open it (error {other})"
+        ))),
+    }
 }
 
 /// Running one launcher to its classified end.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 trait CommandRunner {
     fn run(&self, program: &str, args: &[&OsStr]) -> Result<(), OpenFailure>;
 }
 
 /// Linux: select `path` in the file manager, or open its folder when that is not possible.
-fn reveal_linux(_runner: &dyn CommandRunner, _path: &Path) -> Result<(), OpenFailure> {
-    Ok(())
+///
+/// `ShowItems` is the freedesktop file-manager interface. `--print-reply` makes `dbus-send` wait for
+/// the answer, so a session with no file manager providing it fails here and falls back, rather
+/// than succeeding with nothing shown. The fallback opens the folder, never the file (FR-013).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn reveal_linux(runner: &dyn CommandRunner, path: &Path) -> Result<(), OpenFailure> {
+    let item = format!("array:string:{}", file_uri(path));
+    let args = [
+        OsStr::new("--session"),
+        OsStr::new("--print-reply"),
+        OsStr::new("--dest=org.freedesktop.FileManager1"),
+        OsStr::new("--type=method_call"),
+        OsStr::new("/org/freedesktop/FileManager1"),
+        OsStr::new("org.freedesktop.FileManager1.ShowItems"),
+        OsStr::new(&item),
+        // The startup-notification id, which a reveal has none of.
+        OsStr::new("string:"),
+    ];
+    match runner.run("dbus-send", &args) {
+        Ok(()) => Ok(()),
+        Err(selecting) => match path.parent() {
+            Some(folder) => runner.run("xdg-open", &[folder.as_os_str()]),
+            None => Err(selecting),
+        },
+    }
+}
+
+/// `file://` and `path`, percent-encoding every byte outside RFC 3986's unreserved set and `/`, so
+/// a comma or a space cannot split the `array:string:` list `dbus-send` parses.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn file_uri(path: &Path) -> String {
+    let text = path.to_string_lossy();
+    let mut uri = String::from("file://");
+    for byte in text.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => {
+                uri.push(byte as char)
+            }
+            other => uri.push_str(&format!("%{other:02X}")),
+        }
+    }
+    uri
 }
 
 /// The real opener.
 pub struct SystemLinkOpener;
 
+#[cfg(unix)]
+fn spawn(program: &str, args: &[&OsStr], pipe_stderr: bool) -> Result<Child, OpenFailure> {
+    use std::process::{Command, Stdio};
+    Command::new(program)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(if pipe_stderr {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .spawn()
+        .map_err(|e| OpenFailure::LaunchFailed(format!("couldn't start {program}: {e}")))
+}
+
+#[cfg(target_os = "linux")]
+impl CommandRunner for SystemLinkOpener {
+    fn run(&self, program: &str, args: &[&OsStr]) -> Result<(), OpenFailure> {
+        // Null stderr: a handler `xdg-open` runs in the foreground inherits it and outlives the
+        // window, and a pipe nobody reads any more would break it on its first write.
+        let child = spawn(program, args, false)?;
+        if program == "xdg-open" {
+            launch_window(child, LAUNCH_WINDOW, classify_xdg_open)
+        } else {
+            launch_window(child, LAUNCH_WINDOW, |code, _| classify_exit(program, code))
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
 impl LinkOpener for SystemLinkOpener {
-    fn open(&self, _target: &str) -> Result<(), OpenFailure> {
-        Ok(())
+    fn open(&self, target: &str) -> Result<(), OpenFailure> {
+        self.run("xdg-open", &[OsStr::new(target)])
     }
 
-    fn reveal(&self, _path: &Path) -> Result<(), OpenFailure> {
-        Ok(())
+    fn reveal(&self, path: &Path) -> Result<(), OpenFailure> {
+        reveal_linux(self, path)
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl LinkOpener for SystemLinkOpener {
+    fn open(&self, target: &str) -> Result<(), OpenFailure> {
+        // `open` hands the address to Launch Services and exits; the application it starts does
+        // not inherit this pipe, so reading stderr at exit cannot block on it.
+        let child = spawn("open", &[OsStr::new(target)], true)?;
+        launch_window(child, LAUNCH_WINDOW, classify_macos_open)
+    }
+
+    fn reveal(&self, path: &Path) -> Result<(), OpenFailure> {
+        let child = spawn("open", &[OsStr::new("-R"), path.as_os_str()], true)?;
+        launch_window(child, LAUNCH_WINDOW, classify_macos_open)
+    }
+}
+
+#[cfg(windows)]
+impl LinkOpener for SystemLinkOpener {
+    fn open(&self, target: &str) -> Result<(), OpenFailure> {
+        use windows_sys::Win32::UI::Shell::ShellExecuteW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        let wide = |text: &str| -> Vec<u16> { text.encode_utf16().chain(Some(0)).collect() };
+        let verb = wide("open");
+        let file = wide(target);
+        // SAFETY: both strings are NUL-terminated UTF-16 buffers that outlive the call, and the
+        // null window, parameters and directory are documented as optional.
+        let ret = unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                verb.as_ptr(),
+                file.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+        classify_shell_execute(ret as isize)
+    }
+
+    fn reveal(&self, path: &Path) -> Result<(), OpenFailure> {
+        use std::os::windows::process::CommandExt;
+        // Rust's own quoting would wrap the whole `/select,…` argument, which explorer does not
+        // parse; a Windows path cannot contain `"`, so quoting it by hand is safe.
+        std::process::Command::new("explorer.exe")
+            .raw_arg(format!("/select,\"{}\"", path.display()))
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| OpenFailure::LaunchFailed(format!("couldn't start explorer.exe: {e}")))
     }
 }
 
@@ -88,7 +306,7 @@ mod tests {
     #[cfg(unix)]
     mod launch {
         use super::super::*;
-        use std::process::Stdio;
+        use std::process::{Command, Stdio};
         use std::time::Instant;
 
         fn sh(script: &str) -> Child {
@@ -201,7 +419,10 @@ mod tests {
         );
         for ret in [32, 2] {
             assert!(
-                matches!(classify_shell_execute(ret), Err(OpenFailure::LaunchFailed(_))),
+                matches!(
+                    classify_shell_execute(ret),
+                    Err(OpenFailure::LaunchFailed(_))
+                ),
                 "{ret} is at or below 32 and no association error, so a launch failure"
             );
         }
@@ -217,7 +438,9 @@ mod tests {
         fn run(&self, program: &str, args: &[&OsStr]) -> Result<(), OpenFailure> {
             self.calls.borrow_mut().push((
                 program.to_string(),
-                args.iter().map(|a| a.to_string_lossy().into_owned()).collect(),
+                args.iter()
+                    .map(|a| a.to_string_lossy().into_owned())
+                    .collect(),
             ));
             if self.failing.contains(&program) {
                 Err(OpenFailure::LaunchFailed(format!("{program} failed")))
@@ -237,7 +460,11 @@ mod tests {
         let result = reveal_linux(&runner, Path::new("/home/u/bin/tool"));
         let calls = runner.calls.into_inner();
         assert_eq!(result, Ok(()), "the fallback opened, so the reveal worked");
-        assert_eq!(calls.len(), 2, "one ShowItems call, then one fallback: {calls:?}");
+        assert_eq!(
+            calls.len(),
+            2,
+            "one ShowItems call, then one fallback: {calls:?}"
+        );
         assert_eq!(calls[0].0, "dbus-send");
         assert!(
             calls[0]
@@ -257,7 +484,10 @@ mod tests {
             failing: &[],
             calls: RefCell::new(Vec::new()),
         };
-        assert_eq!(reveal_linux(&selected, Path::new("/home/u/bin/tool")), Ok(()));
+        assert_eq!(
+            reveal_linux(&selected, Path::new("/home/u/bin/tool")),
+            Ok(())
+        );
         assert_eq!(
             selected.calls.into_inner().len(),
             1,
