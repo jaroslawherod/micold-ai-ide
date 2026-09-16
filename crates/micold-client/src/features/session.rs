@@ -1472,16 +1472,34 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
 // ---------------------------------------------------------------------------------------
 
 /// What activating `link` asks for (contract link-opening §3, O1).
-fn link_activated(_link: micold_core::link::ResolvedLink) -> Vec<crate::features::Outcome> {
-    Vec::new()
+///
+/// Only a web or mail address opens so far; host paths arrive with M5 and M6, and `resolve` gives
+/// nothing else a `ResolvedLink` yet.
+fn link_activated(link: micold_core::link::ResolvedLink) -> Vec<crate::features::Outcome> {
+    use crate::features::{OpenRequest, Outcome};
+    use micold_core::link::Target;
+    match link.target {
+        Target::Url(address) => vec![Outcome::OpenLink(OpenRequest::Url(address))],
+        Target::HostPath(_) | Target::Unreachable(_) => Vec::new(),
+    }
 }
 
 /// One notification per failed open, and nothing for one that worked (contract link-opening §5).
+///
+/// `address` is always the text the program printed or declared, never the hint's display.
 fn link_open_finished(
-    _state: &mut crate::app::State,
-    _address: &str,
-    _result: Result<(), crate::features::OpenFailure>,
+    state: &mut crate::app::State,
+    address: &str,
+    result: Result<(), crate::features::OpenFailure>,
 ) {
+    use crate::features::OpenFailure;
+    let reason = match result {
+        Ok(()) => return,
+        Err(OpenFailure::NoApplication) => "no application is set up to open it".to_string(),
+        Err(OpenFailure::LaunchFailed(reason)) => reason,
+        Err(OpenFailure::NotFound) => "the file doesn't exist on this machine".to_string(),
+    };
+    state.notify_error(format!("Couldn't open {address}: {reason}"));
 }
 
 // ---------------------------------------------------------------------------------------

@@ -1,15 +1,56 @@
 //! Opening an activated link (feature 031, contract link-opening §3).
+//!
+//! The session reducer decides what an activation asks for; this performs it. An open is I/O that
+//! can wait on a launcher (the launch window in `shell/link_opener.rs`), so it runs on a blocking
+//! task, and its answer comes back as `LinkOpenFinished` for the reducer to report (FR-015).
 
 use iced::Task;
 
 use micold_client::app::Message;
 use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::{OpenFailure, OpenRequest, Outcome};
 
 use crate::App;
 
 /// Run the session reducer on a link message and perform what it asks for.
-pub fn on_link_message(_app: &mut App, _msg: SessionMsg) -> Task<Message> {
-    Task::none()
+///
+/// The reducer's outcomes are split: an open goes to [`perform`], a clipboard write to
+/// `shell::clipboard::interpret`, and the rest to the root's drain, which is where every other
+/// feature's outcomes go.
+pub fn on_link_message(app: &mut App, msg: SessionMsg) -> Task<Message> {
+    let outcomes = micold_client::features::session::update(&mut app.core, msg);
+    let mut effects = Vec::new();
+    let mut rest = Vec::new();
+    for outcome in outcomes {
+        match outcome {
+            Outcome::OpenLink(request) => effects.push(perform(app, request)),
+            write @ Outcome::ClipboardWrite(_) => {
+                effects.push(crate::shell::clipboard::interpret(write))
+            }
+            other => rest.push(other),
+        }
+    }
+    micold_client::app::drain(rest, |o| micold_client::app::interpret(&mut app.core, o));
+    Task::batch(effects)
+}
+
+/// Hand `request` to the opener on a blocking task, with nothing in between (SC-003).
+fn perform(app: &App, request: OpenRequest) -> Task<Message> {
+    let opener = app.caps.link_opener();
+    match request {
+        OpenRequest::Url(address) => Task::perform(
+            async move {
+                let target = address.clone();
+                let result = tokio::task::spawn_blocking(move || opener.open(&target))
+                    .await
+                    .unwrap_or_else(|e| Err(OpenFailure::LaunchFailed(e.to_string())));
+                (address, result)
+            },
+            |(address, result)| Message::Session(SessionMsg::LinkOpenFinished { address, result }),
+        ),
+        // File links arrive with M5 (contract §3, O4); nothing emits this request before then.
+        OpenRequest::Path { .. } => Task::none(),
+    }
 }
 
 #[cfg(test)]
