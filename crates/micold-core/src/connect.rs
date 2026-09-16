@@ -206,7 +206,6 @@ async fn connect_pipe(endpoint: &Endpoint) -> io::Result<Stream> {
         CreateFileW, FILE_FLAG_OVERLAPPED, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
         SECURITY_IDENTIFICATION, SECURITY_SQOS_PRESENT,
     };
-    use windows_sys::Win32::System::Pipes::{WaitNamedPipeW, NMPWAIT_WAIT_FOREVER};
 
     let path: Vec<u16> = endpoint
         .socket_path
@@ -238,17 +237,27 @@ async fn connect_pipe(endpoint: &Endpoint) -> io::Result<Stream> {
         if error.raw_os_error() != Some(ERROR_PIPE_BUSY as i32) {
             return Err(error);
         }
-        let path = path.clone();
-        // SAFETY: `path` is NUL-terminated and owned by the closure for the whole call.
-        let waited = tokio::task::spawn_blocking(move || unsafe {
-            WaitNamedPipeW(path.as_ptr(), NMPWAIT_WAIT_FOREVER)
-        })
-        .await
-        .map_err(io::Error::other)?;
-        if waited == 0 {
-            return Err(io::Error::last_os_error());
-        }
+        wait_for_pipe(path.clone()).await?;
     }
+}
+
+/// Waits for an instance of the NUL-terminated pipe `path` to become free, unbounded.
+///
+/// RED: reads the wait's error back on the awaiting thread.
+#[cfg(windows)]
+async fn wait_for_pipe(path: Vec<u16>) -> io::Result<()> {
+    use windows_sys::Win32::System::Pipes::{WaitNamedPipeW, NMPWAIT_WAIT_FOREVER};
+
+    // SAFETY: `path` is NUL-terminated and owned by the closure for the whole call.
+    let waited = tokio::task::spawn_blocking(move || unsafe {
+        WaitNamedPipeW(path.as_ptr(), NMPWAIT_WAIT_FOREVER)
+    })
+    .await
+    .map_err(io::Error::other)?;
+    if waited == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
 }
 
 /// Open a raw connection to the endpoint, or `None` if nothing is listening.
@@ -523,6 +532,36 @@ mod tests {
             CodecError::ControlNotJson(crate::protocol::envelope::Encoding::Postcard).into();
         assert_eq!(wrapped.kind(), io::ErrorKind::Other);
         assert!(!vanished_mid_handshake(&wrapped));
+    }
+
+    /// Review A F1 on #332: `GetLastError` is per thread. The wait runs on a blocking-pool thread,
+    /// so its failure has to be read there. Read back on the awaiting thread it is whatever that
+    /// thread last left, which in `connect_pipe` is the `ERROR_PIPE_BUSY` that started the wait:
+    /// a daemon that exits during the wait then reads as busy, not absent, and nobody respawns it.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn a_pipe_that_vanishes_during_the_wait_reads_as_absent_not_busy() {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::Foundation::{SetLastError, ERROR_PIPE_BUSY};
+
+        let path: Vec<u16> = std::ffi::OsStr::new(&format!(
+            r"\\.\pipe\Micold.Test.Connect.Gone.{}",
+            std::process::id()
+        ))
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+        // What `connect_pipe`'s `CreateFileW` leaves on this thread before it waits.
+        // SAFETY: sets this thread's last-error value only.
+        unsafe { SetLastError(ERROR_PIPE_BUSY) };
+
+        let waited = wait_for_pipe(path)
+            .await
+            .expect_err("no pipe by that name exists to wait for");
+        assert!(
+            is_absent(&waited),
+            "waiting on a pipe that is not there must read as absence, got {waited:?}"
+        );
     }
 
     /// U71 (security review D1): the pipe name is predictable, so another account can create it
