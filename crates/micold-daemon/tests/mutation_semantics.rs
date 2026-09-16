@@ -1563,6 +1563,10 @@ async fn including_and_excluding_are_both_idempotent_and_reversible() {
 /// canonical location, so a spelling through a linked directory — macOS's `/var`, which is
 /// `/private/var` — was refused as "not one of this repository's worktrees", and excluding by that
 /// spelling matched nothing.
+///
+/// Unix only: creating a symlink on Windows needs `SeCreateSymbolicLinkPrivilege` or Developer
+/// Mode, which neither a CI runner nor a standard user can be assumed to have.
+#[cfg(unix)]
 #[tokio::test]
 async fn a_worktree_named_through_a_symlink_is_included_and_excluded_as_itself() {
     let project = tempfile::tempdir().unwrap();
