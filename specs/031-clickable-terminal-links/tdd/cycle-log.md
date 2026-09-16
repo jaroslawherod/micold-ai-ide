@@ -438,3 +438,14 @@
 - green: `detect` builds a `Scan` once per text: each start's stop (a character no address contains, or a closer no opener at or after the start balances, settled in one pass with a stack of pending starts), the next `'`, `@` and `/`, and the run of trailing punctuation before each index. `end` and `well_formed` read them in O(1); `names_a_host` still reads only the authority. A `file:/` case drafted into the test was dropped: `file:/` is not a scheme, and a `file://` chain cannot fail, since each nested scheme supplies the outer one's `/`. U152 -> `ok` (0.02 s). Differential probe (a temporary test, deleted after): the new `detect` against the old one from `HEAD` on 200,000 random texts of up to 24 tokens from schemes, `x.y`, `@ / ( ) [ ] ' " . , : ? #`, space, `<`, `é` -> equal on all. Suite (`cargo test -p micold-core --all-targets`) -> 1129 passed, 0 failed (main's tests included after the rebase); clippy clean; `cargo fmt --all -- --check` clean
 - refactor: none beyond the green change
 - commit: `perf(031): scan a line packed with non-address schemes in linear time (U152)`
+
+## Cycle 43: U153 padding before a wrapped wide char declares what the char before it declares
+
+- origin: review A round 3 (code-review, high) on M1: alacritty 0.26 writes the `LEADING_WIDE_CHAR_SPACER` padding with the cursor template's `extra` (`term/mod.rs` `write_at_cursor`), so the padding carries the URI of the wide char that wrapped to the next row. `link_at` read the hovered cell's `hyperlink` and `declared_at` fell back to a run of one char, the plain one the padding belongs to (L5)
+- test: `crates/micold-core/src/link/line.rs::tests::padding_before_a_wrapped_wide_char_takes_the_link_of_the_char_before_it` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::padding_before_a_wrapped_wide_char_takes_the_link_of_the_char_before_it -- --exact`
+  -> `assertion `left == right` failed: the padding is part of a plain char, so it is no link` / `left: Some(Link { address: "https://a.example", origin: Declared, cells: [CellSpan { row: 0, cols: 3..5 }] })` / `right: None` (1 failed)
+- green: `link_at` reads `hyperlink` at the lead cell (`cells[index].start`) of the char holding the hovered cell, so a spacer declares what its char declares. Contract L5 now says so. U153 -> `ok`. Suite (`cargo test -p micold-core --all-targets`) -> 1130 passed, 0 failed; clippy clean; fmt clean
+- refactor: none needed
+- commit: `fix(031): a spacer declares what its char declares (U153)`
+- notes: `mise run gate` steps at the previous commit `a2450d0e` (fmt, clippy core and workspace, `cargo test --workspace --no-fail-fast`, `scripts/tests/*.test.sh`) -> all green; the `micold-daemon` `exclusivity` failure of the first gate run did not recur
