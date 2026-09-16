@@ -449,3 +449,13 @@
 - refactor: none needed
 - commit: `fix(031): a spacer declares what its char declares (U153)`
 - notes: `mise run gate` steps at the previous commit `a2450d0e` (fmt, clippy core and workspace, `cargo test --workspace --no-fail-fast`, `scripts/tests/*.test.sh`) -> all green; the `micold-daemon` `exclusivity` failure of the first gate run did not recur
+
+## Cycle 44: U154 a quoted address closed at a bottom cut is kept
+
+- origin: review A round 4 (code-review, high) on M1, low: `detected_at` dropped an address when only trailing punctuation lay between it and a bottom cut, and `'` is trailing punctuation, so `'https://a.example/x'` with its closing quote in the last column of a row wrapping into an unavailable row was never offered. The same review's other low (a column-0 address with no row above, including the alternate screen's top row) is the edge already routed to T028; its bullet now names the alternate screen
+- test: `crates/micold-core/src/link/line.rs::tests::a_quoted_address_whose_closing_quote_ends_a_wrapped_row_is_a_link` (new)
+- red: a first draft put the quoted row at row 0 with nothing above, so it measured U151's top cut instead; it was rewritten with an empty row above before any implementation. That uncommitted draft was then lost when review B restored its own backup of `line.rs` after a probe; the test was rewritten and committed as WIP before running. `scripts/build-lock.sh cargo test -p micold-core --lib link::line::tests::a_quoted_address_whose_closing_quote_ends_a_wrapped_row_is_a_link -- --exact`
+  -> `assertion `left == right` failed: the closing quote ends the address, so nothing on the next row could extend it` / `left: None` / `right: Some(Link { address: "https://a.example/x", origin: Detected, cells: [CellSpan { row: 1, cols: 1..20 }] })` (1 failed)
+- green: `closed_by_its_quote` (the char before the address and the char at its end are both `'`) exempts the address from the bottom-cut drop. Contract L7 says so. U154 -> `ok`. Suite (`cargo test -p micold-core --all-targets`) -> 1131 passed, 0 failed; clippy clean; fmt clean
+- refactor: none needed
+- commit: `fix(031): keep a quoted address closed at a bottom cut (U154)`

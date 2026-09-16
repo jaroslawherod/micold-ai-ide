@@ -82,7 +82,7 @@ the `env_include.rs` builders (plan, Target Platform).
     - A web host must be "`localhost`, dotted, a bracketed IPv6 literal, or carry a port".
     - `file` needs a path starting with `/`.
     - `mailto:` needs `@` with text on both sides.
-- [X] T005 [P] [US1] [U17] [U18] [U19] [U20] [U21] [U22] [U23] [U24] [U25] [U26] [U27] [U151] [U153] Unit tests for `link_at(rows, row, col) -> Option<Link>` in `crates/micold-core/src/link/line.rs`, over a fake `LinkRows`.
+- [X] T005 [P] [US1] [U17] [U18] [U19] [U20] [U21] [U22] [U23] [U24] [U25] [U26] [U27] [U151] [U153] [U154] Unit tests for `link_at(rows, row, col) -> Option<Link>` in `crates/micold-core/src/link/line.rs`, over a fake `LinkRows`.
   - Contract §2 L1–L7:
     - A declared run over the logical line.
     - A detected range mapped back to cells on every row.
@@ -110,7 +110,7 @@ the `env_include.rs` builders (plan, Target Platform).
 ### Implementation for US1: recognition in core
 
 - [X] T009 [US1] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] [U11] [U12] [U13] [U14] [U15] [U16] [U152] [U132] [U133] Implement `detect` (research R3, rules 1–6, hand-written, no new crate) in `crates/micold-core/src/link/detect.rs`
-- [X] T010 [US1] [U17] [U18] [U19] [U20] [U21] [U22] [U23] [U24] [U25] [U26] [U27] [U133] [U151] [U153] Implement `link_at` in `crates/micold-core/src/link/line.rs`, per research R4 and R5.
+- [X] T010 [US1] [U17] [U18] [U19] [U20] [U21] [U22] [U23] [U24] [U25] [U26] [U27] [U133] [U151] [U153] [U154] Implement `link_at` in `crates/micold-core/src/link/line.rs`, per research R4 and R5.
   - Build the logical line by walking back while the previous row is `wrapped`, then forward, capped at 64 rows each way.
   - Map char indices to cells, keeping wide-char spacers.
   - Take the declared maximal run first.
@@ -212,7 +212,7 @@ the `env_include.rs` builders (plan, Target Platform).
 
 - [ ] T028 [US1] [U118] [U119] [U120] [U121] [U122] [U123] [U124] [U129] [A1] [A7] [A9] [A10] [A11] Hover in `crates/micold-client/src/ui/material/terminal_pane.rs`.
   - A `LinkRows` adapter over `GridCache`: `line(LineId(viewport_top - display_offset + row))`, with `text`, `wrapped`, `CachedExtra.hyperlink`, and `spacer` from the cell's style-run flags (`WIDE_CHAR_SPACER | LEADING_WIDE_CHAR_SPACER`; ledger decision 15).
-  - A row above the first line the terminal ever printed answers `text = Some("")`, unwrapped, not `None`: `None` means "may continue past here" (contract L7), so it would drop an address at column 0 of a session's first line. Rows trimmed from scrollback (older than `GridCache::oldest_available`) or not yet cached still answer `None` (M1 review B).
+  - A row above the first line the terminal ever printed, or above the top of the alternate screen (`less`, `vim`), answers `text = Some("")`, unwrapped, not `None`: `None` means "may continue past here" (contract L7), so it would drop an address at column 0 of a session's first line. Rows trimmed from scrollback (older than `GridCache::oldest_available`) or not yet cached still answer `None` (M1 review B).
   - `PaneState.hover: Option<HoverCache { session, context, cell, grid_version: (u64, u64), rows_hash: u64, resolved: Option<ResolvedLink> }>`.
   - The pure invalidation function.
   - In `update`, recompute on `CursorMoved`, `ModifiersChanged` and `window::Event::RedrawRequested`, which reads `GridCache::generation()`/`seq()`. Request a redraw when `resolved` changes.
