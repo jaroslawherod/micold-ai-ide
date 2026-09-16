@@ -129,3 +129,24 @@ first run is not red evidence, so each was proved by mutating the production cod
   `PtySession::spawn_answering`; `PtySession::spawn` keeps its signature (light answers) so its direct
   test callers are unchanged. Suite `scripts/build-lock.sh cargo test -p micold-daemon` -> 343 passed, 0 failed
 - refactor: none
+
+## Cycle 12: U12–U15 the window reports its scheme on connect and on change
+
+- tests (new, `crates/micold-client/src/shell/daemon_sync.rs` tests, over a real `Outbox`, every
+  message delivered through the binary's `update`):
+  U12 `connecting_reports_the_resolved_scheme_before_attaching`,
+  U13 `a_message_that_changes_the_scheme_reports_it_once` (`SystemThemeChanged(Light)` under
+  `FollowSystem`), U14 `a_message_that_keeps_the_scheme_sends_no_report` (`SystemThemeChanged(Dark)`),
+  U15 `a_reconnect_reports_again_although_the_scheme_did_not_change`
+- red: `App::reported_scheme` added first as an unread stub.
+  `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide scheme` -> 3 failed:
+  U12 `sent [AiCliAvailabilityRequest { req: 0 }, Attach { … }, SetViewedSession { … }]`,
+  U13 `left: [] right: [Light]`, U15 `left: [] right: [Dark]`. U14 passed vacuously (nothing is ever sent)
+- green: `daemon_sync::report_color_scheme` sends `TerminalColorScheme` when the resolved scheme
+  differs from `App::reported_scheme`; `on_connected` clears it and reports right after
+  `app.daemon = Some(outbox)`, before `ask_cli_availability` and the attach; `on_disconnected` clears
+  it; `main.rs`'s `update` calls it after every `update_inner`
+- red (mutation, U14): the unchanged-scheme guard disabled -> U14 `left: [Dark] right: []`, U15
+  `left: [Dark, Dark] right: [Dark]` (2 failed); reverted
+- suite: `scripts/build-lock.sh cargo test -p micold-client` -> 1705 passed, 0 failed
+- refactor: none

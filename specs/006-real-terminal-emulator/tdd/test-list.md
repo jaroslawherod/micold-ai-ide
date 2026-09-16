@@ -74,10 +74,10 @@ Tests in `daemon_sync.rs`'s `#[cfg(test)] mod tests` over a real `Outbox`.
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U12 | On connecting, the window reports its resolved scheme before its `Attach` | FR-003a | example | PENDING | |
-| U13 | A message that changes the resolved scheme sends exactly one new report | FR-003a | example | PENDING | |
-| U14 | A message that leaves the resolved scheme unchanged sends no report | FR-003a | example | PENDING | |
-| U15 | A reconnect reports again although the scheme did not change | FR-003a | example | PENDING | |
+| U12 | On connecting, the window reports its resolved scheme before its `Attach` | FR-003a | example | DONE | `crates/micold-client/src/shell/daemon_sync.rs::tests::connecting_reports_the_resolved_scheme_before_attaching` |
+| U13 | A message that changes the resolved scheme sends exactly one new report | FR-003a | example | DONE | `crates/micold-client/src/shell/daemon_sync.rs::tests::a_message_that_changes_the_scheme_reports_it_once` |
+| U14 | A message that leaves the resolved scheme unchanged sends no report | FR-003a | example | DONE | `crates/micold-client/src/shell/daemon_sync.rs::tests::a_message_that_keeps_the_scheme_sends_no_report` |
+| U15 | A reconnect reports again although the scheme did not change | FR-003a | example | DONE | `crates/micold-client/src/shell/daemon_sync.rs::tests::a_reconnect_reports_again_although_the_scheme_did_not_change` |
 
 ## Invariants and edge cases still to place
 
