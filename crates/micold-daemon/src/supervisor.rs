@@ -262,6 +262,14 @@ impl PtySession {
             })
             .map_err(io::Error::other)?;
 
+        // The daemon is launched with `CREATE_NEW_PROCESS_GROUP`, which leaves it ignoring Ctrl-C,
+        // and a child inherits that. The session's program would then never see the `CTRL_C_EVENT`
+        // ConPTY raises from `0x03`. The daemon has no console, so restoring it costs nothing here.
+        #[cfg(windows)]
+        // SAFETY: a null handler with FALSE only clears this process's ignore-Ctrl-C attribute.
+        unsafe {
+            windows_sys::Win32::System::Console::SetConsoleCtrlHandler(None, 0);
+        }
         let mut child = pair.slave.spawn_command(cmd).map_err(io::Error::other)?;
         // Before anything else: on Windows this is what puts the child in a job object, and every
         // instant between the spawn and this call is one in which a grandchild would escape it.
