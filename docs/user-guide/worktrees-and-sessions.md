@@ -866,7 +866,10 @@ The embedded terminal renders the AI CLI's output like a real terminal, not as f
   reverse/inverse) appear the same as in a standalone terminal.
 - **Theme-aware defaults** — when output specifies no explicit color, the terminal's default
   text and background follow the app's light/dark theme and update when you switch themes. The 16
-  ANSI colors use a fixed conventional palette so programs look as their authors intended.
+  ANSI colors use a fixed conventional palette so programs look as their authors intended. A
+  program that asks the terminal whether its background is light or dark — `claude` does — is told
+  the current theme, but it asks when it starts: after switching themes, restart it to pick up
+  colours that suit the new background.
 - **Full-screen interfaces** — the CLI's interactive UI and other full-screen (alternate-screen)
   programs redraw cleanly, with the cursor shown at its current position.
 - **Focus** — the terminal you are looking at is where the keyboard goes, unless you have handed

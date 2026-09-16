@@ -30,7 +30,7 @@ rendered result with `claude` is the T080 visual pass.
 | --- | -------- | ------ | ---- | ----- | ---- |
 | A1  | After a window reports Dark, a program in a session started through the service asks `OSC 11` and reads the dark `surface` | FR-003a, SC-014 | example | DONE | `crates/micold-daemon/tests/terminal_color_scheme.rs::a_session_answers_the_background_query_with_the_scheme_the_window_reported` |
 | A2  | When a window then reports Light, the same running program's next `OSC 11` reads the light `surface` | FR-003a, SC-014 | example | DONE | `crates/micold-daemon/tests/terminal_color_scheme.rs::a_session_answers_the_background_query_with_the_scheme_the_window_reported` |
-| A3  | `claude` on theme `auto`, started in a dark-scheme terminal, draws legible body text | SC-014 | example | PENDING | visual pass, T080 — not a cargo test; `speckit-tdd-run` does not drive it |
+| A3  | `claude` on theme `auto`, started in a dark-scheme terminal, draws legible body text | SC-014 | example | DONE | visual pass, T080 — `evidence/bug007-visual-pass.md` |
 
 ## Inner loop: unit behaviors
 
