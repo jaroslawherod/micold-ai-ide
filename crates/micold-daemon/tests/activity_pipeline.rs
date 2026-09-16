@@ -200,17 +200,21 @@ fn emitter_command(printf_body: &str) -> CommandBuilder {
             .strip_prefix("\x1b]0;")
             .and_then(|rest| rest.strip_suffix('\x07'))
             .expect("the Windows emitter only sets OSC-0 titles");
-        let codes: Vec<String> = title.encode_utf16().map(|unit| unit.to_string()).collect();
-        steps.push(format!(
-            "[Console]::Title = -join [char[]]({})",
-            codes.join(",")
-        ));
+        steps.push(powershell_set_title(title));
     }
     steps.push("Start-Sleep -Seconds 5".to_string());
     let mut cmd = CommandBuilder::new("powershell");
     cmd.args(["-NoProfile", "-NonInteractive", "-Command"]);
     cmd.arg(steps.join("; "));
     cmd
+}
+
+/// A PowerShell statement that sets the console title to `title`, spelled as UTF-16 code units so
+/// no character in it needs quoting on its way through the command line.
+#[cfg(windows)]
+fn powershell_set_title(title: &str) -> String {
+    let codes: Vec<String> = title.encode_utf16().map(|unit| unit.to_string()).collect();
+    format!("[Console]::Title = -join [char[]]({})", codes.join(","))
 }
 
 /// Resolve the `\NNN` octal escapes a `printf` format uses, decoding the bytes as UTF-8.
@@ -976,10 +980,6 @@ fn append_line(path: &std::path::Path, line: &str) {
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "first run on Windows in #332: fails with an invalid filename (os error 123); fix in the #332 review follow-up"
-)]
 fn a_running_pi_row_reads_its_first_message_until_it_is_named() {
     // Feature 029 (Pi), FR-011, quickstart §B finding 1. Pi's terminal title carries a name only
     // once `/name` has run, so the terminal alone takes a running row from the placeholder
@@ -999,12 +999,28 @@ fn a_running_pi_row_reads_its_first_message_until_it_is_named() {
         AiCli::Pi,
     )));
     // Pi's own two titles, in order: the second only once `/name` has run. `π` is U+03C0.
-    let mut cmd = CommandBuilder::new("sh");
-    cmd.arg("-c");
-    cmd.arg(format!(
-        r"printf '\033]0;\317\200 - demo\007'; while [ ! -e '{}' ]; do sleep 0.05; done; printf '\033]0;\317\200 - my task - demo\007'; sleep 10",
-        named.display()
-    ));
+    #[cfg(unix)]
+    let mut cmd = {
+        let mut cmd = CommandBuilder::new("sh");
+        cmd.arg("-c");
+        cmd.arg(format!(
+            r"printf '\033]0;\317\200 - demo\007'; while [ ! -e '{}' ]; do sleep 0.05; done; printf '\033]0;\317\200 - my task - demo\007'; sleep 10",
+            named.display()
+        ));
+        cmd
+    };
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut cmd = CommandBuilder::new("powershell");
+        cmd.args(["-NoProfile", "-NonInteractive", "-Command"]);
+        cmd.arg(format!(
+            "{}; while (-not (Test-Path -LiteralPath '{}')) {{ Start-Sleep -Milliseconds 50 }}; {}; Start-Sleep -Seconds 10",
+            powershell_set_title("π - demo"),
+            named.display().to_string().replace('\'', "''"),
+            powershell_set_title("π - my task - demo"),
+        ));
+        cmd
+    };
     cmd.cwd(std::env::temp_dir());
     let session = state.register_session(
         PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("spawn emitter session"),
@@ -1028,12 +1044,13 @@ fn a_running_pi_row_reads_its_first_message_until_it_is_named() {
     );
 
     // The first exchange lands in Pi's store, and the turn moving is what says so.
+    // Pi's encoding of the working directory: separators and a drive's `:` become `-`.
     let encoded = format!(
         "--{}--",
         project
             .to_string_lossy()
-            .trim_start_matches('/')
-            .replace('/', "-")
+            .trim_start_matches(['/', '\\'])
+            .replace(['/', '\\', ':'], "-")
     );
     let conversation = home
         .path()
@@ -1043,9 +1060,10 @@ fn a_running_pi_row_reads_its_first_message_until_it_is_named() {
     append_line(
         &conversation,
         &format!(
-            r#"{{"type":"session","version":3,"id":"{}","timestamp":"2026-09-14T10:00:00.000Z","cwd":"{}"}}"#,
+            r#"{{"type":"session","version":3,"id":"{}","timestamp":"2026-09-14T10:00:00.000Z","cwd":{}}}"#,
             id.0,
-            project.display()
+            // Escaped: a Windows path's backslashes are not valid JSON as they stand.
+            serde_json::to_string(&project.display().to_string()).unwrap()
         ),
     );
     append_line(
