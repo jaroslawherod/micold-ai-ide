@@ -548,7 +548,7 @@ Test-first: each failing test is its own Red commit before the change that turns
   again. Then implement: the scheme last sent on this connection is kept on `App`, cleared by
   `on_connected`/`on_disconnected`, and a `report_color_scheme(app)` called from `on_connected` and
   after every `update_inner` sends when it differs.
-- [ ] T080 [BUG-007] [A3] Visual pass on a private Xvfb display (the `visual-pass` skill), real client and
+- [X] T080 [BUG-007] [A3] Visual pass on a private Xvfb display (the `visual-pass` skill), real client and
   daemon from this branch: in a Regular terminal, a script that sends `ESC]11;?` and prints the reply
   shows the dark `surface` in dark and the light `surface` after toggling to light; and `claude` (theme
   `auto`) started in the dark scheme draws legible body text (SC-014) — required: if it cannot be
