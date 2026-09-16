@@ -252,6 +252,14 @@ fn boot() -> (App, Task<Message>) {
             projects: projects_for_sandbox,
         });
 
+    // Started here rather than beside the window request below, so the handle that cancels it is
+    // on `App` from the first update (FR-036a).
+    let mut sandbox_bring_up = None;
+    let boot = match boot_plan.clone() {
+        Some(plan) => crate::shell::sandbox::boot(plan, &mut sandbox_bring_up),
+        None => Task::none(),
+    };
+
     let boot_cwd = default_resolution_cwd(&core);
     let boot_snapshot = resolve_env_include(
         caps.env_include(),
@@ -325,6 +333,7 @@ fn boot() -> (App, Task<Message>) {
             placement: resolved_placement,
             sandbox: sandbox_state,
             sandbox_boot: boot_plan.clone(),
+            sandbox_bring_up,
             version_mismatch: None,
             build_mismatch: None,
             next_req: 0,
@@ -350,10 +359,7 @@ fn boot() -> (App, Task<Message>) {
                 }),
             // And, when the daemon is sandboxed, start bringing it up. Batched rather than
             // sequenced: the window has no reason to wait on a container image.
-            match boot_plan {
-                Some(plan) => crate::shell::sandbox::boot(plan),
-                None => Task::none(),
-            },
+            boot,
         ]),
     )
 }

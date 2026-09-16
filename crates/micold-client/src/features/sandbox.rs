@@ -269,9 +269,6 @@ impl Sandbox {
 
     /// Adopt the result of a successful bring-up.
     pub fn started(&mut self, started: Started) {
-        // A sandbox that came up has recovered; the next outage gets the whole bound again.
-        self.unattended = UnattendedBringUps::default();
-        self.previous_attempt = None;
         self.unsatisfiable = started.unsatisfiable;
         self.capabilities = Some(started.capabilities);
         self.state = SandboxState::Running(started.id);
@@ -300,6 +297,11 @@ impl Sandbox {
     /// Adopt the service answering: the bring-up, if there was one, is over.
     pub fn answered(&mut self) {
         self.awaiting_service = None;
+        // A service that answered has recovered; the next outage gets the whole bound again. Not on
+        // `started`: a container that is up says nothing about the service in it, and one that
+        // crashes after every start would refill the bound on each loss (S-6).
+        self.unattended = UnattendedBringUps::default();
+        self.previous_attempt = None;
     }
 
     /// Adopt a failure.

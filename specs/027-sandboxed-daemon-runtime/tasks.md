@@ -1360,6 +1360,34 @@ removable once T202 lands, but that is a refactor, not remediation.
 
 **Order**: T202, then re-run `/speckit.tdd.verify`.
 
+## Phase 25: Review remediation — BUG-005 (milestone reviews A and B)
+
+**Goal**: Clear the findings of the M1 code reviews (2026-09-16). An unattended bring-up outlives the
+placement it was started for, and a crashing service refills its own retry budget.
+
+- [X] T203 [BUG-005] *(test first)* `crates/micold-client/src/features/sandbox.rs` (`Sandbox::started`,
+      `Sandbox::answered`). The unattended budget is restored on `Started`, when only the container is up.
+      A service that answers and crashes gets a fresh zero-delay attempt on every loss, so S-6's bound never
+      holds. Restore it in `answered()` instead, as the user guide says ("once the service has answered").
+      Test: after `Started` the budget is still spent; after the service answers it is whole.
+- [X] T204 [BUG-005] *(test first)* `crates/micold-client/src/shell/sandbox.rs` (`boot`, `BringUp::task`),
+      `shell/persist.rs` (`apply_placement`), `shell/startup.rs`. A bring-up waiting its 5s/15s delay is
+      never cancelled: moving to the host placement lets it start `micold-sandbox` afterwards and set
+      `Running` under the host placement (FR-036a, the user guide's "cancels an attempt that is still
+      waiting"). Keep the task's abort handle on `App` and abort it when the placement moves to the host
+      (and on accepting the fallback). Test: a refused dial schedules a bring-up, the move to the host
+      is confirmed, and the returned work then produces nothing and the state stays `Disabled`.
+- [X] T205 [BUG-005] *(test first)* `crates/micold-client/src/shell/sandbox.rs` (`Msg::Progress`,
+      `Msg::Started`, `Msg::Failed`). A stage or outcome that arrives when the placement is no longer the
+      sandbox overwrites `Disabled`, and `is_coming_up()` then hides the disconnected banner. Drop them
+      unless the placement is `LocalSandbox`. Test: each of the three under the host placement leaves
+      the sandbox `Disabled`.
+- [X] T206 [BUG-005] *(refactor)* `crates/micold-client/src/shell/sandbox.rs` (`LIVE`, `live_tasks`), A1 and
+      U24. The token is subsumed by `reports_the_bring_up` since T202 (sixth-audit finding 3, review B F2).
+      Remove it and its assertions.
+
+**Order**: T203, T205, T204, T206; then `mise run gate`.
+
 ---
 
 ## Parallel Opportunities

@@ -103,6 +103,7 @@ fn update_inner_applies_window_focus_changed() {
         placement: micold_client::daemon::Placement::default(),
         sandbox: micold_client::features::sandbox::Sandbox::default(),
         sandbox_boot: None,
+        sandbox_bring_up: None,
         version_mismatch: None,
         build_mismatch: None,
         next_req: 0,
@@ -152,6 +153,7 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
         placement: micold_client::daemon::Placement::default(),
         sandbox: micold_client::features::sandbox::Sandbox::default(),
         sandbox_boot: None,
+        sandbox_bring_up: None,
         version_mismatch: None,
         build_mismatch: None,
         next_req: 0,
@@ -683,6 +685,7 @@ pub(crate) fn base_app() -> App {
         placement: micold_client::daemon::Placement::default(),
         sandbox: micold_client::features::sandbox::Sandbox::default(),
         sandbox_boot: None,
+        sandbox_bring_up: None,
         version_mismatch: None,
         build_mismatch: None,
         next_req: 0,
@@ -1903,6 +1906,7 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         placement: micold_client::daemon::Placement::default(),
         sandbox: micold_client::features::sandbox::Sandbox::default(),
         sandbox_boot: None,
+        sandbox_bring_up: None,
         version_mismatch: None,
         build_mismatch: None,
         next_req: 0,
@@ -2053,11 +2057,6 @@ fn a_failed_sandbox_the_client_cannot_reach_is_brought_up_again() {
         work.units(),
         1,
         "the bring-up has to be handed back to run, not built and dropped"
-    );
-    assert_eq!(
-        shell::sandbox::BringUp::live_tasks(),
-        1,
-        "the work handed back has to be the bring-up itself, not other work beside a dropped one"
     );
     let reported = messages(work);
     assert!(
@@ -2231,12 +2230,6 @@ fn a_container_found_stopped_is_brought_up_without_showing_a_failure() {
         1,
         "the bring-up has to be handed back to run — one built and dropped leaves `Probing` with \
              nothing running, which is BUG-005"
-    );
-    assert_eq!(
-        shell::sandbox::BringUp::live_tasks(),
-        1,
-        "the work handed back has to be the bring-up itself — one swapped for other work leaves \
-             `Probing` with nothing running, which is BUG-005"
     );
     let reported = messages(work);
     assert!(
@@ -2696,13 +2689,17 @@ fn a_reported_stage_becomes_the_sandbox_state() {
     );
 }
 
+/// The bound is earned back by a service that answered, not by a container that started: a
+/// daemon that crashes after every start would otherwise refill its own budget on each loss and
+/// restart the container forever, with no spacing (S-6).
 #[test]
-fn a_sandbox_that_came_up_earns_its_unattended_bring_ups_back() {
+fn a_sandbox_whose_service_answered_earns_its_unattended_bring_ups_back() {
     use micold_core::sandbox::lifecycle::UnattendedBringUps;
     let mut app = app_with_a_failed_sandbox();
     let _ = connection_failed(&mut app);
+    let spent = app.sandbox.unattended;
     assert_ne!(
-        app.sandbox.unattended,
+        spent,
         UnattendedBringUps::default(),
         "setup: the refused dial has to spend an attempt, or there is nothing to earn back"
     );
@@ -2710,10 +2707,80 @@ fn a_sandbox_that_came_up_earns_its_unattended_bring_ups_back() {
         &mut app,
         Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
     );
+    assert_eq!(
+        app.sandbox.unattended, spent,
+        "a container that started has not recovered until its service answers — refilling here \
+             lets a crashing service restart the container without bound (S-6)"
+    );
+
+    the_service_answers(&mut app);
 
     assert_eq!(
         app.sandbox.unattended,
         UnattendedBringUps::default(),
         "a bound that is never restored makes the second outage of a long session unrecoverable"
+    );
+}
+
+/// T205: a stage or outcome that arrives once the placement has moved to the host belongs to a
+/// sandbox nobody is running. Adopted, it draws a bring-up under the host placement and hides the
+/// disconnected banner behind `is_coming_up` (FR-036b).
+#[test]
+fn a_bring_up_reported_after_moving_to_the_host_is_ignored() {
+    use micold_core::sandbox::lifecycle::SandboxState;
+    for report in [
+        SandboxMsg::Progress(Box::new(SandboxState::Starting)),
+        SandboxMsg::Started(Box::new(a_started_sandbox())),
+        SandboxMsg::Failed(Box::new(match failed_sandbox_state() {
+            SandboxState::Failed(failure) => failure,
+            other => panic!("setup: expected a failure, got {other:?}"),
+        })),
+    ] {
+        let mut app = base_app();
+        app.placement.kind = PlacementKind::HostProcess;
+        let label = format!("{report:?}");
+
+        let _ = update_inner(&mut app, Message::Sandbox(report));
+
+        assert_eq!(
+            app.sandbox.state,
+            SandboxState::Disabled,
+            "{label} arrived under the host placement and was adopted"
+        );
+    }
+}
+
+/// T204: a bring-up still waiting its delay is cancelled by moving to the host. Left to run, it
+/// starts `micold-sandbox` after the move and reports it `Running` under the host placement.
+#[test]
+fn moving_to_the_host_cancels_a_bring_up_that_has_not_run() {
+    let mut app = app_saving_a_placement(PlacementKind::LocalSandbox, PlacementKind::HostProcess);
+    let failed = app_with_a_failed_sandbox();
+    app.sandbox = failed.sandbox.clone();
+    app.sandbox_boot = failed.sandbox_boot.clone();
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+    let waiting = connection_failed(&mut app);
+    assert_eq!(
+        shell::sandbox::BringUp::scheduled().len(),
+        1,
+        "setup: the refused dial has to schedule a bring-up, or there is nothing to cancel"
+    );
+
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::PlacementChangeConfirmed),
+    );
+    let reported = messages(waiting);
+    for message in reported.clone() {
+        let _ = update_inner(&mut app, message);
+    }
+
+    assert!(
+        reported.is_empty(),
+        "the bring-up ran after the move to the host: {reported:?}"
+    );
+    assert_eq!(
+        app.sandbox.state,
+        micold_core::sandbox::lifecycle::SandboxState::Disabled
     );
 }

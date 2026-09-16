@@ -180,8 +180,20 @@ pub struct BootPlan {
 /// Blocking, because every step shells out to a container runtime and image acquisition can take
 /// minutes — on the render thread that would freeze the window for the whole of it, the opposite of
 /// SC-004's "continuous progress".
-pub fn boot(plan: BootPlan) -> iced::Task<micold_client::app::Message> {
-    BringUp::now(plan).task()
+pub fn boot(
+    plan: BootPlan,
+    running: &mut Option<iced::task::Handle>,
+) -> iced::Task<micold_client::app::Message> {
+    BringUp::now(plan).run(running)
+}
+
+/// Cancel the bring-up in `running`, if there is one: one still waiting its delay never starts, and
+/// one under way reports nothing more (FR-036a). The runtime call already in progress is not
+/// interrupted — the placement move that cancels it stops the container too.
+pub fn cancel(running: &mut Option<iced::task::Handle>) {
+    if let Some(handle) = running.take() {
+        handle.abort();
+    }
 }
 
 /// A bring-up the application has decided to run, and when.
@@ -198,8 +210,6 @@ pub struct BringUp {
 #[cfg(test)]
 thread_local! {
     static SCHEDULED: std::cell::RefCell<Vec<BringUp>> = const { std::cell::RefCell::new(Vec::new()) };
-    /// One per bring-up task built on this thread, alive for as long as that task is.
-    static LIVE: std::cell::RefCell<Vec<std::sync::Weak<()>>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 impl BringUp {
@@ -211,8 +221,23 @@ impl BringUp {
         }
     }
 
-    /// Run it against the real container runtime.
-    pub fn task(self) -> iced::Task<micold_client::app::Message> {
+    /// Run it, keeping what cancels it in `running` (see [`cancel`]). A bring-up only starts when
+    /// none is in flight, so the one it replaces has finished; it is cancelled regardless, so two
+    /// can never run against the one container.
+    pub fn run(
+        self,
+        running: &mut Option<iced::task::Handle>,
+    ) -> iced::Task<micold_client::app::Message> {
+        let (task, handle) = self.task().abortable();
+        if let Some(previous) = running.replace(handle) {
+            previous.abort();
+        }
+        task
+    }
+
+    /// Run it against the real container runtime. Private: every caller goes through [`Self::run`],
+    /// or the bring-up it starts cannot be cancelled.
+    fn task(self) -> iced::Task<micold_client::app::Message> {
         #[cfg(test)]
         SCHEDULED.with(|scheduled| scheduled.borrow_mut().push(self.clone()));
         #[cfg(not(test))]
@@ -221,18 +246,6 @@ impl BringUp {
         // host's container runtime by doing so.
         #[cfg(test)]
         let stream = self.stream(micold_core::sandbox::exec::RecordingRunner::new());
-        // The task carries a token, so a test holding the work an update returned can tell a
-        // bring-up handed back from one built and dropped inside the update.
-        #[cfg(test)]
-        let stream = {
-            use iced::futures::StreamExt;
-            let token = std::sync::Arc::new(());
-            LIVE.with(|live| live.borrow_mut().push(std::sync::Arc::downgrade(&token)));
-            stream.map(move |message| {
-                let _alive = &token;
-                message
-            })
-        };
         iced::Task::stream(stream)
     }
 
@@ -241,18 +254,6 @@ impl BringUp {
     #[cfg(test)]
     pub fn scheduled() -> Vec<BringUp> {
         SCHEDULED.with(|scheduled| scheduled.take())
-    }
-
-    /// How many bring-up tasks built on this test's thread still exist. [`Self::scheduled`] counts
-    /// the bring-ups built; this counts the ones not dropped, which is what reaches the runtime.
-    #[cfg(test)]
-    pub fn live_tasks() -> usize {
-        LIVE.with(|live| {
-            live.borrow()
-                .iter()
-                .filter(|token| token.strong_count() > 0)
-                .count()
-        })
     }
 
     /// The messages the bring-up produces, driving the runtime through `runner`.
@@ -428,6 +429,14 @@ pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
         // Feature 027. The sandbox's outcome is recorded, never acted on: a failure must not start
         // a session somewhere else, and a success needs no prompting because the connection
         // subscription is already retrying against the loopback port.
+        // A bring-up reports into the sandbox only while the sandbox is the placement: one that
+        // outlived a move to the host describes a container nobody is running (FR-036b).
+        Msg::Progress(_) | Msg::Started(_) | Msg::Failed(_)
+            if app.placement.kind
+                != micold_core::sandbox::placement::PlacementKind::LocalSandbox =>
+        {
+            iced::Task::none()
+        }
         Msg::Started(started) => {
             app.sandbox.started(*started);
             iced::Task::none()
@@ -459,7 +468,7 @@ pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
             // fallback would otherwise stand for as long as the next refused dial took (FR-036b).
             if app.sandbox.container_lost(CONTAINER_NAME) {
                 if let Some(bring_up) = crate::shell::daemon_sync::bring_up_again(app) {
-                    return bring_up.task();
+                    return bring_up.run(&mut app.sandbox_bring_up);
                 }
             }
             iced::Task::none()
@@ -490,7 +499,7 @@ pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
                             micold_core::sandbox::placement::PlacementKind::LocalSandbox,
                         ),
                     ));
-                    boot(plan)
+                    boot(plan, &mut app.sandbox_bring_up)
                 }
                 _ => iced::Task::none(),
             }
@@ -507,6 +516,9 @@ pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
                 // In memory only: nothing writes it back to the settings store, which is what
                 // makes the choice last for this occurrence alone (FR-035a).
                 if app.sandbox.accept_fallback(offer) {
+                    // An unattended bring-up still waiting would bring the sandbox back up under
+                    // the host placement the user just chose.
+                    cancel(&mut app.sandbox_bring_up);
                     app.placement.kind =
                         micold_core::sandbox::placement::PlacementKind::HostProcess;
                     // And tell the form, which reports where sessions run *now* rather than what

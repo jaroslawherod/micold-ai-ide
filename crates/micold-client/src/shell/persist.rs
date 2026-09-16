@@ -423,6 +423,7 @@ pub fn on_placement_change_confirmed(app: &mut App) -> Task<Message> {
 ///   is the client walking away from it.
 fn apply_placement(app: &mut App, kind: PlacementKind, daemon: &DaemonConfig) -> Task<Message> {
     let leaving = app.sandbox_boot.take();
+    crate::shell::sandbox::cancel(&mut app.sandbox_bring_up);
 
     app.placement.kind = kind;
     app.placement.strict_fingerprint = daemon.sandbox.image.refuses_fingerprint_mismatch();
@@ -449,7 +450,10 @@ fn apply_placement(app: &mut App, kind: PlacementKind, daemon: &DaemonConfig) ->
                     .collect(),
             };
             app.sandbox_boot = Some(plan.clone());
-            Task::batch([stop_old, crate::shell::sandbox::boot(plan)])
+            Task::batch([
+                stop_old,
+                crate::shell::sandbox::boot(plan, &mut app.sandbox_bring_up),
+            ])
         }
         // Nothing to bring up: the connection actor spawns a host process itself when it cannot
         // reach one, which is the path every non-sandboxed launch already takes.

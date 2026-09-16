@@ -603,3 +603,20 @@ Appended rather than edited in place. The log is append-only.
 - deviation: the first gate run died with `No space left on device` and `ld terminated with signal 7 [Bus error]` at 2.0M
   free. `target-shared/debug/incremental` (30G) was deleted and `SWEEP_ARGS='--maxsize 40GB' mise run sweep` run, both with
   no `cargo`/`rustc` live, then the gate re-ran with `CARGO_INCREMENTAL=0`
+
+## Review remediation: M1 reviews A and B (T203–T206, 2026-09-16)
+
+- tests: `a_sandbox_whose_service_answered_earns_its_unattended_bring_ups_back` (replaces
+  `a_sandbox_that_came_up_earns_its_unattended_bring_ups_back`), `a_bring_up_reported_after_moving_to_the_host_is_ignored`,
+  `moving_to_the_host_cancels_a_bring_up_that_has_not_run`
+- red (`scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide -- tests::a_sandbox_whose_service_answered tests::a_bring_up_reported_after tests::moving_to_the_host_cancels`
+  -> `0 passed; 3 failed`):
+  T203 `main.rs:3756` "a container that started has not recovered until its service answers …" `left: UnattendedBringUps { spent: 0 }` `right: { spent: 1 }`;
+  T205 `main.rs:3791` "Progress(Starting) arrived under the host placement and was adopted" `left: Starting` `right: Disabled`;
+  T204 `main.rs:3825` "the bring-up ran after the move to the host: [Sandbox(Progress(Probing)), Sandbox(Failed(..))]"
+- green: the budget is restored in `Sandbox::answered`, not `started`; `Msg::Progress/Started/Failed` are dropped unless the
+  placement is `LocalSandbox`; `BringUp::run` wraps the task with `Task::abortable` and keeps the handle on
+  `App::sandbox_bring_up`, which `apply_placement` and an accepted fallback cancel. Client target 148 passed, 0 failed
+- refactor (T206): the test-only `LIVE` token and `live_tasks()` removed with their A1/U24 assertions (subsumed by
+  `reports_the_bring_up`, T202); `BringUp::task` made private so every bring-up goes through `run` and is cancellable
+- `mise run gate` after T203–T206 -> GATE_EXIT=0, `cargo test --workspace` 3113 passed, 0 failed
