@@ -522,7 +522,7 @@ Test-first: each failing test is its own Red commit before the change that turns
   with the background of `tokens::terminal_defaults(scheme)`, read at reply time; indices below 256
   keep `StandardPalette`. Correct `StandardPalette`'s doc, which claims the fixed table keeps VT
   programs correct.
-- [ ] T077 [BUG-007] [U10] Wire message: `ClientMsg::TerminalColorScheme { scheme: ColorScheme }` in
+- [X] T077 [BUG-007] [U10] Wire message: `ClientMsg::TerminalColorScheme { scheme: ColorScheme }` in
   `crates/micold-core/src/protocol/messages.rs`, `Serialize`/`Deserialize` on `ColorScheme`,
   `PROTOCOL_VERSION` 12 → 13 with its doc line, a round-trip case in
   `crates/micold-core/tests/protocol_roundtrip.rs`, and the two tests that pin the number moved with

@@ -162,15 +162,16 @@ fn the_two_new_refusals_are_distinct_values() {
 /// on the wire — another feature's bump, which this literal follows rather than resisting. And 10
 /// since feature 029 added `ClientMsg::WorktreeRefresh`; same case, same answer. And 11 since
 /// feature 029's Pi provider added `AiCli::Pi` and the activity-component switch. And 12 since `002`
-/// BUG-003 added `ClientMsg::ProjectActivate`.
+/// BUG-003 added `ClientMsg::ProjectActivate`. And 13 since `006` BUG-007 added
+/// `ClientMsg::TerminalColorScheme`.
 ///
 /// The literal is the point. `SCHEMA_HASH` is generated and moves on its own; this integer does
 /// not, so a message added without touching it ships a wire change under an unchanged version and
 /// two builds that disagree will shake hands anyway. Failing here is the reminder — and it worked:
 /// 029 arrived here because of this test, not despite it.
 #[test]
-fn the_protocol_version_is_twelve() {
-    assert_eq!(PROTOCOL_VERSION, 12);
+fn the_protocol_version_is_thirteen() {
+    assert_eq!(PROTOCOL_VERSION, 13);
 }
 
 /// The daemon finds its token where the image says it will. If these two drift, a sandbox starts

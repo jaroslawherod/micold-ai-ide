@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
 use crate::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
+use crate::theme::ColorScheme;
 use crate::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
 
 // ---------------------------------------------------------------------------------------------
@@ -203,6 +204,14 @@ pub enum ClientMsg {
     },
     /// Clean disconnect. Does **not** stop sessions.
     Goodbye,
+    /// The client's resolved light/dark scheme (`006` FR-003a, BUG-007). Sent on every connection
+    /// before `Attach` and again whenever it changes; the daemon answers the dynamic-colour queries
+    /// (`OSC 10/11/12`) from the last one any client sent, and never acknowledges it
+    /// (`contracts/messages.md`, `contracts/protocol.md` §8 of `010`).
+    TerminalColorScheme {
+        /// The scheme the client's window is drawn in.
+        scheme: ColorScheme,
+    },
 
     // --- Session commands (fire-and-forget) ---
     /// Append input bytes to a session's PTY. `serial` is monotonic per session and exists to

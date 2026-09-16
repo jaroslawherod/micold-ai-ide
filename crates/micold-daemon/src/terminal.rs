@@ -179,7 +179,10 @@ impl EventListener for DaemonListener {
             // VT control replies — answered here, never forwarded (protocol.md §8, T034).
             Event::PtyWrite(text) => self.reply(text.as_bytes()),
             Event::ColorRequest(index, format) => {
-                let rgb = self.colors.dynamic(index).unwrap_or_else(|| self.palette.color(index));
+                let rgb = self
+                    .colors
+                    .dynamic(index)
+                    .unwrap_or_else(|| self.palette.color(index));
                 self.reply(format(rgb).as_bytes());
             }
             Event::TextAreaSizeRequest(format) => {

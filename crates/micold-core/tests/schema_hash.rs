@@ -160,7 +160,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// Fifth time, same case, same answer.
 ///
 /// And 11 → 12 for `002` BUG-003's `ClientMsg::ProjectActivate`. Sixth time, same case, same answer.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 12;
+///
+/// And 12 → 13 for `006` BUG-007's `ClientMsg::TerminalColorScheme`. Seventh time, same case, same
+/// answer.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 13;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
