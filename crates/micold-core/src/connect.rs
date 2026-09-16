@@ -199,8 +199,10 @@ fn refuse_foreign_pid(pid: Option<u32>, own_sid: &str) -> io::Result<bool> {
         Err(e) if e.kind() == io::ErrorKind::PermissionDenied => Err(refuse(&format!(
             "an account this user cannot query (pid {pid})"
         ))),
-        // `OpenProcess` names a pid with no process behind it this way: the server has exited.
+        // The server has exited: its process object is gone (`OpenProcess` names such a pid this
+        // way), or it is still held open by someone but no longer running.
         Err(e) if e.raw_os_error() == Some(ERROR_INVALID_PARAMETER as i32) => Ok(false),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
         Err(e) => Err(e),
     }
 }
