@@ -250,21 +250,23 @@ async fn connect_pipe(endpoint: &Endpoint) -> io::Result<Stream> {
 
 /// Waits for an instance of the NUL-terminated pipe `path` to become free, unbounded.
 ///
-/// RED: reads the wait's error back on the awaiting thread.
+/// The wait's error is read on the thread that waited. `GetLastError` is per thread, so read back
+/// on the awaiting one it would be that thread's stale `ERROR_PIPE_BUSY`, and a daemon that went
+/// away during the wait would read as busy rather than absent.
 #[cfg(windows)]
 async fn wait_for_pipe(path: Vec<u16>) -> io::Result<()> {
     use windows_sys::Win32::System::Pipes::{WaitNamedPipeW, NMPWAIT_WAIT_FOREVER};
 
-    // SAFETY: `path` is NUL-terminated and owned by the closure for the whole call.
-    let waited = tokio::task::spawn_blocking(move || unsafe {
-        WaitNamedPipeW(path.as_ptr(), NMPWAIT_WAIT_FOREVER)
+    tokio::task::spawn_blocking(move || {
+        // SAFETY: `path` is NUL-terminated and owned by the closure for the whole call.
+        if unsafe { WaitNamedPipeW(path.as_ptr(), NMPWAIT_WAIT_FOREVER) } == 0 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(())
+        }
     })
     .await
-    .map_err(io::Error::other)?;
-    if waited == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(())
+    .map_err(io::Error::other)?
 }
 
 /// Open a raw connection to the endpoint, or `None` if nothing is listening.
