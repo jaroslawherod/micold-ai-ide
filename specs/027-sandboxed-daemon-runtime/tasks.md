@@ -1386,7 +1386,12 @@ placement it was started for, and a crashing service refills its own retry budge
       U24. The token is subsumed by `reports_the_bring_up` since T202 (sixth-audit finding 3, review B F2).
       Remove it and its assertions.
 
-**Order**: T203, T205, T204, T206; then `mise run gate`.
+- [X] T207 [BUG-005] *(test first)* `crates/micold-client/src/features/sandbox.rs` (`Sandbox::restart`).
+      `previous_attempt` survives a restart the user pressed, so its stage line reads "Trying again:"
+      with an older failure's reason than the one on screen (review A round 2). Clear it on restart.
+      Test: an unattended attempt fails, the user restarts, and the stage line carries no "Trying again".
+
+**Order**: T203, T205, T204, T206; then `mise run gate`. T207 after review round 2.
 
 ---
 
