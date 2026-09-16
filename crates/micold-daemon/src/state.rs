@@ -36,6 +36,7 @@ use crate::framer::Framer;
 use crate::idle::Presence;
 use crate::supervision::{ExitOutcome, SupervisionAction};
 use crate::supervisor::PtySession;
+use crate::terminal::TerminalColors;
 
 /// A per-connection client identity (ephemeral; never persisted).
 pub type ClientId = u64;
@@ -91,6 +92,9 @@ pub struct DaemonState {
     /// socket already proves the caller is the user — requiring a token there would break every
     /// existing installation and protect nothing that is not already protected.
     auth_token: std::sync::OnceLock<micold_core::protocol::auth::Token>,
+    /// The light/dark scheme a client last reported (`ClientMsg::TerminalColorScheme`), which every
+    /// session's terminal answers `OSC 10/11/12` from (`006` FR-003a, BUG-007).
+    terminal_colors: TerminalColors,
 }
 
 struct Inner {
@@ -369,7 +373,13 @@ impl DaemonState {
             diagnostics: std::sync::OnceLock::new(),
             hooks: std::sync::OnceLock::new(),
             auth_token: std::sync::OnceLock::new(),
+            terminal_colors: TerminalColors::default(),
         }
+    }
+
+    /// The scheme sessions answer colour queries for (`006` FR-003a, BUG-007). Clones share it.
+    pub fn terminal_colors(&self) -> &TerminalColors {
+        &self.terminal_colors
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -1684,7 +1694,14 @@ impl DaemonState {
                 // mode: it is `claude`'s mechanism, and `copilot` has no `--settings` flag to hand
                 // it to (feature 026, T016a).
                 let activity = self.activity_launch_for(id, &mut spec);
-                PtySession::spawn_ai_cli(id, &spec, plan.scrollback, size, &activity)
+                PtySession::spawn_ai_cli(
+                    id,
+                    &spec,
+                    plan.scrollback,
+                    size,
+                    &activity,
+                    &self.terminal_colors,
+                )
             }
             TerminalMode::Regular => PtySession::spawn_shell(
                 id,
@@ -1692,6 +1709,7 @@ impl DaemonState {
                 &self.env_include_vars_for(&plan.cwd),
                 plan.scrollback,
                 size,
+                &self.terminal_colors,
             ),
         };
         // A refused spawn is recorded like the refusals above (`010` BUG-001, FR-012). Returned
@@ -2161,7 +2179,14 @@ impl DaemonState {
                     mode: LaunchMode::Resume,
                 };
                 let activity = self.activity_launch_for(id, &mut spec);
-                PtySession::spawn_ai_cli(id, &spec, scrollback, size, &activity)
+                PtySession::spawn_ai_cli(
+                    id,
+                    &spec,
+                    scrollback,
+                    size,
+                    &activity,
+                    &self.terminal_colors,
+                )
             }
             TerminalMode::Regular => PtySession::spawn_shell(
                 id,
@@ -2169,6 +2194,7 @@ impl DaemonState {
                 &self.env_include_vars_for(&cwd),
                 scrollback,
                 size,
+                &self.terminal_colors,
             ),
         };
         match spawned {
@@ -2334,7 +2360,12 @@ impl DaemonState {
         // at the same size (FR-020a, `006` SC-011).
         let size = self.desired_size(session);
         let pty = Arc::new(PtySession::spawn_shell(
-            session, &cwd, &env, scrollback, size,
+            session,
+            &cwd,
+            &env,
+            scrollback,
+            size,
+            &self.terminal_colors,
         )?);
         let mut inner = self.lock();
         match inner.sessions.get_mut(&session) {

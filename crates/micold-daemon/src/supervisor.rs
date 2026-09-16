@@ -195,6 +195,7 @@ impl PtySession {
         scrollback_lines: usize,
         initial_size: Option<(u16, u16)>,
         activity_args: &[std::ffi::OsString],
+        colors: &TerminalColors,
     ) -> io::Result<Self> {
         ensure_cwd_exists(&spec.cwd)?;
         let mut cmd = CommandBuilder::new(spec.provider.provider().command());
@@ -215,7 +216,7 @@ impl PtySession {
         for arg in activity_args {
             cmd.arg(arg);
         }
-        Self::spawn(id, cmd, scrollback_lines, initial_size)
+        Self::spawn_answering(id, cmd, scrollback_lines, initial_size, colors.clone())
     }
 
     /// Spawn the platform's plain interactive shell in `cwd` as a daemon-owned session
@@ -228,6 +229,7 @@ impl PtySession {
         env: &[(String, String)],
         scrollback_lines: usize,
         initial_size: Option<(u16, u16)>,
+        colors: &TerminalColors,
     ) -> io::Result<Self> {
         ensure_cwd_exists(cwd)?;
         let shell = std::env::var("SHELL").ok();
@@ -240,16 +242,35 @@ impl PtySession {
         for (k, v) in env {
             cmd.env(k, v);
         }
-        Self::spawn(id, cmd, scrollback_lines, initial_size)
+        Self::spawn_answering(id, cmd, scrollback_lines, initial_size, colors.clone())
     }
 
     /// Open a PTY, spawn `cmd` as its child, start the reader thread, and build the VT emulator with
-    /// its daemon listener. Shared plumbing for [`Self::spawn_ai_cli`] / [`Self::spawn_shell`].
+    /// its daemon listener, which answers colour queries for the light scheme. For a session whose
+    /// colour answers follow a reported scheme, see [`Self::spawn_answering`].
     pub fn spawn(
         id: SessionId,
         cmd: CommandBuilder,
         scrollback_lines: usize,
         initial_size: Option<(u16, u16)>,
+    ) -> io::Result<Self> {
+        Self::spawn_answering(
+            id,
+            cmd,
+            scrollback_lines,
+            initial_size,
+            TerminalColors::default(),
+        )
+    }
+
+    /// [`Self::spawn`], with the terminal answering `OSC 10/11/12` from `colors` (`006` FR-003a,
+    /// BUG-007). Shared plumbing for [`Self::spawn_ai_cli`] / [`Self::spawn_shell`].
+    pub fn spawn_answering(
+        id: SessionId,
+        cmd: CommandBuilder,
+        scrollback_lines: usize,
+        initial_size: Option<(u16, u16)>,
+        colors: TerminalColors,
     ) -> io::Result<Self> {
         let (cols, rows) = initial_size.unwrap_or((INIT_COLS, INIT_ROWS));
         let pty = native_pty_system();
@@ -305,7 +326,7 @@ impl PtySession {
             Arc::clone(&writer),
             Arc::clone(&size),
             signals.clone(),
-            TerminalColors::default(),
+            colors,
         );
         let dims = TermDimensions {
             rows: rows as usize,

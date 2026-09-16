@@ -28,8 +28,8 @@ rendered result with `claude` is the T080 visual pass.
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| A1  | After a window reports Dark, a program in a session started through the service asks `OSC 11` and reads the dark `surface` | FR-003a, SC-014 | example | PENDING | |
-| A2  | When a window then reports Light, the same running program's next `OSC 11` reads the light `surface` | FR-003a, SC-014 | example | PENDING | |
+| A1  | After a window reports Dark, a program in a session started through the service asks `OSC 11` and reads the dark `surface` | FR-003a, SC-014 | example | DONE | `crates/micold-daemon/tests/terminal_color_scheme.rs::a_session_answers_the_background_query_with_the_scheme_the_window_reported` |
+| A2  | When a window then reports Light, the same running program's next `OSC 11` reads the light `surface` | FR-003a, SC-014 | example | DONE | `crates/micold-daemon/tests/terminal_color_scheme.rs::a_session_answers_the_background_query_with_the_scheme_the_window_reported` |
 | A3  | `claude` on theme `auto`, started in a dark-scheme terminal, draws legible body text | SC-014 | example | PENDING | visual pass, T080 — not a cargo test; `speckit-tdd-run` does not drive it |
 
 ## Inner loop: unit behaviors
@@ -66,7 +66,7 @@ Tests in `crates/micold-daemon/tests/vt_color_queries.rs`: a `Term` wired with a
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U11 | A `TerminalColorScheme` from a connected client becomes the service's scheme (last report wins) | FR-003a; 010 protocol §8 | example | PENDING | |
+| U11 | A `TerminalColorScheme` from a connected client becomes the service's scheme (last report wins) | FR-003a; 010 protocol §8 | example | DONE | `crates/micold-daemon/tests/terminal_color_scheme.rs::a_reported_scheme_becomes_the_services_scheme_and_the_last_report_wins` |
 
 ### `crates/micold-client/src/shell/daemon_sync.rs` + `main.rs` `update`
 
