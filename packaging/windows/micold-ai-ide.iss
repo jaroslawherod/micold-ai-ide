@@ -122,11 +122,33 @@ function InitializeUninstall(): Boolean;
 var
   Error: String;
 begin
+  // The uninstaller checks AppMutex only after this returns. With the window open it will refuse
+  // (silent) or ask the user to close it, so stopping the daemon here would end the user's sessions
+  // for an uninstall that may never happen (FR-009). CurUninstallStepChanged stops it once past that.
+  if CheckForMutexes('{#SetupSetting("AppMutex")}') then
+  begin
+    Result := True;
+    exit;
+  end;
   Error := StopDaemon();
   if (Error <> '') and not UninstallSilent() then
     MsgBox(Error, mbError, MB_OK);
   // A silent uninstall has no one to retry, so it goes ahead.
   Result := (Error = '') or UninstallSilent();
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Error: String;
+begin
+  // Past the AppMutex check, and before any file is removed: the daemon a user left running when
+  // they closed the window on request is stopped here. Already stopped, this finds nothing to do.
+  if CurUninstallStep = usUninstall then
+  begin
+    Error := StopDaemon();
+    if (Error <> '') and not UninstallSilent() then
+      MsgBox(Error, mbError, MB_OK);
+  end;
 end;
 
 // The ready page lists what setup will do; stopping the daemon ends the user's sessions, so it says

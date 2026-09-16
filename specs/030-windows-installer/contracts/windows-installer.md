@@ -72,7 +72,10 @@ else (FR-007).
 
 `[Code]`, for R12:
 
-- `PrepareToInstall` and `InitializeUninstall` call `StopDaemon()`.
+- `PrepareToInstall` and `InitializeUninstall` call `StopDaemon()`. `InitializeUninstall` skips it while
+  the app mutex exists, because the uninstaller checks `AppMutex` only afterwards and may refuse.
+  `CurUninstallStepChanged(usUninstall)` calls it again, past that check and before files are removed
+  (revised after #358: a refused uninstall had already stopped the daemon).
 - `StopDaemon()` reads the pid record and checks that the process image is under `{app}`, or equals
   `micold-daemon.exe` for a legacy location.
 - It terminates the process and waits up to 5 s.

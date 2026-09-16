@@ -71,7 +71,9 @@ behind each directive. The ones that matter when changing it:
 - **The daemon is stopped explicitly.** Restart Manager does not close the windowless daemon, and a
   live daemon keeps its exe locked. So `StopDaemon` in `[Code]` runs before install and uninstall. It
   reads the pid record and stops that process only if its image is `micold-daemon.exe`. The ready
-  page tells the user this ends their sessions. `crates/micold-core/tests/windows_installer_in_use.rs`
+  page tells the user this ends their sessions. An uninstall started with the window open does not
+  stop it until the window is closed, because Inno refuses such an uninstall only after
+  `InitializeUninstall` has run. `crates/micold-core/tests/windows_installer_in_use.rs`
   guards this.
 - **Uninstall keeps the user's data.** It removes only `%LOCALAPPDATA%\micold-ai-ide\run`, the
   daemon's runtime directory. Settings and session data stay.
