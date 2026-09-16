@@ -36,6 +36,26 @@ content sitting beneath it. Hence the staging step (§2). One further wrinkle: m
 directory's `README.md` as that directory's index, which is why `docs/README.md` becomes the site's
 home page rather than a new file competing with it.
 
+**Bugfix BUG-001: stop words.** "Out of the box" above was wrong for full-text search in one
+respect. elasticlunr drops English stop words, `about` among them, from the index mdBook writes and
+from the query the browser runs, so a guide topic named by such a word cannot be found by that word.
+mdBook has no setting for the list. See §1a.
+
+## 1a. Keeping topic words searchable (Bugfix BUG-001, open)
+
+**Open, settled by T088.** The workaround has to hold at both ends: the term must be in the index,
+and it must survive the query pipeline. Candidates to weigh:
+
+- A site-side step after `mdbook build` that re-adds the dropped terms to `searchindex.js` and
+  removes the same words from `elasticlunr.stopWords` before the searcher runs, driven by the words
+  in guide titles rather than by a hand-kept list.
+- A theme override of mdBook's search front end, if the mdBook version `pages.yml` installs allows
+  one.
+- Searchable alias text on the page. This was rejected up front: an indexed stop word is still
+  dropped from the query.
+
+Whichever is chosen must be pinned against mdBook upgrades by FR-026a's check, not by a note here.
+
 ---
 
 ## 2. Staging, and where the two new pages live
@@ -95,6 +115,15 @@ sibling requirement, FR-033, checkable — see §11.
 missing variable to the emitter. That check is cheap and it is what stops the derivation from being
 80% true.
 
+**Bugfix BUG-003**: the grep proves only that `site.css` holds no literal. mdBook's own
+`css/chrome.css` and `css/general.css` load next to it and declare transitions of their own
+(`.sidebar` `transform 0.3s`, `.page-wrapper` `margin-left, transform 0.3s ease`,
+`.chapter-fold-toggle div` `transform 0.5s`, and others). Those reached the published page untouched.
+FR-030a is therefore also checked on the rendered page: every element with a non-zero
+`transition-duration` must use a duration and an easing the emitter produces. The theme overrides
+each mdBook transition with `--micold-motion-*`. The sidebar slide uses the application's own
+sidebar-slide row (`medium_4`, `emphasized`; 018 design-tokens §6.3).
+
 ---
 
 ## 4. Fonts, icons, and the monospace exception
@@ -113,6 +142,13 @@ stack mirrors the application's own choice for its terminal, which ships no mono
 **Cost recorded**: the three font files total ~1.2 MB. They are cached across pages and are outside
 the per-page still-image budget of FR-015c, which is about images. Subsetting Material Symbols to
 the glyphs the site actually uses is a later optimisation, not a requirement.
+
+**Bugfix BUG-002: where the icon font is used.** Serving the font was treated as meeting FR-031,
+while `index.hbs` kept drawing every chrome control with mdBook's `{{fa …}}` Font Awesome helper.
+Every icon in the site's chrome is a Material Symbols glyph: `menu`, `palette`, `search`, `edit`,
+`chevron_left` and `chevron_right`, plus `progress_activity` for the search spinner. The link to the
+source repository has no brand glyph in the set, so it uses `code`, and its accessible name says
+"Source on GitHub". T094 settles the final names against the glyphs the font actually contains.
 
 ---
 
@@ -314,6 +350,9 @@ merge** in CI's existing `docs` job; everything that needs a rendered page runs 
 | Per-page still total ≤ 1 MB; each clip ≤ 3 MB | `media-budget.sh` | pre-deploy | FR-015c, SC-012 |
 | Every declared capture was produced | `build.sh` | pre-deploy | FR-011a, SC-004 |
 | No `<img>`, `<link>`, `<script>` or `url()` points off-origin | `page-checks.mjs` | pre-deploy | SC-015, FR-031 |
+| Each word of each guide title, searched alone, returns that page in the first five results *(BUG-001)* | `page-checks.mjs` | pre-deploy | FR-026a |
+| The app bar's title is start-aligned and centred vertically with its controls; no Font Awesome icon in the chrome *(BUG-002)* | `page-checks.mjs` | pre-deploy | FR-029a, FR-031 |
+| Every rendered transition uses an emitted duration and easing *(BUG-003)* | `page-checks.mjs` | pre-deploy | FR-030a, SC-014 |
 
 **Why the pre-merge checks are shell and not Rust**: `crates/micold-core/tests/documentation_is_not_read.rs`
 scans Rust sources under `crates/` and fails on any string literal resolving to a path marked

@@ -15,6 +15,16 @@ found three defects, none of them filed yet:
 - The site's own transitions keep mdBook's `ease` timings (FR-030a).
 
 B5 ran on emulated phones only, so a real phone is still unrun.
+**Reopened 2026-09-16** for those three defects, now filed and patched as [BUG-001](./bugs/BUG-001.md),
+[BUG-002](./bugs/BUG-002.md) and [BUG-003](./bugs/BUG-003.md). Their fixes are Phases 9–11 of
+[tasks.md](./tasks.md) and are not yet implemented.
+
+**Bugfix**: 2026-09-16 — BUG-001 Added FR-026a, a stop-word edge case and a search assumption:
+a single word that names a guide topic must find it, whatever the search engine's stop-word list says.
+**Bugfix**: 2026-09-16 — BUG-002 Clarified FR-029a (the title's placement in the app bar) and FR-031
+(the icon set covers the site's own chrome, not only the fonts it ships).
+**Bugfix**: 2026-09-16 — BUG-003 Clarified FR-030a: it binds every transition the published page
+runs, including those the site generator's own stylesheets bring, and is checked on the rendered page.
 
 **Input**: User description: "GitHub Pages documentation site for the project, published automatically on each release, built from the in-repo docs (primarily the user guide), and including screenshots and animated GIFs captured from the running application."
 
@@ -230,6 +240,10 @@ version with no manual intervention, and that a failure to publish is visible ra
   interaction that cannot be shown in 15 seconds under 3 MB, must fail the publication loudly enough
   to be fixed — by recapturing smaller, by splitting the interaction, or by raising the ceiling
   deliberately — rather than being published over budget or silently downscaled to illegibility.
+- **A topic's name is a word the search engine ignores.** Search engines drop common words ("about",
+  "which", "over") from their index and from queries. When such a word is the name of a guide
+  topic or of something in the application — the About dialog — a reader who types it must still
+  find that topic, not be told there is nothing (FR-026a). *(Bugfix BUG-001.)*
 
 ## Requirements *(mandatory)*
 
@@ -340,6 +354,11 @@ version with no manual intervention, and that a failure to publish is visible ra
 - **FR-025**: The site MUST be readable on a phone: no horizontal scrolling, images fitted to the
   viewport.
 - **FR-026**: The site MUST offer full-text search across its pages.
+- **FR-026a**: Every word in a guide page's title, searched on its own, MUST return that page among
+  the first five results. A word the search engine would otherwise drop as a stop word is no
+  exception. This MUST be checked automatically on every publication, one query per word, alongside
+  FR-023a's whole-title search. *(Bugfix BUG-001: "Help & About" passed the whole-title check
+  because `help` survived, while `about` on its own returned nothing.)*
 - **FR-027**: The site MUST honour the reader's light/dark preference, and MUST meet the contrast
   requirement below in both.
 - **FR-027a**: Every published page MUST conform to WCAG 2.2 Level AA. Conformance MUST be checked
@@ -360,6 +379,11 @@ version with no manual intervention, and that a failure to publish is visible ra
   design system. Two treatments carry the resemblance beyond colour and type: the header is the
   application's top app bar, and panels are separated by shade and shadow at the application's
   elevation levels rather than by outlines.
+  *(Bugfix BUG-002: "is the application's top app bar" includes how the bar lays out its title — the
+  title starts at the leading edge, after the bar's leading controls, and is centred vertically on the
+  same line as the controls — and the icons it draws (FR-031). Matching the bar's surface role,
+  elevation and title type alone left the title pinned to the top of the bar and centred across it.
+  Both are checked on the rendered page.)*
 - **FR-029b**: Application components with no documentation counterpart MUST NOT be recreated on the
   site. The site has no overflow menu, no chips, no worktree list — the reader sees those in
   screenshots, not in the page furniture around them.
@@ -369,6 +393,11 @@ version with no manual intervention, and that a failure to publish is visible ra
 - **FR-030a**: The site's own transitions — hover, focus, an expanding navigation section, switching
   theme — MUST use the application's motion durations and easing, so the site moves the way the
   application moves.
+  *(Bugfix BUG-003: this binds every transition the published page runs, including the ones the
+  site generator's own stylesheets declare, which the site's theme must override. It is checked on
+  the rendered page, not only in the site's own stylesheet. mdBook's 0.3 s / 0.5 s `ease` sidebar,
+  page-wrapper, section-toggle, previous/next and header-icon transitions all reached the published
+  page.)*
 - **FR-030b**: A reader whose system asks for reduced motion MUST get none of those transitions.
   This is separate from FR-015a: clips never start on their own for anyone, and site transitions are
   removed for readers who have asked for that.
@@ -376,6 +405,11 @@ version with no manual intervention, and that a failure to publish is visible ra
   and the same Material Symbols files in this repository — and MUST serve them from the site itself.
   No font, icon or stylesheet may be fetched from a third party at page load. The licences those
   files ship under MUST be carried on the site alongside the project's own (FR-008).
+  *(Bugfix BUG-002: "use the icon set" means every icon the site draws in its own chrome — the app
+  bar's controls and the previous/next arrows — is a Material Symbols glyph. Shipping the font while
+  the site generator's own icon helper draws the controls does not meet it. A control with no
+  matching glyph, such as a link to the source repository, uses the nearest glyph, and its accessible
+  name says what it is.)*
 - **FR-031a**: Code blocks and terminal output MUST be set in the reader's own monospaced font,
   through the system stack — the same choice the application makes for its terminal, which ships no
   monospaced face either. The site MUST NOT ship or fetch one.
@@ -482,6 +516,11 @@ version with no manual intervention, and that a failure to publish is visible ra
   than a review habit (FR-027a). The four rules stated elsewhere in this spec — alternative text,
   no motion the reader did not start, a phone-readable layout, and the reader's colour preference —
   are consequences of that bar, not a substitute for it.
+- **Search engine (Bugfix BUG-001)**: mdBook's built-in search (elasticlunr) drops English stop words
+  from both its index and the reader's query, and mdBook offers no setting for the list. "Full-text"
+  (FR-026) is therefore not something the generator guarantees by default. The site either works
+  around the stop-word list for topic words or proves it does not need to, and FR-026a checks the
+  result.
 - **Analytics**: none. The project is local-first and collects nothing; the site follows suit.
 - **Comments/feedback**: readers propose corrections through the repository (FR-007). The site hosts
   no comment system.
