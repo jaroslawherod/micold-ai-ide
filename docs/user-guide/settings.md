@@ -4,6 +4,12 @@ Open **Settings** from the overflow menu (the three-dots button) in the top tool
 main area, with a rail down the left listing four sections. The app bar and the connection strip
 stay where they are, so the way back out is always in view.
 
+**Collapse**, at the bottom of the rail, slides the rail in to its icons and gives the width to the
+section. Collapsed, the same control is drawn as the show-sidebar icon, and pressing it slides the
+rail back out. Every section stays one press away while the rail is collapsed or moving, and a
+section with something to report keeps marking its row throughout: by its badge while there is room
+for it, and by a tinted icon when there is not.
+
 Editing is one form across all four sections: switching sections never discards what you typed, and
 **Save** applies every section at once. If a value is rejected, Settings jumps to the section
 holding it and marks the field — press **Cancel**, or Esc, to leave without saving anything.

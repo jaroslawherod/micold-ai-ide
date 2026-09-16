@@ -49,7 +49,7 @@ follows from which form's tree holds it (research R5).
 
 | Variant | Holds | Used for |
 |---|---|---|
-| `Sliding { labelled, marked, icons_only }` | Three `Element`s of the same widget type, always in this child order | A destination with an icon, and the collapse control; unless the row is badged, `marked` is a never-drawn copy of `labelled` given a zero-size parked node, so its tree survives a badge toggling (research R3) |
+| `Sliding { labelled, marked, icons_only }` | Three `Element`s of the same widget type, always in this child order | A destination with an icon, and the collapse control; unless the row is badged, `marked` is a never-drawn copy of `labelled` given a zero-size parked node (laid out only for the focus step), so its tree survives a badge toggling (research R3) |
 | `Single(element)` | One `Element` | A destination with no icon (research R3a) |
 
 Rest widths: `labelled` and `marked` at 272, `icons_only` at 64; `Single` at the width given.

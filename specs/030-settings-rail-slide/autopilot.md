@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/settings-side-bar-should-be-animated
 - **Started**: 2026-09-14
 - **Phase**: 4-implement
-- **Next step**: PR 3 (M1): push, open, wait for checks, rebase-merge
+- **Next step**: M2: PR 4 open, wait for `ci complete`, rebase-merge
 
 ## Pull requests
 
@@ -16,15 +16,16 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|
 | #334 | PR 1: spec | merged | a9f54e77 |
 | #339 | PR 2: plan | merged | b27ffe62 |
-| #340 | PR 3: M1, the sidebar curve | open, rebasing onto ce4fe7ba (D24) | — |
+| #340 | PR 3: M1, the sidebar curve | merged | 31ed5ea6 |
+| #360 | PR 4: M2, the settings rail slide | open | — |
 | #344 | Side PR (D24): the held-Pi daemon test keeps its session on the guard's `PATH` | merged | ce4fe7ba |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T004, T045–T046 | The worktree sidebar hides and shows on `emphasized` over `medium_4`, never narrower than its rail, handing over to it once no wider | #340 | open; rebased after #344 (D24) |
-| M2 | T005–T044 | The settings rail slides, with icons on their line, badges marked, focus kept, pointer confined | — | pending |
+| M1 | T001–T004, T045–T046 | The worktree sidebar hides and shows on `emphasized` over `medium_4`, never narrower than its rail, handing over to it once no wider | #340 | merged 31ed5ea6 |
+| M2 | T005–T044 | The settings rail slides, with icons on their line, badges marked, focus kept, pointer confined | #360 | open |
 
 ## Decisions
 
@@ -54,6 +55,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | D22 | implement | M1 review r3 (A, MAJOR): D21's "not a regression" was wrong. What the user sees is how long nothing moves before the strip appears: 17–57 ms on `main` (linear, panels 600–180 px), 108–192 ms with the curve and floor, showing a still sliver of the *Hide sidebar* button. Fix in M1? | Yes, test-first as U24/T046: `layout` swaps to the rail once a closing panel's `full · p` is no wider than the floor (or at `CLOSED`), stores the decision in `Track`, and `update`, `draw`, `mouse_interaction` and `overlay` read it, so they always match the layout they get. Opening never swaps early; a zero floor (settings view, T019) keeps `CLOSED`. D20's rule applies: a regression the curve introduced is FR-003's. Spec (Assumptions, Scope, SC-002), contract §2/§6, plan, research R7, quickstart §A.2 and tasks amended; U23 re-cut | agent-resolved | M1 review r3 A F1; navigation_drawer.rs `layout`; tdd/cycle-log.md cycle 3 |
 | D23 | implement | M1 review round 3 had a MAJOR (fixed as D22, gate green on 507dda7a). Run a 4th round or open PR 3? | Open PR 3 (M1) | decided by user | escalation, category 5 |
 | D24 | implement | PR #340's macOS `build + test` failed 3 of 3 on `micold-daemon` `exclusivity.rs:435` (`a_second_open_of_a_held_pi_conversation_starts_nothing`, 0 launches): first read as a race (the test reads the fake `pi`'s launch file as soon as the session is live); corrected on probing: the fixture left environment-include on, which sources `~/.bashrc` and replaces the session's `PATH`, so the real `pi` (or none) ran and the stub never did. Main's first macOS daemon run (`ac8444ec`) also failed, on `idle_race.rs:71`, and every push since was docs-only. Not 030's code. How to proceed? | Fix the test in a separate PR (#344: env-include off in the fixture, plus wait for the launch record), merge it on green, then rebase #340 and merge | decided by user | escalation, red main |
+| D25 | implement | PR #360's windows-latest installer smoke failed 2 of 2 at `windows-install-smoke.sh:266` (no daemon found after the refused uninstall); script is 030-windows-installer's, main green on the same base. How to proceed? | Re-run CI again | decided by user | escalation, blocked outside flow |
+| D26 | implement | After D25's rerun, #360's windows-latest smoke failed 3 of 3 at `windows-install-smoke.sh:266` while main passed at the same base. How to proceed? | Rebase onto main and resume (main gained ed320ee9, "a refused uninstall no longer stops the daemon") | decided by user | escalation, blocked outside flow |
 
 ## Declined review findings
 
@@ -63,6 +66,12 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M1 | code r3 (B) | NIT: U1's `(sidebar - 0.25).abs() > 0.05` assertion is redundant with the ±0.01 check on 0.607 | T003's text and test-list U1 name that assertion; it gives the clearer failure message on a linear track |
 | M1 | code r3 (B) | NIT: U1 steps `Progress` directly, so a wrong duration passed by `update` would go unseen | Predates 030 (`SLIDE` was passed the same way); T019 (M2) drives the drawer through `Widget::update` with frame events |
 | M1 | spec r3 (A) | NIT: `4af105ca`'s message says 31 px | Commits are not rewritten; cycle-log *Correction and strengthening: U23* records 32 |
+| M2 | code r1 (A) | MINOR: a press whose row changes form before its release (the last ~0.1% of a collapse, or a badged row's first ~0.1% of an expand, some 60–80 ms) publishes nothing: the parked form's release goes to a throwaway shell | Contract §5 *Pointer* and research R5 drop a parked form's messages by design, and FR-009 lets only controls drawn under the pointer act; carrying a press across forms is a design change to R5. Recorded under *Follow-ups not done* |
+| M2 | code r1 (B) | MINOR F2: an unbadged row's `marked` form is laid out at 272 on every layout for the focus step, where R3 said it is not laid out | Kept, docs corrected (R3, data-model): skipping it needs tree state recording a badge change, the "second record of what the width already says" R5 rejects; five rows of cached text layout per frame |
+| M2 | code r2 (A) | MAJOR F1: `Rail` re-derives the drawer's `Track` (tree state + `Progress` + `on_layout_frame`) and borrows `parked`; extract a shared widget | The shared mechanism is already one primitive, `cdk::motion::Progress::on_layout_frame`; what each widget adds differs (the drawer's floor and early swap, D20/D22, against the rail's per-row forms). Composing the drawer was rejected in D3, and a shared slide widget is a refactor of M1's shipped drawer beyond M2's tasks |
+| M2 | code r2 (A) | MINOR F2: parked forms get every `RedrawRequested`, also at rest | Research R5 forwards every redraw by design (a `Button` computes its status only on that event); gating it needs a "transition pending" record R5 rejects as a second source of what the width says. At rest it is an idle `update` on two small forms per row, with no allocation (`Vec::new`) |
+| M2 | code r2 (A) | MINOR F3: all three forms are laid out every layout | R4 needs both rest forms' glyph x on every layout (the selection exception, A11, is read from `x_labelled` changing on rebuild); the `marked` layout is round 1's F2, declined above |
+| M2 | code r2 (A) | MINOR F4–F6: repeated unused-marked-slot predicate, repeated drawn-child lookup, `sliding` flag | Fixed: `RowSlide::is_unused` and `RowSlide::drawn_in`; tests green |
 | — (spec) | spec r2 | F6 part: file a bug against 018 for the sidebar's linear curve | Writing into 018's directory is outside this flow (the only allowed edit to another spec is the bug path's patch). 030 carries the fix as FR-003 and cites 018 SC-010 in its assumptions; the rest of F6 was fixed |
 
 ## Open escalation
@@ -70,6 +79,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 None.
 
 ## Follow-ups not done
+
+- A click whose release lands after its row changes form (the last ~0.1% of a slide) is dropped (M2 code review A, declined above). A fix would record which form holds a press and route its release there.
 
 - The local suite on 9275a357 and a9f54e77 fails in `micold-daemon --test exclusivity`
   (`a_second_open_of_a_held_pi_conversation_starts_nothing`) and `--test pi_launch_wiring`

@@ -137,7 +137,7 @@ crates/micold-client/
 ├── tests/
 │   ├── settings_rail_motion.rs          # NEW: frame-by-frame slide tests (FR-001–FR-015, SC-001–SC-007)
 │   ├── fixtures/layout_snapshot.txt     # regenerated: parked forms added, visible rects unchanged
-│   ├── gates/rail_icons_align.rs        # unchanged; relies on icons_only being the last child (research R10)
+│   ├── gates/rail_icons_align.rs        # gains an inside-the-rail clause; relies on icons_only being the last child (research R10)
 │   └── support/
 │       ├── covered_states.rs            # `settings.rail` anchor paths follow the new tree
 │       └── layout.rs                    # `view_of` made pub for the motion harness
