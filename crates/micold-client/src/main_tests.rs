@@ -2551,6 +2551,42 @@ fn the_previous_attempts_reason_stays_visible_while_the_next_one_runs() {
     }
 }
 
+/// T207: a restart the user pressed is not "trying again" after an unattended attempt. The reason
+/// recorded before it is an older failure than the one the user just read, so carrying it into
+/// the restart's stage line names the wrong cause.
+#[test]
+fn a_restart_does_not_carry_an_unattended_attempts_reason() {
+    let mut app = app_with_a_failed_sandbox();
+    let _ = connection_failed(&mut app);
+    let _ = update_inner(
+        &mut app,
+        Message::Sandbox(SandboxMsg::Failed(Box::new(
+            micold_core::sandbox::lifecycle::Failure {
+                stage: micold_core::sandbox::lifecycle::Stage::Starting,
+                error: micold_core::sandbox::runtime::RuntimeError::NotInstalled {
+                    kind: micold_core::sandbox::runtime::RuntimeKind::Podman,
+                },
+            },
+        ))),
+    );
+    assert!(
+        app.sandbox.previous_attempt.is_some(),
+        "setup: the unattended attempt has to leave a reason behind"
+    );
+
+    let _ = update_inner(&mut app, Message::Sandbox(SandboxMsg::RestartRequested));
+
+    let line =
+        micold_client::ui::attempt_line(&app.sandbox).expect("setup: the restart has a stage line");
+    assert!(
+        !line
+            .detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains("Trying again")),
+        "a restart the user pressed showed an older attempt's reason: {line:?}"
+    );
+}
+
 /// A refused dial while the state still says `Running` is reported, not brought up: nothing
 /// has shown the sandbox is gone yet. The liveness check `on_disconnected` starts is what
 /// decides that and moves the state on (FR-036, US6 scenario 3); a bring-up from here would

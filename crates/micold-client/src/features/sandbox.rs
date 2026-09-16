@@ -342,6 +342,9 @@ impl Sandbox {
         match micold_core::sandbox::lifecycle::restart(&self.state, request) {
             Some(next) => {
                 self.state = next;
+                // A person's restart is a fresh start, not the next unattended attempt: the reason
+                // left from before would name an older failure than the one they just read.
+                self.previous_attempt = None;
                 true
             }
             None => false,

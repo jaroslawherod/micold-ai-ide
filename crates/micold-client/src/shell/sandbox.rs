@@ -188,8 +188,10 @@ pub fn boot(
 }
 
 /// Cancel the bring-up in `running`, if there is one: one still waiting its delay never starts, and
-/// one under way reports nothing more (FR-036a). The runtime call already in progress is not
-/// interrupted — the placement move that cancels it stops the container too.
+/// one under way reports nothing more (FR-036a). It does not interrupt a runtime call already in
+/// progress: `start` runs on a blocking thread and finishes its stages, so a bring-up cancelled
+/// mid-pull can still create the container after the move's own stop found none (a race the
+/// launch-time bring-up has always had; recorded as a BUG-005 follow-up).
 pub fn cancel(running: &mut Option<iced::task::Handle>) {
     if let Some(handle) = running.take() {
         handle.abort();
@@ -516,8 +518,9 @@ pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
                 // In memory only: nothing writes it back to the settings store, which is what
                 // makes the choice last for this occurrence alone (FR-035a).
                 if app.sandbox.accept_fallback(offer) {
-                    // An unattended bring-up still waiting would bring the sandbox back up under
-                    // the host placement the user just chose.
+                    // Belt and braces: a fallback is offered only from `Failed`, and a waiting
+                    // bring-up has already moved the state to `Probing`, so there is normally
+                    // nothing to cancel. Kept so no bring-up can outlive the move to the host.
                     cancel(&mut app.sandbox_bring_up);
                     app.placement.kind =
                         micold_core::sandbox::placement::PlacementKind::HostProcess;

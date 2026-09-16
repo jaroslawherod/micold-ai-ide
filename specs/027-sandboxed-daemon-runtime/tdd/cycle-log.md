@@ -620,3 +620,14 @@ Appended rather than edited in place. The log is append-only.
 - refactor (T206): the test-only `LIVE` token and `live_tasks()` removed with their A1/U24 assertions (subsumed by
   `reports_the_bring_up`, T202); `BringUp::task` made private so every bring-up goes through `run` and is cancellable
 - `mise run gate` after T203–T206 -> GATE_EXIT=0, `cargo test --workspace` 3113 passed, 0 failed
+
+## Review remediation round 2 (T207, 2026-09-16)
+
+- rebased onto origin/main 33f6491c; main's `216f8801` moved the binary's tests to `main_tests.rs`, and every branch commit
+  touching `main.rs` was replayed with the same move, so the tests above now live in `main_tests.rs`
+- test: `a_restart_does_not_carry_an_unattended_attempts_reason`
+- red: `main_tests.rs:2581` "a restart the user pressed showed an older attempt's reason: StageLine { label: "Checking the
+  container runtime", detail: Some("Trying again: The sandbox failed while checking the container runtime. Docker is not installed.") }"
+- green: `Sandbox::restart` clears `previous_attempt`. Client target 149 passed, 0 failed
+- refactor: none. `cancel`'s comment corrected (it does not stop runtime work already under way), and the fallback's
+  cancel marked as a safety net (review A/B round 2)
