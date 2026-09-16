@@ -2070,13 +2070,16 @@ impl DaemonState {
             // same session but titles itself `user@host: ~/dir`, and a Regular Terminal session's
             // primary *is* a shell — neither has a conversation to name. And only the part of the
             // title the CLI means as the name counts: not its product name, not its decoration
-            // (FR-004).
+            // (FR-004). Nor the title a Windows console gives itself, its executable's path.
             let title = workspace
                 .find_session(*id)
                 .filter(|(_, session)| session.mode == TerminalMode::AiCli)
                 .and_then(|(project, session)| {
                     let proc = live.procs.get(&SessionProcess::Primary)?;
                     let title = proc.pty.signals().title()?;
+                    if crate::activity::is_console_default_title(&title) {
+                        return None;
+                    }
                     session
                         .provider
                         .provider()
