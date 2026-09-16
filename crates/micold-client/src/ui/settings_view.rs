@@ -68,25 +68,15 @@ pub fn view<'a>(
         })
         .collect();
 
-    // The drawer, not a bare column: the rail slides in with the view rather than appearing whole,
-    // which is the same transition the sidebar makes and the reason it is worth reaching for a
-    // component that owns both children.
-    //
-    // The drawer is never *closed* here, and collapsing the rail (FR-026c) is not the same thing:
-    // the drawer's closed child is empty, and an empty rail is a page with no way off it. What
-    // collapsing does is narrow the rail while keeping every destination pressable, which is the
-    // list's own question — so it is answered by `SectionList`, and the drawer stays open in both
-    // states.
-    let rail: Element<'a, Message> = material::NavigationDrawer::new(
-        SectionList::new(sections, r)
-            .selected(draft.section.index())
-            .badge_accent(r.error, r.on_error)
-            .collapsed(rail_collapsed)
-            .toggle(Message::Settings(SettingsMsg::RailToggled)),
-        Space::new().width(Length::Fixed(0.0)).height(Length::Fill),
-    )
-    .open(true)
-    .into();
+    // Collapsing (FR-026c) slides the rail between its widths rather than snapping (030 FR-001).
+    // The list owns that motion, not a wrapper here: the view says which state the rail is in and
+    // nothing about how far it has got.
+    let rail: Element<'a, Message> = SectionList::new(sections, r)
+        .selected(draft.section.index())
+        .badge_accent(r.error, r.on_error)
+        .collapsed(rail_collapsed)
+        .toggle(Message::Settings(SettingsMsg::RailToggled))
+        .into();
 
     let page: Element<'a, Message> = match draft.section {
         SettingsSection::Appearance => appearance::view(draft, r),

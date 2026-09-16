@@ -92,8 +92,10 @@ The collapse control has `Labelled` (HideSidebar + "Collapse") and `IconsOnly` (
 
 A `Sliding` row always has three child trees, in the fixed order `[labelled, marked, icons_only]`,
 and every slot holds a real form of the same widget type: a row without a badge, and the control,
-build `marked` as a copy of `labelled` that is never drawn and is not laid out (a zero-size parked
-node). iced diffs children by position and replaces a child's tree whenever the widget's tag
+build `marked` as a copy of `labelled` that is never drawn and is given a zero-size parked node. (It
+is still laid out at 272 once per layout, into a node that is thrown away, so R5's focus step can
+look for focus in it: a badge that clears while `Marked` is drawn leaves focus there, and `operate`
+needs a real node. Found in M2 review.) iced diffs children by position and replaces a child's tree whenever the widget's tag
 changes (`Tree::diff`), so a placeholder of another type in the `marked` slot would discard a
 focused `Marked` form's `Focus` when a badge clears mid-slide (a validation error fixed), before
 `layout` could hand focus over; and an optional slot would shift `icons_only`'s tree into the
@@ -315,7 +317,10 @@ that makes the regenerated fixture reviewable.
 `tests/support/covered_states.rs` to the new tree path (the drawer wrapper's levels go, and `Rail`
 adds one). It keeps naming the rail's padded container, as on `origin/main`, so that
 `tests/gates/rail_icons_align.rs`, which takes rows two levels below the anchor, finds the
-`RowSlide` nodes as its rows; the implementing task reads the path from the regenerated fixture. That gate is not changed: its
+`RowSlide` nodes as its rows; the implementing task reads the path from the regenerated fixture. The
+anchor's path turned out unchanged. The gate gained one clause in M2 (every glyph measured must be
+inside the rail): with the slots reordered, every row's last node was parked at −8.5e37, where f32
+put every glyph on one "axis" and the gate passed (cycle-log cycle 10). Otherwise it is as it was: its
 `glyph()` takes the *last* node under a row narrower than the row, and with the fixed child order
 `[labelled, marked, icons_only]` that is the drawn `IconsOnly` form's glyph in the collapsed state
 it checks. (A filter on non-finite x would do nothing: the records hold raw bounds, where a parked x

@@ -108,6 +108,23 @@ fn a_collapsed_rails_icons_share_one_axis() {
         centres.len()
     );
 
+    // A parked form sits about −8.5e37 away, where f32 has no precision left at dp scale: a set of
+    // parked glyphs would share one "axis" there. Only a glyph inside the rail is one on screen.
+    let outside: Vec<String> = centres
+        .iter()
+        .filter(|(_, c)| *c < rail.x || *c > rail.x + rail.width)
+        .map(|(i, c)| format!("row {i} at {c:.1}"))
+        .collect();
+    assert!(
+        outside.is_empty(),
+        "collapsed, every row's glyph must be drawn inside the rail ({:.1}–{:.1}), but these are \
+         not: {}. The glyph measured is a row's last one, so its icons-only form must be its last \
+         child (feature 030, research R10).",
+        rail.x,
+        rail.x + rail.width,
+        outside.join(", ")
+    );
+
     let first = centres[0].1;
     let strays: Vec<String> = centres
         .iter()

@@ -95,7 +95,7 @@ struct Track {
 
 /// A node parked where it cannot be seen. The inactive child still needs a layout entry — the tree,
 /// the node list and the child list must stay index-aligned — but it must not occupy space.
-fn parked(node: layout::Node) -> layout::Node {
+pub(super) fn parked(node: layout::Node) -> layout::Node {
     node.translate(Vector::new(-f32::MAX / 4.0, 0.0))
 }
 

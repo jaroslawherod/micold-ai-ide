@@ -677,7 +677,7 @@ pub fn resolve_revealed(
 }
 
 /// `ui::view` with the arguments every covered state passes.
-fn view_of(under: &StateUnderTest) -> Element<'_, micold_client::app::Message> {
+pub fn view_of(under: &StateUnderTest) -> Element<'_, micold_client::app::Message> {
     micold_client::ui::view(
         &under.state,
         None,

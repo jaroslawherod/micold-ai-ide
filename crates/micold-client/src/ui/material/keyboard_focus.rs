@@ -190,6 +190,21 @@ impl Focus {
         };
         Some(top_up(child, state::FOCUS))
     }
+
+    /// Whether this holds the keyboard, and whether that is shown.
+    ///
+    /// The two flags a sliding rail row hands from the form it parks to the form it draws (feature
+    /// 030 FR-007), read and written as a pair because handing over only the first would show a ring
+    /// a pointer press had hidden (FR-006).
+    pub(super) fn held(&self) -> (bool, bool) {
+        (self.focused, self.visible)
+    }
+
+    /// See [`Self::held`].
+    pub(super) fn hold(&mut self, focused: bool, visible: bool) {
+        self.focused = focused;
+        self.visible = visible;
+    }
 }
 
 /// The opacity of a layer that, laid over one of `under` in the same colour, leaves `target`.
@@ -443,6 +458,10 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
                 layout.bounds(),
                 tree.state.downcast_mut::<Focus>() as &mut dyn operation::Focusable,
             );
+            // The same state again, whole: `Focusable` can say "focused" but not whether that is
+            // shown, and a sliding rail row hands both to the form it draws (feature 030 FR-007).
+            // Under the same condition, so the n-th state offered is the n-th focusable.
+            operation.custom(None, layout.bounds(), tree.state.downcast_mut::<Focus>());
         }
         operation.traverse(&mut |operation| {
             self.content.as_widget_mut().operate(
