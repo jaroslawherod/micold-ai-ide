@@ -212,6 +212,24 @@ inside a container.
 Reopening the application starts the sandbox again. A stopped container is not a failure state and
 you will not be told about it as if it were one.
 
+### It comes back on its own while the application is open
+
+The application does not wait for you to relaunch it. Whenever it finds the service missing while
+the sandbox is the chosen placement — a start that failed, a container stopped or removed from
+outside, the machine waking without it — it brings the sandbox up again itself:
+
+- **Up to three attempts**, the first at once, then after 5 seconds, then after 15. The count starts
+  over once the service has answered, so a sandbox that recovers gets all three again next time.
+- **Each attempt shows its stage**, the same as a first start: checking the runtime, getting the
+  image (with its download progress), starting. While one is under way there is no
+  "could not connect" banner — a sandbox that is coming up is not a lost connection.
+- **Why the last attempt failed stays on screen** as *Trying again: …* beside the stage of the next.
+- **When all three have failed**, the failure is left standing with its cause and next step from the
+  catalogue below, and **Restart** is how you try again. Nothing is retried after that without you.
+
+Switching the placement back to *On this computer* cancels an attempt that is still waiting. None of
+this ever starts the service outside the container.
+
 ### Keeping the sandbox running
 
 **"Keep the sandbox running"** is the one setting that changes this. With it on:
@@ -236,6 +254,10 @@ the service in a container is what keeps them *running*.
 
 ## When it does not start
 
+A failure is first retried on its own, as described in
+[It comes back on its own](#it-comes-back-on-its-own-while-the-application-is-open); what follows is
+what stands once those attempts are spent.
+
 Every failure the sandbox can report names a cause **and** a next step. There is no generic "sandbox
 error": the runtime's own output is classified into one of the twelve cases below, and anything that
 matches none of them is reported as the last row rather than dropped.
@@ -258,7 +280,7 @@ reading the detail.
 | Something else holds the control port | *Port 7373 is already in use, so the sandbox has no control channel.* | Stop whatever holds it, or choose another port in **Settings → Session service**. |
 | A project is on a path the runtime will not bind | *`/mnt/team-share/webapp` cannot be shared with the sandbox: …* | Move the project to a path the runtime can share, or unregister it. Network shares and FUSE mounts are the usual cause. |
 | The runtime rejected a resource limit | *The runtime refused the storage limit: …* | Clear that limit in **Settings → Session service**, then retry. See [Limits](#limits) — the writable-storage cap is the one most often unavailable. |
-| The container was stopped or removed from outside | *The sandbox container `micold-sandbox` is no longer running.* | Restart the sandbox. Sessions resume from where they were — their processes stopped with the container, but their history and layout did not. |
+| The container was stopped or removed from outside | *The sandbox container `micold-sandbox` is no longer running.* | Usually nothing: the application brings it back up on its own (see [It comes back on its own](#it-comes-back-on-its-own-while-the-application-is-open)). If that fails three times, restart the sandbox. Sessions resume from where they were — their processes stopped with the container, but their history and layout did not. |
 | A step did not finish | *Pulling the image did not finish in time.* | Retry; if it persists, restart the runtime. |
 | Anything else | *The runtime reported: `<its first line of output>`* | Retry. The runtime's full output is in the diagnostics. |
 
