@@ -14,7 +14,12 @@ const MAX_ROWS_EACH_WAY: i64 = 64;
 pub fn link_at(rows: &impl LinkRows, row: i64, col: u16) -> Option<Link> {
     rows.text(row)?;
     let line = LogicalLine::around(rows, row);
-    match rows.hyperlink(row, col) {
+    // A spacer declares what the char it belongs to declares (contract L5), whatever the terminal
+    // wrote into it.
+    let lead = line
+        .index_of(row, col)
+        .map_or(col, |index| line.cells[index].1.start);
+    match rows.hyperlink(row, lead) {
         Some(uri) => declared_at(rows, &line, uri, row, col),
         None => detected_at(&line, row, col),
     }
@@ -558,6 +563,33 @@ mod tests {
             link_at(&rows, 1, 2),
             link,
             "from the next row, the address is the same link"
+        );
+    }
+
+    #[test]
+    fn padding_before_a_wrapped_wide_char_takes_the_link_of_the_char_before_it() {
+        // The terminal writes the padding with the wrapping char's declared URI, but the padding
+        // belongs to the plain `a` before it on its row (contract L5).
+        let rows = Rows::new(
+            0,
+            vec![
+                row("aaaa ").spacer(4).declare(4..5, ADDRESS).wrapped(),
+                row("例 え ").spacer(1).spacer(3).declare(0..4, ADDRESS),
+            ],
+        );
+        assert_eq!(
+            link_at(&rows, 0, 4),
+            None,
+            "the padding is part of a plain char, so it is no link"
+        );
+        assert_eq!(
+            link_at(&rows, 1, 0),
+            Some(Link {
+                address: ADDRESS.to_string(),
+                origin: LinkOrigin::Declared,
+                cells: vec![span(1, 0..4)],
+            }),
+            "the declared run is the wide chars alone, not the padding before them"
         );
     }
 

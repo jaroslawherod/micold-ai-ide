@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M1 (T001–T012): review round 2 A fixed (U152); review B round 2 (interrupted, re-dispatch), gate, then PR
+- **Next step**: M1 (T001–T012): review A round 3 fixed (U153); gate green at a2450d0e; awaiting review B round 2, then review A round 4 on U153, then PR
 
 ## Pull requests
 
@@ -51,6 +51,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | 15 | 4-milestones | U25: a wide char's spacer cell holds a space on the wire (alacritty 0.26 writes `' '`; messages.md calls it meaningless), so `LinkRows` as designed cannot tell it from real text and detection would stop at it | Add `LinkRows::spacer(row, col)`, answered by the client from the style-run flags; the logical line skips spacers in its text and covers them with the char before them on their row. Contract §1 and L5, data-model §1 and T028 updated | agent-resolved | alacritty_terminal 0.26 `Term::input`; specs/010 contracts/messages.md §Wide characters; crates/micold-daemon/src/framer.rs:362,368 |
 | 16 | 4-milestones | M1 review A: a detected address nested in one whose start lies past the top cut (`?next=https://…`) was offered, since L7 dropped only a candidate at column 0 | Widen L7's upper edge: drop a candidate when only address characters precede it on the logical line (U151); contract L7 updated | agent-resolved | contract L7 "A truncated address is never recognised (FR-003)"; research R4 "safer than recognising a truncation" |
 | 17 | 4-milestones | M1 review A round 2: `detect` rescanned the rest of the line for every candidate that failed, 3.4 s on a capped line of `mailto:` repeated. The suggested fix (skip ahead to the failed scan's end) would stop finding an address nested in a rejected one, which the contract keeps | Precompute each start's stop, the next `'`, `@` and `/`, and the trailing punctuation run in one pass, so each candidate costs O(1) plus its authority (U152); checked against the old `detect` on 200,000 random texts | agent-resolved | research R4 "bounds the work on pathological output"; contract §3 nested addresses |
+| 18 | 4-milestones | M1 review A round 3: alacritty writes the end-of-row padding before a wrapping wide char with the cursor template's hyperlink, so hovering it built a one-cell declared link over the plain char before it | `link_at` reads the hyperlink of the lead cell of the char under the pointer (U153); contract L5 says a spacer's own `hyperlink` is not read | agent-resolved | contract L5 "its spacer cell belongs to the same link as its lead cell" |
 
 ## Declined review findings
 
