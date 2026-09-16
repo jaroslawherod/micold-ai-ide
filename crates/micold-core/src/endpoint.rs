@@ -256,7 +256,8 @@ pub fn user_sid() -> io::Result<String> {
 }
 
 /// The SID of the user the process `pid` runs as. Access denied when this user may not query it,
-/// which a process of another account usually is.
+/// which a process of another account usually is. Not found once the process has exited, even
+/// while a handle someone else holds keeps its pid openable.
 #[cfg(windows)]
 pub fn process_user_sid(pid: u32) -> io::Result<String> {
     imp::process_user_sid(pid)
@@ -266,11 +267,12 @@ pub fn process_user_sid(pid: u32) -> io::Result<String> {
 mod imp {
     use super::*;
 
-    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, HANDLE};
+    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, HANDLE, STILL_ACTIVE};
     use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
     use windows_sys::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
     use windows_sys::Win32::System::Threading::{
-        GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
+        GetCurrentProcess, GetExitCodeProcess, OpenProcess, OpenProcessToken,
+        PROCESS_QUERY_LIMITED_INFORMATION,
     };
 
     /// Closes a process or token handle on every return path.
@@ -312,6 +314,18 @@ mod imp {
             return Err(io::Error::last_os_error());
         }
         let process = Handle(raw);
+        let mut exit_code = 0u32;
+        // SAFETY: `process` was opened with `PROCESS_QUERY_LIMITED_INFORMATION`, which this call
+        // needs; `exit_code` is a local out value.
+        if unsafe { GetExitCodeProcess(process.0, &mut exit_code) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if exit_code != STILL_ACTIVE as u32 {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("process {pid} has exited"),
+            ));
+        }
         token_user_sid(process.0)
     }
 
