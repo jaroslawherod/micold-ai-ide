@@ -44,10 +44,10 @@ Tests in `crates/micold-daemon/tests/vt_color_queries.rs`: a `Term` wired with a
 | U1  | Under Dark, `OSC 11 ; ?` is answered with the dark `surface` | FR-003a | example | DONE | `crates/micold-daemon/tests/vt_color_queries.rs::a_dark_pane_answers_a_background_query_with_the_dark_surface` |
 | U2  | Under Dark, `OSC 10 ; ?` is answered with the dark `on_surface` | FR-003a | example | DONE | `crates/micold-daemon/tests/vt_color_queries.rs::a_dark_pane_answers_a_foreground_query_with_the_dark_on_surface` |
 | U3  | Under Dark, `OSC 12 ; ?` is answered with the dark `on_surface` (the cursor block is drawn in the foreground) | FR-003a | example | DONE | `crates/micold-daemon/tests/vt_color_queries.rs::a_dark_pane_answers_a_cursor_query_with_the_dark_on_surface` |
-| U4  | Under Light, `OSC 11 ; ?` is answered with the light `surface` | FR-003a | example | PENDING | |
-| U5  | A scheme changed on a listener already built is what its next query answers | FR-003a | example | PENDING | |
-| U6  | Before any scheme is set, the answer is the light scheme's | FR-003a | example | PENDING | |
-| U7  | `OSC 4 ; 1 ; ?` is still answered with xterm red under either scheme | FR-003a ("Palette queries (`OSC 4`) are unchanged") | example | PENDING | |
+| U4  | Under Light, `OSC 11 ; ?` is answered with the light `surface` | FR-003a | example | DONE | `crates/micold-daemon/tests/vt_color_queries.rs::a_light_pane_answers_a_background_query_with_the_light_surface` |
+| U5  | A scheme changed on a listener already built is what its next query answers | FR-003a | example | DONE | `crates/micold-daemon/tests/vt_color_queries.rs::a_scheme_changed_after_the_listener_was_built_answers_the_next_query` |
+| U6  | Before any scheme is set, the answer is the light scheme's | FR-003a | example | DONE | `crates/micold-daemon/tests/vt_color_queries.rs::before_any_scheme_is_reported_the_answer_is_light` |
+| U7  | `OSC 4 ; 1 ; ?` is still answered with xterm red under either scheme | FR-003a ("Palette queries (`OSC 4`) are unchanged") | example | DONE | `crates/micold-daemon/tests/vt_color_queries.rs::a_palette_query_is_still_answered_from_the_xterm_table` |
 
 ### `crates/micold-core/src/tokens/mod.rs` — `terminal_defaults`
 

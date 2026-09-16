@@ -139,3 +139,65 @@ fn a_dark_pane_answers_a_cursor_query_with_the_dark_on_surface() {
         "a program asking a dark pane for its cursor colour must get the colour the cursor is drawn in"
     );
 }
+
+/// The other side of U1: the answer follows the scheme, not a constant that happens to be dark.
+#[test]
+fn a_light_pane_answers_a_background_query_with_the_light_surface() {
+    let mut term = QueriedTerm::new(colors_for(ColorScheme::Light));
+
+    assert_eq!(
+        term.ask("\x1b]11;?\x07"),
+        reply(11, terminal_defaults(ColorScheme::Light).background, BEL),
+        "a program asking a light pane for its background must be told it is light"
+    );
+}
+
+/// A scheme reported while a session is running reaches that session's next query: the listener reads
+/// the shared value when it answers, not when it was built.
+#[test]
+fn a_scheme_changed_after_the_listener_was_built_answers_the_next_query() {
+    let colors = colors_for(ColorScheme::Dark);
+    let mut term = QueriedTerm::new(colors.clone());
+    term.ask("\x1b]11;?\x07");
+
+    colors.set(ColorScheme::Light);
+
+    assert_eq!(
+        term.ask("\x1b]11;?\x07"),
+        reply(11, terminal_defaults(ColorScheme::Light).background, BEL),
+        "after the user switches to light, a running program's next query must be told light"
+    );
+}
+
+/// Before any client has reported, the answer is the light scheme's — the scheme the application
+/// resolves when it knows nothing about the OS preference (003 FR-018).
+#[test]
+fn before_any_scheme_is_reported_the_answer_is_light() {
+    let mut term = QueriedTerm::new(TerminalColors::default());
+
+    assert_eq!(
+        term.ask("\x1b]11;?\x07"),
+        reply(11, terminal_defaults(ColorScheme::Light).background, BEL),
+        "with no scheme reported yet, the service answers for the light scheme"
+    );
+}
+
+/// Palette queries are not the defaults: `OSC 4` keeps the xterm table whatever the scheme.
+#[test]
+fn a_palette_query_is_still_answered_from_the_xterm_table() {
+    const XTERM_RED: Rgb = Rgb { r: 205, g: 0, b: 0 };
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let mut term = QueriedTerm::new(colors_for(scheme));
+
+        assert_eq!(
+            term.ask("\x1b]4;1;?\x07"),
+            format!(
+                "\x1b]4;1;rgb:{r:02x}{r:02x}/{g:02x}{g:02x}/{b:02x}{b:02x}{BEL}",
+                r = XTERM_RED.r,
+                g = XTERM_RED.g,
+                b = XTERM_RED.b
+            ),
+            "palette entry 1 is xterm red under {scheme:?}"
+        );
+    }
+}
