@@ -36,6 +36,10 @@ document.
 
 ## Clarifications
 
+### Session 2026-09-16
+
+- Q: Should the pointer become the link pointer on plain hover, or only when a click would open the link? → A: Only while the link modifier (Ctrl, or Cmd on macOS) is held. The underline and the address hint still show on plain hover. (FR-007)
+
 ### Session 2026-09-14
 
 - Q: Which gesture opens a link in the terminal? → A: Ctrl+click on Linux and Windows, Cmd+click on
@@ -51,8 +55,8 @@ document.
 ### User Story 1 - Follow a web address printed in the terminal (Priority: P1)
 
 An AI CLI replies "I opened the pull request: https://github.com/acme/app/pull/312." The user moves
-the pointer over the address; it is marked as a link and the pointer changes to show it can be
-followed. The user activates it and the pull request opens in their default web browser. The full
+the pointer over the address; it is marked as a link and its address is shown. Holding Ctrl (Cmd on
+macOS), the pointer changes to show a click will follow it. The user activates it and the pull request opens in their default web browser. The full
 stop after the address is not part of what opens. The same works in a Regular Terminal, and — for
 programs that let the terminal do the wrapping — for an address the terminal wrapped onto a second
 row because it did not fit the pane. (AI CLIs that lay out their own text break long lines
@@ -70,7 +74,8 @@ address; repeat with the pane narrowed so the terminal wraps the address.
 
 1. **Given** a terminal showing `See https://example.com/docs/page.html for details.`, **When** the
    user hovers any character of the address, **Then** exactly the characters of the address (and not
-   "See", the space, or the final full stop) are shown as a link and the pointer indicates a link.
+   "See", the space, or the final full stop) are shown as a link; the pointer indicates a link only while the link modifier (Ctrl, or Cmd on
+   macOS) is held, and returns to the text pointer when it is released.
 2. **Given** that hovered address, **When** the user performs the link gesture (FR-004) on it,
    **Then** the system's default web browser is asked to open `https://example.com/docs/page.html`,
    and no input is sent to the terminal's process.
@@ -299,10 +304,12 @@ the complete address arrived; right-click again and choose open, and confirm it 
 **Showing links**
 
 - **FR-007**: While the pointer is over a recognised, followable link, every character of that link —
-  on every row it spans — MUST be visibly marked as a link (for example underlined), and the pointer
-  MUST change to the platform's link pointer. The marking MUST disappear when the pointer leaves it.
-  While the running program has mouse reporting on, the marking and pointer MUST appear only while
-  Shift is held (FR-016). A declared link is a maximal run of adjacent cells carrying the same address,
+  on every row it spans — MUST be visibly marked as a link (for example underlined), and while the link
+  modifier (FR-004: Ctrl, or Cmd on macOS) is held the pointer MUST change to the platform's link
+  pointer, changing back as soon as the modifier is released. The marking MUST disappear when the
+  pointer leaves it. While the running program has mouse reporting on, the marking MUST appear only
+  while Shift is held, and the link pointer only while Shift and the link modifier are held
+  (FR-016). A declared link is a maximal run of adjacent cells carrying the same address,
   continuing across a soft wrap but not across a real line break; two runs separated by other cells
   are two links, even with the same address.
 - **FR-008**: Whenever FR-007 marks a link — detected or declared — the address it will open MUST be

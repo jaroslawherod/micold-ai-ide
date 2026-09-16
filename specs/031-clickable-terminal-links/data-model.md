@@ -142,7 +142,7 @@ outcomes: `OpenLink` goes to `shell::links::perform`, `ClipboardWrite` to
 
 | # | Message | From state | To state / effect |
 |---|---|---|---|
-| T1 | *(pane-internal)* cursor moved to a cell, `ModifiersChanged`, or `window::Event::RedrawRequested` whose grid `(generation, seq)` differs from the cached one (`draw` gets `&Tree` and cannot update state, so `update` does it) | any | recompute `hover` if the session, the context, the cell, the consulted rows' hash or (under mouse reporting) Shift changed; redraw if `resolved` changed (FR-007, FR-008, FR-016, SC-005) |
+| T1 | *(pane-internal)* cursor moved to a cell, `ModifiersChanged`, or `window::Event::RedrawRequested` whose grid `(generation, seq)` differs from the cached one (`draw` gets `&Tree` and cannot update state, so `update` does it) | any | recompute `hover` if the session, the context, the cell, the consulted rows' hash or (under mouse reporting) Shift changed; record the held modifiers for `mouse_interaction`; redraw if `resolved` changed (FR-007, FR-008, FR-016, SC-005) |
 | T2 | *(pane-internal)* left press, `command()`, routing = terminal, single click, `hover.resolved` is `Some` | `link_press = None` | `link_press = Some`; `last_click` updated through `Click::new`; no `TerminalSelectStart` (FR-004, G3b) |
 | T3 | *(pane-internal)* cursor moved off the press cell | `link_press = Some` | `link_press = None`; emit `TerminalSelectStart` at the press cell (FR-004) |
 | T4 | left release on the press cell | `link_press = Some` | re-resolve under the pointer (FR-017); if `Some`, emit `SessionMsg::LinkActivated(resolved)`; `link_press = None` |

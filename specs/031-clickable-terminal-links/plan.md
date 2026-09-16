@@ -9,7 +9,7 @@
 Addresses in a terminal pane become links. The pane recognises two kinds of link under the pointer.
 A **detected** link is plain text with an explicit `http://`, `https://`, `mailto:` or `file://`
 prefix, including text the terminal soft-wrapped. A **declared** link is text a program marked with
-OSC 8. While the pointer is over either kind, the link is underlined, the pointer becomes a hand, and
+OSC 8. While the pointer is over either kind, the link is underlined, the pointer becomes a hand while Ctrl (Cmd) is held, and
 the pane shows the address it will open. Ctrl+click (Cmd+click on macOS) hands the address to the
 operating system:
 
