@@ -44,6 +44,13 @@ fn sources() -> Vec<(String, String)> {
             if path.is_dir() {
                 walk(&path, out);
             } else if path.extension().is_some_and(|e| e == "rs") {
+                // `main_tests.rs` is `main.rs`'s `#[cfg(test)]` module moved out of line: all fixtures.
+                if path
+                    .file_name()
+                    .is_some_and(|n| n.to_string_lossy().ends_with("_tests.rs"))
+                {
+                    continue;
+                }
                 if let Ok(text) = fs::read_to_string(&path) {
                     out.push((path.display().to_string(), production_only(&text)));
                 }
