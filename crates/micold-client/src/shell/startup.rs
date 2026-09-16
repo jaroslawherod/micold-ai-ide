@@ -304,6 +304,7 @@ fn boot() -> (App, Task<Message>) {
     (
         App {
             core,
+            reported_scheme: None,
             caps,
             grids: HashMap::new(),
             stamper: SessionInputStamper::new(),

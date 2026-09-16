@@ -239,6 +239,8 @@ pub fn on_grid_frame(
 pub fn on_disconnected(app: &mut App) -> Task<Message> {
     crate::log_line("attach: disconnected");
     app.daemon = None;
+    // The next connection may be to a restarted daemon that was never told (`006` BUG-007).
+    app.reported_scheme = None;
     // Content on screen is now stale; the banner says so (FR-027). The subscription is
     // already auto-reconnecting with backoff.
     app.disconnected = true;
@@ -873,6 +875,11 @@ pub fn on_connected(
     // bug that put this sentence in the plural.
     let project = app.core.workspace.active_project().map(|p| p.path.clone());
     app.daemon = Some(outbox);
+    // Before the attach and its starts: a program in a session started below asks for the
+    // background as it launches, and is answered from whatever the daemon knows by then (`006`
+    // FR-003a, BUG-007). Cleared first, because this connection has been told nothing yet.
+    app.reported_scheme = None;
+    report_color_scheme(app);
     // Ask the authority whose settings were just adopted above which CLIs it can actually run
     // (feature 027, FR-023c). Here rather than only on the named events elsewhere — Settings
     // opening and the override menu opening — because a reconnect is the one moment the answer
@@ -908,6 +915,21 @@ pub fn on_connected(
         }
     }
     Task::none()
+}
+
+/// Tell the daemon the window's resolved colour scheme when this connection has not been told it yet
+/// (`006` FR-003a, BUG-007). The daemon answers programs' `OSC 10/11/12` queries from the last scheme
+/// reported, so a dark window that never says so has its programs told the pane is light. Called
+/// from [`on_connected`] and after every message, so a switch reaches running sessions' next query.
+pub fn report_color_scheme(app: &mut App) {
+    let scheme = app.core.color_scheme();
+    if app.reported_scheme == Some(scheme) {
+        return;
+    }
+    if let Some(daemon) = &app.daemon {
+        daemon.send(ClientMsg::TerminalColorScheme { scheme });
+        app.reported_scheme = Some(scheme);
+    }
 }
 
 /// Project rename (feature 001, FR-017): the daemon is the single writer, so route it through
@@ -1769,6 +1791,7 @@ pub(crate) mod tests {
     use micold_client::app::State;
     use micold_core::protocol::messages::WireLifecycle;
     use micold_core::session::{AiCli, SessionLabel, SessionLifecycle};
+    use micold_core::theme::{ColorScheme, SystemScheme};
 
     // Convergence fix (retrofit session, 2026-07-27): the daemon's OperationError.detail (git's
     // own stderr, e.g. naming which submodule failed and why) was destructured with `..` and
@@ -1839,6 +1862,147 @@ pub(crate) mod tests {
             live_shells,
             ..summary(id, title, lifecycle)
         }
+    }
+
+    // --- `006` BUG-007: the window tells the daemon its colour scheme (FR-003a, U12–U15) --------
+
+    /// Deliver `message` through the binary's own `update`, as the runtime does, and return what it
+    /// put on the wire. Through `update` and not a helper, because the report has to follow *any*
+    /// message that changes the scheme, and only `update` sees every message.
+    fn deliver(
+        app: &mut App,
+        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+        message: Message,
+    ) -> Vec<ClientMsg> {
+        let _ = crate::update(app, message);
+        let mut sent = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            sent.push(msg);
+        }
+        sent
+    }
+
+    /// Connect `app` through `update` and return the outbox's receiving end with what was sent.
+    fn connect_through_update(
+        app: &mut App,
+    ) -> (
+        iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+        Vec<ClientMsg>,
+    ) {
+        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+        let sent = deliver(
+            app,
+            &mut rx,
+            Message::Connection(micold_client::features::connection::Msg::Connected {
+                outbox: micold_client::daemon::Outbox::new(tx),
+                catalog: snapshot_with("/repo/demo", Vec::new()),
+                settings: crate::tests::quiet_settings(),
+            }),
+        );
+        (rx, sent)
+    }
+
+    fn scheme_reports(sent: &[ClientMsg]) -> Vec<ColorScheme> {
+        sent.iter()
+            .filter_map(|m| match m {
+                ClientMsg::TerminalColorScheme { scheme } => Some(*scheme),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn system_theme(scheme: SystemScheme) -> Message {
+        Message::Settings(micold_client::features::settings::Msg::SystemThemeChanged(
+            Ok(scheme),
+        ))
+    }
+
+    /// An app following a dark desktop, with a project to attach to.
+    fn dark_app_on_a_project() -> App {
+        let mut app = base_app();
+        app.core.workspace.active = Some(PathBuf::from("/repo/demo"));
+        app.core.settings.system_scheme = SystemScheme::Dark;
+        assert_eq!(app.core.color_scheme(), ColorScheme::Dark, "fixture check");
+        app
+    }
+
+    /// U12: the daemon is told the scheme before the attach whose sessions will be asked for it.
+    #[test]
+    fn connecting_reports_the_resolved_scheme_before_attaching() {
+        let mut app = dark_app_on_a_project();
+
+        let (_rx, sent) = connect_through_update(&mut app);
+
+        let report = sent.iter().position(|m| {
+            matches!(
+                m,
+                ClientMsg::TerminalColorScheme {
+                    scheme: ColorScheme::Dark
+                }
+            )
+        });
+        let attach = sent
+            .iter()
+            .position(|m| matches!(m, ClientMsg::Attach { .. }));
+        assert!(
+            attach.is_some(),
+            "fixture check: the connection must attach; sent {sent:?}"
+        );
+        assert!(
+            report.is_some() && report < attach,
+            "a dark window must report dark before its Attach, or a session it starts asks before \
+             the daemon knows; sent {sent:?}"
+        );
+    }
+
+    /// U13: a switch reaches the daemon once, so a running program's next query reads the new scheme.
+    #[test]
+    fn a_message_that_changes_the_scheme_reports_it_once() {
+        let mut app = dark_app_on_a_project();
+        let (mut rx, _) = connect_through_update(&mut app);
+
+        let sent = deliver(&mut app, &mut rx, system_theme(SystemScheme::Light));
+
+        assert_eq!(
+            scheme_reports(&sent),
+            vec![ColorScheme::Light],
+            "the desktop turning light must be reported exactly once; sent {sent:?}"
+        );
+    }
+
+    /// U14: a message that leaves the scheme where it was sends nothing.
+    #[test]
+    fn a_message_that_keeps_the_scheme_sends_no_report() {
+        let mut app = dark_app_on_a_project();
+        let (mut rx, _) = connect_through_update(&mut app);
+
+        let sent = deliver(&mut app, &mut rx, system_theme(SystemScheme::Dark));
+
+        assert_eq!(
+            scheme_reports(&sent),
+            Vec::<ColorScheme>::new(),
+            "an unchanged scheme must not be re-sent; sent {sent:?}"
+        );
+    }
+
+    /// U15: a reconnect may be to a restarted daemon that knows nothing, so it reports again.
+    #[test]
+    fn a_reconnect_reports_again_although_the_scheme_did_not_change() {
+        let mut app = dark_app_on_a_project();
+        let (mut rx, _) = connect_through_update(&mut app);
+        deliver(
+            &mut app,
+            &mut rx,
+            Message::Connection(micold_client::features::connection::Msg::Disconnected),
+        );
+
+        let (_rx, sent) = connect_through_update(&mut app);
+
+        assert_eq!(
+            scheme_reports(&sent),
+            vec![ColorScheme::Dark],
+            "a new connection must be told the scheme again; sent {sent:?}"
+        );
     }
 
     /// An `App` with a live outbox, plus the receiving end of it.

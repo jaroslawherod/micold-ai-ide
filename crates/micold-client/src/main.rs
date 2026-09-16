@@ -48,6 +48,9 @@ use std::time::Instant;
 /// The binary's application state: the pure core plus gui-only runtime handles.
 struct App {
     core: State,
+    /// The colour scheme last reported to the daemon on this connection (`006` FR-003a, BUG-007),
+    /// or `None` when none has been sent on it yet.
+    reported_scheme: Option<micold_core::theme::ColorScheme>,
     /// Every service capability, chosen once at boot (feature 021, T049 — FR-018).
     ///
     /// Held here because four of the eleven sites this replaced were inside `update_inner`, which
@@ -403,6 +406,10 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     let dialog_before = snapshot_before.as_ref().map(Closing::id);
 
     let task = update_inner(app, message);
+
+    // `006` BUG-007: whichever message changed the resolved scheme — a desktop switch, a saved
+    // preference — the daemon has to hear of it, and only here sees every message.
+    shell::daemon_sync::report_color_scheme(app);
 
     // Feature 024: an armed reveal scrolls its row into view once there *is* a row to scroll to.
     //

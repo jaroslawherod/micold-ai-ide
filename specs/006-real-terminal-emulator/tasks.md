@@ -539,7 +539,7 @@ Test-first: each failing test is its own Red commit before the change that turns
   `spawn_ai_cli` / `spawn_shell` from `DaemonState`'s spawn sites in `state.rs`, so sessions started
   before a change answer the new scheme too. `PtySession`'s direct test callers keep compiling through
   a `TerminalColors::default()` (a defaulted constructor or a `Default` argument), not a rewrite.
-- [ ] T079 [BUG-007] [U12] [U13] [U14] [U15] Client reporting, test-first in `crates/micold-client/src/shell/daemon_sync.rs`'s
+- [X] T079 [BUG-007] [U12] [U13] [U14] [U15] Client reporting, test-first in `crates/micold-client/src/shell/daemon_sync.rs`'s
   tests over a real `Outbox`: `on_connected` sends `TerminalColorScheme` with
   `State::color_scheme()` **after** `app.daemon = Some(outbox)` (a send above it is silently dropped)
   and **before** its `Attach`; driven through the binary's `update` (not the helper

@@ -83,6 +83,7 @@ fn update_inner_applies_window_focus_changed() {
     let mut app = App {
         caps: Capabilities::real(),
         core: State::default(),
+        reported_scheme: None,
         grids: HashMap::new(),
         stamper: SessionInputStamper::new(),
         selection: None,
@@ -132,6 +133,7 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
     let mut app = App {
         caps: Capabilities::real(),
         core: State::default(),
+        reported_scheme: None,
         grids: HashMap::new(),
         stamper: SessionInputStamper::new(),
         selection: None,
@@ -261,7 +263,7 @@ fn displaying_a_session_before_the_pane_has_a_size_sends_only_the_start() {
 
 /// Settings that change nothing and source no environment script — these tests are about which
 /// session messages go out, and env-include would reach for the filesystem on the way.
-fn quiet_settings() -> micold_core::protocol::messages::DaemonSettings {
+pub(crate) fn quiet_settings() -> micold_core::protocol::messages::DaemonSettings {
     micold_core::protocol::messages::DaemonSettings {
         scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
         env_include_enabled: false,
@@ -663,6 +665,7 @@ pub(crate) fn base_app() -> App {
     App {
         caps: Capabilities::real(),
         core: State::default(),
+        reported_scheme: None,
         grids: HashMap::new(),
         stamper: SessionInputStamper::new(),
         selection: None,
@@ -1878,6 +1881,7 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
     let mut app = App {
         caps: Capabilities::real(),
         core: State::default(),
+        reported_scheme: None,
         grids: HashMap::new(),
         stamper: SessionInputStamper::new(),
         selection: None,
