@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M2 (opening pipeline): start with speckit-tdd-run on its first PENDING behavior; read T028's M1-review bullets before M3
+- **Next step**: M2: PR open, wait for `ci complete` and rebase-merge; then record the merge here
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
 | M1 | T001–T012 | Link recognition core (`micold_core::link`, SC-002 corpus) | #356 | merged |
-| M2 | T013–T022 | Opening pipeline: `LinkActivated` through `update_inner` to the system opener | — | pending |
+| M2 | T013–T022 | Opening pipeline: `LinkActivated` through `update_inner` to the system opener | — | in review |
 | M3 | T082, T083, T037, T023–T034 | Clickable web, mail and declared links in the pane | — | pending |
 | M4 | T035, T036, T038–T041 | Session terminal identity and the FORCE_HYPERLINK opt-in | — | pending |
 | M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | — | pending |
@@ -53,11 +53,14 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | 16 | 4-milestones | M1 review A: a detected address nested in one whose start lies past the top cut (`?next=https://…`) was offered, since L7 dropped only a candidate at column 0 | Widen L7's upper edge: drop a candidate when only address characters precede it on the logical line (U151); contract L7 updated | agent-resolved | contract L7 "A truncated address is never recognised (FR-003)"; research R4 "safer than recognising a truncation" |
 | 17 | 4-milestones | M1 review A round 2: `detect` rescanned the rest of the line for every candidate that failed, 3.4 s on a capped line of `mailto:` repeated. The suggested fix (skip ahead to the failed scan's end) would stop finding an address nested in a rejected one, which the contract keeps | Precompute each start's stop, the next `'`, `@` and `/`, and the trailing punctuation run in one pass, so each candidate costs O(1) plus its authority (U152); checked against the old `detect` on 200,000 random texts | agent-resolved | research R4 "bounds the work on pathological output"; contract §3 nested addresses |
 | 18 | 4-milestones | M1 review A round 3: alacritty writes the end-of-row padding before a wrapping wide char with the cursor template's hyperlink, so hovering it built a one-cell declared link over the plain char before it | `link_at` reads the hyperlink of the lead cell of the char under the pointer (U153); contract L5 says a spacer's own `hyperlink` is not read | agent-resolved | contract L5 "its spacer cell belongs to the same link as its lead cell" |
+| 19 | 4-milestones | T021 has `shell/links.rs` run the session reducer itself, but `tests/feature_registration_cost.rs::only_the_root_drives_a_feature` forbids any caller of a feature reducer outside `app.rs` | Add `State::update_session_for_effects` in `app.rs`: it runs the reducer, drains every outcome but `ClipboardWrite` and `OpenLink`, and returns those two for `shell/links.rs` to perform | agent-resolved | tests/feature_registration_cost.rs SC-002, FR-002 |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M2 | B | F1 (MINOR): `link_open_finished`'s `NotFound` text ships untested | The arm exists because the match is exhaustive; its behaviour is U77, assigned to M5, whose cycle must show its own red |
+| M2 | B | F3 (MINOR): U94's `< 250 ms` bound would pass a shorter debounce | `perform` is `Task::perform` over `spawn_blocking` with no timer in the code; the bound guards against a real delay, and a tighter wall-clock bound would flake on a loaded CI runner |
 | M1 | B | F5 (MINOR): contract §3 rows `http://localhost:5173/`, `mailto:team@example.com,`, `file:///home/u/My%20Doc.pdf`, `team@example.com`, `src/main.rs:42`, `data:text/html,x` have no `detect` unit test of their own | Each is a line of the SC-002 corpus (`tests/fixtures/link_corpus.txt`, section "Contract link-recognition §3") checked cell by cell through `link_at`, which calls `detect`; a second table test would pass on arrival and duplicate it |
 
 ## Open escalation

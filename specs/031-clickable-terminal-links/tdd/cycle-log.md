@@ -469,7 +469,7 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
 - test: `crates/micold-client/tests/features_session_links.rs` (new): `activating_a_url_link_asks_to_open_that_url_verbatim`, `an_open_with_no_application_notifies_that_nothing_is_set_up`, `a_failed_launch_notifies_the_reason`, `an_open_that_worked_notifies_nothing`
 - red: `scripts/build-lock.sh cargo test -p micold-client --test features_session_links`
   -> U73 `left: []` / `right: [OpenLink(Url("https://example.com/docs?q=a%20b#top"))]`; U74 `left: []` / `right: [(Error, "Couldn't open https://example.com/docs?q=a%20b#top: no application is set up to open it")]`; U75 `left: []` / `right: [(Error, "Couldn't open …: xdg-open exited with status 4")]` (1 passed; 3 failed)
-- U76 passed on arrival: an empty reducer notifies nothing. It is kept as the guard on T13 (a reducer that notified on `Ok` would fail it)
+- U76 passed on arrival: an empty reducer notifies nothing. Mutant (review B F2), run after green and reverted: `Ok(()) => "mutant".to_string()` in `link_open_finished` -> `an_open_that_worked_notifies_nothing` panicked with `the browser opening is the feedback; a notification would be noise` (1 failed)
 - green: `link_activated` maps `Target::Url(u)` to `OpenLink(OpenRequest::Url(u))`; `link_open_finished` calls `notify_error` with the contract §5 texts. -> 4 passed
 - commit: red `test(031): opening pipeline tests against compiling stubs (T013–T016)`; green `feat(031): opening pipeline from LinkActivated to the system opener (U73–U76, U93, U94, U101–U105, U138, U139, U144)`
 
@@ -498,3 +498,19 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
 - green: -> 14 passed (whole file)
 - commit: `test(031): opening pipeline tests against compiling stubs (T013–T016)`
 - notes: `tests/clipboard_request.rs`, `tests/outcome_termination.rs` and `tests/features_are_render_free.rs` still pass with the new `Outcome` and `SessionMsg` variants (4, 2 and 6 passed)
+
+## Review fixes: M2 reviews A and B
+
+- `tests/feature_registration_cost.rs::only_the_root_drives_a_feature` failed in `mise run gate`: `shell/links.rs calls session::update`. The root now owns the call: `State::update_session_for_effects(msg)` runs the session reducer, drains every outcome but `ClipboardWrite` and `OpenLink` through `app::interpret`, and returns those two; `shell::links::on_link_message` performs them. U93/U94 stay green
+- review A (low): `ShellExecuteW` ran without COM on the blocking thread. The Windows arm now calls `CoInitializeEx(COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE)` first, ignoring `S_FALSE` and `RPC_E_CHANGED_MODE`; workspace `windows-sys` gains `Win32_System_Com`. Not testable on the Linux gate; `cargo clippy --target x86_64-pc-windows-msvc` checks it compiles
+- review B F2: U76's mutant run recorded in cycle 45
+- `mise run gate` (second run): `micold-core/tests/background_spawns_hide_console.rs::every_background_spawn_hides_its_console` flagged the Windows `reveal`'s `explorer.exe` spawn; it is now wrapped in `micold_core::process::no_window`
+
+## Cycle 49: U155 a reveal names a non-UTF-8 file by its own bytes
+
+- origin: review A (low) on M2: `file_uri` percent-encoded `path.to_string_lossy()`, so a Linux name with a byte that is not UTF-8 asked `ShowItems` for U+FFFD instead
+- test: `crates/micold-client/src/shell/link_opener.rs::tests::a_file_name_that_is_not_utf8_is_encoded_from_its_own_bytes` (new, `#[cfg(unix)]`)
+- red: with the lossy encoding restored for the run, `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide shell::link`
+  -> `left: "file:///home/u/a%20b%2C%EF%BF%BD"` / `right: "file:///home/u/a%20b%2C%FF"` (1 failed)
+- green: on Unix `file_uri` encodes `OsStrExt::as_bytes`; elsewhere the lossy text. -> 9 passed
+- commit: `fix(031): M2 review and gate fixes (U155)`

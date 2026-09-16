@@ -40,6 +40,8 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_Security",
     "Win32_Security_Authorization",
     "Win32_Storage_FileSystem",
+    # Feature 031: COM for `ShellExecuteW`'s shell extensions.
+    "Win32_System_Com",
     # `SetConsoleCtrlHandler`: a session inherits working Ctrl-C however the daemon was launched.
     "Win32_System_Console",
     "Win32_System_JobObjects",
