@@ -200,7 +200,7 @@ the `env_include.rs` builders (plan, Target Platform).
   - Hover is recomputed when the pointer cell changes, and on `window::Event::RedrawRequested` when `(generation, seq)` moved *and* the hash of the consulted rows changed. This includes an in-place redraw that keeps the same `LineId`.
   - It is reused, without re-running `link_at`, when the hash is unchanged.
   - It is recomputed when the session shown or the `LinkContext` changes, and on `ModifiersChanged` under mouse reporting.
-  - `mouse_interaction` is `Pointer` over a followable link, and under mouse reporting only while Shift is held.
+  - `mouse_interaction` is `Pointer` over a followable link only while the link modifier (`command()`) is held, and back to the text pointer when it is released; under mouse reporting only while Shift and the link modifier are held (clarification 2026-09-16).
   - Two `PaneState`s: hovering and pressing in one leaves the other's `hover` and `link_press` `None`, and only the pressed pane emits `LinkActivated` (FR-022).
 - [ ] T026 [P] [US1] [U131] A new test module in `crates/micold-client/src/showcase/samples.rs`: the terminal sample's grid carries a detected `https://` address and a cell with a declared hyperlink
 - [ ] T027 [P] [US2] [U72] Create `crates/micold-daemon/tests/osc8_passthrough.rs` (research R13).
@@ -225,7 +225,7 @@ the `env_include.rs` builders (plan, Target Platform).
 - [ ] T030 [US1] [U123] [U125] [U126] [U127] [U128] Drawing in `crates/micold-client/src/ui/material/terminal_pane.rs`.
   - An underline under the hovered link's cells inside the viewport, in each cell's own foreground colour, so text colour, cursor and selection stay visible (FR-009).
   - The hint label at `link_hint_rect`, middle-elided, using the existing surface and on-surface theme roles.
-  - `mouse_interaction` returns `Pointer` over a link, and under mouse reporting only while Shift is held.
+  - `mouse_interaction` returns `Pointer` over a link only while the link modifier is held (the pane keeps the modifiers from `ModifiersChanged`), and under mouse reporting only while Shift and the link modifier are held.
 - [ ] T031 [US1] [U134] In `crates/micold-client/src/ui/terminal.rs` and its call site in `crates/micold-client/src/ui/mod.rs`, build the pane's `LinkContext { host_names: Vec::new(), windows_host: cfg!(windows), sandbox: None }`; `ui::view`'s signature is unchanged. T050 fills in `host_names` and `sandbox` (glue).
 - [ ] T032 [US1] [U131] Give the terminal sample in `crates/micold-client/src/showcase/samples.rs` a detected `https://` address and a run of cells carrying a declared hyperlink, so that T026 passes
 - [ ] T033 [US1] Add a "Links" subsection under "Interacting with the terminal" in `docs/user-guide/worktrees-and-sessions.md`. It covers:

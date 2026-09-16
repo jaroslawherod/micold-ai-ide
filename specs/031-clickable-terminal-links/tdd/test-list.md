@@ -309,7 +309,7 @@ untouched code, and it is recorded as `BASELINE`.
 | U120 | Hover is reused without re-resolving when the grid version moved but the consulted rows are unchanged | SC-005 | example | PENDING | |
 | U121 | Hover is recomputed when the session shown or the `LinkContext` changes | FR-007 | example | PENDING | |
 | U122 | Under mouse reporting, a link is marked only while Shift is held, and pressing or releasing Shift updates it | FR-016 | example | PENDING | |
-| U123 | The mouse interaction is `Pointer` over a followable link and unchanged elsewhere | FR-007 | example | PENDING | |
+| U123 | The mouse interaction is `Pointer` over a followable link only while the link modifier is held, the text pointer over it without the modifier, and unchanged elsewhere | FR-007 | example | PENDING | |
 | U124 | Hovering and pressing in one pane leaves another pane's hover and press empty, and only the pressed pane activates | FR-022 | example | PENDING | |
 | U125 | The address hint sits bottom-left of the content by default | FR-008 | example | PENDING | |
 | U126 | The hint moves top-left when the pointer is within the hint's height of the bottom edge, and stays bottom-left one row above that | FR-008 | example | PENDING | |
