@@ -501,7 +501,7 @@ ever generated for bracketed paste (it lived in an assumption), so BUG-006 adds 
 reply is written daemon-side (010 `contracts/protocol.md` §8) from the scheme the client reports.
 Test-first: each failing test is its own Red commit before the change that turns it green.
 
-- [ ] T074 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] Failing daemon test in `crates/micold-daemon/tests/vt_color_queries.rs`: a
+- [X] T074 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] Failing daemon test in `crates/micold-daemon/tests/vt_color_queries.rs`: a
   `Term` wired with a real `DaemonListener` over a capturing writer is fed `ESC]10;?ESC\`,
   `ESC]11;?BEL` and `ESC]12;?BEL`. With the listener's `TerminalColors` set to dark, the replies are
   `tokens::roles(Dark)`'s `on_surface`, `surface` and `on_surface` in `rgb:rrrr/gggg/bbbb` form, with
@@ -516,7 +516,7 @@ Test-first: each failing test is its own Red commit before the change that turns
   returning the default foreground (`on_surface`) and background (`surface`), with a core test
   pinning both schemes to those roles; make `TermPalette::from_scheme` read its `fg`/`bg` from it.
   No colour the client draws changes (`style_snapshot` stays green without regeneration).
-- [ ] T076 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] Make T074 pass in `crates/micold-daemon/src/terminal.rs`: `TerminalColors`
+- [X] T076 [BUG-007] [U1] [U2] [U3] [U4] [U5] [U6] [U7] Make T074 pass in `crates/micold-daemon/src/terminal.rs`: `TerminalColors`
   holds the scheme atomically (light by default) and `DaemonListener`'s `ColorRequest` arm answers
   `NamedColor::Foreground` and `NamedColor::Cursor` with the foreground and `NamedColor::Background`
   with the background of `tokens::terminal_defaults(scheme)`, read at reply time; indices below 256

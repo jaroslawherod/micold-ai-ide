@@ -75,3 +75,22 @@ before the implementation.
 - green: `TerminalColors::dynamic` answers `NamedColor::Cursor` with the foreground. Suite
   `scripts/build-lock.sh cargo test -p micold-daemon` -> 333 passed, 0 failed
 - refactor: none needed, one match guard widened
+
+## Cycles 6–9: U4–U7 the answer follows the scheme; palette queries are unchanged
+
+These four pin behaviour cycles 3–5 already built (the listener reads `TerminalColors` at reply
+time, and `dynamic` only sees indices past the palette), so each passed on first run. A passing
+first run is not red evidence, so each was proved by mutating the production code instead.
+
+- tests (new, `crates/micold-daemon/tests/vt_color_queries.rs`):
+  U4 `a_light_pane_answers_a_background_query_with_the_light_surface`,
+  U5 `a_scheme_changed_after_the_listener_was_built_answers_the_next_query`,
+  U6 `before_any_scheme_is_reported_the_answer_is_light`,
+  U7 `a_palette_query_is_still_answered_from_the_xterm_table`
+- red (mutation, U4–U6): `TerminalColors::scheme` forced to `Dark` →
+  `scripts/build-lock.sh cargo test -p micold-daemon --test vt_color_queries` -> 3 failed, each
+  `left: "\u{1b}]11;rgb:1414/1313/1616\u{7}"` (the dark surface where light was expected); U1–U3, U7 passed
+- red (mutation, U7): `TerminalColors::dynamic` answers the foreground for any index instead of
+  `None` → 1 failed, `left: "\u{1b}]4;1;rgb:1c1c/1b1b/1e1e\u{7}"  right: "\u{1b}]4;1;rgb:cdcd/0000/0000\u{7}"`
+- green: mutations reverted. Suite `scripts/build-lock.sh cargo test -p micold-daemon` -> 337 passed, 0 failed
+- refactor: none

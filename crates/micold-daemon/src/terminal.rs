@@ -284,8 +284,10 @@ impl LineIdSource for ApproxLineIds {
 }
 
 /// A fixed xterm-compatible 256-colour palette used to answer VT `ColorRequest` queries daemon-side
-/// (T034). The daemon does not render, but a program may *ask* the terminal for a palette entry; a
-/// stable, conventional answer keeps VT programs correct without involving the client's theme.
+/// (T034). The daemon does not render, but a program may *ask* the terminal for a palette entry, and
+/// indices 0–255 get this conventional table. It does not answer the default foreground, background
+/// or cursor (`OSC 10/11/12`): those follow the pane's scheme through [`TerminalColors`] (FR-003a,
+/// BUG-007), since a fixed light answer made programs in a dark pane draw dark text on it.
 #[derive(Debug, Clone)]
 pub struct StandardPalette {
     entries: [Rgb; 256],
