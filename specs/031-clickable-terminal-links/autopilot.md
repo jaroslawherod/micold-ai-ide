@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M1 (T001–T012): review B round 2 CLEAN; review A round 4 lows fixed (U154) or routed to T028; gate on the final commit, then PR
+- **Next step**: M2 (opening pipeline): start with speckit-tdd-run on its first PENDING behavior; read T028's M1-review bullets before M3
 
 ## Pull requests
 
@@ -16,12 +16,13 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|
 | #336 | Spec | merged | 411711c1 |
 | #341 | Design (clarify, plan, tasks, milestones) | merged | 226d3a8b |
+| #356 | M1 Link recognition core | merged | 33f6491c |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T012 | Link recognition core (`micold_core::link`, SC-002 corpus) | — | in progress |
+| M1 | T001–T012 | Link recognition core (`micold_core::link`, SC-002 corpus) | #356 | merged |
 | M2 | T013–T022 | Opening pipeline: `LinkActivated` through `update_inner` to the system opener | — | pending |
 | M3 | T082, T083, T037, T023–T034 | Clickable web, mail and declared links in the pane | — | pending |
 | M4 | T035, T036, T038–T041 | Session terminal identity and the FORCE_HYPERLINK opt-in | — | pending |
