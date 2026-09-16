@@ -164,8 +164,18 @@ fn vanished_mid_handshake(e: &io::Error) -> bool {
 }
 
 /// Refuses a pipe whose server process does not run as `own_sid` (U71, security review D1).
+///
+/// `Ok(true)` is this user's server; `Ok(false)` is a server that went away before it could be
+/// checked, which the caller reads as nobody listening.
 #[cfg(windows)]
-fn refuse_foreign_server(stream: &Stream, own_sid: &str) -> io::Result<()> {
+fn refuse_foreign_server(stream: &Stream, own_sid: &str) -> io::Result<bool> {
+    let pid = stream.peer_creds()?.pid();
+    refuse_foreign_pid(pid, own_sid)
+}
+
+/// [`refuse_foreign_server`] for the server process `pid`, once the pipe has named it.
+#[cfg(windows)]
+fn refuse_foreign_pid(pid: Option<u32>, own_sid: &str) -> io::Result<bool> {
     let refuse = |server: &str| {
         io::Error::new(
             io::ErrorKind::PermissionDenied,
@@ -174,12 +184,9 @@ fn refuse_foreign_server(stream: &Stream, own_sid: &str) -> io::Result<()> {
             ),
         )
     };
-    let pid = stream
-        .peer_creds()?
-        .pid()
-        .ok_or_else(|| refuse("an unknown process"))?;
+    let pid = pid.ok_or_else(|| refuse("an unknown process"))?;
     match crate::endpoint::process_user_sid(pid) {
-        Ok(server) if server == own_sid => Ok(()),
+        Ok(server) if server == own_sid => Ok(true),
         Ok(server) => Err(refuse(&format!("{server} (pid {pid})"))),
         // A process this user may not even query is not this user's.
         Err(e) if e.kind() == io::ErrorKind::PermissionDenied => Err(refuse(&format!(
@@ -278,7 +285,9 @@ pub async fn dial_address(address: &DialAddress) -> io::Result<Option<Transport>
                     // Anyone may create a pipe by this name first; only this user's daemon is ours
                     // to talk to (FR-021).
                     #[cfg(windows)]
-                    refuse_foreign_server(&stream, &crate::endpoint::user_sid()?)?;
+                    if !refuse_foreign_server(&stream, &crate::endpoint::user_sid()?)? {
+                        return Ok(None);
+                    }
                     Ok(Some(Transport::Local(stream)))
                 }
                 Err(e) if is_absent(&e) => Ok(None),
@@ -591,7 +600,33 @@ mod tests {
             message.contains(SYSTEM) && message.contains(&own),
             "the refusal must name the expected SID {SYSTEM} and the server's {own}, got: {message}"
         );
-        refuse_foreign_server(&stream, &own).expect("this user's own server must be accepted");
+        assert!(
+            refuse_foreign_server(&stream, &own).expect("this user's own server must be accepted"),
+            "this user's own, live server must read as ours"
+        );
+    }
+
+    /// Review A F2 on #332: a daemon that exits between the pipe opening and the account check
+    /// (idle stop, "Restart service") has no process left to query. That is nobody listening, as
+    /// it is at every other point of a connect, so the client spawns a daemon instead of failing.
+    #[cfg(windows)]
+    #[test]
+    fn a_server_that_exited_before_its_account_was_checked_reads_as_gone() {
+        let mut child = std::process::Command::new("cmd.exe")
+            .args(["/c", "exit"])
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        child.wait().unwrap();
+        // The process object lives while any handle to it does; only then is the pid really gone.
+        drop(child);
+        let own = crate::endpoint::user_sid().unwrap();
+
+        let checked = refuse_foreign_pid(Some(pid), &own);
+        assert!(
+            matches!(checked, Ok(false)),
+            "a server process that no longer exists must read as gone, got {checked:?}"
+        );
     }
 
     /// U72, security review D2: whoever serves the pipe learns who connected, and nothing more. A
