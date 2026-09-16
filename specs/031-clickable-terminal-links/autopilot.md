@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M2: PR #361 blocked on red `build + test (windows-latest)` (see Open escalation); once resolved, rerun CI, rebase-merge on green, record the merge here
+- **Next step**: M2: wait for #358 (outside this flow) to merge; then `git rebase origin/main`, push #361 with `--force-with-lease`, rebase-merge on green `ci complete`, record the merge; then dispatch M3
 
 ## Pull requests
 
@@ -68,6 +68,10 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 ## Open escalation
 
 Blocked by work outside my flow. PR #361, run 35136084307: `build + test (windows-latest)` failed on both attempts in step "Install and launch the Windows installer" with `scripts/windows-install-smoke.sh: FAIL: \\.\pipe\Micold.Daemon.<sid> is up, but no micold-daemon.exe process was found behind it` (line 189, `find_daemon_pid`). Attempt 1 failed at the uninstall step and attempt 2 at the repair step. Every other job passed, including windows-11-arm package + smoke. The script belongs to feature 030, and M2 changes nothing in the daemon, the installer or the spawn path; its only Windows-side change is `ShellExecuteW`/`CoInitializeEx`/explorer code that nothing calls yet, plus three `windows-sys` features. main's last 3 CI runs are green (9a6a7738, 33f6491c, 216f8801). The failure looks like a race between the pipe appearing and the pid record or parent-process lookup.
+
+**Diagnosis, 2026-09-16 (orchestrator).** Not a race: a failed-jobs rerun (run 35136084016) failed the same way, and the same job fails on every other branch built from main since then. Commit `2c942157 fix(030): the smoke's uninstall step fails when it finds no running daemon` on main looks up the daemon after the refused uninstall, while main's `packaging/windows/micold-ai-ide.iss` stops the daemon in `InitializeUninstall` before that refusal. Draft PR #358 (`fix/windows-review-followup`, another flow) moves the stop to `CurUninstallStepChanged`; its run is the only recent green one for that job.
+
+**Decided by user, 2026-09-16:** wait for #358 to merge, then rebase #361 onto main, push, and rebase-merge on green. #358 is watched read-only; this flow does not touch it.
 
 ## Follow-ups not done
 
