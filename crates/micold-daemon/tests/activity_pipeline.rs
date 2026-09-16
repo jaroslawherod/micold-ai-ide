@@ -175,20 +175,41 @@ fn emitter_command(printf_body: &str) -> CommandBuilder {
 /// ConPTY does not pass a child's own escape sequences through verbatim: it keeps the console's
 /// state and re-renders it as VT. A title reaches the parser as the OSC-0 ConPTY emits when the
 /// console title changes, so on Windows the emitter sets the title and ConPTY writes the sequence.
+///
+/// A body may set several titles in turn, as the Unix emitter's `printf` does, joined by
+/// `'; sleep <seconds>; printf '`; each pause becomes a `Start-Sleep` between the titles.
 #[cfg(windows)]
 fn emitter_command(printf_body: &str) -> CommandBuilder {
     let decoded = printf_octal_unescape(printf_body);
-    let title = decoded
-        .strip_prefix("\x1b]0;")
-        .and_then(|rest| rest.strip_suffix('\x07'))
-        .expect("the Windows emitter only sets OSC-0 titles");
-    let codes: Vec<String> = title.encode_utf16().map(|unit| unit.to_string()).collect();
+    let mut steps = Vec::new();
+    for (index, part) in decoded.split("'; sleep ").enumerate() {
+        let osc = if index == 0 {
+            part
+        } else {
+            let (seconds, rest) = part
+                .split_once("; printf '")
+                .expect("titles are joined by `'; sleep <seconds>; printf '`");
+            let seconds: f64 = seconds.parse().expect("a pause in seconds");
+            steps.push(format!(
+                "Start-Sleep -Milliseconds {}",
+                (seconds * 1000.0) as u64
+            ));
+            rest
+        };
+        let title = osc
+            .strip_prefix("\x1b]0;")
+            .and_then(|rest| rest.strip_suffix('\x07'))
+            .expect("the Windows emitter only sets OSC-0 titles");
+        let codes: Vec<String> = title.encode_utf16().map(|unit| unit.to_string()).collect();
+        steps.push(format!(
+            "[Console]::Title = -join [char[]]({})",
+            codes.join(",")
+        ));
+    }
+    steps.push("Start-Sleep -Seconds 5".to_string());
     let mut cmd = CommandBuilder::new("powershell");
     cmd.args(["-NoProfile", "-NonInteractive", "-Command"]);
-    cmd.arg(format!(
-        "[Console]::Title = -join [char[]]({}); Start-Sleep -Seconds 5",
-        codes.join(",")
-    ));
+    cmd.arg(steps.join("; "));
     cmd
 }
 
@@ -325,10 +346,6 @@ fn an_osc_title_becomes_the_live_session_title_and_a_spinner_means_working() {
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "first run on Windows in #332: PowerShell's own startup title is recorded as the name; fix in the #332 review follow-up"
-)]
 fn the_observed_title_is_handed_back_for_recording_exactly_once() {
     // Feature 029, contract C9/C10. Before it, `drain_signals` swallowed the title into
     // `LiveSession::last_title` — un-persisted by its own doc comment — and `overlay_live_summaries`
@@ -381,10 +398,6 @@ fn the_observed_title_is_handed_back_for_recording_exactly_once() {
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "first run on Windows in #332: PowerShell's own startup title is recorded as the name; fix in the #332 review follow-up"
-)]
 fn an_ai_clis_own_startup_title_is_not_a_name() {
     // Feature 029, T025 (FR-004, US3/AC2). Both CLIs title the terminal with their own product name
     // before any conversation exists — observed 2026-09-13 against `claude` 2.1.270 (`"✳ Claude
@@ -450,10 +463,6 @@ fn an_ai_clis_own_startup_title_is_not_a_name() {
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "first run on Windows in #332: PowerShell's own startup title is recorded as the name; fix in the #332 review follow-up"
-)]
 fn a_shell_tabs_title_never_becomes_the_sessions_name() {
     // Feature 029, T026 (FR-011). A session's name is its conversation's. A shell tab opened on
     // that session is a different process with its own title — bash's default `PS1` sets
@@ -484,15 +493,22 @@ fn a_shell_tabs_title_never_becomes_the_sessions_name() {
         .attach_process(id, SessionProcess::Shell(instance))
         .expect("attach the shell tab");
     // The echoed input line holds `t026_$((1+1))`; only the *output* holds `t026_2`, so seeing it
-    // proves the title escape before it was written by the shell rather than merely typed.
-    state.session_input(
-        id,
-        0,
+    // proves the title escape before it was written by the shell rather than merely typed. A
+    // Windows shell tab is `cmd.exe`, which sets its title with `title` and expands `%OS%`.
+    #[cfg(unix)]
+    let (input, output): (&[u8], &str) = (
         b"printf '\\033]0;user@host: ~/proj\\007'; echo t026_$((1+1))\n",
+        "t026_2",
     );
+    #[cfg(windows)]
+    let (input, output): (&[u8], &str) = (
+        b"title user@host: ~/proj& echo t026_%OS%\r",
+        "t026_Windows_NT",
+    );
+    state.session_input(id, 0, input);
     let ran = wait_until(Duration::from_secs(5), || {
         observed.extend(state.drain_signals().names);
-        visible_text(&shell).contains("t026_2")
+        visible_text(&shell).contains(output)
     });
     assert!(ran, "precondition: the shell tab emitted its title");
     // One more tick after the output, so a drain that would pick the title up has had its chance.
