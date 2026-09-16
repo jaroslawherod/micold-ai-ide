@@ -128,6 +128,25 @@ pub fn is_spinner_title(title: &str) -> bool {
         .any(|c| ('\u{2800}'..='\u{28FF}').contains(&c))
 }
 
+/// Whether `title` is the one a Windows console gives itself: the path of the executable it runs.
+///
+/// ConPTY re-renders console state as VT, so every session on Windows opens with an OSC-0 title
+/// naming its program, such as `C:\Program Files\nodejs\node.exe`. No CLI set it and it names no
+/// conversation, so it is never a session's name (feature 029, FR-004). Matched as an absolute
+/// drive path ending in an executable extension, on every platform, since a title of that shape
+/// names a program wherever it came from. An elevated console prefixes it with `Administrator: `.
+pub fn is_console_default_title(title: &str) -> bool {
+    let title = title.strip_prefix("Administrator: ").unwrap_or(title);
+    let bytes = title.as_bytes();
+    let absolute =
+        bytes.len() > 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\';
+    let lower = title.to_ascii_lowercase();
+    absolute
+        && [".exe", ".com", ".cmd", ".bat"]
+            .iter()
+            .any(|ext| lower.ends_with(ext))
+}
+
 // ---------------------------------------------------------------------------------------
 // Copilot's event log → the same vocabulary (feature 026, T063 — FR-018)
 // ---------------------------------------------------------------------------------------
@@ -367,6 +386,31 @@ mod tests {
             reason: "exit 1".into(),
         });
         assert_eq!(*a.signal(), ended);
+    }
+
+    #[test]
+    fn a_consoles_executable_path_title_is_its_default() {
+        assert!(is_console_default_title(
+            r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE"
+        ));
+        assert!(is_console_default_title(
+            r"C:\Program Files\nodejs\node.exe"
+        ));
+        assert!(is_console_default_title(r"d:\tools\claude.cmd"));
+        assert!(is_console_default_title(
+            r"Administrator: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE"
+        ));
+    }
+
+    #[test]
+    fn a_conversation_title_is_not_a_consoles_default() {
+        assert!(!is_console_default_title("Fixing the parser"));
+        assert!(!is_console_default_title(
+            "Rename setup.exe in the installer"
+        ));
+        assert!(!is_console_default_title(r"C:\Users\me\project"));
+        assert!(!is_console_default_title("user@host: ~/proj"));
+        assert!(!is_console_default_title(""));
     }
 
     #[test]
