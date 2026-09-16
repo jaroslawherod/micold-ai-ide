@@ -76,6 +76,8 @@ use micold_core::git::{Git, GitCli};
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
 
+use crate::shell::link_opener::{LinkOpener, SystemLinkOpener};
+
 /// Every service capability the client needs, chosen once and handed out from here.
 ///
 /// The two stores are optional because their real implementations are located from the per-user
@@ -91,6 +93,7 @@ pub struct Capabilities {
     scanner: Arc<dyn FolderScanner + Send + Sync>,
     browser: Arc<dyn FolderBrowser + Send + Sync>,
     env_include: Arc<dyn EnvIncludeResolver + Send + Sync>,
+    link_opener: Arc<dyn LinkOpener>,
 }
 
 impl Capabilities {
@@ -108,6 +111,7 @@ impl Capabilities {
             scanner: Arc::new(folders),
             browser: Arc::new(folders),
             env_include: Arc::new(SubprocessResolver),
+            link_opener: Arc::new(SystemLinkOpener),
         }
     }
 
@@ -147,6 +151,16 @@ impl Capabilities {
         self
     }
 
+    /// The same capabilities, with `opener` in place of the operating system's (feature 031).
+    ///
+    /// `base_app()` hands every test a no-op opener through this, so no test can open a browser,
+    /// and a link test replaces that with a recording one.
+    #[cfg(test)]
+    pub(crate) fn with_link_opener(mut self, opener: Arc<dyn LinkOpener>) -> Self {
+        self.link_opener = opener;
+        self
+    }
+
     /// The project catalog, or `None` when no data directory could be resolved.
     pub fn projects(&self) -> Option<&(dyn ProjectStore + Send + Sync)> {
         self.projects.as_deref()
@@ -166,6 +180,12 @@ impl Capabilities {
     /// `async move` that cannot borrow.
     pub fn browser(&self) -> Arc<dyn FolderBrowser + Send + Sync> {
         Arc::clone(&self.browser)
+    }
+
+    /// Opening a link's address, or revealing a file, on this machine (feature 031). Owned, because
+    /// the one consumer calls it on a blocking task.
+    pub fn link_opener(&self) -> Arc<dyn LinkOpener> {
+        Arc::clone(&self.link_opener)
     }
 
     /// Sourcing the environment-include script.

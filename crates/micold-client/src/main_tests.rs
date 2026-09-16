@@ -81,7 +81,9 @@ fn a_session_the_daemon_is_not_hosting_seeds_at_zero() {
 #[test]
 fn update_inner_applies_window_focus_changed() {
     let mut app = App {
-        caps: Capabilities::real(),
+        caps: Capabilities::real().with_link_opener(Arc::new(
+            crate::shell::link_opener::NoopLinkOpener,
+        )),
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),
@@ -132,7 +134,9 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
     // its live size changes) must now be remembered on `App` so `spawn_pty` call sites can
     // seed new sessions at the pane's actual current size instead.
     let mut app = App {
-        caps: Capabilities::real(),
+        caps: Capabilities::real().with_link_opener(Arc::new(
+            crate::shell::link_opener::NoopLinkOpener,
+        )),
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),
@@ -665,7 +669,9 @@ fn a_drained_reveal_records_where_it_sent_the_list() {
 /// module already use, factored out because T100's tests need several variants of it).
 pub(crate) fn base_app() -> App {
     App {
-        caps: Capabilities::real(),
+        caps: Capabilities::real().with_link_opener(Arc::new(
+            crate::shell::link_opener::NoopLinkOpener,
+        )),
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),
@@ -1637,7 +1643,9 @@ fn settings_saved_is_a_silent_no_op_toward_the_daemon_when_disconnected() {
 /// resolves, so this is a configuration the shell already has to handle.
 fn app_saving_a_placement(in_force: PlacementKind, chosen: PlacementKind) -> App {
     let mut app = base_app();
-    app.caps = Capabilities::real().without_settings();
+    app.caps = Capabilities::real()
+        .without_settings()
+        .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener));
     app.placement.kind = in_force;
     app.core.settings.placement_in_force = in_force;
     app.core.settings.settings_draft = Some(SettingsDraft {
@@ -1887,7 +1895,9 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
     use micold_client::features::connection::ConnectionStatus;
 
     let mut app = App {
-        caps: Capabilities::real(),
+        caps: Capabilities::real().with_link_opener(Arc::new(
+            crate::shell::link_opener::NoopLinkOpener,
+        )),
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),

@@ -1360,6 +1360,14 @@ pub enum Msg {
     TerminalCopyRequested,
     /// Paste clipboard text into the focused session's PTY (binary handles clipboard) (FR-013).
     TerminalPasteRequested,
+    /// The user activated this link (feature 031, FR-010). Emits `Outcome::OpenLink`; the shell
+    /// performs it and answers with [`Msg::LinkOpenFinished`].
+    LinkActivated(micold_core::link::ResolvedLink),
+    /// The opener answered for `address`, the text the program printed or declared (FR-015).
+    LinkOpenFinished {
+        address: String,
+        result: Result<(), crate::features::OpenFailure>,
+    },
     /// Open the terminal right-click context menu at a pane-local pixel point (FR-013).
     TerminalContextMenuOpened { x: u16, y: u16 },
     /// Dismiss the terminal context menu (an outside click, or after an item is chosen) (FR-013).
@@ -1453,8 +1461,27 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         | Msg::TerminalResized { .. }
         | Msg::TerminalCopyRequested
         | Msg::TerminalPasteRequested => {}
+        Msg::LinkActivated(link) => return link_activated(link),
+        Msg::LinkOpenFinished { address, result } => link_open_finished(state, &address, result),
     }
     Vec::new()
+}
+
+// ---------------------------------------------------------------------------------------
+// Opening a link (feature 031, T018 — FR-010, FR-015)
+// ---------------------------------------------------------------------------------------
+
+/// What activating `link` asks for (contract link-opening §3, O1).
+fn link_activated(_link: micold_core::link::ResolvedLink) -> Vec<crate::features::Outcome> {
+    Vec::new()
+}
+
+/// One notification per failed open, and nothing for one that worked (contract link-opening §5).
+fn link_open_finished(
+    _state: &mut crate::app::State,
+    _address: &str,
+    _result: Result<(), crate::features::OpenFailure>,
+) {
 }
 
 // ---------------------------------------------------------------------------------------

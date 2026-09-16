@@ -555,7 +555,7 @@ pub fn interpret(
         Outcome::ProjectEntered => state.project_entered(),
         Outcome::RevealSuppressed(suppressed) => state.reveal_suppression_set(suppressed),
         Outcome::FieldFocusCleared => crate::features::window::field_focus_cleared(state),
-        Outcome::ClipboardWrite(_) => {}
+        Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) => {}
     }
     Vec::new()
 }
