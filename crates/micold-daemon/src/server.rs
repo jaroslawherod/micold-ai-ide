@@ -597,8 +597,8 @@ where
         match msg {
             ClientMsg::Ping { nonce } => state.send(id, DaemonMsg::Pong { nonce }),
             ClientMsg::Goodbye => break,
-            // Wired to the sessions' colour answers by T078 (`006` BUG-007).
-            ClientMsg::TerminalColorScheme { .. } => {}
+            // Every session reads it when a program asks for its colours (`006` FR-003a, BUG-007).
+            ClientMsg::TerminalColorScheme { scheme } => state.terminal_colors().set(scheme),
             ClientMsg::Attach { project, force } => {
                 match state.attach(id, project.clone(), force) {
                     Ok(_sessions) => {

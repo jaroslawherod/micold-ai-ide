@@ -530,7 +530,7 @@ Test-first: each failing test is its own Red commit before the change that turns
   `FEATURE_026_PROTOCOL_VERSION`, with their doc lines.
   The contract text is already in 010 `contracts/messages.md` and `contracts/protocol.md` §8 (patched
   with this bug); keep the code's doc comments pointing at it.
-- [ ] T078 [BUG-007] [U11] [A1] [A2] Daemon wiring, test-first: a failing test in `crates/micold-daemon/tests/` that a
+- [X] T078 [BUG-007] [U11] [A1] [A2] Daemon wiring, test-first: a failing test in `crates/micold-daemon/tests/` that a
   connected client's `TerminalColorScheme { Dark }` changes the scheme on `DaemonState`'s
   `TerminalColors`, and that a session spawned through `DaemonState` answers `OSC 11` with it. To fail on the
   reply rather than to a compile error, first add the `DaemonState` field and accessor and a

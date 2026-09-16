@@ -23,6 +23,7 @@ use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
+use micold_daemon::terminal::TerminalColors;
 use uuid::Uuid;
 
 const SESSION: u128 = 0x5E55_C0DE;
@@ -83,6 +84,7 @@ fn spawning_a_shell_in_a_directory_that_does_not_exist_is_refused() {
         &[],
         1_000,
         None,
+        &TerminalColors::default(),
     ) else {
         panic!("a spawn into a missing directory must fail rather than fall back to $HOME");
     };

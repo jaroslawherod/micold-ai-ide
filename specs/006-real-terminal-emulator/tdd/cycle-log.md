@@ -109,3 +109,23 @@ first run is not red evidence, so each was proved by mutating the production cod
   message until T078 wires it. Suite `scripts/build-lock.sh cargo test -p micold-core --all-targets`
   -> 1088 passed, 0 failed; `cargo check -p micold-daemon -p micold-client --all-targets` clean
 - refactor: none (`cargo fmt` also rewrapped cycle 4's `ColorRequest` arm)
+
+## Cycle 11: U11, A1, A2 a reported scheme reaches every session's answers
+
+- tests (new, `crates/micold-daemon/tests/terminal_color_scheme.rs`):
+  U11 `a_reported_scheme_becomes_the_services_scheme_and_the_last_report_wins` (a real
+  `serve_connection` over a duplex; `Ping`/`Pong` after the unacknowledged report as the sync point);
+  A1+A2 `a_session_answers_the_background_query_with_the_scheme_the_window_reported` — a regular
+  session started through `DaemonState::start_session`, whose shell runs
+  `stty raw -echo; printf '\033]11;?\007'; dd bs=1 count=24 | tr '\033\007' EB` and prints the reply
+  on the grid; dark first, then light on the same running session
+- red: `DaemonState::terminal_colors()` and its field were added first, with `server.rs`'s arm still
+  ignoring the message, so the red is the answer.
+  `scripts/build-lock.sh cargo test -p micold-daemon --test terminal_color_scheme` -> 2 failed:
+  U11 `left: Light right: Dark`; A1 `must read E]11;rgb:1414/1313/1616B; screen: E]11;rgb:fdfd/f8f8/fdfdB…`
+  (the session answered light after the window reported dark — the reported bug, end to end)
+- green: `server.rs` sets `state.terminal_colors()` from the message; `PtySession::spawn_ai_cli` /
+  `spawn_shell` take `&TerminalColors`, passed from `DaemonState`'s three spawn sites, through the new
+  `PtySession::spawn_answering`; `PtySession::spawn` keeps its signature (light answers) so its direct
+  test callers are unchanged. Suite `scripts/build-lock.sh cargo test -p micold-daemon` -> 343 passed, 0 failed
+- refactor: none
