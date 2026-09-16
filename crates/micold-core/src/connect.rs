@@ -629,15 +629,17 @@ mod tests {
             .unwrap();
         let pid = child.id();
         child.wait().unwrap();
-        // The process object lives while any handle to it does; only then is the pid really gone.
-        drop(child);
         let own = crate::endpoint::user_sid().unwrap();
 
+        // `child` still holds a handle, so the exited process object is still there to open and
+        // query: whatever else holds one (on CI, often something scanning new processes) leaves the
+        // server in this state. Exited is gone, whether or not its pid can still be opened.
         let checked = refuse_foreign_pid(Some(pid), &own);
         assert!(
             matches!(checked, Ok(false)),
-            "a server process that no longer exists must read as gone, got {checked:?}"
+            "a server process that has exited must read as gone, got {checked:?}"
         );
+        drop(child);
     }
 
     /// U72, security review D2: whoever serves the pipe learns who connected, and nothing more. A
