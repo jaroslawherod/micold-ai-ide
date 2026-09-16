@@ -60,7 +60,7 @@ Tests in `crates/micold-daemon/tests/vt_color_queries.rs`: a `Term` wired with a
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U10 | `TerminalColorScheme` round-trips through the wire codec | FR-003a; 010 `contracts/messages.md` | example | PENDING | |
+| U10 | `TerminalColorScheme` round-trips through the wire codec | FR-003a; 010 `contracts/messages.md` | example | DONE | `crates/micold-core/tests/protocol_roundtrip.rs` (`TerminalColorScheme` both schemes in `sample_client_msgs`) |
 
 ### `crates/micold-daemon/src/server.rs` + `state.rs`
 

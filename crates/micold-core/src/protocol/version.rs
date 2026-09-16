@@ -49,7 +49,9 @@
 /// to reach the catalog's single writer, or `last_active` keeps naming whichever project was last
 /// opened by browsing and the next launch restores that one. It developed against 10 while the Pi
 /// provider took 11.
-pub const PROTOCOL_VERSION: u32 = 12;
+/// Bumped 12 → 13 for `ClientMsg::TerminalColorScheme` (`006` BUG-007): the daemon answers a
+/// program's `OSC 10/11/12` query itself, so it has to be told whether the pane is light or dark.
+pub const PROTOCOL_VERSION: u32 = 13;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

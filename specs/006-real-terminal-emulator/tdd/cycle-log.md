@@ -94,3 +94,18 @@ first run is not red evidence, so each was proved by mutating the production cod
   `None` → 1 failed, `left: "\u{1b}]4;1;rgb:1c1c/1b1b/1e1e\u{7}"  right: "\u{1b}]4;1;rgb:cdcd/0000/0000\u{7}"`
 - green: mutations reverted. Suite `scripts/build-lock.sh cargo test -p micold-daemon` -> 337 passed, 0 failed
 - refactor: none
+
+## Cycle 10: U10 `TerminalColorScheme` round-trips through the wire codec
+
+- test: `crates/micold-core/tests/protocol_roundtrip.rs` `sample_client_msgs` gains
+  `TerminalColorScheme { Dark }` and `{ Light }`; the version pins move with it —
+  `protocol_auth.rs::the_protocol_version_is_thirteen` (renamed) and `schema_hash.rs`'s
+  `FEATURE_026_PROTOCOL_VERSION` = 13
+- red: the variant and `ColorScheme`'s serde were added first as a stub with the version left at 12, so
+  the red is the wire-change gate, not a compile error.
+  `scripts/build-lock.sh cargo test -p micold-core --test protocol_auth --test schema_hash --test protocol_roundtrip`
+  -> `the_protocol_version_is_thirteen … left: 12 right: 13` (1 failed)
+- green: `PROTOCOL_VERSION` 12 → 13 with its doc line; `server.rs` gains an arm that ignores the
+  message until T078 wires it. Suite `scripts/build-lock.sh cargo test -p micold-core --all-targets`
+  -> 1088 passed, 0 failed; `cargo check -p micold-daemon -p micold-client --all-targets` clean
+- refactor: none (`cargo fmt` also rewrapped cycle 4's `ColorRequest` arm)

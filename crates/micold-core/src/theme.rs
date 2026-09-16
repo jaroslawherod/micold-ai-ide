@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 /// A concrete, resolved color scheme. Exactly two values — there is no "unset" here.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ColorScheme {
     /// The light Material theme.
     Light,

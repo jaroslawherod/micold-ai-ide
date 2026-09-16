@@ -17,6 +17,7 @@ use micold_core::protocol::messages::{
     RefusalReason, SessionSummary, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
+use micold_core::theme::ColorScheme;
 use micold_core::worktree::{CreateMode, CreateStage};
 use uuid::Uuid;
 
@@ -66,6 +67,13 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             project: PathBuf::from("/repo"),
         },
         ClientMsg::Goodbye,
+        // `006` BUG-007: both schemes, so neither is the only value the codec ever sees.
+        ClientMsg::TerminalColorScheme {
+            scheme: ColorScheme::Dark,
+        },
+        ClientMsg::TerminalColorScheme {
+            scheme: ColorScheme::Light,
+        },
         ClientMsg::SessionInput {
             session: sid(),
             serial: 42,
