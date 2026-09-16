@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M1 (T001–T012): review A round 3 fixed (U153); gate green at a2450d0e; awaiting review B round 2, then review A round 4 on U153, then PR
+- **Next step**: M1 (T001–T012): review B round 2 CLEAN; review A round 4 lows fixed (U154) or routed to T028; gate on the final commit, then PR
 
 ## Pull requests
 

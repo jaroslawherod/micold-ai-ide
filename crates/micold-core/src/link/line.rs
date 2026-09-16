@@ -123,6 +123,12 @@ fn declared_at(
     })
 }
 
+/// Whether the address at `range` in `text` ended at the `'` that opened right before it (research
+/// R3 rule 5): a hard end, which no text past a cut could extend.
+fn closed_by_its_quote(text: &[char], range: &Range<usize>) -> bool {
+    range.start > 0 && text[range.start - 1] == '\'' && text.get(range.end) == Some(&'\'')
+}
+
 /// The detected address in `line` holding the cell at `row`, `col` (contract L2).
 fn detected_at(line: &LogicalLine, row: i64, col: u16) -> Option<Link> {
     let index = line.index_of(row, col)?;
@@ -133,6 +139,7 @@ fn detected_at(line: &LogicalLine, row: i64, col: u16) -> Option<Link> {
     let reaches_a_cut = (line.cut_above
         && !line.text[..range.start].iter().any(|&c| ends_an_address(c)))
         || (line.cut_below
+            && !closed_by_its_quote(&line.text, &range)
             && line.text[range.end..]
                 .iter()
                 .all(|c| TRAILING_PUNCTUATION.contains(c)));
@@ -590,6 +597,21 @@ mod tests {
                 cells: vec![span(1, 0..4)],
             }),
             "the declared run is the wide chars alone, not the padding before them"
+        );
+    }
+
+    #[test]
+    fn a_quoted_address_whose_closing_quote_ends_a_wrapped_row_is_a_link() {
+        // The row wraps into one that is unavailable, so the line may go on below it.
+        let rows = Rows::new(0, vec![row(""), row("'https://a.example/x'").wrapped()]);
+        assert_eq!(
+            link_at(&rows, 1, 5),
+            Some(Link {
+                address: "https://a.example/x".to_string(),
+                origin: LinkOrigin::Detected,
+                cells: vec![span(1, 1..20)],
+            }),
+            "the closing quote ends the address, so nothing on the next row could extend it"
         );
     }
 
