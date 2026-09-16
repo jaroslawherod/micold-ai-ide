@@ -169,13 +169,20 @@ fn vanished_mid_handshake(e: &io::Error) -> bool {
 /// checked, which the caller reads as nobody listening.
 #[cfg(windows)]
 fn refuse_foreign_server(stream: &Stream, own_sid: &str) -> io::Result<bool> {
-    let pid = stream.peer_creds()?.pid();
+    let pid = match stream.peer_creds() {
+        Ok(creds) => creds.pid(),
+        // The server disconnected before it could be asked who it is.
+        Err(e) if is_absent(&e) || vanished_mid_handshake(&e) => return Ok(false),
+        Err(e) => return Err(e),
+    };
     refuse_foreign_pid(pid, own_sid)
 }
 
 /// [`refuse_foreign_server`] for the server process `pid`, once the pipe has named it.
 #[cfg(windows)]
 fn refuse_foreign_pid(pid: Option<u32>, own_sid: &str) -> io::Result<bool> {
+    use windows_sys::Win32::Foundation::ERROR_INVALID_PARAMETER;
+
     let refuse = |server: &str| {
         io::Error::new(
             io::ErrorKind::PermissionDenied,
@@ -192,6 +199,8 @@ fn refuse_foreign_pid(pid: Option<u32>, own_sid: &str) -> io::Result<bool> {
         Err(e) if e.kind() == io::ErrorKind::PermissionDenied => Err(refuse(&format!(
             "an account this user cannot query (pid {pid})"
         ))),
+        // `OpenProcess` names a pid with no process behind it this way: the server has exited.
+        Err(e) if e.raw_os_error() == Some(ERROR_INVALID_PARAMETER as i32) => Ok(false),
         Err(e) => Err(e),
     }
 }
