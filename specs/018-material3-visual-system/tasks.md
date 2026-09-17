@@ -1867,7 +1867,7 @@ failed with `left: ["saved", "terminal"]` / `right: ["terminal"]` (the button be
 Space first), and `a_ring_goes_when_the_terminal_takes_the_keyboard` failed on `Some(0.1)` where `None`
 belongs. The other 28 passed.
 
-**Pass record (T190)** — 2026-09-17, on `origin/main` at `66fae572` plus T188–T193: `mise run gate`
+**Pass record (T190)** — 2026-09-17, on `origin/main` at `bf3709f5` plus T188–T193: `mise run gate`
 exited 0 — fmt, clippy (core, then workspace, `-D warnings`), `cargo test --workspace` 3279 passed,
 0 failed (summed over every `test result` line), and every `scripts/tests/*.test.sh`. The first run
 with T193 failed `showcase_completeness`: every library component needs a gallery entry or a recorded
