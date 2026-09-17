@@ -217,7 +217,7 @@ impl<'a> From<GridSizeReporter<'a>> for Element<'a, Message> {
 struct PaneState {
     dragging: bool,
     /// The viewport cell a local left press landed in, until the pointer first leaves it. While
-    /// set, motion is still a click and extends nothing (FR-013e, BUG-007): the pane decides this
+    /// set, motion is still a click and extends nothing (FR-013e, BUG-008): the pane decides this
     /// in screen cells because a selection's `LineId` anchors drift under streaming output.
     press_cell: Option<(u16, u16)>,
     modifiers: keyboard::Modifiers,
@@ -978,7 +978,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 // Auto-copy on release (FR-013), decided by the shell against the selection as
                 // this gesture left it. `self.selection` is the one this pane was built with: when
                 // the press and release arrive in one batch it predates the press, and copying it
-                // would put the previous selection over the clipboard (FR-013e, BUG-007).
+                // would put the previous selection over the clipboard (FR-013e, BUG-008).
                 shell.publish(Message::Session(SessionMsg::TerminalSelectionReleased));
                 shell.capture_event();
                 return;
@@ -1599,7 +1599,7 @@ mod tests {
             assert_eq!(clipboard.writes, vec!["hello world".to_string()]);
         }
 
-        // BUG-007 (FR-013e).
+        // BUG-008 (FR-013e).
 
         /// A point inside grid cell `(col, line)`, at fraction `(fx, fy)` of the cell's width and
         /// height from its top-left corner, for a pane laid out at `node`.
@@ -1879,7 +1879,7 @@ mod tests {
             assert!(
                 clipboard.writes.is_empty(),
                 "a press and release delivered together copied {:?} — the selection from before \
-                 the press — over the user's clipboard (FR-013e, BUG-007)",
+                 the press — over the user's clipboard (FR-013e, BUG-008)",
                 clipboard.writes
             );
         }

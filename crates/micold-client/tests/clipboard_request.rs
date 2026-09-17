@@ -119,7 +119,7 @@ fn a_selection_the_provider_cannot_resolve_asks_for_nothing() {
 
 #[test]
 fn a_click_without_a_drag_asks_for_nothing() {
-    // BUG-007: a press that never left its cell selected, and so auto-copied, the character under
+    // BUG-008: a press that never left its cell selected, and so auto-copied, the character under
     // it — replacing whatever the user had on the clipboard with one letter.
     let rows = ["hello world"];
     let provider = lines(&rows);

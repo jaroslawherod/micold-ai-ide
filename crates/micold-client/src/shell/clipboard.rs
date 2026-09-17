@@ -78,7 +78,7 @@ pub fn on_copy_requested(app: &mut App) -> Task<Message> {
 ///
 /// Unlike [`on_copy_requested`] this leaves the context menu alone, and it reads `app.selection`
 /// after the gesture's own `TerminalSelectStart`/`TerminalSelectUpdate` were applied — so a click,
-/// which selects nothing, copies nothing (FR-013e, BUG-007).
+/// which selects nothing, copies nothing (FR-013e, BUG-008).
 pub fn on_selection_released(app: &mut App) -> Task<Message> {
     selection_copy_request(app).map_or_else(Task::none, interpret)
 }

@@ -68,7 +68,7 @@ Canvas render over `content.grid.display_iter()`:
     (SGR/normal encoding as in iced_term `backend.rs`). (FR-013a)
   - Else left-press/drag → `SelectStart`/`SelectUpdate` (single/double/triple = simple/semantic/
     lines). Holding **Shift** forces selection even under mouse mode. (FR-013, FR-013b)
-    *(Bugfix BUG-007: a simple selection is empty — nothing highlighted, nothing auto-copied — until
+    *(Bugfix BUG-008: a simple selection is empty — nothing highlighted, nothing auto-copied — until
     its first `SelectUpdate`, and the pane publishes no `SelectUpdate` while the pointer is still in
     the pressed viewport cell (the focus gutter counting as its edge cell; a local scroll that moves
     the view, or leaving the pane, ends that), so a click without a drag only clears the previous selection. The release's auto-copy is `TerminalSelectionReleased`,

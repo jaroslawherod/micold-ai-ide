@@ -1361,7 +1361,7 @@ pub enum Msg {
     /// A left-button selection gesture ended: copy the current selection, if it resolves to any
     /// text, to the clipboard (FR-013 auto-copy; binary handles clipboard). Resolved against the
     /// selection after the gesture's own start and updates are applied, not the pane's view, and
-    /// unlike [`Msg::TerminalCopyRequested`] it leaves the context menu alone (FR-013e, BUG-007).
+    /// unlike [`Msg::TerminalCopyRequested`] it leaves the context menu alone (FR-013e, BUG-008).
     TerminalSelectionReleased,
     /// Paste clipboard text into the focused session's PTY (binary handles clipboard) (FR-013).
     TerminalPasteRequested,

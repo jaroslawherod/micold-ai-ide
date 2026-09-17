@@ -160,7 +160,7 @@ Mark each ✅/❌ as you go.
 
 ### 10f. Selection granularity — FR-013 (T057)
 20. **Single**-click and drag across some text. **Expect**: character-level selection.
-20a. *(BUG-007, FR-013e)* Drag across some text so it is on the clipboard, then **single**-click a
+20a. *(BUG-008, FR-013e)* Drag across some text so it is on the clipboard, then **single**-click a
     character without moving and paste with **Ctrl+Shift+V**. **Expect**: the click leaves no cell
     highlighted and the paste inserts the dragged text, not the clicked character. Then drag again,
     copy some other text in another application, tap the terminal once (a touchpad tap, or a
