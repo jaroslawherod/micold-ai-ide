@@ -1835,3 +1835,19 @@ words, and the enter and exit motion, none of which this fix touches. Crop:
 long notification and the bottom strip is the showcase's three poses.
 
 **Bugfix**: 2026-09-14 — BUG-015 Updated from bugfix patch: reopened T052 and added Phase 27 (T184–T187).
+
+## Phase 28: BUG-016 — a clicked terminal-bar tab drew the focus ring while the terminal took the keys
+
+**Goal**: a button answers Enter and Space, and shows its focus indicator for them, only when no earlier
+element has already taken the key — so a tab clicked in the terminal bar stays unmarked while the
+terminal holds the keyboard, and the keystroke is not sent to it a second time (FR-022a).
+
+- [ ] T188 Failing test first: in `crates/micold-client/src/ui/material/field_focus.rs`, mount a widget that captures every key ahead of a `Button`, click the button, press Space and Enter, and assert only the capturing widget's message is published and the button's indicator stays `None`; beside it, keep BUG-013's `a_clicked_button_takes_the_keyboard_and_draws_no_indicator` passing unchanged. Red today (FR-022a)
+
+- [ ] T189 In `crates/micold-client/src/ui/material/keyboard_focus.rs`, answer a claimed key in `TakesTheKeyboard::update` only when `shell.is_event_captured()` is false, and say why in the module docs. T188 goes green (FR-022a)
+
+- [ ] T190 Run the workspace gate (`mise run gate`) and record the result here
+
+- [ ] T191 Confirm on a rendered frame, dark scheme, that clicking the `claude` tab and pressing Space in the terminal leaves the tab without a ring while the terminal keeps its own; record what was captured
+
+**Bugfix**: 2026-09-17 — BUG-016 added Phase 28 (T188–T191). **No task is reopened.** T176–T177 are complete as written: their tests drive a button alone, with nothing else in the tree to take a key first.

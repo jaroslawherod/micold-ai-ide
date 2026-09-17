@@ -406,7 +406,8 @@ for the ripple's full-strength span of every press.)*
 It is visible without the pointer being over the element and remains distinguishable when the
 element is simultaneously hovered. On a button it is drawn only for focus that arrived by keyboard —
 a traversal, or a key the button answers; a pointer press moves focus without drawing either the
-outline or the layer (FR-022a).
+outline or the layer (FR-022a). A key another element has already captured is not one the button answers
+(BUG-016).
 
 ~~That set is **text fields and the select control only**. Buttons, list rows, tree items, menu items
 and chips cannot hold focus in the rendering stack — their status model has no focused state
