@@ -14,7 +14,7 @@
 //! # The vocabulary this feature declares
 //!
 //! Eleven transitions in [`Msg`]: the lifecycle (`Connected`, `Event`, `GridFrame`, `Disconnected`,
-//! `ConnectFailed`), the two mismatches a daemon can report (`VersionMismatch`, `BuildMismatch`), and
+//! `ConnectFailed`, `Refused`), the two mismatches a daemon can report (`VersionMismatch`, `BuildMismatch`), and
 //! the four things the user can ask of it (`TakeoverRequested`, `RestartServiceRequested`,
 //! `DiagnosticsRequested`, `LogoutSurvivalOutcome`).
 //!
@@ -226,6 +226,13 @@ pub enum Msg {
     Disconnected,
     /// Connecting to (or spawning) the daemon failed, with a human-facing reason.
     ConnectFailed(String),
+    /// A daemon answered and refused the handshake, with a human-facing reason — a stale `:dev`
+    /// image, or a refusal without a variant of its own (#370).
+    ///
+    /// Separate from [`Msg::ConnectFailed`] because the two call for opposite handling: nothing
+    /// listening right after a sandbox starts is the service still coming up and may be waited on,
+    /// but a refusal comes from a service that is up and will not change its answer by itself.
+    Refused(String),
     /// The user asked to take the active project back after being displaced (US5, FR-024):
     /// re-attach with `force`.
     TakeoverRequested,

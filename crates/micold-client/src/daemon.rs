@@ -324,18 +324,15 @@ async fn connect_and_pump(
             daemon_fingerprint,
             image,
         }) => {
-            return report_connect_failure(
+            return report_refusal(
                 output,
                 stale_dev_image_advice(&image, &daemon_fingerprint, &client_fingerprint),
             )
             .await;
         }
         Connected::Refused(reason) => {
-            return report_connect_failure(
-                output,
-                format!("daemon refused the connection: {reason:?}"),
-            )
-            .await;
+            return report_refusal(output, format!("daemon refused the connection: {reason:?}"))
+                .await;
         }
     };
 
@@ -428,7 +425,7 @@ fn stale_dev_image_advice(
 /// up and the loop retries a second later, but no error notification is raised for a gap the client
 /// is about to close itself.
 ///
-/// Separate from [`report_connect_failure`], which the refusal paths use, and deliberately so: a
+/// Separate from [`report_refusal`], which the refusal paths use, and deliberately so: a
 /// refusal means a daemon answered and said no — a version or build mismatch the user has to act on.
 /// Absorbing one of those would delay a banner that is already correct, for a condition that will
 /// not resolve itself.
@@ -449,11 +446,17 @@ async fn report_transient_connect_failure(
 /// Report a connect failure to the app and map it to a disconnect (so the outer loop retries). If the
 /// app is gone, that surfaces as `AppGone` instead.
 async fn report_connect_failure(output: &mut mpsc::Sender<Message>, reason: String) -> PumpEnd {
-    if output
-        .send(Message::Connection(ConnectionMsg::ConnectFailed(reason)))
-        .await
-        .is_err()
-    {
+    report(output, ConnectionMsg::ConnectFailed(reason)).await
+}
+
+/// Report a daemon's refusal, as [`report_connect_failure`] does a failure — but as its own
+/// message, so the app does not mistake a daemon that said no for one not listening yet (#370).
+async fn report_refusal(output: &mut mpsc::Sender<Message>, reason: String) -> PumpEnd {
+    report(output, ConnectionMsg::Refused(reason)).await
+}
+
+async fn report(output: &mut mpsc::Sender<Message>, msg: ConnectionMsg) -> PumpEnd {
+    if output.send(Message::Connection(msg)).await.is_err() {
         PumpEnd::AppGone
     } else {
         PumpEnd::Disconnected

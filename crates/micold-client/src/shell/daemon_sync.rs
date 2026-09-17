@@ -301,6 +301,17 @@ pub fn on_connect_failed(app: &mut App, reason: String) -> Task<Message> {
     }
 }
 
+/// A daemon answered and said no (#370). Reported on this dial: none of [`refused_dial`]'s grace
+/// applies, because that grace is for a service not listening yet, and this one is listening. Nor
+/// is a bring-up started — the service is there, and a new container would meet the same answer.
+pub fn on_refused(app: &mut App, reason: String) -> Task<Message> {
+    crate::log_line(&format!("attach: refused reason={reason}"));
+    app.disconnected = true;
+    app.core
+        .notify_error(format!("Could not connect to the session daemon: {reason}"));
+    Task::none()
+}
+
 /// What a refused dial changes, and the bring-up it decided to run, if any.
 ///
 /// Split from [`on_connect_failed`] so the decision can be read back: a `Task` cannot be.

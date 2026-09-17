@@ -2469,6 +2469,32 @@ fn the_first_refused_dial_after_start_is_the_service_still_starting() {
     );
 }
 
+/// The grace is for a service that is not listening yet. A daemon that answered and refused — a
+/// stale `:dev` image, say — is listening, and what it said is the one thing the user has to act
+/// on: it is reported on that dial, not one backoff later (#370).
+#[test]
+fn a_refusal_right_after_start_is_reported_at_once() {
+    let mut app = app_with_a_failed_sandbox();
+    let _ = connection_failed(&mut app);
+    let _ = update_inner(
+        &mut app,
+        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
+    );
+
+    let _ = update_inner(
+        &mut app,
+        Message::Connection(ConnectionMsg::Refused(
+            "the sandbox is running `micold-daemon:dev`, built from a different working tree"
+                .into(),
+        )),
+    );
+
+    assert!(
+        a_connection_failure_was_reported(&app),
+        "a daemon that refused is not a service still starting (#370)"
+    );
+}
+
 /// The grace belongs to a started sandbox. One whose container stopped before its service
 /// answered is brought up again, and when that attempt fails the failure has to show — not stay
 /// hidden behind a grace left over from a container that is no longer there.
