@@ -47,7 +47,7 @@ pub fn announce_running() -> Option<RunningMarker> {
 
     let name: Vec<u16> = APP_MUTEX_NAME.encode_utf16().chain(Some(0)).collect();
     // SAFETY: `name` is NUL-terminated and outlives the call; null security attributes are the
-    // documented default. Opening an existing mutex (the other binary holds it) also succeeds and
+    // documented default. Opening an existing mutex (another client instance holds it) also succeeds and
     // returns a handle of our own, which is what keeps the name alive while either process runs.
     let mutex = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
     if mutex.is_null() {

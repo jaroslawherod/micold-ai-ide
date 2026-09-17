@@ -117,6 +117,13 @@ fn the_leftover_report_is_capped() {
 fn a_directory_that_empties_but_survives_is_named_itself() {
     use std::os::unix::fs::PermissionsExt;
 
+    // SAFETY: `geteuid` is always safe — it takes no arguments and cannot fail.
+    if unsafe { libc::geteuid() } == 0 {
+        // Root ignores the parent's missing write bit, so the target is removed and nothing survives.
+        eprintln!("skipped: running as root");
+        return;
+    }
+
     let tmp = tempfile::tempdir().unwrap();
     let parent = tmp.path().join("worktrees");
     let target = parent.join("feat-held");

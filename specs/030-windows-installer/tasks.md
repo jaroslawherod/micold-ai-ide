@@ -102,7 +102,7 @@ description: "Task list for feature 030: Windows installation package"
   3. Calls `TerminateProcess` and `WaitForSingleObject(5000)`.
 
   In `running_daemon_pid`, return `None` when the endpoint is not live, so a stale record is ignored.
-- [X] T020 [U13] [U67] R6, making T012 pass: in `crates/micold-daemon/src/platform/windows.rs`, replace the no-op `terminate_process_tree` with a per-session job built on `micold_core::win_job` (make it `pub` behind `#[cfg(windows)]`).
+- [X] T020 [U13] [U67] R6, making T012 pass: in `crates/micold-daemon/src/platform/windows.rs`, replace the no-op `terminate_process_tree` with a per-session job built on `micold_core::win_job` (make it `pub` behind `#[cfg(windows)]`). Feature 010's `platform/windows.rs` `Job` already met U13, so the daemon kept that `Job` and never moved onto `micold_core::win_job`.
   - In `crates/micold-daemon/src/supervisor.rs`, right after the `portable-pty` spawn, call `OpenProcess` plus `AssignProcessToJobObject` on the child pid, and store the job with the session.
   - On kill, terminate the job.
   - The job is created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`.
@@ -117,7 +117,7 @@ description: "Task list for feature 030: Windows installation package"
   - `crates/micold-core/src/sandbox/exec.rs` (docker/podman)
   - any further hit T013 reports
 - [X] T023 [U19] R7, making T015 pass: in `crates/micold-daemon/src/main.rs`, on `Err(e)` also append `micold-daemon: fatal: {e}` to the daemon log path. Resolve that path through the same function `logging` uses, which already exists as `micold_daemon::logging::default_log_path()` (`logging.rs:241`). Then `eprintln!` and exit 1 as today.
-- [X] T024 [U20] R7 (GUI glue, Principle I exception): add `#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]` to `crates/micold-daemon/src/main.rs` and `crates/micold-client/src/main.rs`. Hold `let _running = micold_core::process::announce_running();` as the first statement of both `main`s, for the process lifetime.
+- [X] T024 [U20] R7 (GUI glue, Principle I exception): add `#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]` to `crates/micold-daemon/src/main.rs` and `crates/micold-client/src/main.rs`. Hold `let _running = micold_core::process::announce_running();` as the first statement of the client's `main` only, for the process lifetime (the daemon does not hold the AppMutex, so a running daemon never blocks an install or uninstall).
 - [X] T025 [U20] E6.1: in `.github/workflows/ci.yml` job `test`, add the step `Release exes are GUI-subsystem (Windows)` with `if: runner.os == 'Windows'` and `shell: pwsh`. It runs `cargo build --release -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon`. For each of `micold-ai-ide.exe` and `micold-daemon.exe` it reads the PE `e_lfanew` at 0x3C and the `Subsystem` u16 at `e_lfanew + 0x5C`, and asserts it is `2`.
 - [X] T026 [U22] [U23] [U24] [U25] [U26] FR-025: un-gate the files the contract names as required:
   - `crates/micold-daemon/tests/autospawn.rs`
@@ -496,7 +496,7 @@ see `autopilot.md`.
 
 ### M1 — Windows installer package 🎯 MVP
 
-- **Tasks**: T001–T005, T013, T022, T023, T029–T032, T035–T037, T041, T042, T044, T046–T052,
+- **Tasks**: T004, T005, T013, T022, T023, T029–T032, T035–T037, T041, T042, T044, T046–T052,
   T054–T056, T058, T059, T065, T068, T074–T079 (US3 series)
 - **Deliverable**: every CI run builds an x64 and an ARM64 Inno Setup installer, releases attach both,
   and `docs/install.md` describes the Windows package; the install smoke runs but does not block.
@@ -507,7 +507,7 @@ see `autopilot.md`.
 
 ### M2 — Windows daemon endpoint and in-use lifecycle
 
-- **Tasks**: T006–T012, T014–T017, T019–T021, T024–T028, T033, T034, T038–T040, T043, T045, T053,
+- **Tasks**: T001–T003, T006–T012, T014–T021, T024–T028, T033, T034, T038–T040, T043, T045, T053,
   T057, T060, T061, T066, T067, T069–T073, T074–T076 (U71–U73 series), T084, T085
 - **Deliverable**: an installed build launches, connects to its per-user daemon over the SID-named pipe,
   and survives repair and uninstall; the install smoke blocks CI on both Windows legs.
