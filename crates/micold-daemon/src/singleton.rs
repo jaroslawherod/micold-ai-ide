@@ -19,8 +19,7 @@ use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::time::Duration;
 
-use interprocess::local_socket::tokio::prelude::*;
-use interprocess::local_socket::tokio::{Listener, Stream};
+use interprocess::local_socket::tokio::Listener;
 use interprocess::local_socket::{GenericFilePath, ListenerOptions, Name, ToFsName};
 
 use micold_core::endpoint::Endpoint;
@@ -63,7 +62,19 @@ fn fs_name(path: &Path) -> io::Result<Name<'_>> {
 }
 
 /// `true` iff something is accepting connections at `path` right now.
+#[cfg(windows)]
 async fn is_live(path: &Path) -> bool {
+    use windows_sys::Win32::Foundation::ERROR_PIPE_BUSY;
+    match micold_core::connect::open_pipe(path) {
+        Ok(_) => true,
+        Err(e) => e.raw_os_error() == Some(ERROR_PIPE_BUSY as i32),
+    }
+}
+
+/// `true` iff something is accepting connections at `path` right now.
+#[cfg(not(windows))]
+async fn is_live(path: &Path) -> bool {
+    use interprocess::local_socket::tokio::{prelude::*, Stream};
     match fs_name(path) {
         Ok(name) => Stream::connect(name).await.is_ok(),
         Err(_) => false,
@@ -166,7 +177,7 @@ pub async fn acquire(endpoint: &Endpoint) -> io::Result<Acquisition> {
         // Losing the first-instance race to this user's own daemon reads as access denied, and so
         // does a pipe another account created first. Only the first can be connected to.
         Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
-            match Stream::connect(fs_name(&endpoint.socket_path)?).await {
+            match micold_core::connect::open_pipe(&endpoint.socket_path) {
                 Err(refused) if refused.kind() == io::ErrorKind::PermissionDenied => {
                     Err(io::Error::new(
                         io::ErrorKind::PermissionDenied,

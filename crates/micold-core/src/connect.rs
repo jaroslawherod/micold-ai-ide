@@ -216,14 +216,7 @@ fn refuse_foreign_pid(pid: Option<u32>, own_sid: &str) -> io::Result<bool> {
 async fn connect_pipe(endpoint: &Endpoint) -> io::Result<Stream> {
     use interprocess::os::windows::named_pipe::local_socket::tokio::Stream as PipeStream;
     use std::os::windows::ffi::OsStrExt;
-    use std::os::windows::io::{FromRawHandle, OwnedHandle};
-    use windows_sys::Win32::Foundation::{
-        ERROR_PIPE_BUSY, GENERIC_READ, GENERIC_WRITE, INVALID_HANDLE_VALUE,
-    };
-    use windows_sys::Win32::Storage::FileSystem::{
-        CreateFileW, FILE_FLAG_OVERLAPPED, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
-        SECURITY_IDENTIFICATION, SECURITY_SQOS_PRESENT,
-    };
+    use windows_sys::Win32::Foundation::ERROR_PIPE_BUSY;
 
     let path: Vec<u16> = endpoint
         .socket_path
@@ -232,31 +225,62 @@ async fn connect_pipe(endpoint: &Endpoint) -> io::Result<Stream> {
         .chain(Some(0))
         .collect();
     loop {
-        // SAFETY: `path` is NUL-terminated and outlives the call; every other argument is a plain
-        // flag or null, as `CreateFileW` allows.
-        let handle = unsafe {
-            CreateFileW(
-                path.as_ptr(),
-                GENERIC_READ | GENERIC_WRITE,
-                FILE_SHARE_READ | FILE_SHARE_WRITE,
-                std::ptr::null(),
-                OPEN_EXISTING,
-                FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION,
-                std::ptr::null_mut(),
-            )
-        };
-        if handle != INVALID_HANDLE_VALUE {
-            // SAFETY: a valid handle `CreateFileW` just returned, owned by nothing else.
-            let handle = unsafe { OwnedHandle::from_raw_handle(handle) };
-            let pipe = PipeStream::try_from(handle)?;
-            return Ok(pipe.into());
-        }
-        let error = io::Error::last_os_error();
-        if error.raw_os_error() != Some(ERROR_PIPE_BUSY as i32) {
-            return Err(error);
+        match open_pipe_wide(&path) {
+            Ok(handle) => {
+                let pipe = PipeStream::try_from(handle)?;
+                return Ok(pipe.into());
+            }
+            Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY as i32) => {}
+            Err(error) => return Err(error),
         }
         wait_for_pipe(path.clone()).await?;
     }
+}
+
+/// Opens the pipe at `path` once, at `SecurityIdentification`, without waiting for a busy one.
+///
+/// Every open of a daemon pipe goes through here, liveness probes included, so no open lets the
+/// pipe's server impersonate this user (U72). A busy pipe fails with `ERROR_PIPE_BUSY`.
+#[cfg(windows)]
+pub fn open_pipe(path: &std::path::Path) -> io::Result<std::os::windows::io::OwnedHandle> {
+    use std::os::windows::ffi::OsStrExt;
+    let path: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    open_pipe_wide(&path)
+}
+
+/// `open_pipe` for a path already encoded as NUL-terminated UTF-16.
+#[cfg(windows)]
+fn open_pipe_wide(path: &[u16]) -> io::Result<std::os::windows::io::OwnedHandle> {
+    use std::os::windows::io::{FromRawHandle, OwnedHandle};
+    use windows_sys::Win32::Foundation::{GENERIC_READ, GENERIC_WRITE, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_FLAG_OVERLAPPED, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+        SECURITY_IDENTIFICATION, SECURITY_SQOS_PRESENT,
+    };
+
+    assert_eq!(
+        path.last(),
+        Some(&0),
+        "the pipe path must be NUL-terminated"
+    );
+    // SAFETY: `path` is NUL-terminated and outlives the call; every other argument is a plain
+    // flag or null, as `CreateFileW` allows.
+    let handle = unsafe {
+        CreateFileW(
+            path.as_ptr(),
+            GENERIC_READ | GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            std::ptr::null(),
+            OPEN_EXISTING,
+            FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION,
+            std::ptr::null_mut(),
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: a valid handle `CreateFileW` just returned, owned by nothing else.
+    Ok(unsafe { OwnedHandle::from_raw_handle(handle) })
 }
 
 /// Waits for an instance of the NUL-terminated pipe `path` to become free, unbounded.
