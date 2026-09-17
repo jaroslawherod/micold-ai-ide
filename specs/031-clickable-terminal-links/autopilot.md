@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M2: #358 merged; #361 green at 5f567ab6 but CONFLICTING after main moved (Cargo manifests, both sides added `iced_runtime`); rebased and resolved, gate on the rebased head, then push, rebase-merge on green `ci complete`, record the merge; then dispatch M3
+- **Next step**: M3 (T082, T083, T037, T023–T034): dispatch the milestone unit; T028/T025/T030 carry the M1-review bullets and the Ctrl-held pointer clarification
 
 ## Pull requests
 
@@ -17,14 +17,14 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #336 | Spec | merged | 411711c1 |
 | #341 | Design (clarify, plan, tasks, milestones) | merged | 226d3a8b |
 | #356 | M1 Link recognition core | merged | 33f6491c |
-| #361 | M2 Opening pipeline | open, rebased after #358 | — |
+| #361 | M2 Opening pipeline | merged | 9995dbdb |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
 | M1 | T001–T012 | Link recognition core (`micold_core::link`, SC-002 corpus) | #356 | merged |
-| M2 | T013–T022 | Opening pipeline: `LinkActivated` through `update_inner` to the system opener | #361 | blocked (CI) |
+| M2 | T013–T022 | Opening pipeline: `LinkActivated` through `update_inner` to the system opener | #361 | merged |
 | M3 | T082, T083, T037, T023–T034 | Clickable web, mail and declared links in the pane | — | pending |
 | M4 | T035, T036, T038–T041 | Session terminal identity and the FORCE_HYPERLINK opt-in | — | pending |
 | M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | — | pending |
@@ -67,11 +67,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 ## Open escalation
 
-Blocked by work outside my flow. PR #361, run 35136084307: `build + test (windows-latest)` failed on both attempts in step "Install and launch the Windows installer" with `scripts/windows-install-smoke.sh: FAIL: \\.\pipe\Micold.Daemon.<sid> is up, but no micold-daemon.exe process was found behind it` (line 189, `find_daemon_pid`). Attempt 1 failed at the uninstall step and attempt 2 at the repair step. Every other job passed, including windows-11-arm package + smoke. The script belongs to feature 030, and M2 changes nothing in the daemon, the installer or the spawn path; its only Windows-side change is `ShellExecuteW`/`CoInitializeEx`/explorer code that nothing calls yet, plus three `windows-sys` features. main's last 3 CI runs are green (9a6a7738, 33f6491c, 216f8801). The failure looks like a race between the pipe appearing and the pid record or parent-process lookup.
-
-**Diagnosis, 2026-09-16 (orchestrator).** Not a race: a failed-jobs rerun (run 35136084016) failed the same way, and the same job fails on every other branch built from main since then. Commit `2c942157 fix(030): the smoke's uninstall step fails when it finds no running daemon` on main looks up the daemon after the refused uninstall, while main's `packaging/windows/micold-ai-ide.iss` stops the daemon in `InitializeUninstall` before that refusal. Draft PR #358 (`fix/windows-review-followup`, another flow) moves the stop to `CurUninstallStepChanged`; its run is the only recent green one for that job.
-
-**Decided by user, 2026-09-16:** wait for #358 to merge, then rebase #361 onto main, push, and rebase-merge on green. #358 is watched read-only; this flow does not touch it.
+None. (M2's block on the Windows install smoke was resolved by #358; see Decisions 20 and git history of this file.)
 
 ## Follow-ups not done
 
