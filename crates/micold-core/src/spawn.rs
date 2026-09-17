@@ -168,12 +168,12 @@ fn terminate_daemon(pid: u32) -> io::Result<()> {
 fn terminate_daemon(pid: u32) -> io::Result<()> {
     use std::os::windows::ffi::OsStringExt;
     use windows_sys::Win32::Foundation::{
-        CloseHandle, ERROR_INVALID_PARAMETER, HANDLE, WAIT_FAILED, WAIT_TIMEOUT,
+        CloseHandle, ERROR_INVALID_PARAMETER, HANDLE, STILL_ACTIVE, WAIT_FAILED, WAIT_TIMEOUT,
     };
     use windows_sys::Win32::System::Threading::{
-        OpenProcess, QueryFullProcessImageNameW, TerminateProcess, WaitForSingleObject,
-        PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
-        PROCESS_TERMINATE,
+        GetExitCodeProcess, OpenProcess, QueryFullProcessImageNameW, TerminateProcess,
+        WaitForSingleObject, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+        PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
     };
 
     /// How long to wait for the terminated process to actually exit.
@@ -206,6 +206,17 @@ fn terminate_daemon(pid: u32) -> io::Result<()> {
         return Err(err);
     }
     let process = Process(raw);
+
+    // A handle someone still holds keeps an exited process's object, and its pid, alive. Such a
+    // process has nothing left to stop, and its image name can no longer be read.
+    let mut code = 0u32;
+    // SAFETY: `process` holds PROCESS_QUERY_LIMITED_INFORMATION; `code` is a valid out pointer.
+    if unsafe { GetExitCodeProcess(process.0, &mut code) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if code != STILL_ACTIVE as u32 {
+        return Ok(());
+    }
 
     let mut buf = [0u16; 1024];
     let mut len = buf.len() as u32;
@@ -439,6 +450,26 @@ mod tests {
         assert!(
             stopped.is_ok(),
             "terminating a pid that has already exited is success; got {stopped:?}"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn terminate_treats_an_exited_process_still_held_open_as_stopped() {
+        // A handle held elsewhere keeps the exited process's object: `OpenProcess` succeeds, but
+        // its image name no longer reads (ERROR_GEN_FAILURE, run 35186650608).
+        let mut exited = Command::new("cmd")
+            .args(["/c", "exit", "0"])
+            .spawn()
+            .expect("spawn a short-lived process");
+        exited.wait().unwrap();
+
+        let stopped = terminate_daemon(exited.id());
+        drop(exited);
+
+        assert!(
+            stopped.is_ok(),
+            "terminating an exited process whose handle is still held is success; got {stopped:?}"
         );
     }
 }
