@@ -553,12 +553,22 @@ struct RowSlide<'a, M> {
     has_badge: bool,
 }
 
+/// A row's own state: the form a pointer press is held on, if any.
+///
+/// A press is a click only if its release reaches the form it started on. The slide changes a row's
+/// form near each end, so the form a press lands on stays drawn until the press is let go, and the
+/// row changes form then. The icon stays on its line either way: the held form is moved like any
+/// drawn form.
+#[derive(Debug, Default)]
+struct Held(Option<usize>);
+
 impl<M> RowSlide<'_, M> {
-    /// The child drawn when the row is `width` wide.
-    fn drawn(&self, width: f32) -> usize {
-        match self.forms {
-            Forms::Sliding(_) => slot(form(fraction(width), self.has_badge)),
-            Forms::Single(_) => 0,
+    /// The child drawn when the row is `width` wide and `held` is the form a press is held on.
+    fn drawn(&self, held: &Held, width: f32) -> usize {
+        match (&self.forms, held.0) {
+            (Forms::Sliding(_), Some(child)) if !self.is_unused(child) => child,
+            (Forms::Sliding(_), _) => slot(form(fraction(width), self.has_badge)),
+            (Forms::Single(_), _) => 0,
         }
     }
 
@@ -569,8 +579,8 @@ impl<M> RowSlide<'_, M> {
     }
 
     /// The child drawn in `layout`, with its layout.
-    fn drawn_in<'l>(&self, layout: Layout<'l>) -> Option<(usize, Layout<'l>)> {
-        let drawn = self.drawn(layout.bounds().width);
+    fn drawn_in<'l>(&self, tree: &Tree, layout: Layout<'l>) -> Option<(usize, Layout<'l>)> {
+        let drawn = self.drawn(tree.state.downcast_ref(), layout.bounds().width);
         layout
             .children()
             .nth(drawn)
@@ -579,6 +589,14 @@ impl<M> RowSlide<'_, M> {
 }
 
 impl<M> Widget<M, iced::Theme, iced::Renderer> for RowSlide<'_, M> {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<Held>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(Held::default())
+    }
+
     fn children(&self) -> Vec<Tree> {
         self.forms
             .elements()
@@ -602,7 +620,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for RowSlide<'_, M> {
         limits: &layout::Limits,
     ) -> layout::Node {
         let width = limits.max().width;
-        let drawn = self.drawn(width);
+        let drawn = self.drawn(tree.state.downcast_ref(), width);
         let unused: [bool; 3] = std::array::from_fn(|child| self.is_unused(child));
         let forms = match &mut self.forms {
             Forms::Single(form) => {
@@ -697,8 +715,10 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for RowSlide<'_, M> {
         shell: &mut Shell<'_, M>,
         viewport: &Rectangle,
     ) {
-        let drawn = self.drawn(layout.bounds().width);
+        let width = layout.bounds().width;
+        let drawn = self.drawn(tree.state.downcast_ref(), width);
         let unused: [bool; 3] = std::array::from_fn(|child| self.is_unused(child));
+        let captured_before = shell.is_event_captured();
         // The drawn form is wider than the row mid-slide, and the part past the row's edge is cut
         // off; the pointer there reaches nothing (FR-009).
         let cursor = within(cursor, layout.bounds());
@@ -755,6 +775,25 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for RowSlide<'_, M> {
                 Shell::replace_redraw_request(shell, next);
             }
         }
+
+        // A press the drawn form took holds that form until it is let go; once it is, the row
+        // takes the form its width asks for, which may be another one.
+        let pressed = matches!(
+            event,
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+                | Event::Touch(touch::Event::FingerPressed { .. })
+        );
+        let let_go = matches!(
+            event,
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+                | Event::Touch(touch::Event::FingerLifted { .. } | touch::Event::FingerLost { .. })
+        );
+        let held = tree.state.downcast_mut::<Held>();
+        if pressed && !captured_before && shell.is_event_captured() {
+            held.0 = Some(drawn);
+        } else if let_go && held.0.take().is_some() && self.drawn(&Held(None), width) != drawn {
+            shell.invalidate_layout();
+        }
     }
 
     fn mouse_interaction(
@@ -766,7 +805,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for RowSlide<'_, M> {
         renderer: &iced::Renderer,
     ) -> mouse::Interaction {
         let cursor = within(cursor, layout.bounds());
-        self.drawn_in(layout)
+        self.drawn_in(tree, layout)
             .map(|(drawn, form_layout)| {
                 self.forms.elements()[drawn].as_widget().mouse_interaction(
                     &tree.children[drawn],
@@ -789,7 +828,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for RowSlide<'_, M> {
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let Some((drawn, form_layout)) = self.drawn_in(layout) else {
+        let Some((drawn, form_layout)) = self.drawn_in(tree, layout) else {
             return;
         };
         let bounds = layout.bounds();
@@ -828,7 +867,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for RowSlide<'_, M> {
         renderer: &iced::Renderer,
         operation: &mut dyn Operation,
     ) {
-        if let Some((drawn, form_layout)) = self.drawn_in(layout) {
+        if let Some((drawn, form_layout)) = self.drawn_in(tree, layout) {
             self.forms.elements_mut()[drawn].as_widget_mut().operate(
                 &mut tree.children[drawn],
                 form_layout,
@@ -846,7 +885,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for RowSlide<'_, M> {
         viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, M, iced::Theme, iced::Renderer>> {
-        let (drawn, form_layout) = self.drawn_in(layout)?;
+        let (drawn, form_layout) = self.drawn_in(tree, layout)?;
         self.forms.elements_mut()[drawn].as_widget_mut().overlay(
             &mut tree.children[drawn],
             form_layout,

@@ -215,6 +215,13 @@ inset (a layout change per frame, which is reflow).
   layout or widget invalidation are copied to the outer shell. So a ripple that was running when its
   form parked finishes on schedule instead of freezing, and keeps frames coming only for its own
   duration; once it and the slide have settled, nothing requests a frame (FR-011).
+- A press holds its form (T053, after close). A row records, in its own tree state, the form whose
+  update captured a left-button press or finger press, and draws that form, whatever its width asks
+  for, until a left-button release, finger lifted or finger lost; then it clears the record and
+  invalidates the layout if its width asks for another form. Without this, a release in the last
+  ~0.1% of a slide reached a parked form and was dropped, so the click was lost. It is not the
+  "second record of what the width says" rejected below: it records what the pointer did, which the
+  width cannot say.
 
 **Rationale**: The WIP established that handing focus over by operation works with the client's
 `Button`; what changes is only that the handoff is per row, so it happens at the frame that row

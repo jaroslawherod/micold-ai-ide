@@ -815,9 +815,19 @@ impl Surface {
     /// Deliver `event` alone with the pointer at `cursor`, over one layout, without feeding what it
     /// publishes through the reducer. Returns the messages published.
     fn event(&mut self, event: iced::Event, cursor: Option<Point>) -> Vec<Message> {
+        self.event_and_layout(event, cursor).0
+    }
+
+    /// [`Surface::event`], also returning whether the event invalidated the layout: what the
+    /// runtime lays out again for when nothing is published.
+    fn event_and_layout(
+        &mut self,
+        event: iced::Event,
+        cursor: Option<Point>,
+    ) -> (Vec<Message>, bool) {
         let node = self.node();
         let mut messages = Vec::new();
-        let _ = deliver(
+        let (invalid, _) = deliver(
             &self.under,
             &mut self.tree,
             &self.renderer,
@@ -826,7 +836,7 @@ impl Surface {
             cursor,
             &mut messages,
         );
-        messages
+        (messages, invalid)
     }
 
     /// What the pointer would look like at `at` over the surface as it is laid out now.
@@ -1178,10 +1188,11 @@ fn pump_until_fraction_below(surface: &mut Surface, below: f32) -> f32 {
     panic!("precondition: the rail never came within {below} of collapsed");
 }
 
-/// A press held on a row while its form parks is let go with the release, so the row is not left
-/// held down: once the rail is back, a release with no press before it publishes nothing (FR-009).
+/// A press held on a row across the slide's last form change is a click: its release over the row
+/// publishes the row's message, and the row is not left held down, so once the rail is back a
+/// release with no press before it publishes nothing (FR-009).
 #[test]
-fn a_press_held_as_its_form_parks_is_released() {
+fn a_press_held_across_a_form_change_is_a_click() {
     let mut surface = Surface::new(false);
     let index = plain_index(&surface);
     surface.toggle();
@@ -1196,16 +1207,29 @@ fn a_press_held_as_its_form_parks_is_released() {
         Some(row),
     );
     pump_until_fraction_below(&mut surface, 0.001);
+    let drawn = |surface: &mut Surface, slot| slot_bounds(surface, index, slot).x > -1.0e6;
+    assert!(
+        drawn(&mut surface, 0),
+        "the pressed labelled form parked before its press was let go"
+    );
     let row = centre(row_bounds(&mut surface, index));
     let released = surface.event(
         iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
         Some(row),
     );
+    let target = SettingsSection::ALL[index];
     assert!(
-        !rail_message(&released),
-        "precondition: the release over the icons-only form published {released:?}"
+        released
+            .iter()
+            .any(|m| matches!(m, Message::Settings(SettingsMsg::SectionShown(s)) if *s == target)),
+        "a press on row {index} held while the rail finished collapsing was dropped on release: \
+         {released:?}"
     );
     surface.settle();
+    assert!(
+        drawn(&mut surface, 2) && !drawn(&mut surface, 0),
+        "once the press was let go, the collapsed row did not take its icons-only form"
+    );
     surface.toggle();
     surface.settle();
     let row = centre(row_bounds(&mut surface, index));
@@ -1216,6 +1240,44 @@ fn a_press_held_as_its_form_parks_is_released() {
     assert!(
         !rail_message(&messages),
         "a row left held down by the slide published {messages:?} on a bare release"
+    );
+}
+
+/// A press held across the slide's last form change and let go off its row publishes nothing, and
+/// the row still takes the form its width asks for: the release asks for a layout, since with
+/// nothing published and the rail at rest nothing else would lay the row out again (FR-009,
+/// FR-011).
+#[test]
+fn a_press_let_go_off_its_row_still_changes_form() {
+    let mut surface = Surface::new(false);
+    let index = plain_index(&surface);
+    surface.toggle();
+    let f = pump_until_fraction_below(&mut surface, 0.02);
+    assert!(
+        f > 0.001,
+        "precondition: the row's labelled form is still drawn at {f}"
+    );
+    let row = centre(row_bounds(&mut surface, index));
+    let _ = surface.event(
+        iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        Some(row),
+    );
+    surface.settle();
+    assert!(
+        slot_bounds(&mut surface, index, 0).x > -1.0e6,
+        "the pressed labelled form parked before its press was let go"
+    );
+    let (messages, invalid) = surface.event_and_layout(
+        iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+        None,
+    );
+    assert!(
+        !rail_message(&messages),
+        "a release off the row published {messages:?}"
+    );
+    assert!(
+        invalid,
+        "a release that changes the row's form left the layout valid, so the held form stays drawn"
     );
 }
 
