@@ -16,7 +16,8 @@
 //! belongs to the gallery, and nothing about a component's appearance leaks into its sample data.
 
 use micold_core::protocol::grid::{
-    GridFrame, LineId, StyleRun, WireColor, WireCursor, WireCursorShape, WireLine, WireStyle,
+    CellExtras, GridFrame, LineId, StyleRun, WireColor, WireCursor, WireCursorShape, WireLine,
+    WireStyle,
 };
 use micold_core::session::SessionId;
 
@@ -135,8 +136,16 @@ const SCREEN: &[&str] = &[
     "test every_variant_has_an_instance ... ok",
     "",
     "test result: ok. 12 passed; 0 failed",
+    "Docs: https://example.com/micold/testing  (see the manual)",
     "$ ",
 ];
+
+/// The address a program declared behind the word `manual` on the docs line (feature 031, U131):
+/// the pane marks it as that run and names this address in its hint, while the address printed
+/// before it is recognised from its text.
+const DECLARED_LINK: &str = "https://example.com/micold/manual";
+/// The word the declared link sits behind.
+const DECLARED_TEXT: &str = "manual";
 
 /// The default cell style: the terminal's own foreground on its own background, no flags.
 const DEFAULT_STYLE: WireStyle = WireStyle {
@@ -177,6 +186,17 @@ pub fn grid() -> GridCache {
             // Padded to the full width so every cell in the row is covered by a style run; the
             // resolver expects the run lengths to sum to the cell count.
             let padded = format!("{text:<width$}", width = COLS as usize);
+            // The declared run: every cell of the word carries the link, as OSC 8 leaves them.
+            let extras = match text.find(DECLARED_TEXT) {
+                Some(start) => (start..start + DECLARED_TEXT.len())
+                    .map(|col| CellExtras {
+                        col: col as u16,
+                        zerowidth: Vec::new(),
+                        hyperlink: Some(0),
+                    })
+                    .collect(),
+                None => Vec::new(),
+            };
             WireLine {
                 id: LineId(row as i64),
                 text: padded,
@@ -184,7 +204,7 @@ pub fn grid() -> GridCache {
                     len: COLS,
                     style: style_for(text),
                 }],
-                extras: Vec::new(),
+                extras,
                 wrapped: false,
             }
         })
@@ -209,7 +229,7 @@ pub fn grid() -> GridCache {
             blinking: false,
         },
         styles: vec![DEFAULT_STYLE, ACCENT_STYLE],
-        hyperlinks: Vec::new(),
+        hyperlinks: vec![DECLARED_LINK.to_string()],
         lines,
         mode: 0,
         input_serial: None,

@@ -65,6 +65,8 @@ pub struct TermPalette {
     fg: Color,
     bg: Color,
     accent: Color,
+    hint_container: Color,
+    hint_content: Color,
     ansi16: [Color; 16],
 }
 
@@ -81,6 +83,8 @@ impl TermPalette {
             fg: rgb_to_color(defaults.foreground),
             bg: rgb_to_color(defaults.background),
             accent: rgb_to_color(tokens::roles(scheme).secondary),
+            hint_container: rgb_to_color(tokens::roles(scheme).surface_container_highest),
+            hint_content: rgb_to_color(tokens::roles(scheme).on_surface),
             ansi16: STANDARD_ANSI16,
         }
     }
@@ -98,6 +102,16 @@ impl TermPalette {
     /// The focus-indicator accent color.
     pub fn accent(&self) -> Color {
         self.accent
+    }
+
+    /// The link address hint's container: a surface role, so it follows the theme (FR-009).
+    pub fn hint_container(&self) -> Color {
+        self.hint_container
+    }
+
+    /// The link address hint's text: the on-surface role over [`Self::hint_container`].
+    pub fn hint_content(&self) -> Color {
+        self.hint_content
     }
 
     /// Resolve an ANSI colour to an iced colour (16 / bright / 256 / truecolor).

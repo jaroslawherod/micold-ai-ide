@@ -408,33 +408,75 @@ impl<'g> GridRows<'g> {
         }
     }
 
+    fn id(&self, row: i64) -> LineId {
+        LineId(self.grid.viewport_top().0 - self.display_offset as i64 + row)
+    }
+
     fn line(&self, row: i64) -> Option<&'g crate::grid::CachedLine> {
-        let _ = row;
-        None
+        self.consulted.borrow_mut().push(row);
+        self.grid.line(self.id(row))
+    }
+
+    /// Whether `row` lies above everything the terminal holds or ever held: above the first line it
+    /// printed, or above a screen with no history at all (the alternate screen of `less` or `vim`).
+    /// Nothing can continue into such a row, so it reads as an empty one (contract L7).
+    fn above_everything(&self, row: i64) -> bool {
+        let id = self.id(row).0;
+        let oldest = self.grid.oldest_available().0;
+        id < oldest && (id < 0 || oldest == self.grid.viewport_top().0)
     }
 
     /// The rows read so far, sorted and without repeats.
     fn consulted(&self) -> Vec<i64> {
-        Vec::new()
+        let mut rows = self.consulted.borrow().clone();
+        rows.sort_unstable();
+        rows.dedup();
+        rows
     }
 }
 
 impl LinkRows for GridRows<'_> {
     fn text(&self, row: i64) -> Option<&str> {
-        self.line(row).map(|line| line.text.as_str())
+        match self.line(row) {
+            Some(line) => Some(line.text.as_str()),
+            None if self.above_everything(row) => Some(""),
+            None => None,
+        }
     }
 
-    fn wrapped(&self, _row: i64) -> bool {
-        false
+    fn wrapped(&self, row: i64) -> bool {
+        self.line(row).is_some_and(|line| line.wrapped)
     }
 
-    fn hyperlink(&self, _row: i64, _col: u16) -> Option<&str> {
-        None
+    fn hyperlink(&self, row: i64, col: u16) -> Option<&str> {
+        self.line(row)?
+            .extras
+            .iter()
+            .find(|extra| extra.col == col)?
+            .hyperlink
+            .as_deref()
     }
 
-    fn spacer(&self, _row: i64, _col: u16) -> bool {
-        false
+    fn spacer(&self, row: i64, col: u16) -> bool {
+        self.line(row)
+            .and_then(|line| style_at(line, col))
+            .is_some_and(|style| {
+                Flags::from_bits_truncate(style.flags)
+                    .intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER)
+            })
     }
+}
+
+/// The style of the cell at `col`, from the line's run-length style runs.
+fn style_at(line: &crate::grid::CachedLine, col: u16) -> Option<WireStyle> {
+    let mut start = 0u16;
+    for (len, style) in &line.runs {
+        if col < start.saturating_add(*len) {
+            return Some(*style);
+        }
+        start = start.saturating_add(*len);
+    }
+    None
 }
 
 /// The link under the pointer, and what it was resolved from (data-model §2, research R2).
@@ -479,27 +521,67 @@ pub(crate) fn hover_refresh(
     key: &HoverKey<'_>,
     rows_hash: impl FnOnce(&[i64]) -> u64,
 ) -> HoverRefresh {
-    let _ = (cached, key, rows_hash);
-    HoverRefresh::Resolve
+    let Some(cached) = cached else {
+        return HoverRefresh::Resolve;
+    };
+    if cached.session != key.session
+        || cached.cell != key.cell
+        || cached.display_offset != key.display_offset
+        || &cached.context != key.context
+    {
+        return HoverRefresh::Resolve;
+    }
+    if cached.grid_version == key.grid_version {
+        HoverRefresh::Reuse
+    } else if rows_hash(&cached.rows) == cached.rows_hash {
+        HoverRefresh::Revalidated
+    } else {
+        HoverRefresh::Resolve
+    }
 }
 
-/// Hash of `rows` as `grid` holds them now: text, soft wrap, declared links and cell flags.
+/// Hash of `rows` as `grid` holds them now: text, soft wrap, declared links and cell styles.
 fn rows_hash(grid: &GridCache, display_offset: usize, rows: &[i64]) -> u64 {
-    let _ = (grid, display_offset, rows);
-    0
+    use std::hash::{Hash, Hasher};
+    let lent = GridRows::new(grid, display_offset);
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for &row in rows {
+        row.hash(&mut hasher);
+        match lent.line(row) {
+            Some(line) => {
+                line.text.hash(&mut hasher);
+                line.wrapped.hash(&mut hasher);
+                line.runs.hash(&mut hasher);
+                for extra in &line.extras {
+                    (extra.col, &extra.hyperlink).hash(&mut hasher);
+                }
+            }
+            None => lent.above_everything(row).hash(&mut hasher),
+        }
+    }
+    hasher.finish()
 }
 
 /// Resolve the link at `cell` from the grid, as a fresh [`HoverCache`] for `key`.
 pub(crate) fn resolve_hover(grid: &GridCache, key: &HoverKey<'_>) -> HoverCache {
+    let lent = GridRows::new(grid, key.display_offset);
+    let (col, row) = key.cell;
+    let resolved = if col < grid.cols() && row < grid.rows() {
+        micold_core::link::line::link_at(&lent, row as i64, col)
+            .and_then(|link| micold_core::link::resolve::resolve(link, key.context))
+    } else {
+        None
+    };
+    let rows = lent.consulted();
     HoverCache {
         session: key.session,
         context: key.context.clone(),
         cell: key.cell,
         display_offset: key.display_offset,
         grid_version: key.grid_version,
-        rows: Vec::new(),
-        rows_hash: rows_hash(grid, key.display_offset, &[]),
-        resolved: None,
+        rows_hash: rows_hash(grid, key.display_offset, &rows),
+        rows,
+        resolved,
     }
 }
 
@@ -510,8 +592,10 @@ pub(crate) fn marked_link(
     mouse_mode: bool,
     shift: bool,
 ) -> Option<&ResolvedLink> {
-    let _ = (hover, mouse_mode, shift);
-    None
+    if mouse_mode && !shift {
+        return None;
+    }
+    hover?.resolved.as_ref()
 }
 
 /// The pointer over the pane: a hand over a marked link only while the link modifier is held, so it
@@ -521,11 +605,12 @@ pub(crate) fn pane_interaction(
     marked: bool,
     modifiers: keyboard::Modifiers,
 ) -> mouse::Interaction {
-    let _ = (marked, modifiers);
-    if over {
-        mouse::Interaction::Text
-    } else {
+    if !over {
         mouse::Interaction::Idle
+    } else if marked && modifiers.command() {
+        mouse::Interaction::Pointer
+    } else {
+        mouse::Interaction::Text
     }
 }
 
@@ -569,22 +654,75 @@ pub(crate) enum GestureStep {
 }
 
 /// The link gesture's state machine (contract link-opening §1, G1–G9).
+///
+/// Only a single left press with the link modifier, handled by the pane and over a marked link,
+/// starts it; a double or triple press selects as it always did (G3b). No step writes to the
+/// program or scrolls (FR-014).
 pub(crate) fn link_gesture(event: GestureEvent<'_>, pressed: Option<&LinkPress>) -> GestureStep {
-    let _ = (event, pressed);
-    GestureStep::PassThrough
+    match (event, pressed) {
+        (
+            GestureEvent::LeftPress {
+                cell,
+                command: true,
+                routing: PressRouting::HandleLocally,
+                cadence: click::Kind::Single,
+                marked: Some(link),
+            },
+            _,
+        ) => GestureStep::Press(LinkPress {
+            link: link.clone(),
+            cell,
+        }),
+        (GestureEvent::CursorMoved { cell }, Some(press)) if cell != press.cell => {
+            GestureStep::SelectFrom {
+                col: press.cell.0,
+                line: press.cell.1,
+            }
+        }
+        (GestureEvent::LeftRelease { cell, marked }, Some(press)) => {
+            GestureStep::Release(marked.filter(|_| cell == press.cell).cloned())
+        }
+        _ => GestureStep::PassThrough,
+    }
 }
+
+/// Inner padding of the address hint, in pixels.
+const HINT_PADDING: f32 = 4.0;
 
 /// Where the address hint sits: bottom-left of the content, or top-left when the pointer's row
 /// is within the hint's height of the bottom edge, so it never covers the link (research R7).
 pub(crate) fn link_hint_rect(content: Rectangle, pointer_row: u16, hint_size: Size) -> Rectangle {
-    let _ = (content, pointer_row, hint_size);
-    Rectangle::default()
+    let size = Size::new(
+        hint_size.width.min(content.width),
+        hint_size.height.min(content.height),
+    );
+    let metrics = CellMetrics::new(TERM_FONT_SIZE);
+    let bottom = content.y + content.height;
+    let row_bottom = content.y + (pointer_row as f32 + 1.0) * metrics.height;
+    let y = if row_bottom > bottom - size.height {
+        content.y
+    } else {
+        bottom - size.height
+    };
+    Rectangle::new(Point::new(content.x, y), size)
 }
 
 /// `text` cut to at most `max_chars` chars by replacing its middle with `…` (FR-008).
 pub(crate) fn elide_middle(text: &str, max_chars: usize) -> String {
-    let _ = max_chars;
-    text.to_string()
+    let count = text.chars().count();
+    if count <= max_chars {
+        return text.to_string();
+    }
+    if max_chars == 0 {
+        return String::new();
+    }
+    let kept = max_chars - 1;
+    let tail = kept / 2;
+    let head = kept - tail;
+    let mut label: String = text.chars().take(head).collect();
+    label.push('…');
+    label.extend(text.chars().skip(count - tail));
+    label
 }
 
 /// Width of the scrollback scrollbar track/thumb, in pixels.
@@ -781,6 +919,17 @@ impl<'a> TerminalPane<'a> {
         LineId(self.grid.viewport_top().0 - self.display_offset as i64 + row as i64)
     }
 
+    /// What the hover at `cell` depends on, as this view has it.
+    fn hover_key(&self, cell: (u16, u16)) -> HoverKey<'_> {
+        HoverKey {
+            session: self.session,
+            context: &self.link_context,
+            cell,
+            display_offset: self.display_offset,
+            grid_version: (self.grid.generation(), self.grid.seq()),
+        }
+    }
+
     /// The currently-selected text (for copy), or empty when nothing is selected.
     fn selectable_content(&self) -> String {
         self.selection
@@ -822,7 +971,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
 
     fn draw(
         &self,
-        _tree: &Tree,
+        tree: &Tree,
         renderer: &mut Renderer,
         _theme: &Theme,
         _style: &renderer::Style,
@@ -834,6 +983,13 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
         let content = content_bounds(bounds);
         let metrics = CellMetrics::new(TERM_FONT_SIZE);
         let default_bg = self.palette.background();
+        let state = tree.state.downcast_ref::<PaneState>();
+        // The link the pointer marks, underlined and named in the hint (FR-007, FR-008).
+        let marked = marked_link(
+            state.hover.as_ref(),
+            self.mouse_mode(),
+            state.modifiers.shift(),
+        );
 
         // Geometry below is drawn in absolute window coordinates, so the canvas frame must span
         // from the window origin to the pane's bottom-right corner. Sizing it to `viewport` breaks
@@ -868,6 +1024,17 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                         styles.push(*style);
                     }
                 }
+
+                let link_cols: Vec<std::ops::Range<u16>> = marked
+                    .map(|link| {
+                        link.link
+                            .cells
+                            .iter()
+                            .filter(|span| span.row == row as i64)
+                            .map(|span| span.cols.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default();
 
                 for (col, ch) in cached.text.chars().enumerate() {
                     let x = content.x + (col as f32) * metrics.width;
@@ -923,6 +1090,20 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                         });
                     }
 
+                    // The marked link's underline, in the glyph's own colour so the text, the
+                    // cursor and the selection stay visible under it (FR-009).
+                    if link_cols.iter().any(|cols| cols.contains(&(col as u16))) {
+                        let uy = y + metrics.height - 1.0;
+                        let underline = if is_cursor { default_bg } else { fg };
+                        frame.stroke(
+                            &Path::line(
+                                iced::Point::new(x, uy),
+                                iced::Point::new(x + metrics.width, uy),
+                            ),
+                            Stroke::default().with_width(1.0).with_color(underline),
+                        );
+                    }
+
                     // Underline / strikethrough.
                     if flags.contains(Flags::UNDERLINE) {
                         let uy = y + metrics.height - 1.0;
@@ -971,6 +1152,44 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     (thumb_w / 2.0).into(),
                 );
                 frame.fill(&thumb, Color { a: 0.5, ..fg });
+            }
+
+            // The address hint (FR-008, research R7): the marked link's `display`, middle-elided to
+            // the pane's width, bottom-left unless the pointer is down there.
+            if let (Some(link), Some(hover)) = (marked, state.hover.as_ref()) {
+                let max_chars = ((content.width - 2.0 * HINT_PADDING) / metrics.width)
+                    .floor()
+                    .max(0.0) as usize;
+                let label = elide_middle(&link.display, max_chars);
+                let size = Size::new(
+                    label.chars().count() as f32 * metrics.width + 2.0 * HINT_PADDING,
+                    metrics.height + 2.0 * HINT_PADDING,
+                );
+                let rect = link_hint_rect(content, hover.cell.1, size);
+                frame.fill_rectangle(rect.position(), rect.size(), self.palette.hint_container());
+                for (i, ch) in label.chars().enumerate() {
+                    let x = rect.x + HINT_PADDING + i as f32 * metrics.width;
+                    if x + metrics.width > rect.x + rect.width {
+                        break;
+                    }
+                    frame.fill_text(Text {
+                        content: ch.to_string(),
+                        max_width: f32::INFINITY,
+                        position: iced::Point::new(
+                            x + metrics.width / 2.0,
+                            rect.y + rect.height / 2.0,
+                        ),
+                        color: self.palette.hint_content(),
+                        size: iced::Pixels(metrics.size),
+                        font: cell_font(Flags::empty()),
+                        align_x: iced::widget::text::Alignment::Center,
+                        align_y: alignment::Vertical::Center,
+                        line_height: iced::widget::text::LineHeight::Absolute(iced::Pixels(
+                            metrics.height,
+                        )),
+                        shaping: iced::widget::text::Shaping::Advanced,
+                    });
+                }
             }
 
             // The focus indicator (FR-010, FR-010b, BUG-005): the 018 focus ring — `secondary`,
@@ -1027,6 +1246,59 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
         // Track modifiers (even when unfocused) so Shift-forces-selection works (FR-013b).
         if let Event::Keyboard(keyboard::Event::ModifiersChanged(m)) = &event {
             state.modifiers = *m;
+        }
+
+        // ---- Links: keep the link under the pointer current (feature 031, research R2, R7).
+        // Only on the events that can change it: the pointer moving, a modifier (Shift under mouse
+        // reporting, and the link modifier for the pointer), a press or release, and a redraw, which
+        // is where output that moved under a resting pointer is noticed.
+        if matches!(
+            event,
+            Event::Mouse(
+                mouse::Event::CursorMoved { .. }
+                    | mouse::Event::CursorLeft
+                    | mouse::Event::ButtonPressed(mouse::Button::Left)
+                    | mouse::Event::ButtonReleased(mouse::Button::Left)
+            ) | Event::Keyboard(keyboard::Event::ModifiersChanged(_))
+                | Event::Window(iced::window::Event::RedrawRequested(_))
+        ) {
+            let shown = |state: &PaneState| {
+                (
+                    marked_link(
+                        state.hover.as_ref(),
+                        self.mouse_mode(),
+                        state.modifiers.shift(),
+                    )
+                    .cloned(),
+                    state.modifiers.command(),
+                )
+            };
+            let before = shown(state);
+            let cell = cursor
+                .position_over(content)
+                .map(|position| grid_at(position, content, metrics));
+            match cell {
+                None => state.hover = None,
+                Some(cell) => {
+                    let key = self.hover_key(cell);
+                    match hover_refresh(state.hover.as_ref(), &key, |rows| {
+                        rows_hash(self.grid, self.display_offset, rows)
+                    }) {
+                        HoverRefresh::Reuse => {}
+                        HoverRefresh::Revalidated => {
+                            if let Some(hover) = state.hover.as_mut() {
+                                hover.grid_version = key.grid_version;
+                            }
+                        }
+                        HoverRefresh::Resolve => {
+                            state.hover = Some(resolve_hover(self.grid, &key));
+                        }
+                    }
+                }
+            }
+            if shown(state) != before {
+                shell.request_redraw();
+            }
         }
 
         // Deliberately nothing here for a press *outside* the pane (feature 023, FR-005/FR-006).
@@ -1127,16 +1399,33 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     state.reporting_button = Some(0);
                     state.reported_cell = Some((col, line));
                 } else {
+                    // Every local press counts towards the click cadence, a link press included,
+                    // so the second press of a Ctrl/Cmd double click selects a word (G3b).
                     let c = Click::new(pos, mouse::Button::Left, state.last_click);
-                    let kind = select_kind(c.kind());
                     state.last_click = Some(c);
-                    state.dragging = true;
-                    state.press_cell = Some((col, line));
-                    shell.publish(Message::Session(SessionMsg::TerminalSelectStart {
-                        col,
-                        line,
-                        kind,
-                    }));
+                    let marked = marked_link(state.hover.as_ref(), self.mouse_mode(), shift);
+                    let step = link_gesture(
+                        GestureEvent::LeftPress {
+                            cell: (col, line),
+                            command: state.modifiers.command(),
+                            routing: PressRouting::HandleLocally,
+                            cadence: c.kind(),
+                            marked,
+                        },
+                        state.link_press.as_ref(),
+                    );
+                    if let GestureStep::Press(press) = step {
+                        state.link_press = Some(press);
+                    } else {
+                        state.link_press = None;
+                        state.dragging = true;
+                        state.press_cell = Some((col, line));
+                        shell.publish(Message::Session(SessionMsg::TerminalSelectStart {
+                            col,
+                            line,
+                            kind: select_kind(c.kind()),
+                        }));
+                    }
                 }
                 shell.capture_event();
                 return;
@@ -1180,6 +1469,50 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     to_keymap_mods(state.modifiers),
                 ) {
                     shell.publish(Message::Session(SessionMsg::TerminalBytes(seq)));
+                }
+                shell.capture_event();
+                return;
+            }
+            // A link press the pointer dragged off its cell is a selection after all (G2).
+            Event::Mouse(mouse::Event::CursorMoved { position }) if state.link_press.is_some() => {
+                let (col, line) = grid_at(*position, content, metrics);
+                if let GestureStep::SelectFrom {
+                    col: from_col,
+                    line: from_line,
+                } = link_gesture(
+                    GestureEvent::CursorMoved { cell: (col, line) },
+                    state.link_press.as_ref(),
+                ) {
+                    state.link_press = None;
+                    state.dragging = true;
+                    shell.publish(Message::Session(SessionMsg::TerminalSelectStart {
+                        col: from_col,
+                        line: from_line,
+                        kind: SelectKind::Simple,
+                    }));
+                    shell.publish(Message::Session(SessionMsg::TerminalSelectUpdate {
+                        col,
+                        line,
+                    }));
+                    shell.capture_event();
+                    return;
+                }
+            }
+            // The release of a link press: the link under the pointer now opens, resolved from the
+            // grid as it is at release (G1, G9, FR-017). Nothing is written, selected or scrolled.
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+                if state.link_press.is_some() =>
+            {
+                let cell = grid_at(cursor.position().unwrap_or_default(), content, metrics);
+                let now = resolve_hover(self.grid, &self.hover_key(cell));
+                let marked = marked_link(Some(&now), self.mouse_mode(), state.modifiers.shift());
+                let step = link_gesture(
+                    GestureEvent::LeftRelease { cell, marked },
+                    state.link_press.as_ref(),
+                );
+                state.link_press = None;
+                if let GestureStep::Release(Some(link)) = step {
+                    shell.publish(Message::Session(SessionMsg::LinkActivated(link)));
                 }
                 shell.capture_event();
                 return;
@@ -1380,17 +1713,20 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
 
     fn mouse_interaction(
         &self,
-        _tree: &Tree,
+        tree: &Tree,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         _viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> mouse::Interaction {
-        if cursor.is_over(layout.bounds()) {
-            mouse::Interaction::Text
-        } else {
-            mouse::Interaction::Idle
-        }
+        let state = tree.state.downcast_ref::<PaneState>();
+        let marked = marked_link(
+            state.hover.as_ref(),
+            self.mouse_mode(),
+            state.modifiers.shift(),
+        )
+        .is_some();
+        pane_interaction(cursor.is_over(layout.bounds()), marked, state.modifiers)
     }
 }
 
