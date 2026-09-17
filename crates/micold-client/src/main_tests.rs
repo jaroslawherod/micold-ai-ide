@@ -82,6 +82,7 @@ fn a_session_the_daemon_is_not_hosting_seeds_at_zero() {
 fn update_inner_applies_window_focus_changed() {
     let mut app = App {
         caps: Capabilities::real()
+            .without_settings()
             .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener)),
         core: State::default(),
         reported_scheme: None,
@@ -134,6 +135,7 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
     // seed new sessions at the pane's actual current size instead.
     let mut app = App {
         caps: Capabilities::real()
+            .without_settings()
             .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener)),
         core: State::default(),
         reported_scheme: None,
@@ -665,9 +667,13 @@ fn a_drained_reveal_records_where_it_sent_the_list() {
 /// Builds an `App` with every field at a neutral default, so each test only spells out the
 /// fields it actually varies (mirrors the literal-construction pattern the other tests in this
 /// module already use, factored out because T100's tests need several variants of it).
+///
+/// No settings store: a test that saves must never write the developer's own `settings.json`
+/// (#368). A test that needs to read a save back gives itself a store in a temp dir.
 pub(crate) fn base_app() -> App {
     App {
         caps: Capabilities::real()
+            .without_settings()
             .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener)),
         core: State::default(),
         reported_scheme: None,
@@ -1552,6 +1558,17 @@ fn a_refusal_after_an_attach_makes_the_window_read_only_again() {
     );
 }
 
+/// #368: the app every test starts from has no settings store, so no test that saves can write
+/// the developer's own `settings.json`. The two save tests below did, on every client test run.
+#[test]
+fn the_test_app_cannot_reach_the_real_settings_file() {
+    assert!(
+        base_app().caps.settings().is_none(),
+        "`base_app()` hands tests the real settings store; a save test would write the \
+         developer's own settings.json (#368)"
+    );
+}
+
 /// T100 (BUG-003 follow-up, FR-012a/FR-012b): saving Settings while connected to a daemon must
 /// ask it to apply the service-owned fields too — not just write `settings.json` locally — so
 /// the change takes effect for that daemon's already-running sessions immediately, rather than
@@ -1640,9 +1657,6 @@ fn settings_saved_is_a_silent_no_op_toward_the_daemon_when_disconnected() {
 /// resolves, so this is a configuration the shell already has to handle.
 fn app_saving_a_placement(in_force: PlacementKind, chosen: PlacementKind) -> App {
     let mut app = base_app();
-    app.caps = Capabilities::real()
-        .without_settings()
-        .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener));
     app.placement.kind = in_force;
     app.core.settings.placement_in_force = in_force;
     app.core.settings.settings_draft = Some(SettingsDraft {
@@ -1893,6 +1907,7 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
 
     let mut app = App {
         caps: Capabilities::real()
+            .without_settings()
             .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener)),
         core: State::default(),
         reported_scheme: None,
@@ -2496,10 +2511,9 @@ fn a_failure_after_start_is_not_still_waiting_for_the_service() {
 fn a_started_sandbox_marked_stale_before_its_service_answered_is_still_coming_up() {
     use micold_client::features::connection::ConnectionStatus;
     use micold_core::sandbox::lifecycle::SandboxState;
+    // The save below goes through the real route; `base_app()` has no settings store, so it
+    // cannot reach the developer's own `settings.json` (#368).
     let mut app = app_with_a_failed_sandbox();
-    // The save below goes through the real route, so it must not reach the developer's own
-    // `settings.json`.
-    app.caps = Capabilities::real().without_settings();
     let _ = connection_failed(&mut app);
     let _ = update_inner(
         &mut app,
