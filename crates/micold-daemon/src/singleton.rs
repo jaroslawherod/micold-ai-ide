@@ -147,16 +147,15 @@ pub async fn acquire(endpoint: &Endpoint) -> io::Result<Acquisition> {
 /// the default descriptor lets Everyone and anonymous logons read it.
 #[cfg(windows)]
 pub async fn acquire(endpoint: &Endpoint) -> io::Result<Acquisition> {
-    #[allow(unused_imports)] // MUTANT
     use interprocess::os::windows::local_socket::ListenerOptionsExt;
 
     if is_live(&endpoint.socket_path).await {
         return Ok(Acquisition::AlreadyRunning);
     }
     let name = fs_name(&endpoint.socket_path)?;
-    // MUTANT (U4, U5): the pipe is bound with the default security descriptor.
-    let _ = owner_only_descriptor;
-    let options = ListenerOptions::new().name(name);
+    let options = ListenerOptions::new()
+        .name(name)
+        .security_descriptor(owner_only_descriptor()?);
     match options.create_tokio() {
         Ok(listener) => Ok(Acquisition::Bound(BoundListener {
             listener,
