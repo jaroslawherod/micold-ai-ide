@@ -321,12 +321,14 @@ pub fn encode_mouse_report(
 /// Render the terminal pane for the active session (FR-012). `grid` is the active session's
 /// daemon-streamed grid cache (colour-rendered); `None` renders an empty state. `selection` is the
 /// active `LineId`-anchored text selection, and `display_offset` how far the view is scrolled back.
+/// `link_context` is what the pane's links resolve against (feature 031, FR-012, FR-018).
 pub fn pane<'a>(
     state: &'a State,
     grid: Option<&'a GridCache>,
     selection: Option<&'a crate::selection::Selection>,
     display_offset: usize,
     scheme: ColorScheme,
+    link_context: micold_core::link::LinkContext,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
@@ -359,6 +361,8 @@ pub fn pane<'a>(
             .selection(selection)
             .display_offset(display_offset)
             .focused(state.terminal_focused())
+            .session(active)
+            .link_context(link_context)
             .into(),
         None => container(
             Text::new(empty_terminal_message(state, active), TypeRole::Caption, r).muted(),

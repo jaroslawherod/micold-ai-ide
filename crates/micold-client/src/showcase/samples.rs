@@ -216,3 +216,47 @@ pub fn grid() -> GridCache {
     });
     cache
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every line of the sample grid, top to bottom.
+    fn lines(grid: &GridCache) -> Vec<&crate::grid::CachedLine> {
+        grid.screen().into_iter().flatten().collect()
+    }
+
+    /// U131: the gallery shows the pane's two kinds of link, so both marks can be looked at.
+    #[test]
+    fn the_terminal_sample_holds_a_detected_address_and_a_declared_link() {
+        let grid = grid();
+        let detected = lines(&grid)
+            .iter()
+            .flat_map(|line| {
+                micold_core::link::detect::detect(&line.text)
+                    .into_iter()
+                    .map(|range| {
+                        line.text
+                            .chars()
+                            .skip(range.start)
+                            .take(range.len())
+                            .collect::<String>()
+                    })
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            detected
+                .iter()
+                .any(|address| address.starts_with("https://")),
+            "a detected https:// address in the sample, found {detected:?}"
+        );
+        let declared = lines(&grid)
+            .iter()
+            .flat_map(|line| line.extras.iter().filter_map(|e| e.hyperlink.clone()))
+            .collect::<Vec<_>>();
+        assert!(
+            declared.len() >= 2,
+            "a run of cells declaring a hyperlink, found {declared:?}"
+        );
+    }
+}
