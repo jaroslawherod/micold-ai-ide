@@ -102,6 +102,17 @@ pub fn running_daemon_pid(endpoint: &Endpoint) -> Option<u32> {
 }
 
 /// `true` iff something accepts connections at the endpoint right now.
+#[cfg(windows)]
+fn endpoint_is_live(endpoint: &Endpoint) -> bool {
+    use windows_sys::Win32::Foundation::ERROR_PIPE_BUSY;
+    match crate::connect::open_pipe(&endpoint.socket_path) {
+        Ok(_) => true,
+        Err(e) => e.raw_os_error() == Some(ERROR_PIPE_BUSY as i32),
+    }
+}
+
+/// `true` iff something accepts connections at the endpoint right now.
+#[cfg(not(windows))]
 fn endpoint_is_live(endpoint: &Endpoint) -> bool {
     use interprocess::local_socket::{prelude::*, GenericFilePath, Stream};
     match endpoint
@@ -156,7 +167,9 @@ fn terminate_daemon(pid: u32) -> io::Result<()> {
 #[cfg(windows)]
 fn terminate_daemon(pid: u32) -> io::Result<()> {
     use std::os::windows::ffi::OsStringExt;
-    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, WAIT_FAILED};
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, ERROR_INVALID_PARAMETER, HANDLE, WAIT_FAILED, WAIT_TIMEOUT,
+    };
     use windows_sys::Win32::System::Threading::{
         OpenProcess, QueryFullProcessImageNameW, TerminateProcess, WaitForSingleObject,
         PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
@@ -185,7 +198,12 @@ fn terminate_daemon(pid: u32) -> io::Result<()> {
         )
     };
     if raw.is_null() {
-        return Err(io::Error::last_os_error());
+        let err = io::Error::last_os_error();
+        // No process has this pid any more: it already exited, as ESRCH is on Unix.
+        if err.raw_os_error() == Some(ERROR_INVALID_PARAMETER as i32) {
+            return Ok(());
+        }
+        return Err(err);
     }
     let process = Process(raw);
 
@@ -218,8 +236,17 @@ fn terminate_daemon(pid: u32) -> io::Result<()> {
         if TerminateProcess(process.0, 1) == 0 {
             return Err(io::Error::last_os_error());
         }
-        if WaitForSingleObject(process.0, EXIT_WAIT_MS) == WAIT_FAILED {
-            return Err(io::Error::last_os_error());
+        match WaitForSingleObject(process.0, EXIT_WAIT_MS) {
+            WAIT_FAILED => return Err(io::Error::last_os_error()),
+            WAIT_TIMEOUT => {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!(
+                        "daemon pid {pid} did not exit within {EXIT_WAIT_MS} ms of termination"
+                    ),
+                ))
+            }
+            _ => {}
         }
     }
     Ok(())
