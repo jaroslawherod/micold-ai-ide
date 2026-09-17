@@ -1842,12 +1842,36 @@ long notification and the bottom strip is the showcase's three poses.
 element has already taken the key — so a tab clicked in the terminal bar stays unmarked while the
 terminal holds the keyboard, and the keystroke is not sent to it a second time (FR-022a).
 
-- [ ] T188 Failing test first: in `crates/micold-client/src/ui/material/field_focus.rs`, mount a widget that captures every key ahead of a `Button`, click the button, press Space and Enter, and assert only the capturing widget's message is published and the button's indicator stays `None`; beside it, keep BUG-013's `a_clicked_button_takes_the_keyboard_and_draws_no_indicator` passing unchanged. Red today (FR-022a)
+- [X] T188 Failing test first: in `crates/micold-client/src/ui/material/field_focus.rs`, mount a widget that captures every key ahead of a `Button`, click the button, press Space and Enter, and assert only the capturing widget's message is published and the button's indicator stays `None`; beside it, keep BUG-013's `a_clicked_button_takes_the_keyboard_and_draws_no_indicator` passing unchanged. Red today (FR-022a)
 
-- [ ] T189 In `crates/micold-client/src/ui/material/keyboard_focus.rs`, answer a claimed key in `TakesTheKeyboard::update` only when `shell.is_event_captured()` is false, and say why in the module docs. T188 goes green (FR-022a)
+- [X] T189 In `crates/micold-client/src/ui/material/keyboard_focus.rs`, answer a claimed key in `TakesTheKeyboard::update` only when `shell.is_event_captured()` is false, and say why in the module docs. T188 goes green (FR-022a)
 
-- [ ] T190 Run the workspace gate (`mise run gate`) and record the result here
+- [X] T190 Run the workspace gate (`mise run gate`) and record the result here
 
-- [ ] T191 Confirm on a rendered frame, dark scheme, that clicking the `claude` tab and pressing Space in the terminal leaves the tab without a ring while the terminal keeps its own; record what was captured
+- [X] T191 Confirm on a rendered frame, dark scheme, that clicking the `claude` tab and pressing Space in the terminal leaves the tab without a ring while the terminal keeps its own; record what was captured
+
+**Red record (T188)** — 2026-09-17, against the unfixed wrapper (`origin/main` at `5c371812`),
+`cargo test -p micold-client --lib field_focus`: `a_clicked_button_leaves_a_key_something_before_it_took`
+failed with "Space went to the terminal, which captured it; the clicked tab after it must not send its
+press a second time (BUG-016)", `left: ["terminal", "saved"]` / `right: ["terminal"]`. The other 27
+`field_focus` tests passed, BUG-013's `a_clicked_button_takes_the_keyboard_and_draws_no_indicator`
+among them.
+
+**Pass record (T190)** — 2026-09-17, on `5c371812` plus this change: `mise run gate` exited 0 — fmt,
+clippy (core, then workspace, `-D warnings`), `cargo test --workspace` 3249 passed, 0 failed (summed
+over every `test result` line), and every `scripts/tests/*.test.sh`. No snapshot moved.
+
+**Rendered-frame record (T191)** — 2026-09-17, dark scheme, on Xvfb (1600×1000) with lavapipe, not a
+real display. `micold-ai-ide` and `micold-daemon` were built together and run from a private copy (the
+daemon log shows `client attached to daemon`). Steps: start a session, click the terminal bar's `+`,
+click the `claude` tab, move the pointer away, press Space, then Enter. On `origin/main` the tab drew
+the `secondary` ring and focus layer after Space, beside the terminal pane's ring. With the fix it
+drew neither after Space or after Enter, and the pane kept its own ring. Two paths where a button sits
+*before* the pane were also probed with the fix: the sidebar's `+` start action (clicked, pointer left
+on it) and the worktree refresh action (clicked, pointer moved away), each followed by Space with the
+terminal focused. Neither drew a ring, and neither started a second session or refreshed again. Not
+exercised: the light scheme, which this change does not touch. Crop:
+[`evidence/BUG-016-no-ring-after-fix.png`](evidence/BUG-016-no-ring-after-fix.png). The top strip (red
+border) is `origin/main` after Space, and the bottom strip (blue) is this branch after Space.
 
 **Bugfix**: 2026-09-17 — BUG-016 added Phase 28 (T188–T191). **No task is reopened.** T176–T177 are complete as written: their tests drive a button alone, with nothing else in the tree to take a key first.

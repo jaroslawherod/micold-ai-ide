@@ -33,6 +33,10 @@
 //! heavier opacity rather than a second layer summed onto the first; and a pointer press moves the
 //! keyboard here without showing it, so the ring marks keyboard focus only (FR-022a).
 //!
+//! A key another widget has already captured is not keyboard use of this control either (BUG-016):
+//! a clicked terminal-bar tab still holds this focus while the terminal pane takes every key, and
+//! answering those drew the tab's ring beside the pane's and re-sent the tab's press.
+//!
 //! [`state::FOCUS_RING_WIDTH`]: micold_core::tokens::state::FOCUS_RING_WIDTH
 
 use iced::advanced::widget::{operation, tree, Operation, Tree, Widget};
@@ -382,7 +386,14 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
 
         // Before the child sees it, and captured: nothing this wraps answers a key at all, so there
         // is nothing to wait for and nothing underneath that wanted the press.
-        if before {
+        //
+        // Unless something earlier in the tree has already taken it. A row or a column hands every
+        // event to every child whether or not one captured it, and a click can leave this holding
+        // focus while the application gives the keyboard elsewhere: a terminal-bar tab keeps it
+        // while the terminal pane laid out above it writes each key to its process. That key is the
+        // terminal's, not one this control answers, so it neither re-sends the press nor shows the
+        // ring beside the terminal's own (FR-022a, BUG-016).
+        if before && !shell.is_event_captured() {
             if let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event {
                 if let Some(message) = self.message_for(key) {
                     // Keyboard use, so from here the focus is shown — whatever put it here.
