@@ -902,3 +902,71 @@ fn a_clicked_button_leaves_a_key_something_before_it_took() {
          beside the terminal's own (FR-022a, BUG-016)",
     );
 }
+
+// A button laid out *before* the widget that takes the key sees it first, so no check on the key can
+// help it. What does is taking its focus away when the terminal takes the keyboard (BUG-016).
+
+/// A button, then the stand-in terminal — the sidebar's order — inside the window-level wrapper that
+/// knows whether the terminal holds the keyboard.
+fn button_before_terminal<'a>(r: Roles, terminal_holds_keyboard: bool) -> Element<'a, String> {
+    crate::ui::cdk::keyboard_elsewhere::KeyboardElsewhere::new(
+        iced::widget::column![Element::from(button(r)), Element::new(TakesEveryKey)],
+        terminal_holds_keyboard,
+    )
+    .into()
+}
+
+impl Mounted<'_> {
+    /// The keyboard wrapper's state for the button inside [`button_before_terminal`].
+    fn first_button_focus(&self) -> super::keyboard_focus::Focus {
+        *self.tree.children[0].children[0]
+            .state
+            .downcast_ref::<super::keyboard_focus::Focus>()
+    }
+}
+
+#[test]
+fn a_button_before_the_terminal_leaves_the_terminals_keys_alone() {
+    use iced::keyboard::key::Named;
+
+    let r = roles();
+    let mut mounted = Mounted::new(button_before_terminal(r, true));
+    let at = mounted.node.children()[0].bounds().center();
+    // The sidebar's start action, clicked while the terminal holds the keyboard.
+    mounted.press(at);
+
+    for key in [Named::Space, Named::Enter] {
+        assert_eq!(
+            mounted.press_key(key),
+            vec!["terminal".to_string()],
+            "{key:?} is the terminal's: a button laid out before it must not answer it first — it \
+             would start a second session and take the key from the terminal (BUG-016)",
+        );
+    }
+    assert!(
+        !mounted.first_button_focus().held().0,
+        "the button must not keep focus while the terminal holds the keyboard (BUG-016)",
+    );
+}
+
+#[test]
+fn a_ring_goes_when_the_terminal_takes_the_keyboard() {
+    let r = roles();
+    let mut mounted = Mounted::new(button_before_terminal(r, false));
+    mounted.focus_next();
+    assert!(
+        mounted.first_button_focus().indicator(true, false).is_some(),
+        "precondition: a traversal shows the ring",
+    );
+
+    // The application hands the keyboard to the terminal; the next frame is the first event after.
+    mounted.rebuild(button_before_terminal(r, true));
+    mounted.redraw();
+
+    assert_eq!(
+        mounted.first_button_focus().indicator(true, false),
+        None,
+        "a ring left on a button while every key goes to the terminal marks the keyboard where it is \
+         not (FR-022a, BUG-016)",
+    );
+}
