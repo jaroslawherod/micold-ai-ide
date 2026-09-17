@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M2: wait for #358 (outside this flow) to merge; then `git rebase origin/main`, push #361 with `--force-with-lease`, rebase-merge on green `ci complete`, record the merge; then dispatch M3
+- **Next step**: M2: #358 merged; #361 green at 5f567ab6 but CONFLICTING after main moved (Cargo manifests, both sides added `iced_runtime`); rebased and resolved, gate on the rebased head, then push, rebase-merge on green `ci complete`, record the merge; then dispatch M3
 
 ## Pull requests
 
@@ -17,7 +17,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #336 | Spec | merged | 411711c1 |
 | #341 | Design (clarify, plan, tasks, milestones) | merged | 226d3a8b |
 | #356 | M1 Link recognition core | merged | 33f6491c |
-| #361 | M2 Opening pipeline | open, CI red | — |
+| #361 | M2 Opening pipeline | open, rebased after #358 | — |
 
 ## Milestones
 
