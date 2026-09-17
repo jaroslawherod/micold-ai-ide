@@ -24,6 +24,14 @@
 //! (a traversal, then Enter on a start action) stops showing it without waiting for a keystroke.
 //! Not on every event: an operation walks the whole tree, and the terminal redraws continually.
 //!
+//! # What it assumes
+//!
+//! No text field or select lives in the wrapped content while the terminal can hold the keyboard:
+//! every one is in a dialog (an overlay, which `operate` does not reach) or in Settings (which turns
+//! `terminal_focused` off). The flag is read from the last `view`, so a field placed in the window
+//! itself — a sidebar filter, an inline rename — could lose a focus a click gave it to a key arriving
+//! in the same event batch. Such a field needs its own answer here first.
+//!
 //! It holds no appearance and adds no layout node, which is why it lives in the `cdk`.
 
 use iced::advanced::widget::operation::focusable;
