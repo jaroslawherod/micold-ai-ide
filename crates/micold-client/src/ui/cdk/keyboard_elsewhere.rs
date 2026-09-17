@@ -123,7 +123,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for KeyboardElsewhere<'a,
         let arrived = self.elsewhere && !seen.elsewhere;
         seen.elsewhere = self.elsewhere;
         let key = matches!(event, Event::Keyboard(keyboard::Event::KeyPressed { .. }));
-        if false && self.elsewhere && (arrived || key) { // RED STUB
+        if self.elsewhere && (arrived || key) {
             let mut unfocus = focusable::unfocus::<()>();
             self.content.as_widget_mut().operate(
                 &mut tree.children[0],

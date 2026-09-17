@@ -350,6 +350,12 @@ pub fn view<'a>(
     .width(Length::Fill)
     .height(Length::Fill)
     .into();
+    // 018 BUG-016: while the terminal holds the keyboard, no button anywhere in the window keeps a
+    // widget focus a click gave it — or it answers Enter and Space ahead of, or as well as, the
+    // terminal, and draws its ring beside the terminal's. Around the whole window rather than the
+    // terminal bar, because the sidebar's buttons are laid out before the pane and see a key first.
+    let base: Element<'a, Message> =
+        cdk::keyboard_elsewhere::KeyboardElsewhere::new(base, state.terminal_focused()).into();
 
     // Every floating surface from here down is *pushed onto one overlay* rather than wrapped
     // around the previous one (FR-008). The order they are pushed in is not the order they are

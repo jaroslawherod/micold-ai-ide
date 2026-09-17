@@ -955,7 +955,10 @@ fn a_ring_goes_when_the_terminal_takes_the_keyboard() {
     let mut mounted = Mounted::new(button_before_terminal(r, false));
     mounted.focus_next();
     assert!(
-        mounted.first_button_focus().indicator(true, false).is_some(),
+        mounted
+            .first_button_focus()
+            .indicator(true, false)
+            .is_some(),
         "precondition: a traversal shows the ring",
     );
 

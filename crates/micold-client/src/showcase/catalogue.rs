@@ -856,4 +856,13 @@ pub const EXEMPTIONS: &[Exemption] = &[
                  no pixel to what it wraps. What a secondary press *produces* is the `ContextMenu` \
                  the floating section poses, on both of its anchors.",
     },
+    Exemption {
+        module: "cdk/keyboard_elsewhere.rs",
+        component: "KeyboardElsewhere",
+        reason: "a behaviour-layer wrapper with no appearance: it delegates layout, draw, operate \
+                 and overlay to its single child and, while told the terminal holds the keyboard, \
+                 clears every widget focus before a key reaches the child (018 BUG-016). What it \
+                 changes is a focus ring that is *not* drawn, which the gallery cannot pose; its \
+                 rule is held by `material/field_focus.rs`'s tests.",
+    },
 ];
