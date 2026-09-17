@@ -14,6 +14,7 @@
 //! and a change to how they *behave* never opens a style function.
 
 pub mod context_area;
+pub mod keyboard_elsewhere;
 pub mod motion;
 pub mod overlay;
 pub mod picker;
