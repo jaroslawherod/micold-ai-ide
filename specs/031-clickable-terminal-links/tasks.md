@@ -236,7 +236,7 @@ the `env_include.rs` builders (plan, Target Platform).
   - web and mail addresses open in the default browser or mail client;
   - a link a program declared behind its text is marked as that text and shows, and opens, the address it declares;
   - the "Couldn't open …" notification.
-- [ ] T034 [US1] Verify the milestone: `mise run gate`, then `cargo check --target aarch64-apple-darwin -p micold-client`, then the `visual-pass` skill for quickstart §B.1–B.7 and §B.12 using `scripts/links-fixture.sh`. Record rows in `specs/031-clickable-terminal-links/visual-pass.md`. US1 and US2's pane scenarios are complete only when the T082 and T083 acceptance tests A1–A11 and A13 are green. It confirms acceptance rows A1–A11 and A13 and carries no markers, so it is not ticked by them.
+- [x] T034 [US1] Verify the milestone: `mise run gate`, then `cargo check --target aarch64-apple-darwin -p micold-client`, then the `visual-pass` skill for quickstart §B.1–B.7 and §B.12 using `scripts/links-fixture.sh`. Record rows in `specs/031-clickable-terminal-links/visual-pass.md`. US1 and US2's pane scenarios are complete only when the T082 and T083 acceptance tests A1–A11 and A13 are green. It confirms acceptance rows A1–A11 and A13 and carries no markers, so it is not ticked by them.
 
 **Checkpoint (M3)**: US1, and US2's declared links in the pane, work end to end on Linux, and CI is green on all three OSes.
 

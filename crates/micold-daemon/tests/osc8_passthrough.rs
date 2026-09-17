@@ -63,7 +63,8 @@ fn an_osc8_link_printed_through_the_pty_reaches_the_grid_cell() {
                 })
             })
             .collect();
-        if !declared.is_empty() {
+        // A read can split the child's output, so wait for the whole run, not its first cell.
+        if declared.iter().map(|(c, _)| c.as_str()).collect::<String>() == TEXT {
             break;
         }
         std::thread::sleep(Duration::from_millis(50));
