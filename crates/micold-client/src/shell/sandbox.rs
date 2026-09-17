@@ -10,6 +10,8 @@
 //! enough to read.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use iced::Task;
 use micold_client::app::Message;
@@ -182,19 +184,90 @@ pub struct BootPlan {
 /// SC-004's "continuous progress".
 pub fn boot(
     plan: BootPlan,
-    running: &mut Option<iced::task::Handle>,
+    running: &mut Option<InFlight>,
 ) -> iced::Task<micold_client::app::Message> {
     BringUp::now(plan).run(running)
 }
 
 /// Cancel the bring-up in `running`, if there is one: one still waiting its delay never starts, and
-/// one under way reports nothing more (FR-036a). It does not interrupt a runtime call already in
-/// progress: `start` runs on a blocking thread and finishes its stages, so a bring-up cancelled
-/// mid-pull can still create the container after the move's own stop found none (a race the
-/// launch-time bring-up has always had; recorded as a BUG-005 follow-up).
-pub fn cancel(running: &mut Option<iced::task::Handle>) {
-    if let Some(handle) = running.take() {
-        handle.abort();
+/// one under way reports nothing more (FR-036a).
+///
+/// A runtime call already in progress is not interrupted — `start` runs on a blocking thread — but
+/// the bring-up issues no further command, and removes the container if it had already begun
+/// creating or starting it. Without that, one cancelled mid-pull went on to create the container
+/// after the move's own stop had found none, and left it holding the control port (#369).
+pub fn cancel(running: &mut Option<InFlight>) {
+    if let Some(in_flight) = running.take() {
+        in_flight.cancel();
+    }
+}
+
+/// A bring-up that was run, and what cancels it (see [`cancel`]).
+#[derive(Debug, Clone)]
+pub struct InFlight {
+    task: iced::task::Handle,
+    cancelled: Arc<AtomicBool>,
+}
+
+impl InFlight {
+    fn cancel(self) {
+        self.cancelled.store(true, Ordering::SeqCst);
+        self.task.abort();
+    }
+}
+
+/// The runner a bring-up drives the runtime through, which refuses every command once the bring-up
+/// is cancelled and remembers whether the container was already being made (#369).
+struct Cancellable<R> {
+    runner: R,
+    cancelled: Arc<AtomicBool>,
+    launched: AtomicBool,
+}
+
+impl<R: CommandRunner> Cancellable<R> {
+    fn admit(&self, args: &[std::ffi::OsString]) -> std::io::Result<()> {
+        if self.cancelled.load(Ordering::SeqCst) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "the sandbox bring-up was cancelled",
+            ));
+        }
+        // Marked before the command runs: a cancel that lands while it runs still cleans up.
+        if args.first().is_some_and(|a| a == "create" || a == "start") {
+            self.launched.store(true, Ordering::SeqCst);
+        }
+        Ok(())
+    }
+
+    /// Remove the container, if this bring-up was cancelled after it began making one. By name,
+    /// because a `create` interrupted mid-way never reported an id.
+    fn clean_up(&self, runtime: micold_core::sandbox::runtime::RuntimeKind) {
+        use micold_core::sandbox::runtime::{ContainerId, ContainerRuntime};
+        if self.cancelled.load(Ordering::SeqCst) && self.launched.load(Ordering::SeqCst) {
+            let _ = CliRuntime::new(runtime, &self.runner)
+                .remove(&ContainerId(CONTAINER_NAME.to_string()));
+        }
+    }
+}
+
+impl<R: CommandRunner> CommandRunner for Cancellable<R> {
+    fn run(
+        &self,
+        program: &std::ffi::OsStr,
+        args: &[std::ffi::OsString],
+    ) -> std::io::Result<micold_core::sandbox::exec::CommandOutput> {
+        self.admit(args)?;
+        self.runner.run(program, args)
+    }
+
+    fn run_streaming(
+        &self,
+        program: &std::ffi::OsStr,
+        args: &[std::ffi::OsString],
+        on_line: &mut dyn FnMut(&str),
+    ) -> std::io::Result<micold_core::sandbox::exec::CommandOutput> {
+        self.admit(args)?;
+        self.runner.run_streaming(program, args, on_line)
     }
 }
 
@@ -226,28 +299,33 @@ impl BringUp {
     /// Run it, keeping what cancels it in `running` (see [`cancel`]). A bring-up only starts when
     /// none is in flight, so the one it replaces has finished; it is cancelled regardless, so two
     /// can never run against the one container.
-    pub fn run(
-        self,
-        running: &mut Option<iced::task::Handle>,
-    ) -> iced::Task<micold_client::app::Message> {
-        let (task, handle) = self.task().abortable();
-        if let Some(previous) = running.replace(handle) {
-            previous.abort();
+    pub fn run(self, running: &mut Option<InFlight>) -> iced::Task<micold_client::app::Message> {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let (task, handle) = self.task(cancelled.clone()).abortable();
+        let in_flight = InFlight {
+            task: handle,
+            cancelled,
+        };
+        if let Some(previous) = running.replace(in_flight) {
+            previous.cancel();
         }
         task
     }
 
     /// Run it against the real container runtime. Private: every caller goes through [`Self::run`],
     /// or the bring-up it starts cannot be cancelled.
-    fn task(self) -> iced::Task<micold_client::app::Message> {
+    fn task(self, cancelled: Arc<AtomicBool>) -> iced::Task<micold_client::app::Message> {
         #[cfg(test)]
         SCHEDULED.with(|scheduled| scheduled.borrow_mut().push(self.clone()));
         #[cfg(not(test))]
-        let stream = self.stream(SystemRunner);
+        let stream = self.stream(SystemRunner, cancelled);
         // A test runs the work an update returns to see what it reports, and must never reach the
         // host's container runtime by doing so.
         #[cfg(test)]
-        let stream = self.stream(micold_core::sandbox::exec::RecordingRunner::new());
+        let stream = self.stream(
+            micold_core::sandbox::exec::RecordingRunner::new(),
+            cancelled,
+        );
         iced::Task::stream(stream)
     }
 
@@ -262,19 +340,27 @@ impl BringUp {
     fn stream<R: CommandRunner + 'static>(
         self,
         runner: R,
+        cancelled: Arc<AtomicBool>,
     ) -> impl iced::futures::Stream<Item = Message> + Send + 'static {
         let Self { plan, after } = self;
         reported(after, move |observe| {
             let facts = HostFacts::gather(plan.state_dir);
-            start(
+            let runner = Cancellable {
+                runner,
+                cancelled,
+                launched: AtomicBool::new(false),
+            };
+            let outcome = start(
                 &plan.profile,
                 &plan.projects,
                 &facts,
                 control_port(),
-                runner,
+                &runner,
                 observe,
             )
-            .map(|ready| ready.started)
+            .map(|ready| ready.started);
+            runner.clean_up(plan.profile.runtime);
+            outcome
         })
     }
 }
@@ -615,7 +701,7 @@ mod tests {
         };
 
         let messages: Vec<Message> = BringUp::now(plan)
-            .stream(RecordingRunner::new())
+            .stream(RecordingRunner::new(), Default::default())
             .collect()
             .await;
 
@@ -666,6 +752,116 @@ mod tests {
         assert!(
             waited >= DELAY,
             "the bring-up started {waited:?} after it was asked for, before its {DELAY:?} delay (S-6)"
+        );
+    }
+
+    /// The runtime a bring-up drives, scripted as far as a created and started sandbox, which
+    /// cancels the bring-up as the first command whose argv begins with `cancel_on` is issued — the
+    /// moment a person moves the placement to the host while that command runs (#369).
+    struct CancelledDuring {
+        runtime: std::sync::Arc<micold_core::sandbox::exec::RecordingRunner>,
+        cancel_on: &'static str,
+        cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    impl CancelledDuring {
+        fn new(cancel_on: &'static str) -> Self {
+            use micold_core::sandbox::exec::{CommandOutput, RecordingRunner};
+            let fixture = |name: &str| {
+                std::fs::read_to_string(
+                    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                        .join("../micold-core/tests/fixtures/runtime")
+                        .join(name),
+                )
+                .expect("runtime fixture")
+            };
+            // Probe (version, info), the image already present, no sandbox yet, the network,
+            // create's own probe, create, start.
+            let runtime = RecordingRunner::new();
+            runtime.push_ok(fixture("docker_version.json"));
+            runtime.push_ok(fixture("docker_info.json"));
+            runtime.push_ok(fixture("docker_inspect_image.json"));
+            runtime.push(Ok(CommandOutput::err(
+                1,
+                "Error: No such container: micold-sandbox",
+            )));
+            runtime.push_ok("micold-sandbox-net");
+            runtime.push_ok(fixture("docker_version.json"));
+            runtime.push_ok(fixture("docker_info.json"));
+            runtime.push_ok("9f2b1c4d7e8a");
+            runtime.push_ok("");
+            Self {
+                runtime: std::sync::Arc::new(runtime),
+                cancel_on,
+                cancelled: std::sync::Arc::default(),
+            }
+        }
+    }
+
+    impl CommandRunner for CancelledDuring {
+        fn run(
+            &self,
+            program: &std::ffi::OsStr,
+            args: &[std::ffi::OsString],
+        ) -> std::io::Result<micold_core::sandbox::exec::CommandOutput> {
+            let out = self.runtime.run(program, args);
+            if args.first().is_some_and(|first| first == self.cancel_on) {
+                self.cancelled
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+            out
+        }
+    }
+
+    async fn bring_up_cancelled_during(cancel_on: &'static str) -> Vec<String> {
+        use iced::futures::StreamExt;
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        let plan = BootPlan {
+            profile: SandboxProfile::default(),
+            state_dir: state_dir.path().to_path_buf(),
+            projects: Vec::new(),
+        };
+        let runtime = CancelledDuring::new(cancel_on);
+        let (runtime_log, cancelled) = (runtime.runtime.clone(), runtime.cancelled.clone());
+        let _: Vec<Message> = BringUp::now(plan)
+            .stream(runtime, cancelled)
+            .collect()
+            .await;
+        runtime_log
+            .calls()
+            .iter()
+            .map(|call| call.args_lossy().join(" "))
+            .collect()
+    }
+
+    /// Cancelled before the container exists, a bring-up creates nothing: the move's own stop found
+    /// no container, and one created afterwards would be nobody's (#369).
+    #[tokio::test]
+    async fn a_bring_up_cancelled_before_create_creates_no_container() {
+        let commands = bring_up_cancelled_during("image").await;
+
+        assert!(
+            !commands
+                .iter()
+                .any(|c| c.starts_with("create") || c.starts_with("start")),
+            "a cancelled bring-up went on to create the sandbox: {commands:?}"
+        );
+    }
+
+    /// Cancelled once the container is being created, the bring-up removes what it made rather than
+    /// leave it holding the control port (#369).
+    #[tokio::test]
+    async fn a_bring_up_cancelled_during_create_removes_the_container_it_made() {
+        let commands = bring_up_cancelled_during("create").await;
+
+        assert!(
+            !commands.iter().any(|c| c.starts_with("start")),
+            "a cancelled bring-up started the sandbox: {commands:?}"
+        );
+        assert_eq!(
+            commands.last().map(String::as_str),
+            Some("rm -f micold-sandbox"),
+            "a cancelled bring-up left its container behind: {commands:?}"
         );
     }
 
