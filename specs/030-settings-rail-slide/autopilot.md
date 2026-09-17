@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature (entered as a bug, [BUG-004](../027-sandboxed-daemon-runtime/bugs/BUG-004.md); switched to Phase 1, see D6)
 - **Worktree branch**: fix/settings-side-bar-should-be-animated
 - **Started**: 2026-09-14
-- **Phase**: 5 close
-- **Next step**: close PR: review, gate, open, merge; then the handoff
+- **Phase**: done
+- **Next step**: none; handoff sent
 
 ## Pull requests
 
@@ -18,7 +18,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #339 | PR 2: plan | merged | b27ffe62 |
 | #340 | PR 3: M1, the sidebar curve | merged | 31ed5ea6 |
 | #360 | PR 4: M2, the settings rail slide | merged | 3997a17f |
-| #372 | PR 5: close | open | — |
+| #372 | PR 5: close | merged | 71c32766 |
 | #344 | Side PR (D24): the held-Pi daemon test keeps its session on the guard's `PATH` | merged | ce4fe7ba |
 
 ## Milestones
