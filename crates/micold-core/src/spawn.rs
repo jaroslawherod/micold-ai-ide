@@ -393,4 +393,25 @@ mod tests {
         );
         assert!(still_running, "the foreign process must be left running");
     }
+
+    #[cfg(windows)]
+    #[test]
+    fn terminate_treats_an_exited_pid_as_stopped() {
+        // Like ESRCH on Unix: a daemon that exited between the liveness check and the stop leaves
+        // nothing to stop. `OpenProcess` on a pid with no process returns ERROR_INVALID_PARAMETER.
+        let mut exited = Command::new("cmd")
+            .args(["/c", "exit", "0"])
+            .spawn()
+            .expect("spawn a short-lived process");
+        let pid = exited.id();
+        exited.wait().unwrap();
+        drop(exited);
+
+        let stopped = terminate_daemon(pid);
+
+        assert!(
+            stopped.is_ok(),
+            "terminating a pid that has already exited is success; got {stopped:?}"
+        );
+    }
 }
