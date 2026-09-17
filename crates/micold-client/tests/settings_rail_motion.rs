@@ -474,8 +474,7 @@ fn rail_controls(surface: &mut Surface) -> (Vec<Rectangle>, Rectangle) {
 }
 
 /// What the user asked for takes effect on the press, whatever the rail is doing: the collapsed
-/// flag flips before any frame, a section chosen mid-slide is shown at once, and each of Settings'
-/// two exits closes the draft mid-slide (FR-010).
+/// flag flips before any frame (FR-010).
 #[test]
 fn the_state_flips_on_the_press() {
     let mut surface = Surface::new(false);
@@ -491,7 +490,13 @@ fn the_state_flips_on_the_press() {
         surface.under.state.settings.settings_rail_collapsed,
         "the flag waited for the slide instead of flipping on the press"
     );
+}
 
+/// A section chosen mid-slide is shown at once (FR-010).
+#[test]
+fn a_section_chosen_mid_slide_is_shown_at_once() {
+    let mut surface = Surface::new(false);
+    surface.toggle();
     pump_to_mid_slide(&mut surface);
     let shown = |s: &Surface| {
         s.under
@@ -517,7 +522,12 @@ fn the_state_flips_on_the_press() {
         "a row pressed mid-slide published nothing for {target:?}: {messages:?}"
     );
     assert_eq!(shown(&surface), *target, "the section waited for the slide");
+}
 
+/// Each of Settings' two exits closes the draft mid-slide (FR-010).
+#[test]
+fn an_exit_mid_slide_closes_settings() {
+    let mut surface = Surface::new(false);
     for (exit, published) in [(SAVE, "Saved"), (CANCEL, "Cancelled")] {
         surface.send(Message::Settings(SettingsMsg::Opened));
         surface.toggle();
@@ -628,7 +638,8 @@ fn rail_fraction(width: f32) -> f32 {
 /// No row reflows while the rail moves and no icon jumps: every row with an icon, and the collapse
 /// control, keeps its rest height on every frame of both slides, and between frames each icon moves
 /// no further than its two rest positions apart times the fraction of the width change made, plus
-/// half a pixel, and never away from where it is heading (FR-013, FR-014, SC-007).
+/// half a pixel, is within half a pixel of the line between its rest positions at that fraction,
+/// and never moves away from where it is heading (FR-013, FR-014, SC-007).
 #[test]
 fn rows_keep_their_height_and_icons_their_line() {
     let expanded = rail_rows(&mut Surface::new(false));
@@ -692,6 +703,13 @@ fn rows_keep_their_height_and_icons_their_line() {
                     "frame {frame} (from collapsed: {start_collapsed}): row {index}'s icon stepped \
                      {} (from {before} to {x}) at width {width}; the bound is {bound}",
                     (x - before).abs()
+                );
+                // The step bound alone lets an icon lag; it is on the line itself, every frame.
+                let on_line = x_icons + (x_labelled - x_icons) * f;
+                assert!(
+                    (x - on_line).abs() <= HALF_PIXEL,
+                    "frame {frame} (from collapsed: {start_collapsed}): row {index}'s icon is at {x}, \
+                     off its line at {on_line} (fraction {f})"
                 );
                 let target = to[index].icon_x.expect("an icon row has an icon at rest");
                 assert!(

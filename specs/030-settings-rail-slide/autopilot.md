@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature (entered as a bug, [BUG-004](../027-sandboxed-daemon-runtime/bugs/BUG-004.md); switched to Phase 1, see D6)
 - **Worktree branch**: fix/settings-side-bar-should-be-animated
 - **Started**: 2026-09-14
-- **Phase**: 4-implement
-- **Next step**: M2: PR 4 open, wait for `ci complete`, rebase-merge
+- **Phase**: 5 close
+- **Next step**: close PR: review, gate, open, merge; then the handoff
 
 ## Pull requests
 
@@ -17,7 +17,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #334 | PR 1: spec | merged | a9f54e77 |
 | #339 | PR 2: plan | merged | b27ffe62 |
 | #340 | PR 3: M1, the sidebar curve | merged | 31ed5ea6 |
-| #360 | PR 4: M2, the settings rail slide | open | — |
+| #360 | PR 4: M2, the settings rail slide | merged | 3997a17f |
+| #372 | PR 5: close | open | — |
 | #344 | Side PR (D24): the held-Pi daemon test keeps its session on the guard's `PATH` | merged | ce4fe7ba |
 
 ## Milestones
@@ -25,7 +26,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
 | M1 | T001–T004, T045–T046 | The worktree sidebar hides and shows on `emphasized` over `medium_4`, never narrower than its rail, handing over to it once no wider | #340 | merged 31ed5ea6 |
-| M2 | T005–T044 | The settings rail slides, with icons on their line, badges marked, focus kept, pointer confined | #360 | open |
+| M2 | T005–T044 | The settings rail slides, with icons on their line, badges marked, focus kept, pointer confined | #360 | merged 3997a17f |
 
 ## Decisions
 
@@ -73,6 +74,9 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M2 | code r2 (A) | MINOR F3: all three forms are laid out every layout | R4 needs both rest forms' glyph x on every layout (the selection exception, A11, is read from `x_labelled` changing on rebuild); the `marked` layout is round 1's F2, declined above |
 | M2 | code r2 (A) | MINOR F4–F6: repeated unused-marked-slot predicate, repeated drawn-child lookup, `sliding` flag | Fixed: `RowSlide::is_unused` and `RowSlide::drawn_in`; tests green |
 | — (spec) | spec r2 | F6 part: file a bug against 018 for the sidebar's linear curve | Writing into 018's directory is outside this flow (the only allowed edit to another spec is the bug path's patch). 030 carries the fix as FR-003 and cites 018 SC-010 in its assumptions; the rest of F6 was fixed |
+| close | converge | 2 LOW `partial`: stale doc comments in `section_list.rs` (module "no state", `is_unused`) | Fixed as T047 |
+| close | tdd-verify | PASS_WITH_GAPS: M2 test-first is `LIKELY` (one squashed commit; the cycle log is the evidence); MED: A7's step check is only a bound; MED: U15 bundles three FR-010 claims; LOW ×3 | Fixed T048 (on-line check, mutant `powf(1.2)` now caught) and T049 (split); T050–T052 need no action per `tdd/verification.md`; the squash is the PR workflow's, not a gap |
+| close | docguard | FAIL 910/2430, all repo-wide: no `docs-canonical/` (Structure, Test-Spec, Environment, API-Surface), CHANGELOG `[Unreleased]` (release-please owns it), README passive voice, TODOs in `main.rs`/`server.rs`, no `AGENTS.md`, no Spec IDs, release-please configs undocumented, TRC004 on every spec's FRs (no test in the repo uses `@req`; tests cite FR IDs in doc comments) | None of it is this feature's: no finding names a file this flow wrote except TRC004, which is the repository's convention; adopting docguard's layout is a repo decision outside this flow |
 
 ## Open escalation
 
