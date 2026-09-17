@@ -348,3 +348,17 @@ existed and failed before the implementation.
     `at 0 ms the row with no icon Rectangle { x: 8.0, y: 96.0, width: 272.0, height: 40.0 } reached past the rail's
     padding at 276.45435`, the real code passes
 - commit: see the M2 milestone commit
+
+## Cycle 13: close-phase test tightening (T048, T049, from `tdd/verification.md`)
+
+- T048, A7: `rows_keep_their_height_and_icons_their_line` also asserts each icon is within `HALF_PIXEL` of
+  `x_icons + (x_labelled − x_icons) · f` on every frame, not only that its step is bounded
+  - mutant *icon lags its line* (`offset` uses `fraction.powf(1.2)`): the old test passes (`1 passed`); the new one
+    fails `frame 2 (from collapsed: false): row 1's icon is at 23.579834, off its line at 23.060314 (fraction
+    0.7645912)`; restored, `settings_rail_motion` -> 19 passed
+  - the task's suggested mutant, *halve `offset`'s coefficient*, is no test of this check: it moves the icons at rest
+    too, which the test reads as its endpoints (`layout_snapshot` is what holds the rest positions); *`fraction ·
+    fraction`* is caught by the step bound already, before and after
+- T049, U15: `the_state_flips_on_the_press` split into it, `a_section_chosen_mid_slide_is_shown_at_once` and
+  `an_exit_mid_slide_closes_settings`, one FR-010 sub-claim each; assertions unchanged; green
+- commit: see the close PR

@@ -2,9 +2,10 @@
 //! 027 FR-026/FR-026a).
 //!
 //! A column of named destinations, one of them current. Pressing one emits its message; the
-//! caller changes what it shows and passes a new selection back. The component holds no state of
-//! its own, which is what lets the same rail serve a settings surface today and anything else
-//! later — the selection lives where the thing being selected lives.
+//! caller changes what it shows and passes a new selection back. The component holds no application
+//! state (only its slide lives in the widget tree, see below), which is what lets the same rail
+//! serve a settings surface today and anything else later — the selection lives where the thing
+//! being selected lives.
 //!
 //! # Why this is in the library
 //!
@@ -561,8 +562,8 @@ impl<M> RowSlide<'_, M> {
         }
     }
 
-    /// Whether `child` is an unbadged row's marked form, which is never drawn and so is neither
-    /// laid out nor given events.
+    /// Whether `child` is an unbadged row's marked form, which is never drawn: it gets a zero-size
+    /// node and no events, and is laid out only to hand back focus it holds.
     fn is_unused(&self, child: usize) -> bool {
         matches!(self.forms, Forms::Sliding(_)) && child == slot(RowForm::Marked) && !self.has_badge
     }
@@ -621,7 +622,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for RowSlide<'_, M> {
             .zip(tree.children.iter_mut())
             .enumerate()
             .map(|(child, (form, tree))| {
-                // An unbadged row's marked form is never drawn, so it is not laid out either.
+                // An unbadged row's marked form is never drawn, so it gets a zero-size node here.
                 if unused[child] {
                     layout::Node::new(Size::ZERO)
                 } else {

@@ -277,3 +277,22 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   `scripts/build-lock.sh cargo test -p micold-client --test settings_rail_motion --test layout_snapshot`;
   quickstart §A.3; `specs/030-settings-rail-slide/visual-pass.md`
 - **Depends on**: M1 (T019 compares the rail with the eased drawer)
+
+---
+
+## Phase 7: Convergence
+
+- [X] T047 Correct two stale doc comments in `crates/micold-client/src/ui/material/section_list.rs`: the module docs' "The component holds no state of its own" (lines 5–7) now sits above `Rail`'s widget-tree `Slide` state (lines 889–893), so say it holds no *application* state (the selection and the collapsed flag are the caller's; only the slide lives in the widget tree); and `RowSlide::is_unused`'s "neither laid out nor given events" (lines 564–565) and the "so it is not laid out either" comment (line 624) contradict the focus step that lays that form out at `ROW_WIDTH` on every layout (lines 638–645), so say it gets a zero-size node and is laid out only to take focus back. Comments only, no behaviour change per plan Constitution VII / T030 and ledger *Declined review findings* M2 code r1 (B) F2 (partial)
+
+---
+
+## Phase 8: TDD remediation
+
+From `tdd/verification.md` (verdict `PASS_WITH_GAPS`; no blocking findings — none of these are
+required before the feature can be considered done, but each is a real gap worth closing).
+
+- [X] T048 [Finding 1, MED] Tighten `rows_keep_their_height_and_icons_their_line` in `crates/micold-client/tests/settings_rail_motion.rs:689-694` so its per-frame icon-step check compares against the value `offset()` itself predicts for that frame (within the existing `HALF_PIXEL` tolerance), not only an upper bound, so a regression that moves an icon too slowly (under-scaled or stalled) fails it. Verify: `scripts/build-lock.sh cargo test -p micold-client --test settings_rail_motion rows_keep_their_height_and_icons_their_line -- --exact`, then apply the mutant *halve the `offset` formula's coefficient* and confirm it now fails (it currently would not). *Done in close:* that mutant also moves the icons at rest, which the test reads as its endpoints, so it is `layout_snapshot`'s; the lagging mutant `fraction.powf(1.2)` passes the old test and fails the new check (cycle-log cycle 13)
+- [X] T049 [Finding 2, MED] Split `the_state_flips_on_the_press` in `crates/micold-client/tests/settings_rail_motion.rs:479-540` into separate tests per FR-010 sub-claim (flip-on-press; mid-slide section change; mid-slide Save/Cancel closing), so a CI summary line names which sub-claim broke. Verify: `scripts/build-lock.sh cargo test -p micold-client --test settings_rail_motion -- state_flips` (or the new names) all green
+- [X] T050 [Finding 3, LOW] No action required now — flagged as a repository-wide convention (`layout.rs`/`rail_icons_align.rs` already locate nodes by tree-index path); revisit only if a future structural change in `ui::view` produces a wave of path-based failures in `settings_rail_motion.rs`
+- [X] T051 [Finding 4, LOW] No action required — an isolated restatement of one multiplication in `crates/micold-client/src/ui/material/navigation_drawer.rs:545`'s test table, not a pattern; leave as is
+- [X] T052 [Finding 5, LOW] No action required — A3's approval-style verification (quickstart §A.3's rectangle-set comparison) is the rubric's expected shape for a snapshot/approval test; record any future re-run of that comparison in `tdd/cycle-log.md` so it stops being self-reported only

@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-14
 
-**Status**: Draft
+**Status**: Closed 2026-09-17 — shipped in PRs #340 (M1, the sidebar curve) and #360 (M2, the settings rail slide); side PR #344
 
 **Input**: User description: "bug: the settings side bar should be animated. it should has the hide and show animation similar like the worktrees tree view"
 
