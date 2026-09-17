@@ -30,7 +30,9 @@ use iced::{
     alignment, keyboard, mouse, Color, Element, Event, Length, Point, Rectangle, Renderer, Size,
     Theme,
 };
+use micold_core::link::{LinkContext, LinkRows, ResolvedLink};
 use micold_core::protocol::grid::{LineId, WireColor, WireStyle};
+use micold_core::session::SessionId;
 use micold_core::tokens::state::FOCUS_RING_WIDTH;
 
 /// Reports the terminal area's size in *cells* to the app, whatever is currently drawn in it
@@ -236,6 +238,10 @@ struct PaneState {
     /// touchpads deliver deltas smaller than one cell, which would otherwise round away to nothing
     /// (BUG-002). See [`wheel_lines`].
     scroll_residual: f32,
+    /// The link under the pointer (feature 031, research R2).
+    hover: Option<HoverCache>,
+    /// A Ctrl/Cmd press on a link awaiting its release (research R6).
+    link_press: Option<LinkPress>,
 }
 
 /// The pane's character area: `bounds` less a gutter of the 018 focus ring's width on every side
@@ -380,6 +386,207 @@ pub(crate) fn wheel_lines(delta: mouse::ScrollDelta, cell_height: f32, residual:
     }
 }
 
+// ---- Links (feature 031): hover, the Ctrl/Cmd+click gesture and the address hint ----
+
+/// The rows `micold_core::link` reads, lent by the grid cache (contract link-recognition §1).
+///
+/// `row` is relative to the viewport's top line as drawn, so the scrollback offset is part of the
+/// mapping. Every row asked for is recorded, so the hover can later tell whether the rows its link
+/// was read from changed (research R2).
+pub(crate) struct GridRows<'g> {
+    grid: &'g GridCache,
+    display_offset: usize,
+    consulted: std::cell::RefCell<Vec<i64>>,
+}
+
+impl<'g> GridRows<'g> {
+    pub(crate) fn new(grid: &'g GridCache, display_offset: usize) -> Self {
+        Self {
+            grid,
+            display_offset,
+            consulted: std::cell::RefCell::new(Vec::new()),
+        }
+    }
+
+    fn line(&self, row: i64) -> Option<&'g crate::grid::CachedLine> {
+        let _ = row;
+        None
+    }
+
+    /// The rows read so far, sorted and without repeats.
+    fn consulted(&self) -> Vec<i64> {
+        Vec::new()
+    }
+}
+
+impl LinkRows for GridRows<'_> {
+    fn text(&self, row: i64) -> Option<&str> {
+        self.line(row).map(|line| line.text.as_str())
+    }
+
+    fn wrapped(&self, _row: i64) -> bool {
+        false
+    }
+
+    fn hyperlink(&self, _row: i64, _col: u16) -> Option<&str> {
+        None
+    }
+
+    fn spacer(&self, _row: i64, _col: u16) -> bool {
+        false
+    }
+}
+
+/// The link under the pointer, and what it was resolved from (data-model §2, research R2).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct HoverCache {
+    pub session: Option<SessionId>,
+    pub context: LinkContext,
+    pub cell: (u16, u16),
+    pub display_offset: usize,
+    pub grid_version: (u64, u64),
+    /// The rows `link_at` read, relative to the viewport top.
+    pub rows: Vec<i64>,
+    pub rows_hash: u64,
+    pub resolved: Option<ResolvedLink>,
+}
+
+/// What a hover is asked about: the pane's inputs at this event.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct HoverKey<'k> {
+    pub session: Option<SessionId>,
+    pub context: &'k LinkContext,
+    pub cell: (u16, u16),
+    pub display_offset: usize,
+    pub grid_version: (u64, u64),
+}
+
+/// Whether a cached hover still answers `key` (research R2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum HoverRefresh {
+    /// Nothing it depends on moved.
+    Reuse,
+    /// The grid moved but the rows the link was read from did not: keep it at the new version.
+    Revalidated,
+    /// Run `link_at` again.
+    Resolve,
+}
+
+/// Decide whether `cached` still answers `key`. `rows_hash` hashes the given rows of the current
+/// grid, and is called only when the grid version moved.
+pub(crate) fn hover_refresh(
+    cached: Option<&HoverCache>,
+    key: &HoverKey<'_>,
+    rows_hash: impl FnOnce(&[i64]) -> u64,
+) -> HoverRefresh {
+    let _ = (cached, key, rows_hash);
+    HoverRefresh::Resolve
+}
+
+/// Hash of `rows` as `grid` holds them now: text, soft wrap, declared links and cell flags.
+fn rows_hash(grid: &GridCache, display_offset: usize, rows: &[i64]) -> u64 {
+    let _ = (grid, display_offset, rows);
+    0
+}
+
+/// Resolve the link at `cell` from the grid, as a fresh [`HoverCache`] for `key`.
+pub(crate) fn resolve_hover(grid: &GridCache, key: &HoverKey<'_>) -> HoverCache {
+    HoverCache {
+        session: key.session,
+        context: key.context.clone(),
+        cell: key.cell,
+        display_offset: key.display_offset,
+        grid_version: key.grid_version,
+        rows: Vec::new(),
+        rows_hash: rows_hash(grid, key.display_offset, &[]),
+        resolved: None,
+    }
+}
+
+/// The link the pane marks: the hovered one, except under mouse reporting without Shift, where the
+/// pointer belongs to the program (FR-016).
+pub(crate) fn marked_link(
+    hover: Option<&HoverCache>,
+    mouse_mode: bool,
+    shift: bool,
+) -> Option<&ResolvedLink> {
+    let _ = (hover, mouse_mode, shift);
+    None
+}
+
+/// The pointer over the pane: a hand over a marked link only while the link modifier is held, so it
+/// shows exactly when a click would open it (FR-007, clarification 2026-09-16).
+pub(crate) fn pane_interaction(
+    over: bool,
+    marked: bool,
+    modifiers: keyboard::Modifiers,
+) -> mouse::Interaction {
+    let _ = (marked, modifiers);
+    if over {
+        mouse::Interaction::Text
+    } else {
+        mouse::Interaction::Idle
+    }
+}
+
+/// A Ctrl/Cmd press on a link, waiting for its release (research R6).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LinkPress {
+    pub link: ResolvedLink,
+    pub cell: (u16, u16),
+}
+
+/// What the pane saw, as far as the link gesture cares (contract link-opening §1).
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum GestureEvent<'a> {
+    LeftPress {
+        cell: (u16, u16),
+        command: bool,
+        routing: PressRouting,
+        cadence: click::Kind,
+        marked: Option<&'a ResolvedLink>,
+    },
+    CursorMoved {
+        cell: (u16, u16),
+    },
+    LeftRelease {
+        cell: (u16, u16),
+        marked: Option<&'a ResolvedLink>,
+    },
+}
+
+/// What the gesture does with an event.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum GestureStep {
+    /// Not the gesture's event: today's handling runs.
+    PassThrough,
+    /// A link press begins; no selection starts.
+    Press(LinkPress),
+    /// The pointer left the press cell: the press becomes a selection from that cell.
+    SelectFrom { col: u16, line: u16 },
+    /// The press ends; the link under the pointer at release, if any, opens.
+    Release(Option<ResolvedLink>),
+}
+
+/// The link gesture's state machine (contract link-opening §1, G1–G9).
+pub(crate) fn link_gesture(event: GestureEvent<'_>, pressed: Option<&LinkPress>) -> GestureStep {
+    let _ = (event, pressed);
+    GestureStep::PassThrough
+}
+
+/// Where the address hint sits: bottom-left of the content, or top-left when the pointer's row
+/// is within the hint's height of the bottom edge, so it never covers the link (research R7).
+pub(crate) fn link_hint_rect(content: Rectangle, pointer_row: u16, hint_size: Size) -> Rectangle {
+    let _ = (content, pointer_row, hint_size);
+    Rectangle::default()
+}
+
+/// `text` cut to at most `max_chars` chars by replacing its middle with `…` (FR-008).
+pub(crate) fn elide_middle(text: &str, max_chars: usize) -> String {
+    let _ = max_chars;
+    text.to_string()
+}
+
 /// Width of the scrollback scrollbar track/thumb, in pixels.
 const SCROLLBAR_WIDTH: f32 = 10.0;
 /// Smallest thumb height so it stays grabbable over a deep history (FR-016).
@@ -456,6 +663,17 @@ pub struct TerminalPane<'a> {
     display_offset: usize,
     palette: TermPalette,
     focused: bool,
+    session: Option<SessionId>,
+    link_context: LinkContext,
+}
+
+/// What a link resolves against when the caller names no context: this machine, unsandboxed.
+fn local_link_context() -> LinkContext {
+    LinkContext {
+        host_names: Vec::new(),
+        windows_host: cfg!(windows),
+        sandbox: None,
+    }
 }
 
 /// The style used for a cell not covered by the line's runs (a protocol violation that must never
@@ -477,7 +695,21 @@ impl<'a> TerminalPane<'a> {
             display_offset: 0,
             palette,
             focused: false,
+            session: None,
+            link_context: local_link_context(),
         }
+    }
+
+    /// The session this pane shows: a hover never outlives a switch to another one (FR-007).
+    pub fn session(mut self, session: SessionId) -> Self {
+        self.session = Some(session);
+        self
+    }
+
+    /// What the pane's links resolve against (FR-012, FR-018).
+    pub fn link_context(mut self, context: LinkContext) -> Self {
+        self.link_context = context;
+        self
     }
 
     /// The active text selection to highlight and copy from (client-side, `LineId`-anchored).
@@ -2612,5 +2844,1300 @@ mod tests {
             batched, 61,
             "stale relative deltas accumulate instead of converging"
         );
+    }
+
+    // --- Links (feature 031): hover, the gesture and the address hint ---
+    //
+    // The pure decisions are tested as functions; the wiring through the real `update`,
+    // `mouse_interaction` and widget state is driven headless, with one tree kept across events so
+    // the pane's hover and press survive between them as they do on screen.
+
+    mod links {
+        use super::*;
+        use iced::advanced::widget::Tree;
+        use iced::advanced::{clipboard, layout::Limits, Layout, Shell};
+        use micold_core::link::{CellSpan, LinkOrigin, Target};
+        use micold_core::protocol::grid::{
+            CellExtras, GridFrame, StyleRun, WireCursor, WireCursorShape, WireLine,
+        };
+        use std::ops::Range;
+
+        const COLS: u16 = 60;
+        const ROWS: u16 = 6;
+        const SENTENCE: &str = "See https://example.com/docs/page.html for details.";
+        const ADDRESS: &str = "https://example.com/docs/page.html";
+        /// The address's cells in [`SENTENCE`].
+        const ADDRESS_COLS: Range<u16> = 4..38;
+        const OUTSIDE: Point = Point::new(-40.0, -40.0);
+
+        /// A spacer cell's style: the wide char before it is two cells wide.
+        const SPACER_STYLE: WireStyle = WireStyle {
+            flags: Flags::WIDE_CHAR_SPACER.bits(),
+            ..DEFAULT_STYLE
+        };
+        const LEADING_SPACER_STYLE: WireStyle = WireStyle {
+            flags: Flags::LEADING_WIDE_CHAR_SPACER.bits(),
+            ..DEFAULT_STYLE
+        };
+
+        /// One grid row as a test spells it.
+        #[derive(Clone, Default)]
+        struct Row {
+            text: String,
+            wrapped: bool,
+            declared: Vec<(Range<u16>, String)>,
+            spacers: Vec<u16>,
+            leading_spacers: Vec<u16>,
+        }
+
+        fn row(text: &str) -> Row {
+            Row {
+                text: text.to_string(),
+                ..Row::default()
+            }
+        }
+
+        impl Row {
+            fn wrapped(mut self) -> Self {
+                self.wrapped = true;
+                self
+            }
+            fn declare(mut self, cols: Range<u16>, uri: &str) -> Self {
+                self.declared.push((cols, uri.to_string()));
+                self
+            }
+            fn spacer(mut self, col: u16) -> Self {
+                self.spacers.push(col);
+                self
+            }
+            fn leading_spacer(mut self, col: u16) -> Self {
+                self.leading_spacers.push(col);
+                self
+            }
+        }
+
+        fn wire(id: i64, row: &Row, hyperlinks: &mut Vec<String>) -> WireLine {
+            let mut text: String = row.text.clone();
+            while text.chars().count() < COLS as usize {
+                text.push(' ');
+            }
+            let style_at = |col: u16| {
+                if row.spacers.contains(&col) {
+                    1
+                } else if row.leading_spacers.contains(&col) {
+                    2
+                } else {
+                    0
+                }
+            };
+            let mut runs: Vec<StyleRun> = Vec::new();
+            for col in 0..text.chars().count() as u16 {
+                let style = style_at(col);
+                match runs.last_mut() {
+                    Some(run) if run.style == style => run.len += 1,
+                    _ => runs.push(StyleRun { len: 1, style }),
+                }
+            }
+            let mut extras = Vec::new();
+            for (cols, uri) in &row.declared {
+                let index = match hyperlinks.iter().position(|u| u == uri) {
+                    Some(i) => i,
+                    None => {
+                        hyperlinks.push(uri.clone());
+                        hyperlinks.len() - 1
+                    }
+                };
+                for col in cols.clone() {
+                    extras.push(CellExtras {
+                        col,
+                        zerowidth: Vec::new(),
+                        hyperlink: Some(index as u16),
+                    });
+                }
+            }
+            WireLine {
+                id: LineId(id),
+                text,
+                runs,
+                extras,
+                wrapped: row.wrapped,
+            }
+        }
+
+        fn frame(
+            seq: u64,
+            lines: &[(i64, Row)],
+            viewport_top: i64,
+            oldest: i64,
+            mode: u32,
+        ) -> GridFrame {
+            let mut hyperlinks = Vec::new();
+            let lines = lines
+                .iter()
+                .map(|(id, row)| wire(*id, row, &mut hyperlinks))
+                .collect();
+            GridFrame {
+                session: SessionId::from_uuid(uuid::Uuid::nil()),
+                seq,
+                generation: 1,
+                full: seq == 1,
+                viewport_top: LineId(viewport_top),
+                oldest_available: LineId(oldest),
+                cols: COLS,
+                rows: ROWS,
+                cursor: WireCursor {
+                    line: LineId(viewport_top),
+                    col: 0,
+                    shape: WireCursorShape::Block,
+                    visible: false,
+                    blinking: false,
+                },
+                styles: vec![DEFAULT_STYLE, SPACER_STYLE, LEADING_SPACER_STYLE],
+                hyperlinks,
+                lines,
+                mode,
+                input_serial: None,
+            }
+        }
+
+        /// A grid whose screen starts at line 0 and holds `rows` from the top.
+        fn screen(rows: &[Row]) -> GridCache {
+            screen_in_mode(rows, 0)
+        }
+
+        fn screen_in_mode(rows: &[Row], mode: u32) -> GridCache {
+            let lines: Vec<(i64, Row)> = rows
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(i, r)| (i as i64, r))
+                .collect();
+            let mut cache = GridCache::default();
+            cache.apply(&frame(1, &lines, 0, 0, mode));
+            cache
+        }
+
+        fn mouse_reporting() -> u32 {
+            TermMode::MOUSE_REPORT_CLICK.bits()
+        }
+
+        /// The centre of the cell at `col`, `row` in a pane laid out at the window origin.
+        fn at(col: u16, row: u16) -> Point {
+            let m = CellMetrics::new(TERM_FONT_SIZE);
+            Point::new(
+                FOCUS_RING_WIDTH + (col as f32 + 0.5) * m.width,
+                FOCUS_RING_WIDTH + (row as f32 + 0.5) * m.height,
+            )
+        }
+
+        fn window() -> Size {
+            let m = CellMetrics::new(TERM_FONT_SIZE);
+            Size::new(
+                COLS as f32 * m.width + 2.0 * FOCUS_RING_WIDTH,
+                ROWS as f32 * m.height + 2.0 * FOCUS_RING_WIDTH,
+            )
+        }
+
+        fn local() -> LinkContext {
+            local_link_context()
+        }
+
+        fn url_link(address: &str, row: i64, cols: Range<u16>, origin: LinkOrigin) -> ResolvedLink {
+            ResolvedLink {
+                link: Link {
+                    address: address.to_string(),
+                    origin,
+                    cells: vec![CellSpan { row, cols }],
+                },
+                display: address.to_string(),
+                target: Target::Url(address.to_string()),
+                needs_confirmation: false,
+            }
+        }
+
+        use micold_core::link::Link;
+
+        /// A pane kept across events, as the window keeps it.
+        struct Pane {
+            grid: GridCache,
+            display_offset: usize,
+            focused: bool,
+            session: SessionId,
+            context: LinkContext,
+            tree: Option<Tree>,
+            renderer: Renderer,
+        }
+
+        impl Pane {
+            fn new(grid: GridCache) -> Self {
+                Self {
+                    grid,
+                    display_offset: 0,
+                    focused: true,
+                    session: SessionId::from_uuid(uuid::Uuid::nil()),
+                    context: local(),
+                    tree: None,
+                    renderer: super::presses::headless(),
+                }
+            }
+
+            fn unfocused(mut self) -> Self {
+                self.focused = false;
+                self
+            }
+
+            fn send(&mut self, cursor: Point, event: Event) -> Vec<Message> {
+                let mut element: Element<'_, Message> = TerminalPane::new(
+                    &self.grid,
+                    TermPalette::from_scheme(micold_core::theme::ColorScheme::Dark),
+                )
+                .display_offset(self.display_offset)
+                .focused(self.focused)
+                .session(self.session)
+                .link_context(self.context.clone())
+                .into();
+                if self.tree.is_none() {
+                    self.tree = Some(Tree::new(&element));
+                }
+                let tree = self.tree.as_mut().expect("just made");
+                tree.diff(&element);
+                let node = element.as_widget_mut().layout(
+                    tree,
+                    &self.renderer,
+                    &Limits::new(Size::ZERO, window()),
+                );
+                let mut messages = Vec::new();
+                let mut shell = Shell::new(&mut messages);
+                element.as_widget_mut().update(
+                    tree,
+                    &event,
+                    Layout::new(&node),
+                    mouse::Cursor::Available(cursor),
+                    &self.renderer,
+                    &mut clipboard::Null,
+                    &mut shell,
+                    &Rectangle::with_size(window()),
+                );
+                messages
+            }
+
+            fn interaction(&mut self, cursor: Point) -> mouse::Interaction {
+                let element: Element<'_, Message> = TerminalPane::new(
+                    &self.grid,
+                    TermPalette::from_scheme(micold_core::theme::ColorScheme::Dark),
+                )
+                .display_offset(self.display_offset)
+                .focused(self.focused)
+                .session(self.session)
+                .link_context(self.context.clone())
+                .into();
+                let mut element = element;
+                if self.tree.is_none() {
+                    self.tree = Some(Tree::new(&element));
+                }
+                let tree = self.tree.as_mut().expect("just made");
+                tree.diff(&element);
+                let node = element.as_widget_mut().layout(
+                    tree,
+                    &self.renderer,
+                    &Limits::new(Size::ZERO, window()),
+                );
+                element.as_widget().mouse_interaction(
+                    tree,
+                    Layout::new(&node),
+                    mouse::Cursor::Available(cursor),
+                    &Rectangle::with_size(window()),
+                    &self.renderer,
+                )
+            }
+
+            fn state(&self) -> &PaneState {
+                self.tree
+                    .as_ref()
+                    .expect("the pane has seen an event")
+                    .state
+                    .downcast_ref::<PaneState>()
+            }
+
+            /// The link the pane marks now.
+            fn marked(&self) -> Option<ResolvedLink> {
+                let mode = TermMode::from_bits_truncate(self.grid.mode());
+                marked_link(
+                    self.state().hover.as_ref(),
+                    mode.intersects(TermMode::MOUSE_MODE),
+                    self.state().modifiers.shift(),
+                )
+                .cloned()
+            }
+
+            fn hover(&mut self, col: u16, row: u16) -> Vec<Message> {
+                self.send(at(col, row), moved(at(col, row)))
+            }
+
+            fn hold(&mut self, cursor: Point, modifiers: keyboard::Modifiers) -> Vec<Message> {
+                self.send(
+                    cursor,
+                    Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)),
+                )
+            }
+
+            /// Press and release the left button at the cell, with whatever modifiers are held.
+            fn click(&mut self, col: u16, row: u16) -> Vec<Message> {
+                let mut published = self.send(at(col, row), press());
+                published.extend(self.send(at(col, row), release()));
+                published
+            }
+        }
+
+        fn moved(position: Point) -> Event {
+            Event::Mouse(mouse::Event::CursorMoved { position })
+        }
+
+        fn press() -> Event {
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+        }
+
+        fn release() -> Event {
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+        }
+
+        fn redraw() -> Event {
+            Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            ))
+        }
+
+        fn activations(published: &[Message]) -> Vec<ResolvedLink> {
+            published
+                .iter()
+                .filter_map(|m| match m {
+                    Message::Session(SessionMsg::LinkActivated(link)) => Some(link.clone()),
+                    _ => None,
+                })
+                .collect()
+        }
+
+        fn a_link() -> ResolvedLink {
+            url_link(ADDRESS, 0, ADDRESS_COLS, LinkOrigin::Detected)
+        }
+
+        // --- The gesture, as a function (contract link-opening §1) ---
+
+        fn press_at(
+            cell: (u16, u16),
+            command: bool,
+            routing: PressRouting,
+            cadence: click::Kind,
+            marked: Option<&ResolvedLink>,
+        ) -> GestureEvent<'_> {
+            GestureEvent::LeftPress {
+                cell,
+                command,
+                routing,
+                cadence,
+                marked,
+            }
+        }
+
+        /// U106, G1.
+        #[test]
+        fn a_command_press_released_on_its_cell_opens_the_link() {
+            let link = a_link();
+            let step = link_gesture(
+                press_at(
+                    (10, 0),
+                    true,
+                    PressRouting::HandleLocally,
+                    click::Kind::Single,
+                    Some(&link),
+                ),
+                None,
+            );
+            let pressed = LinkPress {
+                link: link.clone(),
+                cell: (10, 0),
+            };
+            assert_eq!(
+                step,
+                GestureStep::Press(pressed.clone()),
+                "the press waits for its release"
+            );
+            assert_eq!(
+                link_gesture(
+                    GestureEvent::LeftRelease {
+                        cell: (10, 0),
+                        marked: Some(&link)
+                    },
+                    Some(&pressed)
+                ),
+                GestureStep::Release(Some(link)),
+                "released on the press cell, the link opens (FR-004)"
+            );
+        }
+
+        /// U107, G2.
+        #[test]
+        fn leaving_the_press_cell_turns_the_press_into_a_selection_from_it() {
+            let pressed = LinkPress {
+                link: a_link(),
+                cell: (10, 0),
+            };
+            assert_eq!(
+                link_gesture(GestureEvent::CursorMoved { cell: (11, 0) }, Some(&pressed)),
+                GestureStep::SelectFrom { col: 10, line: 0 }
+            );
+            assert_eq!(
+                link_gesture(GestureEvent::CursorMoved { cell: (10, 0) }, Some(&pressed)),
+                GestureStep::PassThrough,
+                "moving within the press cell is still a click"
+            );
+            assert_eq!(
+                link_gesture(GestureEvent::CursorMoved { cell: (11, 0) }, None),
+                GestureStep::PassThrough,
+                "without a link press, motion is today's"
+            );
+        }
+
+        /// U108 and U110: G3, G4, and the repeated presses of G3b.
+        #[test]
+        fn a_plain_press_or_a_repeated_click_is_not_the_gesture() {
+            let link = a_link();
+            for cadence in [
+                click::Kind::Single,
+                click::Kind::Double,
+                click::Kind::Triple,
+            ] {
+                assert_eq!(
+                    link_gesture(
+                        press_at(
+                            (10, 0),
+                            false,
+                            PressRouting::HandleLocally,
+                            cadence,
+                            Some(&link)
+                        ),
+                        None
+                    ),
+                    GestureStep::PassThrough,
+                    "a {cadence:?} press without the link modifier selects as today"
+                );
+            }
+            for cadence in [click::Kind::Double, click::Kind::Triple] {
+                assert_eq!(
+                    link_gesture(
+                        press_at(
+                            (10, 0),
+                            true,
+                            PressRouting::HandleLocally,
+                            cadence,
+                            Some(&link)
+                        ),
+                        None
+                    ),
+                    GestureStep::PassThrough,
+                    "a {cadence:?} press selects even with the link modifier (G3b)"
+                );
+            }
+            assert_eq!(
+                link_gesture(
+                    press_at(
+                        (10, 0),
+                        true,
+                        PressRouting::HandleLocally,
+                        click::Kind::Single,
+                        None
+                    ),
+                    None
+                ),
+                GestureStep::PassThrough,
+                "a command press over plain text is not the gesture"
+            );
+        }
+
+        /// U111, G5.
+        #[test]
+        fn a_press_routed_to_the_program_is_not_the_gesture() {
+            let link = a_link();
+            assert_eq!(
+                link_gesture(
+                    press_at(
+                        (10, 0),
+                        true,
+                        PressRouting::MouseReport,
+                        click::Kind::Single,
+                        Some(&link)
+                    ),
+                    None
+                ),
+                GestureStep::PassThrough
+            );
+        }
+
+        /// U114, G9.
+        #[test]
+        fn the_release_opens_the_link_under_the_pointer_then_or_nothing() {
+            let pressed = LinkPress {
+                link: a_link(),
+                cell: (10, 0),
+            };
+            let other = url_link("https://other.example", 0, 4..25, LinkOrigin::Detected);
+            assert_eq!(
+                link_gesture(
+                    GestureEvent::LeftRelease {
+                        cell: (10, 0),
+                        marked: Some(&other)
+                    },
+                    Some(&pressed)
+                ),
+                GestureStep::Release(Some(other))
+            );
+            assert_eq!(
+                link_gesture(
+                    GestureEvent::LeftRelease {
+                        cell: (10, 0),
+                        marked: None
+                    },
+                    Some(&pressed)
+                ),
+                GestureStep::Release(None)
+            );
+            assert_eq!(
+                link_gesture(
+                    GestureEvent::LeftRelease {
+                        cell: (10, 0),
+                        marked: Some(&a_link())
+                    },
+                    None
+                ),
+                GestureStep::PassThrough,
+                "a release with no link press is today's"
+            );
+        }
+
+        // --- The gesture through the pane ---
+
+        /// U106 and U115: one activation, and nothing written, selected or scrolled.
+        #[test]
+        fn a_command_click_on_a_link_publishes_one_activation_and_nothing_else() {
+            let mut pane = Pane::new(screen(&[row(SENTENCE)]));
+            pane.hover(10, 0);
+            pane.hold(at(10, 0), keyboard::Modifiers::COMMAND);
+            let published = pane.click(10, 0);
+            assert_eq!(
+                published,
+                vec![Message::Session(SessionMsg::LinkActivated(a_link()))],
+                "exactly one LinkActivated, and no TerminalBytes, selection or scroll (FR-014)"
+            );
+            assert_eq!(pane.state().link_press, None, "the release ends the press");
+        }
+
+        /// U107 through the pane.
+        #[test]
+        fn a_command_press_dragged_off_its_cell_selects_from_the_press_cell() {
+            let mut pane = Pane::new(screen(&[row(SENTENCE)]));
+            pane.hover(10, 0);
+            pane.hold(at(10, 0), keyboard::Modifiers::COMMAND);
+            let pressed = pane.send(at(10, 0), press());
+            assert!(
+                !pressed
+                    .iter()
+                    .any(|m| matches!(m, Message::Session(SessionMsg::TerminalSelectStart { .. }))),
+                "a link press starts no selection: {pressed:?}"
+            );
+            let dragged = pane.send(at(14, 0), moved(at(14, 0)));
+            assert!(
+                dragged.contains(&Message::Session(SessionMsg::TerminalSelectStart {
+                    col: 10,
+                    line: 0,
+                    kind: SelectKind::Simple
+                })),
+                "the drag selects from where it was pressed: {dragged:?}"
+            );
+            let released = pane.send(at(14, 0), release());
+            assert!(activations(&released).is_empty(), "a drag opens nothing");
+        }
+
+        /// U116 (SC-004) and U109 (G3b).
+        #[test]
+        fn plain_drags_and_double_and_triple_clicks_on_links_never_activate() {
+            let mut pane = Pane::new(screen(&[row(SENTENCE)]));
+            let mut published = Vec::new();
+            for script in 0..100 {
+                match script % 3 {
+                    0 => {
+                        published.extend(pane.hover(6, 0));
+                        published.extend(pane.send(at(6, 0), press()));
+                        published.extend(pane.send(at(20, 0), moved(at(20, 0))));
+                        published.extend(pane.send(at(20, 0), release()));
+                    }
+                    1 => {
+                        published.extend(pane.hover(16, 0));
+                        published.extend(pane.click(16, 0));
+                        published.extend(pane.click(16, 0));
+                    }
+                    _ => {
+                        published.extend(pane.hover(26, 0));
+                        published.extend(pane.click(26, 0));
+                        published.extend(pane.click(26, 0));
+                        published.extend(pane.click(26, 0));
+                    }
+                }
+            }
+            assert_eq!(
+                activations(&published).len(),
+                0,
+                "100 selections on links open nothing (SC-004)"
+            );
+
+            let mut pane = Pane::new(screen(&[row(SENTENCE)]));
+            pane.hover(10, 0);
+            pane.hold(at(10, 0), keyboard::Modifiers::COMMAND);
+            let first = pane.click(10, 0);
+            let second = pane.click(10, 0);
+            assert_eq!(
+                activations(&first).len(),
+                1,
+                "the first click of a modifier double-click opens"
+            );
+            assert_eq!(
+                activations(&second).len(),
+                0,
+                "its second press never opens again"
+            );
+            assert!(
+                second.contains(&Message::Session(SessionMsg::TerminalSelectStart {
+                    col: 10,
+                    line: 0,
+                    kind: SelectKind::Semantic
+                })),
+                "the second press counts as a double click because the link press recorded it: {second:?}"
+            );
+        }
+
+        /// U142, G7.
+        #[test]
+        fn a_middle_click_or_wheel_over_a_link_behaves_as_today() {
+            let mut pane = Pane::new(screen(&[row(SENTENCE)]));
+            pane.hover(10, 0);
+            pane.hold(at(10, 0), keyboard::Modifiers::COMMAND);
+            let mut published = pane.send(
+                at(10, 0),
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)),
+            );
+            published.extend(pane.send(
+                at(10, 0),
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Middle)),
+            ));
+            let wheel = pane.send(
+                at(10, 0),
+                Event::Mouse(mouse::Event::WheelScrolled {
+                    delta: mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 },
+                }),
+            );
+            assert!(activations(&published).is_empty() && activations(&wheel).is_empty());
+            assert_eq!(
+                wheel,
+                vec![Message::Session(SessionMsg::TerminalScrolled(1))],
+                "the wheel scrolls as today"
+            );
+        }
+
+        /// U111 through the pane: G5.
+        #[test]
+        fn under_mouse_reporting_a_command_click_goes_to_the_program() {
+            let mut pane = Pane::new(screen_in_mode(&[row(SENTENCE)], mouse_reporting()));
+            pane.hover(10, 0);
+            pane.hold(at(10, 0), keyboard::Modifiers::COMMAND);
+            let published = pane.click(10, 0);
+            assert!(
+                activations(&published).is_empty(),
+                "the program owns the click (FR-016)"
+            );
+            assert_eq!(
+                published
+                    .iter()
+                    .filter(|m| matches!(m, Message::Session(SessionMsg::TerminalBytes(_))))
+                    .count(),
+                2,
+                "the press and the release are reported: {published:?}"
+            );
+        }
+
+        /// U112, G6.
+        #[test]
+        fn under_mouse_reporting_shift_and_command_open_the_link() {
+            let mut pane = Pane::new(screen_in_mode(&[row(SENTENCE)], mouse_reporting()));
+            pane.hover(10, 0);
+            pane.hold(
+                at(10, 0),
+                keyboard::Modifiers::COMMAND | keyboard::Modifiers::SHIFT,
+            );
+            let published = pane.click(10, 0);
+            assert_eq!(activations(&published), vec![a_link()]);
+            assert!(!published
+                .iter()
+                .any(|m| matches!(m, Message::Session(SessionMsg::TerminalBytes(_)))));
+        }
+
+        /// U113, G8.
+        #[test]
+        fn a_command_click_on_an_unfocused_pane_focuses_it_and_opens_the_link() {
+            let mut pane = Pane::new(screen(&[row(SENTENCE)])).unfocused();
+            pane.hover(10, 0);
+            pane.hold(at(10, 0), keyboard::Modifiers::COMMAND);
+            let published = pane.click(10, 0);
+            assert!(
+                published.contains(&Message::Session(SessionMsg::TerminalFocused)),
+                "{published:?}"
+            );
+            assert_eq!(activations(&published), vec![a_link()]);
+        }
+
+        /// U114 through the pane: the output changed between the press and the release.
+        #[test]
+        fn the_link_at_release_opens_when_the_output_changed_under_the_press() {
+            let mut pane = Pane::new(screen(&[row(SENTENCE)]));
+            pane.hover(10, 0);
+            pane.hold(at(10, 0), keyboard::Modifiers::COMMAND);
+            pane.send(at(10, 0), press());
+            let other = "See https://example.org/changed/page for details.";
+            pane.grid.apply(&frame(2, &[(0, row(other))], 0, 0, 0));
+            let published = pane.send(at(10, 0), release());
+            let opened: Vec<String> = activations(&published)
+                .into_iter()
+                .map(|l| l.link.address)
+                .collect();
+            assert_eq!(opened, vec!["https://example.org/changed/page".to_string()]);
+
+            let mut pane = Pane::new(screen(&[row(SENTENCE)]));
+            pane.hover(10, 0);
+            pane.hold(at(10, 0), keyboard::Modifiers::COMMAND);
+            pane.send(at(10, 0), press());
+            pane.grid
+                .apply(&frame(2, &[(0, row("plain text now"))], 0, 0, 0));
+            assert!(
+                activations(&pane.send(at(10, 0), release())).is_empty(),
+                "no link at release, nothing opens"
+            );
+        }
+
+        // --- Hover (research R2, R7) ---
+
+        fn key(cell: (u16, u16), version: (u64, u64), context: &LinkContext) -> HoverKey<'_> {
+            HoverKey {
+                session: Some(SessionId::from_uuid(uuid::Uuid::nil())),
+                context,
+                cell,
+                display_offset: 0,
+                grid_version: version,
+            }
+        }
+
+        fn cached(cell: (u16, u16), version: (u64, u64), hash: u64) -> HoverCache {
+            HoverCache {
+                session: Some(SessionId::from_uuid(uuid::Uuid::nil())),
+                context: local(),
+                cell,
+                display_offset: 0,
+                grid_version: version,
+                rows: vec![0],
+                rows_hash: hash,
+                resolved: Some(a_link()),
+            }
+        }
+
+        /// U118.
+        #[test]
+        fn hover_follows_the_pointer_from_cell_to_cell() {
+            let ctx = local();
+            let hover = cached((10, 0), (1, 1), 7);
+            assert_eq!(
+                hover_refresh(Some(&hover), &key((11, 0), (1, 1), &ctx), |_| 7),
+                HoverRefresh::Resolve
+            );
+            assert_eq!(
+                hover_refresh(None, &key((11, 0), (1, 1), &ctx), |_| 7),
+                HoverRefresh::Resolve
+            );
+
+            let mut pane = Pane::new(screen(&[row(SENTENCE)]));
+            pane.hover(1, 0);
+            assert_eq!(pane.marked(), None, "`See` is no link");
+            for col in [ADDRESS_COLS.start, 20, ADDRESS_COLS.end - 1] {
+                pane.hover(col, 0);
+                assert_eq!(
+                    pane.marked(),
+                    Some(a_link()),
+                    "any char of the address marks exactly it (FR-007)"
+                );
+            }
+            pane.hover(ADDRESS_COLS.end, 0);
+            assert_eq!(pane.marked(), None, "the space after it is no link");
+            pane.send(OUTSIDE, moved(OUTSIDE));
+            assert_eq!(
+                pane.state().hover.as_ref().and_then(|h| h.resolved.clone()),
+                None,
+                "leaving the pane drops the hover"
+            );
+        }
+
+        /// U119.
+        #[test]
+        fn a_redraw_after_the_output_changed_under_a_resting_pointer_re_resolves_it() {
+            let ctx = local();
+            let hover = cached((10, 0), (1, 1), 7);
+            assert_eq!(
+                hover_refresh(Some(&hover), &key((10, 0), (1, 2), &ctx), |_| 8),
+                HoverRefresh::Resolve
+            );
+
+            let mut pane = Pane::new(screen(&[row(SENTENCE)]));
+            pane.hover(10, 0);
+            assert_eq!(pane.marked(), Some(a_link()));
+            // A program redraws the row in place: the same LineId, other text.
+            let other = "See https://example.org/changed/page for details.";
+            pane.grid.apply(&frame(2, &[(0, row(other))], 0, 0, 0));
+            pane.send(at(10, 0), redraw());
+            assert_eq!(
+                pane.marked().map(|l| l.link.address),
+                Some("https://example.org/changed/page".to_string()),
+                "the hint never shows the address the row used to hold (SC-006)"
+            );
+        }
+
+        /// U120.
+        #[test]
+        fn a_grid_that_moved_without_touching_the_hovered_rows_keeps_the_hover() {
+            let ctx = local();
+            let hover = cached((10, 0), (1, 1), 7);
+            assert_eq!(
+                hover_refresh(Some(&hover), &key((10, 0), (1, 1), &ctx), |_| panic!(
+                    "nothing moved, so nothing is hashed"
+                )),
+                HoverRefresh::Reuse
+            );
+            assert_eq!(
+                hover_refresh(Some(&hover), &key((10, 0), (1, 2), &ctx), |rows| {
+                    assert_eq!(
+                        rows,
+                        &[0],
+                        "only the rows the link was read from are hashed"
+                    );
+                    7
+                }),
+                HoverRefresh::Revalidated
+            );
+
+            let mut pane = Pane::new(screen(&[row(SENTENCE), row("")]));
+            pane.hover(10, 0);
+            pane.grid
+                .apply(&frame(2, &[(1, row("more output"))], 0, 0, 0));
+            pane.send(at(10, 0), redraw());
+            let hover = pane.state().hover.clone().expect("hovering");
+            assert_eq!(hover.grid_version, (1, 2), "revalidated at the new version");
+            assert_eq!(hover.resolved, Some(a_link()));
+        }
+
+        /// U121.
+        #[test]
+        fn a_switch_of_session_or_context_re_resolves() {
+            let ctx = local();
+            let hover = cached((10, 0), (1, 1), 7);
+            let mut other_session = key((10, 0), (1, 1), &ctx);
+            other_session.session = Some(SessionId::new());
+            assert_eq!(
+                hover_refresh(Some(&hover), &other_session, |_| 7),
+                HoverRefresh::Resolve
+            );
+            let sandboxed = LinkContext {
+                host_names: vec!["devbox".to_string()],
+                ..local()
+            };
+            assert_eq!(
+                hover_refresh(Some(&hover), &key((10, 0), (1, 1), &sandboxed), |_| 7),
+                HoverRefresh::Resolve
+            );
+            let mut scrolled = key((10, 0), (1, 1), &ctx);
+            scrolled.display_offset = 3;
+            assert_eq!(
+                hover_refresh(Some(&hover), &scrolled, |_| 7),
+                HoverRefresh::Resolve,
+                "a scroll moves other lines under the pointer"
+            );
+        }
+
+        /// U122.
+        #[test]
+        fn under_mouse_reporting_a_link_is_marked_only_while_shift_is_held() {
+            let hover = cached((10, 0), (1, 1), 7);
+            assert_eq!(marked_link(Some(&hover), false, false), Some(&a_link()));
+            assert_eq!(marked_link(Some(&hover), true, false), None);
+            assert_eq!(marked_link(Some(&hover), true, true), Some(&a_link()));
+
+            let mut pane = Pane::new(screen_in_mode(&[row(SENTENCE)], mouse_reporting()));
+            pane.hover(10, 0);
+            assert_eq!(pane.marked(), None, "the pointer is the program's");
+            pane.hold(at(10, 0), keyboard::Modifiers::SHIFT);
+            assert_eq!(pane.marked(), Some(a_link()), "Shift takes it back");
+            pane.hold(at(10, 0), keyboard::Modifiers::empty());
+            assert_eq!(pane.marked(), None);
+        }
+
+        /// U123 (clarification 2026-09-16).
+        #[test]
+        fn the_pointer_is_a_hand_over_a_link_only_while_the_link_modifier_is_held() {
+            assert_eq!(
+                pane_interaction(true, true, keyboard::Modifiers::COMMAND),
+                mouse::Interaction::Pointer
+            );
+            assert_eq!(
+                pane_interaction(true, true, keyboard::Modifiers::empty()),
+                mouse::Interaction::Text
+            );
+            assert_eq!(
+                pane_interaction(true, false, keyboard::Modifiers::COMMAND),
+                mouse::Interaction::Text
+            );
+            assert_eq!(
+                pane_interaction(false, true, keyboard::Modifiers::COMMAND),
+                mouse::Interaction::Idle
+            );
+
+            let mut pane = Pane::new(screen(&[row(SENTENCE)]));
+            pane.hover(10, 0);
+            assert_eq!(
+                pane.interaction(at(10, 0)),
+                mouse::Interaction::Text,
+                "no modifier, no hand"
+            );
+            pane.hold(at(10, 0), keyboard::Modifiers::COMMAND);
+            assert_eq!(pane.interaction(at(10, 0)), mouse::Interaction::Pointer);
+            pane.hover(1, 0);
+            assert_eq!(
+                pane.interaction(at(1, 0)),
+                mouse::Interaction::Text,
+                "plain text keeps the text pointer"
+            );
+            pane.hover(10, 0);
+            pane.hold(at(10, 0), keyboard::Modifiers::empty());
+            assert_eq!(
+                pane.interaction(at(10, 0)),
+                mouse::Interaction::Text,
+                "released, back to the text pointer"
+            );
+
+            let mut pane = Pane::new(screen_in_mode(&[row(SENTENCE)], mouse_reporting()));
+            pane.hover(10, 0);
+            pane.hold(at(10, 0), keyboard::Modifiers::COMMAND);
+            assert_eq!(
+                pane.interaction(at(10, 0)),
+                mouse::Interaction::Text,
+                "under mouse reporting Ctrl alone is the program's"
+            );
+            pane.hold(
+                at(10, 0),
+                keyboard::Modifiers::COMMAND | keyboard::Modifiers::SHIFT,
+            );
+            assert_eq!(pane.interaction(at(10, 0)), mouse::Interaction::Pointer);
+        }
+
+        /// U124 (FR-022).
+        #[test]
+        fn hover_and_press_stay_in_the_pane_under_the_pointer() {
+            let mut under = Pane::new(screen(&[row(SENTENCE)]));
+            let mut other = Pane::new(screen(&[row(SENTENCE)]));
+            let mut published = Vec::new();
+            for (cursor, event) in [
+                (at(10, 0), moved(at(10, 0))),
+                (
+                    at(10, 0),
+                    Event::Keyboard(keyboard::Event::ModifiersChanged(
+                        keyboard::Modifiers::COMMAND,
+                    )),
+                ),
+                (at(10, 0), press()),
+                (at(10, 0), release()),
+            ] {
+                published.extend(under.send(cursor, event.clone()));
+                let elsewhere = other.send(OUTSIDE, event);
+                assert!(other
+                    .state()
+                    .hover
+                    .as_ref()
+                    .and_then(|h| h.resolved.as_ref())
+                    .is_none());
+                assert_eq!(other.state().link_press, None);
+                assert!(
+                    activations(&elsewhere).is_empty(),
+                    "the other pane opens nothing"
+                );
+            }
+            assert_eq!(
+                activations(&published).len(),
+                1,
+                "the pane under the pointer opens it once"
+            );
+        }
+
+        // --- The address hint (research R7) ---
+
+        fn content() -> Rectangle {
+            Rectangle::new(Point::new(3.0, 3.0), Size::new(600.0, 18.2 * 20.0))
+        }
+
+        /// U125.
+        #[test]
+        fn the_hint_sits_bottom_left_by_default() {
+            let hint = Size::new(200.0, 22.0);
+            let rect = link_hint_rect(content(), 0, hint);
+            assert_eq!(
+                rect.position(),
+                Point::new(content().x, content().y + content().height - hint.height)
+            );
+            assert_eq!(rect.size(), hint);
+        }
+
+        /// U126.
+        #[test]
+        fn the_hint_moves_top_left_when_the_pointer_nears_the_bottom() {
+            let hint = Size::new(200.0, 22.0);
+            let m = CellMetrics::new(TERM_FONT_SIZE);
+            let bottom = content().y + content().height;
+            let rows = (content().height / m.height) as u16;
+            // The last row whose cells end above the hint's band, and the one below it.
+            let clear = (0..rows)
+                .rev()
+                .find(|r| content().y + (*r as f32 + 1.0) * m.height <= bottom - hint.height)
+                .unwrap();
+            assert_eq!(
+                link_hint_rect(content(), clear, hint).y,
+                bottom - hint.height,
+                "row {clear} keeps it bottom-left"
+            );
+            assert_eq!(
+                link_hint_rect(content(), clear + 1, hint).position(),
+                content().position(),
+                "row {} flips it top-left",
+                clear + 1
+            );
+            assert_eq!(
+                link_hint_rect(content(), rows - 1, hint).position(),
+                content().position()
+            );
+        }
+
+        /// U127.
+        #[test]
+        fn the_hint_always_lies_inside_the_content() {
+            for hint in [
+                Size::new(10.0, 10.0),
+                Size::new(900.0, 22.0),
+                Size::new(100.0, 900.0),
+            ] {
+                for row in [0u16, 5, 19, 40] {
+                    let rect = link_hint_rect(content(), row, hint);
+                    let c = content();
+                    assert!(
+                        rect.x >= c.x
+                            && rect.y >= c.y
+                            && rect.x + rect.width <= c.x + c.width + 0.01
+                            && rect.y + rect.height <= c.y + c.height + 0.01,
+                        "{rect:?} leaves {c:?} (hint {hint:?}, row {row})"
+                    );
+                }
+            }
+        }
+
+        /// U128.
+        #[test]
+        fn a_long_address_is_elided_in_the_middle_and_display_stays_whole() {
+            let long = "https://example.com/a/very/long/path/that/does/not/fit/in/the/pane.html";
+            let label = elide_middle(long, 24);
+            assert_eq!(label.chars().count(), 24);
+            assert!(label.contains('…'));
+            assert!(
+                label.starts_with("https://exa") && label.ends_with("pane.html"),
+                "{label}"
+            );
+            assert_eq!(
+                elide_middle(ADDRESS, 60),
+                ADDRESS,
+                "what fits is shown whole"
+            );
+
+            let grid = screen(&[row(long)]);
+            let ctx = local();
+            let hover = resolve_hover(&grid, &key((5, 0), (grid.generation(), grid.seq()), &ctx));
+            assert_eq!(
+                hover.resolved.map(|r| r.display),
+                Some(long.to_string()),
+                "the model keeps it complete (SC-006)"
+            );
+        }
+
+        // --- Declared links (T037, U129) ---
+
+        fn resolved_at(grid: &GridCache, col: u16, row: u16) -> Option<ResolvedLink> {
+            let ctx = local();
+            resolve_hover(
+                grid,
+                &key((col, row), (grid.generation(), grid.seq()), &ctx),
+            )
+            .resolved
+        }
+
+        /// U129: the run, and its declared address as `display`.
+        #[test]
+        fn hovering_a_declared_run_marks_exactly_the_run_and_resolves_its_address() {
+            let grid =
+                screen(&[row("Read the docs today").declare(9..13, "https://example.com/manual")]);
+            let link = resolved_at(&grid, 10, 0).expect("docs is a link");
+            assert_eq!(link.display, "https://example.com/manual");
+            assert_eq!(link.link.origin, LinkOrigin::Declared);
+            assert_eq!(
+                link.link.cells,
+                vec![CellSpan {
+                    row: 0,
+                    cols: 9..13
+                }]
+            );
+            assert_eq!(
+                resolved_at(&grid, 8, 0),
+                None,
+                "the space before the run is no link"
+            );
+        }
+
+        /// U129: US2 scenario 3.
+        #[test]
+        fn adjacent_runs_with_different_addresses_are_two_links() {
+            let grid = screen(&[row("docsother")
+                .declare(0..4, "https://example.com/manual")
+                .declare(4..9, "https://example.com/other")]);
+            assert_eq!(
+                resolved_at(&grid, 3, 0).map(|l| (l.display, l.link.cells)),
+                Some((
+                    "https://example.com/manual".to_string(),
+                    vec![CellSpan { row: 0, cols: 0..4 }]
+                ))
+            );
+            assert_eq!(
+                resolved_at(&grid, 4, 0).map(|l| (l.display, l.link.cells)),
+                Some((
+                    "https://example.com/other".to_string(),
+                    vec![CellSpan { row: 0, cols: 4..9 }]
+                ))
+            );
+        }
+
+        /// U129: US2 scenario 4.
+        #[test]
+        fn same_address_runs_apart_are_marked_one_at_a_time() {
+            let uri = "https://example.com/manual";
+            let grid = screen(&[row("docs and docs").declare(0..4, uri).declare(9..13, uri)]);
+            assert_eq!(
+                resolved_at(&grid, 1, 0).map(|l| l.link.cells),
+                Some(vec![CellSpan { row: 0, cols: 0..4 }])
+            );
+            assert_eq!(
+                resolved_at(&grid, 10, 0).map(|l| l.link.cells),
+                Some(vec![CellSpan {
+                    row: 0,
+                    cols: 9..13
+                }])
+            );
+        }
+
+        /// U129: US2 scenario 5.
+        #[test]
+        fn address_shaped_text_resolves_to_the_declared_address() {
+            let grid = screen(&[row("https://a.example").declare(0..17, "https://b.example")]);
+            let link = resolved_at(&grid, 3, 0).expect("declared");
+            assert_eq!(
+                (link.display.as_str(), link.target),
+                (
+                    "https://b.example",
+                    Target::Url("https://b.example".to_string())
+                )
+            );
+        }
+
+        // --- The rows the pane lends (T028; M1 review B) ---
+
+        /// U156.
+        #[test]
+        fn rows_above_everything_printed_read_as_empty_and_rows_not_held_as_unavailable() {
+            // A session's first line: nothing was ever above it.
+            let grid = screen(&[row("https://a.example/x")]);
+            let rows = GridRows::new(&grid, 0);
+            assert_eq!(
+                rows.text(-1),
+                Some(""),
+                "above the first line printed is an empty row"
+            );
+            assert!(!rows.wrapped(-1));
+            assert_eq!(
+                resolved_at(&grid, 0, 0).map(|l| l.link.address),
+                Some("https://a.example/x".to_string()),
+                "so an address at column 0 of the first line is a link"
+            );
+
+            // The alternate screen (`less`, `vim`): no history, so nothing above its top.
+            let mut alt = GridCache::default();
+            alt.apply(&frame(
+                1,
+                &[(500, row("https://a.example/x"))],
+                500,
+                500,
+                TermMode::ALT_SCREEN.bits(),
+            ));
+            assert_eq!(GridRows::new(&alt, 0).text(-1), Some(""));
+
+            // History trimmed below the watermark, and history not fetched yet, may continue.
+            let mut deep = GridCache::default();
+            deep.apply(&frame(1, &[(500, row("x"))], 500, 400, 0));
+            let rows = GridRows::new(&deep, 0);
+            assert_eq!(rows.text(-150), None, "trimmed from scrollback");
+            assert_eq!(rows.text(-50), None, "not cached yet");
+            assert_eq!(rows.text(1), None, "below the screen");
+            assert_eq!(rows.text(0), Some(format!("{:<60}", "x").as_str()));
+        }
+
+        /// U157.
+        #[test]
+        fn spacer_cells_come_from_the_style_run_flags() {
+            let grid = screen(&[row("界 x ")
+                .spacer(1)
+                .leading_spacer(4)
+                .wrapped()
+                .declare(0..2, "https://example.com/wide")]);
+            let rows = GridRows::new(&grid, 0);
+            assert!(!rows.spacer(0, 0));
+            assert!(rows.spacer(0, 1), "a wide char's second cell");
+            assert!(!rows.spacer(0, 2));
+            assert!(
+                rows.spacer(0, 4),
+                "the padding a wrapped wide char left at the row's end"
+            );
+            assert!(rows.wrapped(0));
+            assert_eq!(rows.hyperlink(0, 1), Some("https://example.com/wide"));
+            assert_eq!(rows.hyperlink(0, 3), None);
+        }
+
+        /// The scrollback offset is part of the row mapping.
+        #[test]
+        fn rows_follow_the_scrollback_offset() {
+            let mut grid = GridCache::default();
+            grid.apply(&frame(
+                1,
+                &[(7, row("history")), (10, row("screen"))],
+                10,
+                0,
+                0,
+            ));
+            let rows = GridRows::new(&grid, 3);
+            assert_eq!(rows.text(0).map(str::trim_end), Some("history"));
+            assert_eq!(rows.text(3).map(str::trim_end), Some("screen"));
+        }
     }
 }
