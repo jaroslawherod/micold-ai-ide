@@ -1,7 +1,6 @@
 //! Windows Job Objects: kill a spawned process together with everything it started.
 //!
-//! Shared by the bounded profile probe (`env_include`) and, from feature 030, the daemon's session
-//! teardown.
+//! Used by the bounded profile probe (`env_include`).
 
 /// A Windows Job Object owning the spawned process and everything it starts (BUG-003).
 ///
