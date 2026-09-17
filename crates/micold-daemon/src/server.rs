@@ -1360,15 +1360,26 @@ where
                             };
                             // Windows cannot delete a directory that a running process has as its
                             // working directory, so the removal above leaves the worktree behind while
-                            // its sessions still run in it. They are reaped now; remove it once more.
-                            if killed_any && !leftovers.is_empty() {
-                                let target = cache_path.clone();
-                                if let Ok(retried) = tokio::task::spawn_blocking(move || {
-                                    remove_worktree_dir(&target)
-                                })
-                                .await
-                                {
-                                    leftovers = retried;
+                            // its sessions still run in it. They are being reaped now, but a kill
+                            // returns before the job's processes have exited, so retry with a bounded
+                            // backoff (about 3 s in all) rather than once.
+                            if killed_any {
+                                let mut delay = std::time::Duration::from_millis(100);
+                                for _ in 0..5 {
+                                    if leftovers.is_empty() {
+                                        break;
+                                    }
+                                    tokio::time::sleep(delay).await;
+                                    delay *= 2;
+                                    let target = cache_path.clone();
+                                    match tokio::task::spawn_blocking(move || {
+                                        remove_worktree_dir(&target)
+                                    })
+                                    .await
+                                    {
+                                        Ok(retried) => leftovers = retried,
+                                        Err(_) => break,
+                                    }
                                 }
                             }
                             state.invalidate_env_include(&cache_path);
