@@ -1850,6 +1850,10 @@ terminal holds the keyboard, and the keystroke is not sent to it a second time (
 
 - [X] T191 Confirm on a rendered frame, dark scheme, that clicking the `claude` tab and pressing Space in the terminal leaves the tab without a ring while the terminal keeps its own; record what was captured
 
+- [X] T192 Failing tests first: in `crates/micold-client/src/ui/material/field_focus.rs`, put a `Button` *before* a key-capturing widget inside the window-level wrapper, told the terminal holds the keyboard. Click the button, press Space and Enter, and assert only the capturing widget's message is published and the button holds no focus. Beside it, show the ring with a traversal, hand the keyboard to the terminal (a rebuild), send one frame, and assert the ring is gone. Red against a pass-through stub of the wrapper (FR-022a)
+
+- [X] T193 Add `crates/micold-client/src/ui/cdk/keyboard_elsewhere.rs`: while told the terminal holds the keyboard, it runs iced's `unfocus` operation over its content before delegating a key press, and on the first event after that becomes true. Wrap the window's base surface in it in `ui/mod.rs` with `State::terminal_focused()`. T192 goes green; re-run the gate (T190) and the rendered-frame check (T191) with it (FR-022a)
+
 **Red record (T188)** — 2026-09-17, against the unfixed wrapper (`origin/main` at `5c371812`),
 `cargo test -p micold-client --lib field_focus`: `a_clicked_button_leaves_a_key_something_before_it_took`
 failed with "Space went to the terminal, which captured it; the clicked tab after it must not send its
@@ -1857,11 +1861,18 @@ press a second time (BUG-016)", `left: ["terminal", "saved"]` / `right: ["termin
 `field_focus` tests passed, BUG-013's `a_clicked_button_takes_the_keyboard_and_draws_no_indicator`
 among them.
 
-**Pass record (T190)** — 2026-09-17, on `origin/main` at `15b4493f` plus this change: `mise run gate`
-exited 0 — fmt, clippy (core, then workspace, `-D warnings`), `cargo test --workspace` 3263 passed,
-0 failed (summed over every `test result` line), and every `scripts/tests/*.test.sh`. No snapshot
-moved. The regression test was re-run on `15b4493f` with only this test added and failed the same way
-(`left: ["terminal", "saved"]`).
+**Red record (T192)** — 2026-09-17, against a pass-through stub of `KeyboardElsewhere` (its clearing
+disabled), `cargo test -p micold-client --lib field_focus`: `a_button_before_the_terminal_leaves_the_terminals_keys_alone`
+failed with `left: ["saved", "terminal"]` / `right: ["terminal"]` (the button before the pane answered
+Space first), and `a_ring_goes_when_the_terminal_takes_the_keyboard` failed on `Some(0.1)` where `None`
+belongs. The other 28 passed.
+
+**Pass record (T190)** — 2026-09-17, on `origin/main` at `66fae572` plus T188–T193: `mise run gate`
+exited 0 — fmt, clippy (core, then workspace, `-D warnings`), `cargo test --workspace` 3279 passed,
+0 failed (summed over every `test result` line), and every `scripts/tests/*.test.sh`. The first run
+with T193 failed `showcase_completeness`: every library component needs a gallery entry or a recorded
+exemption, and `KeyboardElsewhere` now has an exemption in `showcase/catalogue.rs`, like `ContextArea`.
+No snapshot moved. (An earlier run, before T192–T193, passed on `15b4493f`: 3263 passed.)
 
 **Rendered-frame record (T191)** — 2026-09-17, dark scheme, on Xvfb (1600×1000) with lavapipe, not a
 real display. `micold-ai-ide` and `micold-daemon` were built together and run from a private copy (the
@@ -1872,8 +1883,12 @@ drew neither after Space or after Enter, and the pane kept its own ring. Two pat
 *before* the pane were also probed with the fix: the sidebar's `+` start action (clicked, pointer left
 on it) and the worktree refresh action (clicked, pointer moved away), each followed by Space with the
 terminal focused. Neither drew a ring, and neither started a second session or refreshed again. Not
-exercised: the light scheme, which this change does not touch. Crop:
+exercised: the light scheme, which this change does not touch. Re-run with T193 in the build (the binary contains `keyboard_elsewhere`): clicking the sidebar's `+`
+start action and pressing Space with the new session's terminal focused started one session and drew
+no ring on `+`. Clicking the `claude` tab and pressing Space, then Enter, drew no ring on the tab. Not
+exercised on the rendered frame: a ring that a traversal showed before the terminal took the keyboard.
+`a_ring_goes_when_the_terminal_takes_the_keyboard` covers that case. Crop:
 [`evidence/BUG-016-no-ring-after-fix.png`](evidence/BUG-016-no-ring-after-fix.png). The top strip (red
 border) is `origin/main` after Space, and the bottom strip (blue) is this branch after Space.
 
-**Bugfix**: 2026-09-17 — BUG-016 added Phase 28 (T188–T191). **No task is reopened.** T176–T177 are complete as written: their tests drive a button alone, with nothing else in the tree to take a key first.
+**Bugfix**: 2026-09-17 — BUG-016 added Phase 28 (T188–T193; T192–T193 were added on the user's request after review). **No task is reopened.** T176–T177 are complete as written: their tests drive a button alone, with nothing else in the tree to take a key first.
