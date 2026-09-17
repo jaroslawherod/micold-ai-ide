@@ -84,7 +84,7 @@ None.
 
 ## Follow-ups not done
 
-- A click whose release lands after its row changes form (the last ~0.1% of a slide) is dropped (M2 code review A, declined above). A fix would record which form holds a press and route its release there.
+- ~~A click whose release lands after its row changes form (the last ~0.1% of a slide) is dropped~~ fixed after close at the user's request (T053, U21/U26). Originally: (M2 code review A, declined above). A fix would record which form holds a press and route its release there.
 
 - The local suite on 9275a357 and a9f54e77 fails in `micold-daemon --test exclusivity`
   (`a_second_open_of_a_held_pi_conversation_starts_nothing`) and `--test pi_launch_wiring`

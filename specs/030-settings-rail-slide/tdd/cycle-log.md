@@ -362,3 +362,24 @@ existed and failed before the implementation.
 - T049, U15: `the_state_flips_on_the_press` split into it, `a_section_chosen_mid_slide_is_shown_at_once` and
   `an_exit_mid_slide_closes_settings`, one FR-010 sub-claim each; assertions unchanged; green
 - commit: see the close PR
+
+## Cycle 14: U21, U26 — a press held across a form change is a click (T053, after close)
+
+- test (changed): `a_press_held_as_its_form_parks_is_released` asserted, as a precondition, that the release after
+  the form change published nothing. Renamed `a_press_held_across_a_form_change_is_a_click`; the release over the
+  row now must publish `SectionShown` for that row
+- red: `scripts/build-lock.sh cargo test -p micold-client --test settings_rail_motion a_press_held_across` ->
+  `settings_rail_motion.rs:1206:5: a press on row 1 held while the rail finished collapsing was dropped on release: []`
+- green: `RowSlide` gains tree state `Held(Option<usize>)`: the drawn form that captures a left-button or finger press
+  stays drawn until release, lift or lost, then the layout is invalidated if the width asks for another form;
+  `settings_rail_motion` and `layout_snapshot` green
+- strengthening: U21 also asserts the labelled form is drawn while held and parked (icons-only drawn) after release;
+  new U26 `a_press_let_go_off_its_row_still_changes_form`: released off the row, nothing is published and the layout
+  is invalidated (the harness lays out every frame, so only the shell's flag shows the runtime would)
+- mutants, each restored:
+  - *never hold* (`held.0 = Some(drawn)` removed): `the pressed labelled form parked before its press was let go`
+  - *never let go* (`take()` → `is_some()`): `once the press was let go, the collapsed row did not take its
+    icons-only form`
+  - *no relayout on let go*: U21 passes (harness relayouts); U26 fails `a release that changes the row's form left
+    the layout valid, so the held form stays drawn`
+- commit: see the fix PR
