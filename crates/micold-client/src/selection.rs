@@ -60,7 +60,7 @@ pub struct Selection {
     /// Cached normalized, expanded, inclusive bounds `(top_left, bottom_right)`.
     bounds: (Anchor, Anchor),
     /// Whether the moving end has been extended at all. A `Char` selection that never was is a
-    /// click, and selects nothing (FR-013e, BUG-007).
+    /// click, and selects nothing (FR-013e, BUG-008).
     extended: bool,
 }
 
