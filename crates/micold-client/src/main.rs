@@ -140,8 +140,9 @@ struct App {
     /// (M-4).
     sandbox_boot: Option<shell::sandbox::BootPlan>,
     /// What cancels the sandbox bring-up last started, so that moving off the sandbox stops one
-    /// still waiting its delay (FR-036a). Finished ones are left here; aborting them does nothing.
-    sandbox_bring_up: Option<iced::task::Handle>,
+    /// still waiting its delay (FR-036a), and one under way creates no container (#369). Finished ones
+    /// are left here; cancelling them does nothing.
+    sandbox_bring_up: Option<shell::sandbox::InFlight>,
     /// A pending contract-version mismatch (US6, FR-021/022): `(client_version, daemon_version,
     /// daemon_build)`. `Some` while the running daemon's contract differs from ours — drives the
     /// version-mismatch banner and its "restart service" action. Cleared on a successful connect.
