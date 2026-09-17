@@ -683,3 +683,12 @@ failed before the implementation.
 - U9: `DROPPED` by user decision (AskUserQuestion, 2026-09-14), for cycle 6's reasons. E4.1, data-model.md and R4 no longer promise removal on exit. With U8 and U10 `DONE`, T010 and T018 are ticked.
 - refactor: none needed.
 - commit: see the follow-up commit
+
+## Cycle 79: U4 and U5 kill a mutant with no owner-only DACL
+
+- test: none changed. U4 `crates/micold-daemon/tests/windows_pipe_acl.rs::the_bound_pipe_dacl_is_protected`, U5 `::the_bound_pipe_dacl_allows_only_the_current_user`.
+- red: closes the gap cycle 61 left, where both were red only on `acquire` failing and their DACL assertions were first exercised at green (review B F2 on #332).
+- mutant (U4, U5, 1fada3b3): the Windows `acquire` in `crates/micold-daemon/src/singleton.rs` binds the pipe without `.security_descriptor(owner_only_descriptor()?)`, so the pipe gets the default descriptor. Killed in PR #366's run 35184737045, `build + test (windows-latest)`, `Test (daemon, Windows)`: `the_bound_pipe_dacl_is_protected ... FAILED`, `the pipe's DACL must carry SE_DACL_PROTECTED` (`windows_pipe_acl.rs:231:5`); `the_bound_pipe_dacl_allows_only_the_current_user ... FAILED`, `the pipe's DACL must hold exactly one ACE`, left `5`, right `1` (`windows_pipe_acl.rs:241:5`). No other test failed. Reverted in 977d0538.
+- green: the revert; see PR #366's next run.
+- refactor: none needed.
+- commit: see the follow-up commit
