@@ -35,6 +35,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         Msg::GridFrame(frame) => daemon_sync::on_grid_frame(app, frame),
         Msg::Disconnected => daemon_sync::on_disconnected(app),
         Msg::ConnectFailed(reason) => daemon_sync::on_connect_failed(app, reason),
+        Msg::Refused(reason) => daemon_sync::on_refused(app, reason),
         Msg::TakeoverRequested => daemon_sync::on_takeover_requested(app),
         // The daemon refused us on a contract mismatch (US6, FR-021): record it so the banner can
         // name both versions and offer the restart action. The connection subscription keeps
