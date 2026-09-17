@@ -558,3 +558,12 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
 ## Gate fixes: M3
 
 - `mise run gate`: `crates/micold-client/tests/idle_requests_no_frames.rs::only_the_motion_primitive_asks_for_frames` failed with `a module outside ui/cdk/motion.rs asks the runtime for a frame: ui/material/terminal_pane.rs:1296 shell.request_redraw();`. The hover refresh now calls `shell.invalidate_widgets()` on a change of the marked link or modifier, as `select.rs` does -> 8 passed; the underline reaching the screen is checked by the visual pass
+
+## Cycle 55: U158–U160 M3 review fixes
+
+- origin: review A F1–F4 and review B F1–F2 (all MINOR)
+- test: `terminal_pane.rs::tests::links::{a_link_press_released_outside_the_pane_opens_nothing, a_link_under_the_scrollbar_strip_is_not_marked, moving_to_another_row_of_the_marked_link_repaints}`
+- red: `scripts/build-lock.sh cargo test -p micold-client --lib terminal_pane::tests::links` -> `31 passed; 3 failed`: the outside release published `LinkActivated` for `https://example.com/docs/page.html`; the strip test `left: Some(ResolvedLink { … cols: 26..60 … })` / `right: None`; the row-change repaint assertion failed. The strip test first sat at `display_offset` 0, where no scrollbar shows; moved to offset 1 and re-checked red with the strip filter disabled (`left: Some(…)`)
+- green: a link release with no position over the content clears the press and opens nothing; hover ignores the strip while `scrollbar_metrics` is `Some`; `shown` includes the pointer row while a link is marked -> terminal_pane 78 passed
+- also: `osc8_passthrough.rs` waits for the whole declared run, not its first cell (review A F4) -> 1 passed; `ui/mod.rs` calls `material::local_link_context()` instead of a copy (review B F2)
+- commit: `fix(031): M3 review fixes (U158–U160)`

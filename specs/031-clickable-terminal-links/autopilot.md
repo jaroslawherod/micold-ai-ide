@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M3 step 3: gate, cross-OS checks and visual pass on T082–T033's commits, then reviews A and B
+- **Next step**: M3 step 3 round 2: gate on the review fixes, round-2 reviews, then rebase, push and open the M3 PR
 
 ## Pull requests
 
@@ -65,6 +65,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M3 | B | F3 (MINOR): scrollback arrival does not bump the grid `seq`, so a resting hover over fetched lines is stale until the pointer moves | Kept as a follow-up below: fixing it changes `GridCache::apply_scrollback`'s versioning, shared with other features, for a state that corrects itself on the next pointer move |
 | M2 | B | F1 (MINOR): `link_open_finished`'s `NotFound` text ships untested | The arm exists because the match is exhaustive; its behaviour is U77, assigned to M5, whose cycle must show its own red |
 | M2 | B | F3 (MINOR): U94's `< 250 ms` bound would pass a shorter debounce | `perform` is `Task::perform` over `spawn_blocking` with no timer in the code; the bound guards against a real delay, and a tighter wall-clock bound would flake on a loaded CI runner |
 | M1 | B | F5 (MINOR): contract §3 rows `http://localhost:5173/`, `mailto:team@example.com,`, `file:///home/u/My%20Doc.pdf`, `team@example.com`, `src/main.rs:42`, `data:text/html,x` have no `detect` unit test of their own | Each is a line of the SC-002 corpus (`tests/fixtures/link_corpus.txt`, section "Contract link-recognition §3") checked cell by cell through `link_at`, which calls `detect`; a second table test would pass on arrival and duplicate it |

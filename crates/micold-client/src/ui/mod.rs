@@ -303,11 +303,7 @@ pub fn view<'a>(
         let main_inner: Element<'a, Message> = if state.session.active.is_some() {
             // Links resolve on this machine, unsandboxed, until T050 fills in the host names and
             // the sandbox's shared locations (feature 031).
-            let link_context = micold_core::link::LinkContext {
-                host_names: Vec::new(),
-                windows_host: cfg!(windows),
-                sandbox: None,
-            };
+            let link_context = material::local_link_context();
             terminal::pane(state, grid, selection, display_offset, scheme, link_context)
         } else {
             shell::view(state, scheme)

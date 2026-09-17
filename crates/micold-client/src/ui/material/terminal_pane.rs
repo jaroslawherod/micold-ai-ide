@@ -806,7 +806,7 @@ pub struct TerminalPane<'a> {
 }
 
 /// What a link resolves against when the caller names no context: this machine, unsandboxed.
-fn local_link_context() -> LinkContext {
+pub(crate) fn local_link_context() -> LinkContext {
     LinkContext {
         host_names: Vec::new(),
         windows_host: cfg!(windows),
@@ -1262,20 +1262,35 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             ) | Event::Keyboard(keyboard::Event::ModifiersChanged(_))
                 | Event::Window(iced::window::Event::RedrawRequested(_))
         ) {
+            // What is drawn or shown for the link: the marked link, the pointer's row while one is
+            // marked (the hint's side follows it), and the link modifier (the pointer).
             let shown = |state: &PaneState| {
-                (
-                    marked_link(
-                        state.hover.as_ref(),
-                        self.mouse_mode(),
-                        state.modifiers.shift(),
-                    )
-                    .cloned(),
-                    state.modifiers.command(),
+                let marked = marked_link(
+                    state.hover.as_ref(),
+                    self.mouse_mode(),
+                    state.modifiers.shift(),
                 )
+                .cloned();
+                let row = marked
+                    .as_ref()
+                    .and(state.hover.as_ref())
+                    .map(|hover| hover.cell.1);
+                (marked, row, state.modifiers.command())
             };
             let before = shown(state);
+            // A press over the scrollbar strip pages the view, so nothing under it is a link.
+            let strip = scrollbar_metrics(
+                content.height,
+                self.size().1 as usize,
+                self.history_size(),
+                self.display_offset,
+            )
+            .is_some();
             let cell = cursor
                 .position_over(content)
+                .filter(|position| {
+                    !(strip && position.x >= content.x + content.width - SCROLLBAR_WIDTH)
+                })
                 .map(|position| grid_at(position, content, metrics));
             match cell {
                 None => state.hover = None,
@@ -1506,7 +1521,13 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
                 if state.link_press.is_some() =>
             {
-                let cell = grid_at(cursor.position().unwrap_or_default(), content, metrics);
+                // Released outside the pane: no cell is under the pointer, so nothing opens.
+                let Some(position) = cursor.position_over(content) else {
+                    state.link_press = None;
+                    shell.capture_event();
+                    return;
+                };
+                let cell = grid_at(position, content, metrics);
                 let now = resolve_hover(self.grid, &self.hover_key(cell));
                 let marked = marked_link(Some(&now), self.mouse_mode(), state.modifiers.shift());
                 let step = link_gesture(
@@ -3405,6 +3426,8 @@ mod tests {
             context: LinkContext,
             tree: Option<Tree>,
             renderer: Renderer,
+            /// Whether the last event marked the widget tree stale, which is what repaints it.
+            invalidated: bool,
         }
 
         impl Pane {
@@ -3417,6 +3440,7 @@ mod tests {
                     context: local(),
                     tree: None,
                     renderer: super::presses::headless(),
+                    invalidated: false,
                 }
             }
 
@@ -3457,6 +3481,7 @@ mod tests {
                     &mut shell,
                     &Rectangle::with_size(window()),
                 );
+                self.invalidated = shell.are_widgets_invalid();
                 messages
             }
 
@@ -4477,6 +4502,84 @@ mod tests {
             let rows = GridRows::new(&grid, 3);
             assert_eq!(rows.text(0).map(str::trim_end), Some("history"));
             assert_eq!(rows.text(3).map(str::trim_end), Some("screen"));
+        }
+
+        // --- M3 review fixes ---
+
+        /// U158: a link press released outside the pane opens nothing, even when the press was on
+        /// the top-left cell a missing pointer position would clamp to.
+        #[test]
+        fn a_link_press_released_outside_the_pane_opens_nothing() {
+            let mut pane = Pane::new(screen(&[row(ADDRESS)]));
+            pane.hover(0, 0);
+            pane.hold(at(0, 0), keyboard::Modifiers::COMMAND);
+            pane.send(at(0, 0), press());
+            assert!(
+                pane.state().link_press.is_some(),
+                "the press is the gesture"
+            );
+            let published = pane.send(Point::new(-40.0, -40.0), release());
+            assert_eq!(
+                activations(&published),
+                vec![],
+                "released outside, nothing opens"
+            );
+            assert_eq!(pane.state().link_press, None, "the release ends the press");
+        }
+
+        /// U159: over the scrollbar strip a press pages the view, so a link there is not marked.
+        #[test]
+        fn a_link_under_the_scrollbar_strip_is_not_marked() {
+            let text = format!("{:>width$}", ADDRESS, width = COLS as usize);
+            // The strip shows only while scrolled up: the link is the top row one line up.
+            let mut lines: Vec<(i64, Row)> = (0..9).map(|i| (i, row("history"))).collect();
+            lines.push((9, row(&text)));
+            lines.push((10, row("$ ")));
+            let mut grid = GridCache::default();
+            grid.apply(&frame(1, &lines, 10, 0, 0));
+            let mut pane = Pane::new(grid);
+            pane.display_offset = 1;
+            pane.hover(COLS - 1, 0);
+            pane.hold(at(COLS - 1, 0), keyboard::Modifiers::COMMAND);
+            assert_eq!(pane.marked(), None, "no link is marked under the strip");
+            assert_eq!(
+                pane.interaction(at(COLS - 1, 0)),
+                mouse::Interaction::Text,
+                "no hand over the strip"
+            );
+            pane.hover(COLS - 20, 0);
+            assert!(
+                pane.marked().is_some(),
+                "the same link left of the strip is marked"
+            );
+        }
+
+        /// U160: moving to another row of the same marked link repaints, since the hint's side
+        /// follows the pointer's row.
+        #[test]
+        fn moving_to_another_row_of_the_marked_link_repaints() {
+            let wrapped = &ADDRESS[..30];
+            let rest = &ADDRESS[30..];
+            let rows: Vec<Row> = (0..ROWS)
+                .map(|r| match r {
+                    0 => row(&format!("{:>width$}", wrapped, width = COLS as usize)).wrapped(),
+                    1 => row(rest),
+                    _ => row(""),
+                })
+                .collect();
+            let mut pane = Pane::new(screen(&rows));
+            pane.hover(COLS - 1, 0);
+            assert!(pane.marked().is_some(), "the wrapped link is marked");
+            pane.hover(0, 1);
+            assert!(
+                pane.invalidated,
+                "the pointer changed rows over the same link"
+            );
+            pane.hover(1, 1);
+            assert!(
+                !pane.invalidated,
+                "a move within the row changes nothing drawn"
+            );
         }
     }
 }
