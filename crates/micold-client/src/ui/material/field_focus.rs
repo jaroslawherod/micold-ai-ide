@@ -816,3 +816,89 @@ fn a_select_that_loses_the_keyboard_closes_its_list() {
          focus, and it is not this — published {published:?}",
     );
 }
+
+// -------------------------------------------------------------------------------------------
+// A key something else has taken is not a key the button answers (BUG-016, FR-022a)
+// -------------------------------------------------------------------------------------------
+//
+// The terminal bar's tabs are buttons laid out *after* the terminal pane. A click on a tab moves the
+// wrapper's focus onto it and the application's keyboard onto the terminal, and nothing presses
+// another wrapper to take that focus back. Every key typed into the terminal then reaches the tab's
+// wrapper as well, already captured by the pane.
+
+/// Stands in for the focused terminal pane: it takes every key it sees and says so.
+struct TakesEveryKey;
+
+impl iced::advanced::Widget<String, iced::Theme, iced::Renderer> for TakesEveryKey {
+    fn size(&self) -> Size<iced::Length> {
+        Size::new(iced::Length::Fill, iced::Length::Fixed(40.0))
+    }
+
+    fn layout(
+        &mut self,
+        _tree: &mut Tree,
+        _renderer: &iced::Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        layout::Node::new(limits.resolve(iced::Length::Fill, 40.0, Size::ZERO))
+    }
+
+    fn draw(
+        &self,
+        _tree: &Tree,
+        _renderer: &mut iced::Renderer,
+        _theme: &iced::Theme,
+        _style: &iced::advanced::renderer::Style,
+        _layout: Layout<'_>,
+        _cursor: mouse::Cursor,
+        _viewport: &Rectangle,
+    ) {
+    }
+
+    fn update(
+        &mut self,
+        _tree: &mut Tree,
+        event: &Event,
+        _layout: Layout<'_>,
+        _cursor: mouse::Cursor,
+        _renderer: &iced::Renderer,
+        _clipboard: &mut dyn clipboard::Clipboard,
+        shell: &mut iced::advanced::Shell<'_, String>,
+        _viewport: &Rectangle,
+    ) {
+        if let Event::Keyboard(iced::keyboard::Event::KeyPressed { .. }) = event {
+            shell.publish("terminal".to_string());
+            shell.capture_event();
+        }
+    }
+}
+
+#[test]
+fn a_clicked_button_leaves_a_key_something_before_it_took() {
+    use iced::keyboard::key::Named;
+
+    let r = roles();
+    let bar: Element<'_, String> =
+        iced::widget::column![Element::new(TakesEveryKey), Element::from(button(r))].into();
+    let mut mounted = Mounted::new(bar);
+    let at = mounted.node.children()[1].bounds().center();
+    mounted.press(at);
+
+    for key in [Named::Space, Named::Enter] {
+        assert_eq!(
+            mounted.press_key(key),
+            vec!["terminal".to_string()],
+            "{key:?} went to the terminal, which captured it; the clicked tab after it must not send \
+             its press a second time (BUG-016)",
+        );
+    }
+    let focus = *mounted.tree.children[1]
+        .state
+        .downcast_ref::<super::keyboard_focus::Focus>();
+    assert_eq!(
+        focus.indicator(true, false),
+        None,
+        "typing into the terminal is not keyboard use of the tab: it must not draw the focus ring \
+         beside the terminal's own (FR-022a, BUG-016)",
+    );
+}
