@@ -31,6 +31,7 @@
 - [The layout snapshot](development/layout-snapshot.md)
 - [The component showcase](development/component-showcase.md)
 - [The CI pipeline](development/ci-pipeline.md)
+- [The shared target directory and build lock](development/shared-build.md)
 - [Packaging for macOS](development/macos-packaging.md)
 - [Packaging for Windows](development/windows-packaging.md)
 - [The documentation site](development/docs-site.md)
