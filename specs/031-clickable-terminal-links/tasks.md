@@ -166,7 +166,7 @@ the `env_include.rs` builders (plan, Target Platform).
 
 ### Tests for US1: the pane ⚠️ write first, must fail
 
-- [ ] T082 [US1] [A1] [A2] [A3] [A4] [A5] [A6] [A13] Outer-loop acceptance tests in `#[cfg(test)] mod acceptance` of `crates/micold-client/src/shell/links.rs`, with the shared headless harness (a `GridCache` fed rows, a laid-out `TerminalPane`, events in, messages through `crate::update_inner` on `base_app()` with `caps.with_link_opener(recording)`). One test per behavior:
+- [x] T082 [US1] [A1] [A2] [A3] [A4] [A5] [A6] [A13] Outer-loop acceptance tests in `#[cfg(test)] mod acceptance` of `crates/micold-client/src/shell/links.rs`, with the shared headless harness (a `GridCache` fed rows, a laid-out `TerminalPane`, events in, messages through `crate::update_inner` on `base_app()` with `caps.with_link_opener(recording)`). One test per behavior:
   - A1: hovering any character of `https://example.com/docs/page.html` in `See https://example.com/docs/page.html for details.` marks exactly the address's cells, and the mouse interaction is `Pointer`.
   - A2: a Ctrl/Cmd press and release on it calls the opener once with the address, and no `TerminalBytes` is published.
   - A3: a soft-wrapped address opens complete from either row.
@@ -175,60 +175,60 @@ the `env_include.rs` builders (plan, Target Platform).
   - A6: an address in scrollback, with the view scrolled to it, opens the same address.
   - A13: `mailto:team@example.com` reaches the opener verbatim.
   They must fail (no hover, no activation) before T028–T030, except A5, a guard that is green on arrival (selection already works and nothing opens yet): its red is shown by the mutant in `tdd/test-list.md`.
-- [ ] T083 [US2] [A7] [A8] [A9] [A10] [A11] Outer-loop acceptance tests in `mod acceptance` of `crates/micold-client/src/shell/links.rs`, over grid rows whose cells carry declared hyperlinks:
+- [x] T083 [US2] [A7] [A8] [A9] [A10] [A11] Outer-loop acceptance tests in `mod acceptance` of `crates/micold-client/src/shell/links.rs`, over grid rows whose cells carry declared hyperlinks:
   - A7: hovering `docs` declared as `https://example.com/manual` marks the run, and the hint's text is `https://example.com/manual`.
   - A8: activating it calls the opener with `https://example.com/manual`.
   - A9: two adjacent runs with different declared addresses resolve to their own addresses.
   - A10: same-URI runs separated by plain text: hovering one marks only that run.
   - A11: text reading `https://a.example` declared as `https://b.example` shows and opens `https://b.example`.
   They must fail (no hover, no activation) before T028–T030. They sit in M3 because the pane's hover resolves declared runs from the start.
-- [ ] T037 [US2] [U129] Declared-link hover tests in the `#[cfg(test)]` module of `crates/micold-client/src/ui/material/terminal_pane.rs`, over a fake grid.
+- [x] T037 [US2] [U129] Declared-link hover tests in the `#[cfg(test)]` module of `crates/micold-client/src/ui/material/terminal_pane.rs`, over a fake grid.
   - Hovering `docs` (declared `https://example.com/manual`) resolves that address as `display`, and the underline covers exactly the run.
   - Two adjacent runs with different URIs are two links.
   - Two same-URI runs separated by plain text mark only the hovered run.
   - Address-shaped visible text resolves to the declared URI (US2 scenarios 1, 3–5).
-- [ ] T023 [US1] [U106] [U107] [U108] [U109] [U110] [U111] [U112] [U113] [U114] [U115] [U116] [U142] `link_gesture` tests in the `#[cfg(test)]` module of `crates/micold-client/src/ui/material/terminal_pane.rs`.
+- [x] T023 [US1] [U106] [U107] [U108] [U109] [U110] [U111] [U112] [U113] [U114] [U115] [U116] [U142] `link_gesture` tests in the `#[cfg(test)]` module of `crates/micold-client/src/ui/material/terminal_pane.rs`.
   - Contract link-opening §1: G1–G9 and G3b, including G7: a middle click or wheel over a link behaves as today.
   - A step never writes to the PTY, changes the selection or scrolls (FR-014).
   - The SC-004 script: 100 scripted plain drag, double-click and triple-click selections starting on links produce 0 `LinkActivated`. A modifier double-click on a link produces exactly 1, and its second press counts as a double click because the link press recorded `last_click` through `Click::new`.
-- [ ] T024 [US1] [U125] [U126] [U127] [U128] `link_hint_rect(content, pointer_row, hint_size) -> Rectangle` tests in the same module.
+- [x] T024 [US1] [U125] [U126] [U127] [U128] `link_hint_rect(content, pointer_row, hint_size) -> Rectangle` tests in the same module.
   - Bottom-left by default.
   - Top-left when the pointer is within the hint's height of the bottom.
   - Always inside the content bounds.
   - The middle-elided label leaves `ResolvedLink.display` complete.
-- [ ] T025 [US1] [U118] [U119] [U120] [U121] [U122] [U123] [U124] Hover tests in the same module.
+- [x] T025 [US1] [U118] [U119] [U120] [U121] [U122] [U123] [U124] Hover tests in the same module.
   - Hover is recomputed when the pointer cell changes, and on `window::Event::RedrawRequested` when `(generation, seq)` moved *and* the hash of the consulted rows changed. This includes an in-place redraw that keeps the same `LineId`.
   - It is reused, without re-running `link_at`, when the hash is unchanged.
   - It is recomputed when the session shown or the `LinkContext` changes, and on `ModifiersChanged` under mouse reporting.
   - `mouse_interaction` is `Pointer` over a followable link only while the link modifier (`command()`) is held, and back to the text pointer when it is released; under mouse reporting only while Shift and the link modifier are held (clarification 2026-09-16).
   - Two `PaneState`s: hovering and pressing in one leaves the other's `hover` and `link_press` `None`, and only the pressed pane emits `LinkActivated` (FR-022).
-- [ ] T026 [P] [US1] [U131] A new test module in `crates/micold-client/src/showcase/samples.rs`: the terminal sample's grid carries a detected `https://` address and a cell with a declared hyperlink
-- [ ] T027 [P] [US2] [U72] Create `crates/micold-daemon/tests/osc8_passthrough.rs` (research R13).
+- [x] T026 [P] [US1] [U131] A new test module in `crates/micold-client/src/showcase/samples.rs`: the terminal sample's grid carries a detected `https://` address and a cell with a declared hyperlink
+- [x] T027 [P] [US2] [U72] Create `crates/micold-daemon/tests/osc8_passthrough.rs` (research R13).
   - The test binary re-executes itself through the real PTY supervisor, as a child gated by an environment flag, and the child prints one OSC 8 link.
   - The test asserts that the resulting grid cell's hyperlink equals the URI.
   - It must run on all three CI OSes. If the Windows job shows ConPTY drops the sequence, mark the Windows arm `#[cfg_attr(windows, ignore = "<CI run URL>")]` and record the finding in research R13 and in T040.
 
 ### Implementation for US1: the pane
 
-- [ ] T028 [US1] [U118] [U119] [U120] [U121] [U122] [U123] [U124] [U129] [A1] [A7] [A9] [A10] [A11] Hover in `crates/micold-client/src/ui/material/terminal_pane.rs`.
+- [x] T028 [US1] [U118] [U119] [U120] [U121] [U122] [U123] [U124] [U129] [A1] [A7] [A9] [A10] [A11] Hover in `crates/micold-client/src/ui/material/terminal_pane.rs`.
   - A `LinkRows` adapter over `GridCache`: `line(LineId(viewport_top - display_offset + row))`, with `text`, `wrapped`, `CachedExtra.hyperlink`, and `spacer` from the cell's style-run flags (`WIDE_CHAR_SPACER | LEADING_WIDE_CHAR_SPACER`; ledger decision 15).
   - A row above the first line the terminal ever printed, or above the top of the alternate screen (`less`, `vim`), answers `text = Some("")`, unwrapped, not `None`: `None` means "may continue past here" (contract L7), so it would drop an address at column 0 of a session's first line. Rows trimmed from scrollback (older than `GridCache::oldest_available`) or not yet cached still answer `None` (M1 review B).
   - `PaneState.hover: Option<HoverCache { session, context, cell, grid_version: (u64, u64), rows_hash: u64, resolved: Option<ResolvedLink> }>`.
   - The pure invalidation function.
   - In `update`, recompute on `CursorMoved`, `ModifiersChanged` and `window::Event::RedrawRequested`, which reads `GridCache::generation()`/`seq()`. Request a redraw when `resolved` changes.
   - The pane builder takes a `LinkContext`.
-- [ ] T029 [US1] [U106] [U107] [U108] [U109] [U110] [U111] [U112] [U113] [U114] [U115] [U116] [U142] [A2] [A3] [A4] [A5] [A6] [A8] [A11] [A13] The gesture in `crates/micold-client/src/ui/material/terminal_pane.rs`.
+- [x] T029 [US1] [U106] [U107] [U108] [U109] [U110] [U111] [U112] [U113] [U114] [U115] [U116] [U142] [A2] [A3] [A4] [A5] [A6] [A8] [A11] [A13] The gesture in `crates/micold-client/src/ui/material/terminal_pane.rs`.
   - `PaneState.link_press: Option<LinkPress { link: ResolvedLink, cell: (u16, u16) }>` and the pure `link_gesture`.
   - **Press**: `modifiers.command()`, routing is terminal (`press_routing`), single cadence, and `hover.resolved` is `Some`. The press records `link_press`, updates `last_click` through `Click::new`, focuses as today, and emits no `TerminalSelectStart`.
   - **Move off the press cell**: `TerminalSelectStart` at the press cell.
   - **Release on the press cell**: re-resolve and publish `Message::Session(SessionMsg::LinkActivated(r))` once.
-- [ ] T030 [US1] [U123] [U125] [U126] [U127] [U128] Drawing in `crates/micold-client/src/ui/material/terminal_pane.rs`.
+- [x] T030 [US1] [U123] [U125] [U126] [U127] [U128] Drawing in `crates/micold-client/src/ui/material/terminal_pane.rs`.
   - An underline under the hovered link's cells inside the viewport, in each cell's own foreground colour, so text colour, cursor and selection stay visible (FR-009).
   - The hint label at `link_hint_rect`, middle-elided, using the existing surface and on-surface theme roles.
   - `mouse_interaction` returns `Pointer` over a link only while the link modifier is held (the pane keeps the modifiers from `ModifiersChanged`), and under mouse reporting only while Shift and the link modifier are held.
-- [ ] T031 [US1] [U134] In `crates/micold-client/src/ui/terminal.rs` and its call site in `crates/micold-client/src/ui/mod.rs`, build the pane's `LinkContext { host_names: Vec::new(), windows_host: cfg!(windows), sandbox: None }`; `ui::view`'s signature is unchanged. T050 fills in `host_names` and `sandbox` (glue).
-- [ ] T032 [US1] [U131] Give the terminal sample in `crates/micold-client/src/showcase/samples.rs` a detected `https://` address and a run of cells carrying a declared hyperlink, so that T026 passes
-- [ ] T033 [US1] Add a "Links" subsection under "Interacting with the terminal" in `docs/user-guide/worktrees-and-sessions.md`. It covers:
+- [x] T031 [US1] [U134] In `crates/micold-client/src/ui/terminal.rs` and its call site in `crates/micold-client/src/ui/mod.rs`, build the pane's `LinkContext { host_names: Vec::new(), windows_host: cfg!(windows), sandbox: None }`; `ui::view`'s signature is unchanged. T050 fills in `host_names` and `sandbox` (glue).
+- [x] T032 [US1] [U131] Give the terminal sample in `crates/micold-client/src/showcase/samples.rs` a detected `https://` address and a run of cells carrying a declared hyperlink, so that T026 passes
+- [x] T033 [US1] Add a "Links" subsection under "Interacting with the terminal" in `docs/user-guide/worktrees-and-sessions.md`. It covers:
   - hover marking and the address hint;
   - Ctrl+click on Linux and Windows, Cmd+click on macOS;
   - plain clicks, drags and double or triple clicks still select;

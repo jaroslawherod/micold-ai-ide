@@ -514,3 +514,47 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
   -> `left: "file:///home/u/a%20b%2C%EF%BF%BD"` / `right: "file:///home/u/a%20b%2C%FF"` (1 failed)
 - green: on Unix `file_uri` encodes `OsStrExt::as_bytes`; elsewhere the lossy text. -> 9 passed
 - commit: `fix(031): M2 review and gate fixes (U155)`
+
+## Cycle 50: A1–A11, A13 the pane's links through `update_inner` (outer loop, T082, T083)
+
+- test: `crates/micold-client/src/shell/links.rs::acceptance` (12 tests), driving the real pane from `ui::terminal::pane` and routing its messages through `update_inner` to a `RecordingOpener`
+- red: against compiling stubs (no hover, no activation), `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide shell::links::acceptance`
+  -> `test result: FAILED. 1 passed; 11 failed` (for example A1 `left: Some(Text)` / `right: Some(Pointer)`, A2 `left: []`). A5 passed on arrival as a guard
+- green: after cycles 51–54 -> `shell::links` 13 passed
+- guard A5: mutant `command: _` in `link_gesture` -> fails with `left: ["https://example.com/docs/page.html"]`
+- commits: red `3a6191d6`, green `6d4e9737`
+
+## Cycle 51: U106–U116, U142 the link gesture
+
+- test: `terminal_pane.rs::tests::links` gesture tests (pure `link_gesture` and through the pane)
+- red: `scripts/build-lock.sh cargo test -p micold-client --lib terminal_pane::tests::links` -> the gesture tests fail against the stubs (`a_command_press_released_on_its_cell_opens_the_link` panicked at terminal_pane.rs:2877). U108/U110, U111 (pure) and U142 passed on arrival as guards
+- green: `link_gesture` and the press, move and release arms in `TerminalPane::update`; the release re-resolves the link at release time
+- guards: mutant `command: _` fails U108/U110 and U116 (66 activations); mutant `routing: _` fails U111; a middle press publishing `LinkActivated` fails U142
+- commits: red `3a6191d6`, green `6d4e9737`
+
+## Cycle 52: U118–U124 hover cache and pointer
+
+- test: `terminal_pane.rs::tests::links` hover tests
+- red: same command -> `a_grid_that_moved_without_touching_the_hovered_rows_keeps_the_hover` panicked at terminal_pane.rs:3192, `the_pointer_is_a_hand_over_a_link_only_while_the_link_modifier_is_held` failed; U121 passed on arrival as a guard over `hover_refresh`
+- green: `HoverCache`, `hover_refresh` (session, context, cell, display offset, grid version, consulted-rows hash), `marked_link`, `pane_interaction` (Pointer only while `command()` is held, Decision 20)
+- guard U121: mutant ignoring the session in `hover_refresh` -> `left: Reuse`
+- commits: red `3a6191d6`, green `6d4e9737`
+
+## Cycle 53: U125–U128 the address hint, U129 declared runs, U156–U157 the `LinkRows` adapter
+
+- test: `terminal_pane.rs::tests::links` hint, declared-run and `GridRows` tests
+- red: same command -> `test result: FAILED. 5 passed; 26 failed` for the whole links module (for example `a_long_address_is_elided_in_the_middle_and_display_stays_whole` at terminal_pane.rs:3339, `spacer_cells_come_from_the_style_run_flags` failed)
+- green: `link_hint_rect`, `elide_middle`, `GridRows` (`Some("")` above everything printed, `None` when trimmed or uncached, spacer from style-run flags), underline and hint drawing -> terminal_pane module 75 passed
+- commits: red `3a6191d6`, green `6d4e9737`
+
+## Cycle 54: U131 the showcase sample, U72 OSC 8 through the PTY
+
+- test: `showcase/samples.rs::tests::the_terminal_sample_holds_a_detected_address_and_a_declared_link`; `crates/micold-daemon/tests/osc8_passthrough.rs`
+- red (U131): `scripts/build-lock.sh cargo test -p micold-client --lib showcase::samples` -> `a detected https:// address in the sample, found []` (1 failed)
+- U72 passed on arrival: a characterization of the existing PTY and framer path. Mutant expecting `URI + "/mutant"` -> fails with "every cell of the run carries the declared URI"
+- green: the sample's docs line with a detected address and `manual` declared as `https://example.com/micold/manual` -> 1 passed
+- commits: red `3a6191d6`, green `6d4e9737`
+
+## Gate fixes: M3
+
+- `mise run gate`: `crates/micold-client/tests/idle_requests_no_frames.rs::only_the_motion_primitive_asks_for_frames` failed with `a module outside ui/cdk/motion.rs asks the runtime for a frame: ui/material/terminal_pane.rs:1296 shell.request_redraw();`. The hover refresh now calls `shell.invalidate_widgets()` on a change of the marked link or modifier, as `select.rs` does -> 8 passed; the underline reaching the screen is checked by the visual pass

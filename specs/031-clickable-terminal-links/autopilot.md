@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M3 (T082, T083, T037, T023–T034): dispatch the milestone unit; T028/T025/T030 carry the M1-review bullets and the Ctrl-held pointer clarification
+- **Next step**: M3 step 3: gate, cross-OS checks and visual pass on T082–T033's commits, then reviews A and B
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|---|
 | M1 | T001–T012 | Link recognition core (`micold_core::link`, SC-002 corpus) | #356 | merged |
 | M2 | T013–T022 | Opening pipeline: `LinkActivated` through `update_inner` to the system opener | #361 | merged |
-| M3 | T082, T083, T037, T023–T034 | Clickable web, mail and declared links in the pane | — | pending |
+| M3 | T082, T083, T037, T023–T034 | Clickable web, mail and declared links in the pane | — | in progress |
 | M4 | T035, T036, T038–T041 | Session terminal identity and the FORCE_HYPERLINK opt-in | — | pending |
 | M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | — | pending |
 | M6 | T085, T055–T067, T069, T068 | Sandboxed file links, translated and confirmed | — | pending |
@@ -56,6 +56,10 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | 18 | 4-milestones | M1 review A round 3: alacritty writes the end-of-row padding before a wrapping wide char with the cursor template's hyperlink, so hovering it built a one-cell declared link over the plain char before it | `link_at` reads the hyperlink of the lead cell of the char under the pointer (U153); contract L5 says a spacer's own `hyperlink` is not read | agent-resolved | contract L5 "its spacer cell belongs to the same link as its lead cell" |
 | 19 | 4-milestones | T021 has `shell/links.rs` run the session reducer itself, but `tests/feature_registration_cost.rs::only_the_root_drives_a_feature` forbids any caller of a feature reducer outside `app.rs` | Add `State::update_session_for_effects` in `app.rs`: it runs the reducer, drains every outcome but `ClipboardWrite` and `OpenLink`, and returns those two for `shell/links.rs` to perform | agent-resolved | tests/feature_registration_cost.rs SC-002, FR-002 |
 | 20 | 4-milestones | The user asked that the pointer change only when a link is clickable: on plain hover or only with the link modifier held? | Only while Ctrl (Cmd on macOS) is held; underline and hint still show on plain hover. Spec clarification 2026-09-16; FR-007, US1 scenario 1, research R7, data-model T1, T025, T030, U123, quickstart B.1 updated before M3 | user | user, 2026-09-16: "only while Ctrl is held" |
+| 21 | 4-milestones | The hover key in data-model §3 has no scroll position: scrolling the view under a resting pointer would reuse a link from other rows | Add `display_offset` to `HoverKey`/`HoverCache`, so scrolling re-resolves | agent-resolved | terminal_pane.rs `hover_refresh`; U156 `rows_follow_the_scrollback_offset` |
+| 22 | 4-milestones | The acceptance tests cannot reach `ui::material` (`pub(crate)`) from the bin crate | Build the pane through the public `ui::terminal::pane`, the same element the app renders | agent-resolved | shell/links.rs `mod acceptance` |
+| 23 | 4-milestones | Hint colours | `surface_container_highest` container, `on_surface` text, as `TermPalette::hint_container`/`hint_content` | agent-resolved | ui/terminal.rs |
+| 24 | 4-milestones | The hover change needs a repaint, but `idle_requests_no_frames.rs` allows one `request_redraw` in the rendering layer | Edge-triggered `shell.invalidate_widgets()`, as `select.rs` does | agent-resolved | gate failure recorded in tdd/cycle-log.md "Gate fixes: M3" |
 
 ## Declined review findings
 
@@ -71,4 +75,4 @@ None. (M2's block on the Windows install smoke was resolved by #358; see Decisio
 
 ## Follow-ups not done
 
-None.
+- Scrollback lines fetched by `apply_scrollback` do not bump the grid `seq`, so a resting pointer over just-fetched lines refreshes its hover only on the next pointer move or modifier change (M3, minor).
