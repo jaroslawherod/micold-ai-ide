@@ -905,6 +905,29 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
   own, so the chord is for the times you want the app's shortcuts back without leaving the
   terminal you are looking at.
 
+### Links
+
+Web and mail addresses in a terminal are links, and so is text a program marked as a link.
+
+- **Hover** over an address such as `https://example.com/docs` or `mailto:team@example.com` and
+  it is underlined, exactly the address and not the punctuation around it. The full address it
+  opens shows in a small label at the bottom-left of the terminal, or at the top-left while the
+  pointer is near the bottom. An address the terminal wrapped onto the next row is one link.
+- **Open** it with **Ctrl+click** on Linux and Windows, or **Cmd+click** on macOS. The pointer
+  turns into a hand while you hold Ctrl (Cmd) over a link, to show a click will open it. A web
+  address opens in your default browser, a `mailto:` address in your default mail client.
+- **Selecting still works as before.** A plain click, a drag, and a double or triple click select
+  text even when they start on a link, and never open it.
+- **Programs that use the mouse** (`vim` with `:set mouse=a`, `htop`, …) get Ctrl+clicks as they
+  always did. Hold **Shift** as well, **Shift+Ctrl+click** (Shift+Cmd+click on macOS), to open a
+  link there; the underline shows only while Shift is held.
+- **Links a program declares.** Some programs print a word such as `docs` that stands for an
+  address. The whole word is marked as one link, and the label shows, and a click opens, the
+  address the program declared, even when the visible text reads like another address.
+- **When it can't open.** If nothing on your computer is set up to open the address, or the
+  browser fails to start, a notification says so, for example
+  `Couldn't open https://example.com/docs: no application is set up to open it`.
+
 ### One press does what you pressed
 
 Every control in the window acts on the **first** press, whatever the terminal was holding. Press
