@@ -1857,9 +1857,11 @@ press a second time (BUG-016)", `left: ["terminal", "saved"]` / `right: ["termin
 `field_focus` tests passed, BUG-013's `a_clicked_button_takes_the_keyboard_and_draws_no_indicator`
 among them.
 
-**Pass record (T190)** — 2026-09-17, on `5c371812` plus this change: `mise run gate` exited 0 — fmt,
-clippy (core, then workspace, `-D warnings`), `cargo test --workspace` 3249 passed, 0 failed (summed
-over every `test result` line), and every `scripts/tests/*.test.sh`. No snapshot moved.
+**Pass record (T190)** — 2026-09-17, on `origin/main` at `15b4493f` plus this change: `mise run gate`
+exited 0 — fmt, clippy (core, then workspace, `-D warnings`), `cargo test --workspace` 3263 passed,
+0 failed (summed over every `test result` line), and every `scripts/tests/*.test.sh`. No snapshot
+moved. The regression test was re-run on `15b4493f` with only this test added and failed the same way
+(`left: ["terminal", "saved"]`).
 
 **Rendered-frame record (T191)** — 2026-09-17, dark scheme, on Xvfb (1600×1000) with lavapipe, not a
 real display. `micold-ai-ide` and `micold-daemon` were built together and run from a private copy (the
