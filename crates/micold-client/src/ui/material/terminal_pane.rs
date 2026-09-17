@@ -1296,8 +1296,11 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     }
                 }
             }
+            // Not a frame request: `idle_requests_no_frames.rs` keeps the only one in `cdk::motion`.
+            // A stale tree is what makes the runtime repaint, and this fires only on a change of
+            // the marked link or the modifier, so the render loop still settles (see `select.rs`).
             if shown(state) != before {
-                shell.request_redraw();
+                shell.invalidate_widgets();
             }
         }
 

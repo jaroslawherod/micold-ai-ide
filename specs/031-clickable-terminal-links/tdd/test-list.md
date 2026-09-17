@@ -39,19 +39,19 @@ rendered pixels — is covered by the quickstart §B visual pass.
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| A1  | Hovering any character of `https://example.com/docs/page.html` in `See https://example.com/docs/page.html for details.` marks exactly the address's cells (not "See", the space or the full stop) and the pane's pointer is `Pointer` | US1.1, FR-001, FR-005, FR-007 | example | PENDING | |
-| A2  | A Ctrl/Cmd press and release on that address calls the opener once with `https://example.com/docs/page.html` and publishes no `TerminalBytes` | US1.2, FR-004, FR-010, FR-014, SC-001 | example | PENDING | |
-| A3  | An address the terminal soft-wrapped across two rows opens complete when activated on either row | US1.3, FR-003 | example | PENDING | |
-| A4  | Activating `(https://example.com/a_(b))` opens `https://example.com/a_(b)`, and `"https://example.com"` opens `https://example.com` | US1.4, FR-005 | example | PENDING | |
-| A5  | A plain drag, double-click or triple-click starting on a link selects as today and calls no opener | US1.5, FR-004 | example | PENDING | |
-| A6  | An address scrolled into scrollback, with the view scrolled up to it, opens the same address as on the live screen | US1.6 | example | PENDING | |
-| A7  | Hovering `docs` declared as `https://example.com/manual` marks the run and the hint shows `https://example.com/manual` | US2.1, FR-002, FR-008 | example | PENDING | |
-| A8  | Activating that run calls the opener with `https://example.com/manual` | US2.2, FR-002 | example | PENDING | |
-| A9  | Two adjacent runs with different declared addresses each resolve to their own address when hovered | US2.3 | example | PENDING | |
-| A10 | With the same declared address on two runs separated by undeclared text, hovering one marks only that run | US2.4 | example | PENDING | |
-| A11 | Declared text that reads `https://a.example` but declares `https://b.example` shows and opens `https://b.example` | US2.5, FR-008 | example | PENDING | |
+| A1  | Hovering any character of `https://example.com/docs/page.html` in `See https://example.com/docs/page.html for details.` marks exactly the address's cells (not "See", the space or the full stop) and the pane's pointer is `Pointer` | US1.1, FR-001, FR-005, FR-007 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::hovering_an_address_marks_exactly_its_cells_and_the_pointer_is_a_hand` |
+| A2  | A Ctrl/Cmd press and release on that address calls the opener once with `https://example.com/docs/page.html` and publishes no `TerminalBytes` | US1.2, FR-004, FR-010, FR-014, SC-001 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::a_command_click_on_an_address_opens_it_once_and_writes_nothing_to_the_program` |
+| A3  | An address the terminal soft-wrapped across two rows opens complete when activated on either row | US1.3, FR-003 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::a_soft_wrapped_address_opens_complete_from_either_row` |
+| A4  | Activating `(https://example.com/a_(b))` opens `https://example.com/a_(b)`, and `"https://example.com"` opens `https://example.com` | US1.4, FR-005 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::surrounding_punctuation_is_left_out_of_what_opens` |
+| A5  | A plain drag, double-click or triple-click starting on a link selects as today and calls no opener | US1.5, FR-004 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::selecting_on_a_link_selects_and_opens_nothing` (guard; mutant `command: _` in `link_gesture` fails it) |
+| A6  | An address scrolled into scrollback, with the view scrolled up to it, opens the same address as on the live screen | US1.6 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::an_address_in_scrollback_opens_the_same_address` |
+| A7  | Hovering `docs` declared as `https://example.com/manual` marks the run and the hint shows `https://example.com/manual` | US2.1, FR-002, FR-008 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::hovering_a_declared_run_marks_it_and_shows_its_declared_address` |
+| A8  | Activating that run calls the opener with `https://example.com/manual` | US2.2, FR-002 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::activating_a_declared_run_opens_its_declared_address` |
+| A9  | Two adjacent runs with different declared addresses each resolve to their own address when hovered | US2.3 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::adjacent_declared_runs_open_their_own_addresses` |
+| A10 | With the same declared address on two runs separated by undeclared text, hovering one marks only that run | US2.4 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::same_address_runs_apart_are_marked_one_at_a_time` |
+| A11 | Declared text that reads `https://a.example` but declares `https://b.example` shows and opens `https://b.example` | US2.5, FR-008 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::declared_text_that_reads_as_another_address_shows_and_opens_the_declared_one` |
 | A12 | A `file://<this host>/<tmp>/readme%20a.txt` declared name, as `ls --hyperlink=always` prints it, calls `opener.open` with the decoded existing path | US2.6, FR-012 | example | PENDING | |
-| A13 | Activating `mailto:team@example.com` calls the opener with `mailto:team@example.com` | US3.1, FR-010 | example | PENDING | |
+| A13 | Activating `mailto:team@example.com` calls the opener with `mailto:team@example.com` | US3.1, FR-010 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::a_mail_address_reaches_the_opener_verbatim` |
 | A14 | Activating a `file://` link to an existing document calls `opener.open` with its host path | US3.2, FR-010 | example | PENDING | |
 | A15 | Activating a `file://` link to an existing folder calls `opener.open` with the folder path | US3.3, FR-010 | example | PENDING | |
 | A16 | Activating a `file://` link to a runnable file calls `opener.reveal` and never `opener.open` | US3.4, FR-013 | example | PENDING | |
@@ -115,6 +115,8 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | U153 | The padding before a wide char that wrapped onto the next row declares what the char before it on its row declares, not the URI the terminal wrote into it: a plain char's padding is no link, and the declared run starts on the next row | FR-002, FR-007, L1, L5 | example | DONE | `crates/micold-core/src/link/line.rs::tests::padding_before_a_wrapped_wide_char_takes_the_link_of_the_char_before_it` |
 | U154 | Below a cut, an address closed by the `'` that opened right before it is kept even when only that quote lies between it and the cut: the quote is a hard end | FR-003, L7 | example | DONE | `crates/micold-core/src/link/line.rs::tests::a_quoted_address_whose_closing_quote_ends_a_wrapped_row_is_a_link` |
 | U155 | Linux reveal names the file by its own bytes: a name that is not UTF-8 is percent-encoded as it is on disk, not as a lossy copy | FR-013 | example | DONE | `crates/micold-client/src/shell/link_opener.rs::tests::a_file_name_that_is_not_utf8_is_encoded_from_its_own_bytes` |
+| U156 | The pane's `LinkRows` answers `Some("")` for a row above the first line ever printed or above the alternate screen's top, and `None` for a row trimmed from scrollback or not cached | FR-003, L7, M1 review | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::rows_above_everything_printed_read_as_empty_and_rows_not_held_as_unavailable`, `rows_follow_the_scrollback_offset` |
+| U157 | The pane's `LinkRows::spacer` is true exactly for cells whose style-run flags carry `WIDE_CHAR_SPACER` or `LEADING_WIDE_CHAR_SPACER` | FR-003, L5, Decision 15 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::spacer_cells_come_from_the_style_run_flags` |
 
 ### `crates/micold-core/src/link/address.rs`
 
@@ -224,7 +226,7 @@ U49 is a guard: it is green on arrival. Its red is shown by adding `use std::fs;
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U72 | An OSC 8 link printed by a child of the real PTY supervisor reaches the grid cell's hyperlink, on each CI OS (a Windows ignore is recorded with its CI run if ConPTY drops it) | FR-002, spec Edge Cases (terminal layer drops declared hyperlinks) | characterization | PENDING | |
+| U72 | An OSC 8 link printed by a child of the real PTY supervisor reaches the grid cell's hyperlink, on each CI OS (a Windows ignore is recorded with its CI run if ConPTY drops it) | FR-002, spec Edge Cases (terminal layer drops declared hyperlinks) | characterization | DONE | `crates/micold-daemon/tests/osc8_passthrough.rs::an_osc8_link_printed_through_the_pty_reaches_the_grid_cell` (characterization; mutant URI fails it) |
 
 It is a characterization test because it pins what the daemon already does. It must be green against
 untouched code, and it is recorded as `BASELINE`.
@@ -291,37 +293,37 @@ untouched code, and it is recorded as `BASELINE`.
 
 | id   | behavior | traces | kind | state | test |
 | ---- | -------- | ------ | ---- | ----- | ---- |
-| U106 | A command-modified press and release on one cell over a link publishes exactly one `LinkActivated` | FR-004, G1 | example | PENDING | |
-| U107 | Moving off the press cell before release publishes no activation and starts a selection at the press cell | FR-004, G2 | example | PENDING | |
-| U108 | A plain double or triple click on a link selects and publishes no activation | FR-004, G3 | example | PENDING | |
-| U109 | A command-modified double click on a link activates once, and its second press counts as a double click that selects | FR-004, G3b | example | PENDING | |
-| U110 | A plain press on a link publishes no activation | FR-004, G4 | example | PENDING | |
-| U111 | Under mouse reporting without Shift, a command-modified press is reported to the program and activates nothing | FR-016, G5 | example | PENDING | |
-| U112 | Under mouse reporting with Shift, a command-modified press and release on a link activates it | FR-016, G6 | example | PENDING | |
-| U113 | A command-modified click on an unfocused pane asks for focus and activates the link | FR-004, G8 | example | PENDING | |
-| U114 | When the link under the pointer changed between press and release, the release-time link opens; when there is none, nothing | FR-017, G9 | example | PENDING | |
-| U115 | No gesture step publishes `TerminalBytes`, a selection change or a scroll | FR-014 | example | PENDING | |
-| U116 | 100 scripted plain drag, double- and triple-click selections starting on links publish 0 activations | SC-004 | example | PENDING | |
-| U142 | A middle click or wheel over a link behaves as today and publishes no activation | FR-004, G7 | example | PENDING | |
+| U106 | A command-modified press and release on one cell over a link publishes exactly one `LinkActivated` | FR-004, G1 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_command_press_released_on_its_cell_opens_the_link`, `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_command_click_on_a_link_publishes_one_activation_and_nothing_else` |
+| U107 | Moving off the press cell before release publishes no activation and starts a selection at the press cell | FR-004, G2 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::leaving_the_press_cell_turns_the_press_into_a_selection_from_it`, `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_command_press_dragged_off_its_cell_selects_from_the_press_cell` |
+| U108 | A plain double or triple click on a link selects and publishes no activation | FR-004, G3 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_plain_press_or_a_repeated_click_is_not_the_gesture` (guard; mutant `command: _` fails it) |
+| U109 | A command-modified double click on a link activates once, and its second press counts as a double click that selects | FR-004, G3b | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::plain_drags_and_double_and_triple_clicks_on_links_never_activate` |
+| U110 | A plain press on a link publishes no activation | FR-004, G4 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_plain_press_or_a_repeated_click_is_not_the_gesture` (guard; mutant `command: _` fails it) |
+| U111 | Under mouse reporting without Shift, a command-modified press is reported to the program and activates nothing | FR-016, G5 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_press_routed_to_the_program_is_not_the_gesture`, `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::under_mouse_reporting_a_command_click_goes_to_the_program` (guards; mutant `routing: _` fails them) |
+| U112 | Under mouse reporting with Shift, a command-modified press and release on a link activates it | FR-016, G6 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::under_mouse_reporting_shift_and_command_open_the_link` |
+| U113 | A command-modified click on an unfocused pane asks for focus and activates the link | FR-004, G8 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_command_click_on_an_unfocused_pane_focuses_it_and_opens_the_link` |
+| U114 | When the link under the pointer changed between press and release, the release-time link opens; when there is none, nothing | FR-017, G9 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::the_release_opens_the_link_under_the_pointer_then_or_nothing`, `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::the_link_at_release_opens_when_the_output_changed_under_the_press` |
+| U115 | No gesture step publishes `TerminalBytes`, a selection change or a scroll | FR-014 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_command_click_on_a_link_publishes_one_activation_and_nothing_else` |
+| U116 | 100 scripted plain drag, double- and triple-click selections starting on links publish 0 activations | SC-004 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::plain_drags_and_double_and_triple_clicks_on_links_never_activate` |
+| U142 | A middle click or wheel over a link behaves as today and publishes no activation | FR-004, G7 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_middle_click_or_wheel_over_a_link_behaves_as_today` (guard; mutant publishing on a middle press fails it) |
 | U117 | A right press over a link publishes `TerminalContextMenuOpened` carrying the link resolved at the press; over plain text, `None` | FR-017, FR-020 | example | PENDING | |
-| U118 | Hover is recomputed when the pointer moves to another cell | FR-007 | example | PENDING | |
-| U119 | Hover is recomputed on redraw when the grid version moved and the consulted rows' content changed, including an in-place redraw of the same line | FR-007, spec Edge Cases (output moving under the pointer) | example | PENDING | |
-| U120 | Hover is reused without re-resolving when the grid version moved but the consulted rows are unchanged | SC-005 | example | PENDING | |
-| U121 | Hover is recomputed when the session shown or the `LinkContext` changes | FR-007 | example | PENDING | |
-| U122 | Under mouse reporting, a link is marked only while Shift is held, and pressing or releasing Shift updates it | FR-016 | example | PENDING | |
-| U123 | The mouse interaction is `Pointer` over a followable link only while the link modifier is held, the text pointer over it without the modifier, and unchanged elsewhere | FR-007 | example | PENDING | |
-| U124 | Hovering and pressing in one pane leaves another pane's hover and press empty, and only the pressed pane activates | FR-022 | example | PENDING | |
-| U125 | The address hint sits bottom-left of the content by default | FR-008 | example | PENDING | |
-| U126 | The hint moves top-left when the pointer is within the hint's height of the bottom edge, and stays bottom-left one row above that | FR-008 | example | PENDING | |
-| U127 | The hint always lies inside the content bounds | FR-008 | example | PENDING | |
-| U128 | A long address is middle-elided in the label while `ResolvedLink.display` stays complete | FR-008, SC-006 | example | PENDING | |
-| U129 | Hovering a declared run marks exactly that run and resolves the declared address | FR-002, FR-008, US2.1 | example | PENDING | |
+| U118 | Hover is recomputed when the pointer moves to another cell | FR-007 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::hover_follows_the_pointer_from_cell_to_cell` |
+| U119 | Hover is recomputed on redraw when the grid version moved and the consulted rows' content changed, including an in-place redraw of the same line | FR-007, spec Edge Cases (output moving under the pointer) | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_redraw_after_the_output_changed_under_a_resting_pointer_re_resolves_it` |
+| U120 | Hover is reused without re-resolving when the grid version moved but the consulted rows are unchanged | SC-005 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_grid_that_moved_without_touching_the_hovered_rows_keeps_the_hover` |
+| U121 | Hover is recomputed when the session shown or the `LinkContext` changes | FR-007 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_switch_of_session_or_context_re_resolves` (guard over `hover_refresh`; mutant ignoring the session fails it) |
+| U122 | Under mouse reporting, a link is marked only while Shift is held, and pressing or releasing Shift updates it | FR-016 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::under_mouse_reporting_a_link_is_marked_only_while_shift_is_held` |
+| U123 | The mouse interaction is `Pointer` over a followable link only while the link modifier is held, the text pointer over it without the modifier, and unchanged elsewhere | FR-007 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::the_pointer_is_a_hand_over_a_link_only_while_the_link_modifier_is_held` |
+| U124 | Hovering and pressing in one pane leaves another pane's hover and press empty, and only the pressed pane activates | FR-022 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::hover_and_press_stay_in_the_pane_under_the_pointer` |
+| U125 | The address hint sits bottom-left of the content by default | FR-008 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::the_hint_sits_bottom_left_by_default` |
+| U126 | The hint moves top-left when the pointer is within the hint's height of the bottom edge, and stays bottom-left one row above that | FR-008 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::the_hint_moves_top_left_when_the_pointer_nears_the_bottom` |
+| U127 | The hint always lies inside the content bounds | FR-008 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::the_hint_always_lies_inside_the_content` |
+| U128 | A long address is middle-elided in the label while `ResolvedLink.display` stays complete | FR-008, SC-006 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_long_address_is_elided_in_the_middle_and_display_stays_whole` |
+| U129 | Hovering a declared run marks exactly that run and resolves the declared address | FR-002, FR-008, US2.1 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::hovering_a_declared_run_marks_exactly_the_run_and_resolves_its_address`, `adjacent_runs_with_different_addresses_are_two_links`, `same_address_runs_apart_are_marked_one_at_a_time`, `address_shaped_text_resolves_to_the_declared_address` |
 
 ### `crates/micold-client/src/showcase/samples.rs`
 
 | id   | behavior | traces | kind | state | test |
 | ---- | -------- | ------ | ---- | ----- | ---- |
-| U131 | The terminal sample's grid holds a detected `https://` address and a declared hyperlink run | Constitution (showcase covers visible states), FR-007 | example | PENDING | |
+| U131 | The terminal sample's grid holds a detected `https://` address and a declared hyperlink run | Constitution (showcase covers visible states), FR-007 | example | DONE | `crates/micold-client/src/showcase/samples.rs::tests::the_terminal_sample_holds_a_detected_address_and_a_declared_link` |
 
 ### `crates/micold-client/src/ui/terminal.rs`, `ui/mod.rs`, `main.rs` (glue)
 
