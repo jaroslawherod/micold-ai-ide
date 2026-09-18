@@ -228,13 +228,24 @@ mod unix {
 mod windows {
     use super::*;
 
+    /// The budget for a test that expects the script to be sourced, not to run out of time (#381).
+    ///
+    /// [`spawn_guard`] took the contention out, and a `windows-latest` runner still spent more
+    /// than ten seconds on one cold `powershell.exe` start: four tests failed together on the
+    /// baseline, serialised, having never reached their scripts. For these tests the budget is not
+    /// what is being tested — only that the answer arrives — so they get the most a user may
+    /// configure (`MAX_ENV_INCLUDE_TIMEOUT_SECS`). The tests whose budget *is* the subject keep
+    /// their own small one, so this cannot hide a slow resolution: those still fail if one is.
+    const ANSWERED: Duration =
+        Duration::from_secs(micold_core::settings::MAX_ENV_INCLUDE_TIMEOUT_SECS);
+
     #[test]
     fn exported_variable_is_captured() {
         let _guard = spawn_guard();
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(&dir, "profile.ps1", "$env:QUICKSTART_MARKER = 'hello'\n");
 
-        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_secs(10));
+        let (vars, outcome) = resolve(&script, dir.path(), ANSWERED);
 
         assert_eq!(outcome, EnvIncludeOutcome::Success);
         assert!(vars.contains(&("QUICKSTART_MARKER".to_string(), "hello".to_string())));
@@ -245,7 +256,7 @@ mod windows {
         let dir = tempfile::tempdir().unwrap();
         let script = dir.path().join("does-not-exist.ps1");
 
-        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_secs(10));
+        let (vars, outcome) = resolve(&script, dir.path(), ANSWERED);
 
         assert_eq!(outcome, EnvIncludeOutcome::MissingScript);
         assert!(vars.is_empty());
@@ -261,7 +272,7 @@ mod windows {
             "Write-Output 'something went wrong'\nexit 1\n",
         );
 
-        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_secs(10));
+        let (vars, outcome) = resolve(&script, dir.path(), ANSWERED);
 
         assert!(vars.is_empty());
         match outcome {
@@ -297,7 +308,7 @@ mod windows {
         let dir = tempfile::tempdir().unwrap();
         let script = write_script(&dir, "profile.ps1", "");
 
-        let (vars, outcome) = resolve(&script, dir.path(), Duration::from_secs(10));
+        let (vars, outcome) = resolve(&script, dir.path(), ANSWERED);
 
         assert_eq!(outcome, EnvIncludeOutcome::Success);
         assert!(vars.is_empty());
@@ -317,7 +328,7 @@ mod windows {
 
         let project_with_marker = tempfile::tempdir().unwrap();
         std::fs::File::create(project_with_marker.path().join(".bug002-marker")).unwrap();
-        let (vars, outcome) = resolve(&script, project_with_marker.path(), Duration::from_secs(10));
+        let (vars, outcome) = resolve(&script, project_with_marker.path(), ANSWERED);
         assert_eq!(outcome, EnvIncludeOutcome::Success);
         assert!(
             vars.contains(&("BUG002_VAR".to_string(), "present".to_string())),
@@ -326,11 +337,7 @@ mod windows {
         );
 
         let project_without_marker = tempfile::tempdir().unwrap();
-        let (vars, outcome) = resolve(
-            &script,
-            project_without_marker.path(),
-            Duration::from_secs(10),
-        );
+        let (vars, outcome) = resolve(&script, project_without_marker.path(), ANSWERED);
         assert_eq!(outcome, EnvIncludeOutcome::Success);
         assert!(
             !vars.contains(&("BUG002_VAR".to_string(), "present".to_string())),
