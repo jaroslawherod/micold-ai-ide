@@ -116,10 +116,14 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
                 }
                 existing.lifecycle = lifecycle;
                 existing.activity = summary.activity.clone();
-                // Adopt the daemon's title only when it has a real one. The daemon now overlays the
-                // live OSC-0 title onto the summary (T047), but a summary can still be `Pending`
-                // before the first title arrives; don't let that clobber a title already learned.
-                if let SessionLabel::Named(_) = summary.title {
+                // Adopt the daemon's label only when it has a real one: a title, or a label derived
+                // from the first turn (feature 032, C8.5). The daemon now overlays the live OSC-0
+                // title onto the summary (T047), but a summary can still be `Pending` before either
+                // arrives; don't let that clobber a label already learned.
+                if matches!(
+                    summary.title,
+                    SessionLabel::Named(_) | SessionLabel::Derived(_)
+                ) {
                     existing.label = summary.title.clone();
                 }
                 // Shell-instance liveness (`012` FR-008, BUG-003). The client allocates the ids and

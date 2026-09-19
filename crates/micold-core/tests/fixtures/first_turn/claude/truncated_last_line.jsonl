@@ -1,0 +1,3 @@
+{"type": "file-history-snapshot", "messageId": "m-1", "snapshot": {"trackedFileBackups": {}}, "isSnapshotUpdate": false}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "hello"}]}}
+{"type": "user", "message": {"role": "user", "content": "half written"}}

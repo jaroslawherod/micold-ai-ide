@@ -135,6 +135,12 @@ struct StoredSession {
     worktree_dir: Option<String>,
     #[serde(default)]
     title: Option<String>,
+    /// A label derived from the conversation's first turn (feature 032, C8.1): present only for a
+    /// session with no title. Additive, defaulted and skipped when absent, so a file with no derived
+    /// labels is exactly what an older build wrote and reads — no `schema_version` bump (research
+    /// R2). A record holding both keys loads `Named`: a title outranks a label (FR-005).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    label: Option<String>,
     #[serde(default)]
     mode: StoredTerminalMode,
     /// Closed via FR-015a (bugfix BUG-003). `#[serde(default)]` — absent/`false` for a live
@@ -245,7 +251,11 @@ impl StoredSession {
             worktree_dir: Self::location_to_stored(&session.location),
             title: match &session.label {
                 SessionLabel::Named(t) => Some(t.clone()),
-                SessionLabel::Pending => None,
+                SessionLabel::Pending | SessionLabel::Derived(_) => None,
+            },
+            label: match &session.label {
+                SessionLabel::Derived(l) => Some(l.clone()),
+                SessionLabel::Pending | SessionLabel::Named(_) => None,
             },
             mode: session.mode.into(),
             archived: session.archived,
@@ -256,9 +266,10 @@ impl StoredSession {
     /// Restore a live [`Session`] from its persisted form (shared by the catalog's legacy
     /// migration path and the per-project state file).
     fn into_session(self) -> Session {
-        let label = match self.title {
-            Some(t) => SessionLabel::Named(t),
-            None => SessionLabel::Pending,
+        let label = match (self.title, self.label) {
+            (Some(t), _) => SessionLabel::Named(t),
+            (None, Some(l)) if !l.is_empty() => SessionLabel::Derived(l),
+            (None, _) => SessionLabel::Pending,
         };
         let mut session = Session::restored(
             SessionId::from_uuid(self.id),

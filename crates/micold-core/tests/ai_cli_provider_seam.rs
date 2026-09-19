@@ -34,7 +34,11 @@
 //! way absences are: by a minimal implementation that inherits nothing, plus a compile-time check
 //! that the removed names are gone from the trait's surface.
 
-use micold_core::provider::{ActivitySource, AiCliProvider, FakeAiCliProvider};
+mod support;
+
+use micold_core::provider::{
+    ActivitySource, AiCliProvider, CopilotProvider, FakeAiCliProvider, PiProvider,
+};
 use micold_core::session::AiCli;
 use micold_core::terminal::LaunchMode;
 use std::cell::RefCell;
@@ -191,6 +195,8 @@ struct MinimalProvider {
     conversations: RefCell<BTreeMap<Uuid, String>>,
     /// Sessions marked archived.
     archived: RefCell<BTreeSet<Uuid>>,
+    /// First-turn labels, by id (feature 032). Its own, like its titles: empty unless given.
+    labels: BTreeMap<Uuid, String>,
     /// What this provider needs in a session's environment. Its own, like everything else here:
     /// the seam asks each provider rather than the daemon deciding per CLI (feature 029, FR-020).
     env: Vec<(String, String)>,
@@ -209,6 +215,7 @@ impl MinimalProvider {
             available: true,
             conversations: RefCell::new(BTreeMap::new()),
             archived: RefCell::new(BTreeSet::new()),
+            labels: BTreeMap::new(),
             env: Vec::new(),
             component_logs: None,
         }
@@ -264,6 +271,10 @@ impl AiCliProvider for MinimalProvider {
     }
     fn read_title(&self, _config_dir: &Path, _cwd: &Path, id: Uuid) -> Option<String> {
         self.conversations.borrow().get(&id).cloned()
+    }
+    fn read_label(&self, _config_dir: &Path, _cwd: &Path, id: Uuid) -> Option<String> {
+        // Required like every other method (feature 032, C1.1), and answered from its own keying.
+        self.labels.get(&id).cloned()
     }
     fn name_in_terminal_title(&self, title: &str, _cwd: &Path) -> Option<String> {
         (title != self.display_name).then(|| title.to_string())
@@ -322,6 +333,11 @@ fn a_provider_that_implements_only_the_required_methods_is_a_complete_provider()
     assert_eq!(
         port.read_title(&root, anywhere, one),
         Some("Its own title".to_string())
+    );
+    assert_eq!(
+        port.read_label(&root, anywhere, one),
+        None,
+        "a title is not a label: nothing derived one from its conversation (feature 032, C1.4)"
     );
     assert_eq!(
         port.activity_source(&root, anywhere, one),
@@ -440,5 +456,66 @@ fn a_provider_that_needs_nothing_in_the_environment_says_so_in_the_same_place() 
             ("MINIMAL_TELEMETRY".to_string(), "0".to_string()),
         ],
         "in the order the provider gave them"
+    );
+}
+
+// ---------------------------------------------------------------------------------------
+// Feature 032 (T013) — `read_label`, the second and lower-priority label source (C1)
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn the_fake_answers_a_label_it_was_given_and_never_offers_it_as_a_title() {
+    let config = PathBuf::from("/fake/config");
+    let cwd = Path::new("/fake/project");
+    let session = Uuid::from_u128(32);
+
+    let provider = FakeAiCliProvider::new()
+        .with_conversation(cwd, session, "raw conversation")
+        .with_label("raw conversation", "/speckit-autopilot");
+
+    assert_eq!(
+        provider.read_label(&config, cwd, session),
+        Some("/speckit-autopilot".to_string()),
+        "`with_label` mirrors `with_title` (C1.3)"
+    );
+    assert_eq!(
+        provider.read_title(&config, cwd, session),
+        None,
+        "a label is never a title: the daemon owns the precedence between them (C1.4)"
+    );
+}
+
+#[test]
+fn pi_derives_no_label_because_its_title_already_is_the_first_message() {
+    // `pi`'s `read_title` falls back to the first user message itself (029-pi-cli-provider FR-011),
+    // so a second, lower-priority source could only ever repeat it (C1.2).
+    let cwd = PathBuf::from("/fixture/worktree");
+    let id = support::fixture_id(support::FIXTURE_SESSION_A);
+    let home = support::pi_home().with_conversation(&cwd, id, "conversation-unnamed.jsonl");
+
+    assert!(
+        PiProvider.read_title(home.path(), &cwd, id).is_some(),
+        "the fixture must have a first message, or this test proves nothing"
+    );
+    assert_eq!(PiProvider.read_label(home.path(), &cwd, id), None);
+}
+
+#[test]
+fn copilot_derives_no_label_until_its_first_turn_rule_lands() {
+    // Feature 032 M2 (T036) replaces this: until then a Copilot row behaves exactly as before,
+    // with no half-wired state on `main` (plan, *Delivery shape*).
+    let config = tempfile::tempdir().unwrap();
+    let id = Uuid::from_u128(0xC0);
+    let dir = config.path().join("session-state").join(id.to_string());
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("events.jsonl"),
+        "{\"type\":\"user.message\",\"data\":{\"content\":\"Add the login page\"}}\n",
+    )
+    .unwrap();
+
+    assert_eq!(
+        CopilotProvider.read_label(config.path(), Path::new("/repo"), id),
+        None
     );
 }

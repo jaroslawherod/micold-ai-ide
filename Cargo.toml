@@ -22,6 +22,9 @@ rust-version = "1.97"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 uuid = { version = "1.24.0", features = ["v4", "serde"] }
+# Grapheme clusters for a session label's 80-character cut (feature 032, FR-003, research R8).
+# Already in Cargo.lock through iced/cosmic-text; dependency-free, MIT/Apache-2.0.
+unicode-segmentation = "1.13"
 directories = "6.0.0"
 # Wire encoding for the client<->daemon protocol (plan W1): compact grid frames.
 postcard = { version = "1.1", features = ["use-std"] }

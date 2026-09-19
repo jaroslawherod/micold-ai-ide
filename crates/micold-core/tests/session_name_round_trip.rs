@@ -132,10 +132,183 @@ fn a_record_written_without_a_title_key_loads_as_pending() {
     assert_eq!(labels(&out.workspace), vec![SessionLabel::Pending]);
 }
 
+// ---------------------------------------------------------------------------------------
+// Feature 032 — a derived label is remembered as a label, never as a title (C8.1–C8.3)
+// ---------------------------------------------------------------------------------------
+
+/// How the store spells a session id built by [`session`] — the marker a record is found by.
+fn uuid_text(id: u128) -> String {
+    uuid::Uuid::from_u128(id).to_string()
+}
+
+/// The one session record in the state file the store wrote under `data_dir`, as JSON.
+fn stored_record(data_dir: &Path, marker: &str) -> (PathBuf, serde_json::Value) {
+    let path = find_written_record_containing(data_dir, marker);
+    let json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    (path, json)
+}
+
+/// Every object in `json` with both an `id` and a `mode` key — the session records, wherever the
+/// store nests them.
+fn session_records(json: &serde_json::Value) -> Vec<serde_json::Map<String, serde_json::Value>> {
+    let mut found = Vec::new();
+    let mut stack = vec![json];
+    while let Some(value) = stack.pop() {
+        match value {
+            serde_json::Value::Object(map) => {
+                if map.contains_key("id") && map.contains_key("mode") {
+                    found.push(map.clone());
+                }
+                stack.extend(map.values());
+            }
+            serde_json::Value::Array(items) => stack.extend(items),
+            _ => {}
+        }
+    }
+    found
+}
+
+#[test]
+fn a_derived_label_is_saved_as_a_label_and_loads_back_derived() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+    store
+        .save(&workspace_with(vec![session(
+            0x32,
+            SessionLabel::Derived("/speckit-autopilot".into()),
+        )]))
+        .unwrap();
+
+    let (_, json) = stored_record(dir.path(), &uuid_text(0x32));
+    let records = session_records(&json);
+    assert_eq!(records.len(), 1);
+    assert_eq!(
+        records[0].get("label").and_then(|v| v.as_str()),
+        Some("/speckit-autopilot"),
+        "a label is stored under its own key (C8.1)"
+    );
+    assert!(
+        records[0].get("title").is_none_or(|title| title.is_null()),
+        "and never as a title (the store has always written an untitled session's `title` as \
+         null): a label that passed for a title after a restart could no longer be replaced by one \
+         (FR-008)"
+    );
+
+    assert_eq!(
+        labels(&store.load().workspace),
+        vec![SessionLabel::Derived("/speckit-autopilot".into())],
+        "a restart finds the label without reading the AI CLI's records again (FR-007)"
+    );
+}
+
+#[test]
+fn a_record_with_both_a_title_and_a_label_loads_named() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+    store
+        .save(&workspace_with(vec![session(
+            0x33,
+            SessionLabel::Named("The CLI's title".into()),
+        )]))
+        .unwrap();
+    let (path, mut json) = stored_record(dir.path(), &uuid_text(0x33));
+    add_label_to_every_session(&mut json, serde_json::json!("A stale label"));
+    std::fs::write(&path, serde_json::to_string(&json).unwrap()).unwrap();
+
+    assert_eq!(
+        labels(&store.load().workspace),
+        vec![SessionLabel::Named("The CLI's title".into())],
+        "a title outranks a label, on disk as in memory (C8.2, FR-005)"
+    );
+}
+
+#[test]
+fn a_record_with_an_empty_label_loads_pending() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+    store
+        .save(&workspace_with(vec![session(
+            0x34,
+            SessionLabel::Named("A name this record is about to trade for an empty label".into()),
+        )]))
+        .unwrap();
+    let (path, mut json) = stored_record(dir.path(), &uuid_text(0x34));
+    strip_title_from_every_session(&mut json);
+    add_label_to_every_session(&mut json, serde_json::json!(""));
+    std::fs::write(&path, serde_json::to_string(&json).unwrap()).unwrap();
+
+    assert_eq!(
+        labels(&store.load().workspace),
+        vec![SessionLabel::Pending],
+        "an empty label is no label: the row reads \"New session\", not a blank (C8.2, FR-004)"
+    );
+}
+
+#[test]
+fn a_named_or_pending_session_writes_no_label_key() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+    store
+        .save(&workspace_with(vec![
+            session(0x35, SessionLabel::Named("Titled and unlabelled".into())),
+            session(0x36, SessionLabel::Pending),
+        ]))
+        .unwrap();
+
+    let (_, json) = stored_record(dir.path(), &uuid_text(0x35));
+    let records = session_records(&json);
+    assert_eq!(records.len(), 2);
+    assert!(
+        records.iter().all(|r| !r.contains_key("label")),
+        "a file with no derived labels is byte-for-byte what a build before feature 032 wrote, so \
+         an older build reads it unchanged (C8.3)"
+    );
+}
+
+fn add_label_to_every_session(json: &mut serde_json::Value, label: serde_json::Value) {
+    for_each_session_record(json, &mut |map| {
+        map.insert("label".into(), label.clone());
+    });
+}
+
+fn strip_title_from_every_session(json: &mut serde_json::Value) {
+    for_each_session_record(json, &mut |map| {
+        map.remove("title");
+    });
+}
+
+fn for_each_session_record(
+    json: &mut serde_json::Value,
+    f: &mut dyn FnMut(&mut serde_json::Map<String, serde_json::Value>),
+) {
+    match json {
+        serde_json::Value::Object(map) => {
+            if map.contains_key("id") && map.contains_key("mode") {
+                f(map);
+            }
+            for value in map.values_mut() {
+                for_each_session_record(value, f);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                for_each_session_record(item, f);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// The one JSON file under `data_dir` holding the session record — the catalog itself, or the
 /// per-project state file the store splits it into. Found rather than named, so this test does not
 /// encode where the store chooses to put it.
 fn find_written_record(data_dir: &Path) -> PathBuf {
+    find_written_record_containing(data_dir, "A name this file is about to lose")
+}
+
+/// The JSON file under `data_dir` whose text contains `marker`.
+fn find_written_record_containing(data_dir: &Path, marker: &str) -> PathBuf {
     let mut queue = vec![data_dir.to_path_buf()];
     while let Some(dir) = queue.pop() {
         for entry in std::fs::read_dir(&dir).unwrap().flatten() {
@@ -145,11 +318,11 @@ fn find_written_record(data_dir: &Path) -> PathBuf {
             } else if path.extension().is_some_and(|e| e == "json")
                 && std::fs::read_to_string(&path)
                     .unwrap_or_default()
-                    .contains("A name this file is about to lose")
+                    .contains(marker)
             {
                 return path;
             }
         }
     }
-    panic!("the store wrote no file containing the session's name");
+    panic!("the store wrote no file containing {marker:?}");
 }

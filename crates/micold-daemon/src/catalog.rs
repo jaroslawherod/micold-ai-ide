@@ -581,6 +581,29 @@ impl Catalog {
         Ok(true)
     }
 
+    /// Record a label derived from session `id`'s first turn, persisting — only if the session
+    /// still has neither a title nor a label (feature 032, C6.4). Returns whether it changed.
+    ///
+    /// `Ok(false)` for an unknown id, an empty label, or a session that is not `Pending`: the
+    /// caller read the label off the lock, and a title (or a label) may have landed since.
+    /// [`Session::set_derived_label`] refuses all three, so the precedence (FR-005) does not rest on
+    /// the caller's care. Addressed by `SessionId` through [`Workspace::find_session_mut`], so a
+    /// label belongs to exactly one session (Principle II).
+    ///
+    /// As with [`Self::record_session_name`], the label is set in memory before the disk: a
+    /// persist failure leaves it shown and is returned for the caller to log, never surfaced as a
+    /// session failure (FR-011).
+    pub fn record_session_label(&mut self, id: SessionId, label: &str) -> io::Result<bool> {
+        let Some((_project, session)) = self.workspace.find_session_mut(id) else {
+            return Ok(false);
+        };
+        if !session.set_derived_label(label) {
+            return Ok(false);
+        }
+        self.persist()?;
+        Ok(true)
+    }
+
     /// Forget a worktree's display-name override for `project`, reverting it to the derived name,
     /// persisting (T053). Idempotent — absence is not an error. Prunes an emptied project map so the
     /// on-disk shape matches `Workspace::clear_worktree_name`.

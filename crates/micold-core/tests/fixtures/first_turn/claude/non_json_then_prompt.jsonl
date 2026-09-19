@@ -1,0 +1,3 @@
+{"type": "file-history-snapshot", "messageId": "m-1", "snapshot": {"trackedFileBackups": {}}, "isSnapshotUpdate": false}
+this line is not JSON {
+{"type": "user", "message": {"role": "user", "content": "Typed after the junk"}}

@@ -15,6 +15,7 @@ pub mod clock;
 pub mod connect;
 pub mod endpoint;
 pub mod env_include;
+pub mod first_turn;
 pub mod frame_probe;
 pub mod fs_scan;
 pub mod git;

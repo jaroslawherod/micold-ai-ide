@@ -8,20 +8,20 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/the-name-of-past-session-is-still-not-shown
 - **Started**: 2026-09-19
 - **Phase**: 4-milestones
-- **Next step**: M1
+- **Next step**: M1 in progress (implement T001–T027, T042, T043, T046)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #386 | Spec (carries 029 BUG-001 record) | MERGED 2026-09-19 | — |
-| #388 | Design (clarify, plan, tasks, milestones) | OPEN | — |
+| #388 | Design (clarify, plan, tasks, milestones) | MERGED 2026-09-19 | 6e21c19a |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T027, T042, T043, T046 | Untitled `claude` sessions read their first turn after restart; a later title replaces it (US1 #1–4, US2); quickstart §B1/§B2 recorded | — | pending |
+| M1 | T001–T027, T042, T043, T046 | Untitled `claude` sessions read their first turn after restart; a later title replaces it (US1 #1–4, US2); quickstart §B1/§B2 recorded | — | in progress |
 | M2 | T031–T038, T045 | Listed Copilot sessions read `name:`, else `summary:`, else their first-turn label (US1 #5–6) | — | pending |
 | M3 | T028–T030, T044, T039–T041 | A running session shows its label within a minute of the first prompt, spinner first or not (US3); Polish, quickstart §B3 recorded | — | pending |
 

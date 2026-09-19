@@ -1,0 +1,2 @@
+{"type": "file-history-snapshot", "messageId": "m-1", "snapshot": {"trackedFileBackups": {}}, "isSnapshotUpdate": false}
+{"type": "user", "message": {"role": "user", "content": "<command-message>speckit-plan</command-message>\n<command-name>/speckit-plan</command-name>"}}

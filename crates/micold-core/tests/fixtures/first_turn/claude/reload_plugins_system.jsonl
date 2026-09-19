@@ -1,0 +1,5 @@
+{"type": "file-history-snapshot", "messageId": "m-1", "snapshot": {"trackedFileBackups": {}}, "isSnapshotUpdate": false}
+{"type": "user", "message": {"role": "user", "content": "<command-name>/reload-plugins</command-name>\n            <command-message>reload-plugins</command-message>\n            <command-args></command-args>"}}
+{"type": "system", "subtype": "local_command", "content": "<local-command-stdout>Reloaded 3 plugins</local-command-stdout>", "level": "info", "isMeta": false}
+{"type": "user", "message": {"role": "user", "content": "Tidy the release notes"}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "On it."}]}}

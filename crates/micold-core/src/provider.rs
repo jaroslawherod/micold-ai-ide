@@ -168,6 +168,15 @@ pub trait AiCliProvider {
     /// the session (FR-017).
     fn read_title(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> Option<String>;
 
+    /// A label derived from the conversation's first typed turn (feature 032, FR-002), or `None`.
+    ///
+    /// Best-effort like [`Self::read_title`]: a missing, unreadable or unrecognised record yields
+    /// `None`, never an error (FR-011). Reads a bounded prefix only (FR-014). It never reads a title,
+    /// and `read_title` never returns a label: which of the two a row shows is the daemon's call
+    /// (contract C1.4, C6). Required like every other method here — a CLI whose title already is
+    /// its first message (`pi`) says so by answering `None` (C1.2).
+    fn read_label(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> Option<String>;
+
     /// The conversation name carried by `title`, the (glyph-stripped) terminal title this CLI set
     /// while running in `cwd` — or `None` when the title names no conversation.
     ///
@@ -429,6 +438,10 @@ impl AiCliProvider for ClaudeProvider {
         self.parse_title(&contents)
     }
 
+    fn read_label(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
+        None
+    }
+
     fn name_in_terminal_title(&self, title: &str, _cwd: &Path) -> Option<String> {
         (title != "Claude Code").then(|| title.to_string())
     }
@@ -659,6 +672,12 @@ impl AiCliProvider for CopilotProvider {
         // tree is not a close call.
         let contents = std::fs::read_to_string(self.workspace_path(config_dir, session_id)).ok()?;
         Self::read_yaml_scalar(&contents, "name")
+    }
+
+    fn read_label(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
+        // Not yet: feature 032 derives Copilot's first-turn label in its milestone M2 (Phase 5).
+        // Until then a Copilot row behaves exactly as before, with no half-wired state.
+        None
     }
 
     fn name_in_terminal_title(&self, title: &str, _cwd: &Path) -> Option<String> {
@@ -982,6 +1001,12 @@ impl AiCliProvider for PiProvider {
         Self::parse_title(&prefix)
     }
 
+    fn read_label(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
+        // `read_title` already falls back to the first user message (029-pi-cli-provider FR-011),
+        // so a second, lower-priority source could only repeat it (feature 032, C1.2).
+        None
+    }
+
     fn mark_archived(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> io::Result<()> {
         // An empty sentinel beside the conversation — never a deletion or a truncation. The store
         // is shared with the user's own `pi`, and closing a row here is not permission to remove
@@ -1052,6 +1077,8 @@ struct FakeProviderState {
     available: bool,
     /// Titles keyed by conversation contents, consulted by `read_title`.
     titles: BTreeMap<String, String>,
+    /// First-turn labels keyed by conversation contents, consulted by `read_label` (feature 032).
+    labels: BTreeMap<String, String>,
     /// Conversation contents by `(cwd, id)` — what the fake has "on disk".
     conversations: BTreeMap<(PathBuf, Uuid), String>,
     /// Sessions marked archived, by `(cwd, id)`.
@@ -1101,6 +1128,16 @@ impl FakeAiCliProvider {
             .borrow_mut()
             .titles
             .insert(conversation.to_string(), title.to_string());
+        self
+    }
+
+    /// Make `read_label` answer `label` for exactly these conversation contents — the first-turn
+    /// counterpart of [`Self::with_title`] (feature 032, C1.3). A label is never offered as a title.
+    pub fn with_label(self, conversation: &str, label: &str) -> Self {
+        self.inner
+            .borrow_mut()
+            .labels
+            .insert(conversation.to_string(), label.to_string());
         self
     }
 
@@ -1177,6 +1214,12 @@ impl AiCliProvider for FakeAiCliProvider {
         let inner = self.inner.borrow();
         let contents = inner.conversations.get(&(cwd.to_path_buf(), session_id))?;
         inner.titles.get(contents).cloned()
+    }
+
+    fn read_label(&self, _config_dir: &Path, cwd: &Path, session_id: Uuid) -> Option<String> {
+        let inner = self.inner.borrow();
+        let contents = inner.conversations.get(&(cwd.to_path_buf(), session_id))?;
+        inner.labels.get(contents).cloned()
     }
 
     fn name_in_terminal_title(&self, title: &str, _cwd: &Path) -> Option<String> {

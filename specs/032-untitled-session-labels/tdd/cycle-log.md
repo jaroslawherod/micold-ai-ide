@@ -8,3 +8,33 @@ failed before the implementation.
 - suite: `scripts/build-lock.sh cargo test --workspace` -> 3333 passed, 0 failed, 6 ignored (327 binaries)
 - commit: `fa19e553` (specs-only commits after it do not touch code)
 - recorded: cycle 0, before any change
+
+## Cycle 1 — Phase 2 foundations (U1–U23, U44, U45, U56–U60), grouped
+
+- tests:
+  - `crates/micold-core/tests/session_label_kinds.rs` (U1–U6, new)
+  - `crates/micold-core/tests/session_name_round_trip.rs` (U7–U10)
+  - `crates/micold-core/tests/schema_hash.rs` `the_wire_changes_for_this_feature_cost_exactly_one_version_bump` and `protocol_auth.rs` `the_protocol_version_is_fourteen` (U11)
+  - `crates/micold-core/tests/protocol_roundtrip.rs` `a_session_summary_carrying_a_derived_label_round_trips_on_both_wires` (U12)
+  - `crates/micold-client/tests/session_title_sync.rs` `derived_labels::*` (U13–U15)
+  - `crates/micold-core/tests/first_turn_label.rs` (U16–U23, new)
+  - `crates/micold-core/tests/ai_cli_provider_seam.rs` (U44, U45)
+  - `crates/micold-daemon/tests/untitled_session_labels.rs` (U56–U60, new)
+- red: `scripts/build-lock.sh cargo test --no-fail-fast --test session_label_kinds --test session_name_round_trip --test schema_hash --test protocol_roundtrip --test session_title_sync --test first_turn_label --test ai_cli_provider_seam --test untitled_session_labels`. Stubs only: `Derived` rendered as Pending, `set_derived_label`, `read_prefix`, `shape_label`, the fake's `read_label` and `record_session_label` all returned "nothing".
+  - U1 `a_derived_label_displays_its_text_like_a_title`: `left: "New session"` / `right: "Why does the sidebar read New session?"`
+  - U2 `a_pending_session_takes_a_derived_label_and_reports_the_change`: panicked at session_label_kinds.rs:34
+  - U7 `a_derived_label_is_saved_as_a_label_and_loads_back_derived`: `a label is stored under its own key (C8.1)` `left: None` / `right: Some("/speckit-autopilot")`
+  - U11 schema_hash: `left: 13` / `right: 14`
+  - U13 `a_derived_label_is_adopted_onto_a_pending_row`: `left: Pending` / `right: Derived("/speckit-autopilot")`; U15 `a_pending_summary_never_clears_a_derived_label`: same shape
+  - U16 `whitespace_and_line_break_runs_collapse_to_one_space_and_ends_are_trimmed`: `left: None` / `right: Some("Fix the flaky login test")`; U18, U19, U20: `left: None`; U21 `the_prefix_is_at_most_one_mebibyte`: panicked at first_turn_label.rs:100 (`expect`); U22: `left: None`
+  - U44 `the_fake_answers_a_label_it_was_given_and_never_offers_it_as_a_title`: `with_label mirrors with_title (C1.3)` `left: None`
+  - U56–U59: the four `record_session_label` tests panicked (`left: Pending` / `right: Derived(..)`, `result.is_err()`)
+- passed on arrival, each checked with a deliberate mutant (killed, then restored): U3, U4 (mutant: `set_derived_label` without the `Pending` guard; 2 tests failed); U5, U17, U23 (stub already returned nothing, which is the asserted outcome); U6, U60 (`set_title` / `record_session_name` already replace any label; guards); U8, U9, U10 (mutant: label-first precedence, no empty check, `label` without `skip_serializing_if`; 3 tests failed); U12 (guard: postcard carries the new variant); U14 (Named was already adopted); U45 (mutant: Pi `read_label` returning `read_title`; failed).
+- green: `Derived` + `set_derived_label` (session.rs); `StoredSession.label` (store.rs); `PROTOCOL_VERSION` 14; client adopts `Named | Derived`; `first_turn::{read_prefix, shape_label}` with `unicode-segmentation`; required `AiCliProvider::read_label` (Claude stub `None` until T022, Copilot `None` until M2, Pi `None`, fake `with_label`); `Catalog::record_session_label`. Targeted binaries all green.
+- suite: `scripts/build-lock.sh cargo test --workspace --no-fail-fast` -> 3361 passed, 2 failed, 6 ignored (330 binaries). Both failures were real regressions of this change, fixed in the cycle: `protocol_auth.rs` pinned version 13 (renamed to `the_protocol_version_is_fourteen`, asserts 14); `service_capability_fakes.rs` FR-016 gate rejected `MinimalProvider::read_label` for ignoring `self` (it now answers from a `labels` map, exercised in its test). Re-run of those three binaries: 11 + 13 + 12 passed, 0 failed.
+- refactor: none needed; `read_prefix`'s complete-line cut is shared with `claude_first_turn` in cycle 2.
+- commit: see `git log` (`feat(032): derived session label kind, store, wire and catalog seam`)
+- notes:
+  - Deviation: cycles grouped per task pair (tests of T003/T005/…/T015 red in one batched build, then green in one), not one behavior per build. Reason: every build waits on the shared `target-shared` lock behind other worktrees, and one suite run takes about 6 minutes. Red evidence per behavior is still the real output above.
+  - Test fix, before the implementation change: U7 first asserted `!contains_key("title")`. The store has always written `"title": null` for an untitled session, so the assertion was over-specified; it now asserts "absent or null", with the reason in its message.
+  - Baseline: the in-session baseline run was stopped deliberately; the recorded baseline at `fa19e553` (3333 passed) and green main CI at `6e21c19a` stand in for it.

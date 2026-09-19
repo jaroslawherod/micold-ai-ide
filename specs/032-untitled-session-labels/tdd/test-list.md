@@ -56,49 +56,49 @@ the cycle log; a red is not required.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U1  | `Derived(text)` displays as `text`, like `Named` | FR-001, D7 | example | PENDING | |
-| U2  | `set_derived_label` on a `Pending` session sets `Derived` and reports a change | FR-001 | example | PENDING | |
-| U3  | `set_derived_label` on a `Named` session changes nothing and reports no change | FR-005 | example | PENDING | |
-| U4  | `set_derived_label` on a `Derived` session changes nothing (a label is derived once) | FR-007 | example | PENDING | |
-| U5  | `set_derived_label("")` changes nothing | FR-004 | example | PENDING | |
-| U6  | `set_title` on a `Derived` session sets `Named` | FR-006 | example | PENDING | |
+| U1  | `Derived(text)` displays as `text`, like `Named` | FR-001, D7 | example | DONE | session_label_kinds.rs `a_derived_label_displays_its_text_like_a_title` |
+| U2  | `set_derived_label` on a `Pending` session sets `Derived` and reports a change | FR-001 | example | DONE | session_label_kinds.rs `a_pending_session_takes_a_derived_label_and_reports_the_change` |
+| U3  | `set_derived_label` on a `Named` session changes nothing and reports no change | FR-005 | example | DONE | session_label_kinds.rs `a_named_session_is_never_given_a_derived_label` |
+| U4  | `set_derived_label` on a `Derived` session changes nothing (a label is derived once) | FR-007 | example | DONE | session_label_kinds.rs `a_derived_label_is_never_replaced_by_another_derived_label` |
+| U5  | `set_derived_label("")` changes nothing | FR-004 | example | DONE | session_label_kinds.rs `an_empty_derived_label_changes_nothing` |
+| U6  | `set_title` on a `Derived` session sets `Named` | FR-006 | example | DONE | session_label_kinds.rs `a_title_replaces_a_derived_label` |
 
 ### `crates/micold-core/src/store.rs` — `StoredSession`
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U7  | A `Derived` session saves `label` and no `title`, and loads back `Derived` | FR-007, FR-008, C8.1 | example | PENDING | |
-| U8  | A record with both `title` and `label` loads `Named` | FR-005, C8.2 | example | PENDING | |
-| U9  | A record with an empty `label` loads `Pending` | FR-004, C8.2 | example | PENDING | |
-| U10 | A pre-032 record (no `label` key) loads as before; `Named`/`Pending` write no `label` key | FR-009, C8.3 | example | PENDING | |
+| U7  | A `Derived` session saves `label` and no `title`, and loads back `Derived` | FR-007, FR-008, C8.1 | example | DONE | session_name_round_trip.rs `a_derived_label_is_saved_as_a_label_and_loads_back_derived` |
+| U8  | A record with both `title` and `label` loads `Named` | FR-005, C8.2 | example | DONE | session_name_round_trip.rs `a_record_with_both_a_title_and_a_label_loads_named` |
+| U9  | A record with an empty `label` loads `Pending` | FR-004, C8.2 | example | DONE | session_name_round_trip.rs `a_record_with_an_empty_label_loads_pending` |
+| U10 | A pre-032 record (no `label` key) loads as before; `Named`/`Pending` write no `label` key | FR-009, C8.3 | example | DONE | session_name_round_trip.rs `a_named_or_pending_session_writes_no_label_key`, `a_record_written_without_a_title_key_loads_as_pending` |
 
 ### `crates/micold-core/src/protocol/version.rs` — wire
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U11 | `PROTOCOL_VERSION` is 14 (pinned) | C8.4 | example | PENDING | |
-| U12 | A `SessionSummary` with a `Derived` title round-trips through the control codec | C8.4 | guard | PENDING | |
+| U11 | `PROTOCOL_VERSION` is 14 (pinned) | C8.4 | example | DONE | schema_hash.rs `the_wire_changes_for_this_feature_cost_exactly_one_version_bump`; protocol_auth.rs `the_protocol_version_is_fourteen` |
+| U12 | A `SessionSummary` with a `Derived` title round-trips through the control codec | C8.4 | guard | DONE | protocol_roundtrip.rs `a_session_summary_carrying_a_derived_label_round_trips_on_both_wires` |
 
 ### `crates/micold-client/src/catalog_sync.rs` — client adoption
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U13 | A `Derived` summary title is adopted onto a `Pending` client session | FR-001, C8.5 | example | PENDING | |
-| U14 | A `Named` summary replaces a `Derived` client label | FR-006, C8.5 | example | PENDING | |
-| U15 | A `Pending` summary never clobbers a `Derived` client label | FR-007, C8.5 | example | PENDING | |
+| U13 | A `Derived` summary title is adopted onto a `Pending` client session | FR-001, C8.5 | example | DONE | session_title_sync.rs `derived_labels::a_derived_label_is_adopted_onto_a_pending_row` |
+| U14 | A `Named` summary replaces a `Derived` client label | FR-006, C8.5 | example | DONE | session_title_sync.rs `derived_labels::a_title_replaces_a_derived_label_on_the_row` |
+| U15 | A `Pending` summary never clobbers a `Derived` client label | FR-007, C8.5 | example | DONE | session_title_sync.rs `derived_labels::a_pending_summary_never_clears_a_derived_label` |
 
 ### `crates/micold-core/src/first_turn.rs` — prefix and shaping
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U16 | Whitespace and line-break runs collapse to one space; ends trimmed | FR-003, C5.1 | example | PENDING | |
-| U17 | Whitespace-only text yields no label | FR-002, C5.2 | example | PENDING | |
-| U18 | Exactly 80 graphemes pass unchanged | FR-003, C5.3 | example | PENDING | |
-| U19 | 81 graphemes yield the first 79 plus `…`, 80 in total | FR-003, C5.4 | example | PENDING | |
-| U20 | The cut never splits a ZWJ emoji, a base + combining mark, or CJK | FR-003, C5.5 | example | PENDING | |
-| U21 | `read_prefix` returns at most 1 MiB (1,048,576 bytes; a file of 1 MiB + 1 is cut) | FR-014, C2.1 | example | PENDING | |
-| U22 | `read_prefix` drops a trailing line without `\n` | FR-011, C2.2 | example | PENDING | |
-| U23 | `read_prefix` of a missing file is `None` | FR-011 | example | PENDING | |
+| U16 | Whitespace and line-break runs collapse to one space; ends trimmed | FR-003, C5.1 | example | DONE | first_turn_label.rs `whitespace_and_line_break_runs_collapse_to_one_space_and_ends_are_trimmed` |
+| U17 | Whitespace-only text yields no label | FR-002, C5.2 | example | DONE | first_turn_label.rs `whitespace_only_text_yields_no_label` |
+| U18 | Exactly 80 graphemes pass unchanged | FR-003, C5.3 | example | DONE | first_turn_label.rs `exactly_eighty_graphemes_pass_unchanged` |
+| U19 | 81 graphemes yield the first 79 plus `…`, 80 in total | FR-003, C5.4 | example | DONE | first_turn_label.rs `eighty_one_graphemes_yield_the_first_seventy_nine_and_an_ellipsis` |
+| U20 | The cut never splits a ZWJ emoji, a base + combining mark, or CJK | FR-003, C5.5 | example | DONE | first_turn_label.rs `the_cut_never_splits_a_grapheme_cluster` |
+| U21 | `read_prefix` returns at most 1 MiB (1,048,576 bytes; a file of 1 MiB + 1 is cut) | FR-014, C2.1 | example | DONE | first_turn_label.rs `the_prefix_is_at_most_one_mebibyte` |
+| U22 | `read_prefix` drops a trailing line without `\n` | FR-011, C2.2 | example | DONE | first_turn_label.rs `a_trailing_line_without_a_newline_is_dropped` |
+| U23 | `read_prefix` of a missing file is `None` | FR-011 | example | DONE | first_turn_label.rs `a_missing_file_has_no_prefix` |
 
 ### `crates/micold-core/src/first_turn.rs` — `claude_first_turn`
 
@@ -134,8 +134,8 @@ the cycle log; a red is not required.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U44 | The fake's `with_label` answers `read_label`; its `read_title` stays `None` | C1.3, C1.4 | example | PENDING | |
-| U45 | `PiProvider::read_label` is `None` even when its `read_title` is the first message | C1.2 | example | PENDING | |
+| U44 | The fake's `with_label` answers `read_label`; its `read_title` stays `None` | C1.3, C1.4 | example | DONE | ai_cli_provider_seam.rs `the_fake_answers_a_label_it_was_given_and_never_offers_it_as_a_title` |
+| U45 | `PiProvider::read_label` is `None` even when its `read_title` is the first message | C1.2 | example | DONE | ai_cli_provider_seam.rs `pi_derives_no_label_because_its_title_already_is_the_first_message` |
 | U46 | `ClaudeProvider::read_label` returns the shaped first turn of the transcript at its derived path | FR-002, FR-012 | example | PENDING | |
 | U47 | `ClaudeProvider::read_label` is `None` for a missing transcript | FR-011 | example | PENDING | |
 | U48 | A `claude` first turn starting past 1 MiB yields `None` even when a later prompt exists | FR-014, C2.4 | example | PENDING | |
@@ -151,11 +151,11 @@ the cycle log; a red is not required.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U56 | Sets `Derived` on a `Pending` session, persists, and a reloaded catalog shows it | FR-007, C6.4 | example | PENDING | |
-| U57 | Returns `Ok(false)` for an unknown id, an empty label, a `Named` and a `Derived` session | FR-005, C6.4 | example | PENDING | |
-| U58 | A persist failure keeps the in-memory label and returns `Err` | FR-011, C6.4 | example | PENDING | |
-| U59 | Labelling session A never changes session B in the same worktree | FR-002, Principle II | example | PENDING | |
-| U60 | `record_session_name` replaces a `Derived` label with `Named` and persists | FR-006, C6.5 | guard | PENDING | |
+| U56 | Sets `Derived` on a `Pending` session, persists, and a reloaded catalog shows it | FR-007, C6.4 | example | DONE | untitled_session_labels.rs `a_label_is_recorded_on_a_pending_session_and_survives_a_reload` |
+| U57 | Returns `Ok(false)` for an unknown id, an empty label, a `Named` and a `Derived` session | FR-005, C6.4 | example | DONE | untitled_session_labels.rs `a_label_is_refused_for_an_unknown_id_an_empty_label_and_a_labelled_or_titled_session` |
+| U58 | A persist failure keeps the in-memory label and returns `Err` | FR-011, C6.4 | example | DONE | untitled_session_labels.rs `a_label_that_cannot_be_persisted_is_still_shown_and_the_failure_is_returned` |
+| U59 | Labelling session A never changes session B in the same worktree | FR-002, Principle II | example | DONE | untitled_session_labels.rs `labelling_one_session_never_touches_another_in_the_same_worktree` |
+| U60 | `record_session_name` replaces a `Derived` label with `Named` and persists | FR-006, C6.5 | guard | DONE | untitled_session_labels.rs `a_title_replaces_a_label_and_is_persisted` |
 
 ### `crates/micold-daemon/src/state.rs` — precedence and passes
 
