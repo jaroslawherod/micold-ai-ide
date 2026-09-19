@@ -217,11 +217,13 @@ fn mount_args(mounts: &MountSet) -> Vec<OsString> {
         )
         .into(),
     );
-    // Credentials are read-only without exception: the sandbox is allowed to *use* the user's
-    // identity when they opted in, never to rewrite it.
+    // Credentials are read-only, with one exception (rule N-4): the AI CLI's sign-in token, which
+    // the CLI replaces itself whenever it refreshes it. The sandbox may *use* the user's identity
+    // when they opted in, and may keep that one token current, but never rewrite the rest.
     for c in &mounts.credentials {
+        let mode = if c.share.writable() { "rw" } else { "ro" };
         args.push("-v".into());
-        args.push(format!("{}:{}:ro", c.host.display(), c.container.display()).into());
+        args.push(format!("{}:{}:{mode}", c.host.display(), c.container.display()).into());
     }
     args
 }
