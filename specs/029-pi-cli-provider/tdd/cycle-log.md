@@ -155,3 +155,15 @@ failed before the implementation.
   drops it before sourcing). File -> 9 passed; daemon crate -> 352 passed, 0 failed
 - refactor: the handler's comment rewritten for FR-003b (which environment, why spawned); no code
   moved
+
+## Cycle 9: A3 with env-include off and `pi` absent from the service's `PATH`, it is not offered
+
+- test: `crates/micold-daemon/tests/ai_cli_availability.rs::with_env_include_off_a_cli_only_the_script_would_add_is_not_offered` (new; helper `service_with_script` split out of `service_with` so a script can be configured while the feature is off)
+- red: passed on first run — `env_include_vars_for` already short-circuits when disabled. Deliberate
+  mutant: its `if !enabled || …` guard changed to `if (false && !enabled) || …` (env-include
+  always on). `scripts/build-lock.sh cargo test --test ai_cli_availability with_env_include_off_a_cli_only_the_script_would_add_is_not_offered -- --exact`
+  -> `got [Pi]` (1 failed). Mutant reverted (`git diff` on `state.rs` empty); file -> 10 passed
+- green: no production change
+- refactor: none
+- notes: T063 was ticked one commit early (at cycle 8, before A3 ran); it is correct from this
+  commit on
