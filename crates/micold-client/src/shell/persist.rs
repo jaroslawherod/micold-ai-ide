@@ -182,7 +182,7 @@ pub fn on_settings_opened(app: &mut App) -> Task<Message> {
     // to the service rather than a local `PATH` walk (feature 027, FR-023c); the reply lands a
     // moment later and the view redraws, which is why the field keeps its previous answer in the
     // meantime instead of being cleared.
-    crate::shell::daemon_sync::ask_cli_availability(app);
+    crate::shell::daemon_sync::ask_cli_availability(app, None);
     // Seeded from one `Settings` value rather than field by field, so that a setting added to the
     // persisted shape is carried into the draft by `from_settings` instead of needing a line here
     // that somebody has to remember to write.

@@ -198,3 +198,15 @@ failed before the implementation.
   because their scratch `PATH` hides `bash` and the default `~/.bashrc` resolution failed; the
   premise ("the service's own `PATH` is what a session gets") is now explicit. Assertions untouched.
 - suite: file -> 10 passed
+
+## Cycle 11: U11 the start menu asks about its location's directory
+
+- test: `crates/micold-client/src/main_tests.rs::tests::opening_the_start_menu_asks_about_its_locations_directory` (new, with helpers `connected_with_outbox` and `availability_asked_for`)
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide opening_the_start_menu_asks_about_its_locations_directory`
+  -> `left: [None]` / `right: [Some("/repo/demo/.claude/worktrees/feature-x")]` (1 failed)
+- green: `ask_cli_availability(app, cwd)` sends the directory it is given; the `StartMenuOpened`
+  arm in `main.rs` passes `location.cwd(active project)`; Settings and the reconnect pass `None`.
+  Client crate `scripts/build-lock.sh cargo test -p micold-client --all-targets` -> 1800 passed,
+  0 failed (a first run died on `No space left on device`; another session's `cargo sweep`
+  reclaimed the disk and the re-run is the one recorded)
+- refactor: none

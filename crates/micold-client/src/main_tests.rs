@@ -2986,3 +2986,63 @@ fn moving_to_the_host_cancels_a_bring_up_that_has_not_run() {
         micold_core::sandbox::lifecycle::SandboxState::Disabled
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// 029 BUG-001 (FR-003b): the availability question names the directory it is about
+// ---------------------------------------------------------------------------------------------
+
+/// Connect `app` on a channel this test keeps, and drop what the connection itself sent.
+fn connected_with_outbox(
+    app: &mut App,
+) -> iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg> {
+    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+    let _ = update_inner(
+        app,
+        Message::Connection(ConnectionMsg::Connected {
+            outbox: micold_client::daemon::Outbox::new(tx),
+            catalog: snapshot_with("/repo/demo", Vec::new()),
+            settings: quiet_settings(),
+        }),
+    );
+    while rx.try_recv().is_ok() {}
+    rx
+}
+
+/// Every directory an availability request sent since the last drain named.
+fn availability_asked_for(
+    rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+) -> Vec<Option<PathBuf>> {
+    let mut asked = Vec::new();
+    while let Ok(msg) = rx.try_recv() {
+        if let ClientMsg::AiCliAvailabilityRequest { cwd, .. } = msg {
+            asked.push(cwd);
+        }
+    }
+    asked
+}
+
+/// U11: the per-session start menu for a worktree asks which CLIs a session *there* would find —
+/// the environment-include script can give each directory a different `PATH`.
+#[test]
+fn opening_the_start_menu_asks_about_its_locations_directory() {
+    let mut app = base_app();
+    app.core.workspace.active = Some(PathBuf::from("/repo/demo"));
+    let mut rx = connected_with_outbox(&mut app);
+
+    let _ = update_inner(
+        &mut app,
+        Message::Session(SessionMsg::StartMenuOpened {
+            location: SessionLocation::Worktree("feature-x".into()),
+            unavailable_default: None,
+        }),
+    );
+
+    assert_eq!(
+        availability_asked_for(&mut rx),
+        vec![Some(PathBuf::from(
+            "/repo/demo/.claude/worktrees/feature-x"
+        ))],
+        "the menu offers CLIs for a session in this worktree, so the service must be asked about \
+         the environment a session there is spawned with (FR-003b)"
+    );
+}

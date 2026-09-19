@@ -58,7 +58,7 @@ is covered by T070's visual pass.
 
 | id  | behavior                                                                                                   | traces  | kind    | state   | test |
 | --- | ---------------------------------------------------------------------------------------------------------- | ------- | ------- | ------- | ---- |
-| U11 | Opening the per-session start menu for a location sends an availability request carrying that location's directory | FR-003b | example | PENDING |      |
+| U11 | Opening the per-session start menu for a location sends an availability request carrying that location's directory | FR-003b | example | DONE    | `tests::opening_the_start_menu_asks_about_its_locations_directory` (crates/micold-client/src/main_tests.rs) |
 | U12 | Opening Settings sends an availability request with no directory                                            | FR-003b | example | PENDING |      |
 
 ## Invariants and edge cases still to place
