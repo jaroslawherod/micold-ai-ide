@@ -25,7 +25,7 @@ is covered by T070's visual pass.
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | ------- | ------- | ---- |
 | A1  | With `pi` only on the `PATH` that env-include adds for a directory, an `AiCliAvailabilityRequest` for that directory lists Pi                                     | US1-5b, SC-001a, FR-003b    | example | DONE    | `a_cli_on_the_path_env_include_adds_for_a_directory_is_offered_for_it` (crates/micold-daemon/tests/ai_cli_availability.rs) |
 | A2  | With `pi` only on the env-include `PATH` for a directory, starting a Pi session there is not refused as a missing CLI                                            | US1-5b, SC-001a, FR-003b    | example | PENDING |      |
-| A3  | With env-include off and `pi` absent from the service's own `PATH`, the same request does not list Pi                                                            | US1-5, FR-003, FR-003b      | example | PENDING |      |
+| A3  | With env-include off and `pi` absent from the service's own `PATH`, the same request does not list Pi                                                            | US1-5, FR-003, FR-003b      | example | DONE    | `with_env_include_off_a_cli_only_the_script_would_add_is_not_offered` (crates/micold-daemon/tests/ai_cli_availability.rs) |
 
 ## Inner loop: unit behaviors
 

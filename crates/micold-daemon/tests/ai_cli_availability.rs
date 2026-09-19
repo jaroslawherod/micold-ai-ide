@@ -260,10 +260,16 @@ fn prepend_to_path(bin: &Path) -> (String, String) {
 
 /// A service whose settings turn environment-include on (with `script`) or off.
 fn service_with(store: &Path, env_include: Option<&Path>) -> Arc<DaemonState> {
+    service_with_script(store, env_include, env_include.is_some())
+}
+
+/// A service with `script` configured and environment-include `enabled` or not — off with a script
+/// in place is the reporter's own configuration (BUG-001).
+fn service_with_script(store: &Path, script: Option<&Path>, enabled: bool) -> Arc<DaemonState> {
     JsonFileSettingsStore::at(store.join("settings.json"))
         .save(&Settings {
-            env_include_enabled: env_include.is_some(),
-            env_include_script_path: env_include
+            env_include_enabled: enabled,
+            env_include_script_path: script
                 .map(|script| script.to_string_lossy().into_owned())
                 .unwrap_or_default(),
             ..Settings::default()
@@ -476,4 +482,27 @@ async fn a_slow_environment_does_not_hold_up_the_next_request_on_the_connection(
             other => panic!("expected LogLocation, got {other:?}"),
         }
     }
+}
+
+/// A3: with environment-include off, a CLI that only the script would add is not offered — a
+/// session spawned there would not get the script's `PATH` either, so it would not find the CLI.
+#[tokio::test]
+async fn with_env_include_off_a_cli_only_the_script_would_add_is_not_offered() {
+    let session_bin = bin_with(AiCli::Pi.provider().command());
+    let _service = ServicePath::without_clis(None);
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let (unix, windows) = prepend_to_path(session_bin.path());
+    let script = include_script(store.path(), &unix, &windows);
+
+    let state = service_with_script(store.path(), Some(&script), false);
+    let mut client = connect(&state).await;
+
+    let offered = ask(&mut client, 4, Some(project.path())).await;
+    assert!(
+        offered.is_empty(),
+        "environment-include is off, so a session here gets the service's own PATH, which holds \
+         no CLI; offering one would start a session that cannot find it (FR-003, FR-003b), got \
+         {offered:?}"
+    );
 }
