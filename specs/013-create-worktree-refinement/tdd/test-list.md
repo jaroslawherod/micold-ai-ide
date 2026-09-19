@@ -41,8 +41,8 @@ public `overlay::registry` / `app::on_escape` entry points.
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U1  | An open form that is `Editing` is an ordinary dialog: Escape and scrim both yield `Msg::Cancelled` | FR-010a (the "no creation in progress" side) | example | PENDING | |
-| U2  | An open form that is `Creating` is a `NonDismissibleDialog`: `registry::escape` and `app::on_escape` both yield nothing | FR-010a | example | PENDING | |
+| U1  | An open form that is `Editing` is an ordinary dialog: Escape and scrim both yield `Msg::Cancelled` | FR-010a (the "no creation in progress" side) | example | DONE | `crates/micold-client/tests/add_worktree_dismissal.rs::an_idle_form_is_dismissed_by_escape_and_the_scrim` |
+| U2  | An open form that is `Creating` is a `NonDismissibleDialog`: `registry::escape` and `app::on_escape` both yield nothing | FR-010a | example | DONE | `crates/micold-client/tests/add_worktree_dismissal.rs::a_form_whose_create_is_in_flight_is_dismissed_by_neither_escape_nor_the_scrim` |
 | U3  | A `Creating` form over an open Settings draft: `app::on_escape` still yields nothing — it must not fall through to the Settings draft's cancel | FR-010a | example | PENDING | |
 | U4  | A create that failed returns the form to `Editing`, and Escape dismisses it again | FR-010a (the span ends with the operation) | example | PENDING | |
 | U5  | The in-dialog Cancel (`Msg::Cancelled`) closes a `Creating` form | FR-010a ("the only way out") | characterization | PENDING | |
