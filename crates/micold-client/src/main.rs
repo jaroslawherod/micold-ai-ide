@@ -662,7 +662,15 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             location,
             unavailable_default,
         }) => {
-            shell::daemon_sync::ask_cli_availability(app);
+            // Asked about the directory a session started from this list would run in (029
+            // BUG-001, FR-003b): the start menu is always the active project's.
+            let cwd = app
+                .core
+                .workspace
+                .active
+                .as_deref()
+                .map(|project| location.cwd(project));
+            shell::daemon_sync::ask_cli_availability(app, cwd);
             app.core
                 .update(Message::Session(SessionMsg::StartMenuOpened {
                     location,

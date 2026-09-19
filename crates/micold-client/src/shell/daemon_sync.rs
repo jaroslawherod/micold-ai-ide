@@ -404,13 +404,18 @@ pub fn on_takeover_requested(app: &mut App) -> Task<Message> {
 ///
 /// A no-op while disconnected, deliberately: there is nobody who could answer, and the field stays
 /// `None` — "not said yet" — rather than being cleared to an empty set that reads as "none exist".
-pub fn ask_cli_availability(app: &mut App) {
+///
+/// `cwd` is the directory the choice is made for — a project root or a worktree — or `None` where
+/// none is in play (Settings, a reconnect), which the service answers for the home directory. The
+/// answer follows the environment a session there is spawned with (feature 029, BUG-001, FR-003b):
+/// the environment-include script can put a CLI on one directory's `PATH` and not another's.
+pub fn ask_cli_availability(app: &mut App, cwd: Option<std::path::PathBuf>) {
     let Some(d) = app.daemon.clone() else {
         return;
     };
     let req = app.next_req;
     app.next_req += 1;
-    d.send(ClientMsg::AiCliAvailabilityRequest { req, cwd: None });
+    d.send(ClientMsg::AiCliAvailabilityRequest { req, cwd });
 }
 
 /// What the service's answer describes, from what this client knows about the service it started.
@@ -951,7 +956,7 @@ pub fn on_connected(
     // opening and the override menu opening — because a reconnect is the one moment the answer
     // can have changed without the user doing anything: a restarted sandbox may be a *different*
     // image, and the set the previous connection reported describes a container that is gone.
-    ask_cli_availability(app);
+    ask_cli_availability(app, None);
     if let (Some(project), Some(daemon)) = (project, app.daemon.clone()) {
         daemon.send(ClientMsg::Attach {
             project: project.clone(),
