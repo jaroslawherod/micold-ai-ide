@@ -1188,6 +1188,85 @@ fn a_create_with_no_form_open_is_still_reported() {
     );
 }
 
+/// The correlation id of the create `app_creating_a_worktree` sent.
+fn pending_create_req(app: &App) -> u64 {
+    *app.pending_ops
+        .iter()
+        .find(|(_, op)| matches!(op, PendingOp::WorktreeCreate(_)))
+        .expect("the fixture must have a create pending")
+        .0
+}
+
+/// `013` BUG-001, A1: with a create in flight, neither Escape nor the scrim closes the form.
+///
+/// The reported case, end to end through the window's own paths: `Message::EscapePressed` for
+/// the key, and whatever `on_escape` hands the scrim for a click on it. Thirty seconds into a
+/// submodule fetch, either used to take the progress display away and leave the outcome nowhere
+/// to land (FR-010a).
+#[test]
+fn a_create_in_flight_holds_its_dialog_through_escape_and_the_scrim() {
+    use micold_client::features::worktree_form::WorktreeFormStatus;
+    let (mut app, _rx) = app_creating_a_worktree();
+
+    let _ = update_inner(&mut app, Message::EscapePressed);
+    assert_eq!(
+        form_status(&app),
+        Some(WorktreeFormStatus::Creating),
+        "Escape closed the add-worktree dialog while its create was still running (FR-010a)"
+    );
+
+    let scrim = micold_client::app::on_escape(&app.core);
+    assert_eq!(
+        scrim, None,
+        "the scrim must have nothing to send while a create runs (FR-010a)"
+    );
+    if let Some(message) = scrim {
+        let _ = update_inner(&mut app, message);
+    }
+    assert_eq!(
+        form_status(&app),
+        Some(WorktreeFormStatus::Creating),
+        "a click on the scrim closed the add-worktree dialog while its create was still running"
+    );
+}
+
+/// `013` BUG-001, A2: Cancel closes the dialog mid-create, and the create's later failure still
+/// reaches the user, as a notification carrying the daemon's message (FR-010b).
+#[test]
+fn a_create_failing_after_cancel_reaches_the_user_as_a_notification() {
+    let (mut app, _rx) = app_creating_a_worktree();
+    let req = pending_create_req(&app);
+
+    let _ = update_inner(&mut app, Message::WorktreeForm(FormMsg::Cancelled));
+    assert!(
+        app.core.worktree_form.form.is_none(),
+        "Cancel must close the dialog even while its create runs (FR-010a)"
+    );
+
+    let _ = shell::daemon_sync::on_daemon_event(
+        &mut app,
+        DaemonMsg::OperationError {
+            req,
+            kind: micold_core::protocol::messages::ErrorKind::GitFailed,
+            message: "git failed to create the worktree".into(),
+            detail: None,
+        },
+    );
+
+    let said = app
+        .core
+        .notifications
+        .queue
+        .visible()
+        .map(|n| n.message.clone())
+        .unwrap_or_default();
+    assert!(
+        said.contains("git failed to create the worktree"),
+        "a create that failed after its dialog was cancelled must still be reported, carrying \
+         the daemon's message (FR-010b), got {said:?}"
+    );
+}
+
 /// A new attempt starts with a clean slate.
 ///
 /// The stale error from the previous attempt stood through the whole of the next one's pending

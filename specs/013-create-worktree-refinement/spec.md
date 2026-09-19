@@ -70,6 +70,8 @@ Today, after clicking "Create," the user sees a static "Creating worktree…" me
 - What happens if the worktree being deleted has no meaningful branch to offer a choice about (edge/unexpected repository state)? The branch-deletion choice is only presented when the worktree has an associated branch to act on; the rest of the deletion proceeds unchanged if not.
 - What happens if creation fails before any stage-specific work begins (during the existing pre-flight duplicate checks)? The progress indicator should reflect that failure occurred at the earliest stage rather than appearing to have made partial progress.
 - What happens to the "Create"/"Cancel" buttons while the progress indicator is showing? Unchanged from today — creation continues to run without the user needing to keep the button available for further action.
+- What happens if the user clicks outside the overlay, or presses Escape, while creation is in progress (for example, 30 seconds into a submodule fetch)? Nothing — the overlay stays open, with the progress indicator and stage description still showing. The only way to leave the overlay during creation is the explicit Cancel button inside it (FR-010a). *(Added by BUG-001.)*
+- What happens if the user does press Cancel while creation is in progress? The overlay closes, but the creation itself is not aborted — it runs to completion in the session service. When it finishes, its outcome (created, failed with the stage, or interrupted) is reported as a notification, so closing the overlay never leaves the user unable to tell whether the worktree exists (FR-010b). *(Added by BUG-001.)*
 
 ## Requirements *(mandatory)*
 
@@ -87,6 +89,10 @@ Today, after clicking "Create," the user sees a static "Creating worktree…" me
   **Bugfix**: 2026-08-06 — BUG-009 added this requirement; a submodule-setup stage emitted one frame and then nothing, the client's liveness deadline reaped the connection at 9 s, and the progress display was replaced mid-creation by a disconnect banner — the "is it hung?" state FR-006 exists to prevent. See `010-daemon-session-persistence/bugs/BUG-009.md`.
 - **FR-009**: If creation fails at any stage, the progress indicator MUST stop advancing and the failed stage MUST be identifiable from the display, followed by the existing failure/error message — the indicator must never continue to suggest progress after a failure.
 - **FR-010**: On successful creation, the progress indicator and any stage description MUST be cleared and the overlay MUST close, consistent with today's successful-creation behavior.
+- **FR-010a**: While a creation is in progress, the create overlay MUST NOT be dismissible by any implicit action — neither a click outside the dialog (on its scrim) nor the Escape key. The explicit Cancel button inside the dialog MUST remain available and MUST be the only way to close the overlay before the creation resolves. While no creation is in progress, the overlay keeps the ordinary dialog dismissal of `017-material-component-architecture` FR-009. This is that requirement's "explicitly declared non-dismissible" exception, applied for exactly the span of the operation.
+  **Bugfix**: 2026-09-18 — BUG-001 added this requirement; a scrim click 30 seconds into a submodule fetch closed the overlay, taking the progress display with it, and left the user no way to tell whether the worktree was created. See `bugs/BUG-001.md`.
+- **FR-010b**: If a creation resolves while its overlay is no longer open (the user pressed Cancel during creation), its outcome MUST be reported as a notification: success names the created worktree; failure carries the existing failure message and the stage it failed at (FR-009); an interrupted connection carries the existing "may have taken effect" wording. Cancel during creation closes the overlay only — it MUST NOT be presented as, or assumed to be, an abort of the operation. While the overlay is open, outcomes keep their existing in-overlay presentation (FR-009, FR-010) and no duplicate notification is shown.
+  **Bugfix**: 2026-09-18 — BUG-001 added this requirement; a failure was written into the form, so once the form was gone it was dropped silently (an interruption with no form open was already notified, 010 BUG-020).
 - **FR-011**: The worktree-delete confirmation MUST let the user explicitly choose whether the worktree's associated git branch is also deleted, in addition to the existing explanation of what is being removed.
 - **FR-012**: The delete confirmation's default branch-deletion choice MUST be "delete the branch," preserving today's behavior for a user who confirms without changing it.
 - **FR-013**: If the user opts to keep the branch, confirming deletion MUST remove the worktree directory and its sessions while leaving the git branch untouched and intact in the repository.
@@ -109,6 +115,7 @@ Today, after clicking "Create," the user sees a static "Creating worktree…" me
 - **SC-003**: 100% of worktree deletions require the user to see and confirm (or change) an explicit branch-deletion choice before anything is removed; zero git branches are deleted as an unannounced side effect of removing a worktree.
 - **SC-004**: Users who choose to keep a branch when deleting its worktree can confirm afterward that the branch still exists in the repository, while the worktree directory and its sessions are gone.
 - **SC-005**: Creation failures at any stage are reported with the specific stage identifiable, eliminating cases where the user only sees a generic failure with no sense of how far creation got.
+- **SC-006**: 0 clicks outside the overlay and 0 Escape presses close the create overlay while a creation is in progress; and 100% of creations whose overlay was closed with Cancel report their outcome (created, failed, or interrupted) to the user. *(Added by BUG-001.)*
 
 ## Assumptions
 
@@ -128,3 +135,9 @@ legitimately be silent for longer than that connection's liveness deadline. **No
 this feature's stage model is intact; the defect is in how the service thins it on the wire. The fix
 is `010-daemon-session-persistence` Phase 22 (T120, T123). See
 `010-daemon-session-persistence/bugs/BUG-009.md`.
+
+**Bugfix**: 2026-09-18 — BUG-001 Added FR-010a (the create overlay is non-dismissible by scrim
+click and Escape while a creation is in progress; the in-dialog Cancel is the only way out),
+FR-010b (a creation that resolves after its overlay closed reports its outcome as a notification;
+Cancel closes the overlay and does not abort the operation), two Edge Cases, and SC-006. No
+existing requirement changed. See `bugs/BUG-001.md`.

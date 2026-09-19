@@ -179,3 +179,41 @@ component directory, everything else is an edit to an already-established module
 ## Complexity Tracking
 
 *No entries — the Constitution Check above has no unjustified violations.*
+
+## Bugfix BUG-001 — the create overlay must hold its ground while a create is in flight
+
+*Paths below are the current workspace layout (`crates/…`), not the single-crate `src/` layout this
+plan was written against.*
+
+- **Dismissal follows form status.** `AddWorktreeDialog::dismissal()`
+  (`crates/micold-client/src/features/worktree_form.rs`) is a constant today: plain `Layer::Dialog`
+  rules cancelled by `Msg::Cancelled`. It becomes a function of `WorktreeFormStatus`: while
+  `Creating`, the rules add `.protecting_input()` (→ `Surface::NonDismissibleDialog`), so the core
+  rule answers "no" for scrim click and Escape; while `Editing`, the rules are unchanged. Because
+  `dismissal(&self)` takes no state, the status travels on the surface value that `open_in` builds
+  (e.g. `AddWorktreeDialog { creating: bool }`). The existing machinery does the rest:
+  `registry::escape` returns `None` for a non-dismissible topmost dialog, and `ui/mod.rs` wires the
+  scrim's `on_dismiss` from that same answer, so scrim and Escape cannot disagree.
+- **Trap: `on_escape`'s fallback.** `app::on_escape` is `registry::escape(state).or_else(<Settings
+  draft cancel>)`. `registry::escape` answers `None` both for "no dialog open" and for "the topmost
+  dialog refuses", so a non-dismissible create over the Settings view would fall through and let
+  scrim/Escape cancel the Settings draft behind it. The fix must make a refusing topmost dialog
+  stop the fallback (only fall back when no registered surface is open), with a test for exactly
+  that case.
+- **Cancel stays explicit and non-aborting.** The in-dialog Cancel button keeps sending
+  `Msg::Cancelled` unconditionally. The daemon create is not aborted — no cancellation exists on
+  the wire, and aborting a submodule fetch midway would need its own rollback design; that is out
+  of scope for this bug.
+- **Outcome without a form.** `created` and `create_failed` return a
+  notification `Outcome` (`features::notifications::{info, error}`) when
+  `state.worktree_form.form` is `None`, and behave exactly as today when it is open. The failure
+  wording carries the failed stage (FR-009). This is decision logic, so it is test-first in the
+  client's reducer tests, not covered by the GUI-wiring exception. `create_interrupted` needs no
+  change: with no form open, `shell/daemon_sync.rs` never reaches it and already raises the
+  notification itself (010 BUG-020, test-list U12).
+- **Constitution**: I — the status-dependent rule and the outcome routing are both tested before
+  implementation; the only untested glue is the scrim, which already reads the tested
+  `on_escape` answer. VII — `docs/user-guide/worktrees-and-sessions.md` "Creating a worktree"
+  gains one paragraph. No other principle affected.
+
+**Bugfix**: 2026-09-18 — BUG-001 Updated from bugfix patch.

@@ -49,6 +49,34 @@ pub struct State {
     /// A message shown when opening a non-git directory was refused (FR-001a), or a worktree
     /// create failed (FR-017). Transient.
     pub worktree_error: Option<String>,
+    /// A create whose form was cancelled while it was still running (feature 013, BUG-001).
+    ///
+    /// Cancel closes the overlay and does not stop the create (FR-010b), so its outcome still
+    /// arrives — with no form to land on. This is what says the outcome is owed a notification,
+    /// and what the form knew about the create that the notification has to repeat.
+    pub cancelled_create: Option<CancelledCreate>,
+}
+
+/// What a form cancelled mid-create knew about its create (feature 013, FR-010b).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CancelledCreate {
+    /// The mode the create runs in, which words its stage (feature 016, FR-024).
+    pub mode: CreateMode,
+    /// The last stage the daemon reported, if any, for a failure to name (FR-009).
+    pub stage: Option<CreateStage>,
+}
+
+impl CancelledCreate {
+    /// The failure notification's text: the stage it failed at, then the failure's own message.
+    fn failure(&self, message: &str) -> String {
+        match self.stage {
+            Some(stage) => format!(
+                "Creating the worktree failed at \"{}\": {message}",
+                stage.label(&self.mode)
+            ),
+            None => format!("Creating the worktree failed: {message}"),
+        }
+    }
 }
 
 /// Transient creation status for the add-worktree form (feature 010, research R4). Not
@@ -312,8 +340,13 @@ impl WorktreeForm {
 }
 
 /// The add-worktree form, as a floating surface (feature 021, T032).
+///
+/// Carries whether a create is in flight, because that decides how it may be closed (feature 013,
+/// BUG-001): `dismissal` is asked of the surface value, not of the state it was read from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AddWorktreeDialog;
+pub struct AddWorktreeDialog {
+    creating: bool,
+}
 
 impl FloatingSurface for AddWorktreeDialog {
     fn id(&self) -> SurfaceId {
@@ -324,14 +357,29 @@ impl FloatingSurface for AddWorktreeDialog {
         Layer::Dialog
     }
 
+    /// An ordinary dialog while the user is editing. While a create is in flight it protects its
+    /// input (FR-010a): a stray scrim click or Escape would take the progress display away and
+    /// leave the outcome nowhere to land, so only the in-dialog Cancel closes it.
     fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::WorktreeForm(Msg::Cancelled))
+        let rules = DismissalRules::for_layer(Layer::Dialog)
+            .cancelled_by(Message::WorktreeForm(Msg::Cancelled));
+        if self.creating {
+            rules.protecting_input()
+        } else {
+            rules
+        }
     }
 }
 
 impl Registered for AddWorktreeDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
-        state.worktree_form.form.as_ref().map(|_| AddWorktreeDialog)
+        state
+            .worktree_form
+            .form
+            .as_ref()
+            .map(|form| AddWorktreeDialog {
+                creating: form.status == WorktreeFormStatus::Creating,
+            })
     }
 }
 
@@ -344,7 +392,16 @@ pub fn opened(state: &mut crate::app::State) {
 
 /// The form was dismissed.
 pub fn cancelled(state: &mut crate::app::State) {
-    state.worktree_form.form = None;
+    // Only a form with a create in flight has an outcome still to come. An idle one leaves any
+    // earlier cancelled create's record alone: that create is still running (FR-010b).
+    if let Some(form) = state.worktree_form.form.take() {
+        if form.status == WorktreeFormStatus::Creating {
+            state.worktree_form.cancelled_create = Some(CancelledCreate {
+                mode: form.mode,
+                stage: form.stage,
+            });
+        }
+    }
 }
 
 /// Apply a change to the open form, whatever it is doing.
@@ -581,6 +638,10 @@ pub fn create_stage_changed(
     stage: CreateStage,
     detail: Option<String>,
 ) {
+    // A create whose form was cancelled runs on; its failure must name where it really got to.
+    if let Some(create) = &mut state.worktree_form.cancelled_create {
+        create.stage = Some(stage);
+    }
     with_form(state, |form| {
         if form.stage != Some(stage) {
             form.stage = Some(stage);
@@ -594,11 +655,19 @@ pub fn create_stage_changed(
 
 /// A worktree was created (feature 005, FR-017).
 ///
-/// Idempotent by directory name, and sorted so it lands where the list would have put it.
+/// Idempotent by directory name, and sorted so it lands where the list would have put it. A form
+/// cancelled mid-create never saw it succeed, so the success is announced (feature 013, FR-010b).
 pub fn created(state: &mut crate::app::State, worktree: Worktree) -> Vec<crate::features::Outcome> {
+    let owed = state.worktree_form.cancelled_create.take();
+    let announce = owed.is_some() && state.worktree_form.form.is_none();
     state.worktree_form.form = None;
     state.worktree_form.worktree_error = None;
-    vec![crate::features::Outcome::WorktreeCreated(worktree)]
+    let notice = announce.then(|| {
+        crate::features::notifications::info(format!("Worktree \"{}\" created.", worktree.dir_name))
+    });
+    let mut outcomes = vec![crate::features::Outcome::WorktreeCreated(worktree)];
+    outcomes.extend(notice);
+    outcomes
 }
 
 /// The worktree list changed, so a create failure shown against the old one is stale (T067a-4).
@@ -613,12 +682,23 @@ pub fn worktree_list_changed(state: &mut crate::app::State) {
 /// A create failed (feature 005 FR-017, feature 010).
 ///
 /// The form stays open so the user can adjust, showing the error, and returns to `Editing` so a
-/// retry is possible instead of being stuck in `Creating`.
-pub fn create_failed(state: &mut crate::app::State, message: String) {
+/// retry is possible instead of being stuck in `Creating`. A form cancelled mid-create is not
+/// there to show it, so the failure becomes a notification instead (feature 013, FR-010b).
+pub fn create_failed(
+    state: &mut crate::app::State,
+    message: String,
+) -> Vec<crate::features::Outcome> {
+    let owed = state.worktree_form.cancelled_create.take();
+    if let (Some(create), None) = (owed, &state.worktree_form.form) {
+        return vec![crate::features::notifications::error(
+            create.failure(&message),
+        )];
+    }
     state.worktree_form.worktree_error = Some(message);
     with_form(state, |form| {
         form.status = WorktreeFormStatus::Editing;
     });
+    Vec::new()
 }
 
 /// A create's connection dropped before the daemon answered it (feature 010, BUG-020).
@@ -751,7 +831,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::CreateStarted(mode) => create_started(state, mode),
         Msg::CreateStageChanged(stage, detail) => create_stage_changed(state, stage, detail),
         Msg::Created(worktree) => return created(state, worktree),
-        Msg::CreateFailed(message) => create_failed(state, message),
+        Msg::CreateFailed(message) => return create_failed(state, message),
         Msg::CreateInterrupted(message) => create_interrupted(state, message),
     }
     Vec::new()
