@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: fix/the-name-of-past-session-is-still-not-shown
 - **Started**: 2026-09-19
-- **Phase**: 2-clarify
-- **Next step**: Phase 2 clarify: run `speckit-clarify` rounds until clean (D2–D4 applied).
+- **Phase**: 3-design
+- **Next step**: Design unit (Phase 3: plan, tasks, milestones, checklists, through opening PR 2; the clarify commits ship with PR 2).
 
 ## Pull requests
 
@@ -39,6 +39,7 @@ D2–D4 applied to spec.md (FR-002, FR-006, FR-012 + *Copilot evidence*, US1 #5,
 | Clarify round | Questions | Agent-resolved | Escalated |
 |---|---|---|---|
 | 1 | 4 | 4 (D5–D8) | 0 |
+| 2 | 0 (no critical ambiguities) | — | — |
 
 ## Declined review findings
 
