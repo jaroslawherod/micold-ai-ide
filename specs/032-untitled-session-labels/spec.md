@@ -300,8 +300,8 @@ slash commands by the records, which is why (a) picks them. The user chose (b) (
 ### Copilot evidence
 
 Read from the 281 session directories in `~/.copilot/session-state/` on the development machine on
-2026-09-19, against `CopilotProvider::read_title` (`crates/micold-core/src/provider.rs`), which
-reads only the `name:` key of `workspace.yaml`:
+2026-09-19, against the application's current Copilot title rule, which reads only the `name:` key of
+`workspace.yaml`:
 
 - 142 sessions have an `events.jsonl` (a recorded conversation). 97 have a `name:`; 44 have at least
   one `user.message` and no `name:`; 1 has no `user.message`.

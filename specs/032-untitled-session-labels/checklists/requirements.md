@@ -36,4 +36,7 @@
 - The spec names the AI CLIs (`claude`, GitHub Copilot, `pi`), their `ai-title` record, and
   Copilot's `events.jsonl` / `user.message` fields (FR-012) because they are the product's domain,
   the other vendor's record format the label is read from, not an implementation choice.
+- D9 (Copilot `summary:` as a title, FR-016) and D10 (FR-016 applies to listed sessions; US1 #6,
+  SC-008, SC-009 verified on listed-session fixtures) were applied in Phase 3; the items above were
+  re-checked against the revised spec.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`

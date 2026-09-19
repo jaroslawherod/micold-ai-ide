@@ -66,7 +66,7 @@ the catalog's single writer. No `cfg(target_os)` arm (Principle VI).
 
 - [x] **I. Test-First (NON-NEGOTIABLE)**: PASS. Every change is render-free and reachable from
   `tests/`: `first_turn.rs` pure functions, provider methods over temp directories, `store.rs`
-  round-trip, `Catalog`/`DaemonState` integration with a fake provider, and the client's render-free
+  round-trip, `Catalog`/`DaemonState` integration with the real providers over temp stores, and the client's render-free
   `catalog_sync.rs`. No GUI glue changes, so the GUI exception is not invoked. Each contract clause
   (C1–C8) is a test written red first.
 - [x] **II. Multi-Session Support**: PASS. The label is per-session state, written through
@@ -87,7 +87,7 @@ the catalog's single writer. No `cfg(target_os)` arm (Principle VI).
   three.
 - [x] **VII. Documentation First-Class**: PASS. `docs/user-guide/worktrees-and-sessions.md`
   (*"New session" means…* and *Sessions from before this was true…*) is updated in the milestone
-  that ships each behaviour (FR-015; Copilot `summary:` in M2).
+  that ships each behaviour (FR-015; Copilot `summary:` in M2, the running-session sentence in M3).
 - [x] **VIII. Reusable UI Component Foundation**: PASS (not engaged). No widget change; the row,
   tooltip and terminal bar render `SessionLabel::display()`.
 
@@ -141,7 +141,7 @@ crates/micold-client/
 ├── src/catalog_sync.rs        # adopt Derived as well as Named
 └── tests/session_title_sync.rs     # + C8.5
 
-docs/user-guide/worktrees-and-sessions.md   # FR-015 (+ Copilot summary: in M2)
+docs/user-guide/worktrees-and-sessions.md   # FR-015 (M1; + Copilot in M2; running session in M3)
 ```
 
 **Structure Decision**: the existing workspace. Record-format knowledge stays below the provider
