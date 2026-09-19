@@ -567,3 +567,11 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
 - green: a link release with no position over the content clears the press and opens nothing; hover ignores the strip while `scrollbar_metrics` is `Some`; `shown` includes the pointer row while a link is marked -> terminal_pane 78 passed
 - also: `osc8_passthrough.rs` waits for the whole declared run, not its first cell (review A F4) -> 1 passed; `ui/mod.rs` calls `material::local_link_context()` instead of a copy (review B F2)
 - commit: `fix(031): M3 review fixes (U158–U160)`
+
+## Cycle 56: U161 M3 review fixes, round 2
+
+- origin: review A round 2 (low): a hover off the grid consulted no rows, so the empty rows hash never changed and every grid move revalidated a stale `None`; a resize that brought an address under the resting pointer stayed unmarked until the pointer moved
+- test: `terminal_pane.rs::tests::links::a_hover_off_the_grid_re_resolves_when_the_grid_moves`
+- red: `scripts/build-lock.sh cargo test -p micold-client --lib terminal_pane::tests::links` -> `34 passed; 1 failed`: `left: Revalidated` / `right: Resolve`
+- green: `hover_refresh` returns `Resolve` when the grid moved and the cached hover read no rows -> 35 passed; `mise run gate` -> `GATE_EXIT=0`
+- commits: red `6032d0e0`, green `fix(031): a hover off the grid re-resolves when the grid moves (U161)`
