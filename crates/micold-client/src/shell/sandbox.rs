@@ -67,6 +67,14 @@ impl HostFacts {
     }
 }
 
+/// A bring-up that failed while preparing the host side, before the runtime ran.
+fn preparation_failed(stderr: String) -> Failure {
+    Failure {
+        stage: micold_core::sandbox::lifecycle::Stage::Creating,
+        error: micold_core::sandbox::runtime::RuntimeError::Unknown { stderr },
+    }
+}
+
 /// A sandbox that came up.
 ///
 /// Deliberately does **not** carry the dial address or the token. Both are re-derived at dial time
@@ -95,15 +103,10 @@ pub fn start<R: CommandRunner>(
     let token = Token::generate();
     let token_path = host_token_path(&facts.state_dir);
     if let Err(e) = token.write_to(&token_path) {
-        return Err(Failure {
-            stage: micold_core::sandbox::lifecycle::Stage::Creating,
-            error: micold_core::sandbox::runtime::RuntimeError::Unknown {
-                stderr: format!(
-                    "could not write the sandbox token to {}: {e}",
-                    token_path.display()
-                ),
-            },
-        });
+        return Err(preparation_failed(format!(
+            "could not write the sandbox token to {}: {e}",
+            token_path.display()
+        )));
     }
 
     // The sandbox's own home, created here rather than left to the runtime (FR-004d). A bind
@@ -112,15 +115,10 @@ pub fn start<R: CommandRunner>(
     // a different route. Created before `create` for the same reason the token is.
     let sandbox_home = facts.state_dir.join(micold_core::sandbox::SANDBOX_HOME_DIR);
     if let Err(e) = std::fs::create_dir_all(&sandbox_home) {
-        return Err(Failure {
-            stage: micold_core::sandbox::lifecycle::Stage::Creating,
-            error: micold_core::sandbox::runtime::RuntimeError::Unknown {
-                stderr: format!(
-                    "could not create the sandbox home directory {}: {e}",
-                    sandbox_home.display()
-                ),
-            },
-        });
+        return Err(preparation_failed(format!(
+            "could not create the sandbox home directory {}: {e}",
+            sandbox_home.display()
+        )));
     }
 
     let mounts = MountSet::build(
@@ -134,6 +132,18 @@ pub fn start<R: CommandRunner>(
             container: PathBuf::from(CONTAINER_TOKEN_PATH),
         },
     );
+
+    // A credential mounted into a directory of that home — the AI CLI's sign-in, in `~/.claude` —
+    // needs the directory too, for the same reason: left to the runtime it comes out root-owned,
+    // and the CLI cannot write its sessions beside the token (research R11, BUG-006).
+    for dir in mounts.home_dirs_to_create() {
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            return Err(preparation_failed(format!(
+                "could not create {} in the sandbox home: {e}",
+                dir.display()
+            )));
+        }
+    }
 
     let runtime = CliRuntime::new(profile.runtime, runner);
     let build_spec = |_caps: &RuntimeCapabilities| SandboxSpec {
@@ -862,6 +872,47 @@ mod tests {
             commands.last().map(String::as_str),
             Some("rm -f micold-sandbox"),
             "a cancelled bring-up left its container behind: {commands:?}"
+        );
+    }
+
+    /// Research R11 (BUG-006): the directory a shared sign-in is mounted into exists before the
+    /// runtime runs, created by this process — so it is the user's, not root's.
+    #[test]
+    fn a_bring_up_creates_the_sign_ins_directory_before_the_runtime_runs() {
+        use micold_core::sandbox::exec::RecordingRunner;
+        use micold_core::sandbox::CredentialShare;
+
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        let home = PathBuf::from("/home/u");
+        let facts = HostFacts {
+            uid: 1000,
+            gid: 1000,
+            state_dir: state_dir.path().to_path_buf(),
+            layout: CredentialLayout::conventional(&home, None),
+            home,
+        };
+        let profile = SandboxProfile {
+            credentials: std::collections::BTreeSet::from([CredentialShare::AiCliAuth]),
+            ..SandboxProfile::default()
+        };
+
+        let _ = start(
+            &profile,
+            &[],
+            &facts,
+            DEFAULT_SANDBOX_PORT,
+            RecordingRunner::new(),
+            &mut |_| {},
+        );
+
+        let sign_in_dir = state_dir
+            .path()
+            .join(micold_core::sandbox::SANDBOX_HOME_DIR)
+            .join(".claude");
+        assert!(
+            sign_in_dir.is_dir(),
+            "{} was left for the runtime to create, which creates it as root",
+            sign_in_dir.display()
         );
     }
 
