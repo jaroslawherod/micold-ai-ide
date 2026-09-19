@@ -275,6 +275,31 @@ fn service_with(store: &Path, env_include: Option<&Path>) -> Arc<DaemonState> {
     )))
 }
 
+/// A1: a CLI that only the environment-include script puts on `PATH` for a directory is offered
+/// for that directory — the reported defect, through the real protocol and a real script.
+///
+/// `pi` installed with `npm install -g` under mise or nvm is exactly this: a desktop-started
+/// service's own `PATH` lacks the version manager's directory, the sessions it spawns have it.
+#[tokio::test]
+async fn a_cli_on_the_path_env_include_adds_for_a_directory_is_offered_for_it() {
+    let session_bin = bin_with(AiCli::Pi.provider().command());
+    let _service = ServicePath::without_clis(None);
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let (unix, windows) = prepend_to_path(session_bin.path());
+    let script = include_script(store.path(), &unix, &windows);
+
+    let state = service_with(store.path(), Some(&script));
+    let mut client = connect(&state).await;
+
+    assert_eq!(
+        ask(&mut client, 3, Some(project.path())).await,
+        vec![AiCli::Pi],
+        "a CLI a session started in this directory would find must be offered for it, even \
+         though the session service's own PATH does not hold it (FR-003b, SC-001a)"
+    );
+}
+
 /// U4: the service's answer for a directory walks the `PATH` from that directory's
 /// environment-include result, when environment-include is on.
 #[test]
@@ -372,5 +397,38 @@ fn a_second_answer_for_a_directory_does_not_run_the_script_again() {
         1,
         "the environment for a directory is resolved once and then served from the cache that \
          spawns there use too; asking again must not run the script again (SC-006a)"
+    );
+}
+
+/// U9: a request that names no directory — Settings, where none is in play — is answered for the
+/// user's home directory: the script is sourced there.
+#[tokio::test]
+async fn a_request_with_no_directory_is_answered_for_the_home_directory() {
+    let _service = ServicePath::without_clis(None);
+    let store = tempfile::tempdir().unwrap();
+    let seen = store.path().join("sourced-in");
+    let script = include_script(
+        store.path(),
+        &format!("pwd > '{}'\n", seen.display()),
+        &format!(
+            "(Get-Location).Path | Set-Content -Path '{}'\r\n",
+            seen.display()
+        ),
+    );
+    let home = directories::UserDirs::new()
+        .expect("fixture check: this machine has a home directory")
+        .home_dir()
+        .to_path_buf();
+
+    let state = service_with(store.path(), Some(&script));
+    let mut client = connect(&state).await;
+    ask(&mut client, 9, None).await;
+
+    let sourced_in = std::fs::read_to_string(&seen).unwrap_or_default();
+    assert_eq!(
+        std::fs::canonicalize(sourced_in.trim()).ok(),
+        std::fs::canonicalize(&home).ok(),
+        "with no directory named, the environment that decides is the one a session in the home \
+         directory would get (FR-003b); the script ran in {sourced_in:?}"
     );
 }
