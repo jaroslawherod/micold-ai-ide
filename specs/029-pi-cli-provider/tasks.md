@@ -256,7 +256,7 @@ text but walked the wrong `PATH`. **Tasks added**: T062–T070. See `bugs/BUG-00
 - **US3 (Phase 5)**: depends on Foundational
 - **US4 (Phase 6)**: depends on Foundational
 - **Polish (Phase 7)**: depends on every story that is being shipped
-- **Bugfix BUG-001 (Phase 8)**: depends on US1. T062/T063/T071/T072/T073 first (red), then T064 → T065 → T066 → T074 → T067; T068 and T069 in parallel; T075 then T070 last
+- **Bugfix BUG-001 (Phase 8)**: depends on US1. T062/T063/T071/T072/T073 first (red), then T064 → T065 → T066 → T074 → T067; T068 in parallel; T069 moved out of BUG-001; T075 then T070 last
 
 ### User Story Dependencies
 
