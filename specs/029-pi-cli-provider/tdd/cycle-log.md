@@ -113,3 +113,14 @@ failed before the implementation.
   file -> 5 passed, A1 still red
 - green: no production change
 - refactor: none
+
+## Cycle 6: U7 a second answer for the same directory is served from the shared cache
+
+- test: `crates/micold-daemon/tests/ai_cli_availability.rs::a_second_answer_for_a_directory_does_not_run_the_script_again` (new)
+- red: passed on first run — `env_include_vars_for` already caches per directory, and U4's green
+  goes through it. Deliberate mutant: `self.invalidate_env_include(cwd)` at the top of
+  `ai_clis_available_in`. `scripts/build-lock.sh cargo test --test ai_cli_availability a_second_answer_for_a_directory_does_not_run_the_script_again -- --exact`
+  -> `left: 2` / `right: 1` (1 failed). Mutant removed (`git diff` on `state.rs` empty); file ->
+  6 passed, A1 still red
+- green: no production change
+- refactor: none
