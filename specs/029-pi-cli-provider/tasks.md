@@ -213,20 +213,25 @@ increment: BUG-001.
 
 ### Tests (write first, confirm they fail)
 
-- [ ] T062 [P] [BUG-001] *(test)* In `crates/micold-core/tests/`, pin that `available_in(path)` finds a command present only in a directory of the given `PATH` value, and not one that is only on the test process's own `PATH`. Build the directories in a tempdir; do not change the process environment (FR-003b)
-- [ ] T063 [P] [BUG-001] *(test)* Extend `crates/micold-daemon/tests/ai_cli_availability.rs`: with env-include enabled and a script that prepends a tempdir holding a fake `pi` to `PATH`, an `AiCliAvailabilityRequest` with that `cwd` lists Pi. The same request with env-include disabled does not. A second request is served without re-running the script (shared cache) (FR-003b, SC-006a)
+- [ ] T062 [P] [BUG-001] [U1] [U2] *(test)* In `crates/micold-core/tests/`, pin that `available_in(path)` finds a command present only in a directory of the given `PATH` value, and not one that is only on the test process's own `PATH`. Build the directories in a tempdir; do not change the process environment (FR-003b)
+- [ ] T063 [P] [BUG-001] [A1] [A3] [U4] [U5] [U6] [U7] *(test)* Extend `crates/micold-daemon/tests/ai_cli_availability.rs`: with env-include enabled and a script that prepends a tempdir holding a fake `pi` to `PATH`, an `AiCliAvailabilityRequest` with that `cwd` lists Pi. The same request with env-include disabled does not. A second request is served without re-running the script (shared cache) (FR-003b, SC-006a)
+- [ ] T071 [P] [BUG-001] [A2] [U8] *(test)* In `crates/micold-daemon/tests/session_start.rs`: with `pi` only on the env-include `PATH` for a worktree, starting a Pi session there is not refused with the missing-CLI reason. `start_session`'s gate at `crates/micold-daemon/src/state.rs` (`!provider.is_available()`) walks the process `PATH` today, so a CLI offered under FR-003b would still be refused at launch (FR-003b, SC-001a). Added by `/speckit.tdd.plan`: the patch missed this second check
+- [ ] T072 [P] [BUG-001] [U9] [U10] *(test)* In `crates/micold-daemon/tests/ai_cli_availability.rs`: a request with no `cwd` runs the env-include script in the home directory; and a request whose script sleeps does not hold up a second request on the same connection (FR-003b)
+- [ ] T073 [P] [BUG-001] [U11] [U12] *(test)* In `crates/micold-client/src/main_tests.rs`: opening the start menu for a location sends `AiCliAvailabilityRequest` with that location's directory, and opening Settings sends it with `cwd: None` (FR-003b)
 
 ### Implementation
 
-- [ ] T064 [BUG-001] `crates/micold-core/src/provider.rs`: make `resolves_on_path` take the `PATH` value to walk, add `available_in(path: &OsStr)`, and thread the value through the provider trait's `is_available` for every provider. Keep `PATHEXT` handling and add no `cfg` arm (FR-003b, FR-020, Principle VI). Closes the reopened T019
+- [ ] T064 [BUG-001] [U1] [U2] `crates/micold-core/src/provider.rs`: make `resolves_on_path` take the `PATH` value to walk, add `available_in(path: &OsStr)`, and thread the value through the provider trait's `is_available` for every provider. Keep `PATHEXT` handling and add no `cfg` arm (FR-003b, FR-020, Principle VI). Closes the reopened T019
 - [ ] T065 [BUG-001] `crates/micold-core/src/protocol/messages.rs`: add `cwd: Option<PathBuf>` to `ClientMsg::AiCliAvailabilityRequest`, bump `PROTOCOL_VERSION` 13 → 14 in `crates/micold-core/src/protocol/version.rs`, and regenerate the schema hash
-- [ ] T066 [BUG-001] `crates/micold-daemon/src/server.rs` and `crates/micold-daemon/src/state.rs`: answer the request from the `PATH` in `env_include_vars_for(cwd.unwrap_or(home))`, falling back to the process `PATH`. Run it on `spawn_blocking` and never under the state lock, so the connection loop keeps serving other requests (FR-003b). Makes T063 pass
-- [ ] T067 [BUG-001] `crates/micold-client/src/shell/daemon_sync.rs` (`ask_cli_availability`) and its callers: pass the project or worktree directory when the per-session override or missing-CLI list is opened, and `None` from Settings. Update `crates/micold-client/tests/cli_availability_comes_from_the_service.rs` and `crates/micold-client/src/main_tests.rs` for the new field
+- [ ] T066 [BUG-001] [A1] [A3] [U4] [U5] [U6] [U7] [U9] [U10] `crates/micold-daemon/src/server.rs` and `crates/micold-daemon/src/state.rs`: answer the request from the `PATH` in `env_include_vars_for(cwd.unwrap_or(home))`, falling back to the process `PATH`. Run it on `spawn_blocking` and never under the state lock, so the connection loop keeps serving other requests (FR-003b). Makes T063 and T072 pass
+- [ ] T074 [BUG-001] [A2] [U8] `crates/micold-daemon/src/state.rs` (`start_session`): check availability against the same spawn-environment `PATH` as T066, not the process's own. Makes T071 pass (FR-003b)
+- [ ] T067 [BUG-001] [U11] [U12] `crates/micold-client/src/shell/daemon_sync.rs` (`ask_cli_availability`) and its callers: pass the project or worktree directory when the per-session override or missing-CLI list is opened, and `None` from Settings. Update `crates/micold-client/tests/cli_availability_comes_from_the_service.rs` and `crates/micold-client/src/main_tests.rs` for the new field
 - [ ] T068 [P] [BUG-001] `docs/user-guide/settings.md`: state that the CLIs offered follow the session environment. Explain what to do when a version-manager install is not offered: keep env-include on, or put the CLI on the login `PATH`. Revise line 68's "a `PATH` that hasn't loaded" to match (FR-022)
 - [ ] T069 [P] [BUG-001] Find how `"env_include_script_path": "/tmp/does-not-exist.sh"` with `env_include_enabled: false` reached a real `~/.local/share/micold-ai-ide/settings.json` (grep tests, quickstarts and visual-pass scripts for the fixture path). Make the writer use a private data directory. Report the finding in `bugs/BUG-001.md`
 
 ### Verification
 
+- [ ] T075 [BUG-001] [A1] [A2] [A3] Outer loop closes: the acceptance behaviors A1–A3 are green through the daemon protocol before BUG-001 is considered fixed (US1 scenario 5b, SC-001a)
 - [ ] T070 [BUG-001] Run `mise run gate` and `cargo check --target aarch64-apple-darwin`. Then run quickstart §B on Xvfb (`visual-pass` skill) with the daemon started on a `PATH` lacking `pi` and an env-include script that adds it. Confirm Pi is offered in Settings and the override, and that a session starts `pi` (SC-001a). Record the result in `evidence/`
 
 **Checkpoint**: a `pi` installed under a Node version manager is offered and starts, with no change
@@ -235,6 +240,8 @@ to the user's installation.
 **Bugfix**: 2026-09-18 — BUG-001 Updated from bugfix patch. **Requirements added**: FR-003b, SC-001a
 and US1 scenario 5b; SC-006a amended — see `spec.md`. **One task reopened**: T019, which met its
 text but walked the wrong `PATH`. **Tasks added**: T062–T070. See `bugs/BUG-001.md`.
+
+**TDD plan**: 2026-09-19 — `/speckit.tdd.plan` added behavior markers to T062–T064, T066 and T067, and added T071–T075. See `tdd/test-list.md`.
 
 ---
 
@@ -249,7 +256,7 @@ text but walked the wrong `PATH`. **Tasks added**: T062–T070. See `bugs/BUG-00
 - **US3 (Phase 5)**: depends on Foundational
 - **US4 (Phase 6)**: depends on Foundational
 - **Polish (Phase 7)**: depends on every story that is being shipped
-- **Bugfix BUG-001 (Phase 8)**: depends on US1. T062/T063 first (red), then T064 → T065 → T066 → T067; T068 and T069 in parallel; T070 last
+- **Bugfix BUG-001 (Phase 8)**: depends on US1. T062/T063/T071/T072/T073 first (red), then T064 → T065 → T066 → T074 → T067; T068 and T069 in parallel; T075 then T070 last
 
 ### User Story Dependencies
 
