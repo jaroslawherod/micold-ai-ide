@@ -33,7 +33,7 @@ is covered by T070's visual pass.
 
 | id  | behavior                                                                                                   | traces            | kind    | state   | test |
 | --- | ---------------------------------------------------------------------------------------------------------- | ----------------- | ------- | ------- | ---- |
-| U1  | `available_in(path)` lists a CLI that is present only in a directory of the given `PATH` value             | FR-003b           | example | PENDING |      |
+| U1  | `available_in(path)` lists a CLI that is present only in a directory of the given `PATH` value             | FR-003b           | example | DONE    | `a_cli_present_only_in_the_given_path_is_available` (crates/micold-core/tests/available_in.rs) |
 | U2  | `available_in(path)` omits a CLI that is present only on the process's own `PATH`, not in the given value  | FR-003b           | example | PENDING |      |
 | U3  | `available_here()` still answers from the process's own `PATH`                                              | FR-003, FR-023c(027) | example | DONE | `available_here` (crates/micold-core/tests/available_here.rs) |
 

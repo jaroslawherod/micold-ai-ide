@@ -274,6 +274,14 @@ pub fn available_here() -> Vec<AiCli> {
         .collect()
 }
 
+/// Which AI CLIs resolve on the given `PATH` value (feature 029, BUG-001, FR-003b).
+pub fn available_in(path: &std::ffi::OsStr) -> Vec<AiCli> {
+    AiCli::ALL
+        .into_iter()
+        .filter(|which| resolves_on_path(which.provider().command(), path))
+        .collect()
+}
+
 /// Whether `command` resolves to a file on `PATH` (feature 026, FR-006/FR-010).
 ///
 /// Platform-neutral **without a `cfg`**, which is Principle VI's ask rather than a flourish: the
@@ -284,10 +292,7 @@ pub fn available_here() -> Vec<AiCli> {
 /// It deliberately does not check the executable bit: that needs `PermissionsExt` behind a
 /// `cfg(unix)`, and a file on `PATH` under the CLI's own name that is not executable is a broken
 /// installation the spawn will report anyway (FR-010's failure path).
-fn resolves_on_path(command: &str) -> bool {
-    let Some(path) = std::env::var_os("PATH") else {
-        return false;
-    };
+fn resolves_on_path(command: &str, path: &std::ffi::OsStr) -> bool {
     let is_file = |candidate: PathBuf| {
         std::fs::metadata(candidate)
             .map(|meta| meta.is_file())
@@ -299,7 +304,7 @@ fn resolves_on_path(command: &str) -> bool {
         .filter(|value| !value.is_empty())
         .map(|value| value.split(';').map(str::to_string).collect())
         .unwrap_or_default();
-    std::env::split_paths(&path).any(|dir| {
+    std::env::split_paths(path).any(|dir| {
         is_file(dir.join(command))
             || extensions
                 .iter()
@@ -388,7 +393,10 @@ impl AiCliProvider for ClaudeProvider {
     }
 
     fn is_available(&self) -> bool {
-        resolves_on_path(self.command())
+        resolves_on_path(
+            self.command(),
+            &std::env::var_os("PATH").unwrap_or_default(),
+        )
     }
 
     fn launch_args(&self, session_id: Uuid, mode: LaunchMode) -> Vec<String> {
@@ -601,7 +609,10 @@ impl AiCliProvider for CopilotProvider {
     }
 
     fn is_available(&self) -> bool {
-        resolves_on_path(self.command())
+        resolves_on_path(
+            self.command(),
+            &std::env::var_os("PATH").unwrap_or_default(),
+        )
     }
 
     fn launch_args(&self, session_id: Uuid, mode: LaunchMode) -> Vec<String> {
@@ -932,7 +943,10 @@ impl AiCliProvider for PiProvider {
         // A `PATH` resolution, like the other two: no spawn, no `--version` read, no minimum
         // version gate (FR-003, FR-003a). What is installed is what the user gets, and a failure
         // names the version rather than pre-empting it.
-        resolves_on_path(self.command())
+        resolves_on_path(
+            self.command(),
+            &std::env::var_os("PATH").unwrap_or_default(),
+        )
     }
 
     fn launch_args(&self, session_id: Uuid, _mode: LaunchMode) -> Vec<String> {
