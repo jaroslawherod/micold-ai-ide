@@ -306,6 +306,12 @@ aren't authenticated against), the worktree is not created — the branch and di
 back the same way any other creation failure is, and the error names the submodule that failed
 and why, so you can fix the problem and try again.
 
+While a worktree is being created, clicking outside the form or pressing Escape does nothing: the
+form stays open with its progress showing, so a stray click can't hide how the creation went. To
+leave the form before it finishes, press **Cancel**. Cancel closes the form but does not stop the
+creation, which carries on in the background. When it finishes, a notification tells you the
+outcome: the name of the new worktree, or the error and the step where it failed.
+
 > Naming formats are fixed in this version and are intended to become configurable later.
 
 ## Working from an existing branch
