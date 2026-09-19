@@ -100,7 +100,7 @@ const SHARED: &[(&str, &str)] = &[(
 /// sidebar remembers across a re-discovery, the tag filter that decides which rows exist, how large
 /// the window is, whether the Settings rail is collapsed to its icons, and whether this copy is
 /// installed at all — which refuses to start a session, so it cannot belong to the screen that
-/// says so. The last, `worktree_form.cancelled_mid_create` (feature 013, BUG-001), is by
+/// says so. The last, `worktree_form.cancelled_create` (feature 013, BUG-001), is by
 /// definition about a form that is no longer on screen.
 ///
 /// `project.switcher_open` was here and left when the rule stopped reaching it: the shell closes
@@ -181,9 +181,9 @@ const COMPONENT_LOCAL: &[(&str, &str)] = &[
          sidebar width is clamped against, so it is read before any component exists",
     ),
     (
-        "worktree_form.cancelled_mid_create",
+        "worktree_form.cancelled_create",
         "tests/add_worktree_dismissal.rs::a_create_failing_after_cancel_is_reported_as_an_error_notification \
-         — the flag is set as the form closes and read when the create's outcome arrives, so it \
+         — the record is made as the form closes and read when the create's outcome arrives, so it \
          exists only while there is no form component to hold it (013 BUG-001, FR-010b)",
     ),
 ];
