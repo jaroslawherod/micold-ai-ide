@@ -229,7 +229,7 @@ pub async fn run() -> io::Result<()> {
             {
                 tracing::error!(error = %e, path = %endpoint.lock_path.display(), "could not record daemon pid");
             }
-            serve_interprocess(state, bound).await
+            serve_interprocess(state, *bound).await
         }
     }
 }

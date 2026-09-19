@@ -12,6 +12,9 @@
 //! protection lives in `SettingsStore::update`: it reaches this call site only if this call site
 //! actually goes through it.
 
+// unix-only: the unreadable settings file is made by clearing its unix mode bits.
+#![cfg(unix)]
+
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::JsonFileStore;

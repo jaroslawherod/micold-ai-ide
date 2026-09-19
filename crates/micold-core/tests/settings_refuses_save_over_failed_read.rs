@@ -16,11 +16,15 @@
 //! document that was never corrupt. Observed on the reporter's machine 2026-09-03, preserved at
 //! `bugs/BUG-025-evidence/settings.json.daemon-block-reset.2026-09-03`.
 
+#[cfg(unix)]
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
+#[cfg(unix)]
 use micold_core::theme::ThemePreference;
 
-/// A stored document that is unmistakably the user's, not the defaults.
+/// A stored document that is unmistakably the user's, not the defaults. Only the unix test, which
+/// can make a file unreadable, stores one.
+#[cfg(unix)]
 fn users_settings() -> Settings {
     let mut settings = Settings {
         theme: ThemePreference::Dark,

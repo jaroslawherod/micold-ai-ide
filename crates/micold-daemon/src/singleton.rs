@@ -26,8 +26,9 @@ use micold_core::endpoint::Endpoint;
 
 /// The result of a startup attempt.
 pub enum Acquisition {
-    /// We became the daemon; hold on to this for the process lifetime.
-    Bound(BoundListener),
+    /// We became the daemon; hold on to this for the process lifetime. Boxed because on Windows
+    /// the listener is far larger than the other variant (clippy::large_enum_variant).
+    Bound(Box<BoundListener>),
     /// A live daemon already owns the endpoint; act as a client.
     AlreadyRunning,
 }
@@ -130,11 +131,11 @@ pub async fn acquire(endpoint: &Endpoint) -> io::Result<Acquisition> {
                 let name = fs_name(&endpoint.socket_path)?;
                 let listener = ListenerOptions::new().name(name).create_tokio()?;
                 // 5. Return the listener AND the still-locked file — held for life.
-                return Ok(Acquisition::Bound(BoundListener {
+                return Ok(Acquisition::Bound(Box::new(BoundListener {
                     listener,
                     _lock: Some(lock),
                     socket_path: endpoint.socket_path.clone(),
-                }));
+                })));
             }
             Err(TryLockError::WouldBlock) => {
                 // Another starter is mid-recovery. Touch nothing; back off and re-probe.
@@ -168,11 +169,11 @@ pub async fn acquire(endpoint: &Endpoint) -> io::Result<Acquisition> {
         .name(name)
         .security_descriptor(owner_only_descriptor()?);
     match options.create_tokio() {
-        Ok(listener) => Ok(Acquisition::Bound(BoundListener {
+        Ok(listener) => Ok(Acquisition::Bound(Box::new(BoundListener {
             listener,
             _lock: None,
             socket_path: endpoint.socket_path.clone(),
-        })),
+        }))),
         Err(e) if e.kind() == io::ErrorKind::AddrInUse => Ok(Acquisition::AlreadyRunning),
         // Losing the first-instance race to this user's own daemon reads as access denied, and so
         // does a pipe another account created first. Only the first can be connected to.
