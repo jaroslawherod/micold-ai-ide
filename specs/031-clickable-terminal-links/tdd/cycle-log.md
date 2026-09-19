@@ -633,3 +633,11 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
 - red: `scripts/build-lock.sh cargo test -p micold-daemon --test session_identity_env` -> `a spawn_shell session must not inherit TERMINAL_EMULATOR, whatever its bytes (FR-006)` `left: Some("JetBrains-�")` / `right: None` (4 passed; 1 failed)
 - green: the strip matches the daemon's own `std::env::vars_os()` lossily, plus the builder's UTF-8 entries (Windows adds the registry's) -> 5 passed
 - commit: `fix(031): drop a non-UTF-8 inherited identity variable too (U162)`
+
+## Cycle 64: U163 M4 review fix, the real include diff
+
+- origin: review B round 1 F2 (MINOR): the daemon test passes include values straight in, so contract §2's row "inherited and set by the script" was held only through `Command::get_envs()`, never by a real bash diff
+- test: `crates/micold-core/tests/env_include_resolve.rs::unix::a_script_setting_an_inherited_identity_variable_still_reports_it`, re-executing itself with `FORCE_HYPERLINK=1` inherited and resolving a real script that exports it
+- passed on arrival: it guards cycle 60's strip. Mutant, `bash_command` ignoring `inherited` -> `the script's FORCE_HYPERLINK=1 is reported even though the resolver inherited the same value (contract §3): []`; restored with `git checkout` -> `env_include_resolve` 13 passed
+- Unix only: the PowerShell builders keep U67's `get_envs()` check, as this machine cannot run them
+- commit: `test(031): a real include diff reports an inherited identity variable it sets (U163)`

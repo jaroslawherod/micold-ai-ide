@@ -67,6 +67,44 @@ fn spawn_guard() -> SpawnGuard {
 mod unix {
     use super::*;
 
+    /// Feature 031, contract session-terminal-identity §3 (U163): `FORCE_HYPERLINK=1` inherited
+    /// by the resolver *and* set by the script is still reported, so the session, which drops the
+    /// inherited one, gets it back from the include values. The inherited value belongs to a
+    /// re-executed copy of this test, never to this process through `set_var`.
+    #[test]
+    fn a_script_setting_an_inherited_identity_variable_still_reports_it() {
+        const CHILD: &str = "MICOLD_IDENTITY_RESOLVE_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            let _guard = spawn_guard();
+            let dir = tempfile::tempdir().unwrap();
+            let script = write_script(&dir, "script.sh", "export FORCE_HYPERLINK=1\n");
+            let (vars, outcome) = resolve(&script, dir.path(), Duration::from_secs(5));
+            assert_eq!(outcome, EnvIncludeOutcome::Success);
+            assert!(
+                vars.contains(&("FORCE_HYPERLINK".to_string(), "1".to_string())),
+                "the script's FORCE_HYPERLINK=1 is reported even though the resolver inherited \
+                 the same value (contract §3): {vars:?}"
+            );
+            return;
+        }
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "unix::a_script_setting_an_inherited_identity_variable_still_reports_it",
+                "--exact",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .env("FORCE_HYPERLINK", "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success() && stdout.contains("1 passed"),
+            "the child resolving with FORCE_HYPERLINK=1 inherited failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
     #[test]
     fn exported_variable_is_captured() {
         let _guard = spawn_guard();
