@@ -206,6 +206,25 @@ fn credentials_appear_at_the_paths_their_tools_expect() {
     }
 }
 
+/// FR-004e (BUG-006): the AI CLI sign-in share is the token file, not the CLI's directory.
+///
+/// `~/.claude` also holds the CLI's session store, which a read-only share makes unwritable, and
+/// settings and hooks the host's own `claude` runs, which a writable share hands to the session.
+/// The token file is the only part of it the sandbox needs.
+#[test]
+fn the_ai_cli_sign_in_share_is_the_token_file_not_the_cli_directory() {
+    let profile = SandboxProfile {
+        credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
+        ..SandboxProfile::default()
+    };
+    let mounts = build(&profile);
+    assert_eq!(
+        mounts.credentials[0].host,
+        Path::new("/home/u/.claude/.credentials.json"),
+        "the sign-in share must name the token file and nothing around it"
+    );
+}
+
 /// Daemon state is the host's own data directory, bind-mounted.
 ///
 /// It is deliberately *not* a runtime-managed volume: the client has to read `projects.json` to

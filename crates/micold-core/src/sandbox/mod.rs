@@ -249,7 +249,7 @@ pub enum CredentialShare {
     SshAgent,
     /// The git credential helper's store.
     GitCredentials,
-    /// The AI CLI's own authentication material.
+    /// The AI CLI's sign-in token file, and only that file (FR-004e).
     AiCliAuth,
 }
 
@@ -491,7 +491,9 @@ pub struct CredentialLayout {
     pub ssh_agent: Option<PathBuf>,
     /// The git credential helper's store.
     pub git_credentials: Option<PathBuf>,
-    /// The AI CLI's own authentication material.
+    /// The AI CLI's sign-in token file (`~/.claude/.credentials.json`), and nothing else of the
+    /// CLI's directory: the rest is its session store and the hooks the host's `claude` runs
+    /// (FR-004e).
     pub ai_cli_auth: Option<PathBuf>,
 }
 
@@ -506,7 +508,7 @@ impl CredentialLayout {
             git_config: Some(home.join(".gitconfig")),
             ssh_agent: ssh_auth_sock.map(Path::to_path_buf),
             git_credentials: Some(home.join(".git-credentials")),
-            ai_cli_auth: Some(home.join(".claude")),
+            ai_cli_auth: Some(home.join(".claude").join(".credentials.json")),
         }
     }
 
