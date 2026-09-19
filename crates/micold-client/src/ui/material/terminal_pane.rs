@@ -533,6 +533,9 @@ pub(crate) fn hover_refresh(
     }
     if cached.grid_version == key.grid_version {
         HoverRefresh::Reuse
+    } else if cached.rows.is_empty() {
+        // Off the grid, nothing was read: no row can vouch that the cell is still empty.
+        HoverRefresh::Resolve
     } else if rows_hash(&cached.rows) == cached.rows_hash {
         HoverRefresh::Revalidated
     } else {
