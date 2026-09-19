@@ -8,8 +8,9 @@
 
 Feature 029 remembers every title an AI CLI records, and a session with none stays `Pending` —
 "New session" — for good. The four sessions in 029 BUG-001 have real conversations and no
-`ai-title`; the 44 old Copilot sessions on the development machine have a `summary:` title the
-application never reads.
+`ai-title`; a Copilot session from 1.0.36 or older has a `summary:` title the application never
+reads (the 44 such sessions on the development machine are not listed at all, so FR-016 is verified
+on listed-session fixtures; D10).
 
 The change, all behind seams that already exist:
 

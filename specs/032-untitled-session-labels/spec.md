@@ -47,6 +47,10 @@ into 029 (BUG-001 *Size decision*).
   `name:` read as that session's title? → A: Yes ("read the old copilot summary as the name
   too"). It is Copilot's own title: `name:` wins when both are present, and `summary:` ranks above
   a derived label (FR-016). _(decided by user)_
+- Q: The 44 old Copilot sessions are in no Copilot index and are not rows at all; should the
+  application also discover them by scanning Copilot's session directories? → A: No. FR-016 applies
+  to the Copilot sessions the application lists; US1 #6, SC-008 and SC-009 are verified with
+  listed-session fixtures, and discovery is unchanged. _(decided by user)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -90,9 +94,10 @@ shows a label taken from that conversation, not "New session".
    **When** I view the project without opening that session,
    **Then** the row shows a label taken from that session's first turn, on the same rules as a
    `claude` session.
-6. **Given** a GitHub Copilot session run by Copilot 1.0.36 or older, whose `workspace.yaml` holds a
-   `summary:` and no `name:` (all 44 such sessions on the development machine, see *Copilot
-   evidence*),
+6. **Given** a GitHub Copilot session **that the application lists** (it is in Copilot's index for
+   the location, or already in the application's own records), run by Copilot 1.0.36 or older, whose
+   `workspace.yaml` holds a `summary:` and no `name:` (the shape of all 44 such sessions on the
+   development machine, see *Copilot evidence*),
    **When** I view the project without opening that session,
    **Then** the row shows that `summary:` as the session's title, not "New session" and not a
    derived label (FR-016).
@@ -302,13 +307,16 @@ reads only the `name:` key of `workspace.yaml`:
   one `user.message` and no `name:`; 1 has no `user.message`.
 - All 44 were run by Copilot 1.0.10–1.0.36, and every one of them has a one-line `summary:` key
   instead of `name:` in `workspace.yaml`. Every session run by 1.0.37 or later that holds a
-  `user.message` has a `name:`. Today all 44 read "New session"; under FR-016 all 44 show their
-  `summary:` as the title. The two multi-line (`summary: |-`) values on the machine both sit beside
-  a `name:`.
-- So no recorded Copilot session on the machine needs a derived label today. The label rule
-  (FR-002, FR-012) still applies to a Copilot session with neither key, which is every running
-  session until Copilot summarises it (US3), and it is measured on the 44 sessions' own first turns
-  with their `summary:` ignored (SC-009).
+  `user.message` has a `name:`. The two multi-line (`summary: |-`) values on the machine both sit
+  beside a `name:`.
+- **None of the 44 is a row today** (found in plan review, 2026-09-19): Copilot's per-location index
+  (`~/.copilot/sidebar-sessions-state/*.json`, 4 ids in total on the machine) lists none of them, the
+  application discovers Copilot sessions only through that index (026 research R3), and the
+  application's own records hold none of them. FR-016 therefore applies to Copilot sessions the
+  application lists; discovering sessions missing from Copilot's index is out of scope (D10).
+- The label rule (FR-002, FR-012) applies to a listed Copilot session with neither key, which is
+  every running session until Copilot summarises it (US3). The 44 sessions' records are the shapes
+  its fixtures are modelled on (SC-008, SC-009).
 - The first qualifying `user.message` is at record 2–10 in all 44, well inside any bound FR-014 sets
   for `claude`'s record 7–8.
 - Of 972 `user.message` records, 12 carry a `source` (skill context, `instruction-discovery`) and 28
@@ -350,11 +358,12 @@ A running Copilot session reads "New session" until Copilot writes `name:` (or, 
 - **SC-006**: Adding labels adds no perceptible delay: the session list of a project with 50 sessions,
   including conversations of more than 1,000 records, appears as quickly after this change as before.
 - **SC-007**: A running untitled session shows its label within 60 seconds of the first typed prompt.
-- **SC-008**: Of the 44 Copilot sessions on the development machine that hold a `user.message` and a
-  `summary:` but no `name:` (*Copilot evidence*), 44 show their `summary:` as the title after one
-  restart, where 0 do today, and none shows a derived label.
-- **SC-009**: For the same 44 sessions with their `summary:` ignored, the label rule yields each
-  session's first qualifying `content` (FR-002, FR-012, FR-014): 44 of 44.
+- **SC-008**: Every listed Copilot session whose `workspace.yaml` holds a one-line `summary:` and no
+  `name:` shows that `summary:` as its title after one restart, and none shows a derived label;
+  verified on listed-session fixtures shaped on the 44 sessions of *Copilot evidence*.
+- **SC-009**: Every listed Copilot session with a typed turn and neither `name:` nor a readable
+  `summary:` shows its first qualifying `content`, shaped by FR-003, as its label (FR-002, FR-012,
+  FR-014); verified on listed-session fixtures shaped on the same 44 sessions' first turns.
 
 ## Assumptions
 
@@ -383,3 +392,6 @@ A running Copilot session reads "New session" until Copilot writes `name:` (or, 
   title. That is a candidate 029 bug, recorded in the BUG-001 ledger's follow-ups.
 - Letting the user name a session by hand.
 - Changing how `pi` labels a session (029-pi-cli-provider FR-011).
+- Discovering Copilot sessions that Copilot's own per-location index no longer lists (the 44 old
+  sessions of *Copilot evidence*). Surfacing them would need a scan of every
+  `session-state/*/workspace.yaml` per project open (D10).

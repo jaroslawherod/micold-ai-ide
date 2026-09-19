@@ -35,8 +35,10 @@ title, a label, or neither. Pass:
 
 - the four BUG-001 sessions (`9a536c7e`, `2dc1bd13`, `e0912fd9`, `f2e8ef75`) print four different
   labels, `9a536c7e` reading `/speckit-autopilot` (SC-001, SC-005);
-- 44 Copilot sessions print a `summary:` title and no label (SC-008);
-- with titles ignored, those 44 print their first qualifying `content` as the label: 44/44 (SC-009);
+- the probe also prints, as evidence only, the rule's result on the 44 unlisted old Copilot sessions
+  (a `summary:` title each; a first-turn label each with titles ignored). SC-008 and SC-009 are
+  judged on listed sessions by the fixture tests in Part A (`copilot_provider.rs`,
+  `untitled_session_labels.rs`), because none of the 44 is listed (D10);
 - no conversation with a typed prompt prints "neither" (SC-002).
 
 ### B2 — The sidebar after a restart (US1, US2, SC-001, SC-003)
