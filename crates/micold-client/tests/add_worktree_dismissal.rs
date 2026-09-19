@@ -238,3 +238,40 @@ fn a_stage_reported_after_cancel_is_the_one_a_failure_names() {
         "the notification must name the stage reached after Cancel ({stage:?}), got {message:?}"
     );
 }
+
+/// A worktree as the daemon's success reply describes it.
+fn worktree_named(dir_name: &str) -> micold_core::worktree::Worktree {
+    micold_core::worktree::Worktree {
+        dir_name: dir_name.into(),
+        path: std::path::PathBuf::from("/repo/demo/.claude/worktrees").join(dir_name),
+        branch: None,
+        status: micold_core::worktree::WorktreeStatus::Valid,
+        included: false,
+    }
+}
+
+/// U9 — a create that succeeds after its form was cancelled says so, naming the worktree.
+///
+/// The user who pressed Cancel cannot know the create was not aborted unless something tells them
+/// (FR-010b): the worktree appearing in the sidebar is easy to miss, and the dialog that would
+/// have closed on success is already gone.
+#[test]
+fn a_create_succeeding_after_cancel_is_reported_naming_the_worktree() {
+    let mut state = cancelled_mid_create();
+
+    state.update(Message::WorktreeForm(FormMsg::Created(worktree_named(
+        "feat-probe-two",
+    ))));
+
+    let (level, message) = notice(&state)
+        .expect("a create that succeeded after its form closed must still be reported (FR-010b)");
+    assert_eq!(
+        level,
+        micold_core::notify::Level::Info,
+        "a successful create is not an error"
+    );
+    assert!(
+        message.contains("feat-probe-two"),
+        "the notification must name the created worktree, got {message:?}"
+    );
+}

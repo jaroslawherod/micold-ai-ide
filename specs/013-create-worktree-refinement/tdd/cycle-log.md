@@ -110,3 +110,14 @@ existed and failed before the implementation.
   Crate suite -> 1807 passed, 0 failed, 2 ignored (139 binaries)
 - refactor: none needed
 - commit: `fix(013): a stage reported after Cancel is the one a failure names (BUG-001 U8)`
+
+## Cycle 9: U9 a create succeeding after Cancel is reported naming the worktree
+
+- test: `crates/micold-client/tests/add_worktree_dismissal.rs::a_create_succeeding_after_cancel_is_reported_naming_the_worktree` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test add_worktree_dismissal a_create_succeeding_after_cancel_is_reported_naming_the_worktree -- --exact`
+  -> panicked at `add_worktree_dismissal.rs:267`: `a create that succeeded after its form closed must still be reported (FR-010b)` (1 failed)
+- green: `created` takes the cancelled create and, with no form open, adds
+  `notifications::info("Worktree \"<dir_name>\" created.")` after `WorktreeCreated`. File -> 9 passed.
+  Crate suite -> 1808 passed, 0 failed, 2 ignored (139 binaries)
+- refactor: none needed
+- commit: `fix(013): a create that succeeds after Cancel is announced (BUG-001 U9)`

@@ -648,11 +648,19 @@ pub fn create_stage_changed(
 
 /// A worktree was created (feature 005, FR-017).
 ///
-/// Idempotent by directory name, and sorted so it lands where the list would have put it.
+/// Idempotent by directory name, and sorted so it lands where the list would have put it. A form
+/// cancelled mid-create never saw it succeed, so the success is announced (feature 013, FR-010b).
 pub fn created(state: &mut crate::app::State, worktree: Worktree) -> Vec<crate::features::Outcome> {
+    let owed = state.worktree_form.cancelled_create.take();
+    let announce = owed.is_some() && state.worktree_form.form.is_none();
     state.worktree_form.form = None;
     state.worktree_form.worktree_error = None;
-    vec![crate::features::Outcome::WorktreeCreated(worktree)]
+    let notice = announce.then(|| {
+        crate::features::notifications::info(format!("Worktree \"{}\" created.", worktree.dir_name))
+    });
+    let mut outcomes = vec![crate::features::Outcome::WorktreeCreated(worktree)];
+    outcomes.extend(notice);
+    outcomes
 }
 
 /// The worktree list changed, so a create failure shown against the old one is stale (T067a-4).
