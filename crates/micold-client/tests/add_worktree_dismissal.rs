@@ -122,3 +122,20 @@ fn a_form_whose_create_failed_is_dismissed_by_escape_again() {
         "a create that has failed is over; the scrim must close its form again"
     );
 }
+
+/// U5 — the in-dialog Cancel still closes a form whose create is in flight.
+///
+/// With Escape and the scrim both refused, the button is the only way out (FR-010a). It closes
+/// the overlay and nothing else: the create runs on in the session service (FR-010b, ledger D1).
+#[test]
+fn the_in_dialog_cancel_closes_a_form_whose_create_is_in_flight() {
+    let mut state = form_creating();
+
+    state.update(Message::WorktreeForm(FormMsg::Cancelled));
+
+    assert!(
+        state.worktree_form.form.is_none(),
+        "Cancel must close the add-worktree form even while its create runs — it is the only way \
+         out once Escape and the scrim are refused (FR-010a)"
+    );
+}
