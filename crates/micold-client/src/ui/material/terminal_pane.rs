@@ -4102,6 +4102,28 @@ mod tests {
             assert_eq!(hover.resolved, Some(a_link()));
         }
 
+        /// U161. A pointer past the grid's edge read no rows, so no row hash can say the grid grew
+        /// under it (a resize that catches up with a wider pane): re-resolve on every grid move.
+        #[test]
+        fn a_hover_off_the_grid_re_resolves_when_the_grid_moves() {
+            let ctx = local();
+            let off_grid = HoverCache {
+                rows: Vec::new(),
+                resolved: None,
+                ..cached((90, 0), (1, 1), 7)
+            };
+            assert_eq!(
+                hover_refresh(Some(&off_grid), &key((90, 0), (1, 1), &ctx), |_| 7),
+                HoverRefresh::Reuse,
+                "nothing moved"
+            );
+            assert_eq!(
+                hover_refresh(Some(&off_grid), &key((90, 0), (1, 2), &ctx), |_| 7),
+                HoverRefresh::Resolve,
+                "the grid moved, and no row vouches for the cell"
+            );
+        }
+
         /// U121.
         #[test]
         fn a_switch_of_session_or_context_re_resolves() {
