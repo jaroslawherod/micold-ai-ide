@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/the-name-of-past-session-is-still-not-shown
 - **Started**: 2026-09-19
 - **Phase**: 2-clarify
-- **Next step**: Phase 2 clarify: apply D2–D4 to spec.md, then run `speckit-clarify` rounds until clean.
+- **Next step**: Phase 2 clarify: run `speckit-clarify` rounds until clean (D2–D4 applied).
 
 ## Pull requests
 
@@ -30,11 +30,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | D3 | 2-clarify | FR-006: does a later title replace the label? | Yes, the title replaces the label on the row and in what is remembered. | decided by user | BUG-001 recommendation |
 | D4 | 2-clarify | FR-012: is GitHub Copilot in scope? | Yes: `claude` and Copilot both get the fallback label (user chose over the recommended claude-only). | decided by user | spec.md FR-012 |
 
-### Open `[NEEDS CLARIFICATION]` for Phase 2
-
-- FR-002: which typed text is the label (first plain typed prompt; first turn incl. slash-command args or command name; `pi` precedent first user message).
-- FR-006: whether a title that arrives after a label has been shown replaces it.
-- FR-012: whether GitHub Copilot is in scope (`pi` already covered by 029-pi-cli-provider FR-011).
+D2–D4 applied to spec.md (FR-002, FR-006, FR-012 + *Copilot evidence*, US1 #5, SC-008) on 2026-09-19.
 
 ## Declined review findings
 
@@ -55,4 +51,5 @@ None (the 2026-09-19 FR-002/FR-006/FR-012 escalation was answered: D2–D4).
 ## Follow-ups not done
 
 - Carried from 029 BUG-001 ledger: `custom-title` / `agent-name` records ignored by `ClaudeProvider::parse_title` (candidate 029 BUG, out of scope here).
+- Found in Phase 2: `CopilotProvider::read_title` reads only `name:`; Copilot ≤1.0.36 wrote `summary:` instead (44 sessions on the dev machine). Candidate 029 bug, out of scope (spec *Out of scope*).
 - Carried from 029 BUG-001 ledger: unverified `micold_time_track` untitled rows whose transcripts hold `ai-title`s.
