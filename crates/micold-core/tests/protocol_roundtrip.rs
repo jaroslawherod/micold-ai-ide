@@ -568,6 +568,18 @@ fn envelope_header_round_trips_and_rejects_garbage() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
+fn a_session_summary_carrying_a_derived_label_round_trips_on_both_wires() {
+    // Feature 032: a label derived from the first turn rides `SessionSummary.title` as itself, never
+    // as a title, so a client can tell the two apart after a restart (C8.4).
+    let summary = SessionSummary {
+        title: SessionLabel::Derived("/speckit-autopilot".into()),
+        ..sample_summary()
+    };
+    json_roundtrip(&summary);
+    postcard_roundtrip(&summary);
+}
+
+#[test]
 fn a_worktree_snapshot_without_the_provenance_flag_decodes_as_not_user_created() {
     let json = r#"{
         "dir_name": "feat-x",

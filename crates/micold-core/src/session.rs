@@ -72,13 +72,25 @@ impl AiCli {
     pub const ALL: [AiCli; 3] = [AiCli::ClaudeCode, AiCli::Copilot, AiCli::Pi];
 }
 
-/// The sidebar label for a session — extracted from `claude`, never user-entered (FR-011a).
+/// The sidebar label for a session — read from the AI CLI's own records, never user-entered
+/// (FR-011a).
+///
+/// Three kinds, in rising precedence: nothing yet, a label derived from the first turn, the CLI's
+/// own title (feature 032, FR-005). A title replaces a label; a label only ever fills a `Pending`
+/// session; nothing goes back to `Pending` (data-model *Transitions*).
+///
+/// `Derived` is declared **last** so the variant indices `Pending` and `Named` already have on the
+/// wire do not move (postcard encodes the index).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SessionLabel {
-    /// No title from `claude` yet; show a neutral placeholder.
+    /// No title and no label yet; show a neutral placeholder.
     Pending,
-    /// The `claude`-provided session title.
+    /// The title the session's AI CLI recorded for it.
     Named(String),
+    /// A label derived from the first thing the user typed in the conversation (feature 032,
+    /// FR-002), for a session its AI CLI never titled. Shown exactly like a title (D7), and
+    /// replaced by one when it arrives (FR-006).
+    Derived(String),
 }
 
 impl SessionLabel {
@@ -87,6 +99,7 @@ impl SessionLabel {
         match self {
             SessionLabel::Pending => "New session",
             SessionLabel::Named(name) => name,
+            SessionLabel::Derived(label) => label,
         }
     }
 }
@@ -509,9 +522,25 @@ impl Session {
         self.lifecycle = SessionLifecycle::Running;
     }
 
-    /// Update the label from a `claude`-provided title (FR-011a).
+    /// Update the label from the AI CLI's title (FR-011a). Replaces a derived label too: a title
+    /// always outranks one (feature 032, FR-006).
     pub fn set_title(&mut self, title: impl Into<String>) {
         self.label = SessionLabel::Named(title.into());
+    }
+
+    /// Give a session its first-turn label (feature 032, FR-001) — only when it has neither a
+    /// title nor a label yet. Returns whether the label changed, so the caller persists only then.
+    ///
+    /// A `Named` session keeps its title (FR-005), a `Derived` one keeps the label it was first
+    /// given (FR-007), and an empty label is refused: "New session" is the truthful reading of a
+    /// conversation with nothing typed in it (FR-004).
+    pub fn set_derived_label(&mut self, label: impl Into<String>) -> bool {
+        let label = label.into();
+        if label.is_empty() || !matches!(self.label, SessionLabel::Pending) {
+            return false;
+        }
+        self.label = SessionLabel::Derived(label);
+        true
     }
 
     /// Handle an UNEXPECTED process exit (crash / external kill), applying the crash-loop

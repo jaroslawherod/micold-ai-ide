@@ -1,0 +1,4 @@
+{"type": "file-history-snapshot", "messageId": "m-1", "snapshot": {"trackedFileBackups": {}}, "isSnapshotUpdate": false}
+{"type": "user", "message": {"role": "user", "content": "<command-message>speckit-bugfix-report</command-message>\n<command-name>/speckit-bugfix-report</command-name>\n<command-args>the name of past session is still not shown</command-args>"}}
+{"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "Base directory for this skill: /home/u/.claude/skills/speckit-bugfix-report\n\n# speckit-bugfix-report\n\nRun the flow."}]}, "isMeta": true}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Tracing the bug."}]}}

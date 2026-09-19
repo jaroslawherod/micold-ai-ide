@@ -1,0 +1,2 @@
+{"type": "file-history-snapshot", "messageId": "m-1", "snapshot": {"trackedFileBackups": {}}, "isSnapshotUpdate": false}
+{"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "[Image #1] what is wrong with this row?"}, {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "iVBORw0KGgo="}}]}}

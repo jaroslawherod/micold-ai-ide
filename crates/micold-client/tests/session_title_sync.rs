@@ -187,3 +187,114 @@ fn a_copilot_session_with_no_title_yet_keeps_its_placeholder() {
 
     assert_eq!(state.active_sessions()[0].label.display(), "New session");
 }
+
+// ---------------------------------------------------------------------------------------
+// Feature 032 (T009) — a label the daemon derived reaches the row like a title does (C8.5)
+// ---------------------------------------------------------------------------------------
+
+mod derived_labels {
+    use micold_client::app::State;
+    use micold_client::catalog_sync::reconcile_catalog;
+    use micold_core::protocol::messages::{
+        ActivitySignal, CatalogSnapshot, ProjectSnapshot, SessionSummary, WireLifecycle,
+    };
+    use micold_core::session::{AiCli, SessionId, SessionLabel};
+    use std::path::PathBuf;
+    use uuid::Uuid;
+
+    const FIRST_TURN: &str = "/speckit-autopilot";
+
+    fn id() -> SessionId {
+        SessionId::from_uuid(Uuid::from_u128(0x032))
+    }
+
+    /// A snapshot carrying one idle session whose summary reads `title`.
+    fn snapshot(title: SessionLabel) -> CatalogSnapshot {
+        CatalogSnapshot {
+            schema_version: 1,
+            last_active: Some(PathBuf::from("/a")),
+            projects: vec![ProjectSnapshot {
+                path: PathBuf::from("/a"),
+                display_name: "a".into(),
+                is_git_repo: true,
+                available: true,
+                worktrees: Vec::new(),
+                sessions: vec![SessionSummary {
+                    id: id(),
+                    worktree_dir: None,
+                    title,
+                    lifecycle: WireLifecycle::Idle,
+                    activity: ActivitySignal::Unknown,
+                    provider: AiCli::ClaudeCode,
+                    input_serial: 0,
+                    live_shells: Vec::new(),
+                }],
+            }],
+        }
+    }
+
+    fn label_shown(core: &State) -> SessionLabel {
+        core.workspace
+            .sessions
+            .get(&PathBuf::from("/a"))
+            .and_then(|list| list.iter().find(|s| s.id == id()))
+            .map(|s| s.label.clone())
+            .expect("the session is in the client's workspace")
+    }
+
+    #[test]
+    fn a_derived_label_is_adopted_onto_a_pending_row() {
+        let mut core = State::default();
+        reconcile_catalog(&mut core, &snapshot(SessionLabel::Pending), false);
+        assert_eq!(label_shown(&core), SessionLabel::Pending);
+
+        reconcile_catalog(
+            &mut core,
+            &snapshot(SessionLabel::Derived(FIRST_TURN.into())),
+            false,
+        );
+        assert_eq!(
+            label_shown(&core),
+            SessionLabel::Derived(FIRST_TURN.into()),
+            "a label the daemon derived after the row was listed reaches it on the next snapshot, \
+             the way a title does (C8.5)"
+        );
+    }
+
+    #[test]
+    fn a_title_replaces_a_derived_label_on_the_row() {
+        let mut core = State::default();
+        reconcile_catalog(
+            &mut core,
+            &snapshot(SessionLabel::Derived(FIRST_TURN.into())),
+            false,
+        );
+        reconcile_catalog(
+            &mut core,
+            &snapshot(SessionLabel::Named("Autopilot the spec flow".into())),
+            false,
+        );
+        assert_eq!(
+            label_shown(&core),
+            SessionLabel::Named("Autopilot the spec flow".into()),
+            "a title the CLI records later replaces the label (FR-006)"
+        );
+    }
+
+    #[test]
+    fn a_pending_summary_never_clears_a_derived_label() {
+        let mut core = State::default();
+        reconcile_catalog(&mut core, &snapshot(SessionLabel::Pending), false);
+        reconcile_catalog(
+            &mut core,
+            &snapshot(SessionLabel::Derived(FIRST_TURN.into())),
+            false,
+        );
+        reconcile_catalog(&mut core, &snapshot(SessionLabel::Pending), false);
+        assert_eq!(
+            label_shown(&core),
+            SessionLabel::Derived(FIRST_TURN.into()),
+            "nothing moves a row back to \"New session\" (C6.6, C8.5)"
+        );
+    }
+}

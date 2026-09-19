@@ -25,6 +25,8 @@ sandbox-real-runtime = []
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
+# Feature 032: count a first-turn label in user-perceived characters (FR-003).
+unicode-segmentation = { workspace = true }
 directories = { workspace = true }
 postcard = { workspace = true }
 # Shared client<->daemon framing codec (protocol::codec). `tokio-util`'s `LengthDelimitedCodec`

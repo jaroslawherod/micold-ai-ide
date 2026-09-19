@@ -1,0 +1,2 @@
+{"type": "file-history-snapshot", "messageId": "m-1", "snapshot": {"trackedFileBackups": {}}, "isSnapshotUpdate": false}
+{"type": "user", "message": {"role": "user", "content": "<command-name>/model</command-name>\n            <command-message>model</command-message>\n            <command-args></command-args>"}}
