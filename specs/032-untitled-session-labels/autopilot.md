@@ -7,14 +7,14 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: fix/the-name-of-past-session-is-still-not-shown
 - **Started**: 2026-09-19
-- **Phase**: 1-spec
-- **Next step**: Wait for PR 1's `ci complete`, merge on green, then Phase 2 clarify (FR-002, FR-006, FR-012).
+- **Phase**: 2-clarify
+- **Next step**: Phase 2 clarify: apply D2–D4 to spec.md, then run `speckit-clarify` rounds until clean.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #386 | Spec (carries 029 BUG-001 record) | open | — |
+| #386 | Spec (carries 029 BUG-001 record) | MERGED 2026-09-19 | — |
 
 ## Milestones
 
@@ -26,6 +26,9 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | 1-spec | Where does the fix go? | A new spec, 032, on this worktree's branch. The 029 BUG-001 size decision found the fix is new behaviour (contradicts 029 FR-004). | agent-resolved | 029 BUG-001.md §Size decision; BUG-001.autopilot.md D2 |
+| D2 | 2-clarify | FR-002: which typed text is the label? | (b) the first turn: a slash command's arguments, else the command name; otherwise the prompt text. | decided by user | spec.md *Label-source evidence* |
+| D3 | 2-clarify | FR-006: does a later title replace the label? | Yes, the title replaces the label on the row and in what is remembered. | decided by user | BUG-001 recommendation |
+| D4 | 2-clarify | FR-012: is GitHub Copilot in scope? | Yes: `claude` and Copilot both get the fallback label (user chose over the recommended claude-only). | decided by user | spec.md FR-012 |
 
 ### Open `[NEEDS CLARIFICATION]` for Phase 2
 
@@ -47,7 +50,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 ## Open escalation
 
-None.
+None (the 2026-09-19 FR-002/FR-006/FR-012 escalation was answered: D2–D4).
 
 ## Follow-ups not done
 
