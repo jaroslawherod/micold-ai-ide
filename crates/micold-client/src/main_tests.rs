@@ -3046,3 +3046,22 @@ fn opening_the_start_menu_asks_about_its_locations_directory() {
          the environment a session there is spawned with (FR-003b)"
     );
 }
+
+/// U12: Settings chooses the default for every directory, so no directory is in play and the
+/// request names none — the service answers it for the home directory.
+#[test]
+fn opening_settings_asks_about_no_directory() {
+    let mut app = base_app();
+    app.core.workspace.active = Some(PathBuf::from("/repo/demo"));
+    let mut rx = connected_with_outbox(&mut app);
+
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+
+    assert_eq!(
+        availability_asked_for(&mut rx),
+        vec![None],
+        "Settings is not about the active project's directory, so it must not ask about it: the \
+         default applies everywhere, and the service answers a request with no directory for the \
+         home directory (FR-003b)"
+    );
+}

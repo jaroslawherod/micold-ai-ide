@@ -210,3 +210,14 @@ failed before the implementation.
   0 failed (a first run died on `No space left on device`; another session's `cargo sweep`
   reclaimed the disk and the re-run is the one recorded)
 - refactor: none
+
+## Cycle 12: U12 opening Settings asks about no directory
+
+- test: `crates/micold-client/src/main_tests.rs::tests::opening_settings_asks_about_no_directory` (new)
+- red: passed on first run — cycle 11's green left Settings on `None`. Deliberate mutant:
+  `persist.rs` passing `app.core.workspace.active.clone()`.
+  `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide opening_settings_asks_about_no_directory`
+  -> `left: [Some("/repo/demo")]` / `right: [None]` (1 failed). Mutant reverted (`git diff` on
+  `persist.rs` empty); binary -> 168 passed
+- green: no production change
+- refactor: none
