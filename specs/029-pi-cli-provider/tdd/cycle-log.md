@@ -167,3 +167,25 @@ failed before the implementation.
 - refactor: none
 - notes: T063 was ticked one commit early (at cycle 8, before A3 ran); it is correct from this
   commit on
+
+## Cycle 10: A2 / U8 the launch gate uses the spawn-environment `PATH`
+
+- test: `crates/micold-daemon/tests/session_start.rs::a_cli_only_on_the_env_include_path_starts_rather_than_being_reported_missing` (new; one test for both ids — A2 is the observable start, U8 the gate that decides it; the stub's argv log also shows the spawn resolved `pi` on the session's `PATH`)
+- red: `scripts/build-lock.sh cargo test --test session_start a_cli_only_on_the_env_include_path_starts_rather_than_being_reported_missing -- --exact`
+  -> `Err(Custom { kind: NotFound, error: "Pi Coding Agent isn't installed. Install it, or start
+  this session on another AI CLI." })` (1 failed)
+- green: `start_session`'s gate asks `provider.is_available(&self.spawn_path_for(&plan.cwd))`.
+  `spawn_path_for` is extracted from `ai_clis_available_in`, so the offer and the gate share one
+  resolution. The portable-pty spawn needed no change: `CommandBuilder` resolves the program with
+  its own `PATH` entry, which the env-include result sets.
+- regressions, fixed in this cycle: `session_start.rs::starting_a_session_whose_cli_is_absent_reports_it_and_spends_no_restart_budget`,
+  `session_start.rs::a_missing_cli_is_advised_on_where_sessions_run_and_on_what_is_being_started`,
+  `catalog_join.rs::the_reason_a_start_failed_reaches_the_client_as_something_to_read`,
+  `resume_failure_reported.rs::a_resume_that_fails_reaches_the_client`. Their catalogs loaded
+  default settings — env-include on, sourcing the developer's own `~/.bashrc`, which on this
+  machine puts `pi` and `copilot` on `PATH` — so with the gate now walking that `PATH` the CLI they
+  hide was found. Not weakened: each file's `catalog_with_ai_cli_session` now writes
+  env-include-off settings (session_start's only when the test wrote none), which restores the
+  premise their `NoCliOnPath` guards state. Assertions untouched.
+- suite: `session_start` -> 19 passed; daemon crate -> 354 passed, 0 failed
+- refactor: `spawn_path_for` extraction (above), done while green

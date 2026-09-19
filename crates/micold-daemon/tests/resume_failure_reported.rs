@@ -122,6 +122,18 @@ fn catalog_with_ai_cli_session(
     id: SessionId,
     cli: AiCli,
 ) -> Catalog {
+    // Environment-include off: the default sources the developer's own `~/.bashrc`, and since 029
+    // BUG-001 the launch gate walks the `PATH` that yields (FR-003b), so a machine whose `.bashrc`
+    // puts the CLI on `PATH` would no longer be the machine without it that this file describes.
+    {
+        use micold_core::settings::{Settings, SettingsStore};
+        JsonFileSettingsStore::at(store_dir.join("settings.json"))
+            .save(&Settings {
+                env_include_enabled: false,
+                ..Settings::default()
+            })
+            .unwrap();
+    }
     let mut sessions = BTreeMap::new();
     sessions.insert(
         project_dir.to_path_buf(),
