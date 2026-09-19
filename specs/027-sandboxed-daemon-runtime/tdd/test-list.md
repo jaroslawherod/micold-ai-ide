@@ -82,6 +82,22 @@ FR-036b, SC-004c, US6 scenario 9, S-6, S-7 (`data-model.md` §7), and C-8's call
 | U30 | A started sandbox marked `Stale` before its service answered is still coming up   | FR-036b      | example | DONE | `main::tests::a_started_sandbox_marked_stale_before_its_service_answered_is_still_coming_up` |
 | U31 | A service that answered with a changed mount set, marked `Stale`, is a lost connection when it goes away | FR-027 | example | DONE | `main::tests::a_service_that_answered_with_a_changed_mount_set_and_went_away_is_a_lost_connection` (pin; red by mutant N3) |
 
+## BUG-006 — the AI CLI keeps its sessions inside the sandbox (`tasks.md` Phase 26)
+
+Added 2026-09-19. Traces are FR-004e, FR-009a, rule N-4 (`data-model.md`) and research R11. The
+acceptance criterion SC-012a needs a real runtime and the shared `micold-daemon:dev` image, so it
+runs as T213 in the sandbox suite, outside this loop (same arrangement as T181 above).
+
+| id  | behavior                                                                                             | traces          | kind             | state   | test |
+| --- | ---------------------------------------------------------------------------------------------------- | --------------- | ---------------- | ------- | ---- |
+| U32 | The AI CLI sign-in share mounts `~/.claude/.credentials.json`, never the `~/.claude` directory        | FR-004e         | example          | PENDING |      |
+| U33 | The AI CLI sign-in mount is read-write, and every other credential mount stays read-only             | N-4, FR-004e    | example          | PENDING |      |
+| U34 | With the sign-in shared, the mount set names `<sandbox-home>/.claude` as a directory to create first | R11, FR-004d    | example          | PENDING |      |
+| U35 | A bring-up creates the directories the mount set names before it runs the runtime                    | R11, FR-004d    | example          | PENDING |      |
+| U36 | Under the sandboxed placement, the boot prune keeps a session the host has no conversation for       | FR-009a         | example          | PENDING |      |
+| U37 | Under the host placement, the boot prune still drops a session with no conversation                  | FR-009a         | characterization | PENDING |      |
+| U38 | With the sign-in shared, the sharing caution says a session can use and replace the sign-in token    | FR-004e, FR-004b | example         | PENDING |      |
+
 ## Invariants and edge cases still to place
 
 - none

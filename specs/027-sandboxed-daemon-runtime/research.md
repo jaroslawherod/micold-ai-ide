@@ -354,3 +354,40 @@ limit that varies — but that is an observation, not something the code assumes
 **Alternatives considered.** A static per-runtime capability table (rejected: goes stale, and lies
 confidently). Attempting each limit and interpreting the failure (rejected: a failed container start
 is an awful place to discover a settings problem, and the error text is not stable enough to parse).
+
+## R11 — Can `claude` refresh a sign-in token that is a single-file bind mount? *(BUG-006, T209)*
+
+**Decision.** Yes. `AiCliAuth` mounts `~/.claude/.credentials.json` alone, read-write. The
+`CLAUDE_CONFIG_DIR` fallback in `plan.md` is not needed.
+
+**Evidence (2026-09-19).** `claude` writes its storage files through one atomic writer. The writer
+writes a temp file next to the target and renames it over the target. When the target is a bind
+mount, the rename fails with `EBUSY` because the target is a mount point. The writer then falls back
+to writing the target in place, and the write reaches the host file.
+
+- Host `claude` 2.1.278 under `bwrap`, with a single file bind-mounted over `$HOME/.claude.json`,
+  traced with `strace -e rename`: each save shows
+  `rename(".../.claude.json.tmp.<pid>.<hex>", ".../.claude.json") = -1 EBUSY (Device or resource busy)`,
+  and the bind-mount source then holds the new config (`"firstStartVersion": "2.1.278"`).
+- The image's pinned `claude` 2.1.247 (`micold-daemon:dev`), run with `docker` and
+  `-v <file>:/h/.claude.json:rw`: the host file afterwards holds `"firstStartVersion": "2.1.247"`.
+
+The evidence covers `.claude.json`, not `.credentials.json`. The binary saves credentials with the
+same writer (`write` calls `Rn(path, json, 0o600)`, which is the temp-and-rename helper with the
+in-place fallback), but no token refresh was triggered, because that needs a live sign-in.
+T213 and T215 cover the credentials file with a real token.
+
+**Consequences for T211.**
+
+- The runtime creates a missing bind-mount target and its missing parent directories as root. If
+  `<state>/sandbox-home/.claude` does not exist before `create`, the runtime creates it root-owned,
+  and `claude` again cannot write its sessions. The client creates that directory as the user before
+  `create`, as it already does for `sandbox-home` itself (FR-004d).
+- The in-place fallback is not atomic. A crash in the middle of a write can leave a truncated token
+  file on the host. The host `claude` then asks for a new sign-in, and nothing else is lost.
+- `claude` serialises its storage writes with a `.storage-write` lock in its config directory. The
+  sandbox's lock is under `<state>/sandbox-home/.claude`, and the host's is under `~/.claude`, so
+  they do not exclude each other. If the host and the sandbox refresh at the same moment, one of
+  them can hold a token the other has already rotated away, and that side asks for a new sign-in.
+  This is accepted and documented (T214). Sharing the lock would mean sharing the directory, which
+  FR-004e forbids.

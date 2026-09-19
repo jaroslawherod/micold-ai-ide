@@ -427,6 +427,46 @@ without stopping it, and its service is still coming up (FR-036b). `on_connected
 (`answered()`) before `adopt_mount_set` can mark it `Stale`, so a mount-set change is always
 past it (FR-027). See the FR-036b note in `spec.md` and U30/U31.
 
+### The AI CLI keeps its sessions inside the sandbox (FR-004e, FR-009a, SC-012a)
+
+`CredentialLayout::conventional` set `ai_cli_auth` to `~/.claude`, and `argv::mount_args` mounts
+every credential `:ro` at its host path. That path is under `HOME`, so the mount covers the
+`.claude` directory of `HomeMount` (FR-004d), which is exactly where `claude` writes its
+transcripts, history and refreshed token. `claude` detects the read-only directory and warns that
+its state will be lost. Separately, the client's boot prune (`shell/persist.rs::prune_empty_sessions`,
+called from `shell/startup.rs:149`) asks `ClaudeProvider::config_dir()`, which is the **host's**
+`~/.claude`. Under sandboxed placement that is the wrong machine's answer, for every CLI and with
+or without the share.
+
+The approach:
+
+- **The share is the token file, and it is writable.** `ai_cli_auth` becomes
+  `~/.claude/.credentials.json`. `CredentialMount` gains a per-share mode, so this one mount is
+  `:rw` and the other three stay `:ro`. `argv`'s "read-only without exception" comment changes with
+  it. A single-file bind mount survives an in-place write but not a write-then-rename, so T209 must
+  prove which one `claude` does before T211 relies on it. If `claude` renames, the fallback is a
+  directory the application owns: the token file lives there, and `claude` finds it through
+  `CLAUDE_CONFIG_DIR`. That fallback is decided in T209, not guessed here.
+- **Not a copy, and not the whole directory.** A copy refreshes on its own and rotates away the
+  host's refresh token. The whole directory, read-write, would let a session write a
+  `settings.json` hook that the host's `claude` later runs, which FR-005 forbids. Both options are
+  recorded in the 2026-09-18 clarifications.
+- **Everything else stays in the sandbox's home.** `projects/`, history, todos and `~/.claude.json`
+  are written to `<state>/sandbox-home`. That directory is persistent state, so it survives the
+  sandbox being recreated (FR-011). No new mount is needed for FR-009a.
+- **"Did the CLI record anything?" is answered where the session runs.** The daemon's prune
+  (`state.rs::prune_empty_sessions`) already runs inside the container and resolves `config_dir()`
+  against the container's `HOME`, so it is already correct. The client's boot prune is not. Under
+  `LocalSandbox` placement the client skips its own prune and keeps what the catalogue reports,
+  following FR-023c's rule for availability. It does not map host paths into `<state>/sandbox-home`,
+  because FR-003a forbids assuming the placement is local. The host placement keeps today's
+  behaviour.
+- **The macOS Keychain.** When the host keeps the token in the Keychain, `~/.claude/.credentials.json`
+  is absent and the share reports the absent item like any other (edge case). No Keychain bridge
+  is built.
+
+**Bugfix**: 2026-09-18 — BUG-006. Section added; nothing above it changed. See `bugs/BUG-006.md`.
+
 ## Complexity Tracking
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |

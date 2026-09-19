@@ -109,7 +109,7 @@ pub enum CredentialShare {
     GitConfig,      // ~/.gitconfig
     SshAgent,       // the agent socket, not the keys
     GitCredentials, // the credential helper's store
-    AiCliAuth,      // the AI CLI's own auth material
+    AiCliAuth,      // the AI CLI's sign-in token file only, mounted writable (FR-004e)
 }
 ```
 
@@ -120,6 +120,12 @@ pub enum CredentialShare {
   so the set is rendered from the set, not summarised as a count.
 - N-3 (R4): `NoOutbound` is the default. It does not claim to block DNS resolution, and the docs say
   so; a posture that overstates what it blocks is worse than one that understates it.
+- N-4 (FR-004e): every share is read-only except `AiCliAuth`, which is writable because the CLI
+  refreshes its token in place. `AiCliAuth` names one file, never the CLI's configuration directory,
+  so a share under `HomeMount` leaves the rest of that home writable.
+
+**Bugfix**: 2026-09-18 — BUG-006. `AiCliAuth` narrowed from "the AI CLI's own auth material" (all
+of `~/.claude`, read-only) to the token file, writable. Rule N-4 added. See `bugs/BUG-006.md`.
 
 ## 5. `RuntimeCapabilities` — what the environment can actually do (FR-020, FR-022, R10)
 

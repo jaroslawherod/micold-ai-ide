@@ -144,6 +144,22 @@ runtime must be a replaceable part from the beginning rather than a refactor pro
   settings checkbox becomes that one control, and applying it runs the service-manager flow under
   host-process placement and sets the restart policy under sandboxed placement.
 
+### Session 2026-09-18
+
+- Q: The AI CLI sign-in share mounted the whole `~/.claude` read-only, so `claude` warned that its
+  session files were read-only and its conversations would be lost (BUG-006). What exactly does
+  that share cover, and in what mode? → A: **Only the CLI's sign-in token, and writable.** The CLI
+  replaces its own token when it refreshes it, so a read-only token fails as soon as it expires. A
+  copy is no better: refresh tokens rotate, so a copy that refreshes invalidates the host's. The
+  rest of the CLI's directory stays in the sandbox's own home. Sharing all of it read-write was
+  rejected: it holds settings and hooks that the host's own `claude` runs, so a session could
+  write a hook and have it run on the host, which FR-005 forbids.
+- Q: Where does a sandboxed session's conversation live, and who decides whether a session has
+  one? → A: In the sandbox's own home, where the CLI wrote it, and the decision is made where the
+  session runs. This is the same rule FR-023c sets for "is the CLI available", applied to "did the
+  CLI record anything". Asking the host's `~/.claude` about a sandboxed session gets a different
+  machine's answer, and the client used that answer to drop sessions.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The agent can only touch the project (Priority: P1)
@@ -227,6 +243,10 @@ reboot the host with session survival opted out and opted in and confirm each be
    running — stopped from the host, lost to a runtime restart, or never successfully started — **Then**
    the application brings it back up without being restarted and without the user pressing anything,
    reporting each attempt's reason if it cannot (FR-002a, FR-036a). *(Added 2026-09-12 — BUG-005.)*
+10. **Given** sandboxed mode is on, with or without the AI CLI sign-in shared, **When** a session of
+    any offered AI CLI holds a conversation and the application is then restarted, **Then** the CLI
+    warned of nothing it could not write, the session is still listed, and it resumes that
+    conversation (FR-004e, FR-009a). *(Added 2026-09-18 — BUG-006.)*
 
 ---
 
@@ -412,6 +432,12 @@ without the user having chosen that for the occasion.
   agent is running, or the socket it names has gone.
 - The user enables a credential opt-in and later forgets it is on, believing the sandbox to be fully
   isolated.
+- The AI CLI sign-in is shared, but the host keeps that CLI's token outside any file, for example
+  in the macOS Keychain. The share then has nothing to mount. This is the absent-item case above,
+  and it is reported as one. *(Added 2026-09-18 — BUG-006.)*
+- The AI CLI sign-in share covers `claude` only. Copilot and Pi keep their state in the sandbox's
+  own home and sign in there. A per-CLI sign-in share is a follow-on, not part of this feature.
+  *(Added 2026-09-18 — BUG-006.)*
 
 ## Requirements *(mandatory)*
 
@@ -454,6 +480,13 @@ without the user having chosen that for the occasion.
   that write reaching the host home or requiring a credential opt-in. This directory is a mount like
   any other and MUST be declared as one: a home the sandbox merely inherits from the image, or an
   unwritable one, are both failures of this requirement rather than of the image.
+- **FR-004e**: The AI CLI sign-in share MUST share only the CLI's sign-in token, and MUST share it
+  writable, so the CLI can refresh it in place. It MUST NOT share the rest of the CLI's
+  configuration directory. That directory holds the CLI's session state, which then becomes
+  unwritable. It also holds settings and hooks that the host's copy of the CLI executes, which
+  FR-005 forbids a session to write. A credential share that lands under the sandbox's home
+  (FR-004d) MUST leave every other path in that home writable. The share's FR-004b statement MUST
+  say that a session can use and replace the sign-in token. *(Added 2026-09-18 — BUG-006.)*
 
 - **FR-005**: The sandbox MUST NOT be granted access to the container runtime's own control
   interface, nor any capability that lets a session escape the sandbox or act on the host.
@@ -470,6 +503,12 @@ without the user having chosen that for the occasion.
   persistence and resumption across application and machine restarts, worktree lifecycle, terminal
   rendering and input, titles, bell, clipboard, and per-session scrollback retention — MUST behave
   equivalently when sandboxed.
+- **FR-009a**: Every AI CLI the application offers MUST be able to record its conversations inside
+  the sandbox, and a recorded conversation MUST survive the application restarting and the sandbox
+  being recreated (FR-011). Whether a session has a recorded conversation MUST be determined where
+  the session runs, as FR-023c requires for CLI availability. Under sandboxed placement the
+  application MUST NOT drop, archive or hide a session because the client's host has no record of
+  its conversation. *(Added 2026-09-18 — BUG-006.)*
 - **FR-010**: Worktrees created by a sandboxed session MUST appear at the same host location as
   those created unsandboxed, and MUST remain usable from the host by ordinary git tooling.
 - **FR-011**: Persistent service state MUST survive the sandbox being stopped, recreated, or
@@ -669,6 +708,14 @@ bring-up read as a failure. **SC-004c** and US6's ninth acceptance scenario are 
 them: the first says where SC-004's progress has to be measured, the second is the flow this bug
 is. See `bugs/BUG-005.md`.
 
+**Bugfix**: 2026-09-18 — BUG-006. FR-004e and FR-009a added, together with SC-012a, US2 scenario 10,
+two edge cases and the 2026-09-18 clarifications. FR-004a named an "AI CLI's own authentication"
+share without saying what it covered. The implementation shared all of `~/.claude` read-only, the
+mode every other credential uses, and `claude` then could not write its sessions: it warned at
+startup that its state would be lost. FR-009 already required resumption to behave the same when
+sandboxed. Nothing said where a sandboxed conversation lives, so the client judged it from the
+host's home and dropped it. See `bugs/BUG-006.md`.
+
 **Bugfix**: 2026-09-14 — BUG-005, FR-036b clarified for a sandbox marked stale. A bring-up is still in
 flight after the container starts, until its service first answers. A sandbox marked stale in that
 gap, because settings the container was created under were saved while it started, is still coming
@@ -752,6 +799,10 @@ which asked for the second rule on both routes.
   sandbox with no user-performed installation step. On an image missing one, the user is told which
   CLI is missing and that their image must supply it — before they start a session, not by a session
   failing.
+- **SC-012a**: On the published image, a session of every AI CLI the application offers, with the
+  AI CLI sign-in shared and without it, records its conversation without warning that it cannot
+  write. After the application restarts, and again after the sandbox is recreated, 100% of those
+  sessions are still listed and resume their conversation. *(Added 2026-09-18 — BUG-006.)*
 - **SC-013**: Every section is reachable from the rail in both its states, and collapsing the rail
   costs no capability: the same set of sections can be selected with the labels hidden as with them
   shown, by pointer and by keyboard alike.
