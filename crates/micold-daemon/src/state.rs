@@ -582,6 +582,17 @@ impl DaemonState {
         env
     }
 
+    /// Which AI CLIs a session spawned in `cwd` would find (feature 029, BUG-001, FR-003b).
+    pub fn ai_clis_available_in(&self, cwd: &Path) -> Vec<AiCli> {
+        let path = self
+            .env_include_vars_for(cwd)
+            .into_iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case("PATH"))
+            .map(|(_, value)| std::ffi::OsString::from(value))
+            .unwrap_or_default();
+        micold_core::provider::available_in(&path)
+    }
+
     /// Invalidate the cached environment-include resolution for one directory (BUG-003) — called
     /// when the worktree at that path is deleted, mirroring the equivalent fix recorded in
     /// `specs/011-env-include-script/bugs/BUG-002.md`'s Resolution: a worktree recreated for the
