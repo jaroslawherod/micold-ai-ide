@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M3 step 3 round 2: gate on the review fixes, round-2 reviews, then rebase, push and open the M3 PR
+- **Next step**: M3 step 6: wait for `ci complete` on the M3 PR, then rebase-merge
 
 ## Pull requests
 
@@ -18,6 +18,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #341 | Design (clarify, plan, tasks, milestones) | merged | 226d3a8b |
 | #356 | M1 Link recognition core | merged | 33f6491c |
 | #361 | M2 Opening pipeline | merged | 9995dbdb |
+| PR_TBD | M3 Clickable web, mail and declared links in the pane | open | — |
 
 ## Milestones
 
@@ -25,7 +26,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|---|
 | M1 | T001–T012 | Link recognition core (`micold_core::link`, SC-002 corpus) | #356 | merged |
 | M2 | T013–T022 | Opening pipeline: `LinkActivated` through `update_inner` to the system opener | #361 | merged |
-| M3 | T082, T083, T037, T023–T034 | Clickable web, mail and declared links in the pane | — | in progress |
+| M3 | T082, T083, T037, T023–T034 | Clickable web, mail and declared links in the pane | PR_TBD | PR open |
 | M4 | T035, T036, T038–T041 | Session terminal identity and the FORCE_HYPERLINK opt-in | — | pending |
 | M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | — | pending |
 | M6 | T085, T055–T067, T069, T068 | Sandboxed file links, translated and confirmed | — | pending |
@@ -60,6 +61,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | 22 | 4-milestones | The acceptance tests cannot reach `ui::material` (`pub(crate)`) from the bin crate | Build the pane through the public `ui::terminal::pane`, the same element the app renders | agent-resolved | shell/links.rs `mod acceptance` |
 | 23 | 4-milestones | Hint colours | `surface_container_highest` container, `on_surface` text, as `TermPalette::hint_container`/`hint_content` | agent-resolved | ui/terminal.rs |
 | 24 | 4-milestones | The hover change needs a repaint, but `idle_requests_no_frames.rs` allows one `request_redraw` in the rendering layer | Edge-triggered `shell.invalidate_widgets()`, as `select.rs` does | agent-resolved | gate failure recorded in tdd/cycle-log.md "Gate fixes: M3" |
+| 25 | 4-milestones | Rebase onto main: BUG-007/008 added `press_cell` (a click without a drag selects nothing) on the plain local press, in conflict with the link press arm | Keep the link gesture; the non-link local press sets `press_cell` as main does. A link press dragged off its cell starts its selection already off the press cell, so it needs none | agent-resolved | terminal_pane.rs left-press arm; review B round 2 checked it |
+| 26 | 4-milestones | M3 review A round 2 (low): a hover off the grid read no rows, so a resize bringing text under the resting pointer never re-resolved | `hover_refresh` re-resolves on any grid move when the cached hover read no rows (U161) | agent-resolved | tdd/cycle-log.md Cycle 56 |
 
 ## Declined review findings
 
