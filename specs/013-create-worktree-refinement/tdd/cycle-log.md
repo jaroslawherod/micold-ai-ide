@@ -61,3 +61,15 @@ existed and failed before the implementation.
 - refactor: none needed
 - commit: `test(013): a failed create's form is dismissible again (BUG-001 U4)`
 - notes: green on arrival; it pins the end of the protected span
+
+## Cycle 5: U5 the in-dialog Cancel closes a form whose create is in flight
+
+- test: `crates/micold-client/tests/add_worktree_dismissal.rs::the_in_dialog_cancel_closes_a_form_whose_create_is_in_flight` (new, characterization)
+- red: none on arrival. `scripts/build-lock.sh cargo test -p micold-client --test add_worktree_dismissal the_in_dialog_cancel_closes_a_form_whose_create_is_in_flight -- --exact`
+  -> `1 passed`: `cancelled` closes the form whatever its status.
+  Deliberate mutant: `cancelled` returns early while `Creating` -> panicked at `add_worktree_dismissal.rs:136`
+  ("Cancel must close the add-worktree form even while its create runs", 1 failed). Mutant reverted with `git checkout`.
+- green: no implementation change. Crate suite -> 1804 passed, 0 failed, 2 ignored (139 binaries)
+- refactor: none needed
+- commit: `test(013): Cancel still closes the add-worktree form mid-create (BUG-001 U5)`
+- notes: the view's Cancel button sends `Msg::Cancelled` unconditionally (`ui/worktree_form.rs:292`)
