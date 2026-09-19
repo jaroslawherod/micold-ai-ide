@@ -124,3 +124,21 @@ failed before the implementation.
   6 passed, A1 still red
 - green: no production change
 - refactor: none
+
+## Cycle 7: U9 a request with no `cwd` resolves the environment in the home directory
+
+- test: `crates/micold-daemon/tests/ai_cli_availability.rs::a_request_with_no_directory_is_answered_for_the_home_directory` (new)
+- red: `scripts/build-lock.sh cargo test --test ai_cli_availability a_request_with_no_directory_is_answered_for_the_home_directory -- --exact`
+  -> `the script ran in ""` / `left: None` / `right: Some("/home/jaro")` (1 failed): the handler
+  still answered from `available_here()` and never sourced anything
+- green: `crates/micold-daemon/src/server.rs` answers `AiCliAvailabilityRequest { req, cwd }` from
+  `state.ai_clis_available_in(cwd or the home directory)`, and from `available_here()` only when
+  there is no home directory at all. Still inline on the connection loop: U10 drives it off.
+  File -> 8 passed; daemon crate `scripts/build-lock.sh cargo test -p micold-daemon --all-targets`
+  -> 351 passed, 0 failed
+- refactor: none
+
+## Outer loop: A1 GREEN
+
+- `a_cli_on_the_path_env_include_adds_for_a_directory_is_offered_for_it` passes with cycle 7's
+  handler change (same run: file -> 8 passed). Committed with cycle 7.

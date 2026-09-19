@@ -23,7 +23,7 @@ is covered by T070's visual pass.
 
 | id  | behavior                                                                                                                                                       | traces                      | kind    | state   | test |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | ------- | ------- | ---- |
-| A1  | With `pi` only on the `PATH` that env-include adds for a directory, an `AiCliAvailabilityRequest` for that directory lists Pi                                     | US1-5b, SC-001a, FR-003b    | example | RED     | `a_cli_on_the_path_env_include_adds_for_a_directory_is_offered_for_it` (crates/micold-daemon/tests/ai_cli_availability.rs) |
+| A1  | With `pi` only on the `PATH` that env-include adds for a directory, an `AiCliAvailabilityRequest` for that directory lists Pi                                     | US1-5b, SC-001a, FR-003b    | example | DONE    | `a_cli_on_the_path_env_include_adds_for_a_directory_is_offered_for_it` (crates/micold-daemon/tests/ai_cli_availability.rs) |
 | A2  | With `pi` only on the env-include `PATH` for a directory, starting a Pi session there is not refused as a missing CLI                                            | US1-5b, SC-001a, FR-003b    | example | PENDING |      |
 | A3  | With env-include off and `pi` absent from the service's own `PATH`, the same request does not list Pi                                                            | US1-5, FR-003, FR-003b      | example | PENDING |      |
 
@@ -51,7 +51,7 @@ is covered by T070's visual pass.
 
 | id  | behavior                                                                                                                    | traces   | kind    | state   | test |
 | --- | --------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------- | ---- |
-| U9  | A request with no `cwd` resolves the environment in the user's home directory                                                | FR-003b  | example | PENDING |      |
+| U9  | A request with no `cwd` resolves the environment in the user's home directory                                                | FR-003b  | example | DONE    | `a_request_with_no_directory_is_answered_for_the_home_directory` (crates/micold-daemon/tests/ai_cli_availability.rs) |
 | U10 | While a slow env-include resolution runs for an availability request, another request on the same connection is answered     | FR-003b  | example | PENDING |      |
 
 ### `crates/micold-client/src/main.rs`, `shell/persist.rs`, `shell/daemon_sync.rs`
