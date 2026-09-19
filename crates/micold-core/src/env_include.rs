@@ -92,7 +92,12 @@ pub fn merge_with_term(vars: &[(String, String)]) -> Vec<(String, String)> {
 /// Keys compare exactly when `keys_case_insensitive` is false and ASCII case-insensitively when it
 /// is true; callers pass `cfg!(windows)`, so core never reads the host OS.
 pub fn is_inherited_terminal_identity(key: &str, value: &str, keys_case_insensitive: bool) -> bool {
-    let _ = (value, keys_case_insensitive);
+    let _ = keys_case_insensitive;
+    if key == "COLORTERM" {
+        // A colour-depth value is a capability every session may keep; anything else names the
+        // terminal that set it.
+        return !(value.eq_ignore_ascii_case("truecolor") || value.eq_ignore_ascii_case("24bit"));
+    }
     TERMINAL_IDENTITY_KEYS.contains(&key)
 }
 
@@ -561,5 +566,21 @@ mod terminal_identity_tests {
             !is_inherited_terminal_identity("HOME", "/h", false),
             "a key outside the table is never matched"
         );
+    }
+
+    #[test]
+    fn colorterm_is_matched_unless_it_names_a_colour_depth() {
+        for value in ["truecolor", "24bit", "TrueColor", "24BIT"] {
+            assert!(
+                !is_inherited_terminal_identity("COLORTERM", value, false),
+                "COLORTERM={value} describes colour depth, which a session keeps"
+            );
+        }
+        for value in ["gnome-terminal", "rxvt-xpm", "yes", ""] {
+            assert!(
+                is_inherited_terminal_identity("COLORTERM", value, false),
+                "COLORTERM={value:?} names a terminal, so a session must not inherit it"
+            );
+        }
     }
 }
