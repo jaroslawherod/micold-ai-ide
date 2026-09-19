@@ -347,6 +347,35 @@ struct Attachment {
     since: Instant,
 }
 
+/// A session [`DaemonState::record_recovered_names`] reads a name for: read under the lock, used off
+/// it.
+struct RecoveryCandidate {
+    id: SessionId,
+    /// Where the session runs, which is where its CLI keeps its records.
+    cwd: PathBuf,
+    /// The CLI that owns it — the only store its name may come from (contract C16).
+    provider: AiCli,
+    /// It has no label of any kind yet, so a first-turn label may be derived for it (feature 032).
+    unlabelled: bool,
+}
+
+impl RecoveryCandidate {
+    fn of(session: &Session, project: &Path) -> Self {
+        Self {
+            id: session.id,
+            cwd: session.location.cwd(project),
+            provider: session.provider,
+            unlabelled: matches!(session.label, SessionLabel::Pending),
+        }
+    }
+}
+
+/// What recovery found for a candidate: its CLI's title, or with none, its first-turn label.
+enum Recovered {
+    Title(String),
+    Label(String),
+}
+
 impl DaemonState {
     /// Build the shared state around an adopted [`Catalog`].
     pub fn new(catalog: Catalog) -> Self {
@@ -1163,9 +1192,13 @@ impl DaemonState {
                     if provider.is_archived(&config_dir, &cwd, id) {
                         continue;
                     }
+                    // A title wins; with none, the first typed turn (feature 032, C6.1). Both are
+                    // read once, here, and persisted by the adoption below.
                     let label = match provider.read_title(&config_dir, &cwd, id) {
                         Some(title) => SessionLabel::Named(title),
-                        None => SessionLabel::Pending,
+                        None => provider
+                            .read_label(&config_dir, &cwd, id)
+                            .map_or(SessionLabel::Pending, SessionLabel::Derived),
                     };
                     found.push(Session::restored(
                         SessionId::from_uuid(id),
@@ -1214,8 +1247,9 @@ impl DaemonState {
     /// re-read, so a deleted transcript cannot take it away. A `None` read is a no-op for the same
     /// reason: never an error, never a wrong name, and never a way back to `Pending`.
     pub fn recover_session_names(&self, project: &Path) -> usize {
-        // Candidates, read under the lock, once: the session, where it runs, and which CLI owns it.
-        let candidates: Vec<(SessionId, PathBuf, AiCli)> = {
+        // Candidates, read under the lock, once: the session, where it runs, which CLI owns it, and
+        // whether it has no label at all yet.
+        let candidates: Vec<RecoveryCandidate> = {
             let inner = self.lock();
             inner
                 .catalog
@@ -1226,7 +1260,7 @@ impl DaemonState {
                     sessions
                         .iter()
                         .filter(|s| !s.archived && matches!(s.label, SessionLabel::Pending))
-                        .map(|s| (s.id, s.location.cwd(project), s.provider))
+                        .map(|s| RecoveryCandidate::of(s, project))
                         .collect()
                 })
                 .unwrap_or_default()
@@ -1248,7 +1282,7 @@ impl DaemonState {
     ///
     /// Reads the providers' stores, so it runs in the supervisor's `spawn_blocking` hop.
     pub fn recover_live_session_names(&self) -> usize {
-        let candidates: Vec<(SessionId, PathBuf, AiCli)> = {
+        let candidates: Vec<RecoveryCandidate> = {
             let mut guard = self.lock();
             let inner = &mut *guard;
             let workspace = inner.catalog.workspace();
@@ -1262,7 +1296,7 @@ impl DaemonState {
                     (session.mode == TerminalMode::AiCli
                         && !session.archived
                         && matches!(session.label, SessionLabel::Pending))
-                    .then(|| (*id, session.location.cwd(project), session.provider))
+                    .then(|| RecoveryCandidate::of(session, project))
                 })
                 .collect()
         };
@@ -1271,7 +1305,12 @@ impl DaemonState {
 
     /// Read each candidate's name from its own provider's store, off the lock, and record the ones
     /// found against sessions that are still unnamed. Returns how many were recorded.
-    fn record_recovered_names(&self, candidates: Vec<(SessionId, PathBuf, AiCli)>) -> usize {
+    ///
+    /// A candidate with no title and no label yet is also asked for its first-turn label (feature
+    /// 032, C6.3): the title first, because a title outranks a label (FR-005), and the label only
+    /// when there is no title — one read per session, and never a second label (FR-007). Both kinds
+    /// count, so a label alone is enough for the caller to broadcast (C6.3a).
+    fn record_recovered_names(&self, candidates: Vec<RecoveryCandidate>) -> usize {
         if candidates.is_empty() {
             return 0;
         }
@@ -1281,13 +1320,25 @@ impl DaemonState {
         // `claude`'s store, find nothing, or worse find another CLI's conversation under the same
         // id and name the row wrongly (contract C16). A provider with no resolvable config dir
         // contributes nothing and stops nothing (C20).
-        let found: Vec<(SessionId, String)> = candidates
+        let found: Vec<(SessionId, Recovered)> = candidates
             .into_iter()
-            .filter_map(|(id, cwd, which)| {
+            .filter_map(|candidate| {
+                let RecoveryCandidate {
+                    id,
+                    cwd,
+                    provider: which,
+                    unlabelled,
+                } = candidate;
                 let provider = which.provider();
                 let config_dir = provider.config_dir()?;
-                let title = provider.read_title(&config_dir, &cwd, id.0)?;
-                Some((id, title))
+                if let Some(title) = provider.read_title(&config_dir, &cwd, id.0) {
+                    return Some((id, Recovered::Title(title)));
+                }
+                if !unlabelled {
+                    return None;
+                }
+                let label = provider.read_label(&config_dir, &cwd, id.0)?;
+                Some((id, Recovered::Label(label)))
             })
             .collect();
         if found.is_empty() {
@@ -1296,24 +1347,32 @@ impl DaemonState {
 
         let mut inner = self.lock();
         let mut recovered = 0;
-        for (id, name) in found {
-            // The live path may have named it in the time this spent off the lock, and the
-            // terminal's name is the newer one.
-            let still_pending = inner
-                .catalog
-                .workspace()
-                .find_session(id)
-                .is_some_and(|(_, s)| matches!(s.label, SessionLabel::Pending));
-            if !still_pending {
-                continue;
-            }
-            match inner.catalog.record_session_name(id, &name) {
+        for (id, found) in found {
+            let result = match found {
+                Recovered::Title(name) => {
+                    // The live path may have named it in the time this spent off the lock, and the
+                    // terminal's name is the newer one. A label is replaced (FR-006).
+                    let named = inner
+                        .catalog
+                        .workspace()
+                        .find_session(id)
+                        .is_none_or(|(_, s)| matches!(s.label, SessionLabel::Named(_)));
+                    if named {
+                        continue;
+                    }
+                    inner.catalog.record_session_name(id, &name)
+                }
+                // Only onto a session still without any label: the catalog refuses a `Named` or
+                // `Derived` one, so a title that arrived meanwhile keeps its place (C6.6).
+                Recovered::Label(label) => inner.catalog.record_session_label(id, &label),
+            };
+            match result {
                 Ok(true) => recovered += 1,
                 Ok(false) => {}
                 Err(err) => tracing::warn!(
                     session = %id.0,
                     %err,
-                    "could not persist the recovered session name; it is still shown"
+                    "could not persist the recovered session name or label; it is still shown"
                 ),
             }
         }

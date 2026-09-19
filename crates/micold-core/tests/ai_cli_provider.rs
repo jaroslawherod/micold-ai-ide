@@ -317,3 +317,98 @@ fn the_launch_environment_is_a_property_of_the_provider_not_of_a_session() {
     let port: &dyn AiCliProvider = &ClaudeProvider;
     assert_eq!(port.launch_env(), Vec::new());
 }
+
+// ---------------------------------------------------------------------------------------
+// Feature 032 (T019) — the first-turn label, read from the transcript at its derived path
+// ---------------------------------------------------------------------------------------
+
+/// One `claude` user record whose content is `text`, `\n`-terminated.
+fn typed(text: &str) -> String {
+    format!(
+        "{}\n",
+        serde_json::json!({"type": "user", "message": {"role": "user", "content": text}})
+    )
+}
+
+#[test]
+fn the_label_is_the_shaped_first_turn_of_the_sessions_own_transcript() {
+    let config = tempfile::tempdir().unwrap();
+    write_transcript(
+        config.path(),
+        CWD,
+        fixed_id(),
+        &format!(
+            "{}{}",
+            typed("Fix the\n\n  flaky login test"),
+            typed("and then this")
+        ),
+    );
+    assert_eq!(
+        ClaudeProvider
+            .read_label(config.path(), Path::new(CWD), fixed_id())
+            .as_deref(),
+        Some("Fix the flaky login test"),
+        "the first typed turn, as one line (FR-002, FR-003)"
+    );
+}
+
+#[test]
+fn a_missing_transcript_has_no_label_and_does_not_fail() {
+    let config = tempfile::tempdir().unwrap();
+    assert_eq!(
+        ClaudeProvider.read_label(config.path(), Path::new(CWD), fixed_id()),
+        None
+    );
+}
+
+#[test]
+fn a_first_turn_past_the_read_bound_yields_no_label_even_with_a_later_prompt() {
+    // One record longer than the whole 1 MiB bound comes first; the typed prompt starts after it.
+    // Reading on to find it would cost the whole file, and the bound is what FR-014 asks for
+    // (C2.4).
+    let config = tempfile::tempdir().unwrap();
+    let padding = "x".repeat(micold_core::first_turn::LABEL_BUDGET_BYTES as usize);
+    let huge = format!(
+        "{}\n",
+        serde_json::json!({"type": "assistant", "message": {"role": "assistant", "content": padding}})
+    );
+    write_transcript(
+        config.path(),
+        CWD,
+        fixed_id(),
+        &format!("{huge}{}", typed("A prompt past the bound")),
+    );
+    assert_eq!(
+        ClaudeProvider.read_label(config.path(), Path::new(CWD), fixed_id()),
+        None
+    );
+}
+
+#[test]
+fn the_title_and_the_label_are_read_from_the_same_file_and_never_mixed() {
+    let config = tempfile::tempdir().unwrap();
+    write_transcript(
+        config.path(),
+        CWD,
+        fixed_id(),
+        &format!(
+            "{}{{\"type\":\"ai-title\",\"aiTitle\":\"First title\"}}\n{}{{\"type\":\"ai-title\",\"aiTitle\":\"Latest title\"}}\n",
+            typed("The first typed turn"),
+            typed("A second turn")
+        ),
+    );
+    assert_eq!(
+        ClaudeProvider
+            .read_title(config.path(), Path::new(CWD), fixed_id())
+            .as_deref(),
+        Some("Latest title"),
+        "`read_title` is unchanged: the latest `ai-title` (C1.4)"
+    );
+    assert_eq!(
+        ClaudeProvider
+            .read_label(config.path(), Path::new(CWD), fixed_id())
+            .as_deref(),
+        Some("The first typed turn"),
+        "and `read_label` never answers a title (C1.4)"
+    );
+}
