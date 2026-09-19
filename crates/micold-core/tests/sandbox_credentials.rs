@@ -225,6 +225,25 @@ fn the_ai_cli_sign_in_share_is_the_token_file_not_the_cli_directory() {
     );
 }
 
+/// Research R11 (BUG-006): a credential mounted inside the sandbox's home needs its parent there.
+///
+/// The runtime creates a missing mount target's parents as root. Left to it, `<sandbox-home>/.claude`
+/// comes out root-owned, and `claude` cannot write its sessions again, which is the bug this share
+/// was narrowed to fix. So the mount set names the directory, and the bring-up creates it first.
+#[test]
+fn a_shared_sign_in_names_its_directory_in_the_sandbox_home_to_create() {
+    let profile = SandboxProfile {
+        credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
+        ..SandboxProfile::default()
+    };
+    let mounts = build(&profile);
+    assert_eq!(
+        mounts.home_dirs_to_create(),
+        vec![mounts.home.host.join(".claude")],
+        "the sign-in's parent must exist, user-owned, before the runtime mounts the file into it"
+    );
+}
+
 /// Daemon state is the host's own data directory, bind-mounted.
 ///
 /// It is deliberately *not* a runtime-managed volume: the client has to read `projects.json` to
