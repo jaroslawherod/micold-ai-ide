@@ -1444,12 +1444,21 @@ the ones it found nothing for. FR-004e, FR-009a and SC-012a settle both.
       and `shell/persist.rs`. Skip the client-side prune under `LocalSandbox` placement. The daemon's
       prune runs where the session runs and stays the only judge there (FR-009a, FR-023c). Do not
       map host paths into `<state>/sandbox-home` (FR-003a).
-- [ ] T213 [BUG-006] *(sandbox suite)* `crates/micold-daemon/tests/`, run by `mise run
+- [X] T213 [BUG-006] *(sandbox suite)* `crates/micold-daemon/tests/`, run by `mise run
       test-sandbox`. For each offered AI CLI, with the sign-in shared and without it: start a session
       in the sandbox and record a conversation. Recreate the sandbox, and confirm the daemon's prune
       keeps the session and the transcript is under `<state>/sandbox-home` (SC-012a, US2 scenario
       10). With the share on, confirm nothing under the host's `~/.claude` other than
       `.credentials.json` changed.
+      *Landed as* `crates/micold-daemon/tests/sandbox_real_ai_cli_sessions.rs`, two probes (share off
+      and on), both passing on 2026-09-19 against a fresh `:dev` image on Docker. With the share on,
+      `claude -p` held a real conversation through the host's sign-in (`hi`, rc 0). Copilot, Pi, and
+      `claude` without the share cannot sign in there, so the probe writes their records into each
+      CLI's layout from inside the sandbox; the host side reads them back through the provider. A
+      control session that recorded nothing is pruned, which shows the prune ran. Mutant: restoring
+      the old share (the whole `~/.claude`, read-only) fails the shared probe, because no transcript
+      reaches `<state>/sandbox-home`. Host `~/.claude` is checked for records of the seeded sessions,
+      not for being byte-identical: other `claude` processes on the host write to it all the time.
 - [X] T214 [BUG-006] `docs/user-guide/sandboxed-daemon.md`, "Credentials". "AI CLI sign-in" shares
       only Claude Code's sign-in token and lets a session refresh it. Conversations stay in the
       sandbox. On macOS, a token kept in the Keychain cannot be shared. Copilot and Pi sign in inside
