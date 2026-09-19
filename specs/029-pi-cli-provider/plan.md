@@ -205,7 +205,9 @@ offered. FR-003b now says availability follows the spawn environment.
    from that list, or the process's own when env-include is off or supplies none, and answers from
    `available_in`. Resolution can block up to the env-include timeout, and the state lock is never
    held across it. So the handler runs it on `spawn_blocking` and sends `AiCliAvailability` when
-   it completes, leaving the connection loop free (FR-003b's last sentence).
+   it completes, leaving the connection loop free (FR-003b's last sentence). `start_session`'s
+   launch gate (`if !provider.is_available()`) checks against the same spawn-environment `PATH`
+   for the session's own directory; otherwise a CLI offered by the handler is refused at launch.
 4. **Client**: `ask_cli_availability` passes the directory when the per-session override or the
    missing-CLI list is opened for a project or worktree, and `None` from Settings.
 5. **Docs**: `docs/user-guide/settings.md` states that which CLIs are offered follows the session
