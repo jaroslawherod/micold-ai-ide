@@ -29,8 +29,16 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | D2 | 2-clarify | FR-002: which typed text is the label? | (b) the first turn: a slash command's arguments, else the command name; otherwise the prompt text. | decided by user | spec.md *Label-source evidence* |
 | D3 | 2-clarify | FR-006: does a later title replace the label? | Yes, the title replaces the label on the row and in what is remembered. | decided by user | BUG-001 recommendation |
 | D4 | 2-clarify | FR-012: is GitHub Copilot in scope? | Yes: `claude` and Copilot both get the fallback label (user chose over the recommended claude-only). | decided by user | spec.md FR-012 |
+| D5 | 2-clarify r1 | Is a CLI-handled `claude` slash command (`/model`) a turn? | No; only prompt-sending commands (skills, custom commands) are turns. | agent-resolved | spec.md US1 #4, FR-001; Copilot records none (2/87 claude sessions open with bare `/model`) |
+| D6 | 2-clarify r1 | Are identical first-turn labels disambiguated? | No, as identical titles are not. | agent-resolved | 029-persistent-session-names spec; 029-pi-cli-provider FR-011 |
+| D7 | 2-clarify r1 | Is a label styled differently from a title? | No; same places, same presentation. | agent-resolved | spec.md Assumptions |
+| D8 | 2-clarify r1 | Must FR-014's bound cover the Copilot sessions? | Yes, SC-008's 44 (first turn at record 2–10). | agent-resolved | spec.md *Copilot evidence* |
 
 D2–D4 applied to spec.md (FR-002, FR-006, FR-012 + *Copilot evidence*, US1 #5, SC-008) on 2026-09-19.
+
+| Clarify round | Questions | Agent-resolved | Escalated |
+|---|---|---|---|
+| 1 | 4 | 4 (D5–D8) | 0 |
 
 ## Declined review findings
 
