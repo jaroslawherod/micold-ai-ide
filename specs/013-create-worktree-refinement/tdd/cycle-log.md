@@ -36,3 +36,16 @@ existed and failed before the implementation.
 - refactor: none needed
 - commit: `fix(013): the add-worktree dialog ignores Escape and the scrim while a create runs (BUG-001)`
 - notes: per the milestone brief, a cycle's suite is the client crate; the workspace suite runs once before the PR
+
+## Cycle 3: U3 a create in flight over a Settings draft does not fall through to the draft
+
+- test: `crates/micold-client/tests/add_worktree_dismissal.rs::a_create_in_flight_over_a_settings_draft_does_not_fall_through_to_the_draft` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test add_worktree_dismissal a_create_in_flight_over_a_settings_draft_does_not_fall_through_to_the_draft -- --exact`
+  -> `left: Some(Settings(Cancelled))` / `right: None` at `add_worktree_dismissal.rs:94` (1 failed)
+- green: `app::on_escape` asks `registry::topmost` first; an open surface answers for itself (its
+  Escape rule, which is nothing for a protected one), and the Settings fallback runs only when no
+  registered surface is open. File -> 3 passed. Crate suite `scripts/build-lock.sh cargo test -p micold-client`
+  -> 1802 passed, 0 failed, 2 ignored (139 binaries; the count is after the rebase onto `origin/main`)
+- refactor: none needed
+- commit: `fix(013): a protected dialog stops Escape reaching the Settings draft behind it (BUG-001 U3)`
+- notes: `ui/mod.rs` wires the scrim's `on_dismiss` only when `on_escape` answers, so the scrim is inert during a create

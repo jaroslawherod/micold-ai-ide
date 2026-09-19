@@ -69,3 +69,32 @@ fn a_form_whose_create_is_in_flight_is_dismissed_by_neither_escape_nor_the_scrim
         "a click on the scrim cancelled a form whose create was still running (FR-010a)"
     );
 }
+
+/// U3 — a create in flight over an open Settings draft still leaves the scrim with nothing to do.
+///
+/// `on_escape` falls back to cancelling the Settings draft when the registry answers nothing. The
+/// registry answers nothing both when no dialog is open and when the open one refuses, so without
+/// a distinction a scrim click during the create would throw away the user's unsaved settings
+/// behind a dialog that stayed put (plan.md, Bugfix BUG-001, "Trap: `on_escape`'s fallback").
+#[test]
+fn a_create_in_flight_over_a_settings_draft_does_not_fall_through_to_the_draft() {
+    let mut state = State::default();
+    state.update(Message::Settings(
+        micold_client::features::settings::Msg::Opened,
+    ));
+    state.update(Message::WorktreeForm(FormMsg::Opened));
+    state.update(Message::WorktreeForm(FormMsg::CreateStarted(
+        Default::default(),
+    )));
+    assert!(
+        state.settings.settings_draft.is_some(),
+        "precondition: the Settings draft is still open behind the add-worktree dialog"
+    );
+
+    assert_eq!(
+        on_escape(&state),
+        None,
+        "the refusing dialog on top must stop the Settings fallback, or a click on its scrim \
+         discards the draft behind it (FR-010a)"
+    );
+}

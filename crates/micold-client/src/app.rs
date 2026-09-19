@@ -663,14 +663,17 @@ where
 /// collapses the keyboard subscription onto the same call and this goes with it.
 pub fn on_escape(state: &State) -> Option<Message> {
     // The registry first: a dialog opened *over* the Settings view is the thing Escape is about,
-    // and Settings is no longer in that list to answer for itself (feature 027, FR-026).
-    crate::overlay::registry::escape(state).or_else(|| {
-        state
+    // and Settings is no longer in that list to answer for itself (feature 027, FR-026). An open
+    // surface that refuses Escape answers for itself too: falling through would let a scrim click
+    // on a non-dismissible dialog discard the Settings draft behind it (013 BUG-001, FR-010a).
+    match crate::overlay::registry::topmost(state) {
+        Some(open) => open.on(micold_core::overlay::Trigger::Escape).cloned(),
+        None => state
             .settings
             .settings_draft
             .is_some()
-            .then_some(Message::Settings(crate::features::settings::Msg::Cancelled))
-    })
+            .then_some(Message::Settings(crate::features::settings::Msg::Cancelled)),
+    }
 }
 
 /// Where a decoded key press should go (feature 006, FR-009/FR-011). Pure; see
