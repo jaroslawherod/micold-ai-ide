@@ -204,3 +204,65 @@ fn a_session_does_not_see_the_inherited_terminal_identity() {
         }
     }
 }
+
+#[test]
+fn the_include_script_can_opt_a_session_into_hyperlinks() {
+    if child_side() {
+        return;
+    }
+    let test = "the_include_script_can_opt_a_session_into_hyperlinks";
+    let opt_in = [("FORCE_HYPERLINK", "1")];
+    for (case, inherited) in [
+        ("set only by the include script", &[][..]),
+        ("also inherited", &opt_in[..]),
+    ] {
+        let seen = sessions_seeing(test, inherited, &opt_in);
+        for (spawn, env) in seen.both() {
+            assert_eq!(
+                env.get("FORCE_HYPERLINK").map(String::as_str),
+                Some("1"),
+                "FORCE_HYPERLINK=1 from the include script is the documented opt-in, so a {spawn} \
+                 session sees it when it is {case} (contract §2)"
+            );
+        }
+    }
+}
+
+#[test]
+fn an_inherited_colour_depth_is_kept() {
+    if child_side() {
+        return;
+    }
+    let seen = sessions_seeing(
+        "an_inherited_colour_depth_is_kept",
+        &[("COLORTERM", "truecolor")],
+        &[],
+    );
+    for (spawn, env) in seen.both() {
+        assert_eq!(
+            env.get("COLORTERM").map(String::as_str),
+            Some("truecolor"),
+            "COLORTERM=truecolor describes colour depth, not a terminal, so a {spawn} session \
+             keeps it"
+        );
+    }
+}
+
+#[test]
+fn term_stays_xterm_256color() {
+    if child_side() {
+        return;
+    }
+    let seen = sessions_seeing(
+        "term_stays_xterm_256color",
+        &[("TERM", "wezterm"), ("TERM_PROGRAM", "WezTerm")],
+        &[],
+    );
+    for (spawn, env) in seen.both() {
+        assert_eq!(
+            env.get("TERM").map(String::as_str),
+            Some("xterm-256color"),
+            "a {spawn} session's TERM is pinned as before (contract §4)"
+        );
+    }
+}
