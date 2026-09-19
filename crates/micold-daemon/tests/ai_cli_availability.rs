@@ -14,7 +14,7 @@
 //! `micold-client/tests/cli_availability_comes_from_the_service.rs`, which asserts the client
 //! *cannot* answer it locally any more.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use futures_util::{SinkExt, StreamExt};
@@ -24,13 +24,15 @@ use micold_core::protocol::version::{
     BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
 };
 use micold_core::session::AiCli;
+use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
+use micold_core::store::JsonFileStore;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use tokio_util::codec::Framed;
 
 type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
 
-/// `PATH` is process-global; the two tests below move it in opposite directions.
+/// `PATH` is process-global, and every test here moves it.
 fn env_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
@@ -165,5 +167,131 @@ async fn an_environment_with_no_cli_reports_an_empty_set_rather_than_failing() {
     assert!(
         ask(&mut client, 1, None).await.is_empty(),
         "an environment with no AI CLI must answer with an empty set, not with silence"
+    );
+}
+
+// ---------------------------------------------------------------------------------------
+// BUG-001 (feature 029, FR-003b): the answer follows the environment a session is spawned with
+// ---------------------------------------------------------------------------------------
+
+/// The service's own `PATH` with every directory that holds an AI CLI taken out, and `front`
+/// (when given) put ahead of what is left.
+///
+/// Narrowed rather than replaced, unlike [`ScratchPath`]: the environment-include script is
+/// sourced by a real `bash` (PowerShell on Windows) that the service finds on this `PATH`, so it
+/// has to stay usable. Taking out only the CLI directories is enough to make a developer machine
+/// with `claude` or `pi` installed look like one without them.
+struct ServicePath {
+    previous: Option<std::ffi::OsString>,
+    _guard: std::sync::MutexGuard<'static, ()>,
+}
+
+impl ServicePath {
+    fn without_clis(front: Option<&Path>) -> Self {
+        let guard = env_lock().lock().unwrap_or_else(|e| e.into_inner());
+        let previous = std::env::var_os("PATH");
+        let commands: Vec<&str> = AiCli::ALL
+            .iter()
+            .map(|cli| cli.provider().command())
+            .collect();
+        let kept = previous
+            .iter()
+            .flat_map(std::env::split_paths)
+            .filter(|dir| !commands.iter().any(|command| holds_command(dir, command)));
+        let joined =
+            std::env::join_paths(front.map(Path::to_path_buf).into_iter().chain(kept)).unwrap();
+        std::env::set_var("PATH", joined);
+        Self {
+            previous,
+            _guard: guard,
+        }
+    }
+}
+
+impl Drop for ServicePath {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            Some(value) => std::env::set_var("PATH", value),
+            None => std::env::remove_var("PATH"),
+        }
+    }
+}
+
+/// Whether `dir` holds `command`, under its bare name or any `PATHEXT` extension (Windows).
+fn holds_command(dir: &Path, command: &str) -> bool {
+    let extensions = std::env::var("PATHEXT").unwrap_or_default();
+    std::iter::once(String::new())
+        .chain(
+            extensions
+                .split(';')
+                .filter(|ext| !ext.is_empty())
+                .map(str::to_string),
+        )
+        .any(|ext| dir.join(format!("{command}{ext}")).is_file())
+}
+
+/// A directory holding `command`. Presence is what availability checks, so an empty file is an
+/// installed CLI here.
+fn bin_with(command: &str) -> tempfile::TempDir {
+    let bin = tempfile::tempdir().unwrap();
+    std::fs::write(bin.path().join(command), b"#!/bin/sh\n").unwrap();
+    bin
+}
+
+/// An environment-include script in `dir`: `unix` is sourced by `bash`, `windows` by PowerShell.
+fn include_script(dir: &Path, unix: &str, windows: &str) -> PathBuf {
+    let (name, body) = if cfg!(windows) {
+        ("env-include.ps1", windows)
+    } else {
+        ("env-include.sh", unix)
+    };
+    let script = dir.join(name);
+    std::fs::write(&script, body).unwrap();
+    script
+}
+
+/// The line that puts `bin` in front of `PATH`, in each shell's syntax.
+fn prepend_to_path(bin: &Path) -> (String, String) {
+    (
+        format!("export PATH=\"{}:$PATH\"\n", bin.display()),
+        format!("$env:PATH = '{};' + $env:PATH\r\n", bin.display()),
+    )
+}
+
+/// A service whose settings turn environment-include on (with `script`) or off.
+fn service_with(store: &Path, env_include: Option<&Path>) -> Arc<DaemonState> {
+    JsonFileSettingsStore::at(store.join("settings.json"))
+        .save(&Settings {
+            env_include_enabled: env_include.is_some(),
+            env_include_script_path: env_include
+                .map(|script| script.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            ..Settings::default()
+        })
+        .unwrap();
+    Arc::new(DaemonState::new(Catalog::load(
+        Box::new(JsonFileStore::at(store.join("projects.json"))),
+        Box::new(JsonFileSettingsStore::at(store.join("settings.json"))),
+    )))
+}
+
+/// U4: the service's answer for a directory walks the `PATH` from that directory's
+/// environment-include result, when environment-include is on.
+#[test]
+fn the_answer_for_a_directory_walks_the_path_env_include_resolves_there() {
+    let session_bin = bin_with(AiCli::Pi.provider().command());
+    let _service = ServicePath::without_clis(None);
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let (unix, windows) = prepend_to_path(session_bin.path());
+    let script = include_script(store.path(), &unix, &windows);
+
+    let state = service_with(store.path(), Some(&script));
+
+    assert_eq!(
+        state.ai_clis_available_in(project.path()),
+        vec![AiCli::Pi],
+        "the PATH that decides is the one a session spawned in this directory gets, and \
+         environment-include is what gives it one (FR-003b)"
     );
 }

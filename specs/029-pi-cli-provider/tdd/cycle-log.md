@@ -62,3 +62,35 @@ failed before the implementation.
   re-wrap hid them from the edit) — `available_in.rs::a_cli_present_only_on_the_process_path_is_not_available_in_another_path`
   -> `got [Pi]`, 3285 passed, 1 failed. Fixed; core suite -> 1141 passed, 0 failed; the other
   3144 were green in that run and untouched since
+
+## Structural step: the request carries its directory, protocol 13 -> 14 (T065)
+
+- change: `ClientMsg::AiCliAvailabilityRequest` gains `cwd: Option<PathBuf>`; `PROTOCOL_VERSION`
+  13 -> 14 (`SCHEMA_HASH` regenerates in `build.rs`); the two literal pins
+  (`protocol_auth.rs::the_protocol_version_is_fourteen`, `schema_hash.rs`'s
+  `FEATURE_026_PROTOCOL_VERSION`) follow the bump the way their comments ask; the daemon ignores
+  the field and the client sends `None` until U9 and U11/U12 drive them
+- why here: A1's test cannot compile without the field (`error[E0559]: variant
+  ClientMsg::AiCliAvailabilityRequest has no field named cwd`), so this is the minimal declaration
+  its red needs
+- suite: core -> 1141 passed, 0 failed; `ai_cli_availability` old tests and
+  `cli_availability_comes_from_the_service` green
+- commit: `f7b3e5a8`
+
+## Outer loop opened: A1 (RED)
+
+- test: `crates/micold-daemon/tests/ai_cli_availability.rs::a_cli_on_the_path_env_include_adds_for_a_directory_is_offered_for_it` (new)
+- red: `scripts/build-lock.sh cargo test --test ai_cli_availability a_cli_on_the_path_env_include_adds_for_a_directory_is_offered_for_it -- --exact`
+  -> `left: []` / `right: [Pi]` (1 failed). Kept out of commits until it is green.
+
+## Cycle 3: U4 the answer for a directory uses that directory's env-include `PATH`
+
+- test: `crates/micold-daemon/tests/ai_cli_availability.rs::the_answer_for_a_directory_walks_the_path_env_include_resolves_there` (new)
+- red: `scripts/build-lock.sh cargo test --test ai_cli_availability the_answer_for_a_directory_walks_the_path_env_include_resolves_there -- --exact`
+  -> first `error[E0599]: no method named ai_clis_available_in`; with a stub returning
+  `available_here()`: `left: []` / `right: [Pi]` (1 failed)
+- green: `crates/micold-daemon/src/state.rs` `DaemonState::ai_clis_available_in(cwd)` takes the
+  `PATH` entry (case-insensitive, for Windows' `Path`) from `env_include_vars_for(cwd)` and asks
+  `available_in`. No fallback yet: U5/U6 drive it. File -> 3 passed, A1 still red (the handler
+  does not call it yet)
+- refactor: none

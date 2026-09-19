@@ -23,7 +23,7 @@ is covered by T070's visual pass.
 
 | id  | behavior                                                                                                                                                       | traces                      | kind    | state   | test |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | ------- | ------- | ---- |
-| A1  | With `pi` only on the `PATH` that env-include adds for a directory, an `AiCliAvailabilityRequest` for that directory lists Pi                                     | US1-5b, SC-001a, FR-003b    | example | PENDING |      |
+| A1  | With `pi` only on the `PATH` that env-include adds for a directory, an `AiCliAvailabilityRequest` for that directory lists Pi                                     | US1-5b, SC-001a, FR-003b    | example | RED     | `a_cli_on_the_path_env_include_adds_for_a_directory_is_offered_for_it` (crates/micold-daemon/tests/ai_cli_availability.rs) |
 | A2  | With `pi` only on the env-include `PATH` for a directory, starting a Pi session there is not refused as a missing CLI                                            | US1-5b, SC-001a, FR-003b    | example | PENDING |      |
 | A3  | With env-include off and `pi` absent from the service's own `PATH`, the same request does not list Pi                                                            | US1-5, FR-003, FR-003b      | example | PENDING |      |
 
@@ -41,7 +41,7 @@ is covered by T070's visual pass.
 
 | id  | behavior                                                                                                                    | traces            | kind    | state   | test |
 | --- | --------------------------------------------------------------------------------------------------------------------------- | ----------------- | ------- | ------- | ---- |
-| U4  | The availability answer for a directory uses the `PATH` from that directory's env-include result when env-include is on      | FR-003b           | example | PENDING |      |
+| U4  | The availability answer for a directory uses the `PATH` from that directory's env-include result when env-include is on      | FR-003b           | example | DONE    | `the_answer_for_a_directory_walks_the_path_env_include_resolves_there` (crates/micold-daemon/tests/ai_cli_availability.rs) |
 | U5  | With env-include off, the availability answer uses the process's own `PATH`                                                  | FR-003b           | example | PENDING |      |
 | U6  | With env-include on but a result that carries no `PATH` (the script left it unchanged), the process's own `PATH` is used      | FR-003b           | example | PENDING |      |
 | U7  | A second availability answer for the same directory is served from the shared cache: the script runs once, not twice         | SC-006a, FR-003b  | example | PENDING |      |
