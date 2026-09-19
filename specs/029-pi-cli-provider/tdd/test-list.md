@@ -52,7 +52,7 @@ is covered by T070's visual pass.
 | id  | behavior                                                                                                                    | traces   | kind    | state   | test |
 | --- | --------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------- | ---- |
 | U9  | A request with no `cwd` resolves the environment in the user's home directory                                                | FR-003b  | example | DONE    | `a_request_with_no_directory_is_answered_for_the_home_directory` (crates/micold-daemon/tests/ai_cli_availability.rs) |
-| U10 | While a slow env-include resolution runs for an availability request, another request on the same connection is answered     | FR-003b  | example | PENDING |      |
+| U10 | While a slow env-include resolution runs for an availability request, another request on the same connection is answered     | FR-003b  | example | DONE    | `a_slow_environment_does_not_hold_up_the_next_request_on_the_connection` (crates/micold-daemon/tests/ai_cli_availability.rs) |
 
 ### `crates/micold-client/src/main.rs`, `shell/persist.rs`, `shell/daemon_sync.rs`
 

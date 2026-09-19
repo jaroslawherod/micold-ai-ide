@@ -432,3 +432,48 @@ async fn a_request_with_no_directory_is_answered_for_the_home_directory() {
          directory would get (FR-003b); the script ran in {sourced_in:?}"
     );
 }
+
+/// U10: resolving the environment can take up to the environment-include timeout, and the
+/// connection loop is also where this client's `Ping` is answered — so a slow script must not
+/// hold up the next request on the same connection (FR-003b's last sentence).
+#[tokio::test]
+async fn a_slow_environment_does_not_hold_up_the_next_request_on_the_connection() {
+    const SLOW_SECONDS: u32 = 3;
+    let _service = ServicePath::without_clis(None);
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let script = include_script(
+        store.path(),
+        &format!("sleep {SLOW_SECONDS}\n"),
+        &format!("Start-Sleep -Seconds {SLOW_SECONDS}\r\n"),
+    );
+
+    let state = service_with(store.path(), Some(&script));
+    let mut client = connect(&state).await;
+    client
+        .send(Frame::Control(ClientMsg::AiCliAvailabilityRequest {
+            req: 10,
+            cwd: Some(project.path().to_path_buf()),
+        }))
+        .await
+        .unwrap();
+    client
+        .send(Frame::Control(ClientMsg::LogLocationRequest { req: 11 }))
+        .await
+        .unwrap();
+
+    loop {
+        match client.next().await.unwrap().unwrap() {
+            Frame::Control(DaemonMsg::LogLocation { req, .. }) => {
+                assert_eq!(req, 11, "fixture check: the reply to the second request");
+                break;
+            }
+            Frame::Control(DaemonMsg::AiCliAvailability { .. }) => panic!(
+                "the availability answer arrived before the request sent after it: resolving the \
+                 environment held up the connection loop for the script's {SLOW_SECONDS}s"
+            ),
+            Frame::Control(DaemonMsg::CatalogChanged { .. }) | Frame::Grid(_) => continue,
+            other => panic!("expected LogLocation, got {other:?}"),
+        }
+    }
+}

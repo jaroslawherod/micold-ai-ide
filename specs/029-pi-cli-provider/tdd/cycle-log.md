@@ -142,3 +142,16 @@ failed before the implementation.
 
 - `a_cli_on_the_path_env_include_adds_for_a_directory_is_offered_for_it` passes with cycle 7's
   handler change (same run: file -> 8 passed). Committed with cycle 7.
+
+## Cycle 8: U10 a slow env-include resolution does not hold up the next request
+
+- test: `crates/micold-daemon/tests/ai_cli_availability.rs::a_slow_environment_does_not_hold_up_the_next_request_on_the_connection` (new)
+- red: `scripts/build-lock.sh cargo test --test ai_cli_availability a_slow_environment_does_not_hold_up_the_next_request_on_the_connection -- --exact`
+  -> `the availability answer arrived before the request sent after it: resolving the environment
+  held up the connection loop for the script's 3s` (1 failed, 3.08s)
+- green: the handler clones the state into a `tokio::spawn`ed task that resolves on
+  `spawn_blocking` and sends `AiCliAvailability` when done — the BUG-009 pattern the worktree-create
+  arm already uses. The state lock is never held across the resolution (`env_include_vars_for`
+  drops it before sourcing). File -> 9 passed; daemon crate -> 352 passed, 0 failed
+- refactor: the handler's comment rewritten for FR-003b (which environment, why spawned); no code
+  moved
