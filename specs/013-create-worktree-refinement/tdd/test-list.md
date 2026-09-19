@@ -58,7 +58,7 @@ Tests in `crates/micold-client/tests/add_worktree_dismissal.rs`, observing
 | U7  | Cancel on a `Creating` form after a stage was reported, then `CreateFailed`: the notification names that stage's label | FR-010b, FR-009 | example | DONE | `crates/micold-client/tests/add_worktree_dismissal.rs::a_failure_after_cancel_names_the_stage_it_failed_at` |
 | U8  | `CreateStageChanged` after the form was cancelled mid-create still updates the stage the failure will name | FR-010b, FR-009 | example | DONE | `crates/micold-client/tests/add_worktree_dismissal.rs::a_stage_reported_after_cancel_is_the_one_a_failure_names` |
 | U9  | Cancel on a `Creating` form, then `Created(worktree)`: an info notification names the worktree's `dir_name` | FR-010b | example | DONE | `crates/micold-client/tests/add_worktree_dismissal.rs::a_create_succeeding_after_cancel_is_reported_naming_the_worktree` |
-| U10 | With the form open, `CreateFailed` and `Created` raise no notification (the in-overlay presentation stands alone) | FR-010b ("no duplicate notification") | example | PENDING | |
+| U10 | With the form open, `CreateFailed` and `Created` raise no notification (the in-overlay presentation stands alone) | FR-010b ("no duplicate notification") | example | DONE | `crates/micold-client/tests/add_worktree_dismissal.rs::outcomes_with_the_form_open_raise_no_notification` |
 | U11 | Cancel on an `Editing` form, then a stray `CreateFailed`: no notification — nothing was running | FR-010b (boundary: only a create cancelled mid-flight is reported) | example | PENDING | |
 
 ### `crates/micold-client/src/shell/daemon_sync.rs` — interrupted create with no form

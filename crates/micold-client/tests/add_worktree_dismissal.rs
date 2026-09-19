@@ -275,3 +275,34 @@ fn a_create_succeeding_after_cancel_is_reported_naming_the_worktree() {
         "the notification must name the created worktree, got {message:?}"
     );
 }
+
+/// U10 — with the form open, outcomes keep their in-dialog presentation and raise no notification.
+///
+/// The dialog shows a failure on its error line and closes on success (FR-009, FR-010); a
+/// notification on top of either would say the same thing twice (FR-010b).
+#[test]
+fn outcomes_with_the_form_open_raise_no_notification() {
+    let mut failed = form_creating();
+    failed.update(Message::WorktreeForm(FormMsg::CreateFailed(
+        "git failed to create the worktree".into(),
+    )));
+    assert_eq!(
+        notice(&failed),
+        None,
+        "a failure the open dialog shows must not also be a notification"
+    );
+    assert!(
+        failed.worktree_form.worktree_error.is_some(),
+        "the open dialog must still show the failure on its own error line"
+    );
+
+    let mut created = form_creating();
+    created.update(Message::WorktreeForm(FormMsg::Created(worktree_named(
+        "feat-probe-two",
+    ))));
+    assert_eq!(
+        notice(&created),
+        None,
+        "a success the open dialog closes on must not also be a notification"
+    );
+}

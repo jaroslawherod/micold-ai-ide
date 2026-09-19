@@ -121,3 +121,15 @@ existed and failed before the implementation.
   Crate suite -> 1808 passed, 0 failed, 2 ignored (139 binaries)
 - refactor: none needed
 - commit: `fix(013): a create that succeeds after Cancel is announced (BUG-001 U9)`
+
+## Cycle 10: U10 outcomes with the form open raise no notification
+
+- test: `crates/micold-client/tests/add_worktree_dismissal.rs::outcomes_with_the_form_open_raise_no_notification` (new)
+- red: none on arrival. `scripts/build-lock.sh cargo test -p micold-client --test add_worktree_dismissal outcomes_with_the_form_open_raise_no_notification -- --exact`
+  -> `1 passed`: U6 and U9 already notify only for a create cancelled with no form open.
+  Deliberate mutant: `created` announces unconditionally (`let announce = true`) -> `left: Some((Info, "Worktree \"feat-probe-two\" created."))` /
+  `right: None` at `add_worktree_dismissal.rs:303` (1 failed). Mutant reverted with `git checkout`.
+- green: no implementation change. Crate suite -> 1809 passed, 0 failed, 2 ignored (139 binaries)
+- refactor: none needed
+- commit: `test(013): outcomes shown in the open dialog raise no notification (BUG-001 U10)`
+- notes: green on arrival because U6/U9 were written guard-first; this pins the "no duplicate" half of FR-010b
