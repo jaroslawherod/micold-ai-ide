@@ -49,3 +49,15 @@ existed and failed before the implementation.
 - refactor: none needed
 - commit: `fix(013): a protected dialog stops Escape reaching the Settings draft behind it (BUG-001 U3)`
 - notes: `ui/mod.rs` wires the scrim's `on_dismiss` only when `on_escape` answers, so the scrim is inert during a create
+
+## Cycle 4: U4 a form whose create failed is dismissed by Escape again
+
+- test: `crates/micold-client/tests/add_worktree_dismissal.rs::a_form_whose_create_failed_is_dismissed_by_escape_again` (new)
+- red: none on arrival. `scripts/build-lock.sh cargo test -p micold-client --test add_worktree_dismissal a_form_whose_create_failed_is_dismissed_by_escape_again -- --exact`
+  -> `1 passed`: `open_in` reads the status afresh, and `create_failed` already returns the form to `Editing`.
+  Deliberate mutant: `create_failed` no longer sets `status = Editing` -> `left: None` /
+  `right: Some(WorktreeForm(Cancelled))` at `add_worktree_dismissal.rs:114` (1 failed). Mutant reverted with `git checkout`.
+- green: no implementation change. Crate suite -> 1803 passed, 0 failed, 2 ignored (139 binaries)
+- refactor: none needed
+- commit: `test(013): a failed create's form is dismissible again (BUG-001 U4)`
+- notes: green on arrival; it pins the end of the protected span
