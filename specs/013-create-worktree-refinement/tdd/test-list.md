@@ -28,8 +28,8 @@ the modal's `on_dismiss`). The rendered result is the T039 visual pass.
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| A1  | With a create in flight, Escape and the scrim leave the form open and still `Creating` | FR-010a, SC-006 | example | PENDING | |
-| A2  | With a create in flight, the in-dialog Cancel closes the form; the daemon's later failure reply reaches the user as a notification carrying its message | FR-010b, SC-006 | example | PENDING | |
+| A1  | With a create in flight, Escape and the scrim leave the form open and still `Creating` | FR-010a, SC-006 | example | DONE | `crates/micold-client/src/main_tests.rs::a_create_in_flight_holds_its_dialog_through_escape_and_the_scrim` |
+| A2  | With a create in flight, the in-dialog Cancel closes the form; the daemon's later failure reply reaches the user as a notification carrying its message | FR-010b, SC-006 | example | DONE | `crates/micold-client/src/main_tests.rs::a_create_failing_after_cancel_reaches_the_user_as_a_notification` |
 | A3  | Against a repository with submodules: scrim click and Escape mid-create change nothing; Cancel closes the dialog; the outcome arrives as a notification | FR-010a, FR-010b, SC-006 | example | PENDING | visual pass, T039 |
 
 ## Inner loop: unit behaviors
