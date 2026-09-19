@@ -1405,7 +1405,7 @@ the ones it found nothing for. FR-004e, FR-009a and SC-012a settle both.
 
 ### Tests for BUG-006 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T208 [BUG-006] [U32] [U33] [U34] *(test)* `crates/micold-core/tests/sandbox_credentials.rs` and
+- [X] T208 [BUG-006] [U32] [U33] [U34] *(test)* `crates/micold-core/tests/sandbox_credentials.rs` and
       `crates/micold-core/tests/sandbox_argv.rs`. `AiCliAuth` produces exactly one mount, of
       `~/.claude/.credentials.json`, and never of the `~/.claude` directory. Its `-v` flag ends
       `:rw`, and the other three shares still end `:ro` (N-4). No credential mount names a directory under
@@ -1431,12 +1431,12 @@ the ones it found nothing for. FR-004e, FR-009a and SC-012a settle both.
 
 ### Implementation for BUG-006
 
-- [ ] T211 [BUG-006] [U32] [U33] [U34] [U35] [U38] `crates/micold-core/src/sandbox/mod.rs` (`CredentialLayout::conventional`,
+- [X] T211 [BUG-006] [U32] [U33] [U34] [U35] [U38] `crates/micold-core/src/sandbox/mod.rs` (`CredentialLayout::conventional`,
       `CredentialMount`) and `crates/micold-core/src/sandbox/argv.rs` (`mount_args`). Narrow
       `ai_cli_auth` to the token file. Give `CredentialMount` a mode taken from the share, so that
       `AiCliAuth` is `:rw`. Rewrite the "read-only without exception" comment to state N-4. Update
       the share's FR-004b wording to say a session can use and replace the sign-in token.
-- [ ] T212 [BUG-006] [U36] `crates/micold-client/src/shell/startup.rs` (the `prune_empty_sessions` call)
+- [X] T212 [BUG-006] [U36] `crates/micold-client/src/shell/startup.rs` (the `prune_empty_sessions` call)
       and `shell/persist.rs`. Skip the client-side prune under `LocalSandbox` placement. The daemon's
       prune runs where the session runs and stays the only judge there (FR-009a, FR-023c). Do not
       map host paths into `<state>/sandbox-home` (FR-003a).
