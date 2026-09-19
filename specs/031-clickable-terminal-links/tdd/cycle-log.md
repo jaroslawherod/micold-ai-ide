@@ -625,3 +625,11 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
 - mutant 2, the predicate given `""` as the value -> `an_inherited_colour_depth_is_kept` fails (`left: None` / `right: Some("truecolor")`)
 - both mutants restored with `git checkout`, suite 4 passed
 - commit: `48038cac`
+
+## Cycle 63: U162 M4 review fix
+
+- origin: review A round 1 (low): `strip_inherited_terminal_identity` listed the builder's `iter_full_env_as_str()`, which skips entries that are not UTF-8, so such an identity variable reached the session while the include shell (lossy) removed it
+- test: `session_identity_env.rs::an_identity_variable_that_is_not_utf8_is_dropped_too` (Unix: `TERMINAL_EMULATOR=JetBrains-\xff` on the re-executed child); `parse_dump` now reads the dump lossily
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test session_identity_env` -> `a spawn_shell session must not inherit TERMINAL_EMULATOR, whatever its bytes (FR-006)` `left: Some("JetBrains-�")` / `right: None` (4 passed; 1 failed)
+- green: the strip matches the daemon's own `std::env::vars_os()` lossily, plus the builder's UTF-8 entries (Windows adds the registry's) -> 5 passed
+- commit: `fix(031): drop a non-UTF-8 inherited identity variable too (U162)`

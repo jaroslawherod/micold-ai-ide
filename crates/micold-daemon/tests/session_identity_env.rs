@@ -70,6 +70,19 @@ fn write_stand_in(dir: &Path) -> PathBuf {
 /// Re-execute `test` with `inherited` in its environment and `include` as the sessions' include
 /// values, and return what each session saw.
 fn sessions_seeing(test: &str, inherited: &[(&str, &str)], include: &[(&str, &str)]) -> Seen {
+    let inherited = inherited
+        .iter()
+        .map(|(k, v)| (OsString::from(k), OsString::from(v)))
+        .collect();
+    sessions_seeing_os(test, inherited, include)
+}
+
+/// [`sessions_seeing`], for an inherited environment that need not be UTF-8.
+fn sessions_seeing_os(
+    test: &str,
+    inherited: Vec<(OsString, OsString)>,
+    include: &[(&str, &str)],
+) -> Seen {
     let dir = tempfile::tempdir().expect("a temp dir");
     let stand_in = write_stand_in(dir.path());
 
@@ -84,7 +97,7 @@ fn sessions_seeing(test: &str, inherited: &[(&str, &str)], include: &[(&str, &st
         child.env_remove(key);
     }
     child
-        .envs(inherited.iter().copied())
+        .envs(inherited)
         .env(CHILD_DIR, dir.path())
         .env(
             CHILD_INCLUDE,
@@ -110,8 +123,7 @@ fn sessions_seeing(test: &str, inherited: &[(&str, &str)], include: &[(&str, &st
 }
 
 fn parse_dump(path: &Path) -> HashMap<String, String> {
-    std::fs::read_to_string(path)
-        .expect("the session's environment dump")
+    String::from_utf8_lossy(&std::fs::read(path).expect("the session's environment dump"))
         .lines()
         .filter_map(|line| line.split_once('='))
         .map(|(k, v)| (k.to_string(), v.trim_end_matches('\r').to_string()))
@@ -263,6 +275,32 @@ fn term_stays_xterm_256color() {
             env.get("TERM").map(String::as_str),
             Some("xterm-256color"),
             "a {spawn} session's TERM is pinned as before (contract §4)"
+        );
+    }
+}
+
+/// An identity variable is dropped even when its value is not UTF-8 (review A, M4). Unix only: a
+/// Windows environment is UTF-16, where the same bytes cannot be set.
+#[cfg(unix)]
+#[test]
+fn an_identity_variable_that_is_not_utf8_is_dropped_too() {
+    use std::os::unix::ffi::OsStringExt;
+    if child_side() {
+        return;
+    }
+    let seen = sessions_seeing_os(
+        "an_identity_variable_that_is_not_utf8_is_dropped_too",
+        vec![(
+            OsString::from("TERMINAL_EMULATOR"),
+            OsString::from_vec(b"JetBrains-\xff".to_vec()),
+        )],
+        &[],
+    );
+    for (spawn, env) in seen.both() {
+        assert_eq!(
+            env.get("TERMINAL_EMULATOR"),
+            None,
+            "a {spawn} session must not inherit TERMINAL_EMULATOR, whatever its bytes (FR-006)"
         );
     }
 }
