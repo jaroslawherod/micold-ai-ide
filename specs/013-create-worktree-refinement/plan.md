@@ -204,11 +204,13 @@ plan was written against.*
   `Msg::Cancelled` unconditionally. The daemon create is not aborted — no cancellation exists on
   the wire, and aborting a submodule fetch midway would need its own rollback design; that is out
   of scope for this bug.
-- **Outcome without a form.** `created`, `create_failed` and `create_interrupted` return a
+- **Outcome without a form.** `created` and `create_failed` return a
   notification `Outcome` (`features::notifications::{info, error}`) when
   `state.worktree_form.form` is `None`, and behave exactly as today when it is open. The failure
   wording carries the failed stage (FR-009). This is decision logic, so it is test-first in the
-  client's reducer tests, not covered by the GUI-wiring exception.
+  client's reducer tests, not covered by the GUI-wiring exception. `create_interrupted` needs no
+  change: with no form open, `shell/daemon_sync.rs` never reaches it and already raises the
+  notification itself (010 BUG-020, test-list U12).
 - **Constitution**: I — the status-dependent rule and the outcome routing are both tested before
   implementation; the only untested glue is the scrim, which already reads the tested
   `on_escape` answer. VII — `docs/user-guide/worktrees-and-sessions.md` "Creating a worktree"

@@ -507,9 +507,9 @@ Behavior ids refer to `tdd/test-list.md`.
   `Creating` (the only way out). Per FR-010a.
 - [ ] T034 [P] [US3] [U6] [U7] [U8] [U9] [U10] [U11] Failing reducer tests: with the form closed (`state.worktree_form.form ==
   None`), `created` yields an info notification naming the worktree, `create_failed` yields an
-  error notification carrying the message and the failed stage, and `create_interrupted` yields a
-  notification with the existing interrupted wording; with the form open, all three behave as
-  today and yield no notification. Per FR-010b.
+  error notification carrying the message and the failed stage; with the form open, both behave
+  as today and yield no notification. (An interrupted create with no form is already notified by
+  `shell/daemon_sync.rs` — U12, 010 BUG-020 — so `create_interrupted` is not changed.) Per FR-010b.
 
 ### Implementation
 
@@ -522,7 +522,7 @@ Behavior ids refer to `tdd/test-list.md`.
   `ui/mod.rs`'s scrim `on_dismiss` is then absent during a create. T033 Green. Depends on T033,
   T035.
 - [ ] T037 [US3] [U6] [U7] [U8] [U9] [U10] [U11] Route create outcomes to notifications when the form is closed:
-  `created`/`create_failed`/`create_interrupted` return `features::notifications::{info, error}`
+  `created`/`create_failed` return `features::notifications::{info, error}`
   outcomes, and their callers forward them. T034 Green. Depends on T034.
 
 ### Documentation & validation

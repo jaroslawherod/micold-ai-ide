@@ -11,7 +11,7 @@ suite_baseline: green # 3276 passed, 0 failed, 6 ignored, 326 binaries at f63834
 # Test List: Worktree Creation & Deletion Flow Refinement — BUG-001 (the create overlay holds its ground mid-create)
 
 **Scope.** Feature 013 closed before this extension was installed, and this list was written for
-bugfix BUG-001 only (`bugs/BUG-001.md`, tasks T032–T039). It covers `FR-010a`, `FR-010b` and
+bugfix BUG-001 only (`bugs/BUG-001.md`, tasks T032–T041). It covers `FR-010a`, `FR-010b` and
 `SC-006`. The feature's other criteria shipped before the list existed and are not re-derived here.
 
 Derived from `spec.md` (FR-010a, FR-010b, SC-006, the two BUG-001 Edge Cases) and `plan.md`
@@ -79,8 +79,8 @@ Tests in `crates/micold-client/tests/add_worktree_dismissal.rs`, observing
   messages carry no operation identity past `daemon_sync`, so the reopened form can absorb the
   earlier create's result. This was already reachable through a scrim click before BUG-001; it is
   a follow-up, not part of this fix.
-- Relabelling Cancel while a create runs: an open question raised with the user after the patch,
-  not a requirement.
+- Relabelling Cancel while a create runs: decided against by the user (ledger D3); the button stays
+  "Cancel".
 
 ## Verification commands
 
