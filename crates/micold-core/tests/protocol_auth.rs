@@ -164,15 +164,16 @@ fn the_two_new_refusals_are_distinct_values() {
 /// feature 029's Pi provider added `AiCli::Pi` and the activity-component switch. And 12 since `002`
 /// BUG-003 added `ClientMsg::ProjectActivate`. And 13 since `006` BUG-007 added
 /// `ClientMsg::TerminalColorScheme`. And 14 since feature 032 put `SessionLabel::Derived` on
-/// `SessionSummary.title`.
+/// `SessionSummary.title`. And 15 since `029` BUG-001 put the directory on
+/// `ClientMsg::AiCliAvailabilityRequest`, having developed against 13 while 032 took 14.
 ///
 /// The literal is the point. `SCHEMA_HASH` is generated and moves on its own; this integer does
 /// not, so a message added without touching it ships a wire change under an unchanged version and
 /// two builds that disagree will shake hands anyway. Failing here is the reminder — and it worked:
 /// 029 arrived here because of this test, not despite it.
 #[test]
-fn the_protocol_version_is_fourteen() {
-    assert_eq!(PROTOCOL_VERSION, 14);
+fn the_protocol_version_is_fifteen() {
+    assert_eq!(PROTOCOL_VERSION, 15);
 }
 
 /// The daemon finds its token where the image says it will. If these two drift, a sandbox starts

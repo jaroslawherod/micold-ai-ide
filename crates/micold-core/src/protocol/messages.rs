@@ -531,6 +531,12 @@ pub enum ClientMsg {
     AiCliAvailabilityRequest {
         /// Correlation id.
         req: u64,
+        /// The directory the choice is being made for — a project root or a worktree — or `None`
+        /// where no directory is in play (Settings), which the service answers for the user's home
+        /// directory (feature 029, BUG-001, FR-003b). The answer follows the environment a session
+        /// started there would be spawned with, so a CLI that only the environment-include script
+        /// puts on `PATH` is offered exactly where a session would find it.
+        cwd: Option<PathBuf>,
     },
 
     // --- Diagnostics ---

@@ -410,7 +410,7 @@ pub fn ask_cli_availability(app: &mut App) {
     };
     let req = app.next_req;
     app.next_req += 1;
-    d.send(ClientMsg::AiCliAvailabilityRequest { req });
+    d.send(ClientMsg::AiCliAvailabilityRequest { req, cwd: None });
 }
 
 /// What the service's answer describes, from what this client knows about the service it started.

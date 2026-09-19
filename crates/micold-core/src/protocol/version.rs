@@ -55,7 +55,11 @@
 /// derived from the first turn rides the wire as itself, so an older peer would fail to decode it.
 /// `SessionLabel` lives in `session.rs`, outside what `SCHEMA_HASH` covers, so only
 /// `tests/schema_hash.rs`'s pin forced this bump (032 research R3).
-pub const PROTOCOL_VERSION: u32 = 14;
+/// Bumped 14 → 15 for `ClientMsg::AiCliAvailabilityRequest::cwd` (`029` BUG-001): which CLIs are
+/// offered follows the environment a session in that directory is spawned with (FR-003b), so the
+/// request names the directory. An older peer would fail to decode the field. It developed against
+/// 13 while feature 032 took 14 here, so both cannot be 14.
+pub const PROTOCOL_VERSION: u32 = 15;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
