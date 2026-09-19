@@ -10,6 +10,9 @@
 //! `crates/micold-daemon/tests/ai_cli_availability.rs` holds the other end: that the service
 //! reports this over the protocol rather than a constant. Together they are FR-023c.
 
+// unix-only: every test here installs its executables by setting their unix mode bits.
+#![cfg(unix)]
+
 use micold_core::provider::available_here;
 use micold_core::session::AiCli;
 
