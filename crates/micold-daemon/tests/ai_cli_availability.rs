@@ -14,6 +14,7 @@
 //! `micold-client/tests/cli_availability_comes_from_the_service.rs`, which asserts the client
 //! *cannot* answer it locally any more.
 
+use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use futures_util::{SinkExt, StreamExt};
@@ -62,9 +63,13 @@ async fn connect(state: &Arc<DaemonState>) -> Client {
     client
 }
 
-async fn ask(client: &mut Client, req: u64) -> Vec<AiCli> {
+/// Ask which CLIs a session in `cwd` would find (`None`: no directory is in play, as in Settings).
+async fn ask(client: &mut Client, req: u64, cwd: Option<&Path>) -> Vec<AiCli> {
     client
-        .send(Frame::Control(ClientMsg::AiCliAvailabilityRequest { req }))
+        .send(Frame::Control(ClientMsg::AiCliAvailabilityRequest {
+            req,
+            cwd: cwd.map(Path::to_path_buf),
+        }))
         .await
         .unwrap();
     loop {
@@ -137,7 +142,7 @@ async fn the_service_reports_the_clis_on_its_own_path() {
     let mut client = connect(&state).await;
 
     assert_eq!(
-        ask(&mut client, 7).await,
+        ask(&mut client, 7, None).await,
         vec![AiCli::ClaudeCode],
         "the service reported something other than what is on its own PATH — which is the whole \
          content of FR-023c, since under sandboxed placement its PATH is the image's and the \
@@ -158,7 +163,7 @@ async fn an_environment_with_no_cli_reports_an_empty_set_rather_than_failing() {
     let mut client = connect(&state).await;
 
     assert!(
-        ask(&mut client, 1).await.is_empty(),
+        ask(&mut client, 1, None).await.is_empty(),
         "an environment with no AI CLI must answer with an empty set, not with silence"
     );
 }

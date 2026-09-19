@@ -168,7 +168,11 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// Eighth time, same case, same answer — with one difference worth writing down: `SessionLabel`
 /// lives in `session.rs`, which `SCHEMA_HASH` does **not** cover (it hashes the protocol sources
 /// only), so the hash did not move and nothing but this pin forced the bump (032 research R3).
-const FEATURE_026_PROTOCOL_VERSION: u32 = 14;
+///
+/// And 14 → 15 for `029` BUG-001's `cwd` on `ClientMsg::AiCliAvailabilityRequest`, which had
+/// developed against the 13 that feature 032's label took to 14. Ninth time, same case, same
+/// answer.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 15;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

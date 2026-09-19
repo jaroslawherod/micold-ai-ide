@@ -647,7 +647,7 @@ where
             // Recomputed per request rather than cached at boot: it is one `PATH` walk per
             // variant, the client only asks when a choice is offered, and research R11's rule is
             // that this answer is never stored.
-            ClientMsg::AiCliAvailabilityRequest { req } => {
+            ClientMsg::AiCliAvailabilityRequest { req, .. } => {
                 let available = micold_core::provider::available_here();
                 tracing::debug!(client = id, ?available, "AI CLI availability reported");
                 state.send(id, DaemonMsg::AiCliAvailability { req, available });
