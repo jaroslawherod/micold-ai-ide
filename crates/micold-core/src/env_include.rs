@@ -705,7 +705,15 @@ mod terminal_identity_tests {
             ("TERM_PROGRAM".to_string(), None),
         ];
         let cwd = Path::new(".");
-        let mut builders = vec![
+        // The bash builder only exists where it runs; the PowerShell ones are built everywhere.
+        #[cfg(not(windows))]
+        let bash = Some((
+            "bash",
+            bash_command(Path::new("/dev/null"), cwd, inherited()),
+        ));
+        #[cfg(windows)]
+        let bash = None;
+        let builders = [
             (
                 "powershell baseline",
                 powershell_baseline_command(cwd, inherited()),
@@ -714,13 +722,9 @@ mod terminal_identity_tests {
                 "powershell attempt",
                 powershell_attempt_command(Path::new("x.ps1"), cwd, inherited()),
             ),
-        ];
-        // The bash builder only exists where it runs; the PowerShell ones are built everywhere.
-        #[cfg(not(windows))]
-        builders.push((
-            "bash",
-            bash_command(Path::new("/dev/null"), cwd, inherited()),
-        ));
+        ]
+        .into_iter()
+        .chain(bash);
         for (name, cmd) in builders {
             assert_eq!(
                 env_changes(&cmd),
