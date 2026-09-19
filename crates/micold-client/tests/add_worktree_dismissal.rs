@@ -98,3 +98,27 @@ fn a_create_in_flight_over_a_settings_draft_does_not_fall_through_to_the_draft()
          discards the draft behind it (FR-010a)"
     );
 }
+
+/// U4 — the protection lasts exactly as long as the create: once it fails, Escape closes again.
+///
+/// A failed create returns the form to `Editing` with the error on it, and the user may just want
+/// to walk away. Holding the dialog past the operation would outlive the reason for it (FR-010a,
+/// "for exactly the span of the operation").
+#[test]
+fn a_form_whose_create_failed_is_dismissed_by_escape_again() {
+    let mut state = form_creating();
+    state.update(Message::WorktreeForm(FormMsg::CreateFailed(
+        "git failed to create the worktree".into(),
+    )));
+
+    assert_eq!(
+        micold_client::overlay::registry::escape(&state),
+        Some(Message::WorktreeForm(FormMsg::Cancelled)),
+        "a create that has failed is over; Escape must close its form again"
+    );
+    assert_eq!(
+        on_escape(&state),
+        Some(Message::WorktreeForm(FormMsg::Cancelled)),
+        "a create that has failed is over; the scrim must close its form again"
+    );
+}
