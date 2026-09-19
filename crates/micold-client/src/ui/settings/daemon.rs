@@ -88,7 +88,20 @@ fn sharing_summary(draft: &SettingsDraft) -> String {
         .iter()
         .map(|c| c.label())
         .collect();
-    format!("Shared with the container: {}.", shared.join(", "))
+    let summary = format!("Shared with the container: {}.", shared.join(", "));
+    // FR-004e: every share is read-only but the sign-in, which the CLI rewrites on each refresh.
+    // Said here because it is the one share that grants more than reading.
+    if draft
+        .shared_credentials()
+        .contains(&CredentialShare::AiCliAuth)
+    {
+        format!(
+            "{summary} A session can use the AI CLI sign-in and replace its token, which the CLI \
+             does each time it refreshes it."
+        )
+    } else {
+        summary
+    }
 }
 
 /// What the user is told at the moment they choose to cut the sandbox off (FR-018).
@@ -507,5 +520,22 @@ mod tests {
         assert!(support.contains("container"));
         // And what is *not* lost, or the warning reads as "your work goes away" (FR-005).
         assert!(support.contains("resumable"));
+    }
+
+    /// FR-004e/FR-004b (BUG-006): the one writable share says so where it is chosen. A session can
+    /// not only use the sign-in token but replace it, and a user who cannot see that believes the
+    /// share is read-only like the rest.
+    #[test]
+    fn a_shared_sign_in_says_a_session_can_replace_the_token() {
+        let mut settings = micold_core::settings::Settings::default();
+        settings.daemon.sandbox.credentials =
+            std::collections::BTreeSet::from([CredentialShare::AiCliAuth]);
+        let draft = SettingsDraft::from_settings(&settings);
+
+        let summary = sharing_summary(&draft);
+        assert!(
+            summary.contains("replace"),
+            "the sign-in share is writable and the caution does not say so: {summary}"
+        );
     }
 }
