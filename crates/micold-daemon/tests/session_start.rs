@@ -1188,12 +1188,26 @@ impl Drop for NoCliOnPath {
 }
 
 /// A catalog holding one AI-CLI session on `provider`, at the root of a real project directory.
+///
+/// Environment-include is **off** unless the test already wrote settings of its own. The default
+/// sources the developer's own `~/.bashrc`, and since 029 BUG-001 the launch gate walks the `PATH`
+/// that yields (FR-003b) — so on a machine whose `.bashrc` puts `pi` on `PATH`, a test holding
+/// [`NoCliOnPath`] would no longer be describing a machine without the CLI.
 fn catalog_with_ai_cli_session(
     provider: AiCli,
     project_dir: &Path,
     store_dir: &Path,
     id: SessionId,
 ) -> Catalog {
+    let settings_path = store_dir.join("settings.json");
+    if !settings_path.exists() {
+        JsonFileSettingsStore::at(settings_path)
+            .save(&Settings {
+                env_include_enabled: false,
+                ..Settings::default()
+            })
+            .unwrap();
+    }
     let mut sessions = BTreeMap::new();
     sessions.insert(
         project_dir.to_path_buf(),
@@ -1507,4 +1521,84 @@ fn starting_a_session_whose_directory_is_gone_reports_failed_with_the_directory(
         "a start that succeeds clears the recorded failure"
     );
     live.kill().expect("kill");
+}
+
+// ---------------------------------------------------------------------------------------
+// 029 BUG-001 — the launch gate asks about the PATH the session is spawned with (FR-003b)
+// ---------------------------------------------------------------------------------------
+
+/// A2/U8: a CLI that only the environment-include `PATH` holds starts, rather than being refused
+/// as missing — and it is that CLI that runs.
+///
+/// The service offers a CLI when a session in that directory would find it (FR-003b). The launch
+/// gate re-checks at start (FR-010), and if it walked the service's own `PATH` it would refuse the
+/// very CLI the service had just offered: a desktop-started service lacks the version manager's
+/// directory that the session's environment has. The stub records its argv, so the test also
+/// shows the spawn itself found the CLI on the session's `PATH`, which is what the gate promises.
+#[test]
+fn a_cli_only_on_the_env_include_path_starts_rather_than_being_reported_missing() {
+    let _path = NoCliOnPath::new();
+    let session_bin = tempfile::tempdir().unwrap();
+    let launches = session_bin.path().join("argv.log");
+    write_stub(
+        session_bin.path(),
+        AiCli::Pi.provider().command(),
+        &launches,
+        "exit 0",
+    );
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+
+    #[cfg(unix)]
+    let (script_name, script) = (
+        "env-include-script.sh",
+        format!("export PATH=\"{}:$PATH\"\n", session_bin.path().display()),
+    );
+    #[cfg(windows)]
+    let (script_name, script) = (
+        "env-include-script.ps1",
+        format!(
+            "$env:PATH = '{};' + $env:PATH\r\n",
+            session_bin.path().display()
+        ),
+    );
+    let script_path = store.path().join(script_name);
+    std::fs::write(&script_path, script).unwrap();
+    JsonFileSettingsStore::at(store.path().join("settings.json"))
+        .save(&Settings {
+            env_include_enabled: true,
+            env_include_script_path: script_path.to_string_lossy().into_owned(),
+            // No activity component: this is about finding the CLI, and the component would be
+            // materialised under the real data directory.
+            pi_activity_component: false,
+            ..Settings::default()
+        })
+        .unwrap();
+
+    let id = SessionId::from_uuid(Uuid::from_u128(0x0029_B001));
+    let state = DaemonState::new(catalog_with_ai_cli_session(
+        AiCli::Pi,
+        project.path(),
+        store.path(),
+        id,
+    ));
+
+    let result = state.start_session(id, micold_core::terminal::LaunchMode::Fresh);
+    let ran = wait_until(Duration::from_secs(5), || {
+        std::fs::read_to_string(&launches).is_ok_and(|log| !log.is_empty())
+    });
+    if let Some(live) = state.live_session(id) {
+        let _ = live.kill();
+    }
+
+    assert!(
+        result.is_ok(),
+        "a CLI a session in this directory would find was offered for it, so starting it there \
+         must not be refused as missing (FR-003b, SC-001a): {result:?}"
+    );
+    assert!(
+        ran,
+        "and the CLI that ran is the one on the session's PATH — the spawn resolves the command \
+         with the environment-include PATH, as the gate assumed"
+    );
 }

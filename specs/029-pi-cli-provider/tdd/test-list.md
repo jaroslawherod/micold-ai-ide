@@ -24,7 +24,7 @@ is covered by T070's visual pass.
 | id  | behavior                                                                                                                                                       | traces                      | kind    | state   | test |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | ------- | ------- | ---- |
 | A1  | With `pi` only on the `PATH` that env-include adds for a directory, an `AiCliAvailabilityRequest` for that directory lists Pi                                     | US1-5b, SC-001a, FR-003b    | example | DONE    | `a_cli_on_the_path_env_include_adds_for_a_directory_is_offered_for_it` (crates/micold-daemon/tests/ai_cli_availability.rs) |
-| A2  | With `pi` only on the env-include `PATH` for a directory, starting a Pi session there is not refused as a missing CLI                                            | US1-5b, SC-001a, FR-003b    | example | PENDING |      |
+| A2  | With `pi` only on the env-include `PATH` for a directory, starting a Pi session there is not refused as a missing CLI                                            | US1-5b, SC-001a, FR-003b    | example | DONE    | `a_cli_only_on_the_env_include_path_starts_rather_than_being_reported_missing` (crates/micold-daemon/tests/session_start.rs) |
 | A3  | With env-include off and `pi` absent from the service's own `PATH`, the same request does not list Pi                                                            | US1-5, FR-003, FR-003b      | example | DONE    | `with_env_include_off_a_cli_only_the_script_would_add_is_not_offered` (crates/micold-daemon/tests/ai_cli_availability.rs) |
 
 ## Inner loop: unit behaviors
@@ -45,7 +45,7 @@ is covered by T070's visual pass.
 | U5  | With env-include off, the availability answer uses the process's own `PATH`                                                  | FR-003b           | example | DONE    | `with_env_include_off_the_answer_walks_the_services_own_path` (crates/micold-daemon/tests/ai_cli_availability.rs) |
 | U6  | With env-include on but a result that carries no `PATH` (the script left it unchanged), the process's own `PATH` is used      | FR-003b           | example | DONE    | `a_script_that_leaves_path_alone_answers_from_the_services_own_path` (crates/micold-daemon/tests/ai_cli_availability.rs) |
 | U7  | A second availability answer for the same directory is served from the shared cache: the script runs once, not twice         | SC-006a, FR-003b  | example | DONE    | `a_second_answer_for_a_directory_does_not_run_the_script_again` (crates/micold-daemon/tests/ai_cli_availability.rs) |
-| U8  | The start-time availability gate in `start_session` uses the same resolution as U4, so it does not refuse what was offered    | FR-003b, SC-001a  | example | PENDING |      |
+| U8  | The start-time availability gate in `start_session` uses the same resolution as U4, so it does not refuse what was offered    | FR-003b, SC-001a  | example | DONE    | `a_cli_only_on_the_env_include_path_starts_rather_than_being_reported_missing` (crates/micold-daemon/tests/session_start.rs) |
 
 ### `crates/micold-daemon/src/server.rs`
 

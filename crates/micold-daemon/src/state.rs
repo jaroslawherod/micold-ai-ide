@@ -582,15 +582,27 @@ impl DaemonState {
         env
     }
 
-    /// Which AI CLIs a session spawned in `cwd` would find (feature 029, BUG-001, FR-003b).
-    pub fn ai_clis_available_in(&self, cwd: &Path) -> Vec<AiCli> {
-        let path = self
-            .env_include_vars_for(cwd)
+    /// The `PATH` a session spawned in `cwd` gets (feature 029, BUG-001, FR-003b): the one the
+    /// environment-include result for `cwd` carries, or this process's own when environment-include
+    /// is off or the script left `PATH` alone — which is exactly what the spawn inherits then.
+    ///
+    /// Through [`Self::env_include_vars_for`], so it shares that per-directory cache with the
+    /// spawns themselves, is invalidated by the same `SettingsSet` and `WorktreeDelete` paths, and
+    /// may block on a first resolution: never call it under the state lock. Matched without regard
+    /// to case, because Windows spells it `Path`.
+    fn spawn_path_for(&self, cwd: &Path) -> std::ffi::OsString {
+        self.env_include_vars_for(cwd)
             .into_iter()
             .find(|(name, _)| name.eq_ignore_ascii_case("PATH"))
             .map(|(_, value)| std::ffi::OsString::from(value))
-            .unwrap_or_else(micold_core::provider::process_path);
-        micold_core::provider::available_in(&path)
+            .unwrap_or_else(micold_core::provider::process_path)
+    }
+
+    /// Which AI CLIs a session spawned in `cwd` would find (feature 029, BUG-001, FR-003b) — the
+    /// answer to `ClientMsg::AiCliAvailabilityRequest`. May block on a first environment-include
+    /// resolution for `cwd`; the caller runs it off the connection loop.
+    pub fn ai_clis_available_in(&self, cwd: &Path) -> Vec<AiCli> {
+        micold_core::provider::available_in(&self.spawn_path_for(cwd))
     }
 
     /// Invalidate the cached environment-include resolution for one directory (BUG-003) — called
@@ -1718,9 +1730,13 @@ impl DaemonState {
         //
         // Reported rather than attempted: spawning a binary that is not on `PATH` fails with an
         // `ENOENT` the user cannot act on, and it would spend the crash-loop budget doing it.
+        //
+        // The `PATH` checked is the one this session is about to be spawned with (029 BUG-001,
+        // FR-003b), the same one the offer was made from. Checking the service's own would refuse
+        // a CLI that only the environment-include script puts on `PATH` — offered, then refused.
         if plan.mode == TerminalMode::AiCli {
             let provider = plan.provider.provider();
-            if !provider.is_available(&micold_core::provider::process_path()) {
+            if !provider.is_available(&self.spawn_path_for(&plan.cwd)) {
                 let reason = missing_cli_reason(
                     provider.display_name(),
                     &std::env::var("MICOLD_IMAGE_REFERENCE").unwrap_or_default(),
