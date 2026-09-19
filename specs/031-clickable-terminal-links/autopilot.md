@@ -18,7 +18,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #341 | Design (clarify, plan, tasks, milestones) | merged | 226d3a8b |
 | #356 | M1 Link recognition core | merged | 33f6491c |
 | #361 | M2 Opening pipeline | merged | 9995dbdb |
-| PR_TBD | M3 Clickable web, mail and declared links in the pane | open | — |
+| #385 | M3 Clickable web, mail and declared links in the pane | open | — |
 
 ## Milestones
 
@@ -26,7 +26,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|---|
 | M1 | T001–T012 | Link recognition core (`micold_core::link`, SC-002 corpus) | #356 | merged |
 | M2 | T013–T022 | Opening pipeline: `LinkActivated` through `update_inner` to the system opener | #361 | merged |
-| M3 | T082, T083, T037, T023–T034 | Clickable web, mail and declared links in the pane | PR_TBD | PR open |
+| M3 | T082, T083, T037, T023–T034 | Clickable web, mail and declared links in the pane | #385 | PR open |
 | M4 | T035, T036, T038–T041 | Session terminal identity and the FORCE_HYPERLINK opt-in | — | pending |
 | M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | — | pending |
 | M6 | T085, T055–T067, T069, T068 | Sandboxed file links, translated and confirmed | — | pending |
