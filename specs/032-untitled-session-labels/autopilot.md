@@ -20,6 +20,13 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
+| M1 | T001–T027, T042, T043, T046 | Untitled `claude` sessions read their first turn after restart; a later title replaces it (US1 #1–4, US2); quickstart §B1/§B2 recorded | — | pending |
+| M2 | T031–T038, T045 | Listed Copilot sessions read `name:`, else `summary:`, else their first-turn label (US1 #5–6) | — | pending |
+| M3 | T028–T030, T044, T039–T041 | A running session shows its label within a minute of the first prompt, spinner first or not (US3); Polish, quickstart §B3 recorded | — | pending |
+
+M1 is 30 tasks (over milestones.md's ~15): kept whole because Setup + Foundational (16) have no deliverable of their own and every `claude` scenario (US1 #1–4) needs all of them, and US2 rides in M1 because without it a title arriving in the records could never replace a label (FR-006 regression on `main`). See tasks.md *Milestones*.
+
+`speckit-analyze` (2026-09-19): 0 CRITICAL, 1 HIGH (quickstart B3 Copilot step tagged M2, fixed to M3), 1 MEDIUM (SC-006 unclaimed: added to M1 with the R7 bound + quickstart §B2 step 4), 1 LOW (phase ranges omitted T042–T045, fixed).
 
 ## Decisions
 
@@ -55,11 +62,18 @@ D2–D4 applied to spec.md (FR-002, FR-006, FR-012 + *Copilot evidence*, US1 #5,
 | 1 | session (opus) | CHANGES | F1 MAJOR: FR-006 left open but US2/FR-008/entity presumed "yes". F2 MAJOR: bounded read decided only in an edge case, clashing with 100% SCs. F3 MAJOR: FR-002 marker lacked evidence; (c) undefined for claude. F4–F9 MINOR: 80-char cap unjustified, concurrency hazards, sensitive text, SC-005 unmeasurable, 029 assumptions superseded silently, checklist ticks. | All accepted. US2/FR-008/entity made conditional on FR-006; FR-014 bound + FR-015 user guide added; *Label-source evidence* table read from the four transcripts ((a) gives 3 identical rows); FR-003 reason + grapheme + ellipsis + tooltip; edge cases added; SC-005 measurable; superseded 029 assumptions listed; checklist unticked with note. |
 | 2 | sonnet | CLEAN | one MINOR: "clear acceptance criteria" tick while FR-002/006/012 pending. | Note added to the checklist. |
 
+### Tasks review log
+
+| Round | Model | Verdict | Findings | Resolution |
+|---|---|---|---|---|
+| 1 | session (opus) | CHANGES | F1 MAJOR: daemon has no provider injection; T020/T026 and R11 said "fake provider". F2 MAJOR: read-only data dir is not a cross-platform persist failure. F3 MAJOR: P1 Copilot milestone after P3 US3. F4–F11 MINOR: M1 note wording, `MinimalProvider` + T013 Copilot-None assertion, T028 file/harness, guard tests unmarked, (new) markers, no M1 quickstart task, plan.md M2 refs, spec.md names `CopilotProvider::read_title`. | All accepted. Real providers under temp env + `ENV` mutex (tasks, R11, test-list, plan); `tmp/file/data` persist failure; milestones reordered (M2 Copilot, M3 US3 + Polish); T046 added for §B1/§B2 in M1; guard kind in test-list; spec wording made implementation-free. |
+
 ### Plan review log
 
 | Round | Model | Verdict | Findings | Resolution |
 |---|---|---|---|---|
 | 1 | session (opus) | CHANGES | F1 BLOCKER: the 44 old Copilot sessions are in no Copilot index and not in micold's catalog, so they are never rows; reading `summary:` changes no row, SC-008/US1 #6 unmeetable. F2 MAJOR: claude CLI-command follower can be a `system/local_command` record (`/reload-plugins`). F3 MAJOR: labels not counted toward the live broadcast. F4 MAJOR: spinner-first order never re-arms `name_stale`. F5–F8 MINOR: Pending re-read cost, per-session writes, schema hash does not cover session.rs, FR-013 row / R6+R10 alternatives / workspace dep. | F2–F8 fixed in contract C3.5a–b′, C6.3a–b, research R3/R5/R6/R7/R8/R9/R10/R11, plan. F1 verified (0 of 44 in the 4 index ids), escalated (category 6), answered D10: spec rescoped to listed sessions. |
+| 2 | sonnet | CLEAN | none; F1–F8 fixes verified against code. | — |
 
 ## Open escalation
 

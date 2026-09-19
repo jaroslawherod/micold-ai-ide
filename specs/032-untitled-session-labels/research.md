@@ -228,7 +228,7 @@ rather than a title — the user decided it is Copilot's title (D9).
 | FR-002, FR-003, FR-012, FR-014 (rule, shaping, bound) | core unit over fixture records | `crates/micold-core/tests/first_turn_label.rs`, fixtures in `crates/micold-core/tests/fixtures/first_turn/` |
 | FR-016 (`summary:`) | core, real provider over a temp `COPILOT_HOME`-shaped dir | `crates/micold-core/tests/copilot_provider.rs` |
 | FR-007, FR-008 (persisted, distinct) | core store round-trip | `crates/micold-core/tests/session_name_round_trip.rs` |
-| FR-001, FR-004, FR-005, FR-006, FR-009, FR-011 | daemon integration, real `Catalog`, fake provider | `crates/micold-daemon/tests/untitled_session_labels.rs` |
+| FR-001, FR-004, FR-005, FR-006, FR-009, FR-011 | daemon integration, real `Catalog`, real `ClaudeProvider`/`CopilotProvider` under a temp `CLAUDE_CONFIG_DIR`/`COPILOT_HOME` (the daemon has no provider injection; env serialised as in `session_name_recovery.rs`) | `crates/micold-daemon/tests/untitled_session_labels.rs` |
 | FR-010 (running session) | daemon integration, `recover_live_session_names` after `note_activity` | same file |
 | Client adoption of `Derived` | client render-free reducer | `crates/micold-client/tests/session_title_sync.rs` |
 | Wire bump | core | `crates/micold-core/tests/schema_hash.rs` |

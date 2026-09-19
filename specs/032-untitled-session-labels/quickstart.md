@@ -50,6 +50,9 @@ title, a label, or neither. Pass:
    label.
 3. Close the app, restart the background service, open the project again. Pass: the same labels
    appear with the list, with no "New session" flash (US1 #3).
+4. SC-006: open a project with ~50 sessions, including transcripts over 1,000 records, on `main`
+   before M1 and on the branch; the list appears no later by eye. The design bound is research R7
+   (one ≤1 MiB read per untitled session, once); there is no automated timing test.
 
 ### B3 — A running session (US3, FR-010, SC-007)
 
@@ -57,4 +60,4 @@ title, a label, or neither. Pass:
    answer completes). Pass: the row shows the prompt's label within 60 s, without reopening.
 2. Let the conversation continue until `claude` titles it. Pass: the row switches to the title, and
    after a service restart still shows the title (US2 #2, FR-006).
-3. Repeat step 1 with a Copilot session before it writes `name:` (M2).
+3. Repeat step 1 with a Copilot session before it writes `name:` (M3).
