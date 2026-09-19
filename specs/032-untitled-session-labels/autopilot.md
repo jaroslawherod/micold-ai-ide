@@ -7,14 +7,15 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: fix/the-name-of-past-session-is-still-not-shown
 - **Started**: 2026-09-19
-- **Phase**: 3-design
-- **Next step**: Design unit: plan review round 2, tasks, milestones, analyze, tasks review, checklists, PR 2.
+- **Phase**: 4-milestones
+- **Next step**: M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #386 | Spec (carries 029 BUG-001 record) | MERGED 2026-09-19 | — |
+| #388 | Design (clarify, plan, tasks, milestones) | OPEN | — |
 
 ## Milestones
 
