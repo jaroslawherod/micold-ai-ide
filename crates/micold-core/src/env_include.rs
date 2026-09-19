@@ -10,6 +10,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -119,6 +120,23 @@ const TERMINAL_IDENTITY_KEYS: [&str; 9] = [
     "KONSOLE_VERSION",
     "DOMTERM",
 ];
+
+/// Remove from `cmd` every variable of `inherited` that names another terminal (contract §3), so
+/// the include shell's diff sees a script that sets one as adding it.
+fn remove_inherited_terminal_identity(
+    cmd: &mut Command,
+    inherited: impl IntoIterator<Item = (OsString, OsString)>,
+) {
+    for (key, value) in inherited {
+        if is_inherited_terminal_identity(
+            &key.to_string_lossy(),
+            &value.to_string_lossy(),
+            cfg!(windows),
+        ) {
+            cmd.env_remove(key);
+        }
+    }
+}
 
 /// How a bounded subprocess run concluded — kept distinct from `EnvIncludeOutcome` so `resolve()`
 /// decides the public category from an unambiguous fact (did it exit, or did we have to kill it)
@@ -270,7 +288,20 @@ fn baseline_env(cwd: &Path, budget: Duration) -> Option<HashMap<String, String>>
 
 #[cfg(not(windows))]
 fn attempt_env(path: &Path, cwd: &Path, timeout: Duration) -> RunOutcome {
+    run_bounded(bash_command(path, cwd, std::env::vars_os()), timeout)
+}
+
+/// The Unix include shell, shared by `baseline_env` and `attempt_env`, with every variable of
+/// `inherited` that names another terminal removed (feature 031, contract
+/// session-terminal-identity §3).
+#[cfg(not(windows))]
+fn bash_command(
+    path: &Path,
+    cwd: &Path,
+    inherited: impl IntoIterator<Item = (OsString, OsString)>,
+) -> Command {
     let mut cmd = Command::new("bash");
+    remove_inherited_terminal_identity(&mut cmd, inherited);
     cmd.current_dir(cwd);
     // `source "$1"` runs directly in THIS shell (never inside a `$(...)` subshell) so any
     // `export`s it makes land in the environment `env -0` dumps below — an earlier version
@@ -300,32 +331,57 @@ fn attempt_env(path: &Path, cwd: &Path, timeout: Duration) -> RunOutcome {
         r#"diag_file=$(mktemp); trap 'status=$?; printf "%s" "$(cat "$diag_file" 2>/dev/null)" >&2; rm -f "$diag_file"; env -0; exit "$status"' EXIT; source "$1" >"$diag_file" 2>&1"#,
     );
     cmd.arg("--").arg(path);
-    run_bounded(cmd, timeout)
+    cmd
 }
 
 #[cfg(windows)]
 fn baseline_env(cwd: &Path, budget: Duration) -> Option<HashMap<String, String>> {
-    // `cwd` (BUG-002): matches `attempt_env`'s working directory for the same reason the Unix
-    // branch does — even though `[System.Environment]::GetEnvironmentVariables()` (process env
-    // vars) isn't expected to vary with the shell's cwd the way bash's `PWD` does, running both
-    // subprocesses from the same directory keeps this branch structurally parallel and immune to
-    // any such quirk.
-    let mut cmd = Command::new("powershell.exe");
-    crate::process::no_window(&mut cmd);
-    cmd.current_dir(cwd);
-    cmd.arg("-NoProfile").arg("-Command").arg(
-        "[System.Environment]::GetEnvironmentVariables().GetEnumerator() | ForEach-Object { \
-         [Console]::Out.Write(\"$($_.Key)=$($_.Value)`0\") }",
-    );
-    match run_bounded(cmd, budget) {
+    match run_bounded(powershell_baseline_command(cwd, std::env::vars_os()), budget) {
         RunOutcome::Exited { stdout, .. } => Some(parse_env_dump(&stdout)),
         // See the Unix branch: `None` rather than an empty map (BUG-003).
         _ => None,
     }
 }
 
+/// The Windows baseline shell, with `inherited`'s terminal identity removed (contract §3). Built on
+/// every OS so the removal is testable here; only Windows runs it.
+#[cfg(any(windows, test))]
+fn powershell_baseline_command(
+    cwd: &Path,
+    inherited: impl IntoIterator<Item = (OsString, OsString)>,
+) -> Command {
+    // `cwd` (BUG-002): matches `attempt_env`'s working directory for the same reason the Unix
+    // branch does — even though `[System.Environment]::GetEnvironmentVariables()` (process env
+    // vars) isn't expected to vary with the shell's cwd the way bash's `PWD` does, running both
+    // subprocesses from the same directory keeps this branch structurally parallel and immune to
+    // any such quirk.
+    let mut cmd = Command::new("powershell.exe");
+    remove_inherited_terminal_identity(&mut cmd, inherited);
+    crate::process::no_window(&mut cmd);
+    cmd.current_dir(cwd);
+    cmd.arg("-NoProfile").arg("-Command").arg(
+        "[System.Environment]::GetEnvironmentVariables().GetEnumerator() | ForEach-Object { \
+         [Console]::Out.Write(\"$($_.Key)=$($_.Value)`0\") }",
+    );
+    cmd
+}
+
 #[cfg(windows)]
 fn attempt_env(path: &Path, cwd: &Path, timeout: Duration) -> RunOutcome {
+    run_bounded(
+        powershell_attempt_command(path, cwd, std::env::vars_os()),
+        timeout,
+    )
+}
+
+/// The Windows include shell, with `inherited`'s terminal identity removed (contract §3). Built on
+/// every OS so the removal is testable here; only Windows runs it.
+#[cfg(any(windows, test))]
+fn powershell_attempt_command(
+    path: &Path,
+    cwd: &Path,
+    inherited: impl IntoIterator<Item = (OsString, OsString)>,
+) -> Command {
     let script = format!(
         "$out = try {{ . '{}' 2>&1 | Out-String }} catch {{ $_.Exception.Message }}; \
          $status = if ($LASTEXITCODE) {{ $LASTEXITCODE }} else {{ 0 }}; \
@@ -336,10 +392,11 @@ fn attempt_env(path: &Path, cwd: &Path, timeout: Duration) -> RunOutcome {
         path.display()
     );
     let mut cmd = Command::new("powershell.exe");
+    remove_inherited_terminal_identity(&mut cmd, inherited);
     crate::process::no_window(&mut cmd);
     cmd.current_dir(cwd);
     cmd.arg("-NoProfile").arg("-Command").arg(script);
-    run_bounded(cmd, timeout)
+    cmd
 }
 
 /// Resolve `path`'s effect on the environment by actually sourcing it in a real, disposable
@@ -608,5 +665,63 @@ mod terminal_identity_tests {
             !is_inherited_terminal_identity("ColorTerm", "truecolor", true),
             "and still keeps a colour depth"
         );
+    }
+
+    /// A fixed inherited environment, so the test does not depend on the runner's own.
+    fn inherited() -> Vec<(OsString, OsString)> {
+        [
+            ("TERM_PROGRAM", "WezTerm"),
+            ("FORCE_HYPERLINK", "1"),
+            ("COLORTERM", "truecolor"),
+            ("HOME", "/h"),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.into(), v.into()))
+        .collect()
+    }
+
+    /// Every variable `cmd` was told to change, as `(key, None)` for a removal.
+    fn env_changes(cmd: &Command) -> Vec<(String, Option<String>)> {
+        let mut changes: Vec<_> = cmd
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|v| v.to_string_lossy().into_owned()),
+                )
+            })
+            .collect();
+        changes.sort();
+        changes
+    }
+
+    #[test]
+    fn each_include_shell_removes_exactly_the_inherited_identity() {
+        let removed = vec![
+            ("FORCE_HYPERLINK".to_string(), None),
+            ("TERM_PROGRAM".to_string(), None),
+        ];
+        let cwd = Path::new(".");
+        let mut builders = vec![
+            (
+                "powershell baseline",
+                powershell_baseline_command(cwd, inherited()),
+            ),
+            (
+                "powershell attempt",
+                powershell_attempt_command(Path::new("x.ps1"), cwd, inherited()),
+            ),
+        ];
+        // The bash builder only exists where it runs; the PowerShell ones are built everywhere.
+        #[cfg(not(windows))]
+        builders.push(("bash", bash_command(Path::new("/dev/null"), cwd, inherited())));
+        for (name, cmd) in builders {
+            assert_eq!(
+                env_changes(&cmd),
+                removed,
+                "the {name} include shell removes the identity variables it inherits, and only \
+                 those, so a script that sets one is seen to add it (contract §3)"
+            );
+        }
     }
 }
