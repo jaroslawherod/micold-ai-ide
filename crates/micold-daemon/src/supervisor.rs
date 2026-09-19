@@ -185,11 +185,20 @@ fn prefer_process_path(cmd: &mut CommandBuilder) {
 /// session-terminal-identity §2), so a program in the session asks micold's own identity, not the
 /// one of the terminal the daemon was started from. Called before `TERM` and the include values
 /// are applied, so a value the include script sets survives.
+///
+/// Read from the daemon's own environment, lossily, because the builder lists only its UTF-8
+/// entries and an identity variable with other bytes would otherwise slip through; and from the
+/// builder too, which on Windows also carries the registry's variables.
 fn strip_inherited_terminal_identity(cmd: &mut CommandBuilder) {
-    let inherited: Vec<String> = cmd
-        .iter_full_env_as_str()
-        .filter(|(key, value)| is_inherited_terminal_identity(key, value, cfg!(windows)))
-        .map(|(key, _)| key.to_string())
+    let matches = |key: &str, value: &str| is_inherited_terminal_identity(key, value, cfg!(windows));
+    let inherited: Vec<std::ffi::OsString> = std::env::vars_os()
+        .filter(|(key, value)| matches(&key.to_string_lossy(), &value.to_string_lossy()))
+        .map(|(key, _)| key)
+        .chain(
+            cmd.iter_full_env_as_str()
+                .filter(|(key, value)| matches(key, value))
+                .map(|(key, _)| key.into()),
+        )
         .collect();
     for key in inherited {
         cmd.env_remove(key);

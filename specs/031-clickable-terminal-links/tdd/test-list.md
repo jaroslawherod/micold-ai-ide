@@ -121,6 +121,7 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | U159 | While the scrollbar shows, a link under its strip is not marked and the pointer is no hand there, since a press there pages the view | FR-007, M3 review | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_link_under_the_scrollbar_strip_is_not_marked` |
 | U160 | Moving to another row of the same marked link repaints (the hint side follows the row); a move within the row does not | FR-008, M3 review | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::moving_to_another_row_of_the_marked_link_repaints` |
 | U161 | A hover whose pointer sits past the grid's edge (no rows read) re-resolves whenever the grid moves, so a resize that brings text under the resting pointer marks it | FR-008, M3 review round 2 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_hover_off_the_grid_re_resolves_when_the_grid_moves` |
+| U162 | An inherited identity variable whose value is not UTF-8 is dropped from a session too | FR-006, M4 review A | example | DONE | `crates/micold-daemon/tests/session_identity_env.rs::an_identity_variable_that_is_not_utf8_is_dropped_too` |
 
 ### `crates/micold-core/src/link/address.rs`
 
