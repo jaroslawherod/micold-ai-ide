@@ -1423,11 +1423,15 @@ the ones it found nothing for. FR-004e, FR-009a and SC-012a settle both.
       mount stands, and no fallback is needed. The runtime creates a missing mount target's
       parent directories as root, so `<sandbox-home>/.claude` must exist before `create` (U34,
       U35). See `research.md` R11.
-- [ ] T210 [BUG-006] [U36] [U37] *(test)* `crates/micold-client/src/main_tests.rs` (the binary's tests; `boot`
+- [X] T210 [BUG-006] [U36] [U37] *(test)* `crates/micold-client/src/main_tests.rs` (the binary's tests; `boot`
       and `shell::persist` are not reachable from `tests/*.rs`). Under `LocalSandbox` placement, the
       boot prune keeps a session whose conversation is absent from the host's config directory.
       Under `HostProcess` placement it still drops that session (FR-009a). Red against today's
       unconditional `prune_empty_sessions`.
+      *Landed as* U36 (`under_the_sandbox_the_boot_prune_keeps_a_session_the_host_has_no_record_of`, in
+      `shell/persist.rs`, not `main_tests.rs`) and U39 (`a_sandboxed_launch_keeps_a_session_the_host_has_no_record_of`,
+      in `shell/startup.rs`). The host half is the existing `the_boot_prune_judges_every_session_by_its_own_cli`,
+      kept as a mutant-checked baseline (U37).
 
 ### Implementation for BUG-006
 
@@ -1446,7 +1450,7 @@ the ones it found nothing for. FR-004e, FR-009a and SC-012a settle both.
       keeps the session and the transcript is under `<state>/sandbox-home` (SC-012a, US2 scenario
       10). With the share on, confirm nothing under the host's `~/.claude` other than
       `.credentials.json` changed.
-- [ ] T214 [BUG-006] `docs/user-guide/sandboxed-daemon.md`, "Credentials". "AI CLI sign-in" shares
+- [X] T214 [BUG-006] `docs/user-guide/sandboxed-daemon.md`, "Credentials". "AI CLI sign-in" shares
       only Claude Code's sign-in token and lets a session refresh it. Conversations stay in the
       sandbox. On macOS, a token kept in the Keychain cannot be shared. Copilot and Pi sign in inside
       the sandbox.
