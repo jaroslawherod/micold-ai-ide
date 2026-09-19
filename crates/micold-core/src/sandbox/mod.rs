@@ -271,6 +271,13 @@ impl CredentialShare {
             CredentialShare::AiCliAuth => "AI CLI sign-in",
         }
     }
+
+    /// Whether the share is mounted writable (rule N-4, FR-004e). Only the AI CLI's sign-in token
+    /// is: the CLI replaces it on every refresh, and a read-only token stops working once it
+    /// expires. Everything else is only ever read.
+    pub fn writable(self) -> bool {
+        matches!(self, CredentialShare::AiCliAuth)
+    }
 }
 
 /// The user's sandbox configuration (FR-005 … FR-019).

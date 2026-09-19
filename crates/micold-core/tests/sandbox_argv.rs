@@ -270,3 +270,34 @@ fn git_routes_to_the_daemon_exactly_when_the_mounted_paths_differ() {
         );
     }
 }
+
+/// Rule N-4 (BUG-006, FR-004e): the sign-in token is the one credential the sandbox may write.
+///
+/// `claude` replaces its own token when it refreshes it, so a read-only token stops working the
+/// first time it expires. Every other share is only ever read, and stays read-only.
+#[test]
+fn only_the_ai_cli_sign_in_is_mounted_writable() {
+    let spec = spec_for(false);
+    let credential_hosts: Vec<String> = spec
+        .mounts
+        .credentials
+        .iter()
+        .map(|c| c.host.to_string_lossy().into_owned())
+        .collect();
+    let sign_in = Path::new(NIX_HOME)
+        .join(".claude/.credentials.json")
+        .to_string_lossy()
+        .into_owned();
+    assert!(
+        credential_hosts.contains(&sign_in),
+        "the spec shares the sign-in, or this test checks nothing: {credential_hosts:?}"
+    );
+
+    for (host, _, mode) in volumes(&argv::create(&spec, &caps())) {
+        if !credential_hosts.contains(&host) {
+            continue;
+        }
+        let expected = if host == sign_in { "rw" } else { "ro" };
+        assert_eq!(mode, expected, "credential mount {host} has the wrong mode");
+    }
+}
