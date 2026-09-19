@@ -1155,7 +1155,8 @@ impl NoCliOnPath {
         };
         for cli in AiCli::ALL {
             assert!(
-                !cli.provider().is_available(),
+                !cli.provider()
+                    .is_available(&micold_core::provider::process_path()),
                 "the guard has to actually hide {}, or the tests holding it prove nothing",
                 cli.provider().command()
             );

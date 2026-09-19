@@ -581,30 +581,34 @@ fn availability_is_a_live_path_lookup_that_remembers_nothing() {
     let path = ScopedPath::empty();
 
     assert!(
-        !CopilotProvider.is_available(),
+        !CopilotProvider.is_available(&micold_core::provider::process_path()),
         "an empty PATH means neither CLI is installed"
     );
-    assert!(!micold_core::provider::ClaudeProvider.is_available());
+    assert!(
+        !micold_core::provider::ClaudeProvider.is_available(&micold_core::provider::process_path())
+    );
 
     path.install("copilot");
     assert!(
-        CopilotProvider.is_available(),
+        CopilotProvider.is_available(&micold_core::provider::process_path()),
         "the answer changed with the machine, without anything being told to re-check"
     );
     assert!(
-        !micold_core::provider::ClaudeProvider.is_available(),
+        !micold_core::provider::ClaudeProvider.is_available(&micold_core::provider::process_path()),
         "and it is per provider — installing one says nothing about the other"
     );
 
     path.install("claude");
-    assert!(micold_core::provider::ClaudeProvider.is_available());
+    assert!(
+        micold_core::provider::ClaudeProvider.is_available(&micold_core::provider::process_path())
+    );
 
     // Called twice in a row: still live, so a memoising implementation is caught here rather than
     // by a user whose fresh install is not noticed until they restart.
-    assert!(CopilotProvider.is_available());
+    assert!(CopilotProvider.is_available(&micold_core::provider::process_path()));
     path.uninstall("copilot");
     assert!(
-        !CopilotProvider.is_available(),
+        !CopilotProvider.is_available(&micold_core::provider::process_path()),
         "uninstalling is noticed too — a cache would still be answering `true`"
     );
 
@@ -626,7 +630,7 @@ fn a_directory_named_like_the_cli_is_not_an_installed_cli() {
     // something the user cannot connect to what they did.
     let path = ScopedPath::empty();
     std::fs::create_dir_all(path.bin.join("copilot")).unwrap();
-    assert!(!CopilotProvider.is_available());
+    assert!(!CopilotProvider.is_available(&micold_core::provider::process_path()));
 }
 
 // ---------------------------------------------------------------------------------------

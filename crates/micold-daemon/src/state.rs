@@ -1709,7 +1709,7 @@ impl DaemonState {
         // `ENOENT` the user cannot act on, and it would spend the crash-loop budget doing it.
         if plan.mode == TerminalMode::AiCli {
             let provider = plan.provider.provider();
-            if !provider.is_available() {
+            if !provider.is_available(&micold_core::provider::process_path()) {
                 let reason = missing_cli_reason(
                     provider.display_name(),
                     &std::env::var("MICOLD_IMAGE_REFERENCE").unwrap_or_default(),

@@ -160,7 +160,9 @@ fn a_pi_session_carries_the_component_only_while_the_switch_is_on() {
         ("XDG_DATA_HOME", data_home.path().into()),
         ("HOME", data_home.path().into()),
     ]);
-    assert!(AiCli::Pi.provider().is_available());
+    assert!(AiCli::Pi
+        .provider()
+        .is_available(&micold_core::provider::process_path()));
 
     let state = DaemonState::new(catalog_with_pi_sessions(project.path(), store.path()));
 

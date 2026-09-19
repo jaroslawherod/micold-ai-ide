@@ -19,8 +19,9 @@
 //!
 //! Two halves of one claim, because either alone passes while wrong:
 //!
-//! 1. **No client source calls the probe.** `micold_core::provider::available_here` and the
-//!    `is_available()` it is built from are the daemon's to call. A client that reintroduces
+//! 1. **No client source calls the probe.** `micold_core::provider::available_here`, its sibling
+//!    `available_in` (feature 029, BUG-001) and the `is_available(path)` both are built from are
+//!    the daemon's to call. A client that reintroduces
 //!    either has reintroduced the bug whatever it names the field.
 //! 2. **The field is fed by the protocol.** A scan for an absence passes trivially if the feature
 //!    was deleted rather than moved, so the shell must still be seen asking the service and
@@ -44,15 +45,22 @@ fn sources() -> Vec<(String, String)> {
 
 /// The spellings that would resolve a CLI on *this* process's `PATH`.
 ///
-/// `available_here` is the whole probe; `provider().is_available()` is the per-provider predicate
-/// it is built from, and calling that in a loop is the same bug written out longhand. Both are
-/// listed so that re-implementing the function under another name is caught as well as calling it.
+/// `available_here` is the whole probe and `available_in` the same probe over a `PATH` value the
+/// caller supplies (feature 029, BUG-001) — from the client, any value it could supply is the
+/// host's. `provider().is_available(` is the per-provider predicate both are built from, and
+/// calling that in a loop is the same bug written out longhand. All three are listed so that
+/// re-implementing the function under another name is caught as well as calling it. The predicate
+/// is spelled up to its open parenthesis, because it takes the `PATH` to walk as an argument.
 ///
-/// The predicate is spelled with its receiver on purpose. A bare `.is_available()` also matches
+/// The predicate is spelled with its receiver on purpose. A bare `.is_available(` also matches
 /// `worktree_form`'s branch candidates, which are about a git ref and have nothing to do with any
 /// of this — a guard that fails for an unrelated reason gets relaxed, and a relaxed guard is
 /// worth nothing.
-const PROBES: [&str; 2] = ["available_here(", "provider().is_available()"];
+const PROBES: [&str; 3] = [
+    "available_here(",
+    "available_in(",
+    "provider().is_available(",
+];
 
 #[test]
 fn no_client_source_probes_this_process_for_a_cli() {
