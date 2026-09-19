@@ -306,3 +306,23 @@ fn outcomes_with_the_form_open_raise_no_notification() {
         "a success the open dialog closes on must not also be a notification"
     );
 }
+
+/// U11 — cancelling a form with nothing in flight owes no notification to a stray failure.
+///
+/// Only a create cancelled mid-flight is still running when its form closes (FR-010b). A failure
+/// arriving after an idle form was dismissed belongs to no create the user started from it.
+#[test]
+fn a_stray_failure_after_an_idle_form_was_cancelled_raises_no_notification() {
+    let mut state = form_open();
+    state.update(Message::WorktreeForm(FormMsg::Cancelled));
+
+    state.update(Message::WorktreeForm(FormMsg::CreateFailed(
+        "git failed to create the worktree".into(),
+    )));
+
+    assert_eq!(
+        notice(&state),
+        None,
+        "nothing was running when the form closed, so nothing is owed a notification"
+    );
+}
