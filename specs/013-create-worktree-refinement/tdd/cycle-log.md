@@ -144,3 +144,27 @@ existed and failed before the implementation.
 - green: no implementation change. Crate suite -> 1810 passed, 0 failed, 2 ignored (139 binaries)
 - refactor: none needed
 - commit: `test(013): a stray failure after an idle Cancel raises no notification (BUG-001 U11)`
+
+## Cycle 12: A1 a create in flight holds its dialog through Escape and the scrim (outer loop)
+
+- test: `crates/micold-client/src/main_tests.rs::tests::a_create_in_flight_holds_its_dialog_through_escape_and_the_scrim` (new)
+- red: none on arrival. `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide -- a_create_in_flight_holds_its_dialog_through_escape_and_the_scrim`
+  -> `1 passed`: the outer test was written after U2/U3 closed the loop from inside, so the
+  acceptance behavior was already delivered. Deliberate mutant: `AddWorktreeDialog::dismissal` never
+  adds `.protecting_input()` -> `left: None` / `right: Some(Creating)` at `main_tests.rs:1212`
+  ("Escape closed the add-worktree dialog while its create was still running", 1 failed). Mutant reverted with `git checkout`.
+- green: no implementation change. Crate suite -> 1812 passed, 0 failed, 2 ignored (139 binaries; A1 and A2 together)
+- refactor: none needed
+- commit: `test(013): the create dialog's acceptance tests through the App (BUG-001 A1, A2)` (with cycle 13)
+- notes: the key goes through `Message::EscapePressed`; the scrim through the message `app::on_escape` gives `ui/mod.rs`
+
+## Cycle 13: A2 a create failing after Cancel reaches the user as a notification (outer loop)
+
+- test: `crates/micold-client/src/main_tests.rs::tests::a_create_failing_after_cancel_reaches_the_user_as_a_notification` (new)
+- red: none on arrival, for the same reason as cycle 12 (U6 delivered it).
+  Deliberate mutant: `create_failed` never takes the notification branch -> panicked at `main_tests.rs:1263`:
+  `a create that failed after its dialog was cancelled must still be reported, carrying the daemon's message (FR-010b), got ""` (1 failed).
+  Mutant reverted with `git checkout` (run in the same build as cycle 12's mutant; both failed).
+- green: no implementation change. Crate suite as cycle 12.
+- refactor: none needed
+- commit: shared with cycle 12 — the two tests share the `pending_create_req` helper in one file, so they were committed together
