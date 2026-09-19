@@ -73,3 +73,18 @@ existed and failed before the implementation.
 - refactor: none needed
 - commit: `test(013): Cancel still closes the add-worktree form mid-create (BUG-001 U5)`
 - notes: the view's Cancel button sends `Msg::Cancelled` unconditionally (`ui/worktree_form.rs:292`)
+
+## Cycle 6: U6 a create failing after Cancel is reported as an error notification
+
+- test: `crates/micold-client/tests/add_worktree_dismissal.rs::a_create_failing_after_cancel_is_reported_as_an_error_notification` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test add_worktree_dismissal a_create_failing_after_cancel_is_reported_as_an_error_notification -- --exact`
+  -> panicked at `add_worktree_dismissal.rs:173`: `a create that failed after its form closed must still be reported (FR-010b)` (1 failed)
+- green: `worktree_form::State` gains `cancelled_mid_create`, set by `cancelled` when the form it
+  closes is `Creating`; `create_failed` takes it and, with no form open, returns
+  `notifications::error(message)` instead of writing the form's error line. File -> 6 passed.
+  First crate-suite run -> 1 failed: `root_state_is_shared::component_local_paths_are_pinned_or_moved`
+  (`state.worktree_form.cancelled_mid_create` — written only by `worktree_form`). The flag cannot
+  move into the form component — it exists only while that component is gone — so it joins
+  `COMPONENT_LOCAL`, pinned by this cycle's test. Crate suite -> 1805 passed, 0 failed, 2 ignored (139 binaries)
+- refactor: none needed
+- commit: `fix(013): a create that fails after Cancel is reported as a notification (BUG-001 U6)`

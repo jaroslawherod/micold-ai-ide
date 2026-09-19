@@ -49,6 +49,11 @@ pub struct State {
     /// A message shown when opening a non-git directory was refused (FR-001a), or a worktree
     /// create failed (FR-017). Transient.
     pub worktree_error: Option<String>,
+    /// Whether the form was cancelled while its create was still running (feature 013, BUG-001).
+    ///
+    /// Cancel closes the overlay and does not stop the create (FR-010b), so its outcome still
+    /// arrives — with no form to land on. This is what says the outcome is owed a notification.
+    pub cancelled_mid_create: bool,
 }
 
 /// Transient creation status for the add-worktree form (feature 010, research R4). Not
@@ -360,7 +365,9 @@ pub fn opened(state: &mut crate::app::State) {
 
 /// The form was dismissed.
 pub fn cancelled(state: &mut crate::app::State) {
-    state.worktree_form.form = None;
+    if let Some(form) = state.worktree_form.form.take() {
+        state.worktree_form.cancelled_mid_create = form.status == WorktreeFormStatus::Creating;
+    }
 }
 
 /// Apply a change to the open form, whatever it is doing.
@@ -629,12 +636,21 @@ pub fn worktree_list_changed(state: &mut crate::app::State) {
 /// A create failed (feature 005 FR-017, feature 010).
 ///
 /// The form stays open so the user can adjust, showing the error, and returns to `Editing` so a
-/// retry is possible instead of being stuck in `Creating`.
-pub fn create_failed(state: &mut crate::app::State, message: String) {
+/// retry is possible instead of being stuck in `Creating`. A form cancelled mid-create is not
+/// there to show it, so the failure becomes a notification instead (feature 013, FR-010b).
+pub fn create_failed(
+    state: &mut crate::app::State,
+    message: String,
+) -> Vec<crate::features::Outcome> {
+    let owed = std::mem::take(&mut state.worktree_form.cancelled_mid_create);
+    if owed && state.worktree_form.form.is_none() {
+        return vec![crate::features::notifications::error(message)];
+    }
     state.worktree_form.worktree_error = Some(message);
     with_form(state, |form| {
         form.status = WorktreeFormStatus::Editing;
     });
+    Vec::new()
 }
 
 /// A create's connection dropped before the daemon answered it (feature 010, BUG-020).
@@ -767,7 +783,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::CreateStarted(mode) => create_started(state, mode),
         Msg::CreateStageChanged(stage, detail) => create_stage_changed(state, stage, detail),
         Msg::Created(worktree) => return created(state, worktree),
-        Msg::CreateFailed(message) => create_failed(state, message),
+        Msg::CreateFailed(message) => return create_failed(state, message),
         Msg::CreateInterrupted(message) => create_interrupted(state, message),
     }
     Vec::new()
