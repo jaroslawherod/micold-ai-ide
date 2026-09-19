@@ -56,6 +56,13 @@ Which AI coding CLI a new session runs when you don't choose one for it.
 - **The choices** are the CLIs you actually have installed where sessions run: on this computer, or
   in the container's image when the [session service](#session-service) runs in one. If only one is
   installed, that is the only option — and nothing else about starting a session changes for you.
+- **"Installed" means a session would find it.** A CLI is offered when it is on the `PATH` a session
+  starts with, and that includes what
+  [the environment a session starts in](#the-environment-a-session-starts-in) adds. So a CLI you
+  installed through a version manager — `pi` or `copilot` from `npm install -g` under mise or nvm,
+  say — is offered as long as environment-include is on and your startup file sets that version
+  manager up. The per-session list asks about that session's own project or worktree; this field
+  asks about your home directory.
 - **A note under the field names any CLI that is missing** from there, so you know before you start a
   session rather than when it fails.
 - **Default**: Claude Code.
@@ -64,10 +71,16 @@ Which AI coding CLI a new session runs when you don't choose one for it.
 - You can override it per session without touching this setting — see
   [Worktrees & sessions → Choosing which AI CLI a session runs](./worktrees-and-sessions.md#choosing-which-ai-cli-a-session-runs).
 
+**A CLI you installed is not offered?** It is not on the `PATH` a session gets. Either keep
+**Source a script before each session** on, with a script that sets up the version manager you
+installed it with, or install the CLI somewhere on the `PATH` your login session already has (for
+example with a symlink in `~/.local/bin`). The app does not look anywhere else, because a session
+would not either.
+
 **If your default names a CLI that isn't installed, the app keeps it rather than quietly changing
-it.** That is deliberate. A CLI can be missing for a moment — a `PATH` that hasn't loaded, an
-upgrade in progress — and silently rewriting your preference would lose a choice you made without
-saying so. The setting stays as you left it, and when you start a session the app tells you what is
+it.** That is deliberate. A CLI can be missing for a moment — a startup file that failed or timed
+out, environment-include switched off, an upgrade in progress — and silently rewriting your
+preference would lose a choice you made without saying so. The setting stays as you left it, and when you start a session the app tells you what is
 missing and offers the CLIs that are available instead of substituting one.
 
 ### Show activity for Pi sessions
