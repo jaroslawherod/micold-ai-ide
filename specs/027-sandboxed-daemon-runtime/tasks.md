@@ -1463,9 +1463,13 @@ the ones it found nothing for. FR-004e, FR-009a and SC-012a settle both.
       only Claude Code's sign-in token and lets a session refresh it. Conversations stay in the
       sandbox. On macOS, a token kept in the Keychain cannot be shared. Copilot and Pi sign in inside
       the sandbox.
-- [ ] T215 [BUG-006] Re-run `quickstart.md` §B with the sign-in shared. Start a `claude` session:
+- [X] T215 [BUG-006] Re-run `quickstart.md` §B with the sign-in shared. Start a `claude` session:
       no read-only warning appears. Restart the application, and the session is listed and resumes
       its conversation. Record the pass in `specs/027-sandboxed-daemon-runtime/evidence/`.
+      *Passed* 2026-09-19: `evidence/bug-006-sign-in-sessions.md`. All five checks pass. The first
+      interactive `claude` in a fresh sandbox home still walks through its own onboarding, which
+      asks for a login method although the shared token is valid. That is recorded there as a
+      separate finding.
 
 **Order**: T209 first, because its answer decides T211's shape. Then T208 and T210 in parallel,
 since they touch different crates. Then T211 and T212 in parallel, T213 and T214 after them, and
