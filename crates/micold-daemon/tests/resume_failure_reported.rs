@@ -97,7 +97,8 @@ impl NoCliOnPath {
             _guard: guard,
         };
         assert!(
-            !CLI.provider().is_available(),
+            !CLI.provider()
+                .is_available(&micold_core::provider::process_path()),
             "the guard has to actually hide {}, or this test proves nothing",
             CLI.provider().command()
         );
@@ -328,7 +329,9 @@ impl PiInstalled {
             _guard: guard,
         };
         assert!(
-            AiCli::Pi.provider().is_available(),
+            AiCli::Pi
+                .provider()
+                .is_available(&micold_core::provider::process_path()),
             "the guard has to actually put {} on `PATH`, or the refusal under test is pre-empted \
              by the missing-binary one",
             AiCli::Pi.provider().command()

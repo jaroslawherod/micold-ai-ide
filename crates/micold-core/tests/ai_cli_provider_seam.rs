@@ -247,7 +247,7 @@ impl AiCliProvider for MinimalProvider {
     fn command(&self) -> &'static str {
         self.command
     }
-    fn is_available(&self) -> bool {
+    fn is_available(&self, _path: &std::ffi::OsStr) -> bool {
         self.available
     }
     fn launch_args(&self, session_id: Uuid, _mode: LaunchMode) -> Vec<String> {
@@ -312,7 +312,7 @@ fn a_provider_that_implements_only_the_required_methods_is_a_complete_provider()
     assert_eq!(port.command(), "minimal");
     assert_eq!(port.display_name(), "Minimal");
     assert_eq!(port.id(), AiCli::ClaudeCode);
-    assert!(port.is_available());
+    assert!(port.is_available(&micold_core::provider::process_path()));
     assert_eq!(
         port.launch_args(one, LaunchMode::Fresh),
         vec!["minimal".to_string(), one.to_string()],

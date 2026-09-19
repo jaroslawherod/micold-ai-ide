@@ -332,7 +332,7 @@ fn the_reason_a_start_failed_reaches_the_client_as_something_to_read() {
     let cli = micold_core::session::AiCli::Copilot;
     let provider = cli.provider();
     assert!(
-        !provider.is_available(),
+        !provider.is_available(&micold_core::provider::process_path()),
         "the guard has to actually hide {}, or this test proves nothing",
         provider.command()
     );

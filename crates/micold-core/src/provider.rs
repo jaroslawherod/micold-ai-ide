@@ -40,6 +40,7 @@
 
 use crate::session::AiCli;
 use crate::terminal::LaunchMode;
+use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
@@ -124,9 +125,13 @@ pub trait AiCliProvider {
     /// either leak into the other is the likeliest drift in this seam.
     fn command(&self) -> &'static str;
 
-    /// Whether [`Self::command`] resolves on `PATH` right now. Never cached here and never
-    /// persisted (research R11) — the answer changes when the user installs something.
-    fn is_available(&self) -> bool;
+    /// Whether [`Self::command`] resolves on `path`, a `PATH` value, right now. Never cached here
+    /// and never persisted (research R11) — the answer changes when the user installs something.
+    ///
+    /// The `PATH` is the caller's to supply (feature 029, BUG-001, FR-003b): the one that matters
+    /// is the one a session would be spawned with, which the session service resolves per
+    /// directory and which is not, in general, its own. [`process_path`] is its own.
+    fn is_available(&self, path: &OsStr) -> bool;
 
     // --- launching ---
 
@@ -260,21 +265,33 @@ impl std::fmt::Display for AiCli {
 ///
 /// In `AiCli::ALL`'s order, so the list a picker is built from is the declared one.
 pub fn available_here() -> Vec<AiCli> {
+    available_in(&process_path())
+}
+
+/// Which AI CLIs resolve on `path`, a `PATH` value the caller supplies (feature 029, BUG-001,
+/// FR-003b).
+///
+/// [`available_here`] asks about this process's own `PATH`. A session service started from the
+/// desktop inherits the login session's, which lacks the directories a version manager adds, while
+/// the sessions it spawns get those directories from the environment-include script. So the
+/// service resolves the `PATH` a session *would be spawned with* and asks about that: a CLI is
+/// offered exactly when a session started on it would find it.
+///
+/// In `AiCli::ALL`'s order, like [`available_here`].
+pub fn available_in(path: &OsStr) -> Vec<AiCli> {
     AiCli::ALL
         .into_iter()
-        .filter(|which| which.provider().is_available())
+        .filter(|which| which.provider().is_available(path))
         .collect()
 }
 
-/// Which AI CLIs resolve on the given `PATH` value (feature 029, BUG-001, FR-003b).
-pub fn available_in(path: &std::ffi::OsStr) -> Vec<AiCli> {
-    AiCli::ALL
-        .into_iter()
-        .filter(|which| resolves_on_path(which.provider().command(), path))
-        .collect()
+/// This process's own `PATH`, empty when it has none — the value [`available_here`] walks.
+pub fn process_path() -> OsString {
+    std::env::var_os("PATH").unwrap_or_default()
 }
 
-/// Whether `command` resolves to a file on `PATH` (feature 026, FR-006/FR-010).
+/// Whether `command` resolves to a file in a directory of `path`, a `PATH` value (feature 026,
+/// FR-006/FR-010; the value is the caller's since feature 029 BUG-001).
 ///
 /// Platform-neutral **without a `cfg`**, which is Principle VI's ask rather than a flourish: the
 /// separator comes from [`std::env::split_paths`], and the Windows `.exe`/`.cmd` question is
@@ -284,7 +301,7 @@ pub fn available_in(path: &std::ffi::OsStr) -> Vec<AiCli> {
 /// It deliberately does not check the executable bit: that needs `PermissionsExt` behind a
 /// `cfg(unix)`, and a file on `PATH` under the CLI's own name that is not executable is a broken
 /// installation the spawn will report anyway (FR-010's failure path).
-fn resolves_on_path(command: &str, path: &std::ffi::OsStr) -> bool {
+fn resolves_on_path(command: &str, path: &OsStr) -> bool {
     let is_file = |candidate: PathBuf| {
         std::fs::metadata(candidate)
             .map(|meta| meta.is_file())
@@ -384,11 +401,8 @@ impl AiCliProvider for ClaudeProvider {
         "claude"
     }
 
-    fn is_available(&self) -> bool {
-        resolves_on_path(
-            self.command(),
-            &std::env::var_os("PATH").unwrap_or_default(),
-        )
+    fn is_available(&self, path: &OsStr) -> bool {
+        resolves_on_path(self.command(), path)
     }
 
     fn launch_args(&self, session_id: Uuid, mode: LaunchMode) -> Vec<String> {
@@ -600,11 +614,8 @@ impl AiCliProvider for CopilotProvider {
         "copilot"
     }
 
-    fn is_available(&self) -> bool {
-        resolves_on_path(
-            self.command(),
-            &std::env::var_os("PATH").unwrap_or_default(),
-        )
+    fn is_available(&self, path: &OsStr) -> bool {
+        resolves_on_path(self.command(), path)
     }
 
     fn launch_args(&self, session_id: Uuid, mode: LaunchMode) -> Vec<String> {
@@ -931,14 +942,11 @@ impl AiCliProvider for PiProvider {
         (!name.is_empty()).then(|| name.to_string())
     }
 
-    fn is_available(&self) -> bool {
+    fn is_available(&self, path: &OsStr) -> bool {
         // A `PATH` resolution, like the other two: no spawn, no `--version` read, no minimum
         // version gate (FR-003, FR-003a). What is installed is what the user gets, and a failure
         // names the version rather than pre-empting it.
-        resolves_on_path(
-            self.command(),
-            &std::env::var_os("PATH").unwrap_or_default(),
-        )
+        resolves_on_path(self.command(), path)
     }
 
     fn launch_args(&self, session_id: Uuid, _mode: LaunchMode) -> Vec<String> {
@@ -1151,7 +1159,7 @@ impl FakeAiCliProvider {
         self
     }
 
-    /// What `is_available()` answers.
+    /// What `is_available(_)` answers, whatever `PATH` it is given.
     pub fn with_availability(self, available: bool) -> Self {
         self.inner.borrow_mut().available = available;
         self
@@ -1207,7 +1215,7 @@ impl AiCliProvider for FakeAiCliProvider {
         "fake-ai-cli"
     }
 
-    fn is_available(&self) -> bool {
+    fn is_available(&self, _path: &OsStr) -> bool {
         self.inner.borrow().available
     }
 

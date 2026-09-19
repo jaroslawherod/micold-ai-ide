@@ -339,7 +339,9 @@ mod one_conversation_one_session {
                 _bin: bin,
             };
             assert!(
-                AiCli::Pi.provider().is_available(),
+                AiCli::Pi
+                    .provider()
+                    .is_available(&micold_core::provider::process_path()),
                 "the guard has to actually put {} on `PATH`, or nothing is ever spawned and the \
                  count below is trivially satisfied",
                 AiCli::Pi.provider().command()

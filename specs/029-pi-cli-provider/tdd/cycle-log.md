@@ -45,3 +45,20 @@ failed before the implementation.
 - notes: the test moves the process `PATH` (the task text asks not to). It is the only way to
   place a CLI on the process `PATH` and not in the given value; it is the one test in its binary
   that touches the environment, and it restores `PATH` before asserting
+
+## Structural step after cycle 2: the `PATH` value goes through the provider seam (T064)
+
+- change: `AiCliProvider::is_available` takes the `PATH` value to walk (`&OsStr`), every provider
+  forwards it to `resolves_on_path`, `available_in` asks the trait, `available_here` is
+  `available_in(&process_path())`, and `process_path()` is public for the callers that still mean
+  the process's own. No default method (the trait's FR-021 rule). Call sites that meant the
+  process `PATH` pass `process_path()` explicitly: `state.rs`'s launch gate (changed in U8) and six
+  test files.
+- test changes, stated: the signature change touches the test files' call sites mechanically, and
+  `micold-client/tests/cli_availability_comes_from_the_service.rs`'s probe list moved from
+  `provider().is_available()` to `provider().is_available(` and gained `available_in(`, because
+  the old spelling can no longer match any call and the guard would have gone silently blind
+- suite: the first full run caught three providers still passing the process `PATH` (a rustfmt
+  re-wrap hid them from the edit) — `available_in.rs::a_cli_present_only_on_the_process_path_is_not_available_in_another_path`
+  -> `got [Pi]`, 3285 passed, 1 failed. Fixed; core suite -> 1141 passed, 0 failed; the other
+  3144 were green in that run and untouched since
