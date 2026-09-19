@@ -133,3 +133,14 @@ existed and failed before the implementation.
 - refactor: none needed
 - commit: `test(013): outcomes shown in the open dialog raise no notification (BUG-001 U10)`
 - notes: green on arrival because U6/U9 were written guard-first; this pins the "no duplicate" half of FR-010b
+
+## Cycle 11: U11 a stray failure after an idle form was cancelled raises no notification
+
+- test: `crates/micold-client/tests/add_worktree_dismissal.rs::a_stray_failure_after_an_idle_form_was_cancelled_raises_no_notification` (new)
+- red: none on arrival. `scripts/build-lock.sh cargo test -p micold-client --test add_worktree_dismissal a_stray_failure_after_an_idle_form_was_cancelled_raises_no_notification -- --exact`
+  -> `1 passed`: `cancelled` records a create only when the form it closes is `Creating`.
+  Deliberate mutant: `cancelled` records one whatever the status -> `left: Some((Error, "Creating the worktree failed: git failed to create the worktree"))` /
+  `right: None` at `add_worktree_dismissal.rs:323` (1 failed). Mutant reverted with `git checkout`.
+- green: no implementation change. Crate suite -> 1810 passed, 0 failed, 2 ignored (139 binaries)
+- refactor: none needed
+- commit: `test(013): a stray failure after an idle Cancel raises no notification (BUG-001 U11)`
