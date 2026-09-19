@@ -415,6 +415,7 @@ pub fn ask_cli_availability(app: &mut App, cwd: Option<std::path::PathBuf>) {
     };
     let req = app.next_req;
     app.next_req += 1;
+    app.cli_availability_asked = req;
     d.send(ClientMsg::AiCliAvailabilityRequest { req, cwd });
 }
 
@@ -777,6 +778,10 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // sentence FR-023b asks for is composed in the settings view from this and from what the
         // client knows about the service it started, and there is nothing to say at the moment the
         // answer arrives — the user is not necessarily looking at a picker.
+        // An answer to a request older than the latest is about another directory (029 BUG-001):
+        // they are resolved off the service's loop, so a slow first resolution can land after a
+        // cached one asked later.
+        DaemonMsg::AiCliAvailability { req, .. } if req < app.cli_availability_asked => {}
         DaemonMsg::AiCliAvailability { available, .. } => {
             let source = availability_source(app);
             app.core.session.available_providers = Some(CliAvailability { available, source });

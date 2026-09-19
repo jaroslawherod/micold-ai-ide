@@ -221,3 +221,16 @@ failed before the implementation.
   `persist.rs` empty); binary -> 168 passed
 - green: no production change
 - refactor: none
+
+## Cycle 13: U13 (added mid-loop) an earlier request's answer does not replace a later one's
+
+- why added: cycle 8 moved the answer off the service's connection loop, so two answers can now
+  arrive in the reverse order of their requests — a first env-include resolution for a worktree
+  takes up to the script's timeout while the home directory's is cached. Since cycle 11 each answer
+  is about a different directory, so a late one would show another directory's set.
+- test: `crates/micold-client/src/main_tests.rs::tests::an_answer_to_an_earlier_question_does_not_replace_a_later_one` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide an_answer_to_an_earlier_question_does_not_replace_a_later_one`
+  -> `left: Some([ClaudeCode])` / `right: Some([Pi])` (1 failed)
+- green: `App::cli_availability_asked` records the latest request's `req`; the reply arm drops an
+  `AiCliAvailability` whose `req` is older. Client crate -> 1802 passed, 0 failed
+- refactor: none

@@ -60,6 +60,7 @@ is covered by T070's visual pass.
 | --- | ---------------------------------------------------------------------------------------------------------- | ------- | ------- | ------- | ---- |
 | U11 | Opening the per-session start menu for a location sends an availability request carrying that location's directory | FR-003b | example | DONE    | `tests::opening_the_start_menu_asks_about_its_locations_directory` (crates/micold-client/src/main_tests.rs) |
 | U12 | Opening Settings sends an availability request with no directory                                            | FR-003b | example | DONE    | `tests::opening_settings_asks_about_no_directory` (crates/micold-client/src/main_tests.rs) |
+| U13 | A reply to an earlier availability request does not replace the answer to a later one                    | FR-003b | example | DONE    | `tests::an_answer_to_an_earlier_question_does_not_replace_a_later_one` (crates/micold-client/src/main_tests.rs) |
 
 ## Invariants and edge cases still to place
 
