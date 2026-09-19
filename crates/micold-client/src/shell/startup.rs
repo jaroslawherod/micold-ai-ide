@@ -146,7 +146,7 @@ fn restore_catalog(
     }
     // Drop any leftover empty sessions so a restart never resumes a nonexistent
     // conversation (bug fix; see spec Clarifications 2026-07-16).
-    prune_empty_sessions(&mut core.workspace);
+    prune_empty_sessions(&mut core.workspace, PlacementKind::HostProcess);
 }
 
 fn boot() -> (App, Task<Message>) {

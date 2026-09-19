@@ -79,7 +79,16 @@ use crate::{session_cwd_for_location, State};
 ///
 /// The compile error that arrived with the registry invited exactly the wrong repair —
 /// `caps.provider(AiCli::default())` — which is that bug wearing a green build.
-pub fn prune_empty_sessions(workspace: &mut micold_core::workspace::Workspace) {
+pub fn prune_empty_sessions(
+    workspace: &mut micold_core::workspace::Workspace,
+    placement: PlacementKind,
+) {
+    // FR-009a: whether a session recorded anything is asked where it runs. Under the sandbox that
+    // is inside the container, where the daemon's own prune asks it; the host's config directory
+    // is a different machine's answer, and acting on it dropped every sandboxed session.
+    if placement == PlacementKind::LocalSandbox {
+        return;
+    }
     for (project_path, sessions) in workspace.sessions.iter_mut() {
         sessions.retain(|s| session_has_conversation(project_path, s));
     }
@@ -547,6 +556,35 @@ mod tests {
         boot_keeps_only_the_uncertain_providers_sessions();
     }
 
+    /// FR-009a (BUG-006): under the sandboxed placement the client's host is the wrong machine to
+    /// ask. The session's conversation is inside the sandbox, so the host having no record of it
+    /// says nothing, and the session stays. The daemon's own prune runs where the session runs.
+    ///
+    /// Needs no scratch provider home: whatever the host's config directory holds, a fresh
+    /// session's id is not in it, so the only way this session survives is by not being asked.
+    #[test]
+    fn under_the_sandbox_the_boot_prune_keeps_a_session_the_host_has_no_record_of() {
+        let project = PathBuf::from("/project/sandboxed");
+        let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+        let mut workspace = Workspace::empty();
+        workspace
+            .sessions
+            .insert(project.clone(), vec![session.clone()]);
+
+        prune_empty_sessions(&mut workspace, PlacementKind::LocalSandbox);
+
+        let surviving: Vec<_> = workspace
+            .sessions
+            .get(&project)
+            .map(|s| s.iter().map(|s| s.id).collect())
+            .unwrap_or_default();
+        assert_eq!(
+            surviving,
+            vec![session.id],
+            "a sandboxed session was judged by the host's conversation store and dropped"
+        );
+    }
+
     /// What T049 actually bought, on the one rule that had no test at all — now held per provider.
     ///
     /// Boot drops sessions the AI CLI has no recorded conversation for, so a restart never resumes
@@ -563,7 +601,7 @@ mod tests {
             .sessions
             .insert(project.clone(), vec![kept.clone(), dropped.clone()]);
 
-        prune_empty_sessions(&mut workspace);
+        prune_empty_sessions(&mut workspace, PlacementKind::HostProcess);
 
         let surviving: Vec<_> = workspace.sessions[&project].iter().map(|s| s.id).collect();
         assert_eq!(
@@ -598,7 +636,7 @@ mod tests {
             vec![claude_session.clone(), copilot_session.clone()],
         );
 
-        prune_empty_sessions(&mut workspace);
+        prune_empty_sessions(&mut workspace, PlacementKind::HostProcess);
 
         let surviving: Vec<_> = workspace.sessions[&project].iter().map(|s| s.id).collect();
         assert_eq!(
@@ -634,7 +672,7 @@ mod tests {
             vec![claude_kept.clone(), copilot_empty.clone()],
         );
 
-        prune_empty_sessions(&mut workspace);
+        prune_empty_sessions(&mut workspace, PlacementKind::HostProcess);
 
         let surviving: Vec<_> = workspace.sessions[&project].iter().map(|s| s.id).collect();
         assert_eq!(
