@@ -96,7 +96,7 @@ terminal and see the same history ([quickstart.md](./quickstart.md) §B).
 
 ### Implementation for User Story 1
 
-- [ ] T019 [US1] ⚠️ Reopened — Implement `PiProvider::is_available()` in `crates/micold-core/src/provider.rs` through the existing `resolves_on_path("pi")` — no spawn, no version read (FR-003, FR-003a, SC-006a) (reopened — BUG-001: it walked the daemon's own `PATH`, not the spawn environment's; closes with T064)
+- [ ] T019 [US1] Implement `PiProvider::is_available()` in `crates/micold-core/src/provider.rs` through the existing `resolves_on_path("pi")` — no spawn, no version read (FR-003, FR-003a, SC-006a) (reopened — BUG-001: it walked the daemon's own `PATH`, not the spawn environment's; closes with T064)
 - [X] T020 [US1] Implement `PiProvider::launch_args()` in `crates/micold-core/src/provider.rs`: one `--session-id <uuid>` vector for both launch modes, with a comment recording why `--session`, `--no-session`, `--name` and `--session-dir` are excluded ([contracts/pi-cli.md](./contracts/pi-cli.md) §Not used)
 - [X] T021 [US1] Implement `PiProvider::config_dir()` in `crates/micold-core/src/provider.rs`: `PI_CODING_AGENT_DIR` else home-relative `~/.pi/agent`, with no `cfg` arm (Principle VI)
 - [X] T022 [US1] Add the per-cwd store helpers to `PiProvider` in `crates/micold-core/src/provider.rs` — cwd encoding, `session_dir()`, `conversation_path()` — and implement `has_recorded_conversation()` on them (FR-005a)
@@ -227,12 +227,12 @@ increment: BUG-001.
 - [ ] T074 [BUG-001] [A2] [U8] `crates/micold-daemon/src/state.rs` (`start_session`): check availability against the same spawn-environment `PATH` as T066, not the process's own. Makes T071 pass (FR-003b)
 - [ ] T067 [BUG-001] [U11] [U12] `crates/micold-client/src/shell/daemon_sync.rs` (`ask_cli_availability`) and its callers: pass the project or worktree directory when the per-session override or missing-CLI list is opened, and `None` from Settings. Update `crates/micold-client/tests/cli_availability_comes_from_the_service.rs` and `crates/micold-client/src/main_tests.rs` for the new field
 - [ ] T068 [P] [BUG-001] `docs/user-guide/settings.md`: state that the CLIs offered follow the session environment. Explain what to do when a version-manager install is not offered: keep env-include on, or put the CLI on the login `PATH`. Revise line 68's "a `PATH` that hasn't loaded" to match (FR-022)
-- [ ] T069 [P] [BUG-001] Find how `"env_include_script_path": "/tmp/does-not-exist.sh"` with `env_include_enabled: false` reached a real `~/.local/share/micold-ai-ide/settings.json` (grep tests, quickstarts and visual-pass scripts for the fixture path). Make the writer use a private data directory. Report the finding in `bugs/BUG-001.md`
+- [ ] T069 [P] [BUG-001] ~~Find how `"env_include_script_path": "/tmp/does-not-exist.sh"` with `env_include_enabled: false` reached a real `~/.local/share/micold-ai-ide/settings.json` (grep tests, quickstarts and visual-pass scripts for the fixture path). Make the writer use a private data directory. Report the finding in `bugs/BUG-001.md`~~ **Moved out of BUG-001** (2026-09-19, bug-rubric review F3): a separate defect with prior evidence in `specs/010-daemon-session-persistence/bugs/BUG-025.md`; likely writer `crates/micold-client/src/main_tests.rs:1587`. Recorded under the ledger's *Follow-ups not done*. Not part of M1.
 
 ### Verification
 
 - [ ] T075 [BUG-001] [A1] [A2] [A3] Outer loop closes: the acceptance behaviors A1–A3 are green through the daemon protocol before BUG-001 is considered fixed (US1 scenario 5b, SC-001a)
-- [ ] T070 [BUG-001] Run `mise run gate` and `cargo check --target aarch64-apple-darwin`. Then run quickstart §B on Xvfb (`visual-pass` skill) with the daemon started on a `PATH` lacking `pi` and an env-include script that adds it. Confirm Pi is offered in Settings and the override, and that a session starts `pi` (SC-001a). Record the result in `evidence/`
+- [ ] T070 [BUG-001] Run `mise run gate` and `cargo check --target aarch64-apple-darwin`. Then run quickstart §B on Xvfb (`visual-pass` skill) with the daemon started on a `PATH` lacking `pi` and an env-include script that adds it. Confirm Pi is offered in Settings and the override, and that a session starts `pi` (SC-001a). Record the result in `evidence/`. The handoff tells the reporter to turn environment-include back on, since their settings have it off (BUG-001 §Steps to Reproduce)
 
 **Checkpoint**: a `pi` installed under a Node version manager is offered and starts, with no change
 to the user's installation.
