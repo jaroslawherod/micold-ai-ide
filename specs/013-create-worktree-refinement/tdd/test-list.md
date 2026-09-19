@@ -60,6 +60,7 @@ Tests in `crates/micold-client/tests/add_worktree_dismissal.rs`, observing
 | U9  | Cancel on a `Creating` form, then `Created(worktree)`: an info notification names the worktree's `dir_name` | FR-010b | example | DONE | `crates/micold-client/tests/add_worktree_dismissal.rs::a_create_succeeding_after_cancel_is_reported_naming_the_worktree` |
 | U10 | With the form open, `CreateFailed` and `Created` raise no notification (the in-overlay presentation stands alone) | FR-010b ("no duplicate notification") | example | DONE | `crates/micold-client/tests/add_worktree_dismissal.rs::outcomes_with_the_form_open_raise_no_notification` |
 | U11 | Cancel on an `Editing` form, then a stray `CreateFailed`: no notification — nothing was running | FR-010b (boundary: only a create cancelled mid-flight is reported) | example | DONE | `crates/micold-client/tests/add_worktree_dismissal.rs::a_stray_failure_after_an_idle_form_was_cancelled_raises_no_notification` |
+| U13 | Cancel mid-create, reopen, Cancel the idle form, then `CreateFailed`: the first create is still owed its notification (found by M1 code review A) | FR-010b | example | DONE | `crates/micold-client/tests/add_worktree_dismissal.rs::an_idle_cancel_after_a_mid_create_cancel_keeps_the_earlier_create_owed` |
 
 ### `crates/micold-client/src/shell/daemon_sync.rs` — interrupted create with no form
 

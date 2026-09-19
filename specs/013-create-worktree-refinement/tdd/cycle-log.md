@@ -168,3 +168,16 @@ existed and failed before the implementation.
 - green: no implementation change. Crate suite as cycle 12.
 - refactor: none needed
 - commit: shared with cycle 12 — the two tests share the `pending_create_req` helper in one file, so they were committed together
+
+## Cycle 14: U13 an idle Cancel after a mid-create Cancel keeps the earlier create owed
+
+- test: `crates/micold-client/tests/add_worktree_dismissal.rs::an_idle_cancel_after_a_mid_create_cancel_keeps_the_earlier_create_owed` (new; behavior found by M1 code review A)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test add_worktree_dismissal an_idle_cancel_after_a_mid_create_cancel_keeps_the_earlier_create_owed -- --exact`
+  -> panicked at `add_worktree_dismissal.rs:346`: `the create cancelled first is still running and must still be reported (FR-010b)` (1 failed)
+- green: `cancelled` writes the record only when the form it closes is `Creating`, instead of
+  overwriting it with `None` for an idle form.
+  Crate suite -> 1813 passed, 0 failed, 2 ignored (139 binaries)
+- refactor: none needed
+- commit: `fix(013): an idle Cancel no longer forgets a create cancelled earlier (BUG-001 U13)`
+- notes: the review's related cases (a reopened form's own mid-create Cancel, or an open form absorbing
+  the earlier outcome) are the test list's out-of-scope reopen case; declined in the ledger

@@ -392,12 +392,15 @@ pub fn opened(state: &mut crate::app::State) {
 
 /// The form was dismissed.
 pub fn cancelled(state: &mut crate::app::State) {
+    // Only a form with a create in flight has an outcome still to come. An idle one leaves any
+    // earlier cancelled create's record alone: that create is still running (FR-010b).
     if let Some(form) = state.worktree_form.form.take() {
-        state.worktree_form.cancelled_create = (form.status == WorktreeFormStatus::Creating)
-            .then_some(CancelledCreate {
+        if form.status == WorktreeFormStatus::Creating {
+            state.worktree_form.cancelled_create = Some(CancelledCreate {
                 mode: form.mode,
                 stage: form.stage,
             });
+        }
     }
 }
 
