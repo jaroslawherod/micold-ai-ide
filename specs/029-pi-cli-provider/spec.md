@@ -13,6 +13,10 @@ name (PR #320), and resuming a Pi session into an image without `pi` gave advice
 (PR #333, re-run in PR #335). Still open, and Pi's own output: every new Pi session opens with a
 `No project session found` warning.
 
+**Reopened**: 2026-09-18 for [BUG-001](./bugs/BUG-001.md). A `pi` installed with `npm install -g`
+under a Node version manager was not offered, because availability was checked against the session
+service's own `PATH` rather than the environment sessions are spawned with. FR-003b added.
+
 **Input**: User description: "add support for https://pi.dev/"
 
 ## Context
@@ -199,6 +203,10 @@ application and confirm the same conversation comes back.
 5a. **Given** an installed `pi` too old to do what a session needs, **When** the user starts a
    session on it, **Then** the failure is reported with a reason that names the installed version,
    and the CLI choice itself was not gated on a version probe.
+5b. **Given** `pi` is reachable only through the environment a session is started in — for example
+   installed with `npm install -g` under a Node version manager that the environment-include
+   script activates — and not through the session service's own `PATH`, **When** the user opens
+   the CLI choice, **Then** Pi is offered, and a session started on it runs `pi` (FR-003b).
 6. **Given** a user who never selects Pi, **When** they use the application as before, **Then**
    nothing about their sessions, settings, or sidebar has changed.
 
@@ -314,6 +322,12 @@ does not come back.
 - **The installed `pi` is present but too old for what a session needs.** It is still offered — the
   application does not judge versions (FR-003a) — and the resulting failure names the version, so
   the user is pointed at the upgrade rather than left guessing.
+- **`pi` is installed through a Node version manager (mise, nvm, fnm, volta).** Its directory is
+  on `PATH` only once the shell startup file has run, so the session service, started from the
+  desktop, does not see it in its own environment. Sessions do see it, through the
+  environment-include script (feature 011). Pi is offered on the strength of the environment
+  sessions actually get (FR-003b). With environment-include turned off, that environment is the
+  session service's own, and Pi is not offered, consistently with what a session would find.
 - **A session's recorded CLI is Pi, but `pi` has since been uninstalled.** The application reports
   which CLI is missing and offers the CLIs that are available, exactly as it already does for a
   missing default, and leaves the stored choice untouched.
@@ -374,6 +388,18 @@ does not come back.
   `pi` too old for what this application needs is caught where it fails — FR-005's start failure and
   FR-012d's badge degradation — and each of those reports MUST name the installed version, so the
   user can act on a cause rather than a symptom.
+- **FR-003b**: "Where sessions actually run" (FR-003) means **the environment a session is spawned
+  with**, not the session service's own process environment. The presence check MUST resolve the
+  command against the `PATH` a session started in that directory would receive: the session
+  service's `PATH` with the environment-include result (feature 011) applied when that feature is
+  enabled. Where a choice is offered for a known directory — the per-session override and the
+  missing-CLI list at the point of creation — that directory's environment is used. Where no
+  directory is in play — the Settings default — the user's home directory is used. The rule
+  applies to every provider, not to Pi alone (FR-019, FR-021), and to both placements, since each
+  resolves its environment where its sessions run. The environment MUST be the same resolution
+  a spawn in that directory uses, shared with it rather than computed a second way, so that a CLI is
+  offered exactly when a session started on it would find it. Resolving that environment MUST NOT
+  block the session service's handling of other requests.
 
 **Running**
 
@@ -539,6 +565,12 @@ does not come back.
   what the application does when it finds a conversation already in use, and that the warning is
   advisory rather than a guarantee (FR-006b, FR-006c).
 
+**Bugfix**: 2026-09-18 — BUG-001. FR-003b added: availability is decided against the environment a
+session is spawned with (session-service `PATH` plus the environment-include result), not the
+session service's bare process `PATH`. SC-006a amended to allow the one shared, cached environment
+resolution that spawns already perform. US1 scenario 5b and an edge case added. See
+[bugs/BUG-001.md](./bugs/BUG-001.md).
+
 ### Key Entities
 
 - **AI CLI choice**: The named CLI a session is bound to. Gains a third member, carrying both of the
@@ -593,8 +625,15 @@ does not come back.
   anything starts, and can still proceed. No detection this application cannot make results in a
   blocked session, and no stale indicator leaves a conversation permanently unopenable.
 - **SC-006a**: Deciding whether Pi is available costs exactly what deciding it for the other two CLIs
-  costs — no process is spawned and no version is read to answer it. Where an old `pi` does fail, the
-  report names the installed version.
+  costs — ~~no process is spawned and no version is read to answer it~~ no version is read, no CLI is
+  spawned, and the only process ever spawned is the environment-include resolution a session spawn
+  in that directory already performs, shared and cached with it (FR-003b; struck 2026-09-18,
+  BUG-001: "no process" made the check blind to a CLI a session would find). Where an old `pi`
+  does fail, the report names the installed version.
+- **SC-001a**: A user whose `pi` is reachable only through the environment-include script — the
+  ordinary result of `npm install -g` under a Node version manager — is offered Pi in the Settings
+  default and the per-session override, and starts a session on it, with no change to their
+  installation (FR-003b, BUG-001).
 - **SC-007**: On the default published image, a Pi session starts with nothing installed by the user
   into the sandbox, and the image's own contents check covers Pi without naming it.
 - **SC-007a**: A Pi session under sandboxed placement reports activity exactly as one on the host —
@@ -622,7 +661,8 @@ does not come back.
   behaviour.
 - **Pi is installed by the user on the host, and by the project in the sandbox.** The application
   does not install, update, or manage a host `pi`; it finds one or reports its absence, and does not
-  judge its version (FR-003a). Inside the
+  judge its version (FR-003a). "Finds" means in the environment sessions are spawned with, which is
+  where a version-manager install lives (FR-003b, BUG-001). Inside the
   published image the project pins the version, as it already does for the other two CLIs.
 - **Pi's conversation store is read, never written by the application.** The conversations in it are
   written by Pi itself (FR-005a); apart from the durable close marker of FR-016, the application

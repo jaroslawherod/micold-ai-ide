@@ -14,7 +14,8 @@ place. Pi accepts `--session-id <id>`, *"creating it if missing"*, for both fres
 launches, so a session's identity is carried by where the conversation is stored in Pi's own per-cwd
 store and FR-005b's correspondence-store fallback is never reached. Conversation storage, name
 extraction, discovery, the durable close marker and the `PATH` availability check all fit the
-existing trait methods unchanged.
+existing trait methods unchanged. *(BUG-001: the availability check fits the seam, but the `PATH` it
+walked was the wrong one — see [Bugfix increment: BUG-001](#bugfix-increment-bug-001).)*
 
 The one place it does not fit is activity. Pi reports busy/idle only to code loaded into it, and that
 code has to be supplied at launch and its log tailed — two spawn-time obligations
@@ -99,7 +100,8 @@ deviation in Complexity Tracking):
   platform restriction; its base directory is home-relative on all three platforms, so
   `config_dir()` has the same single shape `CopilotProvider` already proved out on Windows; the
   `PATH` lookup goes through the existing `resolves_on_path`, which answers the `.exe`/`.cmd`
-  question via `PATHEXT` with no branch. CI covers all three.
+  question via `PATHEXT` with no branch. CI covers all three. *(BUG-001: the lookup keeps that
+  shape but takes the `PATH` to walk as an argument instead of reading the process's own.)*
 - [x] **VII. Documentation First-Class**: PASS. FR-022 is part of this change, not a follow-up:
   `docs/user-guide/settings.md` and `docs/user-guide/worktrees-and-sessions.md` gain Pi, and three
   things are stated outright — that the conversation lives in Pi's store and is resumable outside
@@ -176,6 +178,49 @@ test is `crates/micold-daemon/assets/pi-activity.ts`, placed in the daemon becau
 the component to travel with the session service rather than with the image. No new crate, no new
 module tree, and no directory outside the ones the two existing providers already use — which is
 itself the evidence for the spec's second purpose.
+
+## Bugfix increment: BUG-001
+
+**Defect**: `ClientMsg::AiCliAvailabilityRequest` is answered by `provider::available_here()`,
+which walks the daemon process's own `PATH` (`resolves_on_path` reads `std::env::var_os("PATH")`).
+A desktop-launched daemon inherits the login session's `PATH`, which lacks version-manager
+directories. Sessions are spawned with `SharedState::env_include_vars_for(cwd)` applied, which has
+them. So a `pi` installed with `npm install -g` under mise or nvm runs fine in a session but is never
+offered. FR-003b now says availability follows the spawn environment.
+
+**Design** (every provider; nothing names Pi — FR-019, FR-021):
+
+1. **Core**: `resolves_on_path` takes the `PATH` value to walk (`&OsStr`) rather than reading the
+   process environment, and `available_here()` gains a sibling that takes that value, for example
+   `available_in(path: &OsStr) -> Vec<AiCli>`. `PATHEXT` handling is unchanged, so no `cfg` arm is
+   added (Principle VI). The provider trait's `is_available` takes the same argument; where a
+   provider's check is a pure command lookup it forwards it. This is a seam change available to
+   every provider, recorded as such (FR-020).
+2. **Protocol**: `AiCliAvailabilityRequest` gains `cwd: Option<PathBuf>` — the directory the choice
+   is being made for. Wire-visible, so `PROTOCOL_VERSION` goes from 13 to 14 and the schema hash is
+   regenerated.
+3. **Daemon**: the handler resolves the spawn environment for `cwd.unwrap_or(home)` through the
+   existing `env_include_vars_for`, so it shares the per-directory `env_include_cache` with spawns
+   and is invalidated by the same `SettingsSet` and `WorktreeDelete` paths. It takes the `PATH`
+   from that list, or the process's own when env-include is off or supplies none, and answers from
+   `available_in`. Resolution can block up to the env-include timeout, and the state lock is never
+   held across it. So the handler runs it on `spawn_blocking` and sends `AiCliAvailability` when
+   it completes, leaving the connection loop free (FR-003b's last sentence).
+4. **Client**: `ask_cli_availability` passes the directory when the per-session override or the
+   missing-CLI list is opened for a project or worktree, and `None` from Settings.
+5. **Docs**: `docs/user-guide/settings.md` states that which CLIs are offered follows the session
+   environment, and what to do when a version-manager install is not offered: keep env-include on,
+   or put the CLI on the login `PATH`.
+
+**Cost** (SC-006a as amended): no CLI is spawned and no version is read. The one process is the
+env-include resolution for that directory, which the next spawn there would run anyway, and later
+requests and spawns are served from the cache. With env-include off, the cost is one `PATH` walk
+per provider, as before.
+
+**Sandboxed placement**: unchanged in shape. The daemon runs inside the sandbox, so the same code
+resolves the same environment its sessions get there.
+
+**Bugfix**: 2026-09-18 — BUG-001 Updated from bugfix patch.
 
 ## Complexity Tracking
 
