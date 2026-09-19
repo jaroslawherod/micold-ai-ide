@@ -190,7 +190,8 @@ fn prefer_process_path(cmd: &mut CommandBuilder) {
 /// entries and an identity variable with other bytes would otherwise slip through; and from the
 /// builder too, which on Windows also carries the registry's variables.
 fn strip_inherited_terminal_identity(cmd: &mut CommandBuilder) {
-    let matches = |key: &str, value: &str| is_inherited_terminal_identity(key, value, cfg!(windows));
+    let matches =
+        |key: &str, value: &str| is_inherited_terminal_identity(key, value, cfg!(windows));
     let inherited: Vec<std::ffi::OsString> = std::env::vars_os()
         .filter(|(key, value)| matches(&key.to_string_lossy(), &value.to_string_lossy()))
         .map(|(key, _)| key)

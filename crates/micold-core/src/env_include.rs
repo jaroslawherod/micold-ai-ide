@@ -336,7 +336,10 @@ fn bash_command(
 
 #[cfg(windows)]
 fn baseline_env(cwd: &Path, budget: Duration) -> Option<HashMap<String, String>> {
-    match run_bounded(powershell_baseline_command(cwd, std::env::vars_os()), budget) {
+    match run_bounded(
+        powershell_baseline_command(cwd, std::env::vars_os()),
+        budget,
+    ) {
         RunOutcome::Exited { stdout, .. } => Some(parse_env_dump(&stdout)),
         // See the Unix branch: `None` rather than an empty map (BUG-003).
         _ => None,
@@ -714,7 +717,10 @@ mod terminal_identity_tests {
         ];
         // The bash builder only exists where it runs; the PowerShell ones are built everywhere.
         #[cfg(not(windows))]
-        builders.push(("bash", bash_command(Path::new("/dev/null"), cwd, inherited())));
+        builders.push((
+            "bash",
+            bash_command(Path::new("/dev/null"), cwd, inherited()),
+        ));
         for (name, cmd) in builders {
             assert_eq!(
                 env_changes(&cmd),
