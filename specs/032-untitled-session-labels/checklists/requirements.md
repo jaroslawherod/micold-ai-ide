@@ -13,8 +13,8 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
-- [ ] Requirements are testable and unambiguous
+- [x] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
@@ -31,12 +31,9 @@
 
 ## Notes
 
-- Three `[NEEDS CLARIFICATION]` markers are left open on purpose for Phase 2 (`speckit-clarify`):
-  FR-002 (which typed text is the label), FR-006 (whether a later title replaces a shown label),
-  FR-012 (whether GitHub Copilot is in scope; `pi` is covered by 029-pi-cli-provider FR-011).
-- "Requirements are testable and unambiguous" stays unticked until clarify closes FR-002, FR-006 and
-  FR-012. Every other requirement is testable as written. Their acceptance criteria are complete for
-  each candidate answer; only the choice between candidates is pending.
-- The spec names the AI CLIs (`claude`, GitHub Copilot, `pi`) and their `ai-title` record because
-  they are the product's domain, not an implementation choice.
+- The three `[NEEDS CLARIFICATION]` markers left for Phase 2 (FR-002, FR-006, FR-012) were closed
+  by the user's decisions recorded under the spec's *Clarifications* (ledger D2–D4).
+- The spec names the AI CLIs (`claude`, GitHub Copilot, `pi`) their `ai-title` record, and
+  Copilot's `events.jsonl` / `user.message` fields (FR-012) because they are the product's domain,
+  the other vendor's record format the label is read from, not an implementation choice.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`

@@ -15,6 +15,18 @@ FR-004 a session with no title keeps the "New session" placeholder for good. Sho
 sessions needs a label source that 029 never intended, so it is specified here rather than patched
 into 029 (BUG-001 *Size decision*).
 
+## Clarifications
+
+### Session 2026-09-19
+
+- Q: FR-002: which text the user typed becomes the label? → A: (b) the first turn: a slash
+  command's arguments when it has them, else the command name; otherwise the prompt text.
+  _(decided by user)_
+- Q: FR-006: does a title that arrives after a label has been shown replace it? → A: Yes. The
+  title replaces the label on the row and in what is remembered. _(decided by user)_
+- Q: FR-012: does GitHub Copilot get the same treatment as `claude`? → A: Yes. `claude` and
+  Copilot sessions both get the derived label; `pi` stays out of scope. _(decided by user)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Tell my past untitled sessions apart (Priority: P1)
@@ -52,6 +64,12 @@ shows a label taken from that conversation, not "New session".
    used),
    **When** I view the project,
    **Then** the row still reads "New session".
+5. **Given** a GitHub Copilot session whose records hold a typed prompt but no `name:` (every such
+   session on the development machine was run by a Copilot older than 1.0.37, see *Copilot
+   evidence*),
+   **When** I view the project without opening that session,
+   **Then** the row shows a label taken from that session's first turn, on the same rules as a
+   `claude` session.
 
 ---
 
@@ -65,8 +83,8 @@ never compete with a real title.
 suddenly showing a raw prompt would be a new bug.
 
 **Independent Test**: For a session that has a title, confirm the row shows the title, not a label.
-For a session that shows a label, have the AI CLI title the conversation and confirm the row does
-what FR-006 decides, before and after a restart.
+For a session that shows a label, have the AI CLI title the conversation and confirm the row shows
+the title, before and after a restart (FR-006).
 
 **Acceptance Scenarios**:
 
@@ -76,11 +94,11 @@ what FR-006 decides, before and after a restart.
 2. **Given** a session showing a derived label,
    **When** the AI CLI later titles that conversation,
    **Then** the row shows the title, and after the next restart the row shows the title, not the
-   label (subject to the FR-006 decision).
+   label (FR-006).
 3. **Given** a session showing a derived label that is not running,
    **When** its AI CLI records gain a title (for example, the conversation was resumed outside this
    application) and I restart the background service,
-   **Then** the row shows the title (subject to the FR-006 decision). Having shown a label does not
+   **Then** the row shows the title (FR-006). Having shown a label does not
    stop the application from finding a title that arrives later.
 
 ---
@@ -107,7 +125,7 @@ restart.
    the session being stopped, restarted or reopened.
 2. **Given** a running session showing a derived label,
    **When** the AI CLI titles the conversation,
-   **Then** the row changes to the title as it does today (subject to the FR-006 decision).
+   **Then** the row changes to the title as it does today (FR-006).
 
 ---
 
@@ -116,8 +134,14 @@ restart.
 - **Empty input.** A conversation with no typed prompt: only tool output, only a command the
   application ran on the user's behalf, or nothing at all. It keeps "New session" (029 FR-004 still
   holds for it).
-- **A prompt that is only whitespace, or only a slash command with no text.** It is not a usable
-  label on its own; which text, if any, stands for it is part of the label-source decision (FR-002).
+- **A prompt that is only whitespace, or only a slash command with no text.** A `claude` slash
+  command with no arguments stands for itself: the label is the command name, such as
+  `/speckit-autopilot` (FR-002). A turn with no text left after FR-003's whitespace rules is not a
+  turn for FR-002, and the next turn is looked at instead. A Copilot slash command with no
+  arguments (`/model`, `/usage`) records no turn at all, so it never becomes a label.
+- **Text the AI CLI inserted as if the user had typed it.** `claude` command output and injected
+  reminders, and Copilot's skill context, custom-instruction reminders and autopilot continuations
+  (FR-012), are not typed prompts and never become a label.
 - **A very long, multi-line prompt, or one with punctuation, code, emoji or non-Latin characters.**
   The label is one line, at most 80 user-perceived characters, ending in "…" when cut (FR-003). The
   row's existing ellipsis and the hover tooltip then treat the label as they treat a title: the
@@ -153,12 +177,11 @@ restart.
   a label derived from that conversation wherever the session is listed or identified, when the
   conversation contains at least one prompt the user typed.
 - **FR-002**: The label MUST be text the user typed in that conversation, and MUST come from that
-  session's own conversation and no other [NEEDS CLARIFICATION: which text? See *Label-source
-  evidence* below for what each candidate gives on the four reported sessions: (a) the first plain
-  typed prompt, not a slash command; (b) the first turn, as its slash command's arguments when it
-  has them, else the command name, else its plain text; (c) the first turn with free text of its own
-  (a slash command's arguments or a plain prompt), skipping bare commands and one-word prompts such
-  as `continue`. The `pi` precedent, "first user message", is (b) in `claude` terms.].
+  session's own conversation and no other. It is the conversation's **first turn**: when that turn
+  is a slash command, the command's arguments if it has any, else the command name (with its
+  leading `/`); otherwise the prompt text. A turn with no text after FR-003's whitespace rules is
+  skipped. What counts as a turn for each AI CLI is FR-012. This is candidate (b) of *Label-source
+  evidence*, and the same rule as `pi`'s "first user message" (029-pi-cli-provider FR-011).
 - **FR-003**: The label MUST be a single line of at most 80 user-perceived characters: line breaks
   and runs of whitespace collapsed to single spaces, leading and trailing whitespace removed, and a
   longer text cut between two user-perceived characters and ended with "…". A title is short by
@@ -169,10 +192,9 @@ restart.
   title and not a derived label. A derived label MUST NEVER replace a title, whether shown or
   remembered.
 - **FR-006**: When a title becomes known for a session that has shown a derived label, the title
-  MUST replace the label, both on the row and in what is remembered [NEEDS CLARIFICATION: Does a
-  title that arrives after a label has been shown replace it? BUG-001 *Size decision* recommends yes
-  (029 FR-005, "the latest known name"); the alternative keeps a label once shown, so a row's text
-  never changes under the user.].
+  MUST replace the label, both on the row and in what is remembered, as 029 FR-005 keeps "the
+  latest known name". A label never replaces a title (FR-005), so the change only ever goes from
+  label to title.
 - **FR-007**: The application MUST remember a derived label durably, as it remembers a title (029
   FR-001), so that the row shows it after a restart without the AI CLI's records being read again for
   that purpose.
@@ -186,11 +208,21 @@ restart.
 - **FR-011**: Failing to read the AI CLI's records, or failing to remember a label, MUST NOT change
   anything else on the row, MUST NOT interrupt the session and MUST NOT be reported as a session
   failure (029 FR-009).
-- **FR-012**: The rule applies to `claude` sessions. [NEEDS CLARIFICATION: Does GitHub Copilot need
-  the same treatment? Its session name is absent until Copilot has summarised the conversation, so
-  it can show the same symptom. `pi` already falls back to the first user message under
-  029-pi-cli-provider FR-011 and is out of scope unless its fallback turns out to fail the same
-  way.]
+- **FR-012**: The rule applies to `claude` and GitHub Copilot sessions. A **turn** is:
+  - for `claude`, a prompt record the user entered, as opposed to tool results, command output and
+    text `claude` or the application inserted; a slash command is recorded with its name and its
+    arguments kept apart, which is what FR-002 reads;
+  - for Copilot, a `user.message` record in the session's `events.jsonl` whose `content` the user
+    entered: not one Copilot inserted (a record carrying a `source`, such as `skill-<name>` skill
+    context or `instruction-discovery` reminders) and not an autopilot continuation
+    (`isAutopilotContinuation`). The label is taken from `content`, never `transformedContent`,
+    which Copilot wraps in timestamps and reminders. Copilot already strips a slash command before
+    recording the turn: `/plan <text>` is recorded as `<text>`, `/fleet <text>` as
+    `Fleet deployed: <text>`, and a bare command records no turn, so FR-002's "command name" case
+    never arises for Copilot and the recorded `content` is the label.
+
+  `pi` already falls back to the first user message (029-pi-cli-provider FR-011) and is out of
+  scope.
 - **FR-013**: A session's label MUST remain derived from its conversation and MUST NOT become
   user-editable because of this feature (029 FR-011).
 - **FR-014**: Producing a label MUST look at a bounded part of the conversation from its start, so
@@ -199,7 +231,7 @@ restart.
   keeps the placeholder. The bound MUST be large enough that the chosen FR-002 source labels all
   four reported sessions (SC-001).
 - **FR-015**: The user guide MUST say what the row of a session the AI CLI never titled reads, and
-  that a title replaces it or not, per FR-006 (Principle VII).
+  that a title arriving later replaces it (FR-006) (Principle VII).
 
 ### Label-source evidence
 
@@ -217,7 +249,29 @@ command; record numbers count every line of the record, not only prompts.
 (a) gives three identical rows, which fails US1 scenario 2 and SC-005. (b) and (c) give four
 different rows; (b) needs only the first few records, (c) needs a bound past record 1112 for one
 session. The recorded `/speckit-bugfix-verify` prompts are typed as plain text, not recognised as
-slash commands by the records, which is why (a) picks them.
+slash commands by the records, which is why (a) picks them. The user chose (b) (Clarifications).
+
+### Copilot evidence
+
+Read from the 281 session directories in `~/.copilot/session-state/` on the development machine on
+2026-09-19, against `CopilotProvider::read_title` (`crates/micold-core/src/provider.rs`), which
+reads only the `name:` key of `workspace.yaml`:
+
+- 142 sessions have an `events.jsonl` (a recorded conversation). 97 have a `name:`; 44 have at least
+  one `user.message` and no `name:`; 1 has no `user.message`.
+- All 44 were run by Copilot 1.0.10–1.0.36, and every one of them has a `summary:` key instead of
+  `name:` in `workspace.yaml`. Every session run by 1.0.37 or later that holds a `user.message` has a
+  `name:`. Today all 44 read "New session"; under FR-002 and FR-012 all 44 get a label.
+- The first qualifying `user.message` is at record 2–10 in all 44, well inside any bound FR-014 sets
+  for `claude`'s record 7–8.
+- Of 972 `user.message` records, 12 carry a `source` (skill context, `instruction-discovery`) and 28
+  are autopilot continuations with empty `content`; FR-012 excludes both.
+- Copilot's command history holds `/plan …` and `/fleet …`; their sessions record the text after the
+  command (`/fleet` with a `Fleet deployed: ` prefix). Bare commands (`/model`, `/usage`, `/login`)
+  record no `user.message`.
+
+A running Copilot session reads "New session" until Copilot writes `name:`, so US3 applies to it
+in that window.
 
 ### Key Entities
 
@@ -227,9 +281,9 @@ slash commands by the records, which is why (a) picks them.
   over a derived label.
 - **Derived label**: Short text taken from what the user typed in the conversation. It stands in for a
   title that does not exist yet, is remembered like one, and is remembered as a stand-in, distinct from
-  a title (FR-008). Whether a later title replaces it is FR-006.
+  a title (FR-008). A later title replaces it (FR-006).
 - **Typed prompt**: A turn in the conversation that the user entered, as opposed to tool output or
-  text the application or AI CLI inserted.
+  text the application or AI CLI inserted. What counts as one for each AI CLI is FR-012.
 
 ## Success Criteria *(mandatory)*
 
@@ -249,6 +303,9 @@ slash commands by the records, which is why (a) picks them.
 - **SC-006**: Adding labels adds no perceptible delay: the session list of a project with 50 sessions,
   including conversations of more than 1,000 records, appears as quickly after this change as before.
 - **SC-007**: A running untitled session shows its label within 60 seconds of the first typed prompt.
+- **SC-008**: Of the 44 Copilot sessions on the development machine that hold a `user.message` but
+  no `name:` (*Copilot evidence*), 44 show a derived label after one restart, where 0 do today, and
+  each label is that session's first qualifying `content`.
 
 ## Assumptions
 
@@ -263,8 +320,11 @@ slash commands by the records, which is why (a) picks them.
   terminal bar); no new UI element is added.
 - This feature supersedes two of 029's assumptions: "The name already has a single source — the AI
   CLI's title" (a derived label is a second, lower-priority source), and "Sessions of every supported
-  AI CLI are covered by the same rule" (FR-012 limits the rule to `claude` until clarified). It
-  narrows 029 FR-004 (FR-004 here) and keeps every other 029 requirement.
+  AI CLI are covered by the same rule" (FR-012 applies the label rule to `claude` and Copilot;
+  `pi` keeps its own). It narrows 029 FR-004 (FR-004 here) and keeps every other 029 requirement.
+- Copilot's record format is the one read on 2026-09-19 from versions 1.0.10–1.0.83 (*Copilot
+  evidence*). A later Copilot that records turns differently yields no label, as an unrecognised
+  record does (Edge Cases), until the provider is updated.
 
 ### Out of scope
 
@@ -273,5 +333,7 @@ slash commands by the records, which is why (a) picks them.
 - Honouring a user's `/rename` (`custom-title` records) or `agent-name` records over the AI CLI's
   title. That is a candidate 029 bug, recorded in the BUG-001 ledger's follow-ups.
 - Letting the user name a session by hand.
-- Changing how `pi` labels a session (029-pi-cli-provider FR-011), unless FR-012's clarification
-  brings it in.
+- Changing how `pi` labels a session (029-pi-cli-provider FR-011).
+- Reading the `summary:` key that Copilot 1.0.36 and older wrote instead of `name:` as a title. It
+  is Copilot's own title for those sessions, and ignoring it is a candidate 029 bug of the same kind
+  as `custom-title`; until it is fixed, those sessions get a derived label here (*Copilot evidence*).
