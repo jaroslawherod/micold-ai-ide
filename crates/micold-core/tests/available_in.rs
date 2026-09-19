@@ -34,3 +34,30 @@ fn a_cli_present_only_in_the_given_path_is_available() {
          session service's own PATH has it (FR-003b)"
     );
 }
+
+/// The other direction, and the one the old code path failed: a CLI that only the session
+/// service's own `PATH` holds is not on the `PATH` a session is spawned with, so it is not offered
+/// for that session.
+///
+/// The only test in this binary that moves the process's `PATH`, so it takes no lock: the test
+/// above reads nothing but the value it builds.
+#[test]
+fn a_cli_present_only_on_the_process_path_is_not_available_in_another_path() {
+    let service_bin = tempfile::tempdir().unwrap();
+    let session_bin = tempfile::tempdir().unwrap();
+    install(service_bin.path(), AiCli::Pi.provider().command());
+
+    let previous = std::env::var_os("PATH");
+    std::env::set_var("PATH", path_of(&[service_bin.path()]));
+    let answer = available_in(&path_of(&[session_bin.path()]));
+    match previous {
+        Some(value) => std::env::set_var("PATH", value),
+        None => std::env::remove_var("PATH"),
+    }
+
+    assert!(
+        answer.is_empty(),
+        "the answer is about the given PATH alone: a CLI that only the session service's own \
+         PATH holds would not be found by a session spawned with the given one, got {answer:?}"
+    );
+}
