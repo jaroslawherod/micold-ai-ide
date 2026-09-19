@@ -100,3 +100,13 @@ existed and failed before the implementation.
   Crate suite -> 1806 passed, 0 failed, 2 ignored (139 binaries)
 - refactor: none needed; the rename was the green step's
 - commit: `fix(013): a failure after Cancel names the stage it failed at (BUG-001 U7)`
+
+## Cycle 8: U8 a stage reported after Cancel is the one a failure names
+
+- test: `crates/micold-client/tests/add_worktree_dismissal.rs::a_stage_reported_after_cancel_is_the_one_a_failure_names` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test add_worktree_dismissal a_stage_reported_after_cancel_is_the_one_a_failure_names -- --exact`
+  -> panicked at `add_worktree_dismissal.rs:236`: `... got "Creating the worktree failed at \"Creating branch and worktree\": git failed to fetch a submodule"` (1 failed)
+- green: `create_stage_changed` also moves a cancelled create's recorded stage. File -> 8 passed.
+  Crate suite -> 1807 passed, 0 failed, 2 ignored (139 binaries)
+- refactor: none needed
+- commit: `fix(013): a stage reported after Cancel is the one a failure names (BUG-001 U8)`
