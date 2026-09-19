@@ -21,6 +21,7 @@ use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::sync::FairMutex;
 use alacritty_terminal::term::{Config, Term};
 use alacritty_terminal::vte::ansi::Processor;
+use micold_core::env_include::is_inherited_terminal_identity;
 use micold_core::session::SessionId;
 use micold_core::terminal::{default_shell_command, launch_args, LaunchSpec};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
@@ -180,6 +181,21 @@ fn prefer_process_path(cmd: &mut CommandBuilder) {
     cmd.env("PATH", path);
 }
 
+/// Remove every inherited variable that names another terminal (feature 031, FR-006, contract
+/// session-terminal-identity §2), so a program in the session asks micold's own identity, not the
+/// one of the terminal the daemon was started from. Called before `TERM` and the include values
+/// are applied, so a value the include script sets survives.
+fn strip_inherited_terminal_identity(cmd: &mut CommandBuilder) {
+    let inherited: Vec<String> = cmd
+        .iter_full_env_as_str()
+        .filter(|(key, value)| is_inherited_terminal_identity(key, value, cfg!(windows)))
+        .map(|(key, _)| key.to_string())
+        .collect();
+    for key in inherited {
+        cmd.env_remove(key);
+    }
+}
+
 impl PtySession {
     /// Spawn `spec`'s AI CLI as a daemon-owned session (FR-006). `scrollback_lines` sets the VT
     /// history depth; `initial_size` seeds the grid (falls back to the standard seed).
@@ -201,6 +217,7 @@ impl PtySession {
         let mut cmd = CommandBuilder::new(spec.provider.provider().command());
         #[cfg(windows)]
         prefer_process_path(&mut cmd);
+        strip_inherited_terminal_identity(&mut cmd);
         cmd.cwd(&spec.cwd);
         for (k, v) in &spec.env {
             cmd.env(k, v);
@@ -238,6 +255,7 @@ impl PtySession {
         let mut cmd = CommandBuilder::new(command);
         #[cfg(windows)]
         prefer_process_path(&mut cmd);
+        strip_inherited_terminal_identity(&mut cmd);
         cmd.cwd(cwd);
         for (k, v) in env {
             cmd.env(k, v);
