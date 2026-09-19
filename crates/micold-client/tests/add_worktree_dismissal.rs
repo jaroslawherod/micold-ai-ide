@@ -326,3 +326,27 @@ fn a_stray_failure_after_an_idle_form_was_cancelled_raises_no_notification() {
         "nothing was running when the form closed, so nothing is owed a notification"
     );
 }
+
+/// U13 — dismissing a form reopened after a mid-create Cancel does not forget the earlier create.
+///
+/// Found by code review: after Cancel the user may reopen Add Worktree to look at something and
+/// close it again without creating anything. The earlier create is still running and still owed
+/// its notification (FR-010b); an idle Cancel has nothing of its own to record, so it must leave
+/// the earlier record alone.
+#[test]
+fn an_idle_cancel_after_a_mid_create_cancel_keeps_the_earlier_create_owed() {
+    let mut state = cancelled_mid_create();
+    state.update(Message::WorktreeForm(FormMsg::Opened));
+    state.update(Message::WorktreeForm(FormMsg::Cancelled));
+
+    state.update(Message::WorktreeForm(FormMsg::CreateFailed(
+        "git failed to create the worktree".into(),
+    )));
+
+    let (_, message) = notice(&state)
+        .expect("the create cancelled first is still running and must still be reported (FR-010b)");
+    assert!(
+        message.contains("git failed to create the worktree"),
+        "the notification must carry the failure's message, got {message:?}"
+    );
+}
