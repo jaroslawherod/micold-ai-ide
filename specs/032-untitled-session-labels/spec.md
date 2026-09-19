@@ -26,6 +26,23 @@ into 029 (BUG-001 *Size decision*).
   title replaces the label on the row and in what is remembered. _(decided by user)_
 - Q: FR-012: does GitHub Copilot get the same treatment as `claude`? → A: Yes. `claude` and
   Copilot sessions both get the derived label; `pi` stays out of scope. _(decided by user)_
+- Q: Is a `claude` slash command that the CLI handles itself and never sends to the model (`/model`,
+  `/login`, `/usage`, `/clear`) a turn, so a session opened with a bare `/model` reads "/model"? →
+  A: No. Only a slash command that sends a prompt to the model (a custom command or skill, such as
+  `/speckit-autopilot`) is a turn; a CLI-handled command is skipped. A session holding only such
+  commands has no typed prompt and keeps "New session" (US1 scenario 4, FR-004), the same outcome
+  as Copilot, which records no turn for them. Seen on the development machine: 2 of 87 recent
+  `claude` sessions open with a bare `/model`. _(agent-resolved: specs/032-untitled-session-labels/spec.md#User Story 1 scenario 4, FR-001, FR-012)_
+- Q: When two sessions have the same first turn (two sessions both opened with a bare
+  `/speckit-autopilot`), are their labels made distinct? → A: No. Each shows its own derived label,
+  identical or not; no suffix or disambiguation is added, as none is added to two identical titles.
+  _(agent-resolved: specs/029-persistent-session-names/spec.md#Requirements; specs/029-pi-cli-provider/spec.md#FR-011)_
+- Q: Does a derived label look different on the row from a title? → A: No. It is shown exactly
+  where and as a title is shown (row, tooltip, terminal bar), with no new styling or UI element.
+  _(agent-resolved: specs/032-untitled-session-labels/spec.md#Assumptions)_
+- Q: Must FR-014's bound also reach the first turn of the untitled Copilot sessions? → A: Yes. The
+  bound must label all four reported `claude` sessions (SC-001) and all 44 Copilot sessions
+  (SC-008), whose first turn is at record 2–10. _(agent-resolved: specs/032-untitled-session-labels/spec.md#Copilot evidence)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -136,16 +153,20 @@ restart.
   holds for it).
 - **A prompt that is only whitespace, or only a slash command with no text.** A `claude` slash
   command with no arguments stands for itself: the label is the command name, such as
-  `/speckit-autopilot` (FR-002). A turn with no text left after FR-003's whitespace rules is not a
+  `/speckit-autopilot` (FR-002). A command `claude` handles itself without prompting the model
+  (`/model`, `/login`) is not a turn (FR-012). A turn with no text left after FR-003's whitespace rules is not a
   turn for FR-002, and the next turn is looked at instead. A Copilot slash command with no
   arguments (`/model`, `/usage`) records no turn at all, so it never becomes a label.
+- **Two sessions with the same first turn.** Both rows show the same label; nothing is added to
+  tell them apart, as nothing is added to two identical titles.
 - **Text the AI CLI inserted as if the user had typed it.** `claude` command output and injected
   reminders, and Copilot's skill context, custom-instruction reminders and autopilot continuations
   (FR-012), are not typed prompts and never become a label.
 - **A very long, multi-line prompt, or one with punctuation, code, emoji or non-Latin characters.**
   The label is one line, at most 80 user-perceived characters, ending in "…" when cut (FR-003). The
   row's existing ellipsis and the hover tooltip then treat the label as they treat a title: the
-  tooltip shows the whole label, which is the cut text, not the whole prompt.
+  tooltip shows the whole label, which is the cut text, not the whole prompt. A label is not styled
+  differently from a title.
 - **The AI CLI's records are missing, unreadable, or in a format the application does not
   recognise.** No label; the row reads "New session" (or its remembered label or title, if it has
   one) and the session is not reported as failed.
@@ -211,7 +232,9 @@ restart.
 - **FR-012**: The rule applies to `claude` and GitHub Copilot sessions. A **turn** is:
   - for `claude`, a prompt record the user entered, as opposed to tool results, command output and
     text `claude` or the application inserted; a slash command is recorded with its name and its
-    arguments kept apart, which is what FR-002 reads;
+    arguments kept apart, which is what FR-002 reads. A slash command is a turn only when it sends a
+    prompt to the model (a custom command or skill); one `claude` handles itself (`/model`,
+    `/login`, `/usage`, `/clear`) is not a turn;
   - for Copilot, a `user.message` record in the session's `events.jsonl` whose `content` the user
     entered: not one Copilot inserted (a record carrying a `source`, such as `skill-<name>` skill
     context or `instruction-discovery` reminders) and not an autopilot continuation
@@ -228,8 +251,8 @@ restart.
 - **FR-014**: Producing a label MUST look at a bounded part of the conversation from its start, so
   labelling a row costs the same whether its conversation is a minute or a year old (the trade-off
   029-pi-cli-provider FR-011 made for `pi`). When that part holds no usable text for FR-002, the row
-  keeps the placeholder. The bound MUST be large enough that the chosen FR-002 source labels all
-  four reported sessions (SC-001).
+  keeps the placeholder. The bound MUST be large enough that FR-002 labels all four reported
+  `claude` sessions (SC-001) and all 44 untitled Copilot sessions (SC-008).
 - **FR-015**: The user guide MUST say what the row of a session the AI CLI never titled reads, and
   that a title arriving later replaces it (FR-006) (Principle VII).
 
