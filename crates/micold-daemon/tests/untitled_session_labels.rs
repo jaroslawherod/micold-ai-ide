@@ -27,6 +27,7 @@ use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
+use micold_daemon::state::DaemonState;
 use uuid::Uuid;
 
 /// Serialises every test that sets the providers' environment variables (see the module doc).
@@ -260,4 +261,275 @@ fn a_title_replaces_a_label_and_is_persisted() {
         SessionLabel::Named("Autopilot the spec flow".into()),
         "a title that arrives later replaces the label, on disk too (FR-006)"
     );
+}
+
+// ---------------------------------------------------------------------------------------
+// US1 (T020) — past untitled `claude` sessions read their first turn (A1–A4, C6.1–C6.3a)
+// ---------------------------------------------------------------------------------------
+
+/// A synthetic `claude` transcript from the core crate's first-turn fixtures (contract C3).
+fn claude_fixture(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../micold-core/tests/fixtures/first_turn/claude")
+        .join(name);
+    std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("fixture {}: {err}", path.display()))
+}
+
+impl ProviderStores {
+    fn claude_dir(&self, cwd: &Path) -> PathBuf {
+        let encoded: String = cwd
+            .to_string_lossy()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+            .collect();
+        self.claude.join("projects").join(encoded)
+    }
+
+    /// Write `contents` where `claude` keeps session `id`'s transcript for `cwd`.
+    fn claude_transcript(&self, cwd: &Path, id: Uuid, contents: &str) {
+        let dir = self.claude_dir(cwd);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{id}.jsonl")), contents).unwrap();
+    }
+
+    /// Append an `ai-title` record to session `id`'s transcript — `claude` titling it later.
+    fn claude_titles(&self, cwd: &Path, id: Uuid, title: &str) {
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(self.claude_dir(cwd).join(format!("{id}.jsonl")))
+            .unwrap();
+        writeln!(file, "{{\"type\":\"ai-title\",\"aiTitle\":{title:?}}}").unwrap();
+    }
+
+    fn forget_claude_transcript(&self, cwd: &Path, id: Uuid) {
+        std::fs::remove_file(self.claude_dir(cwd).join(format!("{id}.jsonl"))).unwrap();
+    }
+}
+
+fn cwd() -> PathBuf {
+    SessionLocation::Default.cwd(&project())
+}
+
+fn state_with(data_dir: &Path, sessions: Vec<Session>) -> DaemonState {
+    DaemonState::new(catalog_with(data_dir, sessions))
+}
+
+/// The label a client would be sent for `id` — the row text.
+fn label_of(state: &DaemonState, id: Uuid) -> SessionLabel {
+    state
+        .sessions_for(&project())
+        .into_iter()
+        .find(|s| s.id.0 == id)
+        .map(|s| s.title)
+        .expect("session is in the catalog")
+}
+
+#[test]
+fn discovery_adopts_a_titled_session_named_an_untitled_one_labelled_and_an_empty_one_pending() {
+    let stores = ProviderStores::new();
+    let titled = Uuid::from_u128(0x3211);
+    let untitled = Uuid::from_u128(0x3212);
+    let nothing_typed = Uuid::from_u128(0x3213);
+    stores.claude_transcript(&cwd(), titled, &claude_fixture("bare_skill.jsonl"));
+    stores.claude_titles(&cwd(), titled, "Autopilot the spec flow");
+    stores.claude_transcript(&cwd(), untitled, &claude_fixture("skill_with_args.jsonl"));
+    stores.claude_transcript(
+        &cwd(),
+        nothing_typed,
+        &claude_fixture("injected_only.jsonl"),
+    );
+
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(data.path(), Vec::new());
+    assert_eq!(state.discover_external_sessions(&project()), 3);
+
+    assert_eq!(
+        label_of(&state, titled),
+        SessionLabel::Named("Autopilot the spec flow".into()),
+        "a title wins over a label (C6.1, FR-005)"
+    );
+    assert_eq!(
+        label_of(&state, untitled),
+        SessionLabel::Derived("the name of past session is still not shown".into()),
+        "no title, so the first typed turn (C6.1, FR-001)"
+    );
+    assert_eq!(
+        label_of(&state, nothing_typed),
+        SessionLabel::Pending,
+        "nothing typed, nothing to show but \"New session\" (FR-004)"
+    );
+}
+
+#[test]
+fn a_known_untitled_session_reads_its_first_turn_after_project_open_and_keeps_it() {
+    // A1 (US1 #1): the session is in the catalog, never titled, and never opened here.
+    let stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3214);
+    stores.claude_transcript(&cwd(), id, &claude_fixture("bare_skill.jsonl"));
+
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(data.path(), vec![session(id, SessionLabel::Pending)]);
+
+    assert_eq!(
+        state.recover_session_names(&project()),
+        1,
+        "a label counts as a recovered name, so the snapshot is broadcast (C6.3a)"
+    );
+    assert_eq!(
+        label_of(&state, id),
+        SessionLabel::Derived("/speckit-autopilot".into())
+    );
+    assert_eq!(
+        label_in(&catalog_at(data.path()), id),
+        SessionLabel::Derived("/speckit-autopilot".into()),
+        "persisted, not merely projected (FR-007)"
+    );
+}
+
+#[test]
+fn several_untitled_sessions_in_one_project_each_read_their_own_first_turn() {
+    // A2 (US1 #2, SC-004): the reporter's rows, which all read "New session", now differ.
+    let stores = ProviderStores::new();
+    let cases = [
+        (0x3221, "bare_skill.jsonl", "/speckit-autopilot"),
+        (
+            0x3222,
+            "skill_with_args.jsonl",
+            "the name of past session is still not shown",
+        ),
+        (
+            0x3223,
+            "model_then_prompt.jsonl",
+            "Why does the sidebar read New session?",
+        ),
+        (
+            0x3224,
+            "image_prompt.jsonl",
+            "[Image #1] what is wrong with this row?",
+        ),
+    ];
+    for (id, fixture, _) in cases {
+        stores.claude_transcript(&cwd(), Uuid::from_u128(id), &claude_fixture(fixture));
+    }
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(
+        data.path(),
+        cases
+            .iter()
+            .map(|(id, _, _)| session(Uuid::from_u128(*id), SessionLabel::Pending))
+            .collect(),
+    );
+
+    assert_eq!(state.recover_session_names(&project()), cases.len());
+    for (id, fixture, expected) in cases {
+        assert_eq!(
+            label_of(&state, Uuid::from_u128(id)),
+            SessionLabel::Derived(expected.into()),
+            "{fixture}: each row reads its own conversation's first turn (Principle II)"
+        );
+    }
+}
+
+#[test]
+fn after_a_restart_the_label_is_there_without_reading_the_clis_records() {
+    // A3 (US1 #3, FR-007, FR-009).
+    let stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3231);
+    stores.claude_transcript(&cwd(), id, &claude_fixture("model_then_prompt.jsonl"));
+    let data = tempfile::tempdir().unwrap();
+    state_with(data.path(), vec![session(id, SessionLabel::Pending)])
+        .recover_session_names(&project());
+
+    stores.forget_claude_transcript(&cwd(), id);
+    let restarted = DaemonState::new(catalog_at(data.path()));
+
+    assert_eq!(
+        label_of(&restarted, id),
+        SessionLabel::Derived("Why does the sidebar read New session?".into()),
+        "the first snapshot after a restart carries the label, with the transcript gone"
+    );
+}
+
+#[test]
+fn a_session_with_nothing_typed_in_it_still_reads_new_session() {
+    // A4 (US1 #4, FR-004).
+    let stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3241);
+    stores.claude_transcript(&cwd(), id, &claude_fixture("injected_only.jsonl"));
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(data.path(), vec![session(id, SessionLabel::Pending)]);
+
+    assert_eq!(state.recover_session_names(&project()), 0);
+    assert_eq!(label_of(&state, id).display(), "New session");
+}
+
+#[test]
+fn a_labelled_session_is_never_pruned_and_an_empty_one_still_is() {
+    // Data-model invariant 4: a `Derived` session had a conversation, so it is not empty, even when
+    // its transcript later goes away. A session with no conversation is tidied away as before.
+    let stores = ProviderStores::new();
+    let labelled = Uuid::from_u128(0x3251);
+    let empty = Uuid::from_u128(0x3252);
+    stores.claude_transcript(&cwd(), labelled, &claude_fixture("bare_skill.jsonl"));
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(
+        data.path(),
+        vec![
+            session(labelled, SessionLabel::Pending),
+            session(empty, SessionLabel::Pending),
+        ],
+    );
+    state.recover_session_names(&project());
+    stores.forget_claude_transcript(&cwd(), labelled);
+
+    assert_eq!(
+        state.prune_empty_sessions(&project()).unwrap(),
+        vec![SessionId::from_uuid(empty)]
+    );
+    assert_eq!(
+        label_of(&state, labelled),
+        SessionLabel::Derived("/speckit-autopilot".into())
+    );
+}
+
+#[test]
+fn a_failed_read_or_a_failed_label_write_changes_nothing_else() {
+    // FR-011, C6.7: best-effort both ways, and never a session failure.
+    let stores = ProviderStores::new();
+    let unreadable = Uuid::from_u128(0x3261);
+    let unwritable = Uuid::from_u128(0x3262);
+    stores.claude_transcript(&cwd(), unwritable, &claude_fixture("bare_skill.jsonl"));
+    // `unreadable` has no transcript at all.
+
+    let base = tempfile::tempdir().unwrap();
+    let mut catalog = catalog_at(&unwritable_data_dir(base.path()));
+    catalog.adopt_discovered_sessions(
+        &project(),
+        vec![
+            session(unreadable, SessionLabel::Pending),
+            session(unwritable, SessionLabel::Pending),
+        ],
+    );
+    let state = DaemonState::new(catalog);
+    let before: Vec<_> = state
+        .sessions_for(&project())
+        .into_iter()
+        .map(|s| (s.id, s.lifecycle))
+        .collect();
+
+    state.recover_session_names(&project());
+
+    assert_eq!(label_of(&state, unreadable), SessionLabel::Pending);
+    assert_eq!(
+        label_of(&state, unwritable),
+        SessionLabel::Derived("/speckit-autopilot".into()),
+        "a label that could not be written is still shown"
+    );
+    let after: Vec<_> = state
+        .sessions_for(&project())
+        .into_iter()
+        .map(|s| (s.id, s.lifecycle))
+        .collect();
+    assert_eq!(before, after, "no session failed over a label (FR-011)");
 }

@@ -438,8 +438,11 @@ impl AiCliProvider for ClaudeProvider {
         self.parse_title(&contents)
     }
 
-    fn read_label(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
-        None
+    fn read_label(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> Option<String> {
+        // The same transcript `read_title` reads, but only its bounded prefix (C2, FR-014).
+        let prefix =
+            crate::first_turn::read_prefix(&self.transcript_path(config_dir, cwd, session_id))?;
+        crate::first_turn::claude_first_turn(&prefix)
     }
 
     fn name_in_terminal_title(&self, title: &str, _cwd: &Path) -> Option<String> {
