@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/the-name-of-past-session-is-still-not-shown
 - **Started**: 2026-09-19
 - **Phase**: 3-design
-- **Next step**: Design unit, awaiting the answer to the open escalation (Copilot old-session scope); then plan review round 2, tasks, milestones, analyze, tasks review, checklists, PR 2.
+- **Next step**: Design unit: plan review round 2, tasks, milestones, analyze, tasks review, checklists, PR 2.
 
 ## Pull requests
 
@@ -34,6 +34,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | D7 | 2-clarify r1 | Is a label styled differently from a title? | No; same places, same presentation. | agent-resolved | spec.md Assumptions |
 | D8 | 2-clarify r1 | Must FR-014's bound cover the Copilot sessions? | Yes, the 44 sessions' first turns (SC-009 since D9) (first turn at record 2–10). | agent-resolved | spec.md *Copilot evidence* |
 | D9 | 3-design | Is Copilot's `summary:` read as the session title when `name:` is absent (Copilot 1.0.10–1.0.36 sessions)? | Yes: "read the old copilot summary as the name too". `name:` wins; `summary:` ranks above a derived label. Applied as FR-016, US1 #6, SC-008 (rewritten), SC-009. | decided by user | spec.md *Copilot evidence*; 44 sessions on the dev machine |
+| D10 | 3-design | The 44 old Copilot sessions are in no Copilot index and not in micold's catalog, so never rows: discover them by scanning `session-state/*/workspace.yaml`? | (A) No: FR-016 applies to listed sessions; US1 #6, SC-008, SC-009 rescoped to listed sessions, verified with fixtures; no new discovery. | decided by user | plan review r1 F1; 0 of 44 in the 4 index ids |
 
 D2–D4 applied to spec.md (FR-002, FR-006, FR-012 + *Copilot evidence*, US1 #5, SC-008) on 2026-09-19.
 
@@ -58,25 +59,14 @@ D2–D4 applied to spec.md (FR-002, FR-006, FR-012 + *Copilot evidence*, US1 #5,
 
 | Round | Model | Verdict | Findings | Resolution |
 |---|---|---|---|---|
-| 1 | session (opus) | CHANGES | F1 BLOCKER: the 44 old Copilot sessions are in no Copilot index and not in micold's catalog, so they are never rows; reading `summary:` changes no row, SC-008/US1 #6 unmeetable. F2 MAJOR: claude CLI-command follower can be a `system/local_command` record (`/reload-plugins`). F3 MAJOR: labels not counted toward the live broadcast. F4 MAJOR: spinner-first order never re-arms `name_stale`. F5–F8 MINOR: Pending re-read cost, per-session writes, schema hash does not cover session.rs, FR-013 row / R6+R10 alternatives / workspace dep. | F2–F8 fixed in contract C3.5a–b′, C6.3a–b, research R3/R5/R6/R7/R8/R9/R10/R11, plan. F1 verified (44 no-name sessions, 0 in the 4 index ids) and escalated: it changes requirements (category 6). |
+| 1 | session (opus) | CHANGES | F1 BLOCKER: the 44 old Copilot sessions are in no Copilot index and not in micold's catalog, so they are never rows; reading `summary:` changes no row, SC-008/US1 #6 unmeetable. F2 MAJOR: claude CLI-command follower can be a `system/local_command` record (`/reload-plugins`). F3 MAJOR: labels not counted toward the live broadcast. F4 MAJOR: spinner-first order never re-arms `name_stale`. F5–F8 MINOR: Pending re-read cost, per-session writes, schema hash does not cover session.rs, FR-013 row / R6+R10 alternatives / workspace dep. | F2–F8 fixed in contract C3.5a–b′, C6.3a–b, research R3/R5/R6/R7/R8/R9/R10/R11, plan. F1 verified (0 of 44 in the 4 index ids), escalated (category 6), answered D10: spec rescoped to listed sessions. |
 
 ## Open escalation
 
-**2026-09-19, Phase 3-design, category 6 (the plan proved false, and the fix changes requirements).**
-Decision needed: the 44 old Copilot sessions (Copilot 1.0.10–1.0.36, `summary:` but no `name:`) are
-not rows in micold at all: Copilot's per-cwd index (`~/.copilot/sidebar-sessions-state/*.json`, 4
-ids in total) lists none of them, discovery reads only that index (026 research R3), and micold's
-catalog knows none of them. The spec's "today all 44 read New session" was wrong, so D9 as applied
-(US1 #6, SC-008) changes no row. Options:
-- (A, recommended) Keep FR-016 (`summary:` is the title of any Copilot session micold lists) and
-  rescope US1 #6 / SC-008 to listed sessions, measured by fixtures; no new discovery. Why: 026 R3
-  chose the index as discovery's source and the scan only as a fallback; surfacing old sessions is a
-  separate feature.
-- (B) Also discover Copilot sessions by scanning `~/.copilot/session-state/*/workspace.yaml` for a
-  matching `cwd:` when they are not in the index, which adopts old sessions into sidebars (30 of the
-  44 would appear under the `max-speed` project), costing a 281-directory scan per project open.
+None (the 2026-09-19 old-Copilot-session escalation was answered: D10).
 
 ## Follow-ups not done
 
+- Old Copilot sessions missing from Copilot's per-cwd index are not discovered (D10); a scan of `~/.copilot/session-state/*/workspace.yaml` by `cwd:` would surface 30 of the 44 under `max-speed`.
 - Carried from 029 BUG-001 ledger: `custom-title` / `agent-name` records ignored by `ClaudeProvider::parse_title` (candidate 029 BUG, out of scope here).
 - Carried from 029 BUG-001 ledger: unverified `micold_time_track` untitled rows whose transcripts hold `ai-title`s.

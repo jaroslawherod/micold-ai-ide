@@ -232,7 +232,8 @@ rather than a title — the user decided it is Copilot's title (D9).
 | FR-010 (running session) | daemon integration, `recover_live_session_names` after `note_activity` | same file |
 | Client adoption of `Derived` | client render-free reducer | `crates/micold-client/tests/session_title_sync.rs` |
 | Wire bump | core | `crates/micold-core/tests/schema_hash.rs` |
-| SC-001, SC-005, SC-008, SC-009 (real stores) | ignored corpus probe + quickstart §B | `crates/micold-core/tests/first_turn_label_corpus.rs` (`#[ignore]`), [quickstart.md](./quickstart.md) |
+| SC-008, SC-009 (listed Copilot sessions, D10) | core provider + daemon integration over fixtures shaped on the 44 old sessions | `copilot_provider.rs`, `untitled_session_labels.rs` |
+| SC-001, SC-005 (real stores) | ignored corpus probe + quickstart §B | `crates/micold-core/tests/first_turn_label_corpus.rs` (`#[ignore]`), [quickstart.md](./quickstart.md) |
 | FR-013 (not user-editable) | daemon: no message sets a label; the only writers are C6 | `untitled_session_labels.rs` asserts `Derived` changes only to `Named` through the recovery and title paths; no new `ClientMsg` (protocol diff) |
 | FR-015 | docs | `docs/user-guide/worktrees-and-sessions.md` |
 
