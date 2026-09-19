@@ -295,3 +295,22 @@ fn the_answer_for_a_directory_walks_the_path_env_include_resolves_there() {
          environment-include is what gives it one (FR-003b)"
     );
 }
+
+/// U5: with environment-include off, a session gets the service's own `PATH`, so that is the one
+/// the answer walks.
+#[test]
+fn with_env_include_off_the_answer_walks_the_services_own_path() {
+    let service_bin = bin_with(AiCli::Pi.provider().command());
+    let _service = ServicePath::without_clis(Some(service_bin.path()));
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+
+    let state = service_with(store.path(), None);
+
+    assert_eq!(
+        state.ai_clis_available_in(project.path()),
+        vec![AiCli::Pi],
+        "with environment-include off a session inherits the service's own PATH, so a CLI there \
+         is one a session would find (FR-003, FR-003b)"
+    );
+}
