@@ -92,13 +92,19 @@ pub fn merge_with_term(vars: &[(String, String)]) -> Vec<(String, String)> {
 /// Keys compare exactly when `keys_case_insensitive` is false and ASCII case-insensitively when it
 /// is true; callers pass `cfg!(windows)`, so core never reads the host OS.
 pub fn is_inherited_terminal_identity(key: &str, value: &str, keys_case_insensitive: bool) -> bool {
-    let _ = keys_case_insensitive;
-    if key == "COLORTERM" {
+    let is = |name: &str| {
+        if keys_case_insensitive {
+            key.eq_ignore_ascii_case(name)
+        } else {
+            key == name
+        }
+    };
+    if is("COLORTERM") {
         // A colour-depth value is a capability every session may keep; anything else names the
         // terminal that set it.
         return !(value.eq_ignore_ascii_case("truecolor") || value.eq_ignore_ascii_case("24bit"));
     }
-    TERMINAL_IDENTITY_KEYS.contains(&key)
+    TERMINAL_IDENTITY_KEYS.iter().any(|name| is(name))
 }
 
 /// The keys that name another terminal whatever their value (contract §1).
@@ -582,5 +588,25 @@ mod terminal_identity_tests {
                 "COLORTERM={value:?} names a terminal, so a session must not inherit it"
             );
         }
+    }
+
+    #[test]
+    fn keys_compare_exactly_unless_the_platform_folds_their_case() {
+        assert!(
+            !is_inherited_terminal_identity("term_program", "WezTerm", false),
+            "on a case-sensitive platform `term_program` is another variable"
+        );
+        assert!(
+            is_inherited_terminal_identity("term_program", "WezTerm", true),
+            "on a case-insensitive platform `term_program` is `TERM_PROGRAM`"
+        );
+        assert!(
+            is_inherited_terminal_identity("ColorTerm", "gnome-terminal", true),
+            "the COLORTERM rule applies whatever the key's case on a case-insensitive platform"
+        );
+        assert!(
+            !is_inherited_terminal_identity("ColorTerm", "truecolor", true),
+            "and still keeps a colour depth"
+        );
     }
 }
