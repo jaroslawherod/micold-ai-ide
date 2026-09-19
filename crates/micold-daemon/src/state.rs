@@ -589,7 +589,7 @@ impl DaemonState {
             .into_iter()
             .find(|(name, _)| name.eq_ignore_ascii_case("PATH"))
             .map(|(_, value)| std::ffi::OsString::from(value))
-            .unwrap_or_default();
+            .unwrap_or_else(micold_core::provider::process_path);
         micold_core::provider::available_in(&path)
     }
 

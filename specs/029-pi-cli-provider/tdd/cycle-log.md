@@ -94,3 +94,12 @@ failed before the implementation.
   `available_in`. No fallback yet: U5/U6 drive it. File -> 3 passed, A1 still red (the handler
   does not call it yet)
 - refactor: none
+
+## Cycle 4: U5 with env-include off, the answer uses the process's own `PATH`
+
+- test: `crates/micold-daemon/tests/ai_cli_availability.rs::with_env_include_off_the_answer_walks_the_services_own_path` (new)
+- red: `scripts/build-lock.sh cargo test --test ai_cli_availability with_env_include_off_the_answer_walks_the_services_own_path -- --exact`
+  -> `left: []` / `right: [Pi]` (1 failed)
+- green: `ai_clis_available_in` falls back to `process_path()` when the resolved environment
+  carries no `PATH`. File -> 4 passed, A1 still red
+- refactor: none
