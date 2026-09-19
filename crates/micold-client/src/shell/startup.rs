@@ -124,6 +124,7 @@ fn restore_catalog(
     core: &mut State,
     store: &dyn micold_core::store::ProjectStore,
     scanner: &dyn micold_core::fs_scan::FolderScanner,
+    placement: PlacementKind,
 ) {
     core.workspace = store.load().workspace;
     core.workspace.refresh_availability(scanner);
@@ -145,8 +146,9 @@ fn restore_catalog(
         ));
     }
     // Drop any leftover empty sessions so a restart never resumes a nonexistent
-    // conversation (bug fix; see spec Clarifications 2026-07-16).
-    prune_empty_sessions(&mut core.workspace, PlacementKind::HostProcess);
+    // conversation (bug fix; see spec Clarifications 2026-07-16). Only where this host can tell:
+    // under the sandbox the conversations are inside it, and the prune leaves them be (FR-009a).
+    prune_empty_sessions(&mut core.workspace, placement);
 }
 
 fn boot() -> (App, Task<Message>) {
@@ -169,8 +171,16 @@ fn boot() -> (App, Task<Message>) {
     core.update(Message::Window(WindowMsg::InstallLocationReported(
         micold_core::install_location::current(),
     )));
+    // Feature 027: where the daemon runs. Read before the catalogue is restored, because the boot
+    // prune has to know where sessions run to know who can say whether they recorded anything
+    // (FR-009a). Also read here rather than in the connection subscription because the *bring-up*
+    // is what the user watches, and it starts before the first dial.
+    let placement = caps
+        .settings()
+        .map(|store| store.load().settings.daemon.placement)
+        .unwrap_or_default();
     if let Some(store) = caps.projects() {
-        restore_catalog(&mut core, store, caps.scanner());
+        restore_catalog(&mut core, store, caps.scanner(), placement);
     }
     let mut scrollback_lines = micold_core::settings::DEFAULT_SCROLLBACK_LINES;
     let mut env_include_enabled = micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED;
@@ -199,12 +209,6 @@ fn boot() -> (App, Task<Message>) {
     // sessions are not on the host. It stays `None` ("nobody has said yet") until the first
     // `DaemonMsg::AiCliAvailability`, which `on_connected` asks for as soon as there is a service
     // to ask. One frame of an empty picker is the honest cost of not guessing.
-    // Feature 027: where the daemon runs. Read here rather than in the connection subscription
-    // because the *bring-up* is what the user watches, and it starts before the first dial.
-    let placement = caps
-        .settings()
-        .map(|store| store.load().settings.daemon.placement)
-        .unwrap_or_default();
     let sandbox_state = micold_client::features::sandbox::Sandbox::for_placement(placement);
     // What the note under the select reports, and what a later save compares against to decide
     // whether it is moving the service at all (BUG-003, FR-032a/FR-035b). Seeded from the same
@@ -371,6 +375,8 @@ mod tests {
     use micold_client::app::State;
     use micold_core::fs_scan::FakeFolderScanner;
     use micold_core::project::{Availability, Project};
+    use micold_core::sandbox::placement::PlacementKind;
+    use micold_core::session::{AiCli, Session, SessionLocation};
     use micold_core::store::FakeProjectStore;
     use micold_core::workspace::Workspace;
     use std::path::PathBuf;
@@ -396,6 +402,7 @@ mod tests {
             &mut core,
             &last_active_is_gone(),
             &FakeFolderScanner::new().with_missing("/gone"),
+            PlacementKind::HostProcess,
         );
 
         assert_eq!(core.workspace.active, None, "FR-023: never activate it");
@@ -420,10 +427,54 @@ mod tests {
     #[test]
     fn a_last_active_project_that_is_still_there_is_restored() {
         let mut core = State::default();
-        restore_catalog(&mut core, &last_active_is_gone(), &FakeFolderScanner::new());
+        restore_catalog(
+            &mut core,
+            &last_active_is_gone(),
+            &FakeFolderScanner::new(),
+            PlacementKind::HostProcess,
+        );
 
         assert_eq!(core.workspace.active, Some(PathBuf::from("/gone")));
         assert!(core.notifications.queue.visible().is_none());
+    }
+
+    /// FR-009a (BUG-006): boot hands the prune the placement it is starting under. A sandboxed
+    /// session's conversation is in the sandbox, so the host having no record of it must not drop
+    /// it before the window opens.
+    #[test]
+    fn a_sandboxed_launch_keeps_a_session_the_host_has_no_record_of() {
+        let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+        let mut workspace = Workspace {
+            projects: vec![Project::new(
+                PathBuf::from("/here"),
+                true,
+                Availability::Available,
+            )],
+            ..Default::default()
+        };
+        workspace
+            .sessions
+            .insert(PathBuf::from("/here"), vec![session.clone()]);
+        let mut core = State::default();
+
+        restore_catalog(
+            &mut core,
+            &FakeProjectStore::loaded(workspace),
+            &FakeFolderScanner::new(),
+            PlacementKind::LocalSandbox,
+        );
+
+        let kept: Vec<_> = core
+            .workspace
+            .sessions
+            .get(&PathBuf::from("/here"))
+            .map(|s| s.iter().map(|s| s.id).collect())
+            .unwrap_or_default();
+        assert_eq!(
+            kept,
+            vec![session.id],
+            "the launch judged a sandboxed session by the host's conversation store"
+        );
     }
 
     /// The window has a narrowest supported size, and it is the one the documentation names.
