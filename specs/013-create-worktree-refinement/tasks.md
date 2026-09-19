@@ -481,3 +481,73 @@ them): Developer A takes US1 (`select.rs` + `worktree_form.rs`), Developer B tak
 **Bugfix**: 2026-08-06 — BUG-009 Added T031 (pointer, closed). **No task reopened** — the stage
 model and its wording were correct; only how the service thinned them on the wire was not. See
 `../010-daemon-session-persistence/bugs/BUG-009.md`.
+
+---
+
+## Bugfix BUG-001 — the create overlay closed on an outside click mid-create
+
+**Goal**: While a create is in flight, a scrim click or Escape does nothing; only the in-dialog
+Cancel closes the overlay (FR-010a). A create that resolves after its overlay closed reports its
+outcome as a notification (FR-010b). See `bugs/BUG-001.md` and plan.md § Bugfix BUG-001.
+
+### Tests (MANDATORY — write first, observe each failing before its implementation)
+
+Behavior ids refer to `tdd/test-list.md`.
+
+
+- [ ] T032 [P] [US3] [U1] [U2] Failing test in `crates/micold-client/tests/` (alongside
+  `overlay_dismissal_rules.rs`): with the add-worktree form open and `status == Editing`, the
+  registered surface's kind is `Surface::Dialog` and both `Trigger::OutsideClick` and
+  `Trigger::Escape` yield `Msg::Cancelled`; with `status == Creating`, the kind is
+  `Surface::NonDismissibleDialog` and both triggers yield nothing. Per FR-010a.
+- [ ] T033 [P] [US3] [U3] [U4] [U5] Failing test: `app::on_escape(state)` returns `None` while a create is in
+  flight — including when the Settings view has a draft open behind the dialog (the
+  `or_else` fallback trap, plan.md § Bugfix BUG-001) — and returns `Msg::Cancelled` once the
+  form is back to `Editing`. Also assert the in-dialog Cancel still sends `Msg::Cancelled` during
+  `Creating` (the only way out). Per FR-010a.
+- [ ] T034 [P] [US3] [U6] [U7] [U8] [U9] [U10] [U11] Failing reducer tests: with the form closed (`state.worktree_form.form ==
+  None`), `created` yields an info notification naming the worktree, `create_failed` yields an
+  error notification carrying the message and the failed stage, and `create_interrupted` yields a
+  notification with the existing interrupted wording; with the form open, all three behave as
+  today and yield no notification. Per FR-010b.
+
+### Implementation
+
+- [ ] T035 [US3] [U1] [U2] Make `AddWorktreeDialog::dismissal()` in
+  `crates/micold-client/src/features/worktree_form.rs` depend on `WorktreeFormStatus`: carry the
+  status on the surface value built by `open_in`, and add `.protecting_input()` while `Creating`.
+  T032 Green. Depends on T032.
+- [ ] T036 [US3] [U3] [U4] Stop `app::on_escape`'s Settings fallback when a registered surface is open but
+  refuses the trigger (`crates/micold-client/src/app.rs`, `overlay/registry.rs`). Confirm
+  `ui/mod.rs`'s scrim `on_dismiss` is then absent during a create. T033 Green. Depends on T033,
+  T035.
+- [ ] T037 [US3] [U6] [U7] [U8] [U9] [U10] [U11] Route create outcomes to notifications when the form is closed:
+  `created`/`create_failed`/`create_interrupted` return `features::notifications::{info, error}`
+  outcomes, and their callers forward them. T034 Green. Depends on T034.
+
+### Documentation & validation
+
+- [ ] T038 [P] [US3] `docs/user-guide/worktrees-and-sessions.md` "Creating a worktree": clicking
+  outside or pressing Escape during creation does nothing; Cancel closes the dialog without
+  stopping the create; the result arrives as a notification.
+- [ ] T039 [US3] [A3] Visual pass (`visual-pass` skill) against a repository with submodules: start a
+  create, click the scrim and press Escape — dialog stays, progress still visible; press Cancel —
+  dialog closes; a notification reports the outcome when the create finishes. Depends on T035–T037.
+
+### Acceptance (outer loop — green before BUG-001 is complete)
+
+- [ ] T040 [US3] [A1] Outer-loop test in `crates/micold-client/src/main_tests.rs`: an `App` with a
+  create in flight (`app_creating_a_worktree`) keeps the form open and `Creating` through
+  `Message::EscapePressed` and through the message `app::on_escape` gives the scrim. Depends on
+  T035, T036.
+- [ ] T041 [US3] [A2] Outer-loop test in `crates/micold-client/src/main_tests.rs`: Cancel during the
+  create closes the form, and the daemon's `OperationError` fed through
+  `shell::daemon_sync::on_daemon_event` reaches the user as a notification carrying its message.
+  Depends on T037.
+
+**Dependencies**: T032/T033/T034 are parallel (Red). T040 and T041 close the outer loop. T035 → T036. T037 is independent of T035/T036.
+T038 is independent. T039 last.
+
+**Bugfix**: 2026-09-18 — BUG-001 Added T032–T039; `/speckit.tdd.plan` added behavior markers and the outer-loop tasks T040–T041. **No task reopened** — T017–T025 delivered the
+stage model and progress display they specified; none claimed the overlay would stay open during a
+create. See `bugs/BUG-001.md`.
