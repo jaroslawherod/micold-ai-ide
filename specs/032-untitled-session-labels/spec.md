@@ -41,8 +41,12 @@ into 029 (BUG-001 *Size decision*).
   where and as a title is shown (row, tooltip, terminal bar), with no new styling or UI element.
   _(agent-resolved: specs/032-untitled-session-labels/spec.md#Assumptions)_
 - Q: Must FR-014's bound also reach the first turn of the untitled Copilot sessions? → A: Yes. The
-  bound must label all four reported `claude` sessions (SC-001) and all 44 Copilot sessions
-  (SC-008), whose first turn is at record 2–10. _(agent-resolved: specs/032-untitled-session-labels/spec.md#Copilot evidence)_
+  bound must label all four reported `claude` sessions (SC-001) and reach the first turn of all 44
+  Copilot sessions (SC-009 since D9), which is at record 2–10. _(agent-resolved: specs/032-untitled-session-labels/spec.md#Copilot evidence)_
+- Q: Is the `summary:` key that Copilot 1.0.36 and older wrote to `workspace.yaml` instead of
+  `name:` read as that session's title? → A: Yes ("read the old copilot summary as the name
+  too"). It is Copilot's own title: `name:` wins when both are present, and `summary:` ranks above
+  a derived label (FR-016). _(decided by user)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -81,12 +85,17 @@ shows a label taken from that conversation, not "New session".
    used),
    **When** I view the project,
    **Then** the row still reads "New session".
-5. **Given** a GitHub Copilot session whose records hold a typed prompt but no `name:` (every such
-   session on the development machine was run by a Copilot older than 1.0.37, see *Copilot
-   evidence*),
+5. **Given** a GitHub Copilot session whose records hold a typed prompt but neither a `name:` nor a
+   `summary:` title (for example, one Copilot has not summarised yet),
    **When** I view the project without opening that session,
    **Then** the row shows a label taken from that session's first turn, on the same rules as a
    `claude` session.
+6. **Given** a GitHub Copilot session run by Copilot 1.0.36 or older, whose `workspace.yaml` holds a
+   `summary:` and no `name:` (all 44 such sessions on the development machine, see *Copilot
+   evidence*),
+   **When** I view the project without opening that session,
+   **Then** the row shows that `summary:` as the session's title, not "New session" and not a
+   derived label (FR-016).
 
 ---
 
@@ -167,6 +176,9 @@ restart.
   row's existing ellipsis and the hover tooltip then treat the label as they treat a title: the
   tooltip shows the whole label, which is the cut text, not the whole prompt. A label is not styled
   differently from a title.
+- **A Copilot `summary:` written in a form the application does not read** (a multi-line block
+  scalar, seen only beside a `name:` on the development machine). It is treated as absent: the
+  session gets a derived label if it has a typed prompt (FR-016).
 - **The AI CLI's records are missing, unreadable, or in a format the application does not
   recognise.** No label; the row reads "New session" (or its remembered label or title, if it has
   one) and the session is not reported as failed.
@@ -252,9 +264,15 @@ restart.
   labelling a row costs the same whether its conversation is a minute or a year old (the trade-off
   029-pi-cli-provider FR-011 made for `pi`). When that part holds no usable text for FR-002, the row
   keeps the placeholder. The bound MUST be large enough that FR-002 labels all four reported
-  `claude` sessions (SC-001) and all 44 untitled Copilot sessions (SC-008).
+  `claude` sessions (SC-001) and the first turn of all 44 Copilot sessions of *Copilot evidence*
+  (SC-009).
 - **FR-015**: The user guide MUST say what the row of a session the AI CLI never titled reads, and
   that a title arriving later replaces it (FR-006) (Principle VII).
+- **FR-016**: For a GitHub Copilot session, the `summary:` key of the session's `workspace.yaml` MUST
+  be read as the session's title when `name:` is absent; `name:` wins when both are present. It is a
+  title for FR-005 and FR-006: it ranks above a derived label, is remembered as a title, and replaces
+  a derived label when it becomes known. A `summary:` value the application cannot read as a single
+  line is treated as absent.
 
 ### Label-source evidence
 
@@ -282,9 +300,15 @@ reads only the `name:` key of `workspace.yaml`:
 
 - 142 sessions have an `events.jsonl` (a recorded conversation). 97 have a `name:`; 44 have at least
   one `user.message` and no `name:`; 1 has no `user.message`.
-- All 44 were run by Copilot 1.0.10–1.0.36, and every one of them has a `summary:` key instead of
-  `name:` in `workspace.yaml`. Every session run by 1.0.37 or later that holds a `user.message` has a
-  `name:`. Today all 44 read "New session"; under FR-002 and FR-012 all 44 get a label.
+- All 44 were run by Copilot 1.0.10–1.0.36, and every one of them has a one-line `summary:` key
+  instead of `name:` in `workspace.yaml`. Every session run by 1.0.37 or later that holds a
+  `user.message` has a `name:`. Today all 44 read "New session"; under FR-016 all 44 show their
+  `summary:` as the title. The two multi-line (`summary: |-`) values on the machine both sit beside
+  a `name:`.
+- So no recorded Copilot session on the machine needs a derived label today. The label rule
+  (FR-002, FR-012) still applies to a Copilot session with neither key, which is every running
+  session until Copilot summarises it (US3), and it is measured on the 44 sessions' own first turns
+  with their `summary:` ignored (SC-009).
 - The first qualifying `user.message` is at record 2–10 in all 44, well inside any bound FR-014 sets
   for `claude`'s record 7–8.
 - Of 972 `user.message` records, 12 carry a `source` (skill context, `instruction-discovery`) and 28
@@ -293,15 +317,15 @@ reads only the `name:` key of `workspace.yaml`:
   command (`/fleet` with a `Fleet deployed: ` prefix). Bare commands (`/model`, `/usage`, `/login`)
   record no `user.message`.
 
-A running Copilot session reads "New session" until Copilot writes `name:`, so US3 applies to it
-in that window.
+A running Copilot session reads "New session" until Copilot writes `name:` (or, before 1.0.37,
+`summary:`), so US3 applies to it in that window.
 
 ### Key Entities
 
 - **Session**: A unit of work in a project, with a location and the AI CLI it runs. For this feature
   it carries at most one of: a title, a derived label, or neither.
-- **Title**: The name the AI CLI gives a conversation. Unchanged by this feature, and always preferred
-  over a derived label.
+- **Title**: The name the AI CLI gives a conversation (`claude`'s `ai-title`; Copilot's `name:`, or
+  `summary:` when `name:` is absent, FR-016). Always preferred over a derived label.
 - **Derived label**: Short text taken from what the user typed in the conversation. It stands in for a
   title that does not exist yet, is remembered like one, and is remembered as a stand-in, distinct from
   a title (FR-008). A later title replaces it (FR-006).
@@ -326,9 +350,11 @@ in that window.
 - **SC-006**: Adding labels adds no perceptible delay: the session list of a project with 50 sessions,
   including conversations of more than 1,000 records, appears as quickly after this change as before.
 - **SC-007**: A running untitled session shows its label within 60 seconds of the first typed prompt.
-- **SC-008**: Of the 44 Copilot sessions on the development machine that hold a `user.message` but
-  no `name:` (*Copilot evidence*), 44 show a derived label after one restart, where 0 do today, and
-  each label is that session's first qualifying `content`.
+- **SC-008**: Of the 44 Copilot sessions on the development machine that hold a `user.message` and a
+  `summary:` but no `name:` (*Copilot evidence*), 44 show their `summary:` as the title after one
+  restart, where 0 do today, and none shows a derived label.
+- **SC-009**: For the same 44 sessions with their `summary:` ignored, the label rule yields each
+  session's first qualifying `content` (FR-002, FR-012, FR-014): 44 of 44.
 
 ## Assumptions
 
@@ -357,6 +383,3 @@ in that window.
   title. That is a candidate 029 bug, recorded in the BUG-001 ledger's follow-ups.
 - Letting the user name a session by hand.
 - Changing how `pi` labels a session (029-pi-cli-provider FR-011).
-- Reading the `summary:` key that Copilot 1.0.36 and older wrote instead of `name:` as a title. It
-  is Copilot's own title for those sessions, and ignoring it is a candidate 029 bug of the same kind
-  as `custom-title`; until it is fixed, those sessions get a derived label here (*Copilot evidence*).
