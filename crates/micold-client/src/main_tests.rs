@@ -110,6 +110,7 @@ fn update_inner_applies_window_focus_changed() {
         version_mismatch: None,
         build_mismatch: None,
         next_req: 0,
+        cli_availability_asked: 0,
         scrollback_inflight: HashMap::new(),
         pending_ops: HashMap::new(),
         probe: None,
@@ -163,6 +164,7 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
         version_mismatch: None,
         build_mismatch: None,
         next_req: 0,
+        cli_availability_asked: 0,
         scrollback_inflight: HashMap::new(),
         pending_ops: HashMap::new(),
         probe: None,
@@ -701,6 +703,7 @@ pub(crate) fn base_app() -> App {
         version_mismatch: None,
         build_mismatch: None,
         next_req: 0,
+        cli_availability_asked: 0,
         scrollback_inflight: HashMap::new(),
         pending_ops: HashMap::new(),
         probe: None,
@@ -2051,6 +2054,7 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         version_mismatch: None,
         build_mismatch: None,
         next_req: 0,
+        cli_availability_asked: 0,
         scrollback_inflight: HashMap::new(),
         pending_ops: HashMap::new(),
         probe: None,
@@ -3063,5 +3067,53 @@ fn opening_settings_asks_about_no_directory() {
         "Settings is not about the active project's directory, so it must not ask about it: the \
          default applies everywhere, and the service answers a request with no directory for the \
          home directory (FR-003b)"
+    );
+}
+
+/// U13: answers are resolved off the service's connection loop, so they can arrive out of order —
+/// a first resolution for one directory can take seconds while another directory's is cached. The
+/// set on screen is the one for the question asked last, never an older question's.
+#[test]
+fn an_answer_to_an_earlier_question_does_not_replace_a_later_one() {
+    let mut app = base_app();
+    app.core.workspace.active = Some(PathBuf::from("/repo/demo"));
+    let mut rx = connected_with_outbox(&mut app);
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Session(SessionMsg::StartMenuOpened {
+            location: SessionLocation::Worktree("feature-x".into()),
+            unavailable_default: None,
+        }),
+    );
+    let mut asked = Vec::new();
+    while let Ok(msg) = rx.try_recv() {
+        if let ClientMsg::AiCliAvailabilityRequest { req, .. } = msg {
+            asked.push(req);
+        }
+    }
+    let [earlier, later] = asked[..] else {
+        panic!("fixture check: Settings and the menu each ask once, got {asked:?}");
+    };
+
+    for (req, available) in [(later, vec![AiCli::Pi]), (earlier, vec![AiCli::ClaudeCode])] {
+        let _ = update_inner(
+            &mut app,
+            Message::Connection(ConnectionMsg::Event(DaemonMsg::AiCliAvailability {
+                req,
+                available,
+            })),
+        );
+    }
+
+    assert_eq!(
+        app.core
+            .session
+            .available_providers
+            .as_ref()
+            .map(|answer| answer.available.clone()),
+        Some(vec![AiCli::Pi]),
+        "the menu open now was asked about last, so its answer stands; the Settings answer that \
+         arrived after it describes a different directory (FR-003b)"
     );
 }

@@ -157,6 +157,11 @@ struct App {
     build_mismatch: Option<(String, String)>,
     /// Correlation-id counter for the client's mutating RPCs (FR-009).
     next_req: u64,
+    /// The correlation id of the latest `AiCliAvailabilityRequest` (029 BUG-001). Answers are
+    /// resolved off the service's connection loop and can overtake each other, and each one is
+    /// about the directory its request named — so an answer to an older request is dropped rather
+    /// than shown for the directory asked about since.
+    cli_availability_asked: u64,
     /// In-flight mutating RPCs keyed by `req` (T055). Lets a reply be matched, a duplicate
     /// submission suppressed, and an in-flight op resolved as *unknown* if the connection drops.
     pending_ops: HashMap<u64, PendingOp>,
