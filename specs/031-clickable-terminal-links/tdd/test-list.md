@@ -212,19 +212,19 @@ U49 is a guard: it is green on arrival. Its red is shown by adding `use std::fs;
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U64 | Each of the nine inherited identity keys is matched whatever its value | FR-006 | example | PENDING | |
-| U65 | `COLORTERM` is matched unless its value is `truecolor` or `24bit` (any ASCII case) | FR-006 | example | PENDING | |
-| U66 | Keys compare exactly when `keys_case_insensitive` is false (`term_program` unmatched) and case-insensitively when true | FR-006 | example | PENDING | |
-| U67 | Given a fixed inherited environment, the Unix `bash` builder and both Windows `powershell.exe` builders remove exactly the matched keys | FR-006 | example | PENDING | |
+| U64 | Each of the nine inherited identity keys is matched whatever its value | FR-006 | example | DONE | `crates/micold-core/src/env_include.rs::terminal_identity_tests::each_identity_key_is_matched_whatever_its_value` |
+| U65 | `COLORTERM` is matched unless its value is `truecolor` or `24bit` (any ASCII case) | FR-006 | example | DONE | `crates/micold-core/src/env_include.rs::terminal_identity_tests::colorterm_is_matched_unless_it_names_a_colour_depth` |
+| U66 | Keys compare exactly when `keys_case_insensitive` is false (`term_program` unmatched) and case-insensitively when true | FR-006 | example | DONE | `crates/micold-core/src/env_include.rs::terminal_identity_tests::keys_compare_exactly_unless_the_platform_folds_their_case` |
+| U67 | Given a fixed inherited environment, the Unix `bash` builder and both Windows `powershell.exe` builders remove exactly the matched keys | FR-006 | example | DONE | `crates/micold-core/src/env_include.rs::terminal_identity_tests::each_include_shell_removes_exactly_the_inherited_identity` |
 
 ### `crates/micold-daemon/src/supervisor.rs`
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U68 | A session spawned by `spawn_shell` or `spawn_ai_cli` does not see inherited `TERM_PROGRAM=WezTerm` or `FORCE_HYPERLINK=1` | FR-006 | example | PENDING | |
-| U69 | `FORCE_HYPERLINK=1` set by the include script is present, also when it was inherited too | FR-006 | example | PENDING | |
-| U70 | Inherited `COLORTERM=truecolor` is kept | FR-006 | example | PENDING | |
-| U71 | `TERM` is `xterm-256color` as before | FR-006 | example | PENDING | |
+| U68 | A session spawned by `spawn_shell` or `spawn_ai_cli` does not see inherited `TERM_PROGRAM=WezTerm` or `FORCE_HYPERLINK=1` | FR-006 | example | DONE | `crates/micold-daemon/tests/session_identity_env.rs::a_session_does_not_see_the_inherited_terminal_identity` |
+| U69 | `FORCE_HYPERLINK=1` set by the include script is present, also when it was inherited too | FR-006 | example | DONE | `crates/micold-daemon/tests/session_identity_env.rs::the_include_script_can_opt_a_session_into_hyperlinks` |
+| U70 | Inherited `COLORTERM=truecolor` is kept | FR-006 | example | DONE | `crates/micold-daemon/tests/session_identity_env.rs::an_inherited_colour_depth_is_kept` |
+| U71 | `TERM` is `xterm-256color` as before | FR-006 | example | DONE | `crates/micold-daemon/tests/session_identity_env.rs::term_stays_xterm_256color` |
 
 ### `crates/micold-daemon/tests/osc8_passthrough.rs`
 

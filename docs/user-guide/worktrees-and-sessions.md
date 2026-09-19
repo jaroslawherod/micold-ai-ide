@@ -951,6 +951,17 @@ Web and mail addresses in a terminal are links, and so is text a program marked 
 - **Links a program declares.** Some programs print a word such as `docs` that stands for an
   address. The whole word is marked as one link, and the label shows, and a click opens, the
   address the program declared, even when the visible text reads like another address.
+- **Whether a program declares links is its own choice.** micold does not announce that its
+  terminal shows declared links, and a session no longer inherits the identity of the terminal you
+  started micold from (`TERM_PROGRAM`, `FORCE_HYPERLINK` and similar variables are removed), so a
+  program cannot mistake micold for that terminal. To have programs that honour it, such as the AI
+  CLIs, declare their links, add `export FORCE_HYPERLINK=1` to the script micold sources before each
+  session (see [The environment a session starts in](settings.md#the-environment-a-session-starts-in))
+  and start a new session.
+- **Long addresses from an AI CLI.** An AI CLI that breaks its own lines to fit the terminal prints
+  a long address as several rows, so only the first row's piece is a link and it opens a truncated
+  address. Check the label before you click; with `FORCE_HYPERLINK=1` the CLI declares the whole
+  address instead.
 - **When it can't open.** If nothing on your computer is set up to open the address, or the
   browser fails to start, a notification says so, for example
   `Couldn't open https://example.com/docs: no application is set up to open it`.

@@ -250,20 +250,20 @@ the `env_include.rs` builders (plan, Target Platform).
 
 ### Tests for US2 ⚠️ write first, must fail
 
-- [ ] T035 [P] [US2] [U64] [U65] [U66] [U67] Unit tests for `is_inherited_terminal_identity(key, value, keys_case_insensitive)` in `crates/micold-core/src/env_include.rs`.
+- [x] T035 [P] [US2] [U64] [U65] [U66] [U67] Unit tests for `is_inherited_terminal_identity(key, value, keys_case_insensitive)` in `crates/micold-core/src/env_include.rs`.
   - Contract session-terminal-identity §1, every row: the nine keys are always true, and `COLORTERM` is true unless its value is `truecolor` or `24bit` (ASCII case-insensitive).
   - Keys compare exactly when the flag is false and case-insensitively when it is true.
   - The Unix `bash` builder, and both Windows `powershell.exe` builders (built on every OS without running them), take the inherited environment as a parameter. Given a fixed set holding `TERM_PROGRAM=WezTerm`, `FORCE_HYPERLINK=1`, `COLORTERM=truecolor` and `HOME=/h`, each records exactly the `env_remove`s for `TERM_PROGRAM` and `FORCE_HYPERLINK`, checked through `Command::get_envs()`, so the test does not depend on the CI runner's environment.
-- [ ] T036 [P] [US2] [U68] [U69] [U70] [U71] Create `crates/micold-daemon/tests/session_identity_env.rs`, against a real spawned session via `spawn_shell` and `spawn_ai_cli`. Set the inherited environment on a re-executed test child, never with `std::env::set_var`. It asserts every row of contract §2's table:
+- [x] T036 [P] [US2] [U68] [U69] [U70] [U71] Create `crates/micold-daemon/tests/session_identity_env.rs`, against a real spawned session via `spawn_shell` and `spawn_ai_cli`. Set the inherited environment on a re-executed test child, never with `std::env::set_var`. It asserts every row of contract §2's table:
   - inherited `TERM_PROGRAM=WezTerm` and `FORCE_HYPERLINK=1` are absent;
   - include-script `FORCE_HYPERLINK=1` is present, including when it is also inherited;
   - `COLORTERM=truecolor` is kept;
   - `TERM=xterm-256color` is unchanged.
 ### Implementation for US2
 
-- [ ] T038 [US2] [U64] [U65] [U66] [U67] Implement `is_inherited_terminal_identity` in `crates/micold-core/src/env_include.rs`. Call `env_remove` for every matching variable of an `inherited: impl IntoIterator<Item = (OsString, OsString)>` parameter at the three include-shell `Command` construction sites, whose callers pass `std::env::vars_os()`: the Unix `bash` builder shared by `baseline_env`/`attempt_env`, and the two Windows `powershell.exe` builders. Pass `cfg!(windows)`.
-- [ ] T039 [US2] [U68] [U69] [U70] [U71] Add `strip_inherited_terminal_identity(&mut CommandBuilder)` in `crates/micold-daemon/src/supervisor.rs`. It calls `env_remove` for each inherited variable the predicate matches. Call it in both `spawn_ai_cli` and `spawn_shell` **before** `TERM` and `spec.env` are applied.
-- [ ] T040 [US2] Extend "Links" in `docs/user-guide/worktrees-and-sessions.md`.
+- [x] T038 [US2] [U64] [U65] [U66] [U67] Implement `is_inherited_terminal_identity` in `crates/micold-core/src/env_include.rs`. Call `env_remove` for every matching variable of an `inherited: impl IntoIterator<Item = (OsString, OsString)>` parameter at the three include-shell `Command` construction sites, whose callers pass `std::env::vars_os()`: the Unix `bash` builder shared by `baseline_env`/`attempt_env`, and the two Windows `powershell.exe` builders. Pass `cfg!(windows)`.
+- [x] T039 [US2] [U68] [U69] [U70] [U71] Add `strip_inherited_terminal_identity(&mut CommandBuilder)` in `crates/micold-daemon/src/supervisor.rs`. It calls `env_remove` for each inherited variable the predicate matches. Call it in both `spawn_ai_cli` and `spawn_shell` **before** `TERM` and `spec.env` are applied.
+- [x] T040 [US2] Extend "Links" in `docs/user-guide/worktrees-and-sessions.md`.
   - Programs decide whether to declare links, and micold does not advertise support.
   - Opt in with `export FORCE_HYPERLINK=1` in the session environment-include script.
   - AI CLIs that break their own lines show a long address as a truncated first-row link, so check the hint.
