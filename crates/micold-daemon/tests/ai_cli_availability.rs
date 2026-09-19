@@ -140,7 +140,10 @@ async fn the_service_reports_the_clis_on_its_own_path() {
     let claude = AiCli::ClaudeCode.provider().command();
     let _path = ScratchPath::with(&[claude]);
 
-    let state = Arc::new(DaemonState::new(Catalog::ephemeral()));
+    // Environment-include off, so the service's own `PATH` is what a session gets: the default
+    // would source the developer's `~/.bashrc`, and what that adds is not this test's subject.
+    let store = tempfile::tempdir().unwrap();
+    let state = service_with(store.path(), None);
     let mut client = connect(&state).await;
 
     assert_eq!(
@@ -161,7 +164,10 @@ async fn the_service_reports_the_clis_on_its_own_path() {
 async fn an_environment_with_no_cli_reports_an_empty_set_rather_than_failing() {
     let _path = ScratchPath::with(&[]);
 
-    let state = Arc::new(DaemonState::new(Catalog::ephemeral()));
+    // Environment-include off, so the service's own `PATH` is what a session gets: the default
+    // would source the developer's `~/.bashrc`, and what that adds is not this test's subject.
+    let store = tempfile::tempdir().unwrap();
+    let state = service_with(store.path(), None);
     let mut client = connect(&state).await;
 
     assert!(
