@@ -1395,6 +1395,76 @@ placement it was started for, and a crashing service refills its own retry budge
 
 ---
 
+## Phase 26: Bugfix BUG-006 — the AI CLI could not write its sessions inside the sandbox
+
+**Goal**: A sandboxed AI CLI session records its conversation, and the conversation is still there
+after a restart. With the AI CLI sign-in shared, `~/.claude` was mounted read-only over the
+sandbox's home, so `claude` warned at startup that its state would be lost. With or without the
+share, the client's boot prune judged sandboxed sessions from the host's `~/.claude` and dropped
+the ones it found nothing for. FR-004e, FR-009a and SC-012a settle both.
+
+### Tests for BUG-006 (MANDATORY — Constitution Principle I) ⚠️
+
+- [ ] T208 [BUG-006] [U32] [U33] [U34] *(test)* `crates/micold-core/tests/sandbox_credentials.rs` and
+      `crates/micold-core/tests/sandbox_argv.rs`. `AiCliAuth` produces exactly one mount, of
+      `~/.claude/.credentials.json`, and never of the `~/.claude` directory. Its `-v` flag ends
+      `:rw`, and the other three shares still end `:ro` (N-4). No credential mount names a directory under
+      `HomeMount`'s container path (FR-004e). Must be
+      red against today's `conventional`.
+- [X] T209 [BUG-006] *(spike, then test)* Find out how `claude` at the image's pinned version
+      writes `.credentials.json` on token refresh: in place, or by writing another file and renaming
+      it. Record the answer in `research.md`. If it renames, a single-file bind mount fails
+      (`EBUSY`), and T211 takes the plan's `CLAUDE_CONFIG_DIR` fallback. T208 then asserts that
+      fallback instead.
+      *Result (2026-09-19)*: in place, after a failed rename. `claude` writes a temp file and renames
+      it over the target. On a bind-mounted target the rename fails with `EBUSY`, and `claude` then
+      writes the target in place. Seen with 2.1.278 under `bwrap` + `strace` and with the image's
+      2.1.247 under `docker`, both on `.claude.json`, which uses the same writer. The single-file
+      mount stands, and no fallback is needed. The runtime creates a missing mount target's
+      parent directories as root, so `<sandbox-home>/.claude` must exist before `create` (U34,
+      U35). See `research.md` R11.
+- [ ] T210 [BUG-006] [U36] [U37] *(test)* `crates/micold-client/src/main_tests.rs` (the binary's tests; `boot`
+      and `shell::persist` are not reachable from `tests/*.rs`). Under `LocalSandbox` placement, the
+      boot prune keeps a session whose conversation is absent from the host's config directory.
+      Under `HostProcess` placement it still drops that session (FR-009a). Red against today's
+      unconditional `prune_empty_sessions`.
+
+### Implementation for BUG-006
+
+- [ ] T211 [BUG-006] [U32] [U33] [U34] [U35] [U38] `crates/micold-core/src/sandbox/mod.rs` (`CredentialLayout::conventional`,
+      `CredentialMount`) and `crates/micold-core/src/sandbox/argv.rs` (`mount_args`). Narrow
+      `ai_cli_auth` to the token file. Give `CredentialMount` a mode taken from the share, so that
+      `AiCliAuth` is `:rw`. Rewrite the "read-only without exception" comment to state N-4. Update
+      the share's FR-004b wording to say a session can use and replace the sign-in token.
+- [ ] T212 [BUG-006] [U36] `crates/micold-client/src/shell/startup.rs` (the `prune_empty_sessions` call)
+      and `shell/persist.rs`. Skip the client-side prune under `LocalSandbox` placement. The daemon's
+      prune runs where the session runs and stays the only judge there (FR-009a, FR-023c). Do not
+      map host paths into `<state>/sandbox-home` (FR-003a).
+- [ ] T213 [BUG-006] *(sandbox suite)* `crates/micold-daemon/tests/`, run by `mise run
+      test-sandbox`. For each offered AI CLI, with the sign-in shared and without it: start a session
+      in the sandbox and record a conversation. Recreate the sandbox, and confirm the daemon's prune
+      keeps the session and the transcript is under `<state>/sandbox-home` (SC-012a, US2 scenario
+      10). With the share on, confirm nothing under the host's `~/.claude` other than
+      `.credentials.json` changed.
+- [ ] T214 [BUG-006] `docs/user-guide/sandboxed-daemon.md`, "Credentials". "AI CLI sign-in" shares
+      only Claude Code's sign-in token and lets a session refresh it. Conversations stay in the
+      sandbox. On macOS, a token kept in the Keychain cannot be shared. Copilot and Pi sign in inside
+      the sandbox.
+- [ ] T215 [BUG-006] Re-run `quickstart.md` §B with the sign-in shared. Start a `claude` session:
+      no read-only warning appears. Restart the application, and the session is listed and resumes
+      its conversation. Record the pass in `specs/027-sandboxed-daemon-runtime/evidence/`.
+
+**Order**: T209 first, because its answer decides T211's shape. Then T208 and T210 in parallel,
+since they touch different crates. Then T211 and T212 in parallel, T213 and T214 after them, and
+T215 last. Then `mise run gate`.
+
+**Bugfix**: 2026-09-18 — BUG-006. **Requirements added**: FR-004e, FR-009a, SC-012a and US2
+scenario 10 — see `spec.md`. **Design corrected**: `data-model.md` gained rule N-4 and a narrowed
+`AiCliAuth`. `plan.md` gained the increment. **No task reopened**: T031 and T033 built what FR-004a
+said, and FR-004a never said what the share covered. See `bugs/BUG-006.md`.
+
+---
+
 ## Parallel Opportunities
 
 **Phase 1**: T002, T003, T005, T006 in parallel after T001.
