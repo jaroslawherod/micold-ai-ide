@@ -575,3 +575,53 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
 - red: `scripts/build-lock.sh cargo test -p micold-client --lib terminal_pane::tests::links` -> `34 passed; 1 failed`: `left: Revalidated` / `right: Resolve`
 - green: `hover_refresh` returns `Resolve` when the grid moved and the cached hover read no rows -> 35 passed; `mise run gate` -> `GATE_EXIT=0`
 - commits: red `6032d0e0`, green `fix(031): a hover off the grid re-resolves when the grid moves (U161)`
+
+## Cycle 57: U64 the nine identity keys (M4, T035, T038)
+
+- test: `crates/micold-core/src/env_include.rs::terminal_identity_tests::each_identity_key_is_matched_whatever_its_value`
+- red: against a stub returning `false`, `scripts/build-lock.sh cargo test -p micold-core --lib terminal_identity_tests` -> `FORCE_HYPERLINK="" names another terminal, so a session must not inherit it` (0 passed; 1 failed)
+- green: `is_inherited_terminal_identity` matches `TERMINAL_IDENTITY_KEYS` exactly -> core subset 1140 passed, 0 failed
+- refactor: none
+- commit: `79d9f0bd`
+
+## Cycle 58: U65 `COLORTERM`
+
+- test: `terminal_identity_tests::colorterm_is_matched_unless_it_names_a_colour_depth`
+- red: same command -> `COLORTERM="gnome-terminal" names a terminal, so a session must not inherit it` (1 passed; 1 failed)
+- green: `COLORTERM` is matched unless its value is `truecolor` or `24bit`, ASCII case-insensitively -> core 1141 passed
+- refactor: none
+- commit: `d4747f1d`
+
+## Cycle 59: U66 key case
+
+- test: `terminal_identity_tests::keys_compare_exactly_unless_the_platform_folds_their_case`
+- red: same command -> `on a case-insensitive platform \`term_program\` is \`TERM_PROGRAM\`` (2 passed; 1 failed)
+- green: keys compare with `eq_ignore_ascii_case` when `keys_case_insensitive` -> core 1142 passed
+- refactor: none
+- commit: `78e9d588`
+
+## Cycle 60: U67 the include shells remove the inherited identity
+
+- structural step first: the Unix `bash` builder and the two Windows `powershell.exe` builders were extracted from `attempt_env`/`baseline_env` into `bash_command`, `powershell_baseline_command` and `powershell_attempt_command`, each taking `inherited` (unused at this step); the PowerShell ones are `#[cfg(any(windows, test))]` so they are built here
+- test: `terminal_identity_tests::each_include_shell_removes_exactly_the_inherited_identity`, through `Command::get_envs()` over a fixed inherited set
+- red: same command -> `the bash include shell removes the identity variables …` `left: []` / `right: [("FORCE_HYPERLINK", None), ("TERM_PROGRAM", None)]`
+- green: `remove_inherited_terminal_identity` calls `env_remove` for each matched variable; callers pass `std::env::vars_os()` -> core 1143 passed
+- also: `tests/background_spawns_hide_console.rs` failed on `env_include.rs:303 (in \`bash_command\`)`: the guard recognises `#[cfg(not(windows))]`, not `#[cfg(any(not(windows), test))]`. The bash builder is now `#[cfg(not(windows))]` and the test pushes it only there (the task asks only the Windows builders to be built on every OS) -> green
+- commit: `5de3e32b`
+
+## Cycle 61: U68 sessions drop the inherited identity (T036, T039)
+
+- test: `crates/micold-daemon/tests/session_identity_env.rs::a_session_does_not_see_the_inherited_terminal_identity`. The inherited environment is set on a re-executed copy of the test binary; it spawns a real session with `spawn_shell` (stand-in script as `SHELL`/`COMSPEC`) and with `spawn_ai_cli` (the same stand-in first on `PATH` as `claude`), each writing its environment to a file
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test session_identity_env` -> `a spawn_shell session must not inherit TERM_PROGRAM …` `left: Some("WezTerm")` / `right: None`
+- green: `strip_inherited_terminal_identity(&mut CommandBuilder)` in `supervisor.rs`, over the builder's full environment, called in both spawns after `CommandBuilder::new` and before `spec.env`/`env` -> 1 passed
+- refactor: none
+- commit: `dd61561b`
+
+## Cycle 62: U69–U71 guards: include opt-in, colour depth, `TERM`
+
+- tests: `session_identity_env.rs::{the_include_script_can_opt_a_session_into_hyperlinks, an_inherited_colour_depth_is_kept, term_stays_xterm_256color}`
+- passed on arrival: they guard the order and the predicate of cycle 61's strip
+- mutant 1, strip moved after the include values and also matching `TERM` -> `the_include_script_can_opt_a_session_into_hyperlinks` fails (`left: None` / `right: Some("1")`), `term_stays_xterm_256color` fails (`left: None` / `right: Some("xterm-256color")`)
+- mutant 2, the predicate given `""` as the value -> `an_inherited_colour_depth_is_kept` fails (`left: None` / `right: Some("truecolor")`)
+- both mutants restored with `git checkout`, suite 4 passed
+- commit: `48038cac`
