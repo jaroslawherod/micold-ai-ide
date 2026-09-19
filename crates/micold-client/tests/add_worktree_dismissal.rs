@@ -139,3 +139,45 @@ fn the_in_dialog_cancel_closes_a_form_whose_create_is_in_flight() {
          out once Escape and the scrim are refused (FR-010a)"
     );
 }
+
+/// The notification on screen, as (level, message), or `None` when nothing was raised.
+fn notice(state: &State) -> Option<(micold_core::notify::Level, String)> {
+    state
+        .notifications
+        .queue
+        .visible()
+        .map(|n| (n.level, n.message.clone()))
+}
+
+/// A state whose add-worktree form was cancelled while its create was still running.
+fn cancelled_mid_create() -> State {
+    let mut state = form_creating();
+    state.update(Message::WorktreeForm(FormMsg::Cancelled));
+    state
+}
+
+/// U6 — a create that fails after its form was cancelled reports the failure as a notification.
+///
+/// Cancel closed the overlay and did not stop the create (FR-010b). With the form gone, the
+/// failure has no error line to land on; without a notification the user is back where the bug
+/// report started, unable to tell whether the worktree exists.
+#[test]
+fn a_create_failing_after_cancel_is_reported_as_an_error_notification() {
+    let mut state = cancelled_mid_create();
+
+    state.update(Message::WorktreeForm(FormMsg::CreateFailed(
+        "git failed to create the worktree".into(),
+    )));
+
+    let (level, message) = notice(&state)
+        .expect("a create that failed after its form closed must still be reported (FR-010b)");
+    assert_eq!(
+        level,
+        micold_core::notify::Level::Error,
+        "a failed create is an error"
+    );
+    assert!(
+        message.contains("git failed to create the worktree"),
+        "the notification must carry the failure's own message, got {message:?}"
+    );
+}

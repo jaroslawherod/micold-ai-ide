@@ -54,7 +54,7 @@ Tests in `crates/micold-client/tests/add_worktree_dismissal.rs`, observing
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U6  | Cancel on a `Creating` form, then `CreateFailed(msg)`: an error notification carries `msg` | FR-010b | example | PENDING | |
+| U6  | Cancel on a `Creating` form, then `CreateFailed(msg)`: an error notification carries `msg` | FR-010b | example | DONE | `crates/micold-client/tests/add_worktree_dismissal.rs::a_create_failing_after_cancel_is_reported_as_an_error_notification` |
 | U7  | Cancel on a `Creating` form after a stage was reported, then `CreateFailed`: the notification names that stage's label | FR-010b, FR-009 | example | PENDING | |
 | U8  | `CreateStageChanged` after the form was cancelled mid-create still updates the stage the failure will name | FR-010b, FR-009 | example | PENDING | |
 | U9  | Cancel on a `Creating` form, then `Created(worktree)`: an info notification names the worktree's `dir_name` | FR-010b | example | PENDING | |
