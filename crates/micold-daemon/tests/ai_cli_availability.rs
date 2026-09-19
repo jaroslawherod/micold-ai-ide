@@ -314,3 +314,28 @@ fn with_env_include_off_the_answer_walks_the_services_own_path() {
          is one a session would find (FR-003, FR-003b)"
     );
 }
+
+/// U6: environment-include on, but the script leaves `PATH` alone — the resolved environment then
+/// carries no `PATH`, and a session inherits the service's own. So that is the one walked, not an
+/// empty one.
+#[test]
+fn a_script_that_leaves_path_alone_answers_from_the_services_own_path() {
+    let service_bin = bin_with(AiCli::Pi.provider().command());
+    let _service = ServicePath::without_clis(Some(service_bin.path()));
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let script = include_script(
+        store.path(),
+        "export BUG001_UNRELATED=1\n",
+        "$env:BUG001_UNRELATED = '1'\r\n",
+    );
+
+    let state = service_with(store.path(), Some(&script));
+
+    assert_eq!(
+        state.ai_clis_available_in(project.path()),
+        vec![AiCli::Pi],
+        "a script that does not touch PATH leaves a session with the service's own PATH, so a \
+         CLI there is still one a session would find (FR-003b)"
+    );
+}
