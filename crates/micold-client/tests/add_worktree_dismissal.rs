@@ -208,3 +208,33 @@ fn a_failure_after_cancel_names_the_stage_it_failed_at() {
         "the notification must name the stage the create failed at ({stage:?}), got {message:?}"
     );
 }
+
+/// U8 — a stage reported after Cancel still counts: the failure names where the create really was.
+///
+/// The create runs on after its form closed, so the daemon keeps reporting progress. A failure in
+/// the submodule fetch must not be blamed on the branch creation the form last showed.
+#[test]
+fn a_stage_reported_after_cancel_is_the_one_a_failure_names() {
+    use micold_core::worktree::CreateStage;
+    let mut state = form_creating();
+    state.update(Message::WorktreeForm(FormMsg::CreateStageChanged(
+        CreateStage::CreatingWorktree,
+        None,
+    )));
+    state.update(Message::WorktreeForm(FormMsg::Cancelled));
+
+    state.update(Message::WorktreeForm(FormMsg::CreateStageChanged(
+        CreateStage::SettingUpSubmodules,
+        None,
+    )));
+    state.update(Message::WorktreeForm(FormMsg::CreateFailed(
+        "git failed to fetch a submodule".into(),
+    )));
+
+    let stage = CreateStage::SettingUpSubmodules.label(&Default::default());
+    let (_, message) = notice(&state).expect("the failure must be reported (FR-010b)");
+    assert!(
+        message.contains(stage),
+        "the notification must name the stage reached after Cancel ({stage:?}), got {message:?}"
+    );
+}

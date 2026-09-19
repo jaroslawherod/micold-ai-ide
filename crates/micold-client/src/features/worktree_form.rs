@@ -631,6 +631,10 @@ pub fn create_stage_changed(
     stage: CreateStage,
     detail: Option<String>,
 ) {
+    // A create whose form was cancelled runs on; its failure must name where it really got to.
+    if let Some(create) = &mut state.worktree_form.cancelled_create {
+        create.stage = Some(stage);
+    }
     with_form(state, |form| {
         if form.stage != Some(stage) {
             form.stage = Some(stage);
