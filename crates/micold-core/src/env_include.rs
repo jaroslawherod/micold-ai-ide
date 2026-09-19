@@ -86,6 +86,29 @@ pub fn merge_with_term(vars: &[(String, String)]) -> Vec<(String, String)> {
     merged
 }
 
+/// Whether an inherited `key=value` is another terminal's identity, which a session must not see
+/// (feature 031, FR-006, contracts/session-terminal-identity.md §1).
+///
+/// Keys compare exactly when `keys_case_insensitive` is false and ASCII case-insensitively when it
+/// is true; callers pass `cfg!(windows)`, so core never reads the host OS.
+pub fn is_inherited_terminal_identity(key: &str, value: &str, keys_case_insensitive: bool) -> bool {
+    let _ = (value, keys_case_insensitive);
+    TERMINAL_IDENTITY_KEYS.contains(&key)
+}
+
+/// The keys that name another terminal whatever their value (contract §1).
+const TERMINAL_IDENTITY_KEYS: [&str; 9] = [
+    "FORCE_HYPERLINK",
+    "TERM_PROGRAM",
+    "TERM_PROGRAM_VERSION",
+    "VTE_VERSION",
+    "WT_SESSION",
+    "WT_PROFILE_ID",
+    "TERMINAL_EMULATOR",
+    "KONSOLE_VERSION",
+    "DOMTERM",
+];
+
 /// How a bounded subprocess run concluded — kept distinct from `EnvIncludeOutcome` so `resolve()`
 /// decides the public category from an unambiguous fact (did it exit, or did we have to kill it)
 /// rather than inferring "was this a timeout?" from elapsed time, which would be racy right at
@@ -505,4 +528,38 @@ pub fn snapshot_for(
     }
     let (vars, outcome) = resolver.resolve(Path::new(script_path), cwd, timeout);
     EnvIncludeSnapshot { vars, outcome }
+}
+
+#[cfg(test)]
+mod terminal_identity_tests {
+    use super::*;
+
+    /// The keys contract session-terminal-identity §1 matches whatever their value.
+    const IDENTITY_KEYS: [&str; 9] = [
+        "FORCE_HYPERLINK",
+        "TERM_PROGRAM",
+        "TERM_PROGRAM_VERSION",
+        "VTE_VERSION",
+        "WT_SESSION",
+        "WT_PROFILE_ID",
+        "TERMINAL_EMULATOR",
+        "KONSOLE_VERSION",
+        "DOMTERM",
+    ];
+
+    #[test]
+    fn each_identity_key_is_matched_whatever_its_value() {
+        for key in IDENTITY_KEYS {
+            for value in ["", "1", "WezTerm", "truecolor"] {
+                assert!(
+                    is_inherited_terminal_identity(key, value, false),
+                    "{key}={value:?} names another terminal, so a session must not inherit it"
+                );
+            }
+        }
+        assert!(
+            !is_inherited_terminal_identity("HOME", "/h", false),
+            "a key outside the table is never matched"
+        );
+    }
 }
