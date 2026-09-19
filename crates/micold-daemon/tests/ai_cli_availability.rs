@@ -339,3 +339,38 @@ fn a_script_that_leaves_path_alone_answers_from_the_services_own_path() {
          CLI there is still one a session would find (FR-003b)"
     );
 }
+
+/// U7: a second answer for the same directory comes from the cache spawns already share — the
+/// script runs once, not once per question (SC-006a as amended).
+#[test]
+fn a_second_answer_for_a_directory_does_not_run_the_script_again() {
+    let session_bin = bin_with(AiCli::Pi.provider().command());
+    let _service = ServicePath::without_clis(None);
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let runs = store.path().join("runs");
+    let (unix, windows) = prepend_to_path(session_bin.path());
+    let script = include_script(
+        store.path(),
+        &format!("echo run >> '{}'\n{unix}", runs.display()),
+        &format!(
+            "Add-Content -Path '{}' -Value run\r\n{windows}",
+            runs.display()
+        ),
+    );
+
+    let state = service_with(store.path(), Some(&script));
+    let first = state.ai_clis_available_in(project.path());
+    let second = state.ai_clis_available_in(project.path());
+
+    assert_eq!(
+        first, second,
+        "fixture check: the same directory, the same answer"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&runs).unwrap().lines().count(),
+        1,
+        "the environment for a directory is resolved once and then served from the cache that \
+         spawns there use too; asking again must not run the script again (SC-006a)"
+    );
+}

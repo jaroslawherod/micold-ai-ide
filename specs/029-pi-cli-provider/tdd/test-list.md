@@ -44,7 +44,7 @@ is covered by T070's visual pass.
 | U4  | The availability answer for a directory uses the `PATH` from that directory's env-include result when env-include is on      | FR-003b           | example | DONE    | `the_answer_for_a_directory_walks_the_path_env_include_resolves_there` (crates/micold-daemon/tests/ai_cli_availability.rs) |
 | U5  | With env-include off, the availability answer uses the process's own `PATH`                                                  | FR-003b           | example | DONE    | `with_env_include_off_the_answer_walks_the_services_own_path` (crates/micold-daemon/tests/ai_cli_availability.rs) |
 | U6  | With env-include on but a result that carries no `PATH` (the script left it unchanged), the process's own `PATH` is used      | FR-003b           | example | DONE    | `a_script_that_leaves_path_alone_answers_from_the_services_own_path` (crates/micold-daemon/tests/ai_cli_availability.rs) |
-| U7  | A second availability answer for the same directory is served from the shared cache: the script runs once, not twice         | SC-006a, FR-003b  | example | PENDING |      |
+| U7  | A second availability answer for the same directory is served from the shared cache: the script runs once, not twice         | SC-006a, FR-003b  | example | DONE    | `a_second_answer_for_a_directory_does_not_run_the_script_again` (crates/micold-daemon/tests/ai_cli_availability.rs) |
 | U8  | The start-time availability gate in `start_session` uses the same resolution as U4, so it does not refuse what was offered    | FR-003b, SC-001a  | example | PENDING |      |
 
 ### `crates/micold-daemon/src/server.rs`
