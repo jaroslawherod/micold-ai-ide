@@ -32,3 +32,16 @@ failed before the implementation.
   `scripts/build-lock.sh cargo test -p micold-core --all-targets` -> 1140 passed, 0 failed
 - refactor: none in this cycle; threading the value through the trait's `is_available` is its own
   structural step after U2
+
+## Cycle 2: U2 `available_in(path)` omits a CLI present only on the process's own `PATH`
+
+- test: `crates/micold-core/tests/available_in.rs::a_cli_present_only_on_the_process_path_is_not_available_in_another_path` (new)
+- red: passed on first run — cycle 1's green already reads only the given value. Deliberate
+  mutant: `available_in` also accepting `which.provider().is_available()` (the process `PATH`).
+  `scripts/build-lock.sh cargo test --test available_in` -> `got [Pi]` (1 passed, 1 failed).
+  Mutant reverted byte for byte; file -> 2 passed
+- green: no production change (covered by cycle 1)
+- refactor: none in this cycle
+- notes: the test moves the process `PATH` (the task text asks not to). It is the only way to
+  place a CLI on the process `PATH` and not in the given value; it is the one test in its binary
+  that touches the environment, and it restores `PATH` before asserting
