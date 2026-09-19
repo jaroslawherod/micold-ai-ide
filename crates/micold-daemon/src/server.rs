@@ -636,25 +636,43 @@ where
                 tracing::info!(client = id, project = %project.display(), "project detached");
                 state.detach(id, &project);
             }
-            // --- AI CLIs (feature 027, FR-023c) ---
+            // --- AI CLIs (feature 027, FR-023c; feature 029 BUG-001, FR-003b) ---
             //
             // Answered *here*, in the service, because here is where sessions run. Under sandboxed
-            // placement this process is inside the container, so `available_here` reads the
-            // image's `PATH` — which is the question FR-023c asks and the one the client cannot
-            // ask for itself. Under host placement it reads the host's, and the same code path
-            // gives the same right answer for the same reason.
+            // placement this process is inside the container and reads the image's environment —
+            // the question FR-023c asks and the one the client cannot ask for itself. Under host
+            // placement it reads the host's, and the same code path gives the right answer for the
+            // same reason.
             //
-            // Recomputed per request rather than cached at boot: it is one `PATH` walk per
-            // variant, the client only asks when a choice is offered, and research R11's rule is
-            // that this answer is never stored.
+            // *Which* environment: the one a session in `cwd` would be spawned with (FR-003b), not
+            // this process's own. A service started from the desktop has the login `PATH`, which
+            // lacks a version manager's directories; its sessions get them from the
+            // environment-include script. `None` (Settings) is answered for the home directory.
+            //
+            // Recomputed per request rather than cached at boot: the client only asks when a choice
+            // is offered, and research R11's rule is that this answer is never stored. What *is*
+            // cached is the resolved environment, in the per-directory cache spawns already use.
+            //
+            // Resolving it can run the script for up to its timeout, so it runs on the blocking
+            // pool and the whole answer is *spawned*, never awaited here: this loop is where the
+            // client's `Ping` is answered (BUG-009, above), and a slow script must not silence it.
             ClientMsg::AiCliAvailabilityRequest { req, cwd } => {
-                let home = || directories::UserDirs::new().map(|d| d.home_dir().to_path_buf());
-                let available = match cwd.or_else(home) {
-                    Some(dir) => state.ai_clis_available_in(&dir),
-                    None => micold_core::provider::available_here(),
-                };
-                tracing::debug!(client = id, ?available, "AI CLI availability reported");
-                state.send(id, DaemonMsg::AiCliAvailability { req, available });
+                let task_state = Arc::clone(state);
+                tokio::spawn(async move {
+                    let resolver = Arc::clone(&task_state);
+                    let available = tokio::task::spawn_blocking(move || {
+                        let home =
+                            || directories::UserDirs::new().map(|d| d.home_dir().to_path_buf());
+                        match cwd.or_else(home) {
+                            Some(dir) => resolver.ai_clis_available_in(&dir),
+                            None => micold_core::provider::available_here(),
+                        }
+                    })
+                    .await
+                    .unwrap_or_else(|_| micold_core::provider::available_here());
+                    tracing::debug!(client = id, ?available, "AI CLI availability reported");
+                    task_state.send(id, DaemonMsg::AiCliAvailability { req, available });
+                });
             }
 
             // --- Diagnostics (US6/Phase 10, FR-043–046) ---
