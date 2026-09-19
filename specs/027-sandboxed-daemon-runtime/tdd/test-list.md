@@ -4,7 +4,7 @@ loop: inside-out
 profile: .specify/memory/tdd-profile.md
 spec_criteria: 8
 planned_at: b53e3449
-updated_at: b53e3449
+updated_at: aa2d2df6
 suite_baseline: green
 ---
 
@@ -90,13 +90,14 @@ runs as T213 in the sandbox suite, outside this loop (same arrangement as T181 a
 
 | id  | behavior                                                                                             | traces          | kind             | state   | test |
 | --- | ---------------------------------------------------------------------------------------------------- | --------------- | ---------------- | ------- | ---- |
-| U32 | The AI CLI sign-in share mounts `~/.claude/.credentials.json`, never the `~/.claude` directory        | FR-004e         | example          | PENDING |      |
-| U33 | The AI CLI sign-in mount is read-write, and every other credential mount stays read-only             | N-4, FR-004e    | example          | PENDING |      |
-| U34 | With the sign-in shared, the mount set names `<sandbox-home>/.claude` as a directory to create first | R11, FR-004d    | example          | PENDING |      |
-| U35 | A bring-up creates the directories the mount set names before it runs the runtime                    | R11, FR-004d    | example          | PENDING |      |
-| U36 | Under the sandboxed placement, the boot prune keeps a session the host has no conversation for       | FR-009a         | example          | PENDING |      |
-| U37 | Under the host placement, the boot prune still drops a session with no conversation                  | FR-009a         | characterization | PENDING |      |
-| U38 | With the sign-in shared, the sharing caution says a session can use and replace the sign-in token    | FR-004e, FR-004b | example         | PENDING |      |
+| U32 | The AI CLI sign-in share mounts `~/.claude/.credentials.json`, never the `~/.claude` directory        | FR-004e         | example          | DONE | `sandbox_credentials::the_ai_cli_sign_in_share_is_the_token_file_not_the_cli_directory` |
+| U33 | The AI CLI sign-in mount is read-write, and every other credential mount stays read-only             | N-4, FR-004e    | example          | DONE | `sandbox_argv::only_the_ai_cli_sign_in_is_mounted_writable` |
+| U34 | With the sign-in shared, the mount set names `<sandbox-home>/.claude` as a directory to create first | R11, FR-004d    | example          | DONE | `sandbox_credentials::a_shared_sign_in_names_its_directory_in_the_sandbox_home_to_create` |
+| U35 | A bring-up creates the directories the mount set names before it runs the runtime                    | R11, FR-004d    | example          | DONE | `shell::sandbox::tests::a_bring_up_creates_the_sign_ins_directory_before_the_runtime_runs` |
+| U36 | Under the sandboxed placement, the boot prune keeps a session the host has no conversation for       | FR-009a         | example          | DONE | `shell::persist::tests::under_the_sandbox_the_boot_prune_keeps_a_session_the_host_has_no_record_of` |
+| U37 | Under the host placement, the boot prune still drops a session with no conversation                  | FR-009a         | characterization | BASELINE | `shell::persist::tests::the_boot_prune_judges_every_session_by_its_own_cli` (mutant-checked) |
+| U38 | With the sign-in shared, the sharing caution says a session can use and replace the sign-in token    | FR-004e, FR-004b | example         | DONE | `ui::settings::daemon::tests::a_shared_sign_in_says_a_session_can_replace_the_token` |
+| U39 | Boot hands the prune the placement it starts under, so a sandboxed launch keeps such a session  | FR-009a         | example          | DONE    | `shell::startup::tests::a_sandboxed_launch_keeps_a_session_the_host_has_no_record_of` (added after U36) |
 
 ## Invariants and edge cases still to place
 

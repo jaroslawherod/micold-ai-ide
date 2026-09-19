@@ -631,3 +631,96 @@ Appended rather than edited in place. The log is append-only.
 - green: `Sandbox::restart` clears `previous_attempt`. Client target 149 passed, 0 failed
 - refactor: none. `cancel`'s comment corrected (it does not stop runtime work already under way), and the fallback's
   cancel marked as a safety net (review A/B round 2)
+
+## BUG-006 (Phase 26, 2026-09-19)
+
+Baseline before the first cycle: `scripts/build-lock.sh cargo test --workspace` at `a42b4f6e` -> 3276 passed, 0 failed.
+Core-only cycles close on the core subset (`cargo test -p micold-core --all-targets`); the full workspace runs at the
+checkpoint after U34, and again before the phase closes.
+
+### U32 — the sign-in share is the token file
+
+- test: `sandbox_credentials::the_ai_cli_sign_in_share_is_the_token_file_not_the_cli_directory`
+- red (`scripts/build-lock.sh cargo test --test sandbox_credentials the_ai_cli_sign_in_share_is_the_token_file_not_the_cli_directory -- --exact`
+  -> `0 passed; 1 failed`): `sandbox_credentials.rs:221` `left: "/home/u/.claude"` `right: "/home/u/.claude/.credentials.json"`
+- green: `CredentialLayout::conventional` names `~/.claude/.credentials.json`. Core subset 1140 passed, 0 failed
+- refactor: doc comments on `CredentialShare::AiCliAuth` and `CredentialLayout::ai_cli_auth` say what the share is and why
+- commit: `16a42329`
+
+### U33 — only the sign-in is writable
+
+- test: `sandbox_argv::only_the_ai_cli_sign_in_is_mounted_writable`
+- red (`scripts/build-lock.sh cargo test --test sandbox_argv only_the_ai_cli_sign_in_is_mounted_writable -- --exact`
+  -> `0 passed; 1 failed`): `sandbox_argv.rs:297` `left: "ro"` `right: "rw"`
+- green: `CredentialShare::writable()`, true for `AiCliAuth` only; `argv::mount_args` takes each credential's mode from
+  it. Core subset 1141 passed, 0 failed
+- refactor: the test asserts the spec shares the sign-in at all, so an empty credential set cannot pass it vacuously
+- commit: `258365d5`
+
+### U34 — the sign-in's directory in the sandbox home is named
+
+- test: `sandbox_credentials::a_shared_sign_in_names_its_directory_in_the_sandbox_home_to_create`
+- red (`scripts/build-lock.sh cargo test --test sandbox_credentials a_shared_sign_in_names_its_directory_in_the_sandbox_home_to_create -- --exact`
+  -> `0 passed; 1 failed`, against a stub returning `Vec::new()`): `sandbox_credentials.rs:240` `left: []`
+  `right: ["/home/u/.local/share/micold-ai-ide/sandbox-home/.claude"]`
+- green: `MountSet::home_dirs_to_create` maps each credential container path under `home.container` to its parent
+  under `home.host`, skipping a credential directly in the home or outside it. Core subset 1142 passed, 0 failed
+- refactor: none needed
+- commit: `e4d54470`
+
+### U35 — the bring-up creates those directories first
+
+- test: `shell::sandbox::tests::a_bring_up_creates_the_sign_ins_directory_before_the_runtime_runs`
+- red (`scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide a_bring_up_creates_the_sign_ins_directory_before_the_runtime_runs`
+  -> `0 passed; 1 failed`): `shell/sandbox.rs:706` "/tmp/.tmpKrfcCJ/sandbox-home/.claude was left for the runtime to
+  create, which creates it as root"
+- green: `start` creates every `MountSet::home_dirs_to_create` entry after building the mount set. Client binary
+  163 passed, 0 failed
+- refactor: the three identical `Stage::Creating` failures in `start` became `preparation_failed(stderr)`. Client
+  binary 163 passed, 0 failed
+- deviation: the refactor went into the same commit as the behavior rather than its own
+- commit: `94b07261`
+
+### U36 — the boot prune keeps a sandboxed session the host has no record of
+
+- test: `shell::persist::tests::under_the_sandbox_the_boot_prune_keeps_a_session_the_host_has_no_record_of`
+- red (`scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide under_the_sandbox_the_boot_prune_keeps_a_session_the_host_has_no_record_of`
+  -> `0 passed; 1 failed`, against `prune_empty_sessions` taking an unused `PlacementKind`): `persist.rs:575`
+  `left: []` `right: [SessionId(cc547bbd-ab3b-4fd8-8d3e-188901a08873)]`
+- green: `prune_empty_sessions` returns without judging anything under `PlacementKind::LocalSandbox`. The three
+  existing prune scenarios pass `HostProcess`. Client binary 164 passed, 0 failed
+- refactor: none needed
+- notes: `restore_catalog` still passes `HostProcess`, so boot does not yet use the rule. Added to the list as U39
+- commit: `9090dc1e`
+
+### U37 — the host placement still drops a session with no conversation (characterization)
+
+- test: `shell::persist::tests::the_boot_prune_judges_every_session_by_its_own_cli` (its
+  `boot_drops_a_session_the_provider_has_no_conversation_for` scenario, now called with `PlacementKind::HostProcess`)
+- baseline: passes against the code as it stands after U36
+- mutant: the early return widened to `placement == PlacementKind::LocalSandbox || true` -> `persist.rs:607`
+  `left: [SessionId(5fd014fe-…), SessionId(c98ea12a-…)]` `right: [SessionId(5fd014fe-…)]`; restored with `git checkout`
+- state: BASELINE. No commit: nothing changed
+
+### U39 — boot hands the prune the placement it starts under (added after U36)
+
+- test: `shell::startup::tests::a_sandboxed_launch_keeps_a_session_the_host_has_no_record_of`
+- red (`scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide a_sandboxed_launch_keeps_a_session_the_host_has_no_record_of`
+  -> `0 passed; 1 failed`, against `restore_catalog` taking an unused `PlacementKind`): `startup.rs:470` `left: []`
+  `right: [SessionId(f67f6cb6-654a-48b9-92a5-8ba078ab8b6f)]`
+- green: `restore_catalog` passes its placement to `prune_empty_sessions`; `boot` reads the placement from the
+  settings store before restoring the catalogue, not after. Client binary 165 passed, 0 failed
+- refactor: the prune call's comment says why it stands down under the sandbox
+- commit: `f120888a`
+
+### U38 — the sharing caution says the sign-in can be replaced
+
+- test: `ui::settings::daemon::tests::a_shared_sign_in_says_a_session_can_replace_the_token`
+- red (`scripts/build-lock.sh cargo test -p micold-client --lib a_shared_sign_in_says_a_session_can_replace_the_token`
+  -> `0 passed; 1 failed`; the first run was a compile error in the test's own fixture, `daemon.profile` for
+  `daemon.sandbox`, fixed before the red was taken): `daemon.rs:523` "the sign-in share is writable and the caution
+  does not say so: Shared with the container: AI CLI sign-in."
+- green: `sharing_summary` appends that a session can use the sign-in and replace its token when `AiCliAuth` is
+  shared. Client lib 424 passed, 0 failed
+- refactor: none needed
+- commit: `aa2d2df6`
