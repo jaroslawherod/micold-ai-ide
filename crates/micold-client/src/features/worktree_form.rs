@@ -373,9 +373,13 @@ impl FloatingSurface for AddWorktreeDialog {
 
 impl Registered for AddWorktreeDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
-        state.worktree_form.form.as_ref().map(|form| AddWorktreeDialog {
-            creating: form.status == WorktreeFormStatus::Creating,
-        })
+        state
+            .worktree_form
+            .form
+            .as_ref()
+            .map(|form| AddWorktreeDialog {
+                creating: form.status == WorktreeFormStatus::Creating,
+            })
     }
 }
 
@@ -389,8 +393,8 @@ pub fn opened(state: &mut crate::app::State) {
 /// The form was dismissed.
 pub fn cancelled(state: &mut crate::app::State) {
     if let Some(form) = state.worktree_form.form.take() {
-        state.worktree_form.cancelled_create =
-            (form.status == WorktreeFormStatus::Creating).then_some(CancelledCreate {
+        state.worktree_form.cancelled_create = (form.status == WorktreeFormStatus::Creating)
+            .then_some(CancelledCreate {
                 mode: form.mode,
                 stage: form.stage,
             });
@@ -683,7 +687,9 @@ pub fn create_failed(
 ) -> Vec<crate::features::Outcome> {
     let owed = state.worktree_form.cancelled_create.take();
     if let (Some(create), None) = (owed, &state.worktree_form.form) {
-        return vec![crate::features::notifications::error(create.failure(&message))];
+        return vec![crate::features::notifications::error(
+            create.failure(&message),
+        )];
     }
     state.worktree_form.worktree_error = Some(message);
     with_form(state, |form| {
