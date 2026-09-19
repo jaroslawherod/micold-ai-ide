@@ -96,7 +96,7 @@ terminal and see the same history ([quickstart.md](./quickstart.md) §B).
 
 ### Implementation for User Story 1
 
-- [ ] T019 [US1] Implement `PiProvider::is_available()` in `crates/micold-core/src/provider.rs` through the existing `resolves_on_path("pi")` — no spawn, no version read (FR-003, FR-003a, SC-006a) (reopened — BUG-001: it walked the daemon's own `PATH`, not the spawn environment's; closes with T064)
+- [X] T019 [US1] Implement `PiProvider::is_available()` in `crates/micold-core/src/provider.rs` through the existing `resolves_on_path("pi")` — no spawn, no version read (FR-003, FR-003a, SC-006a) (reopened — BUG-001: it walked the daemon's own `PATH`, not the spawn environment's; closes with T064)
 - [X] T020 [US1] Implement `PiProvider::launch_args()` in `crates/micold-core/src/provider.rs`: one `--session-id <uuid>` vector for both launch modes, with a comment recording why `--session`, `--no-session`, `--name` and `--session-dir` are excluded ([contracts/pi-cli.md](./contracts/pi-cli.md) §Not used)
 - [X] T021 [US1] Implement `PiProvider::config_dir()` in `crates/micold-core/src/provider.rs`: `PI_CODING_AGENT_DIR` else home-relative `~/.pi/agent`, with no `cfg` arm (Principle VI)
 - [X] T022 [US1] Add the per-cwd store helpers to `PiProvider` in `crates/micold-core/src/provider.rs` — cwd encoding, `session_dir()`, `conversation_path()` — and implement `has_recorded_conversation()` on them (FR-005a)
@@ -221,7 +221,7 @@ increment: BUG-001.
 
 ### Implementation
 
-- [ ] T064 [BUG-001] [U1] [U2] `crates/micold-core/src/provider.rs`: make `resolves_on_path` take the `PATH` value to walk, add `available_in(path: &OsStr)`, and thread the value through the provider trait's `is_available` for every provider. Keep `PATHEXT` handling and add no `cfg` arm (FR-003b, FR-020, Principle VI). Closes the reopened T019
+- [X] T064 [BUG-001] [U1] [U2] `crates/micold-core/src/provider.rs`: make `resolves_on_path` take the `PATH` value to walk, add `available_in(path: &OsStr)`, and thread the value through the provider trait's `is_available` for every provider. Keep `PATHEXT` handling and add no `cfg` arm (FR-003b, FR-020, Principle VI). Closes the reopened T019
 - [ ] T065 [BUG-001] `crates/micold-core/src/protocol/messages.rs`: add `cwd: Option<PathBuf>` to `ClientMsg::AiCliAvailabilityRequest`, bump `PROTOCOL_VERSION` 13 → 14 in `crates/micold-core/src/protocol/version.rs`, and regenerate the schema hash
 - [X] T066 [BUG-001] [A1] [A3] [U4] [U5] [U6] [U7] [U9] [U10] `crates/micold-daemon/src/server.rs` and `crates/micold-daemon/src/state.rs`: answer the request from the `PATH` in `env_include_vars_for(cwd.unwrap_or(home))`, falling back to the process `PATH`. Run it on `spawn_blocking` and never under the state lock, so the connection loop keeps serving other requests (FR-003b). Makes T063 and T072 pass
 - [X] T074 [BUG-001] [A2] [U8] `crates/micold-daemon/src/state.rs` (`start_session`): check availability against the same spawn-environment `PATH` as T066, not the process's own. Makes T071 pass (FR-003b)

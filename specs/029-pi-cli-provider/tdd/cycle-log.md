@@ -189,3 +189,12 @@ failed before the implementation.
   premise their `NoCliOnPath` guards state. Assertions untouched.
 - suite: `session_start` -> 19 passed; daemon crate -> 354 passed, 0 failed
 - refactor: `spawn_path_for` extraction (above), done while green
+
+## Structural step: the two 027 availability tests state env-include off
+
+- change: `ai_cli_availability.rs::the_service_reports_the_clis_on_its_own_path` and
+  `::an_environment_with_no_cli_reports_an_empty_set_rather_than_failing` build their service with
+  `service_with(store, None)` instead of `Catalog::ephemeral()`. They still passed, but only
+  because their scratch `PATH` hides `bash` and the default `~/.bashrc` resolution failed; the
+  premise ("the service's own `PATH` is what a session gets") is now explicit. Assertions untouched.
+- suite: file -> 10 passed
