@@ -49,11 +49,34 @@ pub struct State {
     /// A message shown when opening a non-git directory was refused (FR-001a), or a worktree
     /// create failed (FR-017). Transient.
     pub worktree_error: Option<String>,
-    /// Whether the form was cancelled while its create was still running (feature 013, BUG-001).
+    /// A create whose form was cancelled while it was still running (feature 013, BUG-001).
     ///
     /// Cancel closes the overlay and does not stop the create (FR-010b), so its outcome still
-    /// arrives — with no form to land on. This is what says the outcome is owed a notification.
-    pub cancelled_mid_create: bool,
+    /// arrives — with no form to land on. This is what says the outcome is owed a notification,
+    /// and what the form knew about the create that the notification has to repeat.
+    pub cancelled_create: Option<CancelledCreate>,
+}
+
+/// What a form cancelled mid-create knew about its create (feature 013, FR-010b).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CancelledCreate {
+    /// The mode the create runs in, which words its stage (feature 016, FR-024).
+    pub mode: CreateMode,
+    /// The last stage the daemon reported, if any, for a failure to name (FR-009).
+    pub stage: Option<CreateStage>,
+}
+
+impl CancelledCreate {
+    /// The failure notification's text: the stage it failed at, then the failure's own message.
+    fn failure(&self, message: &str) -> String {
+        match self.stage {
+            Some(stage) => format!(
+                "Creating the worktree failed at \"{}\": {message}",
+                stage.label(&self.mode)
+            ),
+            None => format!("Creating the worktree failed: {message}"),
+        }
+    }
 }
 
 /// Transient creation status for the add-worktree form (feature 010, research R4). Not
@@ -366,7 +389,11 @@ pub fn opened(state: &mut crate::app::State) {
 /// The form was dismissed.
 pub fn cancelled(state: &mut crate::app::State) {
     if let Some(form) = state.worktree_form.form.take() {
-        state.worktree_form.cancelled_mid_create = form.status == WorktreeFormStatus::Creating;
+        state.worktree_form.cancelled_create =
+            (form.status == WorktreeFormStatus::Creating).then_some(CancelledCreate {
+                mode: form.mode,
+                stage: form.stage,
+            });
     }
 }
 
@@ -642,9 +669,9 @@ pub fn create_failed(
     state: &mut crate::app::State,
     message: String,
 ) -> Vec<crate::features::Outcome> {
-    let owed = std::mem::take(&mut state.worktree_form.cancelled_mid_create);
-    if owed && state.worktree_form.form.is_none() {
-        return vec![crate::features::notifications::error(message)];
+    let owed = state.worktree_form.cancelled_create.take();
+    if let (Some(create), None) = (owed, &state.worktree_form.form) {
+        return vec![crate::features::notifications::error(create.failure(&message))];
     }
     state.worktree_form.worktree_error = Some(message);
     with_form(state, |form| {

@@ -88,3 +88,15 @@ existed and failed before the implementation.
   `COMPONENT_LOCAL`, pinned by this cycle's test. Crate suite -> 1805 passed, 0 failed, 2 ignored (139 binaries)
 - refactor: none needed
 - commit: `fix(013): a create that fails after Cancel is reported as a notification (BUG-001 U6)`
+
+## Cycle 7: U7 a failure after Cancel names the stage it failed at
+
+- test: `crates/micold-client/tests/add_worktree_dismissal.rs::a_failure_after_cancel_names_the_stage_it_failed_at` (new)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test add_worktree_dismissal a_failure_after_cancel_names_the_stage_it_failed_at -- --exact`
+  -> panicked at `add_worktree_dismissal.rs:206`: `the notification must name the stage the create failed at ("Setting up submodules"), got "git failed to fetch a submodule"` (1 failed)
+- green: the flag becomes `cancelled_create: Option<CancelledCreate { mode, stage }>`, recorded from
+  the form as Cancel closes it; the failure text is `Creating the worktree failed at "<stage label>": <message>`
+  (or without the stage when none was reported). `COMPONENT_LOCAL` follows the rename. File -> 7 passed.
+  Crate suite -> 1806 passed, 0 failed, 2 ignored (139 binaries)
+- refactor: none needed; the rename was the green step's
+- commit: `fix(013): a failure after Cancel names the stage it failed at (BUG-001 U7)`

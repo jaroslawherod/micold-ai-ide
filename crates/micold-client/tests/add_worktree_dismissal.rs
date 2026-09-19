@@ -181,3 +181,30 @@ fn a_create_failing_after_cancel_is_reported_as_an_error_notification() {
         "the notification must carry the failure's own message, got {message:?}"
     );
 }
+
+/// U7 — the failure notification names the stage the create had reached when it was cancelled.
+///
+/// FR-009 makes the failed stage identifiable in the dialog; FR-010b carries that into the
+/// notification, since "setting up submodules" and "creating the branch" leave different things
+/// behind on disk.
+#[test]
+fn a_failure_after_cancel_names_the_stage_it_failed_at() {
+    use micold_core::worktree::CreateStage;
+    let mut state = form_creating();
+    state.update(Message::WorktreeForm(FormMsg::CreateStageChanged(
+        CreateStage::SettingUpSubmodules,
+        None,
+    )));
+    state.update(Message::WorktreeForm(FormMsg::Cancelled));
+
+    state.update(Message::WorktreeForm(FormMsg::CreateFailed(
+        "git failed to fetch a submodule".into(),
+    )));
+
+    let stage = CreateStage::SettingUpSubmodules.label(&Default::default());
+    let (_, message) = notice(&state).expect("the failure must be reported (FR-010b)");
+    assert!(
+        message.contains(stage),
+        "the notification must name the stage the create failed at ({stage:?}), got {message:?}"
+    );
+}
