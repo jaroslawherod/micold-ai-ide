@@ -67,6 +67,7 @@ D2–D4 applied to spec.md (FR-002, FR-006, FR-012 + *Copilot evidence*, US1 #5,
 | Round | Model | Verdict | Findings | Resolution |
 |---|---|---|---|---|
 | 1 | session (opus) | CHANGES | F1 MAJOR: daemon has no provider injection; T020/T026 and R11 said "fake provider". F2 MAJOR: read-only data dir is not a cross-platform persist failure. F3 MAJOR: P1 Copilot milestone after P3 US3. F4–F11 MINOR: M1 note wording, `MinimalProvider` + T013 Copilot-None assertion, T028 file/harness, guard tests unmarked, (new) markers, no M1 quickstart task, plan.md M2 refs, spec.md names `CopilotProvider::read_title`. | All accepted. Real providers under temp env + `ENV` mutex (tasks, R11, test-list, plan); `tmp/file/data` persist failure; milestones reordered (M2 Copilot, M3 US3 + Polish); T046 added for §B1/§B2 in M1; guard kind in test-list; spec wording made implementation-free. |
+| 2 | sonnet | CLEAN | none; F1–F11 verified; all 16 checklist items CONFIRMED. | — |
 
 ### Plan review log
 
