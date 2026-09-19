@@ -611,6 +611,31 @@ impl MountSet {
         }
     }
 
+    /// The directories inside [`Self::home`] that must exist before the runtime runs (research R11).
+    ///
+    /// A credential mounted below the sandbox's home — the AI CLI's sign-in, at
+    /// `~/.claude/.credentials.json` — lands in a directory of that home. A runtime that has to
+    /// create a mount target's parents creates them as root, and the CLI then cannot write
+    /// anything else into its own directory. So the bring-up creates these first, as the user.
+    /// A credential directly in the home (`~/.gitconfig`) or outside it (the agent socket) needs
+    /// nothing, and is not listed.
+    pub fn home_dirs_to_create(&self) -> Vec<PathBuf> {
+        let mut dirs: Vec<PathBuf> = Vec::new();
+        for c in &self.credentials {
+            let Ok(relative) = c.container.strip_prefix(&self.home.container) else {
+                continue;
+            };
+            let Some(parent) = relative.parent().filter(|p| !p.as_os_str().is_empty()) else {
+                continue;
+            };
+            let dir = self.home.host.join(parent);
+            if !dirs.contains(&dir) {
+                dirs.push(dir);
+            }
+        }
+        dirs
+    }
+
     /// Every host path this sandbox can reach. Used by the denylist assertion, which checks that
     /// generated argv mounts nothing outside this set (obligation C-3, conformance check K-4).
     pub fn host_paths(&self) -> Vec<&Path> {
