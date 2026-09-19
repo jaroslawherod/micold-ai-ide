@@ -312,8 +312,13 @@ impl WorktreeForm {
 }
 
 /// The add-worktree form, as a floating surface (feature 021, T032).
+///
+/// Carries whether a create is in flight, because that decides how it may be closed (feature 013,
+/// BUG-001): `dismissal` is asked of the surface value, not of the state it was read from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AddWorktreeDialog;
+pub struct AddWorktreeDialog {
+    creating: bool,
+}
 
 impl FloatingSurface for AddWorktreeDialog {
     fn id(&self) -> SurfaceId {
@@ -324,14 +329,25 @@ impl FloatingSurface for AddWorktreeDialog {
         Layer::Dialog
     }
 
+    /// An ordinary dialog while the user is editing. While a create is in flight it protects its
+    /// input (FR-010a): a stray scrim click or Escape would take the progress display away and
+    /// leave the outcome nowhere to land, so only the in-dialog Cancel closes it.
     fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::WorktreeForm(Msg::Cancelled))
+        let rules = DismissalRules::for_layer(Layer::Dialog)
+            .cancelled_by(Message::WorktreeForm(Msg::Cancelled));
+        if self.creating {
+            rules.protecting_input()
+        } else {
+            rules
+        }
     }
 }
 
 impl Registered for AddWorktreeDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
-        state.worktree_form.form.as_ref().map(|_| AddWorktreeDialog)
+        state.worktree_form.form.as_ref().map(|form| AddWorktreeDialog {
+            creating: form.status == WorktreeFormStatus::Creating,
+        })
     }
 }
 
