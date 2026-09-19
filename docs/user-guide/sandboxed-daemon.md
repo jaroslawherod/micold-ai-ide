@@ -108,10 +108,28 @@ Nothing of yours is shared unless you say so. Each item is a separate opt-in:
 - **Git configuration** — your commit name and email, read-only.
 - **SSH agent** — the agent's socket, so a session can push. Never your key files.
 - **Git credentials** — the credential helper's store.
-- **AI CLI sign-in** — the AI tool's own authentication.
+- **AI CLI sign-in** — Claude Code's sign-in token (`~/.claude/.credentials.json`), and nothing else
+  from `~/.claude`. It is the one share a session can write to: Claude Code replaces the token each
+  time it refreshes it.
 
 With none of these on, a session that tries to push to a remote fails for want of credentials, and
 the application says so rather than leaving you with an unexplained authentication error.
+
+### Where sandboxed conversations live
+
+Conversations started in the sandbox are stored in the sandbox's own home, under the application's
+data directory, and not in `~/.claude` on your computer. They survive the application restarting
+and the sandbox being recreated, and a sandboxed session resumes from them. They do not show up in
+Claude Code sessions you run outside the application.
+
+A few limits of the sign-in share:
+
+- **macOS keeps the token in the Keychain**, not in a file, so there is nothing to share. Sign in
+  inside a session instead.
+- **Copilot and Pi are not covered.** They sign in inside the sandbox, and that sign-in is kept in
+  the sandbox's home.
+- **Sign-ins can collide.** If Claude Code on your computer and a sandboxed session refresh the
+  token at the same moment, one of them may be asked to sign in again. Nothing else is lost.
 
 While any of them is on, the settings view shows which — a partially shared sandbox should never
 look like a fully isolated one.
