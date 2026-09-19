@@ -14,6 +14,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #386 | Spec (carries 029 BUG-001 record) | open | — |
 
 ## Milestones
 
