@@ -103,3 +103,13 @@ failed before the implementation.
 - green: `ai_clis_available_in` falls back to `process_path()` when the resolved environment
   carries no `PATH`. File -> 4 passed, A1 still red
 - refactor: none
+
+## Cycle 5: U6 env-include on, a result with no `PATH` falls back to the process's own
+
+- test: `crates/micold-daemon/tests/ai_cli_availability.rs::a_script_that_leaves_path_alone_answers_from_the_services_own_path` (new)
+- red: passed on first run — cycle 4's fallback covers it. Deliberate mutant: the fallback
+  replaced by `.unwrap_or_default()`. `scripts/build-lock.sh cargo test --test ai_cli_availability a_script_that_leaves_path_alone_answers_from_the_services_own_path -- --exact`
+  -> `left: []` / `right: [Pi]` (1 failed). Mutant reverted (`git diff` on `state.rs` empty);
+  file -> 5 passed, A1 still red
+- green: no production change
+- refactor: none
