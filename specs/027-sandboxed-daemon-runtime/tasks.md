@@ -1475,6 +1475,10 @@ the ones it found nothing for. FR-004e, FR-009a and SC-012a settle both.
 since they touch different crates. Then T211 and T212 in parallel, T213 and T214 after them, and
 T215 last. Then `mise run gate`.
 
+**Verify**: `mise run image && mise run test-sandbox` — both `sandbox_real_ai_cli_sessions` probes
+pass. They are the only tests that run a real container, so they are the only place the mount set
+this phase changed is checked against a runtime rather than against an argv.
+
 **Bugfix**: 2026-09-18 — BUG-006. **Requirements added**: FR-004e, FR-009a, SC-012a and US2
 scenario 10 — see `spec.md`. **Design corrected**: `data-model.md` gained rule N-4 and a narrowed
 `AiCliAuth`. `plan.md` gained the increment. **No task reopened**: T031 and T033 built what FR-004a
