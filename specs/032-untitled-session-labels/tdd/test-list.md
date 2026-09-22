@@ -38,15 +38,15 @@ the cycle log; a red is not required.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| A1  | A known untitled `claude` session whose transcript holds a typed prompt reads that first turn after project open, without being opened | US1.1, FR-001, FR-002, SC-002 | example | PENDING | |
-| A2  | Several untitled `claude` sessions in one project each read their own first turn, all different | US1.2, SC-004, SC-005 | example | PENDING | |
-| A3  | After a restart over the same data dir, the label is in the first snapshot, with the provider's records removed | US1.3, FR-007, FR-009 | example | PENDING | |
-| A4  | A `claude` session with no typed prompt (only injected records) still reads "New session" | US1.4, FR-004, SC-004 | example | PENDING | |
+| A1  | A known untitled `claude` session whose transcript holds a typed prompt reads that first turn after project open, without being opened | US1.1, FR-001, FR-002, SC-002 | example | DONE | untitled_session_labels.rs `a_known_untitled_session_reads_its_first_turn_after_project_open_and_keeps_it` |
+| A2  | Several untitled `claude` sessions in one project each read their own first turn, all different | US1.2, SC-004, SC-005 | example | DONE | untitled_session_labels.rs `several_untitled_sessions_in_one_project_each_read_their_own_first_turn` |
+| A3  | After a restart over the same data dir, the label is in the first snapshot, with the provider's records removed | US1.3, FR-007, FR-009 | example | DONE | untitled_session_labels.rs `after_a_restart_the_label_is_there_without_reading_the_clis_records` |
+| A4  | A `claude` session with no typed prompt (only injected records) still reads "New session" | US1.4, FR-004, SC-004 | example | DONE | untitled_session_labels.rs `a_session_with_nothing_typed_in_it_still_reads_new_session` |
 | A5  | A listed Copilot session with a typed turn and neither `name:` nor `summary:` reads its first `user.message` content | US1.5, FR-012, SC-009 | example | PENDING | |
 | A6  | A listed Copilot session with `summary:` and no `name:` reads the summary as its title, never a label | US1.6, FR-016, SC-008 | example | PENDING | |
-| A7  | A titled session reads its title, running or not, and never a derived label | US2.1, FR-005, SC-003 | example | PENDING | |
-| A8  | A session showing a label switches to the title the terminal reports, and still reads the title after a restart | US2.2, FR-006 | example | PENDING | |
-| A9  | A stopped session showing a label reads the title its records gained, after the next project open | US2.3, FR-006 | example | PENDING | |
+| A7  | A titled session reads its title, running or not, and never a derived label | US2.1, FR-005, SC-003 | example | DONE | untitled_session_labels.rs `a_titled_session_is_never_given_a_label` |
+| A8  | A session showing a label switches to the title the terminal reports, and still reads the title after a restart | US2.2, FR-006 | example | DONE | untitled_session_labels.rs `an_observed_terminal_title_replaces_a_label_and_is_persisted` |
+| A9  | A stopped session showing a label reads the title its records gained, after the next project open | US2.3, FR-006 | example | DONE | untitled_session_labels.rs `a_labelled_session_reads_the_title_its_records_gained` |
 | A10 | A running untitled session reads its label within one supervisor pass of its first prompt, whether the prompt hook or the spinner arrives first, and the snapshot is broadcast | US3.1, FR-010, SC-007 | example | PENDING | |
 | A11 | A running session showing a label switches to the title as the terminal reports it | US3.2, FR-006 | example | PENDING | |
 
@@ -104,19 +104,19 @@ the cycle log; a red is not required.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U24 | A bare prompt-sending command (`/speckit-autopilot` + `isMeta` follower) yields its name with `/` | FR-002, C3.5b, C3.5c | example | PENDING | |
-| U25 | A command with arguments yields the arguments | FR-002, C3.5c | example | PENDING | |
-| U26 | `/model` followed by a user `<local-command-stdout>` is skipped; the next prompt is the label | FR-012, C3.5a | example | PENDING | |
-| U27 | `/reload-plugins` followed by a `system`/`local_command` stdout record is skipped | FR-012, C3.5a | example | PENDING | |
-| U28 | A last-line `<command-message>` command with no follower is a turn | FR-010, C3.5b′ | example | PENDING | |
-| U29 | A last-line `<command-name>` command with no follower is not a turn | FR-012, C3.5b′ | example | PENDING | |
-| U30 | `isMeta`, compact-summary, `toolUseResult` and tool-result-list records are never turns | FR-012, C3.2, C3.3 | example | PENDING | |
-| U31 | `<local-command-caveat>`, `<bash-…>`, `<task-notification>`, `<system-reminder>` texts are never turns | FR-012, C3.4 | example | PENDING | |
-| U32 | A list content's `text` parts form the label; image parts contribute nothing | FR-002, C3.3 | example | PENDING | |
-| U33 | A whitespace-only prompt is skipped and the next turn is the label | FR-002, C3.7 | example | PENDING | |
-| U34 | A non-JSON line is skipped without failing | FR-011, C2.3 | example | PENDING | |
-| U35 | A `<command-…>` record with no parsable `<command-name>` is not a turn | FR-011, C3.5d | example | PENDING | |
-| U36 | Records with only injected text yield no label | FR-004 | example | PENDING | |
+| U24 | A bare prompt-sending command (`/speckit-autopilot` + `isMeta` follower) yields its name with `/` | FR-002, C3.5b, C3.5c | example | DONE | first_turn_label.rs `a_bare_prompt_sending_command_is_labelled_with_its_name` |
+| U25 | A command with arguments yields the arguments | FR-002, C3.5c | example | DONE | first_turn_label.rs `a_command_with_arguments_is_labelled_with_its_arguments` |
+| U26 | `/model` followed by a user `<local-command-stdout>` is skipped; the next prompt is the label | FR-012, C3.5a | example | DONE | first_turn_label.rs `a_command_claude_answered_itself_is_skipped_for_the_next_prompt` |
+| U27 | `/reload-plugins` followed by a `system`/`local_command` stdout record is skipped | FR-012, C3.5a | example | DONE | first_turn_label.rs `a_command_answered_by_a_system_record_is_skipped_for_the_next_prompt` |
+| U28 | A last-line `<command-message>` command with no follower is a turn | FR-010, C3.5b′ | example | DONE | first_turn_label.rs `a_last_line_command_that_opens_with_its_message_is_a_turn` |
+| U29 | A last-line `<command-name>` command with no follower is not a turn | FR-012, C3.5b′ | example | DONE | first_turn_label.rs `a_last_line_command_that_opens_with_its_name_is_not_a_turn` |
+| U30 | `isMeta`, compact-summary, `toolUseResult` and tool-result-list records are never turns | FR-012, C3.2, C3.3 | example | DONE | first_turn_label.rs `records_claude_or_a_tool_wrote_are_never_turns` |
+| U31 | `<local-command-caveat>`, `<bash-…>`, `<task-notification>`, `<system-reminder>` texts are never turns | FR-012, C3.4 | example | DONE | first_turn_label.rs `text_claude_or_the_application_inserted_is_never_a_turn` |
+| U32 | A list content's `text` parts form the label; image parts contribute nothing | FR-002, C3.3 | example | DONE | first_turn_label.rs `a_list_contents_text_parts_form_the_label_and_an_image_adds_nothing` |
+| U33 | A whitespace-only prompt is skipped and the next turn is the label | FR-002, C3.7 | example | DONE | first_turn_label.rs `a_whitespace_only_prompt_is_skipped_for_the_next_turn` |
+| U34 | A non-JSON line is skipped without failing | FR-011, C2.3 | example | DONE | first_turn_label.rs `a_line_that_is_not_json_is_skipped` |
+| U35 | A `<command-…>` record with no parsable `<command-name>` is not a turn | FR-011, C3.5d | example | DONE | first_turn_label.rs `a_command_record_with_no_parsable_name_is_not_a_turn` |
+| U36 | Records with only injected text yield no label | FR-004 | example | DONE | first_turn_label.rs `a_conversation_with_nothing_typed_in_it_has_no_label` |
 
 ### `crates/micold-core/src/first_turn.rs` — `copilot_first_turn`
 
@@ -136,10 +136,10 @@ the cycle log; a red is not required.
 | --- | --- | --- | --- | --- | --- |
 | U44 | The fake's `with_label` answers `read_label`; its `read_title` stays `None` | C1.3, C1.4 | example | DONE | ai_cli_provider_seam.rs `the_fake_answers_a_label_it_was_given_and_never_offers_it_as_a_title` |
 | U45 | `PiProvider::read_label` is `None` even when its `read_title` is the first message | C1.2 | example | DONE | ai_cli_provider_seam.rs `pi_derives_no_label_because_its_title_already_is_the_first_message` |
-| U46 | `ClaudeProvider::read_label` returns the shaped first turn of the transcript at its derived path | FR-002, FR-012 | example | PENDING | |
-| U47 | `ClaudeProvider::read_label` is `None` for a missing transcript | FR-011 | example | PENDING | |
-| U48 | A `claude` first turn starting past 1 MiB yields `None` even when a later prompt exists | FR-014, C2.4 | example | PENDING | |
-| U49 | `ClaudeProvider::read_title` still returns the latest `ai-title` for a file `read_label` reads | FR-005, C1.4 | example | PENDING | |
+| U46 | `ClaudeProvider::read_label` returns the shaped first turn of the transcript at its derived path | FR-002, FR-012 | example | DONE | ai_cli_provider.rs `the_label_is_the_shaped_first_turn_of_the_sessions_own_transcript` |
+| U47 | `ClaudeProvider::read_label` is `None` for a missing transcript | FR-011 | example | DONE | ai_cli_provider.rs `a_missing_transcript_has_no_label_and_does_not_fail` |
+| U48 | A `claude` first turn starting past 1 MiB yields `None` even when a later prompt exists | FR-014, C2.4 | example | DONE | ai_cli_provider.rs `a_first_turn_past_the_read_bound_yields_no_label_even_with_a_later_prompt` |
+| U49 | `ClaudeProvider::read_title` still returns the latest `ai-title` for a file `read_label` reads | FR-005, C1.4 | example | DONE | ai_cli_provider.rs `the_title_and_the_label_are_read_from_the_same_file_and_never_mixed` |
 | U50 | `CopilotProvider::read_title` returns `name:` when present, even with a `summary:` | FR-016, C7.1 | example | PENDING | |
 | U51 | `CopilotProvider::read_title` returns `summary:` when `name:` is absent | FR-016, C7.1 | example | PENDING | |
 | U52 | `CopilotProvider::read_title` returns `summary:` when `name:` is empty | FR-016, C7.3 | example | PENDING | |
@@ -161,17 +161,17 @@ the cycle log; a red is not required.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U61 | Discovery adopts a titled session `Named`, an untitled one with a label `Derived`, one with neither `Pending` | FR-001, FR-005, C6.1 | example | PENDING | |
-| U62 | `recover_session_names` turns `Pending` into `Derived` and counts it | FR-001, C6.2, C6.3a | example | PENDING | |
-| U63 | `recover_session_names` turns `Derived` into `Named` when a title appears | FR-006, C6.2 | example | PENDING | |
-| U64 | A `Derived` session is never re-labelled from its records (label read only for `Pending`) | FR-007, C6.2 | guard | PENDING | |
-| U65 | A title arriving between the off-lock read and the label write wins; a label arriving after a title is dropped | FR-005, C6.3, C6.6 | guard | PENDING | |
-| U66 | A `None` read and a failed label write change nothing and report no session failure | FR-011, C6.7 | example | PENDING | |
-| U67 | A `Derived` session is not pruned; a `Pending` session with no conversation is pruned as before | FR-004, data-model inv. 4 | example | PENDING | |
+| U61 | Discovery adopts a titled session `Named`, an untitled one with a label `Derived`, one with neither `Pending` | FR-001, FR-005, C6.1 | example | DONE | untitled_session_labels.rs `discovery_adopts_a_titled_session_named_an_untitled_one_labelled_and_an_empty_one_pending` |
+| U62 | `recover_session_names` turns `Pending` into `Derived` and counts it | FR-001, C6.2, C6.3a | example | DONE | untitled_session_labels.rs `a_known_untitled_session_reads_its_first_turn_after_project_open_and_keeps_it` |
+| U63 | `recover_session_names` turns `Derived` into `Named` when a title appears | FR-006, C6.2 | example | DONE | untitled_session_labels.rs `a_labelled_session_reads_the_title_its_records_gained` |
+| U64 | A `Derived` session is never re-labelled from its records (label read only for `Pending`) | FR-007, C6.2 | guard | DONE | untitled_session_labels.rs `a_label_is_never_derived_a_second_time` |
+| U65 | A title arriving between the off-lock read and the label write wins; a label arriving after a title is dropped | FR-005, C6.3, C6.6 | guard | DONE | untitled_session_labels.rs `a_title_and_a_label_racing_for_one_session_end_named` |
+| U66 | A `None` read and a failed label write change nothing and report no session failure | FR-011, C6.7 | example | DONE | untitled_session_labels.rs `a_failed_read_or_a_failed_label_write_changes_nothing_else` |
+| U67 | A `Derived` session is not pruned; a `Pending` session with no conversation is pruned as before | FR-004, data-model inv. 4 | example | DONE | untitled_session_labels.rs `a_labelled_session_is_never_pruned_and_an_empty_one_still_is` |
 | U68 | `recover_live_session_names` records a label after `note_activity` and returns > 0 | FR-010, C6.3a | example | PENDING | |
 | U69 | A spinner-driven activity change in `drain_signals` sets `name_stale` | FR-010, C6.3b | example | PENDING | |
 | U70 | A drain with no activity change leaves `name_stale` unset (idle tick reads nothing) | SC-006 | example | PENDING | |
-| U71 | Nothing but the recovery and title paths writes a label (no client message sets one) | FR-013 | guard | PENDING | |
+| U71 | Nothing but the recovery and title paths writes a label (no client message sets one) | FR-013 | guard | DONE | untitled_session_labels.rs `nothing_but_the_recovery_path_writes_a_label` |
 
 ## Invariants and edge cases still to place
 
