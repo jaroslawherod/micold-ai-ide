@@ -268,7 +268,7 @@ the `env_include.rs` builders (plan, Target Platform).
   - Opt in with `export FORCE_HYPERLINK=1` in the session environment-include script.
   - AI CLIs that break their own lines show a long address as a truncated first-row link, so check the hint.
   - The Windows caveat, if T027 found one.
-- [ ] T041 [US2] Verify the milestone: `mise run gate`, then the `visual-pass` skill for quickstart §B.14 and §B.17, recorded in `visual-pass.md`. `tests/session_identity_env.rs` and the `env_include` predicate tests are green. (A7–A11 were made green in M3 by T034.)
+- [x] T041 [US2] Verify the milestone: `mise run gate`, then the `visual-pass` skill for quickstart §B.14 and §B.17, recorded in `visual-pass.md`. `tests/session_identity_env.rs` and the `env_include` predicate tests are green. (A7–A11 were made green in M3 by T034.)
 
 **Checkpoint (M4)**: US1 works, US2 works except scenario 6 (a `file` link, M5), and every session's identity is micold's own.
 
