@@ -94,18 +94,18 @@ fn the_prefix_is_at_most_one_mebibyte() {
         "the FR-014 bound (research R7)"
     );
     let dir = tempfile::tempdir().unwrap();
-    // Short complete lines up to one byte past the bound.
-    let line = b"0123456789abcde\n"; // 16 bytes
-    let mut contents = line.repeat((LABEL_BUDGET_BYTES as usize) / line.len());
-    contents.push(b'x');
-    assert_eq!(contents.len() as u64, LABEL_BUDGET_BYTES + 1);
+    // Short complete lines, one line past the bound: every byte of it would be kept by a read with
+    // no bound, so only the bound can stop at exactly 1 MiB.
+    let line = b"0123456789abcde\n"; // 16 bytes, and 16 divides the bound
+    let contents = line.repeat((LABEL_BUDGET_BYTES as usize) / line.len() + 1);
+    assert_eq!(contents.len() as u64, LABEL_BUDGET_BYTES + 16);
     let path = write_file(dir.path(), "big.jsonl", &contents);
 
     let prefix = read_prefix(&path).expect("a readable file has a prefix");
     assert_eq!(
         prefix.len() as u64,
         LABEL_BUDGET_BYTES,
-        "a file one byte over the bound is read up to the bound and no further (C2.1)"
+        "a file past the bound is read up to the bound and no further (C2.1)"
     );
 }
 

@@ -533,3 +533,211 @@ fn a_failed_read_or_a_failed_label_write_changes_nothing_else() {
         .collect();
     assert_eq!(before, after, "no session failed over a label (FR-011)");
 }
+
+// ---------------------------------------------------------------------------------------
+// US2 (T026) — the AI CLI's own title still wins (A7–A9, C6.2, C6.3, C6.5, C6.6)
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn a_titled_session_is_never_given_a_label() {
+    // A7 (US2 #1, SC-003): the transcript holds a typed first turn, but the row already has the
+    // name the CLI gave it, and a label never outranks a title (FR-005).
+    let stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3271);
+    stores.claude_transcript(&cwd(), id, &claude_fixture("skill_with_args.jsonl"));
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(
+        data.path(),
+        vec![session(id, SessionLabel::Named("Named by the CLI".into()))],
+    );
+
+    assert_eq!(
+        state.recover_session_names(&project()),
+        0,
+        "a Named session is filtered out before any read (C6.2)"
+    );
+    assert_eq!(
+        label_of(&state, id),
+        SessionLabel::Named("Named by the CLI".into())
+    );
+    assert_eq!(
+        label_in(&catalog_at(data.path()), id),
+        SessionLabel::Named("Named by the CLI".into()),
+        "nothing on disk changed either (C6.6)"
+    );
+}
+
+#[test]
+fn a_labelled_session_reads_the_title_its_records_gained() {
+    // A9 (US2 #3, FR-006, C6.2): the label held the row while the CLI had no name for the
+    // conversation; the next project open finds the name and the label gives way.
+    let stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3272);
+    stores.claude_transcript(&cwd(), id, &claude_fixture("bare_skill.jsonl"));
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(
+        data.path(),
+        vec![session(
+            id,
+            SessionLabel::Derived("/speckit-autopilot".into()),
+        )],
+    );
+
+    stores.claude_titles(&cwd(), id, "Autopilot the spec flow");
+
+    assert_eq!(
+        state.recover_session_names(&project()),
+        1,
+        "a labelled session is still asked for a title, so the row is broadcast (C6.2, C6.3a)"
+    );
+    assert_eq!(
+        label_of(&state, id),
+        SessionLabel::Named("Autopilot the spec flow".into())
+    );
+    assert_eq!(
+        label_in(&catalog_at(data.path()), id),
+        SessionLabel::Named("Autopilot the spec flow".into()),
+        "and it is still the title after a restart (FR-006)"
+    );
+}
+
+#[test]
+fn a_label_is_never_derived_a_second_time() {
+    // U64 (FR-007, C6.2 guard): a labelled session is a recovery candidate for its *title* only.
+    // Its records are never re-read for another label, even when the first turn has moved on.
+    let stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3273);
+    stores.claude_transcript(&cwd(), id, &claude_fixture("model_then_prompt.jsonl"));
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(
+        data.path(),
+        vec![session(
+            id,
+            SessionLabel::Derived("/speckit-autopilot".into()),
+        )],
+    );
+
+    assert_eq!(state.recover_session_names(&project()), 0);
+    assert_eq!(
+        label_of(&state, id),
+        SessionLabel::Derived("/speckit-autopilot".into()),
+        "the label a row already shows never changes under the user (FR-007)"
+    );
+}
+
+#[test]
+fn an_observed_terminal_title_replaces_a_label_and_is_persisted() {
+    // A8 (US2 #2, C6.5 guard): the running session's terminal reports the name; it replaces the
+    // label on the row and on disk, so a restart still reads the title.
+    let _stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3274);
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(
+        data.path(),
+        vec![session(
+            id,
+            SessionLabel::Derived("/speckit-autopilot".into()),
+        )],
+    );
+
+    state.record_observed_names(&[(SessionId::from_uuid(id), "Autopilot the spec flow".into())]);
+
+    assert_eq!(
+        label_of(&state, id),
+        SessionLabel::Named("Autopilot the spec flow".into())
+    );
+    assert_eq!(
+        label_in(&catalog_at(data.path()), id),
+        SessionLabel::Named("Autopilot the spec flow".into()),
+        "the title the terminal reported outlives the label (FR-006)"
+    );
+}
+
+#[test]
+fn a_title_and_a_label_racing_for_one_session_end_named() {
+    // U65 (C6.3, C6.6 guard): the recovery pass reads off the lock, so the terminal can name the
+    // session on either side of it. Both orders end `Named`, and never back at `Derived`.
+    let stores = ProviderStores::new();
+    let label_first = Uuid::from_u128(0x3275);
+    let title_first = Uuid::from_u128(0x3276);
+    stores.claude_transcript(&cwd(), label_first, &claude_fixture("bare_skill.jsonl"));
+    stores.claude_transcript(&cwd(), title_first, &claude_fixture("bare_skill.jsonl"));
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(
+        data.path(),
+        vec![
+            session(label_first, SessionLabel::Pending),
+            session(title_first, SessionLabel::Pending),
+        ],
+    );
+
+    // Label first, then the terminal's title.
+    state.recover_session_names(&project());
+    assert_eq!(
+        label_of(&state, label_first),
+        SessionLabel::Derived("/speckit-autopilot".into())
+    );
+    state.record_observed_names(&[(
+        SessionId::from_uuid(label_first),
+        "Named while labelled".into(),
+    )]);
+    assert_eq!(
+        label_of(&state, label_first),
+        SessionLabel::Named("Named while labelled".into())
+    );
+
+    // Title first, then a recovery pass that would otherwise label it.
+    state.record_observed_names(&[(
+        SessionId::from_uuid(title_first),
+        "Named before the pass".into(),
+    )]);
+    state.recover_session_names(&project());
+    assert_eq!(
+        label_of(&state, title_first),
+        SessionLabel::Named("Named before the pass".into()),
+        "a label arriving after a title is dropped (C6.3, C6.6)"
+    );
+}
+
+#[test]
+fn nothing_but_the_recovery_path_writes_a_label() {
+    // U71 (FR-013): a label is derived from the conversation and is never user-editable, so no
+    // request handler may reach `record_session_label`. Only `record_recovered_names` calls it.
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut call_sites = Vec::new();
+    let mut stack = vec![src.clone()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|ext| ext != "rs") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            for (n, line) in text.lines().enumerate() {
+                // The definition in `catalog.rs` is not a call site.
+                if line.contains("record_session_label(") && !line.contains("pub fn ") {
+                    call_sites.push(format!(
+                        "{}:{}",
+                        path.strip_prefix(&src).unwrap().display(),
+                        n + 1
+                    ));
+                }
+            }
+        }
+    }
+
+    assert_eq!(
+        call_sites.len(),
+        1,
+        "a label is written only by the recovery pass, never by a client request (FR-013); \
+         call sites: {call_sites:?}"
+    );
+    assert!(
+        call_sites[0].starts_with("state.rs"),
+        "the one call site is the daemon's recovery pass: {call_sites:?}"
+    );
+}

@@ -508,8 +508,17 @@ is running: after you close the app, after the background service restarts, afte
 not have to open a session to find out which one it is — the list you come back to reads the same
 as the list you left, so you can pick the session you want by its name alone.
 
-**"New session" means the conversation has no name yet**, not that the app hasn't finished loading.
-A session you created and never talked to reads "New session" for as long as that is true. It does
+**A conversation the CLI never named reads what you first typed in it.** Claude Code does not name
+every conversation. When it has not, the row shows the first thing you typed instead: your first
+prompt, or for a skill or slash command the text you gave it (just the command's name, such as
+`/speckit-autopilot`, when you gave it none). It is shown on one line and cut at 80 characters with
+"…". Commands the CLI answers itself, like `/model`, are skipped, and so is anything the CLI or this
+app inserted into the conversation. If the CLI names the conversation later, that name replaces
+this label, and the label never comes back.
+
+**"New session" means nothing has been typed in the conversation yet**, not that the app hasn't
+finished loading. A session you created and never talked to reads "New session" for as long as that
+is true. It does
 not wait around unnamed, though: with no conversation in it there is nothing to come back to, so the
 next time the project is opened while nothing is running it, the row is tidied away. A session that
 was named keeps its row, even if the CLI later clears out that conversation's records.
@@ -519,9 +528,10 @@ and that newer name is the one that comes back next time. Names are per session:
 never touches another.
 
 **Sessions from before this was true get their names back.** If you have sessions that were showing
-"New session" even though you had named conversations in them, opening the project is enough — each
-one is looked up in its own CLI's records, once, and keeps the name it finds. A session whose
-conversation the CLI no longer has keeps the name it was already showing; nothing takes a name away.
+"New session" even though you had talked in them, opening the project is enough — each one is
+looked up in its own CLI's records, once, and keeps the name it finds, or failing a name, the first
+thing you typed. A session whose conversation the CLI no longer has keeps what it was already
+showing; nothing takes a name or a label away.
 
 ## Choosing which AI CLI a session runs
 

@@ -1246,6 +1246,11 @@ impl DaemonState {
     /// what bounds the pass, and it is also what protects FR-008: a name already recorded is never
     /// re-read, so a deleted transcript cannot take it away. A `None` read is a no-op for the same
     /// reason: never an error, never a wrong name, and never a way back to `Pending`.
+    ///
+    /// A session showing a derived label (feature 032) **is** a candidate: it has no name yet, and
+    /// the title the CLI writes later must replace the label (FR-006, C6.2). It is asked for a
+    /// title only — `unlabelled` is false, so its records are never read for a second label
+    /// (FR-007).
     pub fn recover_session_names(&self, project: &Path) -> usize {
         // Candidates, read under the lock, once: the session, where it runs, which CLI owns it, and
         // whether it has no label at all yet.
@@ -1259,7 +1264,7 @@ impl DaemonState {
                 .map(|sessions| {
                     sessions
                         .iter()
-                        .filter(|s| !s.archived && matches!(s.label, SessionLabel::Pending))
+                        .filter(|s| !s.archived && !matches!(s.label, SessionLabel::Named(_)))
                         .map(|s| RecoveryCandidate::of(s, project))
                         .collect()
                 })
@@ -1295,7 +1300,7 @@ impl DaemonState {
                     let (project, session) = workspace.find_session(*id)?;
                     (session.mode == TerminalMode::AiCli
                         && !session.archived
-                        && matches!(session.label, SessionLabel::Pending))
+                        && !matches!(session.label, SessionLabel::Named(_)))
                     .then(|| RecoveryCandidate::of(session, project))
                 })
                 .collect()

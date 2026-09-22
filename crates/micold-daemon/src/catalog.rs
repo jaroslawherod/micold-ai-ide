@@ -761,6 +761,11 @@ impl Catalog {
     /// A `Named` session is never a candidate (feature 029, FR-008): it had a conversation, so it is
     /// not empty, and the AI CLI deleting its transcript must not take the row and its name off the
     /// list.
+    ///
+    /// Nor is a `Derived` one (feature 032, data-model invariant 4): a label is derived from a turn
+    /// the user typed, so that session had a conversation too. This filter stays `Pending`-only
+    /// while the recovery passes widened to "not `Named`" (C6.2) — the two ask different questions:
+    /// recovery asks whether a better name may exist, pruning asks whether anything was ever said.
     pub fn prunable_session_cwds(&self, project: &Path) -> Vec<(SessionId, PathBuf, AiCli)> {
         self.workspace
             .sessions
