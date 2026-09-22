@@ -61,10 +61,46 @@ impl HostFacts {
             uid,
             gid,
             state_dir,
-            layout: CredentialLayout::conventional(&home, ssh_auth_sock.as_deref()),
+            // Probed here, at the boundary that is allowed to read the host, rather than in
+            // `conventional` — which stays pure and names the path whether or not it is there.
+            layout: drop_absent_sign_in(CredentialLayout::conventional(
+                &home,
+                ssh_auth_sock.as_deref(),
+            )),
             home,
         }
     }
+}
+
+/// Drop a sign-in token this host does not have (BUG-006).
+///
+/// `CredentialLayout::conventional` names `~/.claude/.credentials.json` whether or not anything is
+/// there, and deliberately so: whether an item is *present* is a question for the moment the
+/// sandbox starts, not for a pure function. This is that moment, and it is the last one before the
+/// path is handed to a container runtime — which creates a missing bind source itself, as a
+/// root-owned **directory**, in the user's real home. The host's own `claude` can then never write
+/// its credentials again, which is a worse failure than the share not working.
+///
+/// An absent token is ordinary rather than an error: the CLI keeps its sign-in in the Keychain on
+/// macOS, an API key needs no token file at all, and before a first sign-in there is nothing to
+/// share. The share stays ticked and shares nothing, the same answer
+/// `an_opt_in_with_no_known_path_is_skipped_rather_than_substituted` gives for an absent agent
+/// socket.
+/// The spec asks for the absent item to be reported. `observe` carries a `SandboxState` and
+/// nothing else, so what this can say it says to the log; the user-visible report is recorded as a
+/// follow-up on the BUG-006 ledger.
+fn drop_absent_sign_in(mut layout: CredentialLayout) -> CredentialLayout {
+    if let Some(path) = layout.ai_cli_auth.as_deref() {
+        if !path.is_file() {
+            eprintln!(
+                "sandbox: the AI CLI sign-in is shared, but there is no token file at {}. \
+                 Nothing is mounted for it; sign in on the host, or sign in inside the sandbox.",
+                path.display()
+            );
+            layout.ai_cli_auth = None;
+        }
+    }
+    layout
 }
 
 /// A bring-up that failed while preparing the host side, before the runtime ran.
@@ -872,6 +908,66 @@ mod tests {
             commands.last().map(String::as_str),
             Some("rm -f micold-sandbox"),
             "a cancelled bring-up left its container behind: {commands:?}"
+        );
+    }
+
+    /// BUG-006: a sign-in token this host does not have is not mounted.
+    ///
+    /// Docker and Podman create a bind source that is missing, as a root-owned directory, at the
+    /// path they were given — here `~/.claude/.credentials.json` in the user's *real* home. After
+    /// that the host's own `claude` cannot write its credentials at all. A host with no token file
+    /// is ordinary: the sign-in lives in the Keychain on macOS, an API key needs no file, and
+    /// before a first sign-in there is nothing there yet.
+    #[test]
+    fn an_absent_sign_in_token_is_not_shared() {
+        use micold_core::sandbox::CredentialShare;
+
+        let home = tempfile::tempdir().expect("tempdir");
+        let layout = drop_absent_sign_in(CredentialLayout::conventional(home.path(), None));
+
+        assert_eq!(
+            layout.ai_cli_auth, None,
+            "a token file that is not on this host was handed to the runtime to create"
+        );
+
+        // And the mount set built from it shares nothing, however firmly the user opted in.
+        let profile = SandboxProfile {
+            credentials: std::collections::BTreeSet::from([CredentialShare::AiCliAuth]),
+            ..SandboxProfile::default()
+        };
+        let mounts = MountSet::build(
+            &[],
+            &profile,
+            &layout,
+            home.path().join("state"),
+            home.path(),
+            SecretMount {
+                host: home.path().join("token"),
+                container: PathBuf::from(CONTAINER_TOKEN_PATH),
+            },
+        );
+        assert!(
+            mounts.credentials.is_empty(),
+            "an absent sign-in still produced a mount: {:?}",
+            mounts.credentials
+        );
+    }
+
+    /// …and a token that is there is still shared, or the guard above has quietly turned the
+    /// share off for everyone.
+    #[test]
+    fn a_sign_in_token_that_is_there_is_still_shared() {
+        let home = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(home.path().join(".claude")).expect("the CLI's directory");
+        std::fs::write(home.path().join(".claude").join(".credentials.json"), "{}")
+            .expect("the token");
+
+        let layout = drop_absent_sign_in(CredentialLayout::conventional(home.path(), None));
+
+        assert_eq!(
+            layout.ai_cli_auth,
+            Some(home.path().join(".claude").join(".credentials.json")),
+            "the host's own sign-in was dropped"
         );
     }
 
