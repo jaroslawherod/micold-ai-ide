@@ -151,6 +151,52 @@ fn restore_catalog(
     prune_empty_sessions(&mut core.workspace, placement);
 }
 
+/// What a launch reads off disk before the window opens.
+///
+/// A value rather than two reads, because `SettingsStore::load` is not a question that can be
+/// asked twice: the real store recovers a corrupt file on the first call and reports it there, and
+/// a second call sees only the defaults the recovery left behind (review finding F1, BUG-025).
+struct LoadedFromDisk {
+    settings: Settings,
+}
+
+/// Read the settings once, restore the catalogue under the placement they name, and report a
+/// settings file that had to be recovered.
+///
+/// The order matters and is the order boot has always used: the catalogue first, because a
+/// last-active project that has gone has its own notice to raise, and the recovery notice after it.
+fn restore_from_disk(
+    core: &mut State,
+    settings: Option<&(dyn micold_core::settings::SettingsStore + Send + Sync)>,
+    projects: Option<&(dyn micold_core::store::ProjectStore + Send + Sync)>,
+    scanner: &dyn micold_core::fs_scan::FolderScanner,
+) -> LoadedFromDisk {
+    // The one read. Feature 027 needs the placement out of it before the catalogue is restored,
+    // because the boot prune has to know where sessions run to know who can say whether they
+    // recorded anything (FR-009a); BUG-025 needs the status out of the *same* read, because the
+    // store answers "this file had to be recovered" once and to whoever asks first.
+    let outcome = settings.map(|store| store.load());
+    let placement = outcome
+        .as_ref()
+        .map(|o| o.settings.daemon.placement)
+        .unwrap_or_default();
+    if let Some(store) = projects {
+        restore_catalog(core, store, scanner, placement);
+    }
+    let loaded = match (settings, outcome) {
+        (Some(store), Some(outcome)) => {
+            // T158/BUG-025: the one place a settings recovery becomes visible. Every other reader
+            // of this store discarded the status, which is why a corrupted file looked like a
+            // fresh install for eight days.
+            crate::shell::persist::notify_settings_recovery(store, outcome.status, core);
+            outcome.settings
+        }
+        // No data directory, so there is no file to have been recovered and nothing to report.
+        _ => Settings::default(),
+    };
+    LoadedFromDisk { settings: loaded }
+}
+
 fn boot() -> (App, Task<Message>) {
     // The single assembly point (FR-018). Everything below takes what it needs from `caps`.
     //
@@ -171,39 +217,23 @@ fn boot() -> (App, Task<Message>) {
     core.update(Message::Window(WindowMsg::InstallLocationReported(
         micold_core::install_location::current(),
     )));
-    // Feature 027: where the daemon runs. Read before the catalogue is restored, because the boot
-    // prune has to know where sessions run to know who can say whether they recorded anything
-    // (FR-009a). Also read here rather than in the connection subscription because the *bring-up*
-    // is what the user watches, and it starts before the first dial.
-    let placement = caps
-        .settings()
-        .map(|store| store.load().settings.daemon.placement)
-        .unwrap_or_default();
-    if let Some(store) = caps.projects() {
-        restore_catalog(&mut core, store, caps.scanner(), placement);
-    }
-    let mut scrollback_lines = micold_core::settings::DEFAULT_SCROLLBACK_LINES;
-    let mut env_include_enabled = micold_core::settings::DEFAULT_ENV_INCLUDE_ENABLED;
-    let mut env_include_script_path = Settings::default().env_include_script_path;
-    let mut env_include_timeout_secs = micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS;
-    if let Some(store) = caps.settings() {
-        let outcome = store.load();
-        // T158/BUG-025: the one place a settings recovery becomes visible. Every other reader of
-        // this store discarded the status, which is why a corrupted file looked like a fresh
-        // install for eight days.
-        crate::shell::persist::notify_settings_recovery(store, outcome.status, &mut core);
-        let loaded = outcome.settings;
-        core.settings.theme_pref = loaded.theme;
-        scrollback_lines = loaded.scrollback_lines;
-        env_include_enabled = loaded.env_include_enabled;
-        env_include_script_path = loaded.env_include_script_path;
-        env_include_timeout_secs = loaded.env_include_timeout_secs;
-        // The local read, superseded by `DaemonConnected`'s authoritative copy a moment later. It
-        // is here so the first frame has the user's own default rather than `ClaudeCode` (feature
-        // 026, FR-003).
-        core.session.default_ai_cli = loaded.default_ai_cli;
-        core.session.pi_activity_component = loaded.pi_activity_component;
-    }
+    let loaded = restore_from_disk(
+        &mut core,
+        caps.settings(),
+        caps.projects(),
+        caps.scanner(),
+    );
+    let placement = loaded.settings.daemon.placement;
+    core.settings.theme_pref = loaded.settings.theme;
+    let scrollback_lines = loaded.settings.scrollback_lines;
+    let env_include_enabled = loaded.settings.env_include_enabled;
+    let env_include_script_path = loaded.settings.env_include_script_path.clone();
+    let env_include_timeout_secs = loaded.settings.env_include_timeout_secs;
+    // The local read, superseded by `DaemonConnected`'s authoritative copy a moment later. It is
+    // here so the first frame has the user's own default rather than `ClaudeCode` (feature 026,
+    // FR-003).
+    core.session.default_ai_cli = loaded.settings.default_ai_cli;
+    core.session.pi_activity_component = loaded.settings.pi_activity_component;
     // The availability set is *not* filled here any more (feature 027, FR-023c). It used to be,
     // from this process's own `PATH` — which is the host's, and under the sandboxed placement the
     // sessions are not on the host. It stays `None` ("nobody has said yet") until the first
@@ -215,10 +245,7 @@ fn boot() -> (App, Task<Message>) {
     // resolved placement the connection is about to dial, not from the file — an accepted
     // fallback (FR-035a) moves this without touching what the file says.
     core.settings.placement_in_force = placement;
-    let sandbox_profile = caps
-        .settings()
-        .map(|store| store.load().settings.daemon.sandbox)
-        .unwrap_or_default();
+    let sandbox_profile = loaded.settings.daemon.sandbox.clone();
     // Research R2 part 2: if the daemon will not see this machine's projects at the paths this
     // machine calls them by — a Linux container on a Windows host, and any remote daemon — then
     // this client must not answer git questions for itself, because git stores absolute paths in
@@ -371,15 +398,18 @@ fn boot() -> (App, Task<Message>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{restore_catalog, window_settings, MIN_WINDOW_SIZE};
+    use super::{restore_catalog, restore_from_disk, window_settings, MIN_WINDOW_SIZE};
     use micold_client::app::State;
     use micold_core::fs_scan::FakeFolderScanner;
     use micold_core::project::{Availability, Project};
     use micold_core::sandbox::placement::PlacementKind;
     use micold_core::session::{AiCli, Session, SessionLocation};
+    use micold_core::settings::{Settings, SettingsOutcome, SettingsStore};
+    use micold_core::store::LoadStatus;
     use micold_core::store::FakeProjectStore;
     use micold_core::workspace::Workspace;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// Two known projects, `/gone` the last active.
     fn last_active_is_gone() -> FakeProjectStore {
@@ -474,6 +504,109 @@ mod tests {
             kept,
             vec![session.id],
             "the launch judged a sandboxed session by the host's conversation store"
+        );
+    }
+
+    /// A store that answers the way `JsonFileSettingsStore` answers a corrupt `settings.json`: the
+    /// first load renames the unreadable file aside and reports the recovery, and every load after
+    /// it finds nothing and reads as a first run.
+    ///
+    /// The status is consumed by whoever asks first, which is why a launch may ask only once.
+    struct RecoveredOnce {
+        loads: AtomicUsize,
+        settings: Settings,
+    }
+
+    impl RecoveredOnce {
+        fn serving(settings: Settings) -> Self {
+            Self {
+                loads: AtomicUsize::new(0),
+                settings,
+            }
+        }
+    }
+
+    impl SettingsStore for RecoveredOnce {
+        fn load(&self) -> SettingsOutcome {
+            if self.loads.fetch_add(1, Ordering::SeqCst) == 0 {
+                SettingsOutcome {
+                    settings: self.settings.clone(),
+                    status: LoadStatus::Recovered,
+                }
+            } else {
+                SettingsOutcome {
+                    settings: Settings::default(),
+                    status: LoadStatus::Missing,
+                }
+            }
+        }
+
+        fn save(&self, _settings: &Settings) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// BUG-025, review finding F1: a launch reads the settings once, and both the placement the
+    /// catalogue is restored under and the recovery the user is told about come from that read.
+    ///
+    /// Asking twice is how the bug comes back: the first read consumes the recovery, the second
+    /// sees a missing file, and a corrupt `settings.json` resets every preference in silence.
+    #[test]
+    fn a_launch_reads_the_settings_once_and_reports_a_recovered_file() {
+        let mut sandboxed = Settings::default();
+        sandboxed.daemon.placement = PlacementKind::LocalSandbox;
+        let settings = RecoveredOnce::serving(sandboxed);
+        let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+        let mut workspace = Workspace {
+            projects: vec![Project::new(
+                PathBuf::from("/here"),
+                true,
+                Availability::Available,
+            )],
+            ..Default::default()
+        };
+        workspace
+            .sessions
+            .insert(PathBuf::from("/here"), vec![session.clone()]);
+        let mut core = State::default();
+
+        let loaded = restore_from_disk(
+            &mut core,
+            Some(&settings),
+            Some(&FakeProjectStore::loaded(workspace)),
+            &FakeFolderScanner::new(),
+        );
+
+        assert_eq!(
+            settings.loads.load(Ordering::SeqCst),
+            1,
+            "the settings were read more than once, so the second read decides what the user is told"
+        );
+        let notice = core
+            .notifications
+            .queue
+            .visible()
+            .map(|n| n.message.clone())
+            .unwrap_or_default();
+        assert!(
+            notice.to_lowercase().contains("settings"),
+            "a settings file that had to be recovered was not reported: {notice:?}"
+        );
+        assert_eq!(
+            loaded.settings.daemon.placement,
+            PlacementKind::LocalSandbox,
+            "the placement the launch goes on to use did not come from the read that recovered"
+        );
+        let kept: Vec<_> = core
+            .workspace
+            .sessions
+            .get(&PathBuf::from("/here"))
+            .map(|s| s.iter().map(|s| s.id).collect())
+            .unwrap_or_default();
+        assert_eq!(
+            kept,
+            vec![session.id],
+            "the catalogue was restored under a placement the recovering read did not give it"
         );
     }
 
