@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M4 step 2: implement T035, T036, T038–T041 (session terminal identity and the FORCE_HYPERLINK opt-in)
+- **Next step**: M4 step 6: wait for `ci complete`, then rebase-merge
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M1 | T001–T012 | Link recognition core (`micold_core::link`, SC-002 corpus) | #356 | merged |
 | M2 | T013–T022 | Opening pipeline: `LinkActivated` through `update_inner` to the system opener | #361 | merged |
 | M3 | T082, T083, T037, T023–T034 | Clickable web, mail and declared links in the pane | #385 | merged |
-| M4 | T035, T036, T038–T041 | Session terminal identity and the FORCE_HYPERLINK opt-in | — | in progress |
+| M4 | T035, T036, T038–T041 | Session terminal identity and the FORCE_HYPERLINK opt-in | #PRNUM | PR open |
 | M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | — | pending |
 | M6 | T085, T055–T067, T069, T068 | Sandboxed file links, translated and confirmed | — | pending |
 | M7 | T086, T070–T077 | Link context menu | — | pending |
@@ -63,6 +63,11 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | 24 | 4-milestones | The hover change needs a repaint, but `idle_requests_no_frames.rs` allows one `request_redraw` in the rendering layer | Edge-triggered `shell.invalidate_widgets()`, as `select.rs` does | agent-resolved | gate failure recorded in tdd/cycle-log.md "Gate fixes: M3" |
 | 25 | 4-milestones | Rebase onto main: BUG-007/008 added `press_cell` (a click without a drag selects nothing) on the plain local press, in conflict with the link press arm | Keep the link gesture; the non-link local press sets `press_cell` as main does. A link press dragged off its cell starts its selection already off the press cell, so it needs none | agent-resolved | terminal_pane.rs left-press arm; review B round 2 checked it |
 | 26 | 4-milestones | M3 review A round 2 (low): a hover off the grid read no rows, so a resize bringing text under the resting pointer never re-resolved | `hover_refresh` re-resolves on any grid move when the cached hover read no rows (U161) | agent-resolved | tdd/cycle-log.md Cycle 56 |
+| 27 | 4-milestones | T038 asks the Windows builders to be built on every OS; should the Unix `bash` builder be too? | No: `#[cfg(not(windows))]`, since `tests/background_spawns_hide_console.rs` recognises only whole-Windows exclusions and the task asks it only of the PowerShell builders | agent-resolved | tdd/cycle-log.md Cycle 60 |
+| 28 | 4-milestones | Where does the daemon test's session get a program that dumps its environment, with no real CLI or shell config? | A stand-in script (`claude`, `claude.cmd` on Windows) first on `PATH` for `spawn_ai_cli`, and as `SHELL`/`COMSPEC` for `spawn_shell`, on a re-executed test child | agent-resolved | tests/session_identity_env.rs; review B F3: its Windows arm is first proven by CI on the M4 PR |
+| 29 | 4-milestones | M4 review A / B F1: the daemon strip read only the builder's UTF-8 entries | Match the daemon's `vars_os()` lossily plus the builder's entries (U162) | agent-resolved | tdd/cycle-log.md Cycle 63 |
+| 30 | 4-milestones | M4 review B F2: contract §2's "inherited and set by the script" row had no real bash diff | Unix re-exec test through `resolve` (U163), guarded by a mutant | agent-resolved | tdd/cycle-log.md Cycle 64 |
+| 31 | 4-milestones | Quickstart §B.17's second half (a *declared* link with `FORCE_HYPERLINK=1`) could not be observed: Claude Code 2.1.280 showed no declared run, and that run showed no hover feedback at all, so the two cannot be told apart. Block M4? | No. FR-006 is what micold removes and documents (Decision 5), which §B.14 shows; `osc8_passthrough.rs` shows a declared link reaching the grid on all three CI OSes, and §B.7 (M3) shows the pane opening one. Recorded as a follow-up to re-run when an AI CLI is known to declare links | agent-resolved | visual-pass.md §"Milestone M4" |
 
 ## Declined review findings
 
@@ -79,4 +84,5 @@ None. (M2's block on the Windows install smoke was resolved by #358; see Decisio
 
 ## Follow-ups not done
 
+- Quickstart §B.17's second half is unconfirmed: no AI CLI on this machine was seen to declare an OSC 8 link with `FORCE_HYPERLINK=1` (Claude Code 2.1.280), and that visual-pass run surfaced no hover feedback at all. Re-run it when a CLI is known to declare links (M4, minor).
 - Scrollback lines fetched by `apply_scrollback` do not bump the grid `seq`, so a resting pointer over just-fetched lines refreshes its hover only on the next pointer move or modifier change (M3, minor).

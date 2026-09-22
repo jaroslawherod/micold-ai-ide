@@ -184,3 +184,64 @@ plain Ctrl+click.
   milestones, per the task's scope.
 - The pointer's own cursor shape (arrow vs. hand) — not renderable in this Xvfb setup; see the note
   above the step table.
+
+---
+
+# Milestone M4 (quickstart §B.14, §B.17)
+
+**Date**: 2026-09-19 (§B.14 and §B.17 part 1), 2026-09-22 (§B.17 part 2)
+**Environment**: private Xvfb displays, private `XDG_RUNTIME_DIR`/`XDG_DATA_HOME`/`XDG_CONFIG_HOME`
+under `/tmp/vp-031-m4` and `/tmp/vp-031-m4b`, one seeded project, a fake `xdg-open` on `PATH`
+logging its argv. Pinned pair `~/vp/bin-031-m4/{micold-ai-ide,micold-daemon}` built from `948ac463`
+(md5 `d27bc64f…`, `db6f90d2…`); the daemon binary contains this milestone's `TERMINAL_EMULATOR`
+string, and the client attached with no `refusing client` in the log.
+
+## Steps
+
+| Step | Result |
+|---|---|
+| B.14 identity stripped, then the include-script opt-in | **Pass** |
+| B.17 part 1 a long address from an AI CLI session | **Pass** |
+| B.17 part 2 the same address *declared* with `FORCE_HYPERLINK=1` | **Not confirmed** (see below) |
+
+### B.14 — a session sees neither `TERM_PROGRAM` nor `FORCE_HYPERLINK`, then the opt-in — pass
+
+The client was started from an environment exporting `TERM_PROGRAM=WezTerm` and `FORCE_HYPERLINK=1`.
+In a session's terminal, `env | grep -E 'TERM_PROGRAM|FORCE_HYPERLINK'` printed **nothing**
+(FR-006). The environment-include script was then pointed at a file containing
+`export FORCE_HYPERLINK=1`; in a new terminal the same command printed exactly `FORCE_HYPERLINK=1`,
+and still no `TERM_PROGRAM` — the documented opt-in, and only it, survives.
+
+![B.14 nothing inherited](images/m4-b14-step1-no-vars.png)
+![B.14 the include-script opt-in](images/m4-b14-step2-force-hyperlink.png)
+
+### B.17 part 1 — a long address an AI CLI soft-wraps — pass
+
+A `claude` session printed a 60-segment `https://example.net/…` address that the pane wrapped over
+three rows: the run is one link and the hint shows its address. A hard-broken line
+(`printf 'https://example.net/aaaa\nbbbb/cccc\n'`) gives a first-row-only link, exactly the edge case
+the user guide now tells the reader to check the hint for.
+
+![B.17 the wrapped address is one link](images/m4-b17-part1-firstrow-underline.png)
+![B.17 its hint](images/m4-b17-part1-hint-truncated.png)
+![B.17 a hard-broken line](images/m4-b17-hardbroken-hint.png)
+
+### B.17 part 2 — the declared link with `FORCE_HYPERLINK=1` — not confirmed
+
+With `FORCE_HYPERLINK=1` reaching the session (verified in-session, screenshot below) and Claude Code
+**v2.1.280** running, no declared (OSC 8) link could be observed: the printed addresses showed no
+underline or hint at all in that second run, including a plain short address that the detector alone
+should mark. Hover feedback for AI-CLI pane content *was* observed in part 1 with the same binaries,
+so this is an unexplained gap in that run rather than evidence either way about the CLI. Claude Code
+also re-renders its own Bash-tool output, so an OSC 8 sequence cannot be pushed through a Claude
+session by hand.
+
+Nothing here contradicts the milestone: FR-006 is about what micold *removes* and documents
+(Decision 5 — micold never advertises hyperlink support, and whether a program declares links is its
+own choice), which B.14 shows, and `osc8_passthrough.rs` shows on all three CI OSes that a declared
+link that *is* printed reaches the grid. The step is carried as a follow-up to re-run when an AI CLI
+is known to declare links.
+
+![B.17 Claude Code v2.1.280](images/m4-b17-declared-claude-version.png)
+![B.17 FORCE_HYPERLINK reaches the session](images/m4-b17-declared-force-hyperlink-confirmed.png)
+![B.17 no hover feedback in that run](images/m4-b17-declared-no-hover-feedback.png)
