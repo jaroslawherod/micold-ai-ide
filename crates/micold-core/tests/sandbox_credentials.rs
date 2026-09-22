@@ -267,11 +267,16 @@ fn a_shared_sign_in_names_its_file_in_the_sandbox_home_to_create() {
 /// FR-004e (T208): no credential mount names a *directory* under the sandbox home.
 ///
 /// Held over every share rather than over the sign-in alone, because the cost is paid by whichever
-/// share is added next. A directory mounted into the home is a directory the runtime may create as
-/// root, and everything the CLI writes beside it is then refused — which is how BUG-006 began. A
-/// file, whose parent this set already promises to create, cannot do that.
+/// share is added next. Two things are checked of each mount that lands in the home: that its
+/// parent is a directory the bring-up creates, so the runtime never has to create one as root, and
+/// that it does not contain the AI CLI's own directory there. That directory is where a sandboxed
+/// session writes its transcript, and a mount over it is BUG-006 exactly: read-only it cannot be
+/// written at all, and either way the host's copy shadows the sandbox's.
 #[test]
 fn no_credential_mounts_a_directory_under_the_sandbox_home() {
+    // The AI CLI's own directory, spelled as `provider.rs` spells it. Inside the sandbox home this
+    // is where a session's transcript is written.
+    let cli_dir = Path::new(".claude");
     let profile = SandboxProfile {
         credentials: BTreeSet::from(CredentialShare::ALL),
         ..SandboxProfile::default()
@@ -284,15 +289,15 @@ fn no_credential_mounts_a_directory_under_the_sandbox_home() {
             // Outside the home: the agent socket, and anything else the host keeps elsewhere.
             continue;
         };
-        let target = mounts.home.host.join(relative);
         assert!(
-            !dirs.contains(&target),
-            "{:?} is mounted as a directory in the sandbox home: {}",
+            !cli_dir.starts_with(relative),
+            "{:?} is mounted over {}, the directory a sandboxed session writes its transcript in",
             c.share,
-            target.display()
+            relative.display()
         );
         // Its parent is either the sandbox home itself, which the bring-up creates before
         // anything else, or one of the directories this set asks for.
+        let target = mounts.home.host.join(relative);
         let parent = target.parent().expect("a mount target has a parent");
         assert!(
             parent == mounts.home.host || dirs.contains(&parent.to_path_buf()),
