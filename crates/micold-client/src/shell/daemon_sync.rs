@@ -76,7 +76,16 @@ pub enum PendingOp {
     /// variants (project/session-delete) are added as each mutation domain is migrated.
     CreateSession,
     DeleteSession,
-    WorktreeCreate(String),
+    /// A `WorktreeCreate`, carrying the project it was sent for. The project travels with the op
+    /// rather than being read from `workspace.active` when the answer lands: the user may have
+    /// closed or switched project while the create ran, and the answer is still about this one
+    /// (feature 013, BUG-001 follow-up).
+    WorktreeCreate {
+        /// The new worktree's directory name.
+        dir_name: String,
+        /// The repository the create was sent for.
+        project: PathBuf,
+    },
     WorktreeDelete(String),
     /// A read-only `BranchPreflight` (feature 016). Carries what the reply needs to continue:
     /// the project it was asked about, the derived names, whether the branch came from the
@@ -130,7 +139,9 @@ impl PendingOp {
         match self {
             PendingOp::CreateSession => "create the session".into(),
             PendingOp::DeleteSession => "delete the session".into(),
-            PendingOp::WorktreeCreate(d) => format!("create the worktree \"{d}\""),
+            PendingOp::WorktreeCreate { dir_name, .. } => {
+                format!("create the worktree \"{dir_name}\"")
+            }
             PendingOp::BranchPreflight { .. } => "check the branch".into(),
             PendingOp::BranchList { .. } => "list the branches".into(),
             PendingOp::RepoRootQuery(p) => {
@@ -267,7 +278,7 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
             // resolve the *indicator*, not only announce the outcome, and it has to do it where
             // the user is actually looking. With no form on screen there is no scrim and the
             // notification is the right place, which is what the guard distinguishes.
-            PendingOp::WorktreeCreate(_) if app.core.worktree_form.form.is_some() => {
+            PendingOp::WorktreeCreate { .. } if app.core.worktree_form.form.is_some() => {
                 app.core
                     .update(Message::WorktreeForm(FormMsg::CreateInterrupted(text)));
             }
@@ -535,20 +546,18 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // A worktree create succeeded: close the form. The worktree itself arrives via
             // the `CatalogChanged` push (reconcile), so the constructed value here is only to
             // reuse `WorktreeCreated`'s form-closing logic (it dedups by dir_name).
-            Some(PendingOp::WorktreeCreate(dir_name)) => {
-                if let Some(repo) = app.core.workspace.active.clone() {
-                    let path = repo.join(".claude/worktrees").join(&dir_name);
-                    app.core.update(Message::WorktreeForm(FormMsg::Created(
-                        micold_core::worktree::Worktree {
-                            dir_name,
-                            path,
-                            branch: None,
-                            status: micold_core::worktree::WorktreeStatus::Valid,
-                            // The app made this one, so it is not an inclusion (016 BUG-002).
-                            included: false,
-                        },
-                    )));
-                }
+            Some(PendingOp::WorktreeCreate { dir_name, project }) => {
+                let path = project.join(".claude/worktrees").join(&dir_name);
+                app.core.update(Message::WorktreeForm(FormMsg::Created(
+                    micold_core::worktree::Worktree {
+                        dir_name,
+                        path,
+                        branch: None,
+                        status: micold_core::worktree::WorktreeStatus::Valid,
+                        // The app made this one, so it is not an inclusion (016 BUG-002).
+                        included: false,
+                    },
+                )));
             }
             // Feature 016: the pre-flight answer decides what happens next. A free name
             // creates straight away (FR-025 — no extra prompt); anything else either
@@ -703,7 +712,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         DaemonMsg::OperationProgress { req, stage, detail } => {
             if matches!(
                 app.pending_ops.get(&req),
-                Some(PendingOp::WorktreeCreate(_))
+                Some(PendingOp::WorktreeCreate { .. })
             ) {
                 app.core
                     .update(Message::WorktreeForm(FormMsg::CreateStageChanged(
@@ -724,7 +733,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
                 // failure this is normally the only place that names which submodule failed
                 // and why (auth/network/unreachable commit) — `message` alone is the generic
                 // "git failed to create the worktree".
-                Some(PendingOp::WorktreeCreate(_)) => {
+                Some(PendingOp::WorktreeCreate { .. }) => {
                     app.core.update(Message::WorktreeForm(FormMsg::CreateFailed(
                         worktree_create_error_text(message, detail),
                     )));
@@ -1815,7 +1824,10 @@ pub fn send_worktree_create(
     // which is where the stage label reads it from (FR-024).
     send_op(
         app,
-        PendingOp::WorktreeCreate(dir_name.clone()),
+        PendingOp::WorktreeCreate {
+            dir_name: dir_name.clone(),
+            project: project.clone(),
+        },
         move |req| ClientMsg::WorktreeCreate {
             req,
             project,
@@ -2159,7 +2171,10 @@ pub(crate) mod tests {
 
         send_op(
             &mut app,
-            PendingOp::WorktreeCreate("feat-x".into()),
+            PendingOp::WorktreeCreate {
+                dir_name: "feat-x".into(),
+                project: PathBuf::from("/repo"),
+            },
             |req| ClientMsg::ProjectAdd {
                 req,
                 path: PathBuf::from("/unused"),

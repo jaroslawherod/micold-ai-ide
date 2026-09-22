@@ -181,3 +181,20 @@ existed and failed before the implementation.
 - commit: `fix(013): an idle Cancel no longer forgets a create cancelled earlier (BUG-001 U13)`
 - notes: the review's related cases (a reopened form's own mid-create Cancel, or an open form absorbing
   the earlier outcome) are the test list's out-of-scope reopen case; declined in the ledger
+
+## Cycle 15: U14 a success after Cancel is announced with no project open
+
+- test: `crates/micold-client/src/main_tests.rs::a_success_after_cancel_is_announced_even_with_no_project_open`
+  (new; the M1 ledger's `daemon_sync` guard follow-up)
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide a_success_after_cancel`
+  -> panicked at `main_tests.rs:1300`: `a create that succeeded after its dialog was cancelled must be
+  announced whether or not a project is open when the answer lands (FR-010b), got ""` (1 failed)
+- green: `PendingOp::WorktreeCreate` carries the project it was sent for, so the success arm builds the
+  new worktree's path from the op instead of from `workspace.active`, and its `if let Some(repo)` guard
+  — which dropped the whole `Created` message when no project was open — is gone.
+  Crate suite -> 1862 passed, 0 failed. `mise run gate` -> 3348 passed, 0 failed
+- refactor: none needed; the variant's own doc comment carries the reason
+- commit: `fix(013): a create that succeeds after Cancel is announced with no project open (BUG-001 U14)`
+- notes: the disk filled during the first crate-suite run (`No space left on device`, 183M free); the
+  shared `target-shared/debug/incremental` cache was deleted to reclaim 49G and the run repeated.
+
