@@ -724,3 +724,81 @@ checkpoint after U34, and again before the phase closes.
   shared. Client lib 424 passed, 0 failed
 - refactor: none needed
 - commit: `aa2d2df6`
+
+## BUG-006 review remediation (reviews A and B on `origin/main...HEAD`, 2026-09-22)
+
+Six findings, all confirmed against the code before any of them was acted on. F6 is documentation and
+task text and has no cycle. The client cycles close on the binary's own target
+(`cargo test -p micold-client --bin micold-ai-ide`), the core cycle on `--test sandbox_credentials`.
+
+### U40 — a launch reads the settings once (F1, a BUG-025 regression)
+
+- test: `shell::startup::tests::a_launch_reads_the_settings_once_and_reports_a_recovered_file`
+- red (`scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide a_launch_reads_the_settings_once`
+  -> `0 passed; 1 failed`, against the sequence as it stood, extracted into `restore_from_disk` unchanged):
+  `startup.rs:576` "the settings were read more than once, so the second read decides what the user is told"
+  `left: 2` `right: 1`
+- green: `restore_from_disk` loads once and takes the placement, the recovery status and every other
+  setting from that one outcome. `boot` reads `daemon.sandbox` from it too, which was the third load.
+  Client binary 166 passed, 0 failed
+- notes: the fake store answers `Recovered` to the first load and `Missing` to every one after, which is
+  what `JsonFileSettingsStore` does with a corrupt file — it renames it aside, so only the first caller
+  can be told
+- commit: `f747060e`
+
+### U41 — a sign-in token this host does not have is not mounted (F2)
+
+- test: `shell::sandbox::tests::an_absent_sign_in_token_is_not_shared`, with
+  `a_sign_in_token_that_is_there_is_still_shared` beside it so the guard cannot pass by turning the
+  share off for everyone
+- red (`scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide sign_in_token`
+  -> `1 passed; 1 failed`, against a `drop_absent_sign_in` that returned its argument): `sandbox.rs:714`
+  "a token file that is not on this host was handed to the runtime to create"
+  `left: Some("/tmp/.tmpnVz0mi/.claude/.credentials.json")` `right: None`
+- green: `drop_absent_sign_in` probes the path and drops it, applied in `HostFacts::gather`.
+  `CredentialLayout::conventional` stays pure. Client binary 168 passed, 0 failed
+- notes: the absent share is reported to the log only. `observe` carries a `SandboxState` and nothing
+  else, and the user-visible report is on the ledger as a follow-up rather than new UI plumbing
+- commit: `3adc38c7`
+
+### U42 — the sign-in's mount target is created before the runtime runs (F3)
+
+- test: `sandbox_credentials::a_shared_sign_in_names_its_file_in_the_sandbox_home_to_create`, then
+  `shell::sandbox::tests::a_bring_up_creates_the_sign_ins_target_file_before_the_runtime_runs`,
+  `a_bring_up_replaces_a_sign_in_target_it_cannot_write` and
+  `a_bring_up_keeps_a_sign_in_token_the_sandbox_already_has`
+- red, core (`scripts/build-lock.sh cargo test -p micold-core --test sandbox_credentials` -> `11 passed; 1 failed`,
+  against a stub returning `Vec::new()`): `sandbox_credentials.rs:260` `left: []`
+  `right: ["/home/u/.local/share/micold-ai-ide/sandbox-home/.claude/.credentials.json"]`
+- red, client (`scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide a_bring_up` -> `8 passed; 2 failed`):
+  `sandbox.rs:770` "/tmp/.tmpPKmxBu/sandbox-home/.claude/.credentials.json was left for the runtime to create,
+  which creates it as root"; `sandbox.rs:801` "/tmp/.tmpMYi580/sandbox-home/.claude/.credentials.json stayed
+  unwritable, so the CLI inside cannot refresh its token". The third test passed from the start, which is
+  the point of it: it holds the fix to not touching a token the sandbox already has
+- green: `MountSet::home_files_to_create` beside `home_dirs_to_create`, and `ensure_writable_file` in the
+  bring-up — 0600, create without truncate, and a replacement only for a path that cannot be written.
+  Client binary 171 passed, 0 failed; core `sandbox_credentials` 12 passed, 0 failed
+- verified by hand before the fix: a real container run leaves that path as a root-owned 0-byte file that
+  survives `rm` of the container (the finding's own evidence)
+- commit: `c365bf63`
+
+### U43 — the sandbox stands down from judging, not from tidying (F4)
+
+- test: `shell::persist::tests::under_the_sandbox_the_boot_prune_still_forgets_a_project_with_no_sessions`
+- red (`scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide under_the_sandbox_the_boot_prune_still_forgets`
+  -> `0 passed; 1 failed`): `persist.rs:604` "an empty session list was left behind under the sandbox:
+  {\"/project/emptied\": []}"
+- green: the `LocalSandbox` early return became a condition on the judging pass alone; the `retain` that
+  forgets an empty project runs either way. Client binary 172 passed, 0 failed
+- commit: `c08e9001`
+
+### U44 — every credential share is held to the rule T208 claims (F5, characterization)
+
+- test: `sandbox_credentials::no_credential_mounts_a_directory_under_the_sandbox_home`
+- baseline: passes against the code as it stands. T208 claimed this assertion and no test made it
+- mutant 1: `ai_cli_auth` widened back to `home.join(".claude")` -> the first shape of the test still
+  passed, because a directory directly in the home is indistinguishable from a file by path alone. The
+  test was rewritten to say what actually matters — a mount in the home must not cover the AI CLI's own
+  directory there — and the same mutant then failed: `sandbox_credentials.rs:292` "AiCliAuth is mounted
+  over .claude, the directory a sandboxed session writes its transcript in". Restored with `git checkout`
+- state: BASELINE. Landed in `c365bf63` with U42's tests and corrected in `2c54364e`

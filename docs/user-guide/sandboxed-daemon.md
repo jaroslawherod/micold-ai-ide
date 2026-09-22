@@ -122,10 +122,17 @@ data directory, and not in `~/.claude` on your computer. They survive the applic
 and the sandbox being recreated, and a sandboxed session resumes from them. They do not show up in
 Claude Code sessions you run outside the application.
 
+Moving the service back to your computer leaves them behind. A session started in the sandbox is
+then judged against `~/.claude` on your computer, which has no record of it, so it is dropped from
+the catalogue the next time the application starts. The conversation itself is still in the
+sandbox's home and comes back if you move the service into the container again.
+
 A few limits of the sign-in share:
 
-- **macOS keeps the token in the Keychain**, not in a file, so there is nothing to share. Sign in
-  inside a session instead.
+- **macOS keeps the token in the Keychain**, not in a file, so there is nothing to share. The
+  share stays on and mounts nothing; sign in inside a session instead. The same is true anywhere
+  the token file is missing, such as before your first sign-in or when you authenticate with an
+  API key.
 - **Copilot and Pi are not covered.** They sign in inside the sandbox, and that sign-in is kept in
   the sandbox's home.
 - **Sign-ins can collide.** If Claude Code on your computer and a sandboxed session refresh the
