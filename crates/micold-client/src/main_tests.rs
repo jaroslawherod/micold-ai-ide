@@ -1192,7 +1192,7 @@ fn a_create_with_no_form_open_is_still_reported() {
 fn pending_create_req(app: &App) -> u64 {
     *app.pending_ops
         .iter()
-        .find(|(_, op)| matches!(op, PendingOp::WorktreeCreate(_)))
+        .find(|(_, op)| matches!(op, PendingOp::WorktreeCreate { .. }))
         .expect("the fixture must have a create pending")
         .0
 }
@@ -1264,6 +1264,43 @@ fn a_create_failing_after_cancel_reaches_the_user_as_a_notification() {
         said.contains("git failed to create the worktree"),
         "a create that failed after its dialog was cancelled must still be reported, carrying \
          the daemon's message (FR-010b), got {said:?}"
+    );
+}
+
+/// `013` BUG-001 follow-up: a success after Cancel is announced even with no project open.
+///
+/// The success arm derived the new worktree's path from `workspace.active`, so a create whose
+/// project was closed while it ran produced no `Created` message at all: the announcement FR-010b
+/// owes a cancelled create was dropped, and the record of it owed stayed behind for ever. The
+/// pending op knows which project it was sent for, so nothing about the answer needs the open one.
+#[test]
+fn a_success_after_cancel_is_announced_even_with_no_project_open() {
+    let (mut app, _rx) = app_creating_a_worktree();
+    let req = pending_create_req(&app);
+    let _ = update_inner(&mut app, Message::WorktreeForm(FormMsg::Cancelled));
+    app.core.workspace.active = None;
+
+    let _ = shell::daemon_sync::on_daemon_event(
+        &mut app,
+        DaemonMsg::OperationOk {
+            req,
+            result: micold_core::protocol::messages::OperationResult::WorktreeCreated {
+                dir_name: "feat-probe-two".into(),
+            },
+        },
+    );
+
+    let said = app
+        .core
+        .notifications
+        .queue
+        .visible()
+        .map(|n| n.message.clone())
+        .unwrap_or_default();
+    assert!(
+        said.contains("feat-probe-two"),
+        "a create that succeeded after its dialog was cancelled must be announced whether or not \
+         a project is open when the answer lands (FR-010b), got {said:?}"
     );
 }
 

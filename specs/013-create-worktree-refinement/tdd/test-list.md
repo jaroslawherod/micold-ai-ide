@@ -67,6 +67,7 @@ Tests in `crates/micold-client/tests/add_worktree_dismissal.rs`, observing
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
 | U12 | A disconnect while a create is pending and the form is closed raises a notification naming the worktree | FR-010b (interrupted case) | example | DONE | `crates/micold-client/src/main_tests.rs::a_create_with_no_form_open_is_still_reported` (010 BUG-020) |
+| U14 | A create that succeeds after Cancel is announced even when no project is open when the answer lands (found by M1 review, ledger follow-up) | FR-010b | example | DONE | `crates/micold-client/src/main_tests.rs::a_success_after_cancel_is_announced_even_with_no_project_open` |
 
 ## Invariants and edge cases still to place
 
