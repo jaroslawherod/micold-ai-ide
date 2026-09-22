@@ -86,11 +86,13 @@ pub fn prune_empty_sessions(
     // FR-009a: whether a session recorded anything is asked where it runs. Under the sandbox that
     // is inside the container, where the daemon's own prune asks it; the host's config directory
     // is a different machine's answer, and acting on it dropped every sandboxed session.
-    if placement == PlacementKind::LocalSandbox {
-        return;
-    }
-    for (project_path, sessions) in workspace.sessions.iter_mut() {
-        sessions.retain(|s| session_has_conversation(project_path, s));
+    //
+    // It is the *judging* that stands down, and only that. The sweep below is bookkeeping on this
+    // client's own map, true wherever the daemon runs.
+    if placement != PlacementKind::LocalSandbox {
+        for (project_path, sessions) in workspace.sessions.iter_mut() {
+            sessions.retain(|s| session_has_conversation(project_path, s));
+        }
     }
     workspace
         .sessions
@@ -582,6 +584,29 @@ mod tests {
             surviving,
             vec![session.id],
             "a sandboxed session was judged by the host's conversation store and dropped"
+        );
+    }
+
+    /// Review finding F4 (BUG-006): the sandbox stands down from *judging* sessions, not from the
+    /// tidying that follows it.
+    ///
+    /// A project whose last session was closed keeps an empty entry in the map, and an empty entry
+    /// is a project the catalogue still lists as having sessions. Under the sandbox the early
+    /// return skipped the sweep as well, so those entries accumulated for as long as the daemon
+    /// stayed sandboxed — a different rule for the same data, decided by where the daemon happens
+    /// to run.
+    #[test]
+    fn under_the_sandbox_the_boot_prune_still_forgets_a_project_with_no_sessions() {
+        let project = PathBuf::from("/project/emptied");
+        let mut workspace = Workspace::empty();
+        workspace.sessions.insert(project.clone(), Vec::new());
+
+        prune_empty_sessions(&mut workspace, PlacementKind::LocalSandbox);
+
+        assert!(
+            !workspace.sessions.contains_key(&project),
+            "an empty session list was left behind under the sandbox: {:?}",
+            workspace.sessions
         );
     }
 
