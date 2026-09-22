@@ -636,6 +636,30 @@ impl MountSet {
         dirs
     }
 
+    /// The files inside [`Self::home`] that must exist before the runtime runs (BUG-006).
+    ///
+    /// The companion of [`Self::home_dirs_to_create`], and it exists for the same reason one step
+    /// further down: a runtime that has to create a mount *target* creates it as root too. The
+    /// target of the AI CLI's sign-in is `<sandbox-home>/.claude/.credentials.json`, and a
+    /// root-owned file there outlives the container — so once the share is turned off again, the
+    /// sandbox's own `claude` finds a token file it cannot write, which is the failure this share
+    /// was narrowed to fix, arriving by the other side. The bring-up creates each of these as the
+    /// user, and only an absent or unwritable one: a token the sandbox's own `claude` wrote is
+    /// left exactly as it is.
+    pub fn home_files_to_create(&self) -> Vec<PathBuf> {
+        let mut files: Vec<PathBuf> = Vec::new();
+        for c in &self.credentials {
+            let Ok(relative) = c.container.strip_prefix(&self.home.container) else {
+                continue;
+            };
+            let file = self.home.host.join(relative);
+            if !files.contains(&file) {
+                files.push(file);
+            }
+        }
+        files
+    }
+
     /// Every host path this sandbox can reach. Used by the denylist assertion, which checks that
     /// generated argv mounts nothing outside this set (obligation C-3, conformance check K-4).
     pub fn host_paths(&self) -> Vec<&Path> {

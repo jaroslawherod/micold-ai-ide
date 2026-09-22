@@ -217,12 +217,7 @@ fn boot() -> (App, Task<Message>) {
     core.update(Message::Window(WindowMsg::InstallLocationReported(
         micold_core::install_location::current(),
     )));
-    let loaded = restore_from_disk(
-        &mut core,
-        caps.settings(),
-        caps.projects(),
-        caps.scanner(),
-    );
+    let loaded = restore_from_disk(&mut core, caps.settings(), caps.projects(), caps.scanner());
     let placement = loaded.settings.daemon.placement;
     core.settings.theme_pref = loaded.settings.theme;
     let scrollback_lines = loaded.settings.scrollback_lines;
@@ -405,8 +400,8 @@ mod tests {
     use micold_core::sandbox::placement::PlacementKind;
     use micold_core::session::{AiCli, Session, SessionLocation};
     use micold_core::settings::{Settings, SettingsOutcome, SettingsStore};
-    use micold_core::store::LoadStatus;
     use micold_core::store::FakeProjectStore;
+    use micold_core::store::LoadStatus;
     use micold_core::workspace::Workspace;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};

@@ -244,6 +244,65 @@ fn a_shared_sign_in_names_its_directory_in_the_sandbox_home_to_create() {
     );
 }
 
+/// BUG-006, review finding F3: the sign-in's mount *target* in the sandbox home is named too.
+///
+/// Naming the directory is half the answer. The runtime creates a missing target file as well, and
+/// as root, and that file survives the container being removed — so the next sandbox, with the
+/// share turned off again, hands its `claude` a token file it cannot write. That is the same bug
+/// the share was narrowed to fix, approached from the other side.
+#[test]
+fn a_shared_sign_in_names_its_file_in_the_sandbox_home_to_create() {
+    let profile = SandboxProfile {
+        credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
+        ..SandboxProfile::default()
+    };
+    let mounts = build(&profile);
+    assert_eq!(
+        mounts.home_files_to_create(),
+        vec![mounts.home.host.join(".claude").join(".credentials.json")],
+        "the sign-in's target must exist, user-owned, before the runtime mounts onto it"
+    );
+}
+
+/// FR-004e (T208): no credential mount names a *directory* under the sandbox home.
+///
+/// Held over every share rather than over the sign-in alone, because the cost is paid by whichever
+/// share is added next. A directory mounted into the home is a directory the runtime may create as
+/// root, and everything the CLI writes beside it is then refused — which is how BUG-006 began. A
+/// file, whose parent this set already promises to create, cannot do that.
+#[test]
+fn no_credential_mounts_a_directory_under_the_sandbox_home() {
+    let profile = SandboxProfile {
+        credentials: BTreeSet::from(CredentialShare::ALL),
+        ..SandboxProfile::default()
+    };
+    let mounts = build(&profile);
+    let dirs = mounts.home_dirs_to_create();
+
+    for c in &mounts.credentials {
+        let Ok(relative) = c.container.strip_prefix(&mounts.home.container) else {
+            // Outside the home: the agent socket, and anything else the host keeps elsewhere.
+            continue;
+        };
+        let target = mounts.home.host.join(relative);
+        assert!(
+            !dirs.contains(&target),
+            "{:?} is mounted as a directory in the sandbox home: {}",
+            c.share,
+            target.display()
+        );
+        // Its parent is either the sandbox home itself, which the bring-up creates before
+        // anything else, or one of the directories this set asks for.
+        let parent = target.parent().expect("a mount target has a parent");
+        assert!(
+            parent == mounts.home.host || dirs.contains(&parent.to_path_buf()),
+            "{:?} is mounted into {}, which nothing creates before the runtime runs",
+            c.share,
+            parent.display()
+        );
+    }
+}
+
 /// Daemon state is the host's own data directory, bind-mounted.
 ///
 /// It is deliberately *not* a runtime-managed volume: the client has to read `projects.json` to

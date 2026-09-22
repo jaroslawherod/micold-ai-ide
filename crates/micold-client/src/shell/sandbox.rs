@@ -86,6 +86,7 @@ impl HostFacts {
 /// share. The share stays ticked and shares nothing, the same answer
 /// `an_opt_in_with_no_known_path_is_skipped_rather_than_substituted` gives for an absent agent
 /// socket.
+///
 /// The spec asks for the absent item to be reported. `observe` carries a `SandboxState` and
 /// nothing else, so what this can say it says to the log; the user-visible report is recorded as a
 /// follow-up on the BUG-006 ledger.
@@ -101,6 +102,40 @@ fn drop_absent_sign_in(mut layout: CredentialLayout) -> CredentialLayout {
         }
     }
     layout
+}
+
+/// Make sure `path` is a file this user can write, creating it if it is not there.
+///
+/// Deliberately the narrowest thing that achieves that. A file that is already writable is left
+/// untouched, because it is the sign-in the sandbox's own `claude` stored and replacing it on
+/// every launch would sign the session out on every launch. Only a path that is absent, or that is
+/// there and cannot be written — the root-owned leftover an earlier run's runtime created — is
+/// created or replaced. The new file is 0600: it is a sign-in token, and the container runs as
+/// this same uid.
+fn ensure_writable_file(path: &std::path::Path) -> std::io::Result<()> {
+    if std::fs::OpenOptions::new().write(true).open(path).is_ok() {
+        return Ok(());
+    }
+    if path.exists() {
+        // A directory is what a runtime leaves when it had to create a missing bind source, so it
+        // is worth trying to remove as one before giving up and reporting the path.
+        std::fs::remove_file(path).or_else(|e| {
+            if path.is_dir() {
+                std::fs::remove_dir_all(path)
+            } else {
+                Err(e)
+            }
+        })?;
+    }
+    let mut options = std::fs::OpenOptions::new();
+    // `create` without `truncate`, so nothing that survived the check above is emptied.
+    options.write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path).map(|_| ())
 }
 
 /// A bring-up that failed while preparing the host side, before the runtime ran.
@@ -177,6 +212,18 @@ pub fn start<R: CommandRunner>(
             return Err(preparation_failed(format!(
                 "could not create {} in the sandbox home: {e}",
                 dir.display()
+            )));
+        }
+    }
+
+    // And the target the credential is mounted *onto*, for the same reason once more: a target the
+    // runtime creates is root-owned and outlives the container, so the next sandbox — with the
+    // share turned off — hands its `claude` a token file it cannot write (review finding F3).
+    for file in mounts.home_files_to_create() {
+        if let Err(e) = ensure_writable_file(&file) {
+            return Err(preparation_failed(format!(
+                "could not create {} in the sandbox home: {e}",
+                file.display()
             )));
         }
     }
@@ -908,6 +955,122 @@ mod tests {
             commands.last().map(String::as_str),
             Some("rm -f micold-sandbox"),
             "a cancelled bring-up left its container behind: {commands:?}"
+        );
+    }
+
+    /// A bring-up against a recording runner, with the sign-in shared and `state_dir` as the
+    /// sandbox's state directory. What the host side of it left behind is what these tests read.
+    fn bring_up_sharing_the_sign_in(state_dir: &std::path::Path) {
+        use micold_core::sandbox::exec::RecordingRunner;
+        use micold_core::sandbox::CredentialShare;
+
+        let home = PathBuf::from("/home/u");
+        let facts = HostFacts {
+            uid: 1000,
+            gid: 1000,
+            state_dir: state_dir.to_path_buf(),
+            layout: CredentialLayout::conventional(&home, None),
+            home,
+        };
+        let profile = SandboxProfile {
+            credentials: std::collections::BTreeSet::from([CredentialShare::AiCliAuth]),
+            ..SandboxProfile::default()
+        };
+        let _ = start(
+            &profile,
+            &[],
+            &facts,
+            DEFAULT_SANDBOX_PORT,
+            RecordingRunner::new(),
+            &mut |_| {},
+        );
+    }
+
+    /// Where the sign-in is mounted inside the sandbox's own home.
+    fn sign_in_target(state_dir: &std::path::Path) -> PathBuf {
+        state_dir
+            .join(micold_core::sandbox::SANDBOX_HOME_DIR)
+            .join(".claude")
+            .join(".credentials.json")
+    }
+
+    /// Whether this process can write `path` — the question a root-owned target answers `false`.
+    fn writable(path: &std::path::Path) -> bool {
+        std::fs::OpenOptions::new().write(true).open(path).is_ok()
+    }
+
+    /// BUG-006, review finding F3: the mount *target* exists before the runtime runs, too.
+    ///
+    /// The runtime creates a missing target as a root-owned file, and that file outlives the
+    /// container. Turn the share off again and the sandbox's own `claude` finds a token file it
+    /// cannot write, which is the bug this share was narrowed to fix, from the other side.
+    #[test]
+    fn a_bring_up_creates_the_sign_ins_target_file_before_the_runtime_runs() {
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        bring_up_sharing_the_sign_in(state_dir.path());
+
+        let target = sign_in_target(state_dir.path());
+        assert!(
+            target.is_file(),
+            "{} was left for the runtime to create, which creates it as root",
+            target.display()
+        );
+        assert!(
+            writable(&target),
+            "{} is ours but unwritable",
+            target.display()
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&target)
+                .expect("the target")
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(mode, 0o600, "a sign-in token is readable by others");
+        }
+    }
+
+    /// A target left behind unwritable — the root-owned file an earlier run's runtime created — is
+    /// replaced, or the sandbox is brought up into exactly the failure this is here to prevent.
+    #[test]
+    fn a_bring_up_replaces_a_sign_in_target_it_cannot_write() {
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        let target = sign_in_target(state_dir.path());
+        std::fs::create_dir_all(target.parent().expect("a parent")).expect("the CLI's directory");
+        std::fs::write(&target, "left by the runtime").expect("the target");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o000))
+                .expect("unwritable");
+        }
+
+        bring_up_sharing_the_sign_in(state_dir.path());
+
+        assert!(
+            writable(&target),
+            "{} stayed unwritable, so the CLI inside cannot refresh its token",
+            target.display()
+        );
+    }
+
+    /// …and a token the sandbox's own `claude` wrote is left exactly as it is. Replacing a
+    /// perfectly good sign-in on every launch would sign the user out on every launch.
+    #[test]
+    fn a_bring_up_keeps_a_sign_in_token_the_sandbox_already_has() {
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        let target = sign_in_target(state_dir.path());
+        std::fs::create_dir_all(target.parent().expect("a parent")).expect("the CLI's directory");
+        std::fs::write(&target, "{\"token\":\"kept\"}").expect("the target");
+
+        bring_up_sharing_the_sign_in(state_dir.path());
+
+        assert_eq!(
+            std::fs::read_to_string(&target).expect("the target"),
+            "{\"token\":\"kept\"}",
+            "the bring-up wrote over a token the sandbox's own CLI had stored"
         );
     }
 
