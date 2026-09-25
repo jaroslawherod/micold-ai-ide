@@ -89,3 +89,24 @@ failed before the implementation.
   (C6.2); the label read stays behind `unlabelled` so a `Derived` session is asked for a title only
   (FR-007). `prunable_session_cwds` stays `Pending`-only, with the reason in its doc comment
   (data-model invariant 4).
+- mutant (cycle 2's discrimination, checked from cold context because its red was lost; each mutant
+  applied to a clean tree, run, then restored with `git checkout --`):
+  - `claude_first_turn` returns `None` for every prefix → `ai_cli_provider.rs` 15 passed, **2
+    failed** (`the_label_is_the_shaped_first_turn_of_the_sessions_own_transcript`,
+    `the_title_and_the_label_are_read_from_the_same_file_and_never_mixed`: `left: None` /
+    `right: Some("The first typed turn")`) and `untitled_session_labels.rs` 11 passed, **7 failed**
+    (A1–A4 and U66, U67, U65 included: `left: Pending` / `right: Derived("…")`, `left: 0` /
+    `right: 4`).
+  - the record classifier is skipped (`ClaudeTurn::of(&text)` → `ClaudeTurn::Prompt`, so every
+    candidate record counts as typed text) → `first_turn_label.rs` 13 passed, **9 failed**: the
+    command cases (U24, U25, U26, U27, U28, U29, U35), the inserted-text case (U31) and the
+    nothing-typed case (U36).
+  - Not killed by either mutant, and so **not** evidence of cycle 2's tests: U30, U32, U33, U34 and
+    the shaping and prefix behaviours of cycle 1.
+- suite: `mise run gate` (fmt → clippy core → clippy workspace `-D warnings` → `cargo test
+  --workspace` → `scripts/tests/*.test.sh`) → `EXIT=0`, 3408 passed, 0 failed, 331 binaries.
+- quickstart §B1: `MICOLD_LABEL_CORPUS=1 … --test first_turn_label_corpus -- --ignored` → 83
+  transcripts: 67 titled, 16 labelled, **0 neither** (SC-002). The four BUG-001 rows read four
+  different labels, `9a536c7e` reading `/speckit-autopilot` (SC-001, SC-005). Recorded in
+  `evidence/quickstart-b.md`.
+- refactor: none; the widening removed a duplicated `Pending` filter rather than adding code.
