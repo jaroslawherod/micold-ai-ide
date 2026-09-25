@@ -110,6 +110,42 @@ pub fn claude_first_turn(prefix: &[u8]) -> Option<String> {
     None
 }
 
+/// The label of a Copilot event-log prefix: its first typed turn, shaped (C4), or `None`.
+///
+/// Copilot's log is flatter than `claude`'s — one `user.message` record per turn, with the text of
+/// a slash command already resolved into it (C4.4), so there is no command syntax left to
+/// interpret. What has to be recognised instead is the text Copilot itself put into the
+/// conversation, and it marks that in the **record** rather than in the text: a `data.source`
+/// (skill context, instruction discovery) or `data.isAutopilotContinuation` (C4.1).
+///
+/// The label source is `data.content` — what the user typed — never `data.transformedContent`,
+/// which is the same text wrapped in a datetime header and system reminders for the model (C4.2).
+pub fn copilot_first_turn(prefix: &[u8]) -> Option<String> {
+    complete_lines(prefix)
+        .filter_map(|line| serde_json::from_slice::<Value>(line).ok())
+        .filter_map(|record| copilot_turn_text(&record))
+        .find_map(|text| shape_label(&text))
+}
+
+/// A Copilot turn's label source, or `None` when the record is not a turn (C4.1, C4.2).
+fn copilot_turn_text(record: &Value) -> Option<String> {
+    if record.get("type").and_then(Value::as_str) != Some("user.message") {
+        return None;
+    }
+    let data = record.get("data")?;
+    // Absent *or* null is a turn: Copilot writes `"source": null` on ordinary messages as often as
+    // it omits the key, and treating the explicit null as a source would label nothing at all.
+    if data.get("source").is_some_and(|source| !source.is_null()) {
+        return None;
+    }
+    if data.get("isAutopilotContinuation").and_then(Value::as_bool) == Some(true) {
+        return None;
+    }
+    data.get("content")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+}
+
 /// Every `\n`-terminated line of `bytes`; a trailing partial line is not one (C2.2).
 fn complete_lines(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
     bytes[..complete_len(bytes)]

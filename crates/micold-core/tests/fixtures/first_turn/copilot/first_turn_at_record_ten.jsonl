@@ -1,0 +1,10 @@
+{"type": "session.start", "data": {"sessionId": "66666666-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "version": 1, "producer": "copilot-agent", "copilotVersion": "1.0.24", "context": {"cwd": "/fixture/worktree"}}, "id": "rec-01", "timestamp": "2026-08-20T06:25:32.582Z", "parentId": null}
+{"type": "session.model_change", "data": {"newModel": "auto"}, "id": "rec-02", "timestamp": "2026-08-20T06:25:33.0Z", "parentId": "rec-01"}
+{"type": "session.auto_mode_resolved", "data": {"chosenModel": "claude-haiku-4.5"}, "id": "rec-03", "timestamp": "2026-08-20T06:25:33.1Z", "parentId": "rec-02"}
+{"type": "system.message", "data": {"content": "<system prompt elided in fixture>"}, "id": "rec-04", "timestamp": "2026-08-20T06:25:33.2Z", "parentId": "rec-03"}
+{"type": "user.message", "data": {"content": "You are running the `plan` skill.", "source": "skill-context", "attachments": []}, "id": "rec-05", "timestamp": "2026-08-20T06:25:33.3Z", "parentId": "rec-04"}
+{"type": "user.message", "data": {"content": "AGENTS.md was found and read into context.", "source": "instruction-discovery", "attachments": []}, "id": "rec-06", "timestamp": "2026-08-20T06:25:33.4Z", "parentId": "rec-05"}
+{"type": "user.message", "data": {"content": "", "isAutopilotContinuation": true, "attachments": []}, "id": "rec-07", "timestamp": "2026-08-20T06:25:33.5Z", "parentId": "rec-06"}
+{"type": "session.usage_checkpoint", "data": {"totalPremiumRequests": 0.0}, "id": "rec-08", "timestamp": "2026-08-20T06:25:33.6Z", "parentId": "rec-07"}
+{"type": "user.message", "data": {"content": "   ", "attachments": []}, "id": "rec-09", "timestamp": "2026-08-20T06:25:33.7Z", "parentId": "rec-08"}
+{"type": "user.message", "data": {"content": "The tenth record is the first turn", "transformedContent": "<current_datetime/>\n\nThe tenth record is the first turn", "attachments": []}, "id": "rec-10", "timestamp": "2026-08-20T06:25:34.0Z", "parentId": "rec-09"}

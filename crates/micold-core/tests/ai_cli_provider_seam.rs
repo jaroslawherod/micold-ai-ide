@@ -37,7 +37,7 @@
 mod support;
 
 use micold_core::provider::{
-    ActivitySource, AiCliProvider, CopilotProvider, FakeAiCliProvider, PiProvider,
+    ActivitySource, AiCliProvider, FakeAiCliProvider, PiProvider,
 };
 use micold_core::session::AiCli;
 use micold_core::terminal::LaunchMode;
@@ -500,22 +500,7 @@ fn pi_derives_no_label_because_its_title_already_is_the_first_message() {
     assert_eq!(PiProvider.read_label(home.path(), &cwd, id), None);
 }
 
-#[test]
-fn copilot_derives_no_label_until_its_first_turn_rule_lands() {
-    // Feature 032 M2 (T036) replaces this: until then a Copilot row behaves exactly as before,
-    // with no half-wired state on `main` (plan, *Delivery shape*).
-    let config = tempfile::tempdir().unwrap();
-    let id = Uuid::from_u128(0xC0);
-    let dir = config.path().join("session-state").join(id.to_string());
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(
-        dir.join("events.jsonl"),
-        "{\"type\":\"user.message\",\"data\":{\"content\":\"Add the login page\"}}\n",
-    )
-    .unwrap();
-
-    assert_eq!(
-        CopilotProvider.read_label(config.path(), Path::new("/repo"), id),
-        None
-    );
-}
+// Copilot's own `read_label` landed in feature 032 M2 (T036); its behaviour is covered by
+// `crates/micold-core/tests/copilot_provider.rs` and the acceptance tests in
+// `crates/micold-daemon/tests/untitled_session_labels.rs`, so the placeholder assertion that stood
+// here — "Copilot derives no label yet" — is gone rather than inverted.

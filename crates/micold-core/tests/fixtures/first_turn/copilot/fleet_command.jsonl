@@ -1,0 +1,2 @@
+{"type": "session.start", "data": {"sessionId": "55555555-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "version": 1, "producer": "copilot-agent", "copilotVersion": "1.0.36", "context": {"cwd": "/fixture/worktree"}}, "id": "e3dd19b4-7daf-4a81-ad74-f0d993862ac3", "timestamp": "2026-08-20T06:25:32.582Z", "parentId": null}
+{"type": "user.message", "data": {"content": "Fleet deployed: audit the settings screen", "attachments": []}, "id": "dddd0001-308e-46bd-9f9f-2b697b9b5401", "timestamp": "2026-08-20T06:25:35.000Z", "parentId": "e3dd19b4-7daf-4a81-ad74-f0d993862ac3"}

@@ -99,6 +99,7 @@ struct ProviderStores {
     _guard: MutexGuard<'static, ()>,
     _base: tempfile::TempDir,
     claude: PathBuf,
+    copilot: PathBuf,
 }
 
 impl ProviderStores {
@@ -106,13 +107,15 @@ impl ProviderStores {
         let guard = ENV.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let base = tempfile::tempdir().unwrap();
         let claude = base.path().join("claude");
+        let copilot = base.path().join("copilot");
         std::env::set_var("CLAUDE_CONFIG_DIR", &claude);
         // Never unset: an unset `COPILOT_HOME` falls back to the developer's real `~/.copilot`.
-        std::env::set_var("COPILOT_HOME", base.path().join("copilot"));
+        std::env::set_var("COPILOT_HOME", &copilot);
         Self {
             _guard: guard,
             _base: base,
             claude,
+            copilot,
         }
     }
 }
@@ -739,5 +742,162 @@ fn nothing_but_the_recovery_path_writes_a_label() {
     assert!(
         call_sites[0].starts_with("state.rs"),
         "the one call site is the daemon's recovery pass: {call_sites:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------------------
+// US1 #5–6 (T034) — listed Copilot sessions: `name:`, else `summary:`, else the first turn
+// (A5, A6, C4, C6.1, C6.2, C7)
+//
+// Every session here is **listed** in Copilot's own per-working-directory index, because that is
+// the only way the application ever discovers a Copilot session (026 research R3) and so the only
+// population FR-016 speaks about (D10). A session on disk that no index names is not a row, and
+// this feature does not make it one.
+// ---------------------------------------------------------------------------------------
+
+/// A synthetic Copilot record file from the core crate's first-turn fixtures (contract C4, C7).
+fn copilot_fixture(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../micold-core/tests/fixtures/first_turn/copilot")
+        .join(name);
+    std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("fixture {}: {err}", path.display()))
+}
+
+impl ProviderStores {
+    /// Write Copilot's per-working-directory index for `cwd`, listing exactly `ids` — the file its
+    /// own session picker reads, and the only thing the application discovers Copilot sessions from.
+    fn copilot_index(&self, cwd: &Path, ids: &[Uuid]) {
+        let dir = self.copilot.join("sidebar-sessions-state");
+        std::fs::create_dir_all(&dir).unwrap();
+        let listed = ids
+            .iter()
+            .map(|id| format!("    {:?}", id.to_string()))
+            .collect::<Vec<_>>()
+            .join(",\n");
+        let hashed =
+            micold_core::protocol::hashing::sha256_hex(cwd.to_string_lossy().as_bytes());
+        std::fs::write(
+            dir.join(format!("{hashed}.json")),
+            format!(
+                "{{\n  \"schemaVersion\": 1,\n  \"cwd\": {:?},\n  \"sessionIds\": [\n{listed}\n  ]\n}}\n",
+                cwd.to_string_lossy()
+            ),
+        )
+        .unwrap();
+    }
+
+    /// Materialise Copilot session `id`: its `workspace.yaml` and its `events.jsonl`, each from a
+    /// fixture, `None` leaving that file absent.
+    fn copilot_session(&self, id: Uuid, workspace: Option<&str>, events: Option<&str>) {
+        let dir = self.copilot.join("session-state").join(id.to_string());
+        std::fs::create_dir_all(&dir).unwrap();
+        if let Some(fixture) = workspace {
+            std::fs::write(dir.join("workspace.yaml"), copilot_fixture(fixture)).unwrap();
+        }
+        if let Some(fixture) = events {
+            std::fs::write(dir.join("events.jsonl"), copilot_fixture(fixture)).unwrap();
+        }
+    }
+
+    /// Copilot summarising a session it had not named: rewrite its `workspace.yaml` with a `name:`.
+    fn copilot_names(&self, id: Uuid, name: &str) {
+        let path = self
+            .copilot
+            .join("session-state")
+            .join(id.to_string())
+            .join("workspace.yaml");
+        let existing = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(path, format!("{existing}name: {name}\n")).unwrap();
+    }
+}
+
+#[test]
+fn a_listed_copilot_session_with_only_a_summary_is_named_by_it_and_never_labelled() {
+    // A6 (US1 #6, FR-016, SC-008): the 44 sessions of the *Copilot evidence* survey were written by
+    // Copilot 1.0.10–1.0.36, which wrote `summary:` where later versions write `name:`. It is
+    // Copilot's own title, so it outranks a first-turn label — the row must never read the raw
+    // prompt when a summary is there.
+    let stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3241);
+    stores.copilot_index(&cwd(), &[id]);
+    stores.copilot_session(
+        id,
+        Some("workspace_summary_only.yaml"),
+        Some("plain_first_turn.jsonl"),
+    );
+
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(data.path(), Vec::new());
+    assert_eq!(state.discover_external_sessions(&project()), 1);
+
+    assert_eq!(
+        label_of(&state, id),
+        SessionLabel::Named("The summary an older Copilot wrote".into()),
+        "an older Copilot's `summary:` is that session's title (FR-016, C7.1)"
+    );
+}
+
+#[test]
+fn a_listed_copilot_session_with_neither_key_reads_its_first_typed_turn() {
+    // A5 (US1 #5, FR-012, SC-009): no `name:`, no `summary:` — every running Copilot session until
+    // Copilot summarises it. The row reads what was typed, not "New session".
+    let stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3242);
+    stores.copilot_index(&cwd(), &[id]);
+    stores.copilot_session(
+        id,
+        Some("workspace_neither.yaml"),
+        Some("first_turn_at_record_ten.jsonl"),
+    );
+
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(data.path(), Vec::new());
+    assert_eq!(state.discover_external_sessions(&project()), 1);
+
+    assert_eq!(
+        label_of(&state, id),
+        SessionLabel::Derived("The tenth record is the first turn".into()),
+        "the first `user.message` Copilot did not insert itself (C4.1–C4.3)"
+    );
+    assert_eq!(
+        label_in(&catalog_at(data.path()), id),
+        SessionLabel::Derived("The tenth record is the first turn".into()),
+        "persisted, so a restart shows it without reading Copilot's records again (FR-007)"
+    );
+}
+
+#[test]
+fn a_labelled_copilot_session_reads_the_name_its_workspace_file_gained() {
+    // US2 for Copilot (FR-006): Copilot summarises the conversation later, and that title replaces
+    // the label on the row and in what is remembered.
+    let stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3243);
+    stores.copilot_index(&cwd(), &[id]);
+    stores.copilot_session(
+        id,
+        Some("workspace_neither.yaml"),
+        Some("plain_first_turn.jsonl"),
+    );
+
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(data.path(), Vec::new());
+    state.discover_external_sessions(&project());
+    assert_eq!(
+        label_of(&state, id),
+        SessionLabel::Derived("Add the login page".into()),
+        "until Copilot names it, the row shows what was typed"
+    );
+
+    stores.copilot_names(id, "Add the login page and its route");
+
+    assert_eq!(state.recover_session_names(&project()), 1);
+    assert_eq!(
+        label_of(&state, id),
+        SessionLabel::Named("Add the login page and its route".into())
+    );
+    assert_eq!(
+        label_in(&catalog_at(data.path()), id),
+        SessionLabel::Named("Add the login page and its route".into()),
+        "the title replaces the label on disk too (FR-006)"
     );
 }
