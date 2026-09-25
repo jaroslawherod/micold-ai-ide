@@ -757,6 +757,24 @@ fn a_block_summary_and_a_file_with_neither_key_are_no_title() {
             "{fixture}: no readable title, so the row stays open to a label (C7.2)"
         );
     }
+
+    // The block-scalar test is on the *raw* value: a quoted title may begin with `>` or `|` and is
+    // still one line, still readable, and still the session's name.
+    let quoted = Uuid::from_u128(0x7210);
+    let dir = home.session_dir(quoted);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("workspace.yaml"),
+        "id: 00000000-0000-4000-8000-000000000000\nsummary: \"> rewrite the release notes\"\n",
+    )
+    .unwrap();
+    assert_eq!(
+        CopilotProvider
+            .read_title(home.path(), cwd, quoted)
+            .as_deref(),
+        Some("> rewrite the release notes"),
+        "a quoted value is never a block scalar, whatever its first character (C7.2)"
+    );
 }
 
 #[test]
