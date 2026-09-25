@@ -103,7 +103,7 @@ Outside-in: T020's acceptance tests (A1–A4) are written first and stay red unt
 - [X] T025 [US1] Write `crates/micold-core/tests/first_turn_label_corpus.rs` (new): an `#[ignore]` test gated on `MICOLD_LABEL_CORPUS=1` that walks `ClaudeProvider.config_dir()/projects/*/*.jsonl` read-only and prints per transcript title / label / neither, and counts, for quickstart B1 (SC-001, SC-002, SC-005); it asserts nothing about the machine when the variable is unset
 
 - [X] T042 [US1] [A1] [A2] [A3] [A4] Outer loop green: the acceptance tests for US1 scenarios 1–4 in `crates/micold-daemon/tests/untitled_session_labels.rs` pass with the full suite
-- [ ] T046 [US1] Run quickstart §B1 (`claude` rows only) and §B2 (steps 1–4, incl. SC-006 by eye) on the development machine after T043, and record output and pass/fail per step in `specs/032-untitled-session-labels/evidence/quickstart-b.md` (new)
+- [X] T046 [US1] Run quickstart §B1 (`claude` rows only) and §B2 (steps 1–4, incl. SC-006 by eye) on the development machine after T043, and record output and pass/fail per step in `specs/032-untitled-session-labels/evidence/quickstart-b.md` (new)
 
 **Checkpoint**: past untitled `claude` sessions show their labels after a restart.
 

@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/the-name-of-past-session-is-still-not-shown
 - **Started**: 2026-09-19
 - **Phase**: 4-milestones
-- **Next step**: M1 in progress (implement T001–T027, T042, T043, T046)
+- **Next step**: M1 PR open, waiting for CI; then M2 (T031–T038, T045)
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T027, T042, T043, T046 | Untitled `claude` sessions read their first turn after restart; a later title replaces it (US1 #1–4, US2); quickstart §B1/§B2 recorded | — | in progress |
+| M1 | T001–T027, T042, T043, T046 | Untitled `claude` sessions read their first turn after restart; a later title replaces it (US1 #1–4, US2); quickstart §B1/§B2 recorded | — | open |
 | M2 | T031–T038, T045 | Listed Copilot sessions read `name:`, else `summary:`, else their first-turn label (US1 #5–6) | — | pending |
 | M3 | T028–T030, T044, T039–T041 | A running session shows its label within a minute of the first prompt, spinner first or not (US3); Polish, quickstart §B3 recorded | — | pending |
 
@@ -55,6 +55,8 @@ D2–D4 applied to spec.md (FR-002, FR-006, FR-012 + *Copilot evidence*, US1 #5,
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A (code-review, high) | F1 BLOCKER: `first_turn.rs:81` carries an uncommitted `// MUTANT` line that makes `claude_first_turn` always return `None`. | Not in the diff. The reviewer read the working tree while this unit's own mutation probe was running in it (cycle log, cycle 3 *mutant*); the probe restored the file with `git checkout --` minutes later, and `git show HEAD:…/first_turn.rs` never held the line. The committed diff was the reviewer's own verdict: clean. |
+| M1 | visual pass (§B2 step 2) | The hover tooltip on a session row does not show the label. | Session rows have no tooltip on `main` either (`session_tree_item()` in `crates/micold-client/src/ui/sidebar.rs` never calls `.row_tooltip(..)`, and that file is unchanged by this branch), so a label is treated exactly as a title is (D7, FR-015). Adding one is new behaviour, outside M1's tasks; recorded under *Follow-ups not done*. |
 
 ### Spec review log
 
@@ -82,6 +84,10 @@ D2–D4 applied to spec.md (FR-002, FR-006, FR-012 + *Copilot evidence*, US1 #5,
 None (the 2026-09-19 old-Copilot-session escalation was answered: D10).
 
 ## Follow-ups not done
+
+- Session rows have no hover tooltip at all (worktree rows do), so a label or a title cut at 80
+  characters cannot be read in full. Pre-existing on `main`, found by M1's quickstart §B2 pass;
+  needs its own spec.
 
 - Old Copilot sessions missing from Copilot's per-cwd index are not discovered (D10); a scan of `~/.copilot/session-state/*/workspace.yaml` by `cwd:` would surface 30 of the 44 under `max-speed`.
 - Carried from 029 BUG-001 ledger: `custom-title` / `agent-name` records ignored by `ClaudeProvider::parse_title` (candidate 029 BUG, out of scope here).
