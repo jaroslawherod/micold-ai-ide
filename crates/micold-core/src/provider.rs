@@ -19,6 +19,13 @@
 //! ([`AiCliProvider::id`], [`AiCliProvider::display_name`]), availability
 //! ([`AiCliProvider::is_available`]) and an activity source ([`ActivitySource`]).
 //!
+//! Feature 032 added the second half of the naming seam beside [`AiCliProvider::read_title`]:
+//! [`AiCliProvider::read_label`], the first thing the user typed in a conversation the CLI never
+//! named. Both read the provider's own store and both are per provider, because where a turn is
+//! written, and which records are the user's rather than the CLI's own, is as much a storage
+//! layout as a transcript directory is. A title always outranks a label, and that precedence is
+//! the daemon's, not the seam's.
+//!
 //! # Choosing one
 //!
 //! [`AiCli::provider`] — an exhaustive match, so the lookup is total by construction and no call
@@ -35,8 +42,9 @@
 //! Pure + unit-testable: this module never spawns a process (the real PTY launch lives behind
 //! [`crate::terminal::TerminalBackend`]); its I/O is limited to best-effort reads of a provider's
 //! own on-disk conversation store, and a `PATH` lookup for [`AiCliProvider::is_available`].
-//! Contracts: `specs/005-worktree-session-terminal/contracts/claude-cli.md` and
-//! `specs/026-multi-provider-sessions/contracts/{ai-cli-provider,copilot-cli}.md`.
+//! Contracts: `specs/005-worktree-session-terminal/contracts/claude-cli.md`,
+//! `specs/026-multi-provider-sessions/contracts/{ai-cli-provider,copilot-cli}.md` and
+//! `specs/032-untitled-session-labels/contracts/first-turn-label.md`.
 
 use crate::session::AiCli;
 use crate::terminal::LaunchMode;

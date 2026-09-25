@@ -1221,7 +1221,13 @@ impl DaemonState {
 
     /// Give every **known but unnamed** session of `project` the name its own AI CLI recorded for
     /// it, persisting each one (feature 029, US2 — FR-006, FR-007, FR-010). Returns how many names
-    /// were recovered (`0` ⇒ no write happened).
+    /// **and labels** were recorded (`0` ⇒ no write happened, so the caller need not broadcast —
+    /// feature 032, C6.3a).
+    ///
+    /// "Unnamed" is **not `Named`**, which since feature 032 is two states, not one: `Pending` (the
+    /// row reads "New session") and `Derived` (the row reads the first thing the user typed). A
+    /// `Derived` session is still a candidate here, because the title the CLI writes later has to
+    /// replace the label (FR-006, C6.2); it is asked for a title only, never for a second label.
     ///
     /// This is the one-time repair for every session that predates the live write path: the name
     /// was observed and displayed for as long as the session ran, and never written, so the record
@@ -1309,7 +1315,14 @@ impl DaemonState {
     }
 
     /// Read each candidate's name from its own provider's store, off the lock, and record the ones
-    /// found against sessions that are still unnamed. Returns how many were recorded.
+    /// found against sessions that are still unnamed. Returns how many were recorded — titles and
+    /// labels alike, so a label alone makes the supervisor broadcast (feature 032, C6.3a).
+    ///
+    /// "Still unnamed" is re-checked **under the lock**, and the two kinds are checked differently:
+    /// a title is recorded unless the session became `Named` while this was off the lock, and a
+    /// label only while the session is still `Pending` (C6.3). So a title and a label racing for
+    /// one session always end on the title, and nothing ever walks a session back toward `Pending`
+    /// (C6.6).
     ///
     /// A candidate with no title and no label yet is also asked for its first-turn label (feature
     /// 032, C6.3): the title first, because a title outranks a label (FR-005), and the label only
@@ -2144,6 +2157,13 @@ impl DaemonState {
                     live.activity.apply(ActivityEvent::SpinnerObserved);
                     if live.activity.signal() != &before {
                         out.changed = true;
+                        // An activity change here re-arms the live name lookup, exactly as
+                        // `note_activity` does for a hook (feature 032, FR-010, C6.3b, research
+                        // R9). Without it, a spinner drained *before* the `UserPromptSubmit` hook
+                        // leaves the hook with nothing to change, and the session's first turn
+                        // waits for the end of the turn to be read — well outside the minute US3
+                        // promises.
+                        live.name_stale = true;
                     }
                 }
             }
