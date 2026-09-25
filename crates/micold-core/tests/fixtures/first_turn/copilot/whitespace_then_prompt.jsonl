@@ -1,0 +1,3 @@
+{"type": "session.start", "data": {"sessionId": "44444444-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "version": 1, "producer": "copilot-agent", "copilotVersion": "1.0.24", "context": {"cwd": "/fixture/worktree"}}, "id": "e3dd19b4-7daf-4a81-ad74-f0d993862ac2", "timestamp": "2026-08-20T06:25:32.582Z", "parentId": null}
+{"type": "user.message", "data": {"content": "  \n\t  ", "attachments": []}, "id": "cccc0001-308e-46bd-9f9f-2b697b9b5401", "timestamp": "2026-08-20T06:25:35.000Z", "parentId": "e3dd19b4-7daf-4a81-ad74-f0d993862ac2"}
+{"type": "user.message", "data": {"content": "The real first turn", "attachments": []}, "id": "cccc0002-308e-46bd-9f9f-2b697b9b5402", "timestamp": "2026-08-20T06:25:36.000Z", "parentId": "cccc0001-308e-46bd-9f9f-2b697b9b5401"}

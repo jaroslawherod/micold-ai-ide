@@ -677,3 +677,131 @@ fn a_removed_session_directory_leaves_the_index_still_claiming_it() {
         "and it was never closed — a removal is not an archive, so nothing suppresses the row"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// T033 (feature 032, C7 and C2/C4) — the title Copilot wrote, and the label it did not
+// ---------------------------------------------------------------------------------------
+
+/// A synthetic record file from `tests/fixtures/first_turn/copilot/` (feature 032).
+fn first_turn_fixture(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/first_turn/copilot")
+        .join(name);
+    std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("fixture {}: {err}", path.display()))
+}
+
+/// Materialise session `id` in `home` from the feature-032 fixtures.
+fn first_turn_session(
+    home: &support::CopilotHome,
+    id: Uuid,
+    workspace: Option<&str>,
+    events: Option<&str>,
+) {
+    let dir = home.session_dir(id);
+    std::fs::create_dir_all(&dir).unwrap();
+    if let Some(fixture) = workspace {
+        std::fs::write(dir.join("workspace.yaml"), first_turn_fixture(fixture)).unwrap();
+    }
+    if let Some(fixture) = events {
+        std::fs::write(dir.join("events.jsonl"), first_turn_fixture(fixture)).unwrap();
+    }
+}
+
+#[test]
+fn a_name_outranks_a_summary_and_a_summary_stands_in_for_a_missing_name() {
+    // C7.1, FR-016. Copilot 1.0.36 and earlier wrote `summary:` where later versions write `name:`
+    // (44 such sessions in the *Copilot evidence* survey), and it is Copilot's own title.
+    let cwd = Path::new("/fixture/worktree");
+    let home = copilot_home();
+    let cases = [
+        ("workspace_name_and_summary.yaml", "The name Copilot wrote"),
+        ("workspace_name_only.yaml", "The name Copilot wrote"),
+        (
+            "workspace_summary_only.yaml",
+            "The summary an older Copilot wrote",
+        ),
+        (
+            "workspace_empty_name_and_summary.yaml",
+            "The summary behind an empty name",
+        ),
+    ];
+    for (n, (fixture, expected)) in cases.iter().enumerate() {
+        let id = Uuid::from_u128(0x7100 + n as u128);
+        first_turn_session(&home, id, Some(fixture), None);
+        assert_eq!(
+            CopilotProvider.read_title(home.path(), cwd, id).as_deref(),
+            Some(*expected),
+            "{fixture}: `name:` wins, and an absent or empty one falls back to `summary:` \
+             (C7.1, C7.3)"
+        );
+    }
+}
+
+#[test]
+fn a_block_summary_and_a_file_with_neither_key_are_no_title() {
+    // C7.2: the scalar reader handles the three inline forms Copilot writes and nothing else. A
+    // `summary: |-` block's value is on the *following* lines, so the key's own value is empty —
+    // reading it would title the row `|-`. Both machines on the survey wrote such a block only
+    // beside a `name:`, which C7.1 takes first.
+    let cwd = Path::new("/fixture/worktree");
+    let home = copilot_home();
+    for (n, fixture) in ["workspace_summary_block.yaml", "workspace_neither.yaml"]
+        .iter()
+        .enumerate()
+    {
+        let id = Uuid::from_u128(0x7200 + n as u128);
+        first_turn_session(&home, id, Some(fixture), None);
+        assert_eq!(
+            CopilotProvider.read_title(home.path(), cwd, id),
+            None,
+            "{fixture}: no readable title, so the row stays open to a label (C7.2)"
+        );
+    }
+}
+
+#[test]
+fn the_label_is_the_first_turn_of_the_sessions_own_event_log() {
+    // C2 + C4 through the provider seam: the same `events.jsonl` `has_recorded_conversation` and
+    // `activity_source` already point at, read only as far as the bound allows.
+    let cwd = Path::new("/fixture/worktree");
+    let home = copilot_home();
+    let id = Uuid::from_u128(0x7301);
+    first_turn_session(
+        &home,
+        id,
+        Some("workspace_neither.yaml"),
+        Some("first_turn_at_record_ten.jsonl"),
+    );
+
+    assert_eq!(
+        CopilotProvider.read_label(home.path(), cwd, id).as_deref(),
+        Some("The tenth record is the first turn")
+    );
+    assert_eq!(
+        CopilotProvider.read_label(home.path(), cwd, Uuid::from_u128(0x7302)),
+        None,
+        "a session with no event log yet has no label, and never an error (FR-011)"
+    );
+}
+
+#[test]
+fn a_first_turn_past_the_read_bound_is_no_label() {
+    // C2.4: the bound is what keeps a project open cheap (FR-014). A conversation whose first turn
+    // begins past 1 MiB of records reads as unlabelled rather than being chased to the end of the
+    // file — and a *later* turn is never used in its place.
+    let cwd = Path::new("/fixture/worktree");
+    let home = copilot_home();
+    let id = Uuid::from_u128(0x7401);
+    let dir = home.session_dir(id);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let padding = "{\"type\":\"assistant.message\",\"data\":{\"content\":\"tool output\"}}\n";
+    let mut log = padding.repeat(
+        micold_core::first_turn::LABEL_BUDGET_BYTES as usize / padding.len() + 1,
+    );
+    assert!(log.len() as u64 > micold_core::first_turn::LABEL_BUDGET_BYTES);
+    log.push_str("{\"type\":\"user.message\",\"data\":{\"content\":\"Typed past the bound\"}}\n");
+    std::fs::write(dir.join("events.jsonl"), log).unwrap();
+
+    assert_eq!(CopilotProvider.read_label(home.path(), cwd, id), None);
+}

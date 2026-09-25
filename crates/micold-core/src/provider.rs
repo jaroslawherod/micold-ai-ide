@@ -511,8 +511,8 @@ impl CopilotProvider {
             .join("events.jsonl")
     }
 
-    /// `<base>/session-state/<uuid>/workspace.yaml` — the session's own metadata, of which exactly
-    /// one key is ever read. Pure, no I/O.
+    /// `<base>/session-state/<uuid>/workspace.yaml` — the session's own metadata, of which only the
+    /// two title keys are ever read (`name:`, and `summary:` behind it). Pure, no I/O.
     fn workspace_path(&self, config_dir: &Path, session_id: Uuid) -> PathBuf {
         self.session_dir(config_dir, session_id)
             .join("workspace.yaml")
@@ -528,7 +528,9 @@ impl CopilotProvider {
     ///
     /// Deliberately narrow: no block scalars, no anchors, no escapes beyond stripping the quotes.
     /// Anything it cannot read yields `None`, which is a label that stays `Pending` — never an
-    /// error, and never a wrong title (FR-017).
+    /// error, and never a wrong title (FR-017). A block scalar (`summary: |-`) is exactly that
+    /// case: its value lives on the *following* lines, so the key's own value is the indicator
+    /// itself, and returning it would title the row `|-` (C7.2).
     fn read_yaml_scalar(contents: &str, key: &str) -> Option<String> {
         for line in contents.lines() {
             // Top-level keys only: an indented `name:` belongs to some nested mapping we are not
@@ -549,7 +551,7 @@ impl CopilotProvider {
                 }
                 _ => value,
             };
-            if unquoted.is_empty() {
+            if unquoted.is_empty() || unquoted.starts_with(['|', '>']) {
                 return None;
             }
             return Some(unquoted.to_string());
@@ -669,18 +671,25 @@ impl AiCliProvider for CopilotProvider {
         // conversation and updated as it grows — the same lifecycle as `claude`'s `ai-title`, so
         // the same `Pending → Named` transition applies.
         //
+        // Copilot 1.0.36 and earlier wrote that same title under `summary:` instead, and 44 of the
+        // sessions on the development machine still carry only that key (feature 032 FR-016, C7.1).
+        // It is Copilot's own summary of the conversation, so it is a title and outranks anything
+        // derived from a raw prompt; a `name:` beside it is the newer key and wins.
+        //
         // Read with a purpose-built single-scalar reader rather than a YAML crate (research R4).
-        // Exactly one key is ever wanted from this file: `cwd` is already known from the index, and
-        // `git_root`/`repository`/`branch` are not used. A dozen lines against a new dependency
-        // tree is not a close call.
+        // Only the title keys are ever wanted from this file: `cwd` is already known from the
+        // index, and `git_root`/`repository`/`branch` are not used. A dozen lines against a new
+        // dependency tree is not a close call.
         let contents = std::fs::read_to_string(self.workspace_path(config_dir, session_id)).ok()?;
         Self::read_yaml_scalar(&contents, "name")
+            .or_else(|| Self::read_yaml_scalar(&contents, "summary"))
     }
 
-    fn read_label(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
-        // Not yet: feature 032 derives Copilot's first-turn label in its milestone M2 (Phase 5).
-        // Until then a Copilot row behaves exactly as before, with no half-wired state.
-        None
+    fn read_label(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> Option<String> {
+        // The same `events.jsonl` `has_recorded_conversation` and `activity_source` point at, read
+        // only as far as the bound allows (C2, C4, FR-014).
+        let prefix = crate::first_turn::read_prefix(&self.events_path(config_dir, session_id))?;
+        crate::first_turn::copilot_first_turn(&prefix)
     }
 
     fn name_in_terminal_title(&self, title: &str, _cwd: &Path) -> Option<String> {

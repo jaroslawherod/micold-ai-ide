@@ -309,3 +309,106 @@ fn a_last_record_still_being_written_is_not_read() {
     // The only typed prompt is on a final line with no `\n` (C2.2).
     assert_eq!(claude_label("truncated_last_line.jsonl"), None);
 }
+
+// ---------------------------------------------------------------------------------------
+// C4 — Copilot's first typed turn
+//
+// Copilot's records are flatter than `claude`'s: one `user.message` record per turn, with no
+// command wrappers to interpret. What has to be recognised instead is the text Copilot itself put
+// into the conversation — skill context, instruction discovery, autopilot continuations — which it
+// marks in the record rather than in the text.
+// ---------------------------------------------------------------------------------------
+
+use micold_core::first_turn::copilot_first_turn;
+
+/// A synthetic Copilot event log from `tests/fixtures/first_turn/copilot/`.
+fn copilot_label(fixture: &str) -> Option<String> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/first_turn/copilot")
+        .join(fixture);
+    let bytes =
+        std::fs::read(&path).unwrap_or_else(|err| panic!("fixture {}: {err}", path.display()));
+    copilot_first_turn(&bytes)
+}
+
+#[test]
+fn the_first_user_message_copilot_did_not_source_itself_is_the_label() {
+    assert_eq!(
+        copilot_label("plain_first_turn.jsonl").as_deref(),
+        Some("Add the login page"),
+        "the first turn, not the second, and not the `system.message` before it (C4.1, C4.3)"
+    );
+}
+
+#[test]
+fn a_user_message_copilot_sourced_itself_is_never_a_turn() {
+    // 12 of the 972 `user.message` records surveyed carry a `source` — skill context and
+    // instruction discovery. Copilot wrote them, so they are not what the user typed (C4.1).
+    assert_eq!(
+        copilot_label("sourced_then_prompt.jsonl").as_deref(),
+        Some("Explain the release workflow"),
+        "a `data.source` marks a record Copilot inserted; an explicit null does not (C4.1)"
+    );
+}
+
+#[test]
+fn an_autopilot_continuation_is_never_a_turn() {
+    // 28 of the surveyed records are continuations with empty `content`: Copilot prompting itself
+    // to keep going, not the user typing (C4.1).
+    assert_eq!(
+        copilot_label("autopilot_continuation_then_prompt.jsonl").as_deref(),
+        Some("Rename the worktree column")
+    );
+}
+
+#[test]
+fn the_label_is_the_recorded_content_never_the_transformed_one() {
+    // `transformedContent` is what Copilot sends the model: the same text wrapped in a datetime
+    // header and system reminders. Reading it would put `<current_datetime>` on the row (C4.2).
+    let label = copilot_label("plain_first_turn.jsonl").expect("the fixture has a first turn");
+    assert!(
+        !label.contains("current_datetime"),
+        "the row shows what the user typed, not what was sent to the model (C4.2): {label:?}"
+    );
+    assert_eq!(label, "Add the login page");
+}
+
+#[test]
+fn a_whitespace_only_turn_is_skipped_for_the_next_one() {
+    assert_eq!(
+        copilot_label("whitespace_then_prompt.jsonl").as_deref(),
+        Some("The real first turn"),
+        "an empty turn is no label source; the next non-empty one is (C4.3, C5.2)"
+    );
+}
+
+#[test]
+fn a_fleet_command_is_kept_exactly_as_copilot_recorded_it() {
+    // Copilot records the text *after* a slash command, and `/fleet` with its own prefix. There is
+    // no command syntax left in the record to strip, so none is stripped (C4.4).
+    assert_eq!(
+        copilot_label("fleet_command.jsonl").as_deref(),
+        Some("Fleet deployed: audit the settings screen")
+    );
+}
+
+#[test]
+fn a_first_turn_at_the_tenth_record_is_still_found() {
+    // The survey put the first qualifying turn at record 2–10 in all 44 sessions (FR-014, SC-009).
+    // This fixture is the worst of them: nine records Copilot wrote, then the turn.
+    assert_eq!(
+        copilot_label("first_turn_at_record_ten.jsonl").as_deref(),
+        Some("The tenth record is the first turn")
+    );
+}
+
+#[test]
+fn a_copilot_log_with_nothing_typed_in_it_has_no_label() {
+    let sourced_only = b"{\"type\":\"session.start\",\"data\":{}}\n\
+        {\"type\":\"user.message\",\"data\":{\"content\":\"skill context\",\"source\":\"skill-context\"}}\n";
+    assert_eq!(
+        copilot_first_turn(sourced_only),
+        None,
+        "nothing the user typed is nothing to show but \"New session\" (FR-004)"
+    );
+}
