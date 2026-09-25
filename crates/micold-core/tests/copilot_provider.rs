@@ -796,9 +796,8 @@ fn a_first_turn_past_the_read_bound_is_no_label() {
     std::fs::create_dir_all(&dir).unwrap();
 
     let padding = "{\"type\":\"assistant.message\",\"data\":{\"content\":\"tool output\"}}\n";
-    let mut log = padding.repeat(
-        micold_core::first_turn::LABEL_BUDGET_BYTES as usize / padding.len() + 1,
-    );
+    let mut log =
+        padding.repeat(micold_core::first_turn::LABEL_BUDGET_BYTES as usize / padding.len() + 1);
     assert!(log.len() as u64 > micold_core::first_turn::LABEL_BUDGET_BYTES);
     log.push_str("{\"type\":\"user.message\",\"data\":{\"content\":\"Typed past the bound\"}}\n");
     std::fs::write(dir.join("events.jsonl"), log).unwrap();

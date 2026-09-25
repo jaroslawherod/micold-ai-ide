@@ -42,8 +42,8 @@ the cycle log; a red is not required.
 | A2  | Several untitled `claude` sessions in one project each read their own first turn, all different | US1.2, SC-004, SC-005 | example | DONE | untitled_session_labels.rs `several_untitled_sessions_in_one_project_each_read_their_own_first_turn` |
 | A3  | After a restart over the same data dir, the label is in the first snapshot, with the provider's records removed | US1.3, FR-007, FR-009 | example | DONE | untitled_session_labels.rs `after_a_restart_the_label_is_there_without_reading_the_clis_records` |
 | A4  | A `claude` session with no typed prompt (only injected records) still reads "New session" | US1.4, FR-004, SC-004 | example | DONE | untitled_session_labels.rs `a_session_with_nothing_typed_in_it_still_reads_new_session` |
-| A5  | A listed Copilot session with a typed turn and neither `name:` nor `summary:` reads its first `user.message` content | US1.5, FR-012, SC-009 | example | PENDING | |
-| A6  | A listed Copilot session with `summary:` and no `name:` reads the summary as its title, never a label | US1.6, FR-016, SC-008 | example | PENDING | |
+| A5  | A listed Copilot session with a typed turn and neither `name:` nor `summary:` reads its first `user.message` content | US1.5, FR-012, SC-009 | example | DONE | untitled_session_labels.rs `a_listed_copilot_session_with_neither_key_reads_its_first_typed_turn` |
+| A6  | A listed Copilot session with `summary:` and no `name:` reads the summary as its title, never a label | US1.6, FR-016, SC-008 | example | DONE | untitled_session_labels.rs `a_listed_copilot_session_with_only_a_summary_is_named_by_it_and_never_labelled` |
 | A7  | A titled session reads its title, running or not, and never a derived label | US2.1, FR-005, SC-003 | example | DONE | untitled_session_labels.rs `a_titled_session_is_never_given_a_label` |
 | A8  | A session showing a label switches to the title the terminal reports, and still reads the title after a restart | US2.2, FR-006 | example | DONE | untitled_session_labels.rs `an_observed_terminal_title_replaces_a_label_and_is_persisted` |
 | A9  | A stopped session showing a label reads the title its records gained, after the next project open | US2.3, FR-006 | example | DONE | untitled_session_labels.rs `a_labelled_session_reads_the_title_its_records_gained` |
@@ -122,13 +122,13 @@ the cycle log; a red is not required.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U37 | The first `user.message` with no `source` yields its `content` | FR-012, C4.1, C4.3 | example | PENDING | |
-| U38 | A `user.message` with a `source` (skill context, `instruction-discovery`) is skipped | FR-012, C4.1 | example | PENDING | |
-| U39 | An autopilot continuation is skipped | FR-012, C4.1 | example | PENDING | |
-| U40 | `content` is used, never `transformedContent` | FR-012, C4.2 | example | PENDING | |
-| U41 | A whitespace-only `content` is skipped; the next turn is used | FR-002, C4.3 | example | PENDING | |
-| U42 | `Fleet deployed: <text>` is kept verbatim | FR-012, C4.4 | example | PENDING | |
-| U43 | A first turn at record 10 is found | FR-014, SC-009 | example | PENDING | |
+| U37 | The first `user.message` with no `source` yields its `content` | FR-012, C4.1, C4.3 | example | DONE | first_turn_label.rs `the_first_user_message_copilot_did_not_source_itself_is_the_label` |
+| U38 | A `user.message` with a `source` (skill context, `instruction-discovery`) is skipped | FR-012, C4.1 | example | DONE | first_turn_label.rs `a_user_message_copilot_sourced_itself_is_never_a_turn` |
+| U39 | An autopilot continuation is skipped | FR-012, C4.1 | example | DONE | first_turn_label.rs `an_autopilot_continuation_is_never_a_turn` |
+| U40 | `content` is used, never `transformedContent` | FR-012, C4.2 | example | DONE | first_turn_label.rs `the_label_is_the_recorded_content_never_the_transformed_one` |
+| U41 | A whitespace-only `content` is skipped; the next turn is used | FR-002, C4.3 | example | DONE | first_turn_label.rs `a_whitespace_only_turn_is_skipped_for_the_next_one` |
+| U42 | `Fleet deployed: <text>` is kept verbatim | FR-012, C4.4 | example | DONE | first_turn_label.rs `a_fleet_command_is_kept_exactly_as_copilot_recorded_it` |
+| U43 | A first turn at record 10 is found | FR-014, SC-009 | example | DONE | first_turn_label.rs `a_first_turn_at_the_tenth_record_is_still_found` |
 
 ### `crates/micold-core/src/provider.rs` — the seam
 
@@ -140,12 +140,12 @@ the cycle log; a red is not required.
 | U47 | `ClaudeProvider::read_label` is `None` for a missing transcript | FR-011 | example | DONE | ai_cli_provider.rs `a_missing_transcript_has_no_label_and_does_not_fail` |
 | U48 | A `claude` first turn starting past 1 MiB yields `None` even when a later prompt exists | FR-014, C2.4 | example | DONE | ai_cli_provider.rs `a_first_turn_past_the_read_bound_yields_no_label_even_with_a_later_prompt` |
 | U49 | `ClaudeProvider::read_title` still returns the latest `ai-title` for a file `read_label` reads | FR-005, C1.4 | example | DONE | ai_cli_provider.rs `the_title_and_the_label_are_read_from_the_same_file_and_never_mixed` |
-| U50 | `CopilotProvider::read_title` returns `name:` when present, even with a `summary:` | FR-016, C7.1 | example | PENDING | |
-| U51 | `CopilotProvider::read_title` returns `summary:` when `name:` is absent | FR-016, C7.1 | example | PENDING | |
-| U52 | `CopilotProvider::read_title` returns `summary:` when `name:` is empty | FR-016, C7.3 | example | PENDING | |
-| U53 | A block `summary: |-` alone yields `None` | FR-016, C7.2 | example | PENDING | |
-| U54 | `CopilotProvider::read_label` returns the first turn of `events.jsonl`; `None` when missing | FR-012, FR-011 | example | PENDING | |
-| U55 | A Copilot first turn starting past 1 MiB yields `None` | FR-014, C2.4 | example | PENDING | |
+| U50 | `CopilotProvider::read_title` returns `name:` when present, even with a `summary:` | FR-016, C7.1 | example | DONE | copilot_provider.rs `a_name_outranks_a_summary_and_a_summary_stands_in_for_a_missing_name` |
+| U51 | `CopilotProvider::read_title` returns `summary:` when `name:` is absent | FR-016, C7.1 | example | DONE | copilot_provider.rs `a_name_outranks_a_summary_and_a_summary_stands_in_for_a_missing_name` |
+| U52 | `CopilotProvider::read_title` returns `summary:` when `name:` is empty | FR-016, C7.3 | example | DONE | copilot_provider.rs `a_name_outranks_a_summary_and_a_summary_stands_in_for_a_missing_name` |
+| U53 | A block `summary: |-` alone yields `None` | FR-016, C7.2 | example | DONE | copilot_provider.rs `a_block_summary_and_a_file_with_neither_key_are_no_title` |
+| U54 | `CopilotProvider::read_label` returns the first turn of `events.jsonl`; `None` when missing | FR-012, FR-011 | example | DONE | copilot_provider.rs `the_label_is_the_first_turn_of_the_sessions_own_event_log` |
+| U55 | A Copilot first turn starting past 1 MiB yields `None` | FR-014, C2.4 | example | DONE | copilot_provider.rs `a_first_turn_past_the_read_bound_is_no_label` |
 
 ### `crates/micold-daemon/src/catalog.rs` — `record_session_label`
 

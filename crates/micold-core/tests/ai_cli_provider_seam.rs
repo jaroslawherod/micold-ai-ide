@@ -36,9 +36,7 @@
 
 mod support;
 
-use micold_core::provider::{
-    ActivitySource, AiCliProvider, FakeAiCliProvider, PiProvider,
-};
+use micold_core::provider::{ActivitySource, AiCliProvider, FakeAiCliProvider, PiProvider};
 use micold_core::session::AiCli;
 use micold_core::terminal::LaunchMode;
 use std::cell::RefCell;

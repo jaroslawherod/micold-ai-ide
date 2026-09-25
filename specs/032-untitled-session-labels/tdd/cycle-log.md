@@ -110,3 +110,70 @@ failed before the implementation.
   different labels, `9a536c7e` reading `/speckit-autopilot` (SC-001, SC-005). Recorded in
   `evidence/quickstart-b.md`.
 - refactor: none; the widening removed a duplicated `Pending` filter rather than adding code.
+
+## Cycle 4 — US1 Copilot: `name:`, else `summary:`, else the first turn (U37–U43, U50–U55; A5, A6)
+
+Outside-in, in one grouped cycle per file, as cycles 1–3 were: the acceptance tests were written and
+observed failing first, then the two unit groups, then the implementation.
+
+- tasks: T031–T038, T045
+- tests, written and run before any implementation existed:
+  - `crates/micold-core/tests/fixtures/first_turn/copilot/*` (T031, 6 event logs + 6 `workspace.yaml`)
+  - `crates/micold-daemon/tests/untitled_session_labels.rs` (T034) — A6
+    `a_listed_copilot_session_with_only_a_summary_is_named_by_it_and_never_labelled`, A5
+    `a_listed_copilot_session_with_neither_key_reads_its_first_typed_turn`, and US2 for Copilot
+    `a_labelled_copilot_session_reads_the_name_its_workspace_file_gained`
+  - `crates/micold-core/tests/first_turn_label.rs` (T032) — U37–U43 and a nothing-typed guard
+  - `crates/micold-core/tests/copilot_provider.rs` (T033) — U50–U55
+- red (outer), `scripts/build-lock.sh cargo test --test untitled_session_labels copilot`:
+
+  ```
+  assertion `left == right` failed: an older Copilot's `summary:` is that session's title (FR-016, C7.1)
+    left: Pending
+   right: Named("The summary an older Copilot wrote")
+  test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 18 filtered out
+  ```
+
+- red (units), `scripts/build-lock.sh cargo test -p micold-core --test first_turn_label` and
+  `--test copilot_provider`, against a `copilot_first_turn` stub returning `None`:
+
+  ```
+  the_first_user_message_copilot_did_not_source_itself_is_the_label
+    left: None  right: Some("Add the login page")
+  test result: FAILED. 23 passed; 7 failed; 0 ignored; 0 measured; 0 filtered out
+
+  a_name_outranks_a_summary_and_a_summary_stands_in_for_a_missing_name
+    left: None  right: Some("The summary an older Copilot wrote")
+  the_label_is_the_first_turn_of_the_sessions_own_event_log
+    left: None  right: Some("The tenth record is the first turn")
+  test result: FAILED. 24 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+
+- **mutant** (the three tests that passed on their first run, so their red could not be observed):
+  - `a_block_summary_and_a_file_with_neither_key_are_no_title` — dropping the `|`/`>` guard in
+    `read_yaml_scalar` gives `left: Some("|-") right: None`. Killed.
+  - `a_first_turn_past_the_read_bound_is_no_label` — `.take(u64::MAX)` in `read_prefix` gives
+    `left: Some("Typed past the bound") right: None`. Killed.
+  - `a_copilot_log_with_nothing_typed_in_it_has_no_label` — dropping the `data.source` filter gives
+    `left: Some("skill context") right: None`. Killed.
+
+  Each mutant was restored with `git checkout --` and the file re-verified clean afterwards; the
+  commit was made **before** the probes (`efd49a08`), so nothing probe-related can reach a diff.
+- green: `copilot_first_turn` + `copilot_turn_text` in `crates/micold-core/src/first_turn.rs` (C4.1
+  `source`/`isAutopilotContinuation`, C4.2 `content`, C4.3 first non-empty, C4.4 nothing stripped);
+  `CopilotProvider::read_title` = `name:` else `summary:` and `read_yaml_scalar`'s block-scalar guard
+  (C7.1–C7.3); `CopilotProvider::read_label` = bounded prefix + `copilot_first_turn` (T036). T013's
+  placeholder "Copilot derives no label" assertion in `ai_cli_provider_seam.rs` was deleted, as that
+  task said it would be. User guide (T037) and the Copilot arm of the corpus probe (T038).
+  `cargo test -p micold-core --test first_turn_label --test copilot_provider --test
+  ai_cli_provider_seam --test ai_cli_provider`: 17 + 12 + 26 + 30 passed, 0 failed.
+- outer loop closed: `cargo test --test untitled_session_labels` — 21 passed, 0 failed (A5, A6 and
+  the Copilot US2 case among them), so T045 holds.
+- suite: `mise run gate` (see the milestone's ledger entry).
+- refactor: none. `copilot_first_turn` reuses `complete_lines`, `shape_label` and `read_prefix`
+  unchanged — the C2/C5 layers were built provider-agnostic in cycle 2, and this cycle is the
+  evidence that they are.
+- notes: the evidence probe (T038) is a **report**, not a verdict: SC-008/SC-009 are decided by the
+  listed-session fixture tests (D10). Its run over the development machine's 286 Copilot session
+  directories reads 139 titled, 2 labelled, 145 with neither — before this change the ~44 old
+  `summary:`-only sessions among them would have read as untitled.
