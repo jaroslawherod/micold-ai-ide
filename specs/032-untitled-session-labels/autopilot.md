@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/the-name-of-past-session-is-still-not-shown
 - **Started**: 2026-09-19
 - **Phase**: 4-milestones
-- **Next step**: M2 (T031–T038, T045) — M1 merged
+- **Next step**: M2 PR #396 open, waiting for CI; then M3 (T028–T030, T044, T039–T041)
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
 | M1 | T001–T027, T042, T043, T046 | Untitled `claude` sessions read their first turn after restart; a later title replaces it (US1 #1–4, US2); quickstart §B1/§B2 recorded | #395 | MERGED c5135f57 |
-| M2 | T031–T038, T045 | Listed Copilot sessions read `name:`, else `summary:`, else their first-turn label (US1 #5–6) | — | in progress |
+| M2 | T031–T038, T045 | Listed Copilot sessions read `name:`, else `summary:`, else their first-turn label (US1 #5–6) | #396 | open |
 | M3 | T028–T030, T044, T039–T041 | A running session shows its label within a minute of the first prompt, spinner first or not (US3); Polish, quickstart §B3 recorded | — | pending |
 
 M1 is 30 tasks (over milestones.md's ~15): kept whole because Setup + Foundational (16) have no deliverable of their own and every `claude` scenario (US1 #1–4) needs all of them, and US2 rides in M1 because without it a title arriving in the records could never replace a label (FR-006 regression on `main`). See tasks.md *Milestones*.
