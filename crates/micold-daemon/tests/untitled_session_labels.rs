@@ -755,6 +755,17 @@ fn nothing_but_the_recovery_path_writes_a_label() {
 // this feature does not make it one.
 // ---------------------------------------------------------------------------------------
 
+/// A catalog row for a Copilot session — [`session`] builds `claude` ones.
+fn copilot_session_row(id: Uuid, label: SessionLabel) -> Session {
+    Session::restored(
+        SessionId::from_uuid(id),
+        SessionLocation::Default,
+        label,
+        TerminalMode::AiCli,
+        AiCli::Copilot,
+    )
+}
+
 /// A synthetic Copilot record file from the core crate's first-turn fixtures (contract C4, C7).
 fn copilot_fixture(name: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -833,6 +844,26 @@ fn a_listed_copilot_session_with_only_a_summary_is_named_by_it_and_never_labelle
         label_of(&state, id),
         SessionLabel::Named("The summary an older Copilot wrote".into()),
         "an older Copilot's `summary:` is that session's title (FR-016, C7.1)"
+    );
+
+    // And by the other route into a row: a session the catalog already holds as `Pending` — the
+    // repair pass every project open runs (C6.2). It must reach the same answer, never a label.
+    let known = Uuid::from_u128(0x3244);
+    stores.copilot_session(
+        known,
+        Some("workspace_summary_only.yaml"),
+        Some("plain_first_turn.jsonl"),
+    );
+    let state = DaemonState::new(catalog_with(
+        data.path(),
+        vec![copilot_session_row(known, SessionLabel::Pending)],
+    ));
+
+    assert_eq!(state.recover_session_names(&project()), 1);
+    assert_eq!(
+        label_of(&state, known),
+        SessionLabel::Named("The summary an older Copilot wrote".into()),
+        "recovery reads the same title, and a titled session is never given a label (C6.2, C6.3)"
     );
 }
 

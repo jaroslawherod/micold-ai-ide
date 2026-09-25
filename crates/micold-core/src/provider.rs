@@ -545,13 +545,19 @@ impl CopilotProvider {
                 continue;
             };
             let value = value.trim();
+            // Tested on the **raw** value, before the quotes come off: a block scalar is an
+            // unquoted `|` or `>` where the value should be, while `summary: "> rewrite the
+            // release notes"` is an ordinary one-line title that happens to start with `>` (C7.2).
+            if value.starts_with(['|', '>']) {
+                return None;
+            }
             let unquoted = match (value.chars().next(), value.chars().last()) {
                 (Some('\''), Some('\'')) | (Some('"'), Some('"')) if value.len() >= 2 => {
                     &value[1..value.len() - 1]
                 }
                 _ => value,
             };
-            if unquoted.is_empty() || unquoted.starts_with(['|', '>']) {
+            if unquoted.is_empty() {
                 return None;
             }
             return Some(unquoted.to_string());
