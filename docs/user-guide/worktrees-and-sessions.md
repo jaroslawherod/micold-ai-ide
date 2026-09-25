@@ -516,6 +516,17 @@ prompt, or for a skill or slash command the text you gave it (just the command's
 app inserted into the conversation. If the CLI names the conversation later, that name replaces
 this label, and the label never comes back.
 
+**GitHub Copilot sessions follow the same rule.** A Copilot session the CLI has not named yet shows
+the first thing you typed in it, and switches to Copilot's own name for the conversation once it
+writes one. Text Copilot puts into the conversation itself — the context it loads for a skill, the
+instructions it discovers in the project, the prompts it writes to keep itself going — is not
+counted as something you typed.
+
+**A session from an older Copilot shows the summary it wrote.** Copilot 1.0.36 and earlier recorded
+its name for a conversation as a *summary* rather than a name. That summary is Copilot's own name
+for the session, so the row shows it, exactly as it shows a newer Copilot's name — and in preference
+to the first thing you typed.
+
 **"New session" means nothing has been typed in the conversation yet**, not that the app hasn't
 finished loading. A session you created and never talked to reads "New session" for as long as that
 is true. It does not wait around unnamed, though: with no conversation in it there is nothing to

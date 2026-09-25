@@ -774,8 +774,7 @@ impl ProviderStores {
             .map(|id| format!("    {:?}", id.to_string()))
             .collect::<Vec<_>>()
             .join(",\n");
-        let hashed =
-            micold_core::protocol::hashing::sha256_hex(cwd.to_string_lossy().as_bytes());
+        let hashed = micold_core::protocol::hashing::sha256_hex(cwd.to_string_lossy().as_bytes());
         std::fs::write(
             dir.join(format!("{hashed}.json")),
             format!(
