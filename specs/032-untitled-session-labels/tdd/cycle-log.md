@@ -177,3 +177,40 @@ observed failing first, then the two unit groups, then the implementation.
   listed-session fixture tests (D10). Its run over the development machine's 286 Copilot session
   directories reads 139 titled, 2 labelled, 145 with neither — before this change the ~44 old
   `summary:`-only sessions among them would have read as untitled.
+
+## Cycle 5 — US3: a running session gets its label too (U69; U68, U70, A10, A11 as guards)
+
+- tests: `crates/micold-daemon/tests/untitled_session_labels.rs`, four new tests over a **live**
+  session — catalog-known *and* registered in the runtime registry with a real PTY, the
+  `register_cat` / titler harness copied from `activity_pipeline.rs` (T028):
+  - `a_running_untitled_session_reads_its_label_on_the_tick_after_its_first_prompt` (A10
+    prompt-hook-first, U68)
+  - `a_spinner_drained_before_the_prompt_hook_still_gets_the_label` (A10 spinner-first, U69)
+  - `a_running_labelled_session_switches_to_the_title_its_terminal_reports` (A11)
+  - `an_idle_tick_that_changed_nothing_reads_no_records` (U70)
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test untitled_session_labels` →
+  24 passed, 1 failed.
+  - U69 `a_spinner_drained_before_the_prompt_hook_still_gets_the_label`, at the assertion that is
+    the behaviour: `assertion left == right failed: the drain that changed the activity must
+    re-arm the lookup too (C6.3b)` `left: 0` / `right: 1`. The spinner moved the session to
+    `Working`, so the `UserPromptSubmit` hook that followed changed nothing, `note_activity`
+    returned `false`, and `recover_live_session_names` had no candidate to read — the first turn
+    would have waited for the end of the turn (research R9, plan review F4).
+  - The first red of the same test was the harness, not the behaviour (`the braille spinner glyph
+    must reach the FSM`): `sessions_for` is the catalog alone and never carries activity, so the
+    helper now reads the broadcast snapshot (`catalog_snapshot`), as `activity_pipeline.rs` does.
+  - U68, U70, A10 (prompt-hook-first) and A11 were **green on arrival**: `note_activity` already
+    re-armed the flag and cycle 2 already made a label count toward the broadcast (C6.3a). They
+    are kept as guards over the half of FR-010 that shipped in M1 — U70 is the one that pins the
+    bound SC-006 rests on, that an idle tick reads no provider store at all.
+- green: `crates/micold-daemon/src/state.rs` `drain_signals` sets `live.name_stale = true` in the
+  `SpinnerObserved` branch whenever the FSM's signal changed, beside the `out.changed` it already
+  set there (T029, C6.3b). Three lines of comment cite FR-010 and R9.
+  `scripts/build-lock.sh cargo test -p micold-daemon --test untitled_session_labels` → 25 passed,
+  0 failed.
+- outer loop closed: the US3 acceptance tests pass with the full suite (T044); see the gate below.
+- suite: `mise run gate` (see the milestone's ledger entry).
+- refactor: none. The change is one field assignment in a branch that already existed; the honest
+  alternative — routing the drain's spinner through `note_activity` — would take the state lock
+  twice per tick per session on the 250 ms path, which is the very thing `drain_signals` is
+  written to avoid (module invariant, research R2).

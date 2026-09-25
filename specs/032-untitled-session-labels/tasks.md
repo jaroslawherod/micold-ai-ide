@@ -173,14 +173,14 @@ without reopening (quickstart B3).
 
 ### Tests for User Story 3 ⚠️ (mandatory; each seen failing first)
 
-- [ ] T028 [US3] [A10] [A11] [U68] [U69] [U70] Write failing tests in `crates/micold-daemon/tests/untitled_session_labels.rs`, copying the `register_cat` / `cat` PTY harness from `crates/micold-daemon/tests/activity_pipeline.rs` so the session is both catalog-known and live: a live untitled session, `note_activity` busy → the next `recover_live_session_names` records the label and returns > 0 (C6.3a); **spinner first**: `drain_signals` applies `SpinnerObserved`, then the prompt hook arrives with no activity change, and the next `recover_live_session_names` still records the label (C6.3b, research R9); an idle tick with no change reads nothing
+- [X] T028 [US3] [A10] [A11] [U68] [U69] [U70] Write failing tests in `crates/micold-daemon/tests/untitled_session_labels.rs`, copying the `register_cat` / `cat` PTY harness from `crates/micold-daemon/tests/activity_pipeline.rs` so the session is both catalog-known and live: a live untitled session, `note_activity` busy → the next `recover_live_session_names` records the label and returns > 0 (C6.3a); **spinner first**: `drain_signals` applies `SpinnerObserved`, then the prompt hook arrives with no activity change, and the next `recover_live_session_names` still records the label (C6.3b, research R9); an idle tick with no change reads nothing
 
 ### Implementation for User Story 3
 
-- [ ] T029 [US3] [A10] [A11] [U68] [U69] [U70] In `crates/micold-daemon/src/state.rs` `drain_signals`, set `live.name_stale = true` whenever the `SpinnerObserved` branch changes the session's activity, with a comment citing 032 FR-010 and research R9
-- [ ] T030 [US3] Add to `docs/user-guide/worktrees-and-sessions.md` that a session you are working in gets the same label within a minute of your first prompt, and switches to the CLI's title when it has one
+- [X] T029 [US3] [A10] [A11] [U68] [U69] [U70] In `crates/micold-daemon/src/state.rs` `drain_signals`, set `live.name_stale = true` whenever the `SpinnerObserved` branch changes the session's activity, with a comment citing 032 FR-010 and research R9
+- [X] T030 [US3] Add to `docs/user-guide/worktrees-and-sessions.md` that a session you are working in gets the same label within a minute of your first prompt, and switches to the CLI's title when it has one
 
-- [ ] T044 [US3] [A10] [A11] Outer loop green: the US3 acceptance tests in `crates/micold-daemon/tests/untitled_session_labels.rs` pass with the full suite
+- [X] T044 [US3] [A10] [A11] Outer loop green: the US3 acceptance tests in `crates/micold-daemon/tests/untitled_session_labels.rs` pass with the full suite
 
 **Checkpoint**: running `claude` and Copilot sessions agree with what they will show after a restart.
 
@@ -188,7 +188,7 @@ without reopening (quickstart B3).
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T039 Update the module doc of `crates/micold-core/src/provider.rs` (seam method list, contract links: add `specs/032-untitled-session-labels/contracts/first-turn-label.md`) and the doc comments of `recover_session_names` / `record_recovered_names` in `crates/micold-daemon/src/state.rs` that still say "unnamed = `Pending`"
+- [X] T039 Update the module doc of `crates/micold-core/src/provider.rs` (seam method list, contract links: add `specs/032-untitled-session-labels/contracts/first-turn-label.md`) and the doc comments of `recover_session_names` / `record_recovered_names` in `crates/micold-daemon/src/state.rs` that still say "unnamed = `Pending`"
 - [ ] T040 Run quickstart §B1 for Copilot rows and §B3 (running session, `claude` and Copilot) on the development machine and append the output and pass/fail per step to `specs/032-untitled-session-labels/evidence/quickstart-b.md` (created by T046)
 - [ ] T041 Run `mise run gate` and record the passing SHA in the milestone PR body
 

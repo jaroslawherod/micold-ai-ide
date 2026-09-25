@@ -1,5 +1,5 @@
 //! A session the AI CLI never titled still gets a label: the first thing the user typed in it
-//! (feature 032 — spec US1, US2; contract `specs/032-untitled-session-labels/contracts/
+//! (feature 032 — spec US1, US2, US3; contract `specs/032-untitled-session-labels/contracts/
 //! first-turn-label.md`, C6).
 //!
 //! The row text a client shows is `SessionSummary.title` from the daemon's catalog. These tests
@@ -17,17 +17,22 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 use micold_core::project::{Availability, Project};
+use micold_core::protocol::messages::ActivitySignal;
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
+use micold_daemon::activity::{ActivityEvent, HookKind};
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
+use micold_daemon::supervisor::PtySession;
+use portable_pty::CommandBuilder;
 use uuid::Uuid;
 
 /// Serialises every test that sets the providers' environment variables (see the module doc).
@@ -930,4 +935,263 @@ fn a_labelled_copilot_session_reads_the_name_its_workspace_file_gained() {
         SessionLabel::Named("Add the login page and its route".into()),
         "the title replaces the label on disk too (FR-006)"
     );
+}
+
+// ---------------------------------------------------------------------------------------
+// US3 (T028) — a session I am working in gets its label too (A10, A11, C6.3a, C6.3b)
+//
+// These tests drive a **live** session: catalog-known and registered in the runtime registry with
+// a real PTY, exactly as the supervisor sees it. The pass under test is
+// `recover_live_session_names`, which the supervisor runs on its 250 ms tick for every session
+// whose `name_stale` flag an event has set. Within FR-010's minute, that is one or two ticks.
+// ---------------------------------------------------------------------------------------
+
+/// Register a `cat` PTY (`cmd /q` on Windows) under the catalog-known id, so the session is both
+/// durable and live — the harness `activity_pipeline.rs` uses for the same reason.
+fn register_cat(state: &DaemonState, id: SessionId) -> Arc<PtySession> {
+    #[cfg(unix)]
+    let mut cmd = CommandBuilder::new("cat");
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut cmd = CommandBuilder::new("cmd");
+        cmd.arg("/q");
+        cmd
+    };
+    cmd.cwd(std::env::temp_dir());
+    let session = PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("spawn cat session");
+    state.register_session(session)
+}
+
+/// Register a live session whose process sets the OSC-0 title `title` and then idles — how a
+/// braille-spinner glyph reaches the emulator in production.
+#[cfg(unix)]
+fn register_titler(state: &DaemonState, id: SessionId, title: &str) -> Arc<PtySession> {
+    let mut cmd = CommandBuilder::new("sh");
+    cmd.arg("-c");
+    cmd.arg(format!("printf '\\033]0;{title}\\007'; sleep 30"));
+    cmd.cwd(std::env::temp_dir());
+    let session = PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("spawn titler session");
+    state.register_session(session)
+}
+
+/// ConPTY does not pass a child's escape sequences through verbatim — it re-renders console state
+/// as VT — so on Windows the child sets the console title and ConPTY emits the OSC-0 for it.
+#[cfg(windows)]
+fn register_titler(state: &DaemonState, id: SessionId, title: &str) -> Arc<PtySession> {
+    let codes: Vec<String> = title.encode_utf16().map(|unit| unit.to_string()).collect();
+    let mut cmd = CommandBuilder::new("powershell");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command"]);
+    cmd.arg(format!(
+        "[Console]::Title = -join [char[]]({}); Start-Sleep -Seconds 30",
+        codes.join(",")
+    ));
+    cmd.cwd(std::env::temp_dir());
+    let session = PtySession::spawn(id, cmd, 1_000, Some((80, 24))).expect("spawn titler session");
+    state.register_session(session)
+}
+
+/// Poll `cond` until it holds or `timeout` runs out — a real child process writes when it writes.
+fn wait_until(timeout: Duration, mut cond: impl FnMut() -> bool) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if cond() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    cond()
+}
+
+/// The activity badge a client would be sent for `id`. Read from the broadcast snapshot, which is
+/// where a live session's FSM is projected over its durable record — `sessions_for` is the catalog
+/// alone and never carries activity.
+fn activity_of(state: &DaemonState, id: Uuid) -> ActivitySignal {
+    state
+        .catalog_snapshot()
+        .projects
+        .into_iter()
+        .flat_map(|p| p.sessions)
+        .find(|s| s.id.0 == id)
+        .map(|s| s.activity)
+        .expect("session is in the snapshot")
+}
+
+/// The braille spinner frame `claude` puts in front of its terminal title while it works. The
+/// title itself is the product name, which is never a session name (FR-004), so this is spinner
+/// evidence and nothing else — which is exactly the case C6.3b is about.
+const SPINNER_TITLE: &str = "\u{280B} Claude Code";
+
+#[test]
+fn a_running_untitled_session_reads_its_label_on_the_tick_after_its_first_prompt() {
+    // A10 (US3 #1, FR-010, SC-007), prompt-hook-first order; U68 (C6.3a).
+    let stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3281);
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(data.path(), vec![session(id, SessionLabel::Pending)]);
+    let pty = register_cat(&state, SessionId::from_uuid(id));
+
+    // The pass that follows the spawn has nothing to find: nothing has been typed yet.
+    assert_eq!(
+        state.recover_live_session_names(),
+        0,
+        "an empty conversation has no label source (FR-004)"
+    );
+    assert_eq!(label_of(&state, id), SessionLabel::Pending);
+
+    // The user types. `claude` writes the record ~200 ms before its `UserPromptSubmit` hook fires
+    // (research R9), so the records are already on disk when the flag is re-armed.
+    stores.claude_transcript(&cwd(), id, &claude_fixture("bare_skill.jsonl"));
+    assert!(
+        state.note_activity(
+            SessionId::from_uuid(id),
+            ActivityEvent::Hook(HookKind::UserPromptSubmit)
+        ),
+        "the first prompt moves the session to Working, and that change re-arms the live lookup"
+    );
+
+    assert_eq!(
+        state.recover_live_session_names(),
+        1,
+        "a label counts as a recovered name, so the supervisor broadcasts on this very tick \
+         (C6.3a, SC-007)"
+    );
+    assert_eq!(
+        label_of(&state, id),
+        SessionLabel::Derived("/speckit-autopilot".into()),
+        "the row changes without the user reopening anything (US3 #1)"
+    );
+    assert_eq!(
+        label_in(&catalog_at(data.path()), id),
+        SessionLabel::Derived("/speckit-autopilot".into()),
+        "persisted on the spot, so a restart shows the same row (FR-007)"
+    );
+
+    pty.kill().expect("kill");
+}
+
+#[test]
+fn a_spinner_drained_before_the_prompt_hook_still_gets_the_label() {
+    // A10 (US3 #1, FR-010) in the other order, and U69 (C6.3b, research R9): the spinner is seen
+    // first, so it is the drain — not the hook — that moves the session to Working. The hook then
+    // changes nothing, and before C6.3b nothing re-armed the lookup until the turn ended.
+    let stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3282);
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(data.path(), vec![session(id, SessionLabel::Pending)]);
+    let pty = register_titler(&state, SessionId::from_uuid(id), SPINNER_TITLE);
+
+    // Spend the flag the spawn itself set, before anything is typed.
+    assert_eq!(state.recover_live_session_names(), 0);
+    assert_eq!(label_of(&state, id), SessionLabel::Pending);
+
+    stores.claude_transcript(&cwd(), id, &claude_fixture("bare_skill.jsonl"));
+
+    let spun = wait_until(Duration::from_secs(10), || {
+        state.drain_signals();
+        activity_of(&state, id) == ActivitySignal::Working
+    });
+    assert!(
+        spun,
+        "the braille spinner glyph must reach the FSM as Working evidence (H1a)"
+    );
+    assert_eq!(
+        label_of(&state, id),
+        SessionLabel::Pending,
+        "the product name is not a session name, so the drain observed no title (FR-004)"
+    );
+
+    assert!(
+        !state.note_activity(
+            SessionId::from_uuid(id),
+            ActivityEvent::Hook(HookKind::UserPromptSubmit)
+        ),
+        "the hook finds the session already Working, so it changes nothing — this is the order \
+         that used to leave the label until the end of the turn"
+    );
+
+    assert_eq!(
+        state.recover_live_session_names(),
+        1,
+        "the drain that changed the activity must re-arm the lookup too (C6.3b)"
+    );
+    assert_eq!(
+        label_of(&state, id),
+        SessionLabel::Derived("/speckit-autopilot".into()),
+        "whichever of the spinner and the hook arrives first, the row reads the label (FR-010)"
+    );
+
+    pty.kill().expect("kill");
+}
+
+#[test]
+fn a_running_labelled_session_switches_to_the_title_its_terminal_reports() {
+    // A11 (US3 #2, FR-006): the same live session, one tick later. `claude` names its conversation
+    // in the terminal title; that title replaces the label on the row and on disk.
+    let stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3284);
+    stores.claude_transcript(&cwd(), id, &claude_fixture("bare_skill.jsonl"));
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(data.path(), vec![session(id, SessionLabel::Pending)]);
+    let pty = register_titler(
+        &state,
+        SessionId::from_uuid(id),
+        "\u{280B} Autopilot the spec flow",
+    );
+
+    assert_eq!(state.recover_live_session_names(), 1);
+    assert_eq!(
+        label_of(&state, id),
+        SessionLabel::Derived("/speckit-autopilot".into()),
+        "the label is what the row shows until the CLI names the conversation"
+    );
+
+    // The supervisor's own loop: drain the terminal, then persist what it handed back.
+    let named = wait_until(Duration::from_secs(10), || {
+        let names = state.drain_signals().names;
+        state.record_observed_names(&names);
+        label_of(&state, id) == SessionLabel::Named("Autopilot the spec flow".into())
+    });
+    assert!(
+        named,
+        "the title the terminal reported must replace the label (FR-006); \
+         the row still reads {:?}",
+        label_of(&state, id)
+    );
+    assert_eq!(
+        label_in(&catalog_at(data.path()), id),
+        SessionLabel::Named("Autopilot the spec flow".into()),
+        "and it outlives the label on disk, so a restart agrees (FR-007)"
+    );
+
+    pty.kill().expect("kill");
+}
+
+#[test]
+fn an_idle_tick_that_changed_nothing_reads_no_records() {
+    // U70 (SC-006): the flag is the bound on this pass. A tick where no event moved anything reads
+    // no provider store at all, however many records are sitting there.
+    let stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3283);
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(data.path(), vec![session(id, SessionLabel::Pending)]);
+    let pty = register_cat(&state, SessionId::from_uuid(id));
+
+    // Spend the spawn's flag, then put the records in place behind the daemon's back.
+    assert_eq!(state.recover_live_session_names(), 0);
+    stores.claude_transcript(&cwd(), id, &claude_fixture("bare_skill.jsonl"));
+
+    for _ in 0..3 {
+        assert!(
+            !state.drain_signals().changed,
+            "a quiet session changes nothing on a drain"
+        );
+        assert_eq!(
+            state.recover_live_session_names(),
+            0,
+            "an idle tick reads nothing: only an event re-arms the lookup (SC-006)"
+        );
+    }
+    assert_eq!(label_of(&state, id), SessionLabel::Pending);
+
+    pty.kill().expect("kill");
 }

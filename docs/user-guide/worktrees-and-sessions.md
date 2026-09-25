@@ -544,6 +544,13 @@ looked up in its own CLI's records, once, and keeps the name it finds, or failin
 thing you typed. A session whose conversation the CLI no longer has keeps what it was already
 showing; nothing takes a name or a label away.
 
+**A session you are working in right now is no different.** Type your first prompt into a session
+the CLI has not named, and within a minute its row reads that prompt — you do not have to reopen
+the project, restart anything or switch away and back. It makes no difference whether the CLI
+starts working before or after it tells the app that you typed; either way the row catches up on
+its own. And when the CLI names the conversation later, the row switches to that name while you
+watch, the same as it would after a restart.
+
 ## Choosing which AI CLI a session runs
 
 A session runs one AI coding CLI — Claude Code, GitHub Copilot or Pi Coding Agent — and which one is
