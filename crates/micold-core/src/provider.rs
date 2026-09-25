@@ -480,7 +480,10 @@ impl AiCliProvider for ClaudeProvider {
 // ---------------------------------------------------------------------------------------
 
 /// GitHub's `copilot` CLI. Verified against 1.0.62 and re-verified against 1.0.80 (research
-/// R1–R6, R12). See `specs/026-multi-provider-sessions/contracts/copilot-cli.md`.
+/// R1–R6, R12). See `specs/026-multi-provider-sessions/contracts/copilot-cli.md` — with one clause
+/// of it since superseded: that contract says only `name:` is ever read from `workspace.yaml`, and
+/// feature 032 (FR-016, `specs/032-untitled-session-labels/contracts/first-turn-label.md` C7) added
+/// the older `summary:` behind it and a first-turn label from `events.jsonl`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CopilotProvider;
 

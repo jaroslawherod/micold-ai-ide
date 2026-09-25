@@ -57,7 +57,16 @@ D2–D4 applied to spec.md (FR-002, FR-006, FR-012 + *Copilot evidence*, US1 #5,
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M1 | A (code-review, high) | F1 BLOCKER: `first_turn.rs:81` carries an uncommitted `// MUTANT` line that makes `claude_first_turn` always return `None`. | Not in the diff. The reviewer read the working tree while this unit's own mutation probe was running in it (cycle log, cycle 3 *mutant*); the probe restored the file with `git checkout --` minutes later, and `git show HEAD:…/first_turn.rs` never held the line. The committed diff was the reviewer's own verdict: clean. |
+| M2 | A (code-review, high) | F2 low: `specs/026-multi-provider-sessions/contracts/copilot-cli.md:124` still says only `name:` is read from `workspace.yaml`, which this milestone makes false. | The fix is right, the file is not ours: 026 is another feature's spec directory and this flow never edits one (SKILL.md *Ownership*). Resolved from our own side instead — `CopilotProvider`'s rustdoc now names the superseded clause and points at 032's C7 — and the 026 amendment is recorded under *Follow-ups not done*. |
+| M2 | B (conformance) | F3 MINOR: `first_turn_label_corpus.rs` re-implements the provider's scalar rule instead of calling it, so the two can drift. | Declined, as the reviewer itself allowed ("none required"). The probe walks a *directory listing*, and `read_title` finds a session by id through a path the listing cannot give back; exposing the private scalar reader to widen a report that is explicitly evidence and not a verdict (D10) buys less than it costs. The copy is labelled as one in its doc comment. |
 | M1 | visual pass (§B2 step 2) | The hover tooltip on a session row does not show the label. | Session rows have no tooltip on `main` either (`session_tree_item()` in `crates/micold-client/src/ui/sidebar.rs` never calls `.row_tooltip(..)`, and that file is unchanged by this branch), so a label is treated exactly as a title is (D7, FR-015). Adding one is new behaviour, outside M1's tasks; recorded under *Follow-ups not done*. |
+
+### Milestone code review log
+
+| Milestone | Review | Verdict | Findings | Resolution |
+|---|---|---|---|---|
+| M2 | A (code-review, high) | 2 low | F1 the block-scalar guard ran after quote stripping, so a quoted title beginning with `>` or `|` was discarded; F2 the 026 Copilot contract contradicts FR-016. | F1 fixed (`05d48d15`, raw-value test) — the reviewer's own corpus check found 2 real sessions with `name: |-` that used to title a row `|-`, so the guard is a fix and not only a guard. F2 declined, see above. |
+| M2 | B (conformance) | CLEAN | 3 MINOR: F1 (same block-scalar finding as A's), F2 A5/A6 drove discovery only, not recovery, F3 the corpus probe copies the scalar rule. | F1 and F2 fixed; F3 declined, see above. |
 
 ### Spec review log
 
@@ -91,5 +100,9 @@ None (the 2026-09-19 old-Copilot-session escalation was answered: D10).
   needs its own spec.
 
 - Old Copilot sessions missing from Copilot's per-cwd index are not discovered (D10); a scan of `~/.copilot/session-state/*/workspace.yaml` by `cwd:` would surface 30 of the 44 under `max-speed`.
+- `specs/026-multi-provider-sessions/contracts/copilot-cli.md` still says only `name:` is ever read
+  from a Copilot `workspace.yaml`. M2's FR-016 makes that false (`summary:` behind it, and a
+  `|`/`>` value rejected). Found by M2's review A; not fixed here because 026 is another feature's
+  spec directory. `CopilotProvider`'s rustdoc names the superseded clause in the meantime.
 - Carried from 029 BUG-001 ledger: `custom-title` / `agent-name` records ignored by `ClaudeProvider::parse_title` (candidate 029 BUG, out of scope here).
 - Carried from 029 BUG-001 ledger: unverified `micold_time_track` untitled rows whose transcripts hold `ai-title`s.
