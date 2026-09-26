@@ -377,11 +377,17 @@ impl ClaudeProvider {
             .join(format!("{session_id}.archived"))
     }
 
-    /// The latest `{"type":"ai-title","aiTitle":"…"}` record in a JSONL transcript, if any.
+    /// The name `claude` **currently** holds for the conversation, from its JSONL transcript.
     ///
-    /// Latest wins — the title grows and changes with the conversation. Best-effort: blank and
-    /// unparseable lines are skipped, and an empty `aiTitle` is ignored.
+    /// The latest non-empty `{"type":"custom-title","customTitle":"…}` if there is one: that kind
+    /// alone ranks above position, because `claude` re-emits the *pre-rename*
+    /// `{"type":"ai-title","aiTitle":"…"}` on every turn after a `/rename`, so the last name record
+    /// written is not the current name (C16.1, BUG-002). Failing that, the latest `ai-title` by
+    /// position — the title grows and changes with the conversation.
+    ///
+    /// Best-effort: blank and unparseable lines are skipped, and an empty value is not a name.
     fn parse_title(&self, transcript: &str) -> Option<String> {
+        let mut custom = None;
         let mut latest = None;
         for line in transcript.lines() {
             let line = line.trim();
@@ -391,16 +397,18 @@ impl ClaudeProvider {
             let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
                 continue;
             };
-            if value.get("type").and_then(|t| t.as_str()) != Some("ai-title") {
-                continue;
-            }
-            if let Some(title) = value.get("aiTitle").and_then(|t| t.as_str()) {
-                if !title.is_empty() {
-                    latest = Some(title.to_string());
+            let (slot, field) = match value.get("type").and_then(|t| t.as_str()) {
+                Some("custom-title") => (&mut custom, "customTitle"),
+                Some("ai-title") => (&mut latest, "aiTitle"),
+                _ => continue,
+            };
+            if let Some(name) = value.get(field).and_then(|t| t.as_str()) {
+                if !name.is_empty() {
+                    *slot = Some(name.to_string());
                 }
             }
         }
-        latest
+        custom.or(latest)
     }
 }
 

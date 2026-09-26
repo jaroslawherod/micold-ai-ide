@@ -412,3 +412,45 @@ fn the_title_and_the_label_are_read_from_the_same_file_and_never_mixed() {
         "and `read_label` never answers a title (C1.4)"
     );
 }
+
+/// The three name records `claude` re-emits together on every turn after a `/rename`, in the order
+/// the real transcript writes them: `custom-title`, then the **pre-rename** `ai-title`, then
+/// `agent-name` (BUG-002 *What `claude` writes after a `/rename`*, `c4cc3dca…` lines 12058-12060,
+/// 12080-12082).
+fn renamed_turn() -> String {
+    [
+        r#"{"type":"custom-title","customTitle":"Windows package"}"#,
+        r#"{"type":"ai-title","aiTitle":"PR 284 macOS feature"}"#,
+        r#"{"type":"agent-name","agentName":"Windows package"}"#,
+        "",
+    ]
+    .join("\n")
+}
+
+#[test]
+fn a_rename_is_the_current_name_not_the_ai_title_it_replaced() {
+    // BUG-002's regression gate (T031). `claude`'s `/rename` writes a `custom-title` and keeps
+    // re-emitting the `ai-title` it replaced on every later turn, so "the latest record written" is
+    // the *old* name. The rename is the conversation's current name and must win (FR-005, C16.1).
+    let id = fixed_id();
+    let config = tempfile::tempdir().unwrap();
+    write_transcript(
+        config.path(),
+        CWD,
+        id,
+        &format!(
+            "{}{}{}{}",
+            typed("Package it for Windows"),
+            renamed_turn(),
+            typed("And a second turn after the rename"),
+            renamed_turn(),
+        ),
+    );
+
+    assert_eq!(
+        ClaudeProvider.read_title(config.path(), Path::new(CWD), id),
+        Some("Windows package".to_string()),
+        "the user's `/rename` is the conversation's current name; the pre-rename `ai-title` beside \
+         it is stale by construction and must not come back (C16.1)"
+    );
+}
