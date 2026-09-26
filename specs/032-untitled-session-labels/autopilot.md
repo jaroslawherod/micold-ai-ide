@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/the-name-of-past-session-is-still-not-shown
 - **Started**: 2026-09-19
 - **Phase**: 4-milestones
-- **Next step**: M3 (T028–T030, T044, T039–T041) in progress
+- **Next step**: M3 PR open, waiting for CI; then Phase 5 (close: converge, tdd-verify, docguard)
 
 ## Pull requests
 
@@ -18,6 +18,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #388 | Design (clarify, plan, tasks, milestones) | MERGED 2026-09-19 | 6e21c19a |
 | #395 | M1 — untitled `claude` sessions read their first turn | MERGED 2026-09-25 | c5135f57 |
 | #396 | M2 — Copilot `summary:` titles and first-turn labels | MERGED 2026-09-25 | bc3bd95a |
+| #PRNUM | M3 — a running session reads its label whichever signal arrives first | open | — |
 
 ## Milestones
 
@@ -25,7 +26,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|---|
 | M1 | T001–T027, T042, T043, T046 | Untitled `claude` sessions read their first turn after restart; a later title replaces it (US1 #1–4, US2); quickstart §B1/§B2 recorded | #395 | MERGED c5135f57 |
 | M2 | T031–T038, T045 | Listed Copilot sessions read `name:`, else `summary:`, else their first-turn label (US1 #5–6) | #396 | MERGED bc3bd95a |
-| M3 | T028–T030, T044, T039–T041 | A running session shows its label within a minute of the first prompt, spinner first or not (US3); Polish, quickstart §B3 recorded | — | in progress |
+| M3 | T028–T030, T044, T047, T039–T041 | A running session shows its label within a minute of the first prompt, spinner first or not (US3); Polish, quickstart §B1 (Copilot) + §B3 recorded | #PRNUM | open |
 
 M1 is 30 tasks (over milestones.md's ~15): kept whole because Setup + Foundational (16) have no deliverable of their own and every `claude` scenario (US1 #1–4) needs all of them, and US2 rides in M1 because without it a title arriving in the records could never replace a label (FR-006 regression on `main`). See tasks.md *Milestones*.
 
@@ -45,6 +46,7 @@ M1 is 30 tasks (over milestones.md's ~15): kept whole because Setup + Foundation
 | D8 | 2-clarify r1 | Must FR-014's bound cover the Copilot sessions? | Yes, the 44 sessions' first turns (SC-009 since D9) (first turn at record 2–10). | agent-resolved | spec.md *Copilot evidence* |
 | D9 | 3-design | Is Copilot's `summary:` read as the session title when `name:` is absent (Copilot 1.0.10–1.0.36 sessions)? | Yes: "read the old copilot summary as the name too". `name:` wins; `summary:` ranks above a derived label. Applied as FR-016, US1 #6, SC-008 (rewritten), SC-009. | decided by user | spec.md *Copilot evidence*; 44 sessions on the dev machine |
 | D10 | 3-design | The 44 old Copilot sessions are in no Copilot index and not in micold's catalog, so never rows: discover them by scanning `session-state/*/workspace.yaml`? | (A) No: FR-016 applies to listed sessions; US1 #6, SC-008, SC-009 rescoped to listed sessions, verified with fixtures; no new discovery. | decided by user | plan review r1 F1; 0 of 44 in the 4 index ids |
+| D11 | 4-M3 | Is T047 (the prompt hook always re-arming the lookup) new behaviour needing a spec change? | No: FR-010 already promises the label within a minute of the first prompt. The gap was in the contract's mechanism, so C6.3c and research R9 were amended and T047 added to M3; no requirement changed. | agent-resolved | spec.md FR-010, SC-007; contracts/first-turn-label.md C6.3c |
 
 D2–D4 applied to spec.md (FR-002, FR-006, FR-012 + *Copilot evidence*, US1 #5, SC-008) on 2026-09-19.
 
@@ -66,6 +68,8 @@ D2–D4 applied to spec.md (FR-002, FR-006, FR-012 + *Copilot evidence*, US1 #5,
 
 | Milestone | Review | Verdict | Findings | Resolution |
 |---|---|---|---|---|
+| M3 | A (code-review, high) | 1 medium, 1 low | F1 medium: cycle 5's re-arm is **one-shot per live session** — `SpinnerObserved` only moves `Unknown → Working`, so a CLI drawing a spinner while it starts up spends that transition before anything is typed and the prompt hook then re-arms nothing, leaving the first turn unread until the closing `Stop`. F2 low: the cycle log claimed `mise run gate` evidence before the gate was recorded. | Both accepted, nothing declined. F1 verified against `activity.rs:102-106` and `state.rs` `note_activity` (the re-arm was `|= changed` only), reproduced as a failing test (U72), fixed by T047 — added to M3 as a task, with contract C6.3c and research R9 amended — and the whole US3 file re-run green (26 tests). F2 fixed: the cycle-log line now points forward to the ledger, where the passing SHA is recorded. |
+| M3 | B (conformance) | CHANGES, no BLOCKER/MAJOR | 3 MINOR: F1 the test list typed A11/U68/U70 as `example` while the cycle log records them as green on arrival; F2 `drain_signals`' doc comment did not name the new `name_stale` side effect; F3 T040/T041 (quickstart §B3 evidence, gate SHA) still open. | All three accepted and fixed (`10509fb4` for F1 and F2; F3 by running the §B1 Copilot probe and the §B3 visual pass and recording both in `evidence/quickstart-b.md`). Nothing declined. |
 | M2 | A (code-review, high) | 2 low | F1 the block-scalar guard ran after quote stripping, so a quoted title beginning with `>` or `|` was discarded; F2 the 026 Copilot contract contradicts FR-016. | F1 fixed (`05d48d15`, raw-value test) — the reviewer's own corpus check found 2 real sessions with `name: |-` that used to title a row `|-`, so the guard is a fix and not only a guard. F2 declined, see above. |
 | M2 | B (conformance) | CLEAN | 3 MINOR: F1 (same block-scalar finding as A's), F2 A5/A6 drove discovery only, not recovery, F3 the corpus probe copies the scalar rule. | F1 and F2 fixed; F3 declined, see above. |
 
@@ -95,6 +99,12 @@ D2–D4 applied to spec.md (FR-002, FR-006, FR-012 + *Copilot evidence*, US1 #5,
 None (the 2026-09-19 old-Copilot-session escalation was answered: D10).
 
 ## Follow-ups not done
+
+- Quickstart §B3 step 1 could not isolate a `claude` row showing the raw prompt *distinct from* a
+  title: `claude` 2.1.283 titles a conversation in 0.4–3.5 s, so its untitled window is shorter than
+  the pass can catch, even with the child frozen. The behaviour is proved on Copilot instead (step 3,
+  same daemon path) and by the US3 tests; nothing is missing from the code. Recorded in
+  `evidence/quickstart-b.md`.
 
 - Session rows have no hover tooltip at all (worktree rows do), so a label or a title cut at 80
   characters cannot be read in full. Pre-existing on `main`, found by M1's quickstart §B2 pass;
