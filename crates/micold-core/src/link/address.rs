@@ -7,6 +7,11 @@ pub enum Address {
     Web(String),
     /// `mailto`, verbatim.
     Mail(String),
+    /// A `file://host/path` address, with `path` percent-decoded (FR-012, C9).
+    ///
+    /// `host` is empty when the address named none (`file:///…`). Whether the host is *this*
+    /// machine, and what the path means here, is `resolve`'s question.
+    File { host: String, path: String },
     /// Anything this feature never opens.
     NotFollowable,
 }
@@ -21,9 +26,48 @@ pub fn classify(uri: &str) -> Address {
         Address::Web(uri.to_string())
     } else if starts_with("mailto:") {
         Address::Mail(uri.to_string())
+    } else if starts_with("file://") {
+        file(&uri["file://".len()..])
     } else {
         Address::NotFollowable
     }
+}
+
+/// `host/path` after a `file://` scheme (C4–C10).
+///
+/// The path keeps its leading `/`, as every caller reads it as absolute. A path that cannot be
+/// decoded is no address at all, rather than one pointing somewhere the escape did not name.
+fn file(rest: &str) -> Address {
+    let Some(slash) = rest.find('/') else {
+        return Address::NotFollowable;
+    };
+    let (host, path) = rest.split_at(slash);
+    match percent_decode(path) {
+        Some(path) => Address::File {
+            host: host.to_string(),
+            path,
+        },
+        None => Address::NotFollowable,
+    }
+}
+
+/// `text` with each `%XX` turned into its byte, or `None` for an invalid escape or a result that is
+/// not UTF-8 (C10).
+fn percent_decode(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'%' {
+            out.push(bytes[i]);
+            i += 1;
+            continue;
+        }
+        let hex = text.get(i + 1..i + 3)?;
+        out.push(u8::from_str_radix(hex, 16).ok()?);
+        i += 3;
+    }
+    String::from_utf8(out).ok()
 }
 
 #[cfg(test)]
@@ -62,6 +106,67 @@ mod tests {
             classify("MailTo:team@example.com"),
             Address::Mail("MailTo:team@example.com".to_string()),
             "a mixed-case mail scheme is a mail address"
+        );
+    }
+
+    /// U31: C9 — the host and the path, with the escapes a program prints decoded.
+    #[test]
+    fn a_file_address_carries_its_host_and_its_decoded_path() {
+        assert_eq!(
+            classify("file:///home/u/a.txt"),
+            Address::File {
+                host: String::new(),
+                path: "/home/u/a.txt".to_string(),
+            },
+            "an empty host is this machine (C4)"
+        );
+        assert_eq!(
+            classify("file://build.example.com/p/My%20Doc.pdf"),
+            Address::File {
+                host: "build.example.com".to_string(),
+                path: "/p/My Doc.pdf".to_string(),
+            },
+            "the host is kept as written and %20 is decoded to a space (C5, C9)"
+        );
+        assert_eq!(
+            classify("FILE://localhost/tmp/x"),
+            Address::File {
+                host: "localhost".to_string(),
+                path: "/tmp/x".to_string(),
+            },
+            "the file scheme is matched whatever its case"
+        );
+        assert_eq!(
+            classify("file://host"),
+            Address::NotFollowable,
+            "a file address with no path is no file (FR-001)"
+        );
+    }
+
+    /// U32: C10 — a guard. Its red is the mutant in tdd/test-list.md: a decoder that passes an
+    /// invalid escape through literally.
+    #[test]
+    fn a_file_path_that_cannot_be_decoded_is_not_followable() {
+        for uri in [
+            "file:///p/%ZZ",
+            "file:///p/%2",
+            "file:///p/%",
+            // `%FF` alone is not UTF-8.
+            "file:///p/%FF",
+        ] {
+            assert_eq!(
+                classify(uri),
+                Address::NotFollowable,
+                "{uri} cannot be decoded into a path, so it opens nothing (C10)"
+            );
+        }
+        assert_eq!(
+            classify("file:///p/%C3%A9.txt"),
+            Address::File {
+                host: String::new(),
+                path: "/p/é.txt".to_string(),
+            },
+            "a well-formed multi-byte escape decodes to its character"
         );
     }
 
