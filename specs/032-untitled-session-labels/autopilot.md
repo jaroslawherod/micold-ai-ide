@@ -7,8 +7,9 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: fix/the-name-of-past-session-is-still-not-shown
 - **Started**: 2026-09-19
-- **Phase**: 5-close
-- **Next step**: close phase — converge, tdd-verify, docguard, then the close PR
+- **Phase**: done
+- **Next step**: handoff. The close PR must read `MERGED` first (the orchestrator merges it); then
+  send the WORK COMPLETE handoff with the *Follow-ups not done* list below.
 
 ## Pull requests
 
@@ -19,6 +20,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #395 | M1 — untitled `claude` sessions read their first turn | MERGED 2026-09-25 | c5135f57 |
 | #396 | M2 — Copilot `summary:` titles and first-turn labels | MERGED 2026-09-25 | bc3bd95a |
 | #399 | M3 — a running session reads its label whichever signal arrives first | MERGED 2026-09-26 | 4890b91e |
+| #PENDING | Close — spec `Closed`, the close-phase audits and their remediation | open | — |
 
 ## Milestones
 
@@ -31,6 +33,56 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 M1 is 30 tasks (over milestones.md's ~15): kept whole because Setup + Foundational (16) have no deliverable of their own and every `claude` scenario (US1 #1–4) needs all of them, and US2 rides in M1 because without it a title arriving in the records could never replace a label (FR-006 regression on `main`). See tasks.md *Milestones*.
 
 `speckit-analyze` (2026-09-19): 0 CRITICAL, 1 HIGH (quickstart B3 Copilot step tagged M2, fixed to M3), 1 MEDIUM (SC-006 unclaimed: added to M1 with the R7 bound + quickstart §B2 step 4), 1 LOW (phase ranges omitted T042–T045, fixed).
+
+## Close phase (2026-09-26)
+
+Run in the prescribed order. Spec `**Status**` set to
+`Closed 2026-09-26 — shipped in PRs #386, #388, #395, #396, #399`.
+
+| Skill | Result |
+|---|---|
+| `speckit-converge` | **Converged, zero findings.** Every contract clause C1–C8, FR-001–FR-016, FR-013's no-IPC-writer guard, Principles VI and VII and the leftover scan were verified against the code with `path:line` citations. `tasks.md` left byte-for-byte unchanged, as the skill requires when nothing remains. **No unbuilt behaviour**, so no further milestone. |
+| `speckit-tdd-verify` | **FAIL**, 6 findings, `tdd/verification.md`. None of them adds or changes product behaviour, so all were in the close PR's remit. Finding 4 is **closed** here (see below); findings 1–3, 5 and 6 are not, and all five are carried as follow-ups. |
+| `speckit-docguard-guard` | **Could not run.** DocGuard is an npm tool needing Node ≥18 and `npx`, and this machine has no Node runtime at all; its CDD artifacts (`TEST-SPEC.md`, `DRIFT-LOG.md`, `API-REFERENCE.md`) were never adopted in this Rust repo either. The docs dimensions it would cover are gated here by the repo's own checks, which run inside `mise run gate`: `scripts/tests/documentation-set.test.sh`, `check-user-guide-updated.test.sh`, `links.test.sh`, `media-references.test.sh`, plus `link_corpus.rs` and `documentation_is_not_read.rs`. Those passed. Not escalated: no user decision and no missing access — the tool does not apply to this project. |
+
+What the close PR fixed, all test-evidence or documentation, no behaviour:
+
+- **Finding 4 (three untracked tests)** — U73–U75 added to `tdd/test-list.md`.
+- **Finding 3's documentation half** — A7/A8 keep `kind: example` with an evidence note saying they
+  have no recorded red, instead of being relabelled `guard`, which would have hidden the gap.
+
+What it did **not** fix, and why:
+
+- **Findings 1–3 (no recorded red for 27 behaviours)** — `tasks.md` T048–T050 stay open. Two attempts
+  at the missing mutation evidence produced none: the first was lost when two `speckit-tdd-verify`
+  instances collided over deliberate mutants in this one worktree, the second when the test run never
+  came out from behind another worktree's build lock before the file was restored. `tdd/cycle-log.md`
+  *Cycle 6* records the attempt, the designed mutant set and the ids still unproven, so the gap is
+  written down rather than left to be inferred. Cycle 6 did yield three code-reading results: **A7 is
+  defended by three independent layers, so T049's prescribed single mutant would survive it**, U47 is
+  not killable by one small mutation, and finding 6 is confirmed.
+- **Finding 5 (FR-015 untested)** — a gate pinning the guide's FR-015 wording *was* written
+  (`untitled_row_guide_claims.rs`, on the `macos_logout_claims_agree.rs` pattern) and the gate caught
+  it: `crates/micold-core/tests/documentation_is_not_read.rs` refuses any test that reads a page
+  declared `micold-docs`, because CI skips the whole build for docs-only changes, so such a test makes
+  that skip unsound — the change that breaks the test is the change CI declines to run. The test was
+  removed. The sanctioned `.gitattributes` carve-out (the repo carries six, five because a test reads the file) was **declined**:
+  it would make every prose edit to the project's most-edited user-guide page run the full pipeline,
+  for a LOW finding, and a gate over six sentences of ordinary prose fires on honest rewording rather
+  than on a bug — the existing carve-outs pin single machine-checkable facts, not prose. FR-015 stays
+  covered by `scripts/check-user-guide-updated.sh`, which catches an omission but not a drift.
+  T052 is closed as **won't-do**, with the reasoning in `tdd/test-list.md`.
+- **Finding 6 (the untested read-layer guard)** — recorded as a follow-up, not a task. Closing it
+  needs a read-counting provider, and `DaemonState` builds its providers from the environment with no
+  injection seam by design (`tasks.md` *Daemon tests*), so it would mean adding production structure
+  for a test, against no requirement.
+
+One defect was found and removed inside the close phase: the audit collision left a stray **duplicate**
+of the `if !unlabelled { return None; }` guard in `crates/micold-daemon/src/state.rs`, which a
+`git add -A` swept into an intermediate commit on this branch, since squashed away. It never reached
+`origin/main`. It was
+removed, and `git diff origin/main -- crates/` was then read in full and is **empty**: the close PR
+changes no code and no test, only `specs/` — which is what a close PR should be.
 
 ## Decisions
 
@@ -117,3 +169,25 @@ None (the 2026-09-19 old-Copilot-session escalation was answered: D10).
   spec directory. `CopilotProvider`'s rustdoc names the superseded clause in the meantime.
 - Carried from 029 BUG-001 ledger: `custom-title` / `agent-name` records ignored by `ClaudeProvider::parse_title` (candidate 029 BUG, out of scope here).
 - Carried from 029 BUG-001 ledger: unverified `micold_time_track` untitled rows whose transcripts hold `ai-title`s.
+- Close-phase `speckit-tdd-verify` findings 1–3 (`tasks.md` T048–T050): 27 of the feature's 83
+  behaviours have no recorded red — U30, U32, U33, U34, U46–U49, U61, U62, A7 and A8 have neither a
+  red nor a demonstrated kill. The behaviour is verified correct (converge found nothing); what is
+  missing is evidence the tests *discriminate*. `tdd/cycle-log.md` *Cycle 6* carries the designed
+  mutant set, and notes that A7's would need two simultaneous changes because three independent
+  layers defend it.
+- Close-phase `speckit-tdd-verify` finding 6: the read-layer guard at
+  `crates/micold-daemon/src/state.rs:1355` is untested — deleting it survives U64, which asserts only
+  the outcome. It costs one unnecessary bounded read per already-`Derived` session per recovery pass
+  (bears on SC-006 without breaking it). Closing it needs daemon provider injection, i.e. production
+  structure added for a test.
+- `crates/micold-core/tests/first_turn_label_corpus.rs`'s two tests are `#[ignore]`d by design (they
+  read the developer's real transcripts), so the corpus evidence behind SC-001, SC-002 and SC-005 is
+  never regression-protected in CI; it is a manual quickstart §B1 step only.
+- FR-015's wording in `docs/user-guide/worktrees-and-sessions.md` is not pinned by anything: a reword
+  that drops what an untitled row reads, or that a later title replaces it, would pass the suite.
+  `check-user-guide-updated.sh` catches an omitted guide update, not a drifted one. Pinning it needs a
+  `.gitattributes` carve-out whose cost (every prose edit to that page runs the full pipeline) was
+  judged to outweigh a LOW finding — revisit if that page ever carries a fact worth gating.
+- Process, for the next run: never let two `speckit-tdd-verify` instances run against one worktree.
+  The forked skill returned "standing by" while still live, a second was dispatched, and the two
+  reverted each other's mutants and left a stray edit in the tree.

@@ -4,7 +4,7 @@ loop: outside-in
 profile: .specify/memory/tdd-profile.md
 spec_criteria: 11
 planned_at: fa19e553
-updated_at: fa19e553
+updated_at: close-phase # revised against tdd/verification.md; see autopilot.md *Close phase*
 suite_baseline: green # 3333 passed, 0 failed, 6 ignored, 327 binaries at fa19e553
 ---
 
@@ -35,6 +35,16 @@ text is covered by quickstart §B2.
 `guard` rows are characterization tests: the behaviour already holds once the step before them lands
 (e.g. `set_title` already replaces any label), so they may pass on arrival. Record them as guards in
 the cycle log; a red is not required.
+
+**A7 and A8 passed on arrival although they are `example` rows.** Cycle 3's prose called them guards
+because `record_session_name` / `record_session_label` already enforced the precedence they assert,
+but the passes they exercise are new code in this feature, so the `guard` carve-out does not cover
+them and no red was ever recorded (close-phase verification finding 3). They keep `kind: example` —
+relabelling them would hide the gap rather than close it — and they have **no substitute red either**:
+`cycle-log.md` *Cycle 6* records that the close phase's attempt to mutate them produced nothing, and
+that A7 in particular is defended by three independent layers, so no single mutation can turn it red.
+They remain open as `tasks.md` T049–T050. Read the two files together: `test-list.md` says what kind a
+row is, `cycle-log.md` says what evidence it actually has.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
@@ -115,6 +125,7 @@ the cycle log; a red is not required.
 | U32 | A list content's `text` parts form the label; image parts contribute nothing | FR-002, C3.3 | example | DONE | first_turn_label.rs `a_list_contents_text_parts_form_the_label_and_an_image_adds_nothing` |
 | U33 | A whitespace-only prompt is skipped and the next turn is the label | FR-002, C3.7 | example | DONE | first_turn_label.rs `a_whitespace_only_prompt_is_skipped_for_the_next_turn` |
 | U34 | A non-JSON line is skipped without failing | FR-011, C2.3 | example | DONE | first_turn_label.rs `a_line_that_is_not_json_is_skipped` |
+| U73 | A typed prompt on a final line with no `\n` is not read (the record is still being written) | FR-011, C2.2 | example | DONE | first_turn_label.rs `a_last_record_still_being_written_is_not_read` |
 | U35 | A `<command-…>` record with no parsable `<command-name>` is not a turn | FR-011, C3.5d | example | DONE | first_turn_label.rs `a_command_record_with_no_parsable_name_is_not_a_turn` |
 | U36 | Records with only injected text yield no label | FR-004 | example | DONE | first_turn_label.rs `a_conversation_with_nothing_typed_in_it_has_no_label` |
 
@@ -127,6 +138,7 @@ the cycle log; a red is not required.
 | U39 | An autopilot continuation is skipped | FR-012, C4.1 | example | DONE | first_turn_label.rs `an_autopilot_continuation_is_never_a_turn` |
 | U40 | `content` is used, never `transformedContent` | FR-012, C4.2 | example | DONE | first_turn_label.rs `the_label_is_the_recorded_content_never_the_transformed_one` |
 | U41 | A whitespace-only `content` is skipped; the next turn is used | FR-002, C4.3 | example | DONE | first_turn_label.rs `a_whitespace_only_turn_is_skipped_for_the_next_one` |
+| U74 | A Copilot log whose only `user.message` is sourced yields no label | FR-004, C4.1, C4.3 | example | DONE | first_turn_label.rs `a_copilot_log_with_nothing_typed_in_it_has_no_label` |
 | U42 | `Fleet deployed: <text>` is kept verbatim | FR-012, C4.4 | example | DONE | first_turn_label.rs `a_fleet_command_is_kept_exactly_as_copilot_recorded_it` |
 | U43 | A first turn at record 10 is found | FR-014, SC-009 | example | DONE | first_turn_label.rs `a_first_turn_at_the_tenth_record_is_still_found` |
 
@@ -164,7 +176,8 @@ the cycle log; a red is not required.
 | U61 | Discovery adopts a titled session `Named`, an untitled one with a label `Derived`, one with neither `Pending` | FR-001, FR-005, C6.1 | example | DONE | untitled_session_labels.rs `discovery_adopts_a_titled_session_named_an_untitled_one_labelled_and_an_empty_one_pending` |
 | U62 | `recover_session_names` turns `Pending` into `Derived` and counts it | FR-001, C6.2, C6.3a | example | DONE | untitled_session_labels.rs `a_known_untitled_session_reads_its_first_turn_after_project_open_and_keeps_it` |
 | U63 | `recover_session_names` turns `Derived` into `Named` when a title appears | FR-006, C6.2 | example | DONE | untitled_session_labels.rs `a_labelled_session_reads_the_title_its_records_gained` |
-| U64 | A `Derived` session is never re-labelled from its records (label read only for `Pending`) | FR-007, C6.2 | guard | DONE | untitled_session_labels.rs `a_label_is_never_derived_a_second_time` |
+| U75 | The same for Copilot: a `Derived` Copilot session whose `workspace.yaml` gains `name:` becomes `Named` | FR-006, FR-016, C6.2 | example | DONE | untitled_session_labels.rs `a_labelled_copilot_session_reads_the_name_its_workspace_file_gained` |
+| U64 | A `Derived` session is never re-labelled from its records (label read only for `Pending`) — **asserts the outcome, not the read**: `record_session_label` refuses the second label on its own, so deleting the read-layer guard in `record_recovered_names` survives this test (verification finding 6; observing the read needs a provider seam the daemon does not have) | FR-007, C6.2 | guard | DONE | untitled_session_labels.rs `a_label_is_never_derived_a_second_time` |
 | U65 | A title arriving between the off-lock read and the label write wins; a label arriving after a title is dropped | FR-005, C6.3, C6.6 | guard | DONE | untitled_session_labels.rs `a_title_and_a_label_racing_for_one_session_end_named` |
 | U66 | A `None` read and a failed label write change nothing and report no session failure | FR-011, C6.7 | example | DONE | untitled_session_labels.rs `a_failed_read_or_a_failed_label_write_changes_nothing_else` |
 | U67 | A `Derived` session is not pruned; a `Pending` session with no conversation is pruned as before | FR-004, data-model inv. 4 | example | DONE | untitled_session_labels.rs `a_labelled_session_is_never_pruned_and_an_empty_one_still_is` |
@@ -173,6 +186,27 @@ the cycle log; a red is not required.
 | U70 | A drain with no activity change leaves `name_stale` unset (idle tick reads nothing) | SC-006 | guard | DONE | untitled_session_labels.rs `an_idle_tick_that_changed_nothing_reads_no_records` |
 | U72 | A `UserPromptSubmit` hook sets `name_stale` even when it changes no signal (a startup spinner already spent the one `Unknown → Working` move) | FR-010, C6.3c | example | DONE | untitled_session_labels.rs `a_spinner_seen_before_the_first_prompt_does_not_cost_the_session_its_label` |
 | U71 | Nothing but the recovery and title paths writes a label (no client message sets one) | FR-013 | guard | DONE | untitled_session_labels.rs `nothing_but_the_recovery_path_writes_a_label` |
+
+### `docs/user-guide/worktrees-and-sessions.md` — FR-015 is not pinned by a test, by decision
+
+FR-015 has no automated test here, and getting one costs more than the finding is worth — which is a
+different statement from "it was missed" (close-phase verification finding 5). A test that reads a page marked `micold-docs` in
+`.gitattributes` is refused by `crates/micold-core/tests/documentation_is_not_read.rs`: CI skips the
+whole build when a change touches only declared documentation, so a test that reads such a page makes
+the skip unsound — the change that breaks the test is the change CI declines to run. The close phase
+wrote that gate anyway, saw `documentation_is_not_read.rs` fail on it, and removed it.
+
+The sanctioned remedy is a `.gitattributes` carve-out (`-micold-docs`), which the repo carries six
+times, five of them because a test reads the file. It was **not** taken: this is the most-edited user-guide page, and the carve-out would make
+every prose edit to it run the full pipeline, which is a recurring whole-repo cost for a LOW finding —
+and a gate pinning six sentences of ordinary prose fires on honest rewording, which is churn rather
+than a caught bug. The existing precedents pin single machine-checkable *facts* (a macOS version
+floor, one canonical sentence), not prose.
+
+What covers FR-015 instead: `scripts/check-user-guide-updated.sh` via the `micold-user-facing` /
+`micold-user-guide` attributes, which fails a change that touches what a user can see without
+touching the prose that documents it (Principle VII). That catches an omission, not a drift, and the
+residual drift risk is recorded in `autopilot.md` under *Follow-ups not done*.
 
 ## Invariants and edge cases still to place
 

@@ -249,6 +249,61 @@ regression on `main` (FR-006).
 - `[P]` tasks touch different files. Commit after each task or red/green pair.
 - The fixtures are synthetic; never commit a real user transcript.
 
+## Phase 8: TDD remediation
+
+From `specs/032-untitled-session-labels/tdd/verification.md` (verdict `FAIL`). The feature is not
+done — in the TDD-discipline sense this extension checks — until T048–T050 are cleared; T051–T052
+are lower-severity follow-ups and do not block closing the feature on their own.
+
+**Disposition, close phase 2026-09-26.** **T051 is done** in the close PR (finding 4: U73–U75 track
+the tests the list had missed), and finding 3's test-list half is done as an evidence note beside the
+A7/A8 rows. **T052 is closed as won't-do, not done**: the gate it asks for was written and then
+removed, because `crates/micold-core/tests/documentation_is_not_read.rs` refuses a test that reads a
+page declared `micold-docs` — CI skips the build for docs-only changes, so such a test makes the skip
+unsound. The `.gitattributes` carve-out that would permit it was declined for a LOW finding on the
+most-edited guide page. See `tdd/test-list.md`'s *FR-015 is not pinned by a test, by decision*.
+
+**T048–T050 remain open**: two attempts at the mutation evidence produced none — see
+`tdd/cycle-log.md` *Cycle 6* for the attempt, the designed mutant set and the ids still unproven, and
+`tdd/verification.md`'s close-phase addendum for why the verdict stays FAIL. They are carried in
+`autopilot.md` under *Follow-ups not done*. Cycle 6 also found that T049's prescribed mutant would
+**survive** A7, which is defended three times over, so T049 needs a different design than the one
+written below. A sixth finding — the untested read-layer guard at `state.rs:1355` — is recorded as a
+follow-up rather than a task: closing it needs a provider-injection seam the daemon does not have.
+
+- [ ] T048 (Finding 1, 2, HIGH) Run `cargo-mutants` (or, absent that tool, deliberate mutants by hand
+  — invert a comparison, drop a guard, change a boundary by one) scoped to
+  `crates/micold-core/src/first_turn.rs`'s `claude_first_turn` and `ClaudeTurn::of`, specifically
+  targeting U30, U32, U33, U34 (the four Cycle-2 behaviors the cycle log's own two mutants did not
+  exercise) and U46–U49, U61, U62 (the Cycle-2 behaviors with no mutation evidence at all).
+  Record the result in `specs/032-untitled-session-labels/tdd/cycle-log.md` as a new dated entry, not
+  a rewrite of Cycle 2/3. Done when every one of those ids has at least one recorded killed mutant.
+- [ ] T049 (Finding 3, HIGH) Do the same for A7
+  (`a_titled_session_is_never_given_a_label`) and A8
+  (`an_observed_terminal_title_replaces_a_label_and_is_persisted`) in
+  `crates/micold-daemon/tests/untitled_session_labels.rs`: a deliberate mutant on the `Named`
+  precedence check in `recover_session_names` / `record_observed_names`
+  (`crates/micold-daemon/src/state.rs`), killed and restored, recorded in the cycle log. Done when
+  `cargo test -p micold-daemon --test untitled_session_labels a_titled_session_is_never_given_a_label`
+  and the A8 test both fail under the mutant and pass restored.
+- [ ] T050 (Finding 3, HIGH) Update `test-list.md`'s `kind` column or a footnote for A7, A8 so it no
+  longer implies red evidence that was never recorded — either mark them `guard` to match the cycle
+  log's own (if now-justified by T049) characterization, or record the red T049 produces. Done when
+  `test-list.md` and `cycle-log.md` agree on which of A7–A9 had dedicated red.
+- [X] T051 (Finding 4, MED) Add rows for the three untracked tests to `test-list.md`'s inner-loop
+  table: `a_last_record_still_being_written_is_not_read` and
+  `a_copilot_log_with_nothing_typed_in_it_has_no_label` (`crates/micold-core/tests/first_turn_label.rs`),
+  and `a_labelled_copilot_session_reads_the_name_its_workspace_file_gained`
+  (`crates/micold-daemon/tests/untitled_session_labels.rs`), each traced to the FR/SC it actually
+  covers. Done when every `#[test]` in those two files has a corresponding `test-list.md` row.
+- [ ] T052 (Finding 5, LOW) Add a guard test that reads
+  `docs/user-guide/worktrees-and-sessions.md` for the FR-015 wording (what an untitled row reads, and
+  that a later title replaces it), on the pattern of
+  `crates/micold-core/tests/ci_gate_covers_every_job.rs`'s own doc-content checks. Done when
+  `test-list.md` has a row tracing FR-015 to a real test.
+
+---
+
 ## Milestones
 
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). Order follows
