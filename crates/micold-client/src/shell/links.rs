@@ -57,7 +57,10 @@ fn perform(app: &App, request: OpenRequest) -> Task<Message> {
 /// `std::fs::metadata` follows symbolic links, so a link is judged by the file it points to
 /// (FR-013). Everything platform-specific is read here and handed to
 /// `micold_core::link::runnable::action_for`, which decides.
-fn open_path(opener: &dyn crate::shell::link_opener::LinkOpener, path: &str) -> Result<(), OpenFailure> {
+fn open_path(
+    opener: &dyn crate::shell::link_opener::LinkOpener,
+    path: &str,
+) -> Result<(), OpenFailure> {
     use micold_core::link::runnable::{action_for, FileAction};
 
     let file = std::path::Path::new(path);
@@ -536,10 +539,14 @@ mod acceptance {
                     let text = format!("{:<width$}", line.text, width = COLS as usize);
                     let mut extras = Vec::new();
                     for (cols, uri) in line.declared {
-                        let index = hyperlinks.iter().position(|u| *u == uri).unwrap_or_else(|| {
-                            hyperlinks.push(uri.clone());
-                            hyperlinks.len() - 1
-                        });
+                        let index =
+                            hyperlinks
+                                .iter()
+                                .position(|u| *u == uri)
+                                .unwrap_or_else(|| {
+                                    hyperlinks.push(uri.clone());
+                                    hyperlinks.len() - 1
+                                });
                         extras.extend(cols.map(|col| CellExtras {
                             col,
                             zerowidth: Vec::new(),
@@ -606,8 +613,7 @@ mod acceptance {
 
         /// The names this machine answers to, as boot fills them (U136).
         fn named(mut self, host_names: &[&str]) -> Self {
-            self.app.core.session.host_names =
-                host_names.iter().map(|n| n.to_string()).collect();
+            self.app.core.session.host_names = host_names.iter().map(|n| n.to_string()).collect();
             self
         }
 
@@ -1018,7 +1024,6 @@ mod acceptance {
         path.to_string_lossy().into_owned()
     }
 
-
     /// A12: `ls --hyperlink=always` declares the host's name and percent-encodes the space.
     #[test]
     fn a_declared_file_link_naming_this_host_opens_the_decoded_path() {
@@ -1118,8 +1123,8 @@ mod acceptance {
     #[test]
     fn a_file_link_to_another_machine_and_an_application_scheme_are_no_links() {
         for address in ["file://otherhost/x", "javascript:alert(1)", "vscode://x"] {
-            let mut session =
-                Session::on_screen(vec![line("open this").declare(0..9, address)]).named(&["devbox"]);
+            let mut session = Session::on_screen(vec![line("open this").declare(0..9, address)])
+                .named(&["devbox"]);
             session.hover(3, 0);
             session.hold(keyboard::Modifiers::COMMAND);
             assert_eq!(

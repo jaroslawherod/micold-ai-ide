@@ -175,19 +175,77 @@ mod tests {
     /// FR-013's lists, transcribed from the spec rather than read out of the code above, so a
     /// dropped entry fails here.
     const LINUX_LAUNCHERS: [&str; 9] = [
-        "desktop", "appimage", "jar", "deb", "rpm", "snap", "flatpak", "flatpakref", "run",
+        "desktop",
+        "appimage",
+        "jar",
+        "deb",
+        "rpm",
+        "snap",
+        "flatpak",
+        "flatpakref",
+        "run",
     ];
     const MACOS_BUNDLES: [&str; 8] = [
-        "app", "bundle", "framework", "plugin", "kext", "prefPane", "appex", "xpc",
+        "app",
+        "bundle",
+        "framework",
+        "plugin",
+        "kext",
+        "prefPane",
+        "appex",
+        "xpc",
     ];
     const MACOS_RUNNABLES: [&str; 16] = [
-        "app", "command", "terminal", "tool", "pkg", "mpkg", "jar", "workflow", "action", "scpt",
-        "applescript", "webloc", "fileloc", "inetloc", "url", "shortcut",
+        "app",
+        "command",
+        "terminal",
+        "tool",
+        "pkg",
+        "mpkg",
+        "jar",
+        "workflow",
+        "action",
+        "scpt",
+        "applescript",
+        "webloc",
+        "fileloc",
+        "inetloc",
+        "url",
+        "shortcut",
     ];
     const WINDOWS_RUNNABLES: [&str; 33] = [
-        "exe", "com", "bat", "cmd", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh", "hta",
-        "scr", "pif", "cpl", "msc", "msi", "msp", "reg", "lnk", "url", "jar", "appref-ms",
-        "application", "appx", "msix", "chm", "inf", "scf", "settingcontent-ms", "library-ms",
+        "exe",
+        "com",
+        "bat",
+        "cmd",
+        "ps1",
+        "psm1",
+        "vbs",
+        "vbe",
+        "js",
+        "jse",
+        "wsf",
+        "wsh",
+        "hta",
+        "scr",
+        "pif",
+        "cpl",
+        "msc",
+        "msi",
+        "msp",
+        "reg",
+        "lnk",
+        "url",
+        "jar",
+        "appref-ms",
+        "application",
+        "appx",
+        "msix",
+        "chm",
+        "inf",
+        "scf",
+        "settingcontent-ms",
+        "library-ms",
         "search-ms",
     ];
 
@@ -306,7 +364,12 @@ mod tests {
             );
         }
         assert_eq!(
-            action_for(HostPlatform::Windows, "thing.myapp", file(false), &pathext()),
+            action_for(
+                HostPlatform::Windows,
+                "thing.myapp",
+                file(false),
+                &pathext()
+            ),
             FileAction::Reveal,
             "a %PATHEXT% entry is what this machine itself says it runs"
         );
