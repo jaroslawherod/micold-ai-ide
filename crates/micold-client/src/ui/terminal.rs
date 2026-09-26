@@ -337,13 +337,27 @@ pub fn encode_mouse_report(
 /// Glue: it reads the hostname boot recorded and the sandbox's state, and names neither a platform
 /// nor a filesystem — `micold_core::link::resolve` decides everything from it (U134, U136).
 pub fn link_context(
-    _state: &State,
-    _sandbox: &crate::features::sandbox::Sandbox,
+    state: &State,
+    sandbox: &crate::features::sandbox::Sandbox,
 ) -> micold_core::link::LinkContext {
+    use micold_core::sandbox::lifecycle::SandboxState;
+
+    // A live sandbox — running, or running an image that is now out of date — is the one whose
+    // sessions print container paths. Every other state means the sessions are this machine's own.
+    let container = match &sandbox.state {
+        SandboxState::Running(id) | SandboxState::Stale(id) => Some(id.0.as_str()),
+        _ => None,
+    };
     micold_core::link::LinkContext {
-        host_names: Vec::new(),
+        host_names: state.session.host_names.clone(),
         windows_host: cfg!(windows),
-        sandbox: None,
+        // No shared locations yet, so every one of a sandbox's file links reports as not reachable
+        // (C12) rather than opening this machine's own file of the same name. T066 fills them in.
+        sandbox: container.map(|id| micold_core::link::SandboxLinkContext {
+            host_names: micold_core::link::container_host_names(id),
+            locations: Vec::new(),
+            denied: Vec::new(),
+        }),
     }
 }
 

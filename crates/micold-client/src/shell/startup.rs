@@ -314,6 +314,12 @@ fn boot() -> (App, Task<Message>) {
             std::process::exit(2);
         }
     }
+    // What this machine calls itself, for the `file://` links terminal output prints (feature 031,
+    // FR-012). Reading the hostname is I/O, so the shell does it once here and the pure resolver
+    // compares against the names — `ls --hyperlink=always` prints whichever of the two the machine
+    // answers to, and a link naming any other host is a file on another machine.
+    core.session.host_names =
+        micold_core::link::host_names_from(&gethostname::gethostname().to_string_lossy());
     // If a project is already active from a previous run, discover its worktrees for the initial
     // render. Session recovery from transcripts is now the daemon's responsibility (it owns
     // sessions); the client adopts them from the welcome catalog on connect (T055).

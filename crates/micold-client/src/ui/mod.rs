@@ -301,9 +301,7 @@ pub fn view<'a>(
         .into()
     } else if state.workspace.active_project().is_some() {
         let main_inner: Element<'a, Message> = if state.session.active.is_some() {
-            // Links resolve on this machine, unsandboxed, until T050 fills in the host names and
-            // the sandbox's shared locations (feature 031).
-            let link_context = material::local_link_context();
+            let link_context = terminal::link_context(state, sandbox);
             terminal::pane(state, grid, selection, display_offset, scheme, link_context)
         } else {
             shell::view(state, scheme)
