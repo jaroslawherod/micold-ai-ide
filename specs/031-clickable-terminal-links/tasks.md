@@ -346,68 +346,68 @@ the `env_include.rs` builders (plan, Target Platform).
 
 ### Tests for US3: sandbox translation and confirmation ⚠️ write first, must fail
 
-- [ ] T085 [US3] [A19] Outer-loop acceptance test in `mod acceptance` of `crates/micold-client/src/shell/links.rs`: with `App.sandbox` `Running` and locations sharing `/work/<project>` from a `tempfile` host directory holding `readme.txt`, activating `file:///work/<project>/readme.txt` opens the `confirm_link_open` surface naming the host path and calls no opener; publishing **Open** (`LinkOpenConfirmed`) then calls `opener.open` with that host path.
-- [ ] T055 [P] [US3] [U40] [U42] [U43] [U44] [U48] [U145] Unit tests for `reverse(locations, denied, container_path, windows_host) -> Option<String>` in `crates/micold-core/src/sandbox/pathmap.rs`.
+- [X] T085 [US3] [A19] Outer-loop acceptance test in `mod acceptance` of `crates/micold-client/src/shell/links.rs`: with `App.sandbox` `Running` and locations sharing `/work/<project>` from a `tempfile` host directory holding `readme.txt`, activating `file:///work/<project>/readme.txt` opens the `confirm_link_open` surface naming the host path and calls no opener; publishing **Open** (`LinkOpenConfirmed`) then calls `opener.open` with that host path.
+- [X] T055 [P] [US3] [U40] [U42] [U43] [U44] [U48] [U145] Unit tests for `reverse(locations, denied, container_path, windows_host) -> Option<String>` in `crates/micold-core/src/sandbox/pathmap.rs`.
   - Most-specific-first nesting (C15).
   - "A sandbox path is normalised lexically; climbing above `/` ⇒ `Unreachable`" (C13). Normalisation happens before the location match: with location `/work/proj`, `/work/proj/../../etc/passwd` maps to nothing, and `/work/proj/a/../b` maps to `<host>/b`.
   - Whole path components only: `/work/projector` is not under `/work/proj`.
   - Windows host pairs join with `\` (C14).
   - A result equal to or under a `denied` path gives `None` (C16b).
-- [ ] T056 [P] [US3] [U56] [U57] [U58] [U59] [U60] [U61] [U62] [U63] Unit tests in `crates/micold-core/src/sandbox/parse.rs`, `lifecycle.rs` and `mod.rs`.
+- [X] T056 [P] [US3] [U56] [U57] [U58] [U59] [U60] [U61] [U62] [U63] Unit tests in `crates/micold-core/src/sandbox/parse.rs`, `lifecycle.rs` and `mod.rs`.
   - `ContainerFacts.mount_destinations` parsed from `Mounts[].Destination` in Docker and Podman inspect fixtures, and empty when `Mounts` is missing.
   - `Started.mounted` is `None` on `Create` and `Replace`, and `Some(destinations)` on `Attach` and `Start`.
   - `MountSet::shared_locations(mounted)` lists projects, state, home and credentials, sorted by container-path component count (descending). "The secret mount is never a shared location", and "A location the running container does not mount is not shared" (C16, C16c).
   - The denied list holds the secret mount's host path (`state_dir.join("sandbox.token")`).
-- [ ] T057 [P] [US3] [U38] [U39] [U41] [U47] Replace T042's "sandboxed → `Unreachable`" case in `crates/micold-core/src/link/resolve.rs` with C11–C17, extending the SC-006 property.
+- [X] T057 [P] [US3] [U38] [U39] [U41] [U47] Replace T042's "sandboxed → `Unreachable`" case in `crates/micold-core/src/link/resolve.rs` with C11–C17, extending the SC-006 property.
   - The container-id prefix and the full id are accepted as hosts.
   - `HostPath` with `needs_confirmation = true`.
   - C12 `/tmp/x` gives `Unreachable`.
   - C16b: the token is denied.
   - C16c: an unmounted project gives `Unreachable`.
   - C17: `host_names` still translates.
-- [ ] T058 [P] [US3] [U90] [U91] [U92] Tests in the `#[cfg(test)]` module of `crates/micold-client/src/features/sandbox.rs`.
+- [X] T058 [P] [US3] [U90] [U91] [U92] Tests in the `#[cfg(test)]` module of `crates/micold-client/src/features/sandbox.rs`.
   - T18: `started(started, locations)` stores them, for a created and for an attached container.
   - T19: every transition out of `Running`/`Stale` (observe `Stopped`, `failed`, `container_lost`, `accept_fallback`) and `for_placement` make `locations()` `None`.
   - A `Stale` sandbox still returns its locations.
-- [ ] T059 [P] [US3] [U80] [U81] [U82] [U83] [U84] Extend `crates/micold-client/tests/features_session_links.rs`. Every case clears `pending_link_open`.
+- [X] T059 [P] [US3] [U80] [U81] [U82] [U83] [U84] Extend `crates/micold-client/tests/features_session_links.rs`. Every case clears `pending_link_open`.
   - T7: `needs_confirmation` sets `pending_link_open = Some { active session, r }`, and the `ConfirmLinkOpenDialog` surface is open showing `r.display`.
   - T9, via `link_open_confirmed(state, sandbox_live)`:
     - the session is present and `sandbox_live` is true: `OpenLink(Path)`;
     - the session is gone: `Couldn't open <host path>: the session has closed`;
     - `sandbox_live` is false: `Couldn't open <host path>: the sandbox has stopped`.
   - T10: `LinkOpenDeclined` opens nothing.
-- [ ] T060 [P] [US3] [U98] Extend the `#[cfg(test)]` module of `crates/micold-client/src/shell/links.rs`. `update_inner` with `LinkOpenConfirmed` reads `sandbox_live` from `App.sandbox`: when it is `Running`, the recording opener is called; when it is stopped, a notification and no call.
-- [ ] T061 [P] [US3] [U137] Add `ConfirmLinkOpenDialog` rows to `crates/micold-client/tests/overlay_registry.rs`, `overlay_dispatch_ordering.rs`, `overlay_dismissal_delta.rs` and `overlay_transition_identity.rs`, and change `DIALOGS` from 9 to 10 in `crates/micold-client/tests/popover_displacement.rs`
+- [X] T060 [P] [US3] [U98] Extend the `#[cfg(test)]` module of `crates/micold-client/src/shell/links.rs`. `update_inner` with `LinkOpenConfirmed` reads `sandbox_live` from `App.sandbox`: when it is `Running`, the recording opener is called; when it is stopped, a notification and no call.
+- [X] T061 [P] [US3] [U137] Add `ConfirmLinkOpenDialog` rows to `crates/micold-client/tests/overlay_registry.rs`, `overlay_dispatch_ordering.rs`, `overlay_dismissal_delta.rs` and `overlay_transition_identity.rs`, and change `DIALOGS` from 9 to 10 in `crates/micold-client/tests/popover_displacement.rs`
 
 ### Implementation for US3: sandbox translation and confirmation
 
-- [ ] T062 [US3] [U38] [U39] [U40] [U42] [U43] [U44] [U47] [U48] [U145] Implement `reverse` in `crates/micold-core/src/sandbox/pathmap.rs`, and call it from `resolve`'s sandboxed `File` branch in `crates/micold-core/src/link/resolve.rs`: a match gives `HostPath` with `needs_confirmation = true`, and no match gives `Unreachable`.
-- [ ] T063 [US3] [U56] [U57] [U58] [U59] [U60] [U61] [U62] [U63] The mount-fact chain in core.
+- [X] T062 [US3] [U38] [U39] [U40] [U42] [U43] [U44] [U47] [U48] [U145] Implement `reverse` in `crates/micold-core/src/sandbox/pathmap.rs`, and call it from `resolve`'s sandboxed `File` branch in `crates/micold-core/src/link/resolve.rs`: a match gives `HostPath` with `needs_confirmation = true`, and no match gives `Unreachable`.
+- [X] T063 [US3] [U56] [U57] [U58] [U59] [U60] [U61] [U62] [U63] The mount-fact chain in core.
   - `crates/micold-core/src/sandbox/parse.rs`: `ContainerFacts.mount_destinations`.
   - `crates/micold-core/src/sandbox/lifecycle.rs`: `Started.mounted: Option<Vec<String>>`, set in `bring_up` per `adopt`'s decision.
   - `crates/micold-core/src/sandbox/mod.rs`: `MountSet::shared_locations(mounted) -> Vec<SharedLocation>`, plus the denied host paths.
-- [ ] T064 [US3] [U90] [U91] [U92] Carry the locations to the client state.
+- [X] T064 [US3] [U90] [U91] [U92] Carry the locations to the client state.
   - `crates/micold-client/src/shell/sandbox.rs`: `Ready { started, locations: SandboxLocations }`, where `boot()` keeps both instead of `.map(|ready| ready.started)`.
   - `crates/micold-client/src/features/sandbox.rs`: define `SandboxLocations { shared: Vec<SharedLocation>, denied: Vec<String> }` (deriving `Clone, Debug, PartialEq, Eq`), `SandboxMsg::Started(Box<(Started, SandboxLocations)>)`, the `Sandbox.locations` field, `started(started, locations)`, and `locations()`, which returns it only while `Running` or `Stale`. `for_placement` and every other transition drop it.
   - Update every `SandboxMsg::Started` constructor and match, in `tests/features_sandbox.rs` and elsewhere.
-- [ ] T065 [US3] [U80] [U81] [U82] [U83] [U84] [U137] [A19] The confirmation state in `crates/micold-client/src/features/session.rs`, built like `confirm_session_remove`.
+- [X] T065 [US3] [U80] [U81] [U82] [U83] [U84] [U137] [A19] The confirmation state in `crates/micold-client/src/features/session.rs`, built like `confirm_session_remove`.
   - `pending_link_open: Option<PendingLinkOpen { session: SessionId, link: ResolvedLink }>`.
   - Messages `LinkOpenConfirmed` and `LinkOpenDeclined`.
   - Reducers T7 and T10.
   - `pub fn link_open_confirmed(state, sandbox_live: bool)` for T9.
   - `ConfirmLinkOpenDialog` (`SurfaceId::new("confirm_link_open")`), implementing `FloatingSurface` and `Registered`; Escape and scrim-click decline.
-- [ ] T066 [US3] [U134] [U137] The confirm view.
+- [X] T066 [US3] [U134] [U137] The confirm view.
   - Create `crates/micold-client/src/ui/confirm_link_open.rs`: title **Open a file from the sandbox?**, body `The sandboxed session linked to <host path>. Files the sandbox wrote can contain scripts or macros.`, and actions **Open** (publishes `LinkOpenConfirmed`) and **Cancel** (glue).
   - Register it in `crates/micold-client/src/overlay/registry.rs`.
   - In `crates/micold-client/src/ui/terminal.rs`, build `LinkContext.sandbox = Some` iff `sandbox.locations()` is `Some`, from its `shared` and `denied` and `link::container_host_names(id)`.
-- [ ] T067 [US3] [U98] [A19] Route the confirmation.
+- [X] T067 [US3] [U98] [A19] Route the confirmation.
   - `crates/micold-client/src/main.rs` `update_inner`: a `LinkOpenConfirmed` arm ahead of `Message::Session`, calling `shell::links::on_link_message` (glue).
   - `crates/micold-client/src/shell/links.rs`: for `LinkOpenConfirmed`, compute `sandbox_live` from `app.sandbox.state` (`Running | Stale`) and call `session::link_open_confirmed`.
-- [ ] T069 [US3] Replace the "not reachable" sentence in the "Links" section of `docs/user-guide/worktrees-and-sessions.md`.
+- [X] T069 [US3] Replace the "not reachable" sentence in the "Links" section of `docs/user-guide/worktrees-and-sessions.md`.
   - A sandboxed session's file links open from the host location that holds the same file, after a confirmation naming that path.
   - Paths the sandbox does not share are reported as not reachable.
   - A confirmation pending when the sandbox stops opens nothing.
-- [ ] T068 [US3] Verify the milestone: `mise run gate`, `cargo check --target aarch64-apple-darwin -p micold-client`, then the `visual-pass` skill for quickstart §B.15–B.16 under sandbox placement. US3 is complete only when the T085 acceptance test A19 is green. It confirms acceptance rows A19 and carries no markers, so it is not ticked by them.
+- [X] T068 [US3] Verify the milestone: `mise run gate`, `cargo check --target aarch64-apple-darwin -p micold-client`, then the `visual-pass` skill for quickstart §B.15–B.16 under sandbox placement. US3 is complete only when the T085 acceptance test A19 is green. It confirms acceptance rows A19 and carries no markers, so it is not ticked by them.
 
 **Checkpoint (M6)**: US3 is complete on host and sandbox placements.
 

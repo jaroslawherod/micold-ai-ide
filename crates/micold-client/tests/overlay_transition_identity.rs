@@ -35,6 +35,7 @@ use std::path::PathBuf;
 use micold_client::app::State;
 use micold_client::features::help;
 use micold_client::features::project::RenameDraft;
+use micold_client::features::session::PendingLinkOpen;
 use micold_client::features::worktree::WorktreeRenameDraft;
 use micold_client::overlay::registry::Closing;
 use micold_client::overlay::SurfaceId;
@@ -80,7 +81,27 @@ const DIALOGS: &[(&str, fn(&mut State))] = &[
     ("confirm_forget_project", |state| {
         state.project.forget_target = Some(PathBuf::from("/p"))
     }),
+    ("confirm_link_open", |state| {
+        state.session.pending_link_open = Some(PendingLinkOpen {
+            session: SessionId::new(),
+            link: a_sandboxed_link(),
+        })
+    }),
 ];
+
+/// A resolved sandboxed file link: one that translated to a host path and so needs a confirmation.
+fn a_sandboxed_link() -> micold_core::link::ResolvedLink {
+    micold_core::link::ResolvedLink {
+        link: micold_core::link::Link {
+            address: "file:///work/p/a.md".to_string(),
+            origin: micold_core::link::LinkOrigin::Detected,
+            cells: Vec::new(),
+        },
+        display: "/home/u/p/a.md".to_string(),
+        target: micold_core::link::Target::HostPath("/home/u/p/a.md".to_string()),
+        needs_confirmation: true,
+    }
+}
 
 /// A state with just that dialog open.
 fn opened(open: fn(&mut State)) -> State {
@@ -151,17 +172,19 @@ fn no_two_snapshots_share_an_identity() {
     }
 }
 
-/// The list above covers every dialog. Without this, adding a ninth and forgetting to list it would
+/// The list above covers every dialog. Without this, adding a tenth and forgetting to list it would
 /// leave all three tests above passing on a stale set.
 ///
 /// Nine until feature 027 turned Settings into a view (FR-026): a surface that does not float has
-/// no exit transition to remember, so it leaves `DIALOGS` and the count comes down with it.
+/// no exit transition to remember, so it leaves `DIALOGS` and the count comes down with it. Nine
+/// again with `confirm_link_open`, the question a sandboxed file link asks before it opens
+/// (FR-018a).
 #[test]
 fn every_variant_is_covered() {
     // Bump deliberately: a new dialog needs a row in `DIALOGS`.
     assert_eq!(
         every_snapshot().len(),
-        8,
+        9,
         "a dialog was added or removed — update DIALOGS"
     );
 }

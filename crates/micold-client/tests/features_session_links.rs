@@ -215,3 +215,219 @@ fn an_open_that_worked_notifies_nothing() {
         "the browser opening is the feedback; a notification would be noise"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// The confirmation before a sandboxed file opens (feature 031, T059 — FR-018a, T7/T9/T10)
+// ---------------------------------------------------------------------------------------
+
+use micold_client::features::session::{
+    link_open_confirmed, ConfirmLinkOpenDialog, PendingLinkOpen,
+};
+use micold_client::overlay::registry::Registered;
+use micold_client::overlay::FloatingSurface;
+use micold_core::session::{AiCli, Session, SessionLocation};
+
+const CONTAINER: &str = "file:///work/proj/notes.md";
+const HOST: &str = "/home/u/proj/notes.md";
+
+/// A link the sandbox resolved: a host path that must be confirmed first (FR-018a).
+fn sandboxed_link() -> ResolvedLink {
+    ResolvedLink {
+        needs_confirmation: true,
+        ..path_link(CONTAINER, HOST)
+    }
+}
+
+/// A state with one session, which is the active one.
+fn with_a_session() -> (State, micold_core::session::SessionId) {
+    let mut state = State::default();
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-a".to_string()),
+        AiCli::ClaudeCode,
+    );
+    let id = session.id;
+    state
+        .workspace
+        .sessions
+        .insert(std::path::PathBuf::from("/a"), vec![session]);
+    state.workspace.active = Some(std::path::PathBuf::from("/a"));
+    state.session.active = Some(id);
+    (state, id)
+}
+
+/// U80 (T7): the confirmation opens, naming the host path, and nothing is opened yet.
+#[test]
+fn a_link_that_needs_confirmation_opens_the_confirm_surface_and_nothing_else() {
+    let (mut state, id) = with_a_session();
+    let outcomes = micold_client::features::session::update(
+        &mut state,
+        SessionMsg::LinkActivated(sandboxed_link()),
+    );
+    assert!(
+        outcomes.is_empty(),
+        "the sandbox's file is not opened before the user says so: {outcomes:?}"
+    );
+    assert_eq!(
+        state.session.pending_link_open,
+        Some(PendingLinkOpen {
+            session: id,
+            link: sandboxed_link(),
+        }),
+        "the link is captured with the session it came from, so a later confirmation acts on what \
+         was activated rather than on whatever is under the pointer then (FR-017, FR-018a)"
+    );
+    let open = ConfirmLinkOpenDialog::open_in(&state).expect("the confirm surface is showing");
+    assert_eq!(
+        open.id(),
+        micold_client::overlay::SurfaceId::new("confirm_link_open"),
+        "and it is the registered surface, not an ad-hoc one (contract link-opening §4)"
+    );
+    assert_eq!(
+        state
+            .session
+            .pending_link_open
+            .as_ref()
+            .map(|p| p.link.display.as_str()),
+        Some(HOST),
+        "what the dialog shows is the host path that will open (FR-018a)"
+    );
+}
+
+/// U81 (T9): confirming, with the session and the sandbox both still there, opens the host path.
+#[test]
+fn confirming_while_the_session_and_sandbox_live_opens_the_host_path() {
+    let (mut state, _) = with_a_session();
+    micold_client::features::session::update(
+        &mut state,
+        SessionMsg::LinkActivated(sandboxed_link()),
+    );
+    let outcomes = link_open_confirmed(&mut state, true);
+    assert_eq!(
+        outcomes,
+        vec![Outcome::OpenLink(OpenRequest::Path {
+            path: HOST.to_string(),
+            address: CONTAINER.to_string(),
+        })],
+        "the confirmed open is the one the reducer refused before, unchanged (T6, T9)"
+    );
+    assert!(
+        notifications(&mut state).is_empty(),
+        "a confirmed open says nothing until the opener answers"
+    );
+    assert_eq!(
+        state.session.pending_link_open, None,
+        "the confirmation is spent, so the surface closes"
+    );
+}
+
+/// U82 (T9): the session closed while the confirmation was up.
+#[test]
+fn confirming_after_the_session_closed_opens_nothing_and_says_so() {
+    let (mut state, _) = with_a_session();
+    micold_client::features::session::update(
+        &mut state,
+        SessionMsg::LinkActivated(sandboxed_link()),
+    );
+    state.workspace.sessions.clear();
+    let outcomes = link_open_confirmed(&mut state, true);
+    assert!(
+        outcomes.is_empty(),
+        "the session that printed the path is gone: {outcomes:?}"
+    );
+    assert_eq!(
+        notifications(&mut state),
+        vec![(
+            Level::Error,
+            format!("Couldn't open {HOST}: the session has closed")
+        )],
+        "the user is told why nothing happened, naming the path they confirmed (edge case \
+         \u{201c}Pending opens\u{201d}, contract link-opening \u{a7}4)"
+    );
+    assert_eq!(state.session.pending_link_open, None);
+}
+
+/// U83 (T9): the sandbox stopped while the confirmation was up.
+#[test]
+fn confirming_after_the_sandbox_stopped_opens_nothing_and_says_so() {
+    let (mut state, _) = with_a_session();
+    micold_client::features::session::update(
+        &mut state,
+        SessionMsg::LinkActivated(sandboxed_link()),
+    );
+    let outcomes = link_open_confirmed(&mut state, false);
+    assert!(
+        outcomes.is_empty(),
+        "the container that held the file is gone: {outcomes:?}"
+    );
+    assert_eq!(
+        notifications(&mut state),
+        vec![(
+            Level::Error,
+            format!("Couldn't open {HOST}: the sandbox has stopped")
+        )],
+        "a stopped sandbox is a different reason from a closed session, and the user acts on it \
+         differently"
+    );
+    assert_eq!(state.session.pending_link_open, None);
+}
+
+/// U84 (T10): declining opens nothing at all.
+#[test]
+fn declining_opens_nothing_and_clears_the_pending_open() {
+    let (mut state, _) = with_a_session();
+    micold_client::features::session::update(
+        &mut state,
+        SessionMsg::LinkActivated(sandboxed_link()),
+    );
+    let outcomes =
+        micold_client::features::session::update(&mut state, SessionMsg::LinkOpenDeclined);
+    assert!(outcomes.is_empty(), "declining opens nothing: {outcomes:?}");
+    assert_eq!(
+        state.session.pending_link_open, None,
+        "and the surface closes, so the next activation is not answered by this one's Open button"
+    );
+    assert!(
+        notifications(&mut state).is_empty(),
+        "the user declined; telling them they declined is noise"
+    );
+    assert!(
+        ConfirmLinkOpenDialog::open_in(&state).is_none(),
+        "nothing is left showing"
+    );
+}
+
+/// Review B finding 8: the reducer's own `LinkOpenConfirmed` arm is the fallback, and it is inert
+/// on purpose.
+///
+/// Whether the sandbox is live is the binary's fact, so the answer is performed by the route through
+/// `main.rs` and `shell/links.rs`. If that route were ever removed, this pins what is left: the
+/// question stays on screen and nothing opens, rather than the confirmation being bypassed.
+#[test]
+fn the_reducer_alone_leaves_the_question_up_and_opens_nothing() {
+    let (mut state, session) = with_a_session();
+    state.session.pending_link_open = Some(PendingLinkOpen {
+        session,
+        link: sandboxed_link(),
+    });
+
+    let outcomes =
+        micold_client::features::session::update(&mut state, SessionMsg::LinkOpenConfirmed);
+
+    assert!(
+        outcomes.is_empty(),
+        "the reducer alone asks for nothing: it cannot see whether the sandbox is still there"
+    );
+    assert!(
+        state.session.pending_link_open.is_some(),
+        "so the question is still pending, which is what keeps the dialog up"
+    );
+    assert!(notifications(&mut state).is_empty(), "and says nothing");
+}
+
+/// A confirmation with nothing pending opens nothing, rather than reaching for the last link.
+#[test]
+fn confirming_with_nothing_pending_opens_nothing() {
+    let (mut state, _) = with_a_session();
+    assert!(link_open_confirmed(&mut state, true).is_empty());
+    assert!(notifications(&mut state).is_empty());
+}

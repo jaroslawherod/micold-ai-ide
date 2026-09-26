@@ -4,6 +4,7 @@ pub(crate) mod about;
 pub mod cdk;
 pub(crate) mod confirm_delete;
 pub(crate) mod confirm_forget;
+pub(crate) mod confirm_link_open;
 pub(crate) mod confirm_placement;
 pub(crate) mod confirm_session_remove;
 mod focus;

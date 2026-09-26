@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use iced::Task;
 use micold_client::app::Message;
-use micold_client::features::sandbox::Msg as SandboxMsg;
+use micold_client::features::sandbox::{Msg as SandboxMsg, SandboxLocations};
 use micold_core::endpoint::DEFAULT_SANDBOX_PORT;
 use micold_core::protocol::auth::{host_token_path, Token, CONTAINER_TOKEN_PATH};
 use micold_core::sandbox::cli::CliRuntime;
@@ -26,7 +26,7 @@ use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSp
 
 /// The container's name. Fixed, so a sandbox left over from a previous run of the app is
 /// recognisable as ours rather than accumulating beside itself (US6 scenario 5).
-pub const CONTAINER_NAME: &str = "micold-sandbox";
+pub use micold_core::sandbox::CONTAINER_NAME;
 
 /// The user-defined network the sandbox joins. Created with IP masquerade disabled when the posture
 /// is `NoOutbound` (research R4).
@@ -155,6 +155,12 @@ fn preparation_failed(stderr: String) -> Failure {
 /// the process that started the sandbox, which is exactly the property the daemon exists to avoid.
 pub struct Ready {
     pub started: Started,
+    /// What the container it ended up with shares with this machine (feature 031, FR-018).
+    ///
+    /// Kept here rather than rebuilt later: `Started.mounted` says which of this client's mounts
+    /// the *running* container really has, and that answer is only available to the bring-up that
+    /// adopted it.
+    pub locations: SandboxLocations,
 }
 
 /// Bring the sandbox up for `profile`, sharing `projects`.
@@ -252,7 +258,11 @@ pub fn start<R: CommandRunner>(
         build_spec,
         observe,
     )?;
-    Ok(Ready { started })
+    let locations = SandboxLocations {
+        shared: mounts.shared_locations(started.mounted.as_deref()),
+        denied: mounts.denied_host_paths(),
+    };
+    Ok(Ready { started, locations })
 }
 
 /// Everything a bring-up needs that the application has to remember in order to run it *again*.
@@ -451,7 +461,7 @@ impl BringUp {
                 &runner,
                 observe,
             )
-            .map(|ready| ready.started);
+            .map(|ready| (ready.started, ready.locations));
             runner.clean_up(plan.profile.runtime);
             outcome
         })
@@ -467,7 +477,9 @@ fn reported<W>(
     work: W,
 ) -> impl iced::futures::Stream<Item = Message> + Send + 'static
 where
-    W: FnOnce(&mut dyn FnMut(SandboxState)) -> Result<Started, Failure> + Send + 'static,
+    W: FnOnce(&mut dyn FnMut(SandboxState)) -> Result<(Started, SandboxLocations), Failure>
+        + Send
+        + 'static,
 {
     use iced::futures::StreamExt;
 
@@ -495,9 +507,11 @@ where
 }
 
 /// The message a finished bring-up leaves behind.
-fn finished(outcome: Result<Result<Started, Failure>, tokio::task::JoinError>) -> Message {
+fn finished(
+    outcome: Result<Result<(Started, SandboxLocations), Failure>, tokio::task::JoinError>,
+) -> Message {
     match outcome {
-        Ok(Ok(started)) => Message::Sandbox(SandboxMsg::Started(Box::new(started))),
+        Ok(Ok(ready)) => Message::Sandbox(SandboxMsg::Started(Box::new(ready))),
         Ok(Err(failure)) => Message::Sandbox(SandboxMsg::Failed(Box::new(failure))),
         // A panicked or cancelled blocking task is still a sandbox that did not come up, and the
         // user needs the same standing banner for it as for a runtime that refused.
@@ -618,8 +632,9 @@ pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
         {
             iced::Task::none()
         }
-        Msg::Started(started) => {
-            app.sandbox.started(*started);
+        Msg::Started(ready) => {
+            let (started, locations) = *ready;
+            app.sandbox.started(started, locations);
             iced::Task::none()
         }
         Msg::Failed(failure) => {

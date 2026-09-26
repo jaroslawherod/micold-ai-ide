@@ -140,6 +140,17 @@ pub struct Started {
     /// Limits the user set that this runtime cannot enforce. Not an error — the sandbox runs — but
     /// the view must say so rather than let the user believe a bound exists (FR-015).
     pub unsatisfiable: Vec<UnsatisfiableLimit>,
+    /// What the container this bring-up ended up with really mounts, when it is not one this
+    /// bring-up made (feature 031, FR-018; research R10 decision 1).
+    ///
+    /// `None` when the container was created or replaced from the spec: it shares exactly the
+    /// [`MountSet`] it was handed, so there is nothing further to say. `Some(destinations)` when
+    /// this bring-up attached to, or started, a container that already existed — `adopt` accepts
+    /// one by image and fingerprint alone, and a sandbox outlives the application, so that
+    /// container may have been created with other projects. Feature 031 then shares only the
+    /// locations in this list, because on Linux and macOS a container path equals its host path and
+    /// translating one the container lacks would open the host's own file of the same name (C16c).
+    pub mounted: Option<Vec<String>>,
 }
 
 /// What to do about a container that already carries our name (US6 scenario 5, FR-024d).
@@ -292,6 +303,16 @@ where
         profile.image.refuses_fingerprint_mismatch(),
     );
 
+    // Read before the decision is consumed, and only for the two branches that keep a container
+    // somebody else created: what *it* mounts is what a sandboxed session's paths can reach, and
+    // this client's own mount set describes the container it would have made instead (C16c).
+    let mounted = match &decision {
+        Adoption::Attach(_) | Adoption::Start(_) => {
+            existing.as_ref().map(|f| f.mount_destinations.clone())
+        }
+        Adoption::Create | Adoption::Replace { .. } => None,
+    };
+
     let id = match decision {
         Adoption::Attach(id) => id,
         Adoption::Start(id) => {
@@ -318,6 +339,7 @@ where
         id,
         capabilities,
         unsatisfiable,
+        mounted,
     })
 }
 
@@ -660,6 +682,181 @@ mod tests {
     }
 }
 
+/// What a bring-up reports about the mounts of the container it ended up with (feature 031, U58,
+/// U59).
+#[cfg(test)]
+mod mounted_tests {
+    use super::*;
+    use crate::sandbox::parse::{ContainerFacts, ImageFacts};
+    use crate::sandbox::runtime::{IdentityMapping, LimitSupport, RuntimeKind, RuntimeVersion};
+    use crate::sandbox::{CredentialLayout, MountSet, SecretMount};
+    use std::path::{Path, PathBuf};
+
+    const DESTINATIONS: [&str; 2] = ["/home/u/p", "/var/lib/micold-ai-ide"];
+
+    /// A runtime that answers every call, with whatever `find` should report already there.
+    struct Fake {
+        existing: Option<ContainerFacts>,
+    }
+
+    impl Fake {
+        fn caps() -> RuntimeCapabilities {
+            RuntimeCapabilities {
+                kind: RuntimeKind::Docker,
+                version: "29.5.1".to_string(),
+                cpus: LimitSupport::Supported,
+                memory: LimitSupport::Supported,
+                pids: LimitSupport::Supported,
+                storage: LimitSupport::Supported,
+                identity_mapping: IdentityMapping::ExplicitUidGid,
+            }
+        }
+    }
+
+    impl ContainerRuntime for Fake {
+        fn detect(&self) -> Result<RuntimeVersion, RuntimeError> {
+            Ok(RuntimeVersion {
+                kind: RuntimeKind::Docker,
+                version: "29.5.1".to_string(),
+            })
+        }
+        fn probe(&self) -> Result<RuntimeCapabilities, RuntimeError> {
+            Ok(Self::caps())
+        }
+        fn inspect_image(&self, _reference: &str) -> Result<Option<ImageFacts>, RuntimeError> {
+            Ok(None)
+        }
+        fn acquire_image(
+            &self,
+            _source: &ImageSource,
+            _progress: &mut dyn FnMut(Progress),
+        ) -> Result<ImageFacts, RuntimeError> {
+            Ok(ImageFacts {
+                id: "sha256:x".to_string(),
+                tags: Vec::new(),
+                fingerprint: None,
+            })
+        }
+        fn create(&self, _spec: &SandboxSpec) -> Result<ContainerId, RuntimeError> {
+            Ok(ContainerId("created".to_string()))
+        }
+        fn start(&self, _id: &ContainerId) -> Result<(), RuntimeError> {
+            Ok(())
+        }
+        fn stop(&self, _id: &ContainerId) -> Result<(), RuntimeError> {
+            Ok(())
+        }
+        fn remove(&self, _id: &ContainerId) -> Result<(), RuntimeError> {
+            Ok(())
+        }
+        fn inspect(&self, _id: &ContainerId) -> Result<ContainerFacts, RuntimeError> {
+            Err(RuntimeError::Unknown {
+                stderr: "not asked for".to_string(),
+            })
+        }
+        fn find(&self, _name: &str) -> Result<Option<ContainerFacts>, RuntimeError> {
+            Ok(self.existing.clone())
+        }
+        fn logs(&self, _id: &ContainerId, _lines: usize) -> Result<Vec<String>, RuntimeError> {
+            Ok(Vec::new())
+        }
+    }
+
+    fn mounts() -> MountSet {
+        MountSet::build_for(
+            &[PathBuf::from("/home/u/p")],
+            &SandboxProfile::default(),
+            &CredentialLayout::default(),
+            PathBuf::from("/home/u/.local/share/micold-ai-ide"),
+            Path::new("/home/u"),
+            SecretMount {
+                host: PathBuf::from("/home/u/.local/share/micold-ai-ide/sandbox.token"),
+                container: PathBuf::from("/run/micold/token"),
+            },
+            false,
+        )
+    }
+
+    /// The container already there, with the mounts it was created with.
+    fn existing(image: &str, running: bool) -> ContainerFacts {
+        ContainerFacts {
+            id: "9f2b1c4d7e8a".to_string(),
+            running,
+            image: image.to_string(),
+            fingerprint: None,
+            mount_destinations: DESTINATIONS.map(str::to_string).to_vec(),
+        }
+    }
+
+    fn run(existing: Option<ContainerFacts>) -> Started {
+        let profile = SandboxProfile::default();
+        let mounts = mounts();
+        let spec = SandboxSpec {
+            name: "micold-sandbox".to_string(),
+            profile: profile.clone(),
+            mounts: mounts.clone(),
+            uid: 1000,
+            gid: 1000,
+            control_port: 7727,
+            published_ports: Vec::new(),
+            network_name: "micold-net".to_string(),
+            home: PathBuf::from("/home/u"),
+        };
+        bring_up(
+            &Fake { existing },
+            &profile,
+            &mounts,
+            "fingerprint",
+            |_| spec,
+            &mut |_| {},
+        )
+        .expect("the fake answers every call")
+    }
+
+    /// U58: a container this bring-up made shares exactly this mount set, so there is nothing to
+    /// report — and `None` is what makes every location shared.
+    #[test]
+    fn a_created_or_replaced_container_reports_no_mounts_of_its_own() {
+        assert_eq!(
+            run(None).mounted,
+            None,
+            "nothing was there, so this bring-up created the container from the set it was handed"
+        );
+        assert_eq!(
+            run(Some(existing("some-other-image", true))).mounted,
+            None,
+            "an existing container from another image is replaced, and the replacement is this \
+             set's — reporting the *old* one's mounts here would translate links through a \
+             container that no longer exists"
+        );
+    }
+
+    /// U59: a container this bring-up attached to or started may have been created with other
+    /// projects, and what it really mounts is the only honest answer (C16c).
+    #[test]
+    fn an_attached_or_started_container_reports_the_mounts_it_has() {
+        let expected = Some(DESTINATIONS.map(str::to_string).to_vec());
+        assert_eq!(
+            run(Some(existing(
+                &SandboxProfile::default().image.reference,
+                true
+            )))
+            .mounted,
+            expected,
+            "attaching to a running sandbox adopts its mounts, not this client's wishes"
+        );
+        assert_eq!(
+            run(Some(existing(
+                &SandboxProfile::default().image.reference,
+                false
+            )))
+            .mounted,
+            expected,
+            "starting a stopped one of ours is the same container, with the same mounts"
+        );
+    }
+}
+
 #[cfg(test)]
 mod adoption_tests {
     use super::*;
@@ -671,6 +868,7 @@ mod adoption_tests {
             running,
             image: image.to_string(),
             fingerprint: fingerprint.map(str::to_string),
+            mount_destinations: Vec::new(),
         }
     }
 

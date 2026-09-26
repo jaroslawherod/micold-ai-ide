@@ -10,7 +10,7 @@
 //! placement starts in, when the one-occurrence fallback is on the table, and what the persistent
 //! notice says while it lasts.
 
-use micold_client::features::sandbox::{stopped_by_limit, Sandbox, SandboxLimit};
+use micold_client::features::sandbox::{stopped_by_limit, Sandbox, SandboxLimit, SandboxLocations};
 use micold_core::protocol::messages::ExitStatus;
 use micold_core::sandbox::lifecycle::{Failure, SandboxState, Stage, Started};
 use micold_core::sandbox::placement::{ConsentedFallback, PlacementKind};
@@ -84,11 +84,15 @@ fn a_successful_start_retires_the_fallback() {
         because: "was not installed".into(),
     });
 
-    s.started(Started {
-        id: ContainerId("x".into()),
-        capabilities: caps(),
-        unsatisfiable: Vec::new(),
-    });
+    s.started(
+        Started {
+            id: ContainerId("x".into()),
+            capabilities: caps(),
+            unsatisfiable: Vec::new(),
+            mounted: None,
+        },
+        SandboxLocations::default(),
+    );
     assert!(
         s.fallback.is_none(),
         "the banner must stop claiming we are unsandboxed"
@@ -110,14 +114,18 @@ fn a_failure_notice_names_the_cause_and_the_remedy() {
 fn unenforceable_limits_survive_a_successful_start() {
     // FR-015: the sandbox runs, and the view still has to say which limit is not being applied.
     let mut s = Sandbox::default();
-    s.started(Started {
-        id: ContainerId("x".into()),
-        capabilities: caps(),
-        unsatisfiable: vec![UnsatisfiableLimit {
-            field: "storage",
-            reason: "overlay2 without pquota".into(),
-        }],
-    });
+    s.started(
+        Started {
+            id: ContainerId("x".into()),
+            capabilities: caps(),
+            unsatisfiable: vec![UnsatisfiableLimit {
+                field: "storage",
+                reason: "overlay2 without pquota".into(),
+            }],
+            mounted: None,
+        },
+        SandboxLocations::default(),
+    );
     assert_eq!(s.unsatisfiable.len(), 1);
     // ...but it is not a failure, so nothing persistent is shown for it. The daemon section
     // renders it beside the field it belongs to.
