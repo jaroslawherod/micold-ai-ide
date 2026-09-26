@@ -668,3 +668,14 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
 - A18 passed on arrival, as tdd/test-list.md records: after T011 those addresses are already
   `NotFollowable`. Its mutants are checked in the cycle that adds the `File` branch (Cycle 69)
 - the outer red stays red until Cycle 73 closes it; the inner cycles below are its units
+
+## Cycle 67: U140 `host_names_from`
+
+- test: `crates/micold-core/src/link/resolve.rs::tests::this_machines_names_are_its_hostname_and_its_first_dns_label` (T087)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::resolve` -> first
+  `cannot find function host_names_from in this scope`; with the minimal stub returning `Vec::new()`,
+  `a qualified name answers to itself and to its first label (FR-012)` `left: []` /
+  `right: ["build.example.com", "build"]` (4 passed; 1 failed)
+- green: the name as reported, plus its first label when that is shorter; an empty name gives none
+  (T088) -> `cargo test -p micold-core --all-targets` 0 failed
+- refactor: none
