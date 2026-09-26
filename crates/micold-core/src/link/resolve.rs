@@ -79,6 +79,22 @@ pub fn host_names_from(raw: &str) -> Vec<String> {
     names
 }
 
+/// The names a container answers to (FR-018, C11).
+///
+/// A container's hostname is its id's 12-character prefix, which is also what its shell prompt
+/// shows; a program may print the full id instead. An id shorter than the prefix is its own prefix.
+pub fn container_host_names(id: &str) -> Vec<String> {
+    let prefix = id.get(..CONTAINER_ID_PREFIX).unwrap_or(id);
+    let mut names = vec![prefix.to_string()];
+    if prefix != id {
+        names.push(id.to_string());
+    }
+    names
+}
+
+/// How much of a container id its hostname is (C11).
+const CONTAINER_ID_PREFIX: usize = 12;
+
 /// What `link` opens on this machine, or `None` when it is not followable here (FR-008, FR-012,
 /// FR-018).
 pub fn resolve(link: Link, _ctx: &LinkContext) -> Option<ResolvedLink> {
@@ -179,6 +195,27 @@ mod tests {
             host_names_from(""),
             Vec::<String>::new(),
             "no hostname is no name: a file link naming any host then opens nothing"
+        );
+    }
+
+    /// U141: a container reports itself by the short id a shell prompt shows, or by the full one.
+    #[test]
+    fn a_containers_names_are_its_twelve_character_prefix_and_its_full_id() {
+        let full = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        assert_eq!(
+            container_host_names(full),
+            vec!["0123456789ab".to_string(), full.to_string()],
+            "a 64-character id answers to its 12-character prefix and to itself (C11)"
+        );
+        assert_eq!(
+            container_host_names("0123456789ab"),
+            vec!["0123456789ab".to_string()],
+            "an id that is its own prefix is listed once"
+        );
+        assert_eq!(
+            container_host_names("01234567"),
+            vec!["01234567".to_string()],
+            "an id shorter than the prefix length is its own prefix (C11)"
         );
     }
 

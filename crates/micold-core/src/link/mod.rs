@@ -11,7 +11,10 @@ pub mod detect;
 pub mod line;
 pub mod resolve;
 
-pub use resolve::{LinkContext, Reason, ResolvedLink, SandboxLinkContext, SharedLocation, Target};
+pub use resolve::{
+    container_host_names, host_names_from, LinkContext, Reason, ResolvedLink, SandboxLinkContext,
+    SharedLocation, Target,
+};
 
 /// The rows core reads, lent by the client's grid cache (research R4).
 ///

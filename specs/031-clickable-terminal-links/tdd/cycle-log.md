@@ -679,3 +679,13 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
 - green: the name as reported, plus its first label when that is shorter; an empty name gives none
   (T088) -> `cargo test -p micold-core --all-targets` 0 failed
 - refactor: none
+
+## Cycle 68: U141 `container_host_names`
+
+- test: `crates/micold-core/src/link/resolve.rs::tests::a_containers_names_are_its_twelve_character_prefix_and_its_full_id` (T087)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::resolve` ->
+  `a 64-character id answers to its 12-character prefix and to itself (C11)` `left: []` /
+  `right: ["0123456789ab", "0123456789abcdef…"]` (5 passed; 1 failed)
+- green: `id.get(..12).unwrap_or(id)`, then the full id when it differs (T088); both helpers
+  re-exported from `link` -> `cargo test -p micold-core --all-targets` 0 failed
+- refactor: the prefix length is the named constant `CONTAINER_ID_PREFIX`, so C11's 12 is read once
