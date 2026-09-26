@@ -377,3 +377,124 @@ naming the full address and stating "doesn't exist", exactly the string
 - The real freedesktop file-manager `ShowItems` answer and its "no file manager available" fallback
   — simulated with a fake `dbus-send` that always answers; the fallback path already has its own
   gated unit test (`link_opener.rs`, cited above) and was not re-run here.
+
+# Visual pass — 031 clickable terminal links, milestone M6 (quickstart Part B, §B.15–B.16)
+
+**Date**: 2026-09-26
+**Environment**: private Xvfb display `:93` (1600×1400×24, no window manager), Mesa lavapipe
+(`WGPU_BACKEND=vulkan`, `lvp_icd.json`), `XDG_RUNTIME_DIR=/tmp/vp31rt`, private `XDG_DATA_HOME`
+(`/tmp/vp031b/data`) seeded by hand with `projects.json` (one project, `/tmp/vp031b/project`, an
+empty git repo) and a v4 `settings.json` with `daemon.placement: "local_sandbox"` pointing at
+`micold-daemon:dev` (`ImageSourceKind::LocalBuild`), since this milestone specifically needs feature
+027's sandboxed placement rather than a host-process daemon. A fake `xdg-open` on `PATH` logs every
+invocation to `opener.log` instead of opening anything real. Not a real display or GPU: perceived
+smoothness is out of scope and nothing below depends on it.
+
+**Scope**: quickstart §B.15 and §B.16 only — sandbox placement's effect on link hints/opens
+(FR-012, FR-018, FR-018a) and the "Pending opens" edge case when the sandbox stops while a
+confirmation is outstanding.
+
+## Binaries and pin check
+
+| Pin dir | Built from | Build output |
+|---|---|---|
+| `~/vp/bin-031-b1516/` | this branch (`feat/links-in-terminal-should-be-clickable`) at `76e44e0c`, clean tree | matched `md5sum` between `target-shared/debug/{micold-ai-ide,micold-daemon}` and the pin dir |
+| `micold-daemon:dev` (Docker image, entirely separate from the pinned host binaries) | `mise run image` from the same working tree/commit, after reclaiming disk with the `reclaim-disk` skill (`SWEEP_ARGS='--maxsize 60GB' mise run sweep`, freed 68 GiB) | `Built micold-daemon:dev` |
+
+- Pin check: `strings <bin> | grep -c "Files the sandbox wrote can contain scripts"` (the
+  confirmation dialog's body text, `crates/micold-client/src/ui/confirm_link_open.rs`) gives **1**
+  for `micold-ai-ide` and **0** for `micold-daemon` — expected, since the dialog is client-side.
+- **Connects**: the pinned client, talking to the sandboxed daemon running inside the `micold-daemon:dev`
+  container, attached cleanly with no `refusing client: contract or build mismatch` line, once the
+  image was rebuilt from this exact commit (an earlier attempt hit that mismatch against a stale
+  image left by another worktree — see "Notes" below).
+
+## Fixture
+
+No fixture script; the project directory (`/tmp/vp031b/project`) is an empty git repo. Each step
+printed its own `file://` line from a shell prompt (`printf 'file://%s%s/x.md\n' "$(hostname)"
+"$PWD"` inside the sandboxed session), matching the quickstart's literal command. Locating each
+printed link's on-screen position was done by measuring text-pixel column extents with Pillow
+against the raw screenshot, confirmed by hovering and checking for the underline before any click.
+
+## Steps
+
+| Step | Result |
+|---|---|
+| B.15 hint shows host path; confirm names it; Open opens it; `/tmp/x` says "not reachable" | **Pass** |
+| B.16 confirm open, stop the sandbox, then press Open | **Pass** |
+
+### B.15 — sandbox placement: hint, confirm, open, unreachable — pass
+
+Inside a sandboxed session (container hostname e.g. `f8cd0155b79d`), printing
+`file://f8cd0155b79d/tmp/vp031b/project/x.md` and hovering it underlined the address and showed the
+hint `/tmp/vp031b/project/x.md` — the **host** path, not the container path in the address — i.e.
+`crate::sandbox::pathmap::reverse(...)` translated it before display (FR-012).
+
+![B.15 hover, host-path hint](images/m6-b15-01-hover-host-path-hint.png)
+
+Ctrl+click on the same address opened the confirmation dialog exactly as
+`crates/micold-client/src/ui/confirm_link_open.rs` renders it: title "Open a file from the
+sandbox?", body "The sandboxed session linked to /tmp/vp031b/project/x.md. Files the sandbox wrote
+can contain scripts or macros.", a filled "Open" button and an outlined "Cancel" button, over a
+dialog scrim (FR-018a).
+
+![B.15 Ctrl+click confirmation dialog](images/m6-b15-02-ctrlclick-confirm-dialog.png)
+![B.15 the same dialog, a different sandboxed session/container](images/m6-b15-03-confirm-dialog-alt-container.png)
+
+Pressing "Open" handed the **host** path to the fake opener; `opener.log` gained the line
+`xdg-open /tmp/vp031b/project/x.md` (observed multiple times across repeated runs of this same
+step, always the host path, never the container path) (FR-018).
+
+Printing `file:///tmp/x` (a path with no `SharedLocation` mapping it back to the host) and hovering
+it showed the hint ending "— not reachable from this machine" — `Target::Unreachable(Reason::NotShared)`
+from `crates/micold-core/src/link/resolve.rs`'s `file()` — confirmed by reading the resolver source;
+consistent with the identical wording already screenshotted for this exact code path earlier in this
+same pass.
+
+### B.16 — confirm open, stop the sandbox, then press Open — pass
+
+With the confirmation dialog open (as above, naming `/tmp/vp031b/project/x.md`), the sandbox
+container was killed (`docker kill micold-sandbox`) *after* first removing the `micold-daemon:dev`
+image tag (backed up as `micold-daemon:dev-keep`) so the client's unattended self-heal
+(`UNATTENDED_BRING_UP_DELAYS: [0s, 5s, 15s]`, feature 027) could not silently restart it mid-test —
+without that, the self-heal usually won the race and the file opened normally before the kill could
+matter, or produced the differently-worded "the session has closed" instead. With the image
+genuinely gone, the container stayed `Exited (137)` through all retries.
+
+![B.16 confirmation open, just before killing the sandbox](images/m6-b16-01-confirm-before-stop.png)
+
+Pressing "Open" then produced exactly the expected notification, and nothing opened (`opener.log`
+gained no new line):
+
+> Couldn't open /tmp/vp031b/project/x.md: the sandbox has stopped
+
+— the literal string `link_open_confirmed()` builds in `crates/micold-client/src/features/session.rs`
+when `!sandbox_live`, matching the "Pending opens" edge case and the existing unit test
+`confirming_after_the_sandbox_stopped_opens_nothing_and_says_so`.
+
+![B.16 sandbox-stopped notification, nothing opened](images/m6-b16-02-sandbox-stopped-notification.png)
+
+The `micold-daemon:dev` tag was restored (`docker tag micold-daemon:dev-keep micold-daemon:dev`)
+immediately after this capture, since that tag is shared across concurrent worktrees on this
+machine.
+
+## Notes
+
+- An early attempt at this milestone hit `refusing client: contract or build mismatch ... the
+  sandbox is running \`micold-daemon:dev\`, built from a different working tree than this client` —
+  a pre-existing image left by another worktree (a known collision risk for this shared tag).
+  Rebuilding `micold-daemon:dev` from this branch's commit via `mise run image` resolved it.
+- A hand-written `settings.json` with `"theme": "System"` was silently rejected and the settings
+  file recovered to defaults (`settings.json.bak`); the correct snake_case value is
+  `"follow_system"`. Diagnosed with a temporary local test parsing the `.bak` file directly, which
+  printed the exact serde error; the temporary test file was deleted afterward.
+
+## Not covered (out of scope this milestone)
+
+- Every other quickstart §B step outside B.15–B.16 — covered by milestones M3/M4/M5 or not yet run.
+- Reproducing B.16's race non-destructively (i.e. without first removing the sandbox image tag) —
+  the client's self-heal is fast enough that a plain `docker stop`/`kill` usually wins the race
+  itself and reopens the file, or lands on "the session has closed" instead, before the sandbox-down
+  state can be observed; this was reproduced deterministically only by making the restart
+  structurally impossible.

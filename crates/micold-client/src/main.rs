@@ -697,6 +697,11 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Session(msg @ SessionMsg::LinkActivated(_)) => {
             shell::links::on_link_message(app, msg)
         }
+        // The answer to the sandbox confirmation (FR-018a) depends on whether the sandbox is still
+        // live, which is a fact of `App` and not of the pure state, so it is answered here.
+        Message::Session(msg @ SessionMsg::LinkOpenConfirmed) => {
+            shell::links::on_link_message(app, msg)
+        }
         Message::Session(SessionMsg::TerminalAiCliSelected(id)) => {
             shell::daemon_sync::on_terminal_ai_cli_selected(app, id)
         }

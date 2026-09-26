@@ -57,7 +57,7 @@ rendered pixels — is covered by the quickstart §B visual pass.
 | A16 | Activating a `file://` link to a runnable file calls `opener.reveal` and never `opener.open` | US3.4, FR-013 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::activating_a_file_link_to_a_runnable_file_reveals_it_and_never_opens_it` |
 | A17 | Activating a `file://` link to a missing file calls no opener and raises `Couldn't open <address>: the file doesn't exist on this machine` | US3.5, FR-015 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::activating_a_file_link_to_a_missing_file_opens_nothing_and_says_so` |
 | A18 | `file://otherhost/x`, `javascript:alert(1)` and `vscode://x` are not marked on hover and activating them calls no opener | US3.6, FR-011, FR-012 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::a_file_link_to_another_machine_and_an_application_scheme_are_no_links` (guard; mutant: `known` accepts any host) |
-| A19 | In a sandboxed session with a shared project, activating `file:///work/<project>/readme.txt` opens a confirmation naming the host path; **Open** calls `opener.open` with that host path | US3.7, FR-018, FR-018a | example | PENDING | |
+| A19 | In a sandboxed session with a shared project, activating `file:///work/<project>/readme.txt` opens a confirmation naming the host path; **Open** calls `opener.open` with that host path | US3.7, FR-018, FR-018a | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::{a_shared_sandboxed_file_link_asks_first_and_then_opens_the_host_path, a_file_link_in_a_sandboxed_session_reaches_nothing_and_says_why}` |
 | A20 | A right press over a link opens the terminal menu with **Open Link** and **Copy Link Address** ahead of today's items | US4.1, FR-020 | example | PENDING | |
 | A21 | Choosing **Copy Link Address** on a declared link writes its declared address to the clipboard, and on a wrapped detected link the complete unwrapped address | US4.2, FR-021 | example | PENDING | |
 | A22 | A right press over plain text opens the menu with no link items | US4.3, FR-020 | example | PENDING | |
@@ -145,13 +145,13 @@ U32 is a guard: `file:` was `NotFollowable` until T046. Its red was shown in Cyc
 | U35 | A `file` link with host empty, `localhost` or one of `host_names` (any ASCII case) resolves to `HostPath(path)` | FR-012, C4, C5 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::a_file_link_to_this_machine_is_a_path_on_it` |
 | U36 | A `file` link naming another host, including `file://server/share/…` and an unresolvable `file://build-host.invalid/…`, resolves to `None` with no lookup | FR-012, US3.6, C6, C18 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::a_file_link_naming_another_machine_is_no_link` (guard; mutant: `known` accepts any host) |
 | U37 | With `windows_host`, `/C:/Users/x` resolves to `C:\Users\x`, and a path with no drive resolves to `None` | FR-012, C7, C8 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::on_a_windows_host_a_file_path_needs_a_drive` |
-| U38 | In a sandboxed context, the container id's 12-character prefix and the full id are accepted as hosts | FR-018, C11 | example | PENDING | |
-| U39 | A sandboxed path under a shared location resolves to that location's host path, with `needs_confirmation` | FR-018, FR-018a, C11 | example | PENDING | |
+| U38 | In a sandboxed context, the container id's 12-character prefix, the full id and the container's name are accepted as hosts | FR-018, C11 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::a_sandboxed_file_link_is_accepted_from_every_name_the_container_answers_to` |
+| U39 | A sandboxed path under a shared location resolves to that location's host path, with `needs_confirmation` | FR-018, FR-018a, C11 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::a_sandboxed_path_under_a_shared_location_opens_its_host_path_after_a_confirmation` |
 | U41 | A sandboxed path under no shared location resolves to `Unreachable`, displayed as `<path> — not reachable from this machine` | FR-018, C12 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::a_sandboxed_file_link_outside_every_shared_location_is_not_reachable` |
 | U46 | For every resolved link, `display` equals the string its target carries (`Url` and `HostPath`), sampled over every case above | SC-006 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::what_the_hint_shows_is_exactly_what_opens` |
-| U47 | In a sandboxed context, this machine's `host_names` still translate through the shared locations | FR-018, C17 | example | PENDING | |
+| U47 | In a sandboxed context, this machine's `host_names` still translate through the shared locations | FR-018, C17 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::in_a_sandboxed_session_this_machines_names_still_translate` |
 | U140 | `host_names_from` lists the full name and its first DNS label (`build.example.com` → both), a dotless name once, an empty name as none | FR-012 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::this_machines_names_are_its_hostname_and_its_first_dns_label` |
-| U141 | `container_host_names` gives a 64-character id's 12-character prefix and the full id, and a 12- or 8-character id once | FR-018, C11 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::a_containers_names_are_its_twelve_character_prefix_and_its_full_id` |
+| U141 | `container_host_names` gives a 64-character id's 12-character prefix, the full id and the container's name, and a 12- or 8-character id once | FR-018, C11 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::a_containers_names_are_its_prefix_its_full_id_and_the_name_it_was_created_with` |
 
 U36 is a guard: `file:` resolved to `None` until T047. Its red was shown in Cycle 70 by a `File` branch that accepts any host.
 
@@ -190,25 +190,25 @@ U49 is a guard: it is green on arrival. Its red is shown by adding `use std::fs;
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U40 | The most specific of nested shared locations maps the path | FR-018, C15 | example | PENDING | |
-| U42 | A path whose `..` climbs above `/` maps to nothing | FR-018, C13 | example | PENDING | |
-| U43 | Locations match whole path components: `/work/projector` is not under `/work/proj` | FR-018 | example | PENDING | |
-| U44 | A result equal to or under a denied host path maps to nothing | FR-018a, C16b | example | PENDING | |
-| U48 | On a Windows host the remainder joins the host location with `\` | FR-018, C14 | example | PENDING | |
-| U145 | Normalisation precedes the location match: with `/work/proj` shared, `/work/proj/../../etc/passwd` maps to nothing and `/work/proj/a/../b` maps to `<host>/b` | FR-018, C13 | example | PENDING | |
+| U40 | The most specific of nested shared locations maps the path | FR-018, C15 | example | DONE | `crates/micold-core/src/sandbox/pathmap.rs::tests::the_most_specific_of_nested_shared_locations_maps_the_path` |
+| U42 | A path whose `..` climbs above `/` maps to nothing | FR-018, C13 | example | DONE | `crates/micold-core/src/sandbox/pathmap.rs::tests::a_path_is_normalised_before_it_is_matched_and_never_climbs_above_root` |
+| U43 | Locations match whole path components: `/work/projector` is not under `/work/proj` | FR-018 | example | DONE | `crates/micold-core/src/sandbox/pathmap.rs::tests::a_location_matches_whole_path_components_only` |
+| U44 | A result equal to or under a denied host path maps to nothing | FR-018a, C16b | example | DONE | `crates/micold-core/src/sandbox/pathmap.rs::tests::{a_result_equal_to_or_under_a_denied_host_path_maps_to_nothing, a_denied_windows_path_is_denied_whatever_its_case, a_multi_byte_name_at_the_denied_paths_own_length_is_answered_not_panicked}` |
+| U48 | On a Windows host the remainder joins the host location with `\` | FR-018, C14 | example | DONE | `crates/micold-core/src/sandbox/pathmap.rs::tests::{a_windows_host_location_joins_the_remainder_with_backslashes, a_windows_host_refuses_a_component_windows_would_read_as_more_than_a_name}` |
+| U145 | Normalisation precedes the location match: with `/work/proj` shared, `/work/proj/../../etc/passwd` maps to nothing and `/work/proj/a/../b` maps to `<host>/b` | FR-018, C13 | example | DONE | `crates/micold-core/src/sandbox/pathmap.rs::tests::a_path_is_normalised_before_it_is_matched_and_never_climbs_above_root` |
 
 ### `crates/micold-core/src/sandbox/parse.rs`, `lifecycle.rs`, `mod.rs`
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U56 | Mount destinations are read from `Mounts[].Destination` in Docker and in Podman inspect output | FR-018 | example | PENDING | |
-| U57 | Inspect output with no `Mounts` gives no destinations | FR-018 | example | PENDING | |
-| U58 | `Started.mounted` is `None` when the container was created or replaced | FR-018 | example | PENDING | |
-| U59 | `Started.mounted` is the destinations when the container was attached or started | FR-018 | example | PENDING | |
-| U60 | `shared_locations` lists projects, state, home and credentials, most path components first | FR-018, C15 | example | PENDING | |
-| U61 | The secret mount is never a shared location | FR-018a, C16 | example | PENDING | |
-| U62 | With `mounted = Some`, a location the container does not mount is not shared; with `None`, all are | FR-018, C16c | example | PENDING | |
-| U63 | The denied list holds the secret mount's host path | FR-018a, C16b | example | PENDING | |
+| U56 | Mount destinations are read from `Mounts[].Destination` in Docker and in Podman inspect output | FR-018 | example | DONE | `crates/micold-core/src/sandbox/parse.rs::tests::a_containers_mount_destinations_are_read_from_either_runtimes_shape` |
+| U57 | Inspect output with no `Mounts` gives no destinations | FR-018 | example | DONE | `crates/micold-core/src/sandbox/parse.rs::tests::an_inspection_with_no_mounts_reports_no_destinations` |
+| U58 | `Started.mounted` is `None` when the container was created or replaced | FR-018 | example | DONE | `crates/micold-core/src/sandbox/lifecycle.rs::mounted_tests::a_created_or_replaced_container_reports_no_mounts_of_its_own` |
+| U59 | `Started.mounted` is the destinations when the container was attached or started | FR-018 | example | DONE | `crates/micold-core/src/sandbox/lifecycle.rs::mounted_tests::an_attached_or_started_container_reports_the_mounts_it_has` |
+| U60 | `shared_locations` lists projects, state, home and credentials, most path components first | FR-018, C15 | example | DONE | `crates/micold-core/src/sandbox/mod.rs::tests::shared_locations_list_the_projects_state_home_and_credentials_most_specific_first` |
+| U61 | The secret mount is never a shared location | FR-018a, C16 | example | DONE | `crates/micold-core/src/sandbox/mod.rs::tests::{shared_locations_list_the_projects_state_home_and_credentials_most_specific_first, the_denied_host_paths_hold_the_secret_mounts_own_path}` |
+| U62 | With `mounted = Some`, a location the container does not mount is not shared; with `None`, all are | FR-018, C16c | example | DONE | `crates/micold-core/src/sandbox/mod.rs::tests::a_location_the_running_container_does_not_mount_is_not_shared` |
+| U63 | The denied list holds the secret mount's host path | FR-018a, C16b | example | DONE | `crates/micold-core/src/sandbox/mod.rs::tests::the_denied_host_paths_hold_the_secret_mounts_own_path` |
 
 ### `crates/micold-core/src/env_include.rs`
 
@@ -248,11 +248,11 @@ untouched code, and it is recorded as `BASELINE`.
 | U77 | `LinkOpenFinished` with `NotFound` notifies `Couldn't open <address>: the file doesn't exist on this machine` | FR-015, US3.5 | example | DONE | `crates/micold-client/tests/features_session_links.rs::an_open_of_a_file_that_is_not_there_notifies_that_it_does_not_exist` (mutant: the `NotFound` arm reports no application) |
 | U78 | `LinkActivated` with `HostPath(p)` and no confirmation emits `OpenLink(Path { path: p, address })` | FR-010, T6 | example | DONE | `crates/micold-client/tests/features_session_links.rs::activating_a_file_link_asks_to_open_its_host_path` |
 | U79 | `LinkActivated` with `Unreachable` notifies `Couldn't open <address>: the sandbox doesn't share that location with this machine` and emits no open | FR-015, FR-018, T8 | example | DONE | `crates/micold-client/tests/features_session_links.rs::activating_an_unreachable_link_opens_nothing_and_says_the_sandbox_does_not_share_it` |
-| U80 | `LinkActivated` needing confirmation records the pending open and shows the confirm surface with the host path | FR-018a, T7 | example | PENDING | |
-| U81 | Confirming while the session exists and the sandbox is live emits `OpenLink(Path)` | FR-018a, T9 | example | PENDING | |
-| U82 | Confirming after the session closed notifies `Couldn't open <host path>: the session has closed` and opens nothing | FR-018a, T9 | example | PENDING | |
-| U83 | Confirming after the sandbox stopped notifies `Couldn't open <host path>: the sandbox has stopped` and opens nothing | FR-018a, T9 | example | PENDING | |
-| U84 | Declining opens nothing and clears the pending open | FR-018a, T10 | example | PENDING | |
+| U80 | `LinkActivated` needing confirmation records the pending open and shows the confirm surface with the host path | FR-018a, T7 | example | DONE | `crates/micold-client/tests/features_session_links.rs::a_link_that_needs_confirmation_opens_the_confirm_surface_and_nothing_else` |
+| U81 | Confirming while the session exists and the sandbox is live emits `OpenLink(Path)` | FR-018a, T9 | example | DONE | `crates/micold-client/tests/features_session_links.rs::confirming_while_the_session_and_sandbox_live_opens_the_host_path` |
+| U82 | Confirming after the session closed notifies `Couldn't open <host path>: the session has closed` and opens nothing | FR-018a, T9 | example | DONE | `crates/micold-client/tests/features_session_links.rs::confirming_after_the_session_closed_opens_nothing_and_says_so` |
+| U83 | Confirming after the sandbox stopped notifies `Couldn't open <host path>: the sandbox has stopped` and opens nothing | FR-018a, T9 | example | DONE | `crates/micold-client/tests/features_session_links.rs::confirming_after_the_sandbox_stopped_opens_nothing_and_says_so` |
+| U84 | Declining opens nothing and clears the pending open | FR-018a, T10 | example | DONE | `crates/micold-client/tests/features_session_links.rs::declining_opens_nothing_and_clears_the_pending_open` |
 | U85 | A menu opened with a link lists **Open Link** and **Copy Link Address** first | FR-020, T14 | example | PENDING | |
 | U86 | A menu opened without a link lists today's items only | FR-020, T14 | example | PENDING | |
 | U87 | **Open Link** acts as `LinkActivated` on the captured link and closes the menu | FR-017, FR-020, T15 | example | PENDING | |
@@ -264,9 +264,9 @@ untouched code, and it is recorded as `BASELINE`.
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U90 | `started(started, locations)` makes `locations()` return them, for a created and for an attached container | FR-018, T18 | example | PENDING | |
-| U91 | After each exit from `Running`/`Stale` (stopped, failed, container lost, fallback accepted) and after `for_placement`, `locations()` is `None` | FR-018, T19 | example | PENDING | |
-| U92 | A `Stale` sandbox still returns its locations | FR-018 | example | PENDING | |
+| U90 | `started(started, locations)` makes `locations()` return them, for a created and for an attached container | FR-018, T18 | example | DONE | `crates/micold-client/src/features/sandbox.rs::tests::a_started_sandbox_reports_the_locations_it_shares` |
+| U91 | After each exit from `Running`/`Stale` (stopped, failed, container lost, fallback accepted) and after `for_placement`, `locations()` is `None` | FR-018, T19 | example | DONE | `crates/micold-client/src/features/sandbox.rs::tests::leaving_running_or_stale_leaves_no_locations_behind` |
+| U92 | A `Stale` sandbox still returns its locations | FR-018 | example | DONE | `crates/micold-client/src/features/sandbox.rs::tests::a_stale_sandbox_still_reports_its_locations` |
 
 ### `crates/micold-client/src/shell/links.rs`
 
@@ -278,7 +278,7 @@ untouched code, and it is recorded as `BASELINE`.
 | U96 | An existing document or folder is passed to `opener.open` | FR-010, T11 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::a_document_is_opened_and_a_runnable_file_is_revealed` |
 | U97 | On each CI OS, real runnable files of every kind that OS lists (including a symlink to an executable file, the extension-only kinds such as Linux `.desktop`/`.AppImage` and macOS `.command`, and inside a directory whose name has a space) are passed to `reveal` 100%, and `.txt`, `.png`, `.pdf`, `.html` to `open` 100% | FR-013, SC-007 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::every_runnable_kind_is_revealed_and_every_document_opened` (the macOS kinds run on CI's macOS leg) |
 | U146 | macOS: a real directory without a bundle extension that holds `Contents/Info.plist` is passed to `reveal` | FR-013 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::every_runnable_kind_is_revealed_and_every_document_opened` (macOS only; CI's macOS leg) |
-| U98 | `LinkOpenConfirmed` calls the opener when `App.sandbox` is `Running`, and notifies without calling it when the sandbox has stopped | FR-018a | example | PENDING | |
+| U98 | `LinkOpenConfirmed` calls the opener when `App.sandbox` is `Running`, and notifies without calling it when the sandbox has stopped | FR-018a | example | DONE | `crates/micold-client/src/shell/links.rs::tests::{confirming_while_the_sandbox_runs_opens_the_translated_host_path, confirming_after_the_sandbox_stopped_opens_nothing_and_says_so}` |
 | U99 | `ContextMenuCopyLinkAddress` through `update_inner` returns the clipboard write task rather than dropping it | FR-021 | example | PENDING | |
 | U100 | `ContextMenuOpenLink` on a URL link reaches the opener | FR-020 | example | PENDING | |
 
@@ -346,7 +346,7 @@ acceptance behavior rather than a unit of their own. AI CLI and Regular Terminal
 
 | id   | behavior | traces | kind | state | test |
 | ---- | -------- | ------ | ---- | ----- | ---- |
-| U137 | `confirm_link_open` is a registered floating surface: listed in each overlay list, dismissed by Escape and scrim click as a decline, counted among the 10 dialogs | FR-018a | example | PENDING | |
+| U137 | `confirm_link_open` is a registered floating surface: listed in each overlay list, dismissed by Escape and scrim click as a decline, counted among the 10 dialogs | FR-018a | example | DONE | `crates/micold-client/tests/overlay_registry.rs`, and the rows in `overlay_dispatch_ordering.rs`, `overlay_dismissal_delta.rs`, `overlay_transition_identity.rs` and `popover_displacement.rs` |
 
 ## Invariants and edge cases still to place
 

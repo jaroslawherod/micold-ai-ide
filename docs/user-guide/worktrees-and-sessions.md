@@ -994,10 +994,16 @@ Web and mail addresses in a terminal are links, and so is text a program marked 
   nothing opens and a notification says
   `Couldn't open file:///home/you/notes.txt: the file doesn't exist on this machine`.
 - **Sessions in the sandbox.** A session running in the sandbox prints the paths it sees inside the
-  container, which are not this computer's paths. Their labels read
+  container, which are not this computer's paths. A file in a folder the sandbox shares with your
+  computer opens from the place on your computer that holds the same file: the label reads that
+  path, and a click asks **Open a file from the sandbox?** naming it, because the sandboxed session
+  could have written the file. Nothing opens until you answer.
+- **Paths the sandbox does not share** are not reachable from your computer. Their labels read
   `/work/project/readme.txt — not reachable from this machine`, and a click opens nothing rather than
   the wrong file: a notification says
   `Couldn't open file:///work/project/readme.txt: the sandbox doesn't share that location with this machine`.
+- **If the sandbox stops** while the question is on screen, answering **Open** opens nothing and a
+  notification says `Couldn't open /home/you/project/readme.txt: the sandbox has stopped`.
 - **When it can't open.** If nothing on your computer is set up to open the address, or the
   browser fails to start, a notification says so, for example
   `Couldn't open https://example.com/docs: no application is set up to open it`.

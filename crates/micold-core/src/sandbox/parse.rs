@@ -108,6 +108,15 @@ pub struct ContainerFacts {
     pub image: String,
     /// The build fingerprint label, when the image carries one (research R8).
     pub fingerprint: Option<String>,
+    /// Where this container's bind mounts appear *inside* it, from `Mounts[].Destination`.
+    ///
+    /// The mount set is fixed when a container is created, and a sandbox outlives the application —
+    /// so a container this client attaches to may share a different set of projects than this
+    /// client's own [`MountSet`](crate::sandbox::MountSet) describes. These are what it really
+    /// shares, and feature 031 translates a sandboxed `file` link only through them (research R10).
+    /// Destinations are enough: every host source is derived from its destination and the state
+    /// directory, so a matching destination names the same host path.
+    pub mount_destinations: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -118,6 +127,15 @@ struct ContainerDoc {
     state: Option<StateDoc>,
     #[serde(alias = "Config")]
     config: Option<ConfigDoc>,
+    #[serde(alias = "Mounts")]
+    mounts: Option<Vec<MountDoc>>,
+}
+
+/// One entry of a container's `Mounts` array. Docker and Podman both spell it this way.
+#[derive(Debug, Deserialize)]
+struct MountDoc {
+    #[serde(alias = "Destination")]
+    destination: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -154,6 +172,14 @@ pub fn container(stdout: &str) -> Result<ContainerFacts, RuntimeError> {
             .config
             .and_then(|c| c.labels)
             .and_then(|l| l.get(FINGERPRINT_LABEL).cloned()),
+        // A document with no `Mounts` at all reads as a container that shares nothing, which is the
+        // safe direction: feature 031 then translates no sandboxed path through it (C16c).
+        mount_destinations: doc
+            .mounts
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|m| m.destination)
+            .collect(),
     })
 }
 
@@ -257,6 +283,43 @@ mod tests {
         assert!(c.running);
         assert_eq!(c.image, "micold-daemon:dev");
         assert_eq!(c.fingerprint.as_deref(), Some("b7f3a1c9"));
+    }
+
+    /// U56: what the container really shares, read from the array both runtimes print.
+    #[test]
+    fn a_containers_mount_destinations_are_read_from_either_runtimes_shape() {
+        assert_eq!(
+            container(&fixture("docker_inspect_container.json"))
+                .unwrap()
+                .mount_destinations,
+            vec![
+                "/home/u/p",
+                "/var/lib/micold-ai-ide",
+                "/home/u",
+                "/run/micold/token",
+            ],
+            "Docker lists every bind mount's destination, in creation order"
+        );
+        assert_eq!(
+            container(&fixture("podman_inspect_container.json"))
+                .unwrap()
+                .mount_destinations,
+            vec!["/home/u/p", "/var/lib/micold-ai-ide"],
+            "podman spells the array the same way, and this container shares fewer projects than \
+             this client's own mount set would — which is the case the field exists for (C16c)"
+        );
+    }
+
+    /// U57: a document with no `Mounts` shares nothing, rather than failing to parse.
+    #[test]
+    fn an_inspection_with_no_mounts_reports_no_destinations() {
+        let doc = r#"{"Id":"9f2b","State":{"Running":true},"Config":{"Image":"i"}}"#;
+        assert_eq!(
+            container(doc).unwrap().mount_destinations,
+            Vec::<String>::new(),
+            "a container that reports no mounts shares nothing, which is the safe direction: no \
+             sandboxed path then translates to a host path (C16c)"
+        );
     }
 
     #[test]

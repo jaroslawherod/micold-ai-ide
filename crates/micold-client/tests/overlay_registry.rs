@@ -44,6 +44,7 @@ use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session;
 use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::session::PendingLinkOpen;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::settings::PendingPlacementChange;
 use micold_client::features::sidebar;
@@ -145,7 +146,33 @@ fn dialogs() -> Vec<Dialog> {
                 })
             },
         },
+        // The one question a sandboxed file link asks before it opens (FR-018a): the path came out
+        // of the sandbox, and the answer decides whether this machine opens it at all.
+        Dialog {
+            id: "confirm_link_open",
+            cancel: Message::Session(SessionMsg::LinkOpenDeclined),
+            open: |state| {
+                state.session.pending_link_open = Some(PendingLinkOpen {
+                    session: SessionId::new(),
+                    link: a_sandboxed_link(),
+                })
+            },
+        },
     ]
+}
+
+/// A resolved sandboxed file link: one that translated to a host path and so needs a confirmation.
+fn a_sandboxed_link() -> micold_core::link::ResolvedLink {
+    micold_core::link::ResolvedLink {
+        link: micold_core::link::Link {
+            address: "file:///work/p/a.md".to_string(),
+            origin: micold_core::link::LinkOrigin::Detected,
+            cells: Vec::new(),
+        },
+        display: "/home/u/p/a.md".to_string(),
+        target: micold_core::link::Target::HostPath("/home/u/p/a.md".to_string()),
+        needs_confirmation: true,
+    }
 }
 
 /// A state with `dialog` open (or nothing open, for `None`) and the filter panel as asked.
@@ -237,8 +264,8 @@ fn every_dialog_is_in_the_list() {
     // The compile-time half of this went with the enum: an exhaustive `match` used to make a
     // dialog added without an expectation a build error. Nothing about a registration line is
     // exhaustive, so the hold is now arithmetic — this list against the registry's own count of
-    // dialogs. A tenth dialog registered without a row here fails on the second assertion, and
-    // the twenty states this file covers stay twenty.
+    // dialogs. An eleventh dialog registered without a row here fails on the second assertion, and
+    // the twenty-two states this file covers stay twenty-two.
     //
     // Nine, then eight, then nine again. Settings was the largest of the original nine and is no
     // longer a dialog at all — it is a view (FR-026), so it neither floats nor takes Escape. The
@@ -247,14 +274,14 @@ fn every_dialog_is_in_the_list() {
     // and does take Escape.
     assert_eq!(
         dialogs().len(),
-        9,
-        "the dialog list has drifted. Add the new dialog here, or the twenty states this file is \
-         meant to cover are no longer twenty"
+        10,
+        "the dialog list has drifted. Add the new dialog here, or the twenty-two states this file \
+         is meant to cover are no longer twenty-two"
     );
     assert_eq!(
         every_state().len(),
-        20,
-        "nine dialogs plus nothing open, each with the filter panel open and closed"
+        22,
+        "ten dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()
@@ -633,7 +660,7 @@ fn a_dialog_draws_from_its_own_state() {
     // paired with looks for state a different dialog owns.
     //
     // Driven through the reducer rather than by assigning fields, so the live state is the one the
-    // application actually produces. Eight of the nine dialogs can be opened that way. The project
+    // application actually produces. Eight of the ten dialogs can be opened that way. The project
     // selector's listing and a session's record are established by the binary, not the pure core,
     // so a `State` built here has neither and the view would correctly return `None` — they are
     // covered by `every_dialog_is_registered_with_a_view` above and by their own feature tests.

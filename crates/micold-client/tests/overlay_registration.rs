@@ -113,13 +113,29 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
 
 /// Popover-*shaped* fields that are actually a dialog's own state, with the dialog each opens.
 ///
-/// One member, and it is here rather than exempted by name: `about_open` looks exactly like a
-/// popover flag to the scan below, and the way to keep the scan honest is to say what it is, not
-/// to teach the scan to skip it. `a_dialog_flag_registers_in_the_dialog_band` then holds this list
-/// to being true.
+/// Two members, and they are here rather than exempted by name: `about_open` and
+/// `pending_link_open` look exactly like popover flags to the scan below, and the way to keep the
+/// scan honest is to say what they are, not to teach the scan to skip them.
+/// `a_dialog_flag_registers_in_the_dialog_band` then holds this list to being true.
 #[allow(clippy::type_complexity)]
-const DIALOG_FLAGS: &[(&str, &str, fn(&mut State))] =
-    &[("help.about_open", "about", |s| s.help.about_open = true)];
+const DIALOG_FLAGS: &[(&str, &str, fn(&mut State))] = &[
+    ("help.about_open", "about", |s| s.help.about_open = true),
+    ("session.pending_link_open", "confirm_link_open", |s| {
+        s.session.pending_link_open = Some(micold_client::features::session::PendingLinkOpen {
+            session: SessionId::new(),
+            link: micold_core::link::ResolvedLink {
+                link: micold_core::link::Link {
+                    address: "file:///work/p/a.md".to_string(),
+                    origin: micold_core::link::LinkOrigin::Detected,
+                    cells: Vec::new(),
+                },
+                display: "/home/u/p/a.md".to_string(),
+                target: micold_core::link::Target::HostPath("/home/u/p/a.md".to_string()),
+                needs_confirmation: true,
+            },
+        })
+    }),
+];
 
 /// Popover-shaped fields actually declared on `State`, so the lists above cannot go stale.
 ///

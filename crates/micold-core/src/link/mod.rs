@@ -65,6 +65,12 @@ pub struct CellSpan {
 mod tests {
     /// Every source in `link/`, by module name. A module `mod.rs` declares but this list omits
     /// fails [`link_performs_no_io`] rather than escaping it.
+    ///
+    /// `link/` only: since feature 031's M6, `resolve::file` calls
+    /// `crate::sandbox::pathmap::reverse` for a sandboxed path, and this scan does not read
+    /// `sandbox/`. `reverse` is I/O-free by its own contract — it takes the shared locations as
+    /// data and consults no filesystem, which is what lets a hover resolve without a syscall — but
+    /// that fact is held by that module's own documentation and tests, not proved here.
     const SOURCES: [(&str, &str); 6] = [
         ("mod", include_str!("mod.rs")),
         ("address", include_str!("address.rs")),

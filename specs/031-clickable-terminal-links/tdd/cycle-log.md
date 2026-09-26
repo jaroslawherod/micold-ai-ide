@@ -843,3 +843,188 @@ autopilot.md.
   a directory (B5)
 - refactor: none. Documentation, tasks.md, data-model.md and the ledger were corrected where review
   found them describing `app::State`/`main.rs` instead of `features::session::State`/`shell/startup.rs`
+
+## Cycle 76: `pathmap::reverse` — a container path back to a host path (T055, T062)
+
+- test: `crates/micold-core/src/sandbox/pathmap.rs::tests::{the_most_specific_of_nested_shared_locations_maps_the_path,
+  a_location_matches_whole_path_components_only, a_path_is_normalised_before_it_is_matched_and_never_climbs_above_root,
+  a_windows_host_location_joins_the_remainder_with_backslashes, a_result_equal_to_or_under_a_denied_host_path_maps_to_nothing,
+  a_denied_windows_path_is_denied_whatever_its_case, a_path_in_no_shared_location_maps_to_nothing}`
+- red: the first assertion-level red was captured against a declared-but-stubbed `reverse` (the
+  signature written first, the body returning `None`), `left: None` / `right: Some("/home/u/proj/a.md")`.
+  That capture was lost when this session's context was compacted, so the denial half is recorded
+  again here by mutation: `reverse` with its `denied` check removed ->
+  `a_result_equal_to_or_under_a_denied_host_path_maps_to_nothing` `left: Some("/home/u/.local/share/micold-ai-ide/sandbox.token")`
+  and `a_denied_windows_path_is_denied_whatever_its_case` `left: Some("C:\\Users\\u\\AppData\\micold\\sandbox.token")`
+  (12 passed; 2 failed). Restored, 14 passed
+- green: `reverse` normalises the container path lexically **before** matching (so `..` cannot re-enter
+  a shared prefix), matches whole components only, picks the longest match rather than the first, and
+  refuses a result at or under a denied host path — case-insensitively and with `/` read as `\` when the
+  host is Windows, because a case-sensitive denial on Windows would be no denial
+- refactor: `normalise` and `is_at_or_under` are the two private helpers; no I/O, so `link_performs_no_io`
+  and core's no-I/O rule are untouched
+
+## Cycle 77: the mount-fact chain — what the running container actually has (T056, T063)
+
+- tests: `crates/micold-core/src/sandbox/parse.rs::tests::{a_containers_mount_destinations_are_read_from_either_runtimes_shape,
+  an_inspection_with_no_mounts_reports_no_destinations}` (U56, U57),
+  `lifecycle.rs::mounted_tests::{a_created_or_replaced_container_reports_no_mounts_of_its_own,
+  an_attached_or_started_container_reports_the_mounts_it_has}` (U58, U59),
+  `sandbox/mod.rs::tests::{shared_locations_list_the_projects_state_home_and_credentials_most_specific_first,
+  a_location_the_running_container_does_not_mount_is_not_shared, the_denied_host_paths_hold_the_secret_mounts_own_path}`
+  (U60–U63)
+- red: captured against stubs (`mount_destinations` always empty, `mounted` always `None`,
+  `shared_locations` returning an empty vector) and lost to the same compaction; re-recorded by
+  mutation: `bring_up` reporting `None` for `Adoption::Attach`/`Start` ->
+  `an_attached_or_started_container_reports_the_mounts_it_has` `left: None` (1 passed; 1 failed).
+  Restored, 2 passed
+- green: `ContainerFacts.mount_destinations` reads `Mounts[].Destination` under either runtime's
+  casing; `Started.mounted` is `Some(destinations)` only when the container was adopted, `None` when
+  this client created it; `MountSet::shared_locations(mounted)` lists projects, state, home and
+  credentials most-specific-first and drops what a running container does not mount;
+  `denied_host_paths` holds the secret mount's host path, which is never a shared location
+- fixtures: `docker_inspect_container.json` gained a real captured `Mounts` array, and
+  `podman_inspect_container.json` is new and labelled transcribed in the fixtures README, as that
+  README requires
+
+## Cycle 78: `resolve` translates a sandboxed file link (T057, T062)
+
+- tests: `crates/micold-core/src/link/resolve.rs::tests::{a_sandboxed_file_link_is_accepted_from_every_name_the_container_answers_to,
+  a_sandboxed_path_under_a_shared_location_opens_its_host_path_after_a_confirmation,
+  in_a_sandboxed_session_this_machines_names_still_translate, a_denied_or_unmounted_sandboxed_path_is_not_reachable}`
+  (U38, U39, U47, C16b/C16c)
+- red: captured against the pre-M6 sandboxed arm, which answered `Unreachable(NotShared)` for every
+  container path, and lost to the compaction; re-recorded by mutation: the translated arm built with
+  `needs_confirmation: false` -> `a_sandboxed_path_under_a_shared_location_opens_its_host_path_after_a_confirmation`
+  `left: Some(ResolvedLink { …, target: HostPath("/home/u/proj/a.md"), needs_confirmation: false })`
+  (12 passed; 1 failed). Restored, 13 passed
+- green: a sandboxed `file://` link goes through `pathmap::reverse`; a translated path becomes
+  `Target::HostPath` with `needs_confirmation: true` and a hint showing the host path, and anything
+  unshared or denied stays `Unreachable(NotShared)` with the "not reachable from this machine" hint
+- decision: `container_host_names(id, name)` now also accepts the container's **name**. Research R10
+  rejects setting `--hostname`, and a real `docker create` probe showed Docker defaults
+  `Config.Hostname` to the id's 12-character prefix while podman defaults it to the name — so the
+  name is the missing spelling, not a new container contract. This closes M5 review A finding 4. The
+  name only decides that an address names *the sandbox*; the path still goes through `reverse` and
+  the confirmation
+
+## Cycle 79: the locations reach the client state (T058, T064, T066's context glue)
+
+- tests: `crates/micold-client/src/features/sandbox.rs::tests::{a_started_sandbox_reports_the_locations_it_shares,
+  a_stale_sandbox_still_reports_its_locations, leaving_running_or_stale_leaves_no_locations_behind}` (U90–U92)
+- red: captured against a `locations()` stub returning `None` and lost to the compaction;
+  re-recorded by mutation: `locations()` answering `None` for `Stale` ->
+  `a_stale_sandbox_still_reports_its_locations` `left: None` (2 passed; 1 failed). Restored, 3 passed
+- green: `SandboxLocations { shared, denied }`, `SandboxMsg::Started(Box<(Started, SandboxLocations)>)`,
+  and `locations()` answering only while `Running` or `Stale`; `shell/sandbox.rs::start` builds them
+  from `mounts.shared_locations(started.mounted.as_deref())` and `mounts.denied_host_paths()`, and
+  `ui::terminal::link_context` builds `LinkContext.sandbox` exactly when both the container and the
+  locations are there
+- refactor: `CONTAINER_NAME` moved from the binary's `shell/sandbox.rs` into `micold_core::sandbox`, so
+  the library's `link_context` can name the container; `shell/sandbox.rs` re-exports it and every
+  existing use is unchanged
+
+## Cycle 80: the confirmation state (T059, T065)
+
+- tests: `crates/micold-client/tests/features_session_links.rs::{a_link_that_needs_confirmation_opens_the_confirm_surface_and_nothing_else,
+  confirming_while_the_session_and_sandbox_live_opens_the_host_path, confirming_after_the_session_closed_opens_nothing_and_says_so,
+  confirming_after_the_sandbox_stopped_opens_nothing_and_says_so, declining_opens_nothing_and_clears_the_pending_open,
+  confirming_with_nothing_pending_opens_nothing}` (U80–U84)
+- red: captured against reducers that took the message and did nothing, and lost to the compaction;
+  re-recorded by mutation: `link_open_confirmed` with its `sandbox_live` guard disabled ->
+  `confirming_after_the_sandbox_stopped_opens_nothing_and_says_so ... FAILED` (13 passed; 1 failed).
+  Restored, 14 passed
+- green: `pending_link_open`, `LinkOpenConfirmed`/`LinkOpenDeclined`, `ConfirmLinkOpenDialog` as a
+  `FloatingSurface` whose Escape and scrim click decline, and `link_open_confirmed(state, sandbox_live)`,
+  which opens only while both the session and the sandbox are still there and otherwise notifies in
+  the contract's words
+
+## Cycle 81: the confirm surface is a registered dialog (T061, T066)
+
+- tests: rows for `confirm_link_open` in `crates/micold-client/tests/{overlay_registry.rs,
+  overlay_dispatch_ordering.rs, overlay_dismissal_delta.rs, overlay_transition_identity.rs}` and
+  `DIALOGS` 9 -> 10 in `popover_displacement.rs` (U137)
+- red: `scripts/build-lock.sh cargo test --no-fail-fast -p micold-client --test overlay_registry
+  --test overlay_dispatch_ordering --test overlay_dismissal_delta --test overlay_transition_identity
+  --test popover_displacement`:
+  `escape_still_reaches_exactly_what_it_used_to` "Escape changed for confirm_link_open"
+  `left: None` / `right: Some(Session(LinkOpenDeclined))`;
+  `each_dialog_registers_under_its_own_identity` "confirm_link_open: the registry names a different
+  surface than this dialog is supposed to be" `left: None`;
+  `every_dialog_is_in_the_list` `left: 9`; `one_dialog_at_a_time` "opening `confirm_link_open` over
+  `about` should leave exactly one dialog open" `left: []`; plus `every_variant_is_covered` and
+  `every_popover_is_in_the_table` (5 + 2 + 1 + 5 + 1 failures across the five files)
+- green: `ui/confirm_link_open.rs` — title **Open a file from the sandbox?**, body `The sandboxed
+  session linked to <host path>. Files the sandbox wrote can contain scripts or macros.`, **Open**
+  publishing `LinkOpenConfirmed` and **Cancel** declining — registered in `overlay/registry.rs`
+  beside `confirm_session_remove` -> all five files pass (7, 7, 17, 6, 4)
+
+## Cycle 82: the shell answers the confirmation (T060, T067)
+
+- tests: `crates/micold-client/src/shell/links.rs::tests::{confirming_while_the_sandbox_runs_opens_the_translated_host_path,
+  confirming_after_the_sandbox_stopped_opens_nothing_and_says_so}` (U98)
+- red: `scripts/build-lock.sh cargo test --no-fail-fast --bin micold-ai-ide confirming_` ->
+  2 passed; 2 failed. "the confirmed open reaches the opener with the host path (FR-018a)"
+  `left: []`, and "the reason is the sandbox, named against the host path" `left: []` — the generic
+  `Message::Session` arm ran the reducer, which cannot see the sandbox
+- green: `update_inner` routes `LinkOpenConfirmed` to `shell::links::on_link_message`, which reads
+  `sandbox_is_live(app)` (`Running | Stale`, the two states that have a container) and calls
+  `session::link_open_confirmed` -> 204 passed
+
+## Cycle 83: A19 end to end (T085)
+
+- test: `crates/micold-client/src/shell/links.rs::acceptance::a_shared_sandboxed_file_link_asks_first_and_then_opens_the_host_path`
+- red: green on arrival — every part was already built and this is the outer loop over them. Mutant:
+  the `Target::HostPath(_) if link.needs_confirmation` arm made unreachable ->
+  "nothing is opened before the question is answered (FR-018a)"
+  `left: ["/tmp/.tmpcN0sFS/readme.txt"]`. Restored, 1 passed
+- green: activating `file:///work/proj/readme.txt` in a sandbox sharing `/work/proj` opens
+  `confirm_link_open` naming the host path and calls no opener; `LinkOpenConfirmed` then opens exactly
+  that host path and raises no notification
+- harness: `Session::with_a_session_record`, `dialog()`, `confirming()` and `confirm_open()`, so the
+  scenario is driven through the real pane, the real registry and `update_inner`
+
+## Cycle 84: the M6 review round — A1–A4, B1–B3, B5, B6, B8, B9
+
+Reviews A (`code-review`, high) and B (fresh, against spec, contracts, constitution and the guards)
+ran on `origin/main...HEAD`. Each finding was checked in the code first; the declined ones and their
+reasons are in autopilot.md. A1 and B1 are the same finding, as are A2 and B3.
+
+- tests: `crates/micold-core/src/sandbox/pathmap.rs::tests::{a_multi_byte_name_at_the_denied_paths_own_length_is_answered_not_panicked,
+  a_windows_host_refuses_a_component_windows_would_read_as_more_than_a_name}`,
+  `crates/micold-client/src/features/sandbox.rs::tests::locations_answer_only_for_the_container_they_were_read_from`,
+  `crates/micold-client/tests/features_session_links.rs::the_reducer_alone_leaves_the_question_up_and_opens_nothing`,
+  and a `confirm_link_open` row in `crates/micold-client/tests/overlay_registration.rs`'s `DIALOG_FLAGS`
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib sandbox::pathmap` -> 14 passed; 2 failed.
+  `a_multi_byte_name_at_the_denied_paths_own_length_is_answered_not_panicked` panicked at
+  `pathmap.rs:182`: `start byte index 48 is not a char boundary; it is inside 'あ' (bytes 47..50 of string)`
+  — a name the sandboxed program chose, so a container could crash the client's render on hover
+  (A1/B1, HIGH).
+  `a_windows_host_refuses_a_component_windows_would_read_as_more_than_a_name`
+  `left: Some("C:\\Users\\u\\p\\..\\..\\..\\Users\\u\\AppData\\micold\\sandbox.token")` — on a Windows
+  host a `\` inside a container-chosen component is a separator to Win32, so the path escaped its
+  shared location *and* walked past the denial (B2, HIGH).
+  `scripts/build-lock.sh cargo test -p micold-client --lib features::sandbox` -> 3 passed; 1 failed.
+  `left: Some(SandboxLocations { … })` for a container that had been replaced (A2/B3, HIGH)
+- green:
+  - `is_at_or_under` compares by byte and never slices at an unchecked index; the separator is ASCII,
+    so a byte equal to it is a character boundary by construction
+  - `reverse` refuses a component containing `\`, `/` or `:`, or ending in a dot or a space, when the
+    host is Windows — each is a name Win32 reads as something other than a name
+  - `Sandbox.locations` keeps the `ContainerId` it was read from, and `locations()` answers only when
+    the live state names that same container. This closes both windows the state alone left open:
+    `bring_up` reports `observe(Running(id))` before `Started`, and a replaced container reaches
+    `Running` under a new id while the old map is still held
+  - the tie-break in `reverse` prefers the earlier location (`Reverse(index)`), which is what
+    `MountSet::shared_locations` documents for its own ties (A4)
+  -> core `sandbox::` 113 passed, the whole `micold-client` suite green
+- guards: `only_the_root_drives_a_feature` (SC-002) refused `shell/links.rs` calling
+  `session::link_open_confirmed`, so the call moved to `app::State::confirm_link_open_for_effects`,
+  beside `update_session_for_effects` and for the same reason; `overlay_registration.rs` asked what
+  `session.pending_link_open` is, and it is named in `DIALOG_FLAGS` as `confirm_link_open` rather
+  than exempted
+- records: the six `pathmap` rows U40, U42–U44, U48 and U145 are marked DONE with their tests (B5);
+  `link_performs_no_io`'s doc now says it does not reach `sandbox::pathmap` and why the claim still
+  holds (B6); the fixtures README no longer implies the docker fixture carries the `Config.Hostname`
+  the probe read (B9)
+- refactor: none beyond the guard-driven move above

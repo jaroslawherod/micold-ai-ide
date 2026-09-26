@@ -2417,7 +2417,16 @@ fn a_started_sandbox() -> micold_core::sandbox::lifecycle::Started {
             identity_mapping: IdentityMapping::ExplicitUidGid,
         },
         unsatisfiable: Vec::new(),
+        mounted: None,
     }
+}
+
+/// The message that bring-up sends when it succeeds: the container, and what it shares.
+fn a_started_sandbox_message() -> SandboxMsg {
+    SandboxMsg::Started(Box::new((
+        a_started_sandbox(),
+        micold_client::features::sandbox::SandboxLocations::default(),
+    )))
 }
 
 /// FR-036b where T178's visual pass caught it (finding 2): `Started` means the container is up,
@@ -2430,10 +2439,7 @@ fn a_started_sandbox_whose_service_has_not_answered_yet_is_not_a_lost_connection
     let mut app = app_with_a_failed_sandbox();
     let _ = connection_failed(&mut app);
 
-    let _ = update_inner(
-        &mut app,
-        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
-    );
+    let _ = update_inner(&mut app, Message::Sandbox(a_started_sandbox_message()));
 
     assert_ne!(
         connection_status(&app),
@@ -2483,10 +2489,7 @@ fn a_started_service_that_answered_and_went_away_is_a_lost_connection() {
     use micold_client::features::connection::ConnectionStatus;
     let mut app = app_with_a_failed_sandbox();
     let _ = connection_failed(&mut app);
-    let _ = update_inner(
-        &mut app,
-        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
-    );
+    let _ = update_inner(&mut app, Message::Sandbox(a_started_sandbox_message()));
     the_service_answers(&mut app);
     assert!(
         matches!(
@@ -2514,10 +2517,7 @@ fn a_service_that_answered_with_a_changed_mount_set_and_went_away_is_a_lost_conn
     use micold_client::features::connection::ConnectionStatus;
     let mut app = app_with_a_failed_sandbox();
     let _ = connection_failed(&mut app);
-    let _ = update_inner(
-        &mut app,
-        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
-    );
+    let _ = update_inner(&mut app, Message::Sandbox(a_started_sandbox_message()));
     the_service_answers_with(&mut app, snapshot_with("/repo/demo", Vec::new()));
     assert!(
         matches!(
@@ -2544,10 +2544,7 @@ fn a_started_service_that_keeps_refusing_is_reported() {
     use micold_client::features::connection::ConnectionStatus;
     let mut app = app_with_a_failed_sandbox();
     let _ = connection_failed(&mut app);
-    let _ = update_inner(
-        &mut app,
-        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
-    );
+    let _ = update_inner(&mut app, Message::Sandbox(a_started_sandbox_message()));
 
     let _ = connection_failed(&mut app);
     let _ = connection_failed(&mut app);
@@ -2571,10 +2568,7 @@ fn the_first_refused_dial_after_start_is_the_service_still_starting() {
     use micold_client::features::connection::ConnectionStatus;
     let mut app = app_with_a_failed_sandbox();
     let _ = connection_failed(&mut app);
-    let _ = update_inner(
-        &mut app,
-        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
-    );
+    let _ = update_inner(&mut app, Message::Sandbox(a_started_sandbox_message()));
 
     let _ = connection_failed(&mut app);
 
@@ -2596,10 +2590,7 @@ fn the_first_refused_dial_after_start_is_the_service_still_starting() {
 fn a_refusal_right_after_start_is_reported_at_once() {
     let mut app = app_with_a_failed_sandbox();
     let _ = connection_failed(&mut app);
-    let _ = update_inner(
-        &mut app,
-        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
-    );
+    let _ = update_inner(&mut app, Message::Sandbox(a_started_sandbox_message()));
 
     let _ = update_inner(
         &mut app,
@@ -2627,10 +2618,7 @@ fn a_failure_after_start_is_not_still_waiting_for_the_service() {
         unreachable!("the fixture's sandbox is failed")
     };
     let _ = connection_failed(&mut app);
-    let _ = update_inner(
-        &mut app,
-        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
-    );
+    let _ = update_inner(&mut app, Message::Sandbox(a_started_sandbox_message()));
     let _ = update_inner(&mut app, Message::Sandbox(SandboxMsg::Lost));
 
     let _ = update_inner(
@@ -2661,10 +2649,7 @@ fn a_started_sandbox_marked_stale_before_its_service_answered_is_still_coming_up
     // cannot reach the developer's own `settings.json` (#368).
     let mut app = app_with_a_failed_sandbox();
     let _ = connection_failed(&mut app);
-    let _ = update_inner(
-        &mut app,
-        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
-    );
+    let _ = update_inner(&mut app, Message::Sandbox(a_started_sandbox_message()));
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
     let _ = update_inner(
         &mut app,
@@ -2909,10 +2894,7 @@ fn a_sandbox_whose_service_answered_earns_its_unattended_bring_ups_back() {
         UnattendedBringUps::default(),
         "setup: the refused dial has to spend an attempt, or there is nothing to earn back"
     );
-    let _ = update_inner(
-        &mut app,
-        Message::Sandbox(SandboxMsg::Started(Box::new(a_started_sandbox()))),
-    );
+    let _ = update_inner(&mut app, Message::Sandbox(a_started_sandbox_message()));
     assert_eq!(
         app.sandbox.unattended, spent,
         "a container that started has not recovered until its service answers — refilling here \
@@ -2936,7 +2918,7 @@ fn a_bring_up_reported_after_moving_to_the_host_is_ignored() {
     use micold_core::sandbox::lifecycle::SandboxState;
     for report in [
         SandboxMsg::Progress(Box::new(SandboxState::Starting)),
-        SandboxMsg::Started(Box::new(a_started_sandbox())),
+        a_started_sandbox_message(),
         SandboxMsg::Failed(Box::new(match failed_sandbox_state() {
             SandboxState::Failed(failure) => failure,
             other => panic!("setup: expected a failure, got {other:?}"),

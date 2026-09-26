@@ -343,20 +343,32 @@ pub fn link_context(
     use micold_core::sandbox::lifecycle::SandboxState;
 
     // A live sandbox — running, or running an image that is now out of date — is the one whose
-    // sessions print container paths. Every other state means the sessions are this machine's own.
+    // sessions print container paths. Every other state means the sessions are this machine's own,
+    // and `Sandbox::locations` answers `None` for all of them, so the two cannot disagree.
     let container = match &sandbox.state {
         SandboxState::Running(id) | SandboxState::Stale(id) => Some(id.0.as_str()),
-        _ => None,
+        SandboxState::Disabled
+        | SandboxState::Probing
+        | SandboxState::Acquiring(_)
+        | SandboxState::Starting
+        | SandboxState::Failed(_) => None,
     };
     micold_core::link::LinkContext {
         host_names: state.session.host_names.clone(),
         windows_host: cfg!(windows),
-        // No shared locations yet, so every one of a sandbox's file links reports as not reachable
-        // (C12) rather than opening this machine's own file of the same name. T066 fills them in.
-        sandbox: container.map(|id| micold_core::link::SandboxLinkContext {
-            host_names: micold_core::link::container_host_names(id),
-            locations: Vec::new(),
-            denied: Vec::new(),
+        // `Some` exactly while the sandbox reports locations, which is exactly while a container is
+        // up (U134). A container path then translates through what that container really shares, and
+        // one outside every location reports as not reachable rather than opening this machine's own
+        // file of the same name (C12, C16c).
+        sandbox: container.zip(sandbox.locations()).map(|(id, locations)| {
+            micold_core::link::SandboxLinkContext {
+                host_names: micold_core::link::container_host_names(
+                    id,
+                    micold_core::sandbox::CONTAINER_NAME,
+                ),
+                locations: locations.shared.clone(),
+                denied: locations.denied.clone(),
+            }
         }),
     }
 }

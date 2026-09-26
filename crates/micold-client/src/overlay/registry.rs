@@ -286,6 +286,7 @@ register! {
             crate::features::project::ProjectContextMenu,
     },
     crate::features::project::RenameProjectDialog => crate::ui::rename::dialog,
+    crate::features::session::ConfirmLinkOpenDialog => crate::ui::confirm_link_open::dialog,
     crate::features::session::ConfirmSessionRemoveDialog => crate::ui::confirm_session_remove::dialog,
     crate::features::session::SessionContextMenu,
     crate::features::session::SessionStartMenu,

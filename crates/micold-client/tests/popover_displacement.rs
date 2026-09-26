@@ -151,12 +151,14 @@ fn every_popover_is_in_the_table() {
     // in this file could notice. Counted against the registry rather than driven, because the
     // popovers displace each other and no state has them all open at once.
     //
-    // Nine of the eighteen registrations are dialogs;
+    // Ten of the nineteen registrations are dialogs;
     // `overlay_registry.rs::every_dialog_is_in_the_list` is what holds that half. It was nine, then
     // eight when feature 027 made Settings a full-surface view rather than a floating one (FR-026),
     // and nine again with `confirm_placement` — the question that view asks before it moves where
-    // sessions run (BUG-003, FR-032), which is a floating surface even though the form is not.
-    const DIALOGS: usize = 9;
+    // sessions run (BUG-003, FR-032), which is a floating surface even though the form is not. Ten
+    // with `confirm_link_open`, the question a sandboxed file link asks before this machine opens
+    // it (FR-018a).
+    const DIALOGS: usize = 10;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

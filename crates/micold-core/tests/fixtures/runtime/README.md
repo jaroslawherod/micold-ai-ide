@@ -43,3 +43,18 @@ fixture is always wrong:
 Treating a transcribed fixture as if it were captured is the failure mode this section exists to
 prevent: it lets the classifier pass a suite built from our own assumptions. Anything added here
 for a runtime nobody has run should say so in this file until someone runs it.
+
+## `*_inspect_container.json` and the `Mounts` array
+
+`docker_inspect_container.json`'s `Mounts` array was **captured** from Docker 29.5.1 on the machine
+above (`docker create -v …:/work/proj -v …:/var/lib/micold-ai-ide:ro`). That same container's
+`Config.Hostname` read `21f9040f15fa`, the id's 12-character prefix, which is one half of feature
+031's C11 — but this fixture carries no `Config.Hostname` field, so that observation lives in the
+probe and in C11's own wording rather than being demonstrated by the file below.
+
+`podman_inspect_container.json` is **transcribed**, not captured: no podman is installed on this
+machine. It is written in podman's documented shape — the same capitalised `Mounts[].Destination`
+keys Docker uses, plus the `Driver`, `Options` and `Propagation` fields podman adds — and it exists
+to show that one parser reads both. Podman also defaults a container's hostname to its *name*
+rather than to its id prefix, which is why `container_host_names` accepts the name as well (C11).
+Replace this file with captured output when a podman rig is to hand.

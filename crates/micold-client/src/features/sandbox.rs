@@ -15,7 +15,7 @@ use micold_core::sandbox::lifecycle::{
     Failure, RestartRequested, SandboxState, Started, UnattendedBringUps,
 };
 use micold_core::sandbox::placement::{ConsentedFallback, PlacementKind};
-use micold_core::sandbox::runtime::{RuntimeCapabilities, UnsatisfiableLimit};
+use micold_core::sandbox::runtime::{ContainerId, RuntimeCapabilities, UnsatisfiableLimit};
 use micold_core::sandbox::{Bytes, ResourceBudget};
 
 /// Everything the sandbox reports or is asked to do (feature 028, FR-001).
@@ -38,9 +38,13 @@ use micold_core::sandbox::{Bytes, ResourceBudget};
 pub enum Msg {
     /// The bring-up finished and the service is reachable inside the container (FR-032).
     ///
+    /// Carries the locations that container shares with this machine too, so feature 031 can
+    /// translate its sessions' `file` links (FR-018): they are known only to the bring-up that
+    /// adopted the container, and rebuilding them later would describe the *next* container.
+    ///
     /// Boxed because `Started` carries the whole spec that produced it, and an unboxed variant
     /// would set the size of every `Message` in the application by this one.
-    Started(Box<Started>),
+    Started(Box<(Started, SandboxLocations)>),
     /// The container is there but the service inside it logged something worth showing (FR-036).
     Diagnostics(Vec<String>),
     /// The container that was running is gone (FR-034).
@@ -230,6 +234,32 @@ pub struct Sandbox {
     /// two is still the bring-up, and a banner saying the service is gone would call it broken. It is
     /// bounded, so a service that never listens is still reported.
     pub awaiting_service: Option<u8>,
+    /// What the *running* container shares with this machine, for translating its file links
+    /// (feature 031, FR-018; research R10 decision 1).
+    ///
+    /// Written by [`Sandbox::started`] from the bring-up, never rebuilt from the boot plan: the plan
+    /// describes the container this client would create *next*, and the sessions printing these
+    /// paths run in the one that is up. Read through [`Sandbox::locations`], never directly, so a
+    /// stopped sandbox cannot leave its map applied to host sessions.
+    ///
+    /// The container it was read from is kept beside it, because the state alone does not identify
+    /// one: `bring_up` reports `Running(id)` before it returns what that container shares, and a
+    /// replacement reaches `Running` under a new id while this field still holds the old map.
+    pub locations: Option<(ContainerId, SandboxLocations)>,
+}
+
+/// The locations a running sandbox shares with the host, and the host paths it must never reach
+/// (feature 031, FR-018, FR-018a).
+///
+/// `denied` is not the complement of `shared`: it is the short list of host paths that *are*
+/// reachable through a shared location and must still be refused — this client's own sandbox token,
+/// which lives in the shared state directory (C16b).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SandboxLocations {
+    /// Most specific container path first, as `MountSet::shared_locations` orders them.
+    pub shared: Vec<micold_core::link::SharedLocation>,
+    /// Host paths no translation may produce.
+    pub denied: Vec<String>,
 }
 
 /// Refused dials a just-started service may take before it is overdue: one reconnect
@@ -246,6 +276,7 @@ impl Default for Sandbox {
             unattended: UnattendedBringUps::default(),
             previous_attempt: None,
             awaiting_service: None,
+            locations: None,
         }
     }
 }
@@ -267,15 +298,42 @@ impl Sandbox {
         self.state = state;
     }
 
-    /// Adopt the result of a successful bring-up.
-    pub fn started(&mut self, started: Started) {
+    /// Adopt the result of a successful bring-up, and the locations that container shares
+    /// (feature 031, T18).
+    pub fn started(&mut self, started: Started, locations: SandboxLocations) {
         self.unsatisfiable = started.unsatisfiable;
         self.capabilities = Some(started.capabilities);
+        self.locations = Some((started.id.clone(), locations));
         self.state = SandboxState::Running(started.id);
         // A successful start retires the fallback: the sandbox is working again, and continuing to
         // show "running unsandboxed" would be a lie the banner keeps telling.
         self.fallback = None;
         self.awaiting_service = Some(REFUSALS_WHILE_STARTING);
+    }
+
+    /// What the sandbox shares with this machine, while there is a container to share it
+    /// (feature 031, FR-018, T18/T19).
+    ///
+    /// `Some` only while the state is `Running` or `Stale` **for the container the map was read
+    /// from** — a `Stale` container is still up, only its mount set is out of date, and its sessions
+    /// still print its paths. Every other state, including a placement change through
+    /// [`Sandbox::for_placement`], answers `None`, so `LinkContext.sandbox` is `None` and a host
+    /// session's `file` links are read as this machine's own. Gating here rather than clearing the
+    /// field on each transition means a transition added later cannot forget to (research R10
+    /// decision 1), and matching the id closes the two live windows the state alone leaves open:
+    /// `bring_up`'s `observe(Running(id))` arrives before `Started`, and a replaced container reaches
+    /// `Running` under a new id.
+    pub fn locations(&self) -> Option<&SandboxLocations> {
+        let live = match &self.state {
+            SandboxState::Running(id) | SandboxState::Stale(id) => id,
+            SandboxState::Disabled
+            | SandboxState::Probing
+            | SandboxState::Acquiring(_)
+            | SandboxState::Starting
+            | SandboxState::Failed(_) => return None,
+        };
+        let (owner, locations) = self.locations.as_ref()?;
+        (owner == live).then_some(locations)
     }
 
     /// Whether a bring-up is under way, including a started sandbox whose service has not answered
@@ -441,6 +499,185 @@ impl Sandbox {
                     .to_string(),
             ),
             _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use micold_core::link::SharedLocation;
+    use micold_core::sandbox::runtime::{
+        ContainerId, IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
+    };
+
+    fn caps() -> RuntimeCapabilities {
+        RuntimeCapabilities {
+            kind: RuntimeKind::Docker,
+            version: "29.5.1".into(),
+            cpus: LimitSupport::Supported,
+            memory: LimitSupport::Supported,
+            pids: LimitSupport::Supported,
+            storage: LimitSupport::Supported,
+            identity_mapping: IdentityMapping::ExplicitUidGid,
+        }
+    }
+
+    /// A bring-up that created the container, so it shares this client's whole mount set.
+    fn created() -> Started {
+        Started {
+            id: ContainerId("0123456789abcdef".into()),
+            capabilities: caps(),
+            unsatisfiable: Vec::new(),
+            mounted: None,
+        }
+    }
+
+    /// A bring-up that attached to a container sharing only the project.
+    fn attached() -> Started {
+        Started {
+            mounted: Some(vec!["/work/proj".into()]),
+            ..created()
+        }
+    }
+
+    fn locations() -> SandboxLocations {
+        SandboxLocations {
+            shared: vec![SharedLocation {
+                container: "/work/proj".into(),
+                host: "/home/u/proj".into(),
+            }],
+            denied: vec!["/home/u/.local/share/micold-ai-ide/sandbox.token".into()],
+        }
+    }
+
+    /// U90, T18: a started sandbox carries what it shares, however it came to be running.
+    #[test]
+    fn a_started_sandbox_reports_the_locations_it_shares() {
+        for started in [created(), attached()] {
+            let mut s = Sandbox::default();
+            s.started(started, locations());
+            assert_eq!(
+                s.locations(),
+                Some(&locations()),
+                "the bring-up is the only thing that knows what this container shares, so what it \
+                 reported is what the pane's links resolve against (FR-018)"
+            );
+        }
+    }
+
+    /// U92: a `Stale` container is still up, and its sessions still print its paths.
+    #[test]
+    fn a_stale_sandbox_still_reports_its_locations() {
+        let mut s = Sandbox::default();
+        s.started(created(), locations());
+        s.mounts_changed();
+        assert!(
+            matches!(s.state, SandboxState::Stale(_)),
+            "setup: registering a project marked the running container out of date"
+        );
+        assert_eq!(
+            s.locations(),
+            Some(&locations()),
+            "what is out of date is the mount set the container *should* have, not the one it has"
+        );
+    }
+
+    /// U91, review B finding 3: the map belongs to one container, not to the state `Running`.
+    ///
+    /// `lifecycle::bring_up` reports `Running(id)` through `observe` *before* it returns `Started`,
+    /// so there is a moment when the state is live and no map has arrived; and a replaced container
+    /// reaches `Running` under a new id while the old map is still held. In both the pane would
+    /// otherwise read a container path as this machine's own, with no confirmation — the one outcome
+    /// FR-018 forbids.
+    #[test]
+    fn locations_answer_only_for_the_container_they_were_read_from() {
+        let mut s = Sandbox::default();
+        s.observe(SandboxState::Running(created().id));
+        assert_eq!(
+            s.locations(),
+            None,
+            "the bring-up reports Running before it reports what the container shares"
+        );
+
+        s.started(created(), locations());
+        assert_eq!(s.locations(), Some(&locations()), "setup: the map arrived");
+
+        s.observe(SandboxState::Running(ContainerId(
+            "fedcba9876543210".into(),
+        )));
+        assert_eq!(
+            s.locations(),
+            None,
+            "a replacement container shares what it was created with, not what the last one did"
+        );
+    }
+
+    /// U91, T19: every way out of a live sandbox takes the map with it.
+    #[test]
+    fn leaving_running_or_stale_leaves_no_locations_behind() {
+        let live = || {
+            let mut s = Sandbox::default();
+            s.started(created(), locations());
+            s
+        };
+        #[allow(clippy::type_complexity)]
+        let transitions: Vec<(&str, Box<dyn Fn(&mut Sandbox)>)> = vec![
+            (
+                "the container was observed stopped",
+                Box::new(|s: &mut Sandbox| s.observe(SandboxState::Probing)),
+            ),
+            (
+                "the bring-up failed",
+                Box::new(|s: &mut Sandbox| {
+                    s.failed(Failure {
+                        stage: micold_core::sandbox::lifecycle::Stage::Starting,
+                        error: micold_core::sandbox::runtime::RuntimeError::NotRunning {
+                            kind: RuntimeKind::Docker,
+                        },
+                    })
+                }),
+            ),
+            (
+                "the container was lost",
+                Box::new(|s: &mut Sandbox| {
+                    assert!(s.container_lost("micold-sandbox"), "setup: it was running");
+                }),
+            ),
+            (
+                "the user accepted the fallback",
+                Box::new(|s: &mut Sandbox| {
+                    s.failed(Failure {
+                        stage: micold_core::sandbox::lifecycle::Stage::Probing,
+                        error: micold_core::sandbox::runtime::RuntimeError::NotRunning {
+                            kind: RuntimeKind::Docker,
+                        },
+                    });
+                    let offer = s.fallback_offer().expect("a failed sandbox offers one");
+                    assert!(s.accept_fallback(offer), "setup: the offer was taken");
+                }),
+            ),
+        ];
+        for (what, apply) in transitions {
+            let mut s = live();
+            apply(&mut s);
+            assert_eq!(
+                s.locations(),
+                None,
+                "{what}: a map that outlived its container would translate a *host* session's \
+                 file link into a path the sandbox chose (FR-018)"
+            );
+        }
+
+        for kind in [
+            micold_core::sandbox::placement::PlacementKind::HostProcess,
+            micold_core::sandbox::placement::PlacementKind::LocalSandbox,
+        ] {
+            assert_eq!(
+                Sandbox::for_placement(kind).locations(),
+                None,
+                "a placement the user has just selected has no container yet, so it shares nothing"
+            );
         }
     }
 }

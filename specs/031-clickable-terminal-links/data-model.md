@@ -52,7 +52,12 @@ Address = Web(String)                    // http, https — verbatim
 | `sandbox` | `Option<SandboxLinkContext>` | `Some` iff `Sandbox::locations()` is `Some` (§2) |
 
 `SandboxLinkContext { host_names: Vec<String>, locations: Vec<SharedLocation>, denied: Vec<String> }`. `host_names`
-holds the container id's 12-character prefix (`id.get(..12).unwrap_or(id)`) and the full id. `locations` is most-specific first
+holds the container id's 12-character prefix (`id.get(..12).unwrap_or(id)`), the full id and the
+container's name (`micold_core::sandbox::CONTAINER_NAME`), built by
+`link::container_host_names(id, name)`. The name is there because podman defaults a container's
+hostname to its name where Docker defaults it to the id prefix, and research R10 rejects setting
+`--hostname`. A name only decides that the address means *this sandbox*; the path is still translated
+by `reverse` and still confirmed. `locations` is most-specific first
 and excludes the secret mount and every location the running container does not mount. `denied`
 holds the host token path, which `reverse` never returns even through the state mount (R10).
 
