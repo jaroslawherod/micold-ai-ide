@@ -137,6 +137,26 @@ fn activating_a_file_link_asks_to_open_its_host_path() {
     );
 }
 
+/// A path that still awaits the user's confirmation opens nothing here (contract link-opening O3).
+///
+/// M6 adds the confirmation surface; until it does, no resolver marks a `HostPath` this way. The
+/// reducer refuses it anyway, so the day the flag is set the confirmation cannot be bypassed
+/// (review A finding 5).
+#[test]
+fn a_host_path_that_needs_confirmation_opens_nothing_yet() {
+    let link = ResolvedLink {
+        needs_confirmation: true,
+        ..path_link("file://box/work/a.md", "/home/u/work/a.md")
+    };
+    let mut state = State::default();
+    let outcomes =
+        micold_client::features::session::update(&mut state, SessionMsg::LinkActivated(link));
+    assert!(
+        outcomes.is_empty(),
+        "a path awaiting confirmation is not opened behind the user's back: {outcomes:?}"
+    );
+}
+
 /// U79 (T8): a sandboxed path outside every shared location opens nothing and says why.
 #[test]
 fn activating_an_unreachable_link_opens_nothing_and_says_the_sandbox_does_not_share_it() {

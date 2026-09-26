@@ -782,7 +782,7 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
 - refactor: the acceptance module's own runnable-file helper is gone; both modules use
   `tests::runnable_file`
 
-## Cycle 74: U134, U136 — the boot glue closes A12
+## Cycle 74: U136, U134 — the boot glue closes A12
 
 - tests: the glue has no unit test of its own. `crates/micold-client/src/shell/links.rs::acceptance::a_declared_file_link_naming_this_host_opens_the_decoded_path` (A12) is its test, as
   Cycle 66 and tdd/test-list.md record: it drives the pane through `ui::terminal::link_context`,
@@ -792,11 +792,54 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
   `right: ["/tmp/.tmpzpfykH/readme a.txt"]` — the declared link named this host, and nothing knew
   the host's names yet
 - green: `shell::startup` fills `session::State.host_names` from
-  `micold_core::link::host_names_from(gethostname())` (U134, T049 with Decision 33), and
+  `micold_core::link::host_names_from(gethostname())` (U136, T049 with Decision 33), and
   `ui::terminal::link_context` builds the `LinkContext` from that state plus the running sandbox's
-  container names (U136, T050, Decision 35); `ui::view` now calls it instead of
+  container names (U134, T050, Decision 35); `ui::view` now calls it instead of
   `material::local_link_context` -> 22 passed
-- no mutant was needed: A12's own red above is the glue's red — with the boot line absent the names
-  are empty, which is exactly the mutant
+- this entry first claimed no mutant was needed. Review B showed the claim was false: A12 sets the
+  names through the harness and never runs `boot()`, so the boot read had no test at all. Cycle 75
+  gives it one, and the sandboxed half of U134 too
 - refactor: `material::local_link_context` is no longer re-exported; the pane's context has one
   producer
+
+## Cycle 75: the M5 review round — A1–A3, A5, B1–B5
+
+Reviews A (`code-review`, high) and B (fresh, against spec, contracts, constitution and the guards)
+ran on `origin/main...HEAD` after the gate, the macOS/Windows cross-checks and the visual pass. Each
+finding below was checked in the code first; the declined ones and their reasons are in
+autopilot.md.
+
+- tests: `crates/micold-core/src/link/runnable.rs::tests::{on_windows_a_trailing_dot_or_space_never_hides_a_runnable_extension, a_folder_named_like_a_runnable_file_still_opens}`,
+  `address.rs::tests::a_file_path_that_cannot_be_decoded_is_not_followable` (four new rows),
+  `resolve.rs::tests::on_a_windows_host_a_file_path_needs_a_drive` (two new rows),
+  `crates/micold-client/src/shell/startup.rs::tests::boot_names_this_machine_from_its_hostname`,
+  `crates/micold-client/src/shell/links.rs::acceptance::a_file_link_in_a_sandboxed_session_reaches_nothing_and_says_why`,
+  `crates/micold-client/tests/features_session_links.rs::a_host_path_that_needs_confirmation_opens_nothing_yet`
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::` -> 54 passed; 4 failed.
+  `file:///p/%+A` `left: File { host: "", path: "/p/\n" }` / `right: NotFollowable` (review A2 —
+  an integer parser reads the sign); `file:///C:` `left: Some(HostPath("C:"))` /
+  `right: Some(HostPath("C:\\"))` (A3); `Linux pkg.run` as a directory `left: Reveal` /
+  `right: Open` (B4); `"x.exe."` on Windows `left: Open` / `right: Reveal` (A1, the one that would
+  have run a program).
+  `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide shell::startup` ->
+  3 passed; 1 failed. `left: []` /
+  `right: ["jaro-ASUS-Vivobook-S-16-M3607HA-M3607HA"]` (B1, against a stub returning no names)
+- green: `action_for` trims trailing dots, spaces and tabs on Windows and reads an extension only for
+  a file off macOS (FR-013's Folders bullet); `percent_decode` requires two hex digits and refuses a
+  decoded control character; `windows_path` makes a bare `/C:` the drive root and refuses
+  drive-relative `C:x`; `shell::startup::host_names_at_boot` is the boot read, tested against
+  `gethostname` -> core `link::` 58 passed, `shell::` 121 passed, `features_session_links` 8 passed
+- `a_file_link_in_a_sandboxed_session_reaches_nothing_and_says_why` (B2, A6) passed on arrival: the
+  sandboxed arm of `link_context` was written in Cycle 74 with no test of its own. Mutant — dropping
+  `SandboxState::Running(id)` from the match — fails it:
+  `left: ["Couldn't open file:///tmp/x: the file doesn't exist on this machine"]` /
+  `right: [… "the sandbox doesn't share that location with this machine"]`. Restored, 23 passed
+- deviation: `a_host_path_that_needs_confirmation_opens_nothing_yet` (A5) was written together with
+  its guard rather than before it. The mutant — removing the `needs_confirmation` arm — fails it
+  (`a_host_path_that_needs_confirmation_opens_nothing_yet ... FAILED`), which is recorded here in
+  place of the missing first red
+- A18 now performs the activation gesture it asserts about (B3), and `every_runnable_kind` creates a
+  real file for every entry of FR-013's list for this platform plus every macOS bundle extension as
+  a directory (B5)
+- refactor: none. Documentation, tasks.md, data-model.md and the ledger were corrected where review
+  found them describing `app::State`/`main.rs` instead of `features::session::State`/`shell/startup.rs`
