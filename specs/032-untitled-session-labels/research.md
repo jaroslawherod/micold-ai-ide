@@ -202,6 +202,13 @@ the Unicode tables are the whole difficulty.
   reading on either signal finds it.
 - The supervisor broadcasts only when the recovery count is > 0, and today that counts titles only;
   labels now count too (C6.3a).
+A third gap closes it, found by M3's review A: `SpinnerObserved` moves the FSM only from `Unknown`
+to `Working`, so a session whose CLI drew a spinner while starting up has already spent that one
+transition before the user typed. The prompt hook then changes no signal and C6.3b's re-arm never
+fires, leaving the turn unread until the closing `Stop`. So `note_activity` re-arms on
+`UserPromptSubmit` unconditionally (C6.3c) — the prompt is the event that wrote the turn, and it
+fires at most once per turn.
+
 So the label is derived and broadcast within a tick or two of the prompt, inside FR-010's 60 s.
 
 **Cost of widening recovery to `Derived`**: the set of sessions re-read for a title is the same set

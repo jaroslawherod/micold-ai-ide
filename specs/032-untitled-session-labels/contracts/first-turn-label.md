@@ -109,6 +109,12 @@ File: `<config>/session-state/<session id>/events.jsonl` (the existing `events_p
 - C6.3b `drain_signals` sets `name_stale` whenever it changes a session's activity (the
   `SpinnerObserved` route), as `note_activity` already does, so the first prompt re-arms the live
   lookup whichever of the spinner and the prompt hook arrives first (FR-010).
+- C6.3c `note_activity` sets `name_stale` for a `UserPromptSubmit` hook **whether or not the signal
+  changed**. C6.3b alone is not enough: `SpinnerObserved` can only move `Unknown → Working`, so a
+  spinner drawn while the CLI starts up — before anything is typed — spends that one transition on a
+  tick with an empty conversation, and the prompt hook that follows then changes nothing. The prompt
+  is the event that puts the first turn on disk, so it is the one signal that must always re-arm the
+  lookup. At most once per turn, so SC-006's bound is unmoved.
 - C6.4 `Catalog::record_session_label(id, label) -> io::Result<bool>`: `Ok(false)` for an unknown
   id, an empty label, or a session that is not `Pending`; otherwise sets `Derived`, persists, and
   returns `Ok(true)`. A persist error leaves the in-memory label set and is logged by the caller,

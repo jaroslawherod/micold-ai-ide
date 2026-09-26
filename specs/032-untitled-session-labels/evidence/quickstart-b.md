@@ -64,3 +64,58 @@ That file is identical to `main`, so this is not a regression of feature 032 and
 D7 — a label and a title are treated exactly alike, which is what the spec requires. Recorded as a
 follow-up in `autopilot.md`; giving session rows a tooltip is new behaviour and belongs to a spec,
 not to this milestone.
+
+## M3 — §B1 (Copilot rows) — 2026-09-26
+
+Command (the same probe; it reports both providers):
+
+```bash
+MICOLD_LABEL_CORPUS=1 scripts/build-lock.sh cargo test -p micold-core \
+  --test first_turn_label_corpus -- --ignored --nocapture
+```
+
+Result: **PASS**.
+
+- `286 copilot sessions: 139 titled, 2 labelled, 145 neither`. The 139 titled include the ~44
+  `summary:`-only sessions from Copilot 1.0.36 and earlier, which read as untitled before this
+  feature (FR-016). The 145 "neither" are conversations with no typed turn of their own — Copilot
+  writes a session directory before the user says anything — so SC-002 holds: no conversation with a
+  typed prompt reads "neither".
+- `78 transcripts: 61 titled, 17 labelled, 0 neither` for `claude`, with `9a536c7e` reading
+  `/speckit-autopilot` and the other three BUG-001 sessions reading their own first turns. The
+  counts differ from M1's (`83: 67/16/0`) only because the machine's own store moved on between the
+  two runs.
+- As **evidence only** (D10): the probe's Copilot half walks every session directory on the machine,
+  listed or not, so the old unlisted `summary:` sessions are counted above. SC-008 and SC-009 are
+  judged on *listed* sessions by the fixture tests in Part A (`copilot_provider.rs`,
+  `untitled_session_labels.rs`), because none of the 44 is in a Copilot per-cwd index.
+
+No file was modified: the probe opens every record read-only.
+
+## M3 — §B3 (a running session) — 2026-09-26
+
+Run with the repo's `visual-pass` skill, as §B2 was: a private Xvfb display (`:79`), a private
+`XDG_RUNTIME_DIR` and `XDG_DATA_HOME` under `/tmp/vp79`, a seeded scratch project, and the client
+and daemon built from this branch and copied to a private directory before launch (never run out of
+`target-shared/`). The user's own app, service and sessions were left running and untouched. The
+pinned pair was verified to connect, and the fix's line confirmed live in the build
+(`state.rs` `drain_signals`, `live.name_stale = true` in the `SpinnerObserved` branch).
+
+One environment fix was needed: the nested `claude` inherited `CLAUDE_CODE_CHILD_SESSION` and
+reported transcript saving as off; relaunching with `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1` fixed
+it.
+
+| Step | Result | What was seen |
+|---|---|---|
+| 1 — `claude`: type a prompt, do not let it title the conversation | **pass, with a caveat** | the row left "New session" well inside the 60 s bound, without reopening the project or restarting anything. Over 7 trials (including freezing the child with `SIGSTOP` to widen the window) `claude` 2.1.283 titled the conversation in 0.4–3.5 s, so no frame was caught showing the raw prompt text *distinct from* the generated title: the row went "New session" → title. The 60 s bound and "never stuck on New session" are demonstrated; the literal label frame for `claude` is not, and step 3 catches it on the same code path |
+| 2 — let it title itself; restart | **pass** | the row switched to `claude`'s own title (`Repository explanation`), and after the private daemon and client were restarted the first frame already read that title — no "New session" flash |
+| 3 — Copilot, before it writes `name:` | **pass, cleanly observed** | `workspace.yaml` confirmed `user_named: false` with no `name:`. While Copilot was still working the row read the derived label `Explain what this repo…`; when `workspace.yaml` gained `name: Summarize Repository Functionality` the row switched to it. This is the label-then-title transition step 1 could not isolate, on the same daemon path |
+
+Screenshots: `quickstart-b3-step1-before.png`, `quickstart-b3-step1-after.png`,
+`quickstart-b3-step2-after-restart.png`, `quickstart-b3-step3-copilot-before.png`,
+`quickstart-b3-step3-copilot-label.png`.
+
+Note on step 1's caveat: it is a property of this `claude` build, not of the change. `claude` 2.1.283
+names a conversation within a few seconds, so its untitled window is short — which is exactly why
+the feature's headline population is *past* sessions (§B2) and why the label path is proved on
+Copilot here, where the untitled window lasts as long as the first turn.

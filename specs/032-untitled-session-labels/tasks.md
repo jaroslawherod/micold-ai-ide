@@ -180,6 +180,8 @@ without reopening (quickstart B3).
 - [X] T029 [US3] [A10] [A11] [U68] [U69] [U70] In `crates/micold-daemon/src/state.rs` `drain_signals`, set `live.name_stale = true` whenever the `SpinnerObserved` branch changes the session's activity, with a comment citing 032 FR-010 and research R9
 - [X] T030 [US3] Add to `docs/user-guide/worktrees-and-sessions.md` that a session you are working in gets the same label within a minute of your first prompt, and switches to the CLI's title when it has one
 
+- [X] T047 [US3] [A10] [U72] (added by M3's review A) In `crates/micold-daemon/src/state.rs` `note_activity`, set `live.name_stale` for a `UserPromptSubmit` hook whether or not the signal changed, with a comment citing 032 C6.3c: `SpinnerObserved` can only move `Unknown → Working`, so a spinner drawn while the CLI starts up spends that one transition before anything is typed and T029's re-arm never fires for the prompt
+
 - [X] T044 [US3] [A10] [A11] Outer loop green: the US3 acceptance tests in `crates/micold-daemon/tests/untitled_session_labels.rs` pass with the full suite
 
 **Checkpoint**: running `claude` and Copilot sessions agree with what they will show after a restart.
@@ -271,7 +273,7 @@ priority: both P1 halves (M1 `claude`, M2 Copilot) ship before the P3 story (M3)
 
 ### M3 — A running session shows its label within a minute of the first prompt (+ Polish)
 
-- **Tasks**: T028–T030, T044, T039–T041
+- **Tasks**: T028–T030, T044, T047, T039–T041
 - **Deliverable**: a running untitled `claude` or Copilot session shows its label within one supervisor pass of its first prompt, whether the prompt hook or the spinner is seen first, and switches to the title when the CLI reports one; the user guide says so; quickstart §B3 is recorded in `evidence/quickstart-b.md`.
 - **Satisfies**: US3 acceptance scenarios 1–2 (both providers); FR-010; SC-007
 - **Verify**: `mise run gate`; `scripts/build-lock.sh cargo test --test untitled_session_labels` (A10, A11 pass, incl. the spinner-first case); quickstart §B3 steps 1–3 recorded in `specs/032-untitled-session-labels/evidence/quickstart-b.md`
