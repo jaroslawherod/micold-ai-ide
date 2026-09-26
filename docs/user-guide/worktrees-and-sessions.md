@@ -539,10 +539,16 @@ and that newer name is the one that comes back next time. Names are per session:
 never touches another.
 
 **A name you chose in the CLI yourself is the one that sticks.** Rename a conversation in Claude
-Code — `/rename` — and that is the name the row keeps. The name the CLI had generated for it before
-does not come back, not when you reopen the project, not when the app looks the conversation up in
-the CLI's records again, and not when it meets that conversation for the first time on another
-machine.
+Code — `/rename` — and that is the name the row reads whenever the app looks that conversation up in
+the CLI's records: the first time it meets it, after the background service restarts, or on another
+machine. The name the CLI had generated before your rename does not come back, and the CLI's own
+later titles do not replace it either — your name is the conversation's name until you change it
+again.
+
+**A row that was already showing the pre-rename name is corrected the next time you open that
+session.** A name the app has already recorded is never looked up again (that is what keeps names
+stable), so a row that picked up the CLI-generated name before this was fixed keeps showing it. Open
+that session once and the row takes the name the CLI is displaying, which is yours.
 
 **Sessions from before this was true get their names back.** If you have sessions that were showing
 "New session" even though you had talked in them, opening the project is enough — each one is

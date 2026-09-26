@@ -74,3 +74,28 @@ confined to `micold-core`, and the full-workspace suite runs once at the end as 
 
   On `origin/main` the same read answered `Some("PR 284 macOS feature")` (ledger *Reproduction on
   origin/main*). The reproduction is fixed against the transcript that produced it.
+
+## T035 / T034 — the full gate, and the two verifications the tasks name
+
+- **`mise run gate`**: `GATE_EXIT=0`, 0 failed binaries, run detached at `c572b3b5`
+  (fmt → clippy core → clippy workspace `-D warnings` → `cargo test --workspace` →
+  `scripts/tests/*.test.sh`, all green). Selected results from that run:
+
+  ```
+  Running tests/session_name_recovery.rs
+  test recovery_fills_pending_labels_from_the_clis_own_records_and_nothing_else ... ok
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+  Running tests/untitled_session_labels.rs
+  test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+  Running tests/session_name_persistence.rs
+  test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+  ```
+
+  `session_name_recovery.rs` passes **unmodified** — the recovery pass's shape, cost and precedence
+  are untouched (C14–C20) — and 032's 26 label tests pass too, which is D3 confirmed by the suite
+  rather than by argument.
+- **No `cfg(target_os)` arm changed** (the whole source diff is inside `ClaudeProvider::parse_title`),
+  so no `aarch64-apple-darwin` cross-check was required. Nothing visible changed, so no visual pass.
+- **T034 `mise run site-check`**: recorded in the *Post-review* entry below, with the second gate run.
