@@ -584,7 +584,13 @@ impl DaemonState {
 
     /// The `PATH` a session spawned in `cwd` gets (feature 029, BUG-001, FR-003b): the one the
     /// environment-include result for `cwd` carries, or this process's own when environment-include
-    /// is off or the script left `PATH` alone — which is exactly what the spawn inherits then.
+    /// is off or the script left `PATH` alone.
+    ///
+    /// On Unix the fallback is exactly what the spawn inherits. On Windows it is a subset:
+    /// `supervisor::prefer_process_path` gives the child this process's `PATH` *followed by* the
+    /// system and user `PATH` the registry holds, so a CLI installed since the service started
+    /// spawns but is not offered. That is the safe direction — nothing is offered that would then
+    /// fail to start — and closing it belongs with the registry read, not here.
     ///
     /// Through [`Self::env_include_vars_for`], so it shares that per-directory cache with the
     /// spawns themselves, is invalidated by the same `SettingsSet` and `WorktreeDelete` paths, and

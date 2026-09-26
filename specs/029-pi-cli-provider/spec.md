@@ -627,7 +627,9 @@ resolution that spawns already perform. US1 scenario 5b and an edge case added. 
 - **SC-006a**: Deciding whether Pi is available costs exactly what deciding it for the other two CLIs
   costs — ~~no process is spawned and no version is read to answer it~~ no version is read, no CLI is
   spawned, and the only process ever spawned is the environment-include resolution a session spawn
-  in that directory already performs, shared and cached with it (FR-003b; struck 2026-09-18,
+  in that directory already performs, shared and cached with it — and, where no directory is in play
+  (the Settings default, answered for the home directory per FR-003b), that one home-directory
+  resolution, cached the same way (FR-003b; struck 2026-09-18,
   BUG-001: "no process" made the check blind to a CLI a session would find). Where an old `pi`
   does fail, the report names the installed version.
 - **SC-001a**: A user whose `pi` is reachable only through the environment-include script — the

@@ -321,12 +321,20 @@ fn resolves_on_path(command: &str, path: &OsStr) -> bool {
         .filter(|value| !value.is_empty())
         .map(|value| value.split(';').map(str::to_string).collect())
         .unwrap_or_default();
-    std::env::split_paths(path).any(|dir| {
-        is_file(dir.join(command))
-            || extensions
-                .iter()
-                .any(|ext| is_file(dir.join(format!("{command}{ext}"))))
-    })
+    // An empty component is dropped rather than walked. `split_paths("")` yields one empty path,
+    // and joining a command onto it gives the bare relative name, which would resolve against the
+    // process's current directory — so a `pi` file sitting in the service's working directory would
+    // read as installed. Before feature 029 the caller's `PATH` was always this process's own and
+    // an absent one returned `false` outright; now the value comes from the environment-include
+    // result, where an empty or partly empty `PATH` is ordinary.
+    std::env::split_paths(path)
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .any(|dir| {
+            is_file(dir.join(command))
+                || extensions
+                    .iter()
+                    .any(|ext| is_file(dir.join(format!("{command}{ext}"))))
+        })
 }
 
 // ---------------------------------------------------------------------------------------
