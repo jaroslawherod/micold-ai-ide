@@ -20,6 +20,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #361 | M2 Opening pipeline | merged | 9995dbdb |
 | #385 | M3 Clickable web, mail and declared links in the pane | merged | e5bdc804 |
 | #393 | M4 Session terminal identity and the FORCE_HYPERLINK opt-in | merged | 59132a50 |
+| #402 | M5 File links on the host: open, reveal runnables, not-found | open | — |
 
 ## Milestones
 
@@ -29,7 +30,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M2 | T013–T022 | Opening pipeline: `LinkActivated` through `update_inner` to the system opener | #361 | merged |
 | M3 | T082, T083, T037, T023–T034 | Clickable web, mail and declared links in the pane | #385 | merged |
 | M4 | T035, T036, T038–T041 | Session terminal identity and the FORCE_HYPERLINK opt-in | #393 | merged |
-| M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | — | in progress |
+| M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | #402 | in review |
 | M6 | T085, T055–T067, T069, T068 | Sandboxed file links, translated and confirmed | — | pending |
 | M7 | T086, T070–T077 | Link context menu | — | pending |
 | M8 | T078–T081 | Close: SC-005 measurement, full visual walkthrough | — | pending |
