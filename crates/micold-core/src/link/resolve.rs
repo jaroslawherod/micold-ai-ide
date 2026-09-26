@@ -149,10 +149,20 @@ fn file(link: Link, host: &str, path: &str, ctx: &LinkContext) -> Option<Resolve
 }
 
 /// `/C:/Users/u/a.txt` as `C:\Users\u\a.txt`, or `None` when the path names no drive (C7, C8).
+///
+/// A bare `/C:` becomes `C:\`, the drive's root: Windows reads `C:` on its own against that drive's
+/// current directory, which is not what the hint showed.
 fn windows_path(path: &str) -> Option<String> {
     let drive = path.strip_prefix('/')?;
     let (letter, rest) = drive.split_at_checked(1)?;
     if !letter.chars().all(|c| c.is_ascii_alphabetic()) || !rest.starts_with(':') {
+        return None;
+    }
+    if rest == ":" {
+        return Some(format!("{drive}\\"));
+    }
+    if !(rest.starts_with(":/") || rest.starts_with(":\\")) {
+        // `C:x` is read against that drive's current directory, so it names no fixed file.
         return None;
     }
     Some(drive.replace('/', "\\"))
@@ -292,6 +302,22 @@ mod tests {
             None,
             "a path with no drive names nothing on a Windows machine (C8)"
         );
+        assert_eq!(
+            target("file:///C:", &windows),
+            Some(Target::HostPath(r"C:\".to_string())),
+            "a bare drive is that drive's root — `C:` alone is read against the current directory \
+             instead (review A finding 3)"
+        );
+        assert_eq!(
+            target("file:///CD:/x", &windows),
+            None,
+            "a drive is one letter"
+        );
+        assert_eq!(
+            target("file:///C:x", &windows),
+            None,
+            "`C:x` is read against that drive's current directory, so it names no fixed file"
+        );
     }
 
     /// U41: C12 — a sandboxed session shares nothing yet, which is the safe direction.
@@ -362,7 +388,9 @@ mod tests {
             "file://otherhost/x",
         ];
         let mut followable = 0;
-        // Every context resolution reads, so a `HostPath` and an `Unreachable` are both sampled.
+        // Both contexts are read, so the `HostPath` rows of one and the web and mail rows of both
+        // are sampled. An `Unreachable` has nothing to hand an opener, so it is skipped below and
+        // U41 checks its display instead.
         for ctx in [local(), sandboxed()] {
             for address in addresses {
                 let Some(resolved) = resolve(detected(address), &ctx) else {
