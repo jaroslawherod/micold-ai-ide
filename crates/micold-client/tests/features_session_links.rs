@@ -104,6 +104,86 @@ fn a_failed_launch_notifies_the_reason() {
     );
 }
 
+/// A host path the pane resolved from `address`, ready to open without asking.
+fn path_link(address: &str, path: &str) -> ResolvedLink {
+    ResolvedLink {
+        target: Target::HostPath(path.to_string()),
+        display: path.to_string(),
+        ..web_link(address)
+    }
+}
+
+/// U78 (T6): an activated file link asks the shell to open that path, and says which address it
+/// came from, because that is what a failure is reported against.
+#[test]
+fn activating_a_file_link_asks_to_open_its_host_path() {
+    let address = "file:///home/u/My%20Doc.pdf";
+    let mut state = State::default();
+    let outcomes = micold_client::features::session::update(
+        &mut state,
+        SessionMsg::LinkActivated(path_link(address, "/home/u/My Doc.pdf")),
+    );
+    assert_eq!(
+        outcomes,
+        vec![Outcome::OpenLink(OpenRequest::Path {
+            path: "/home/u/My Doc.pdf".to_string(),
+            address: address.to_string(),
+        })],
+        "the shell is asked for the decoded path, with the address the program printed (FR-010)"
+    );
+    assert!(
+        notifications(&mut state).is_empty(),
+        "asking to open notifies nothing by itself"
+    );
+}
+
+/// U79 (T8): a sandboxed path outside every shared location opens nothing and says why.
+#[test]
+fn activating_an_unreachable_link_opens_nothing_and_says_the_sandbox_does_not_share_it() {
+    let address = "file:///tmp/x";
+    let link = ResolvedLink {
+        target: Target::Unreachable(micold_core::link::Reason::NotShared),
+        display: "/tmp/x — not reachable from this machine".to_string(),
+        ..web_link(address)
+    };
+    let mut state = State::default();
+    let outcomes =
+        micold_client::features::session::update(&mut state, SessionMsg::LinkActivated(link));
+    assert!(
+        outcomes.is_empty(),
+        "nothing is opened for a path this machine cannot reach: {outcomes:?}"
+    );
+    assert_eq!(
+        notifications(&mut state),
+        vec![(
+            Level::Error,
+            format!(
+                "Couldn't open {address}: the sandbox doesn't share that location with this machine"
+            )
+        )],
+        "the notice names the address the program printed, not the hint's suffix (FR-015, FR-018)"
+    );
+}
+
+/// U77: a file link to something that is not there.
+#[test]
+fn an_open_of_a_file_that_is_not_there_notifies_that_it_does_not_exist() {
+    let address = "file:///home/u/gone.txt";
+    let mut state = State::default();
+    state.update(Message::Session(finished(
+        address,
+        Err(OpenFailure::NotFound),
+    )));
+    assert_eq!(
+        notifications(&mut state),
+        vec![(
+            Level::Error,
+            format!("Couldn't open {address}: the file doesn't exist on this machine")
+        )],
+        "US3 scenario 5: the user is told the file is gone, not that no application is set up"
+    );
+}
+
 /// U76 (T13): an open that worked is silent.
 #[test]
 fn an_open_that_worked_notifies_nothing() {
