@@ -689,3 +689,20 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
 - green: `id.get(..12).unwrap_or(id)`, then the full id when it differs (T088); both helpers
   re-exported from `link` -> `cargo test -p micold-core --all-targets` 0 failed
 - refactor: the prefix length is the named constant `CONTAINER_ID_PREFIX`, so C11's 12 is read once
+
+## Cycle 69: U31, U32 `Address::File` and its percent-decoder
+
+- tests: `crates/micold-core/src/link/address.rs::tests::{a_file_address_carries_its_host_and_its_decoded_path, a_file_path_that_cannot_be_decoded_is_not_followable}` (T042, address half)
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::address` -> first
+  `non-exhaustive patterns: Address::File { .. } not covered` in `resolve` (the minimal arm returns
+  `None`, which keeps U36's guard true), then
+  `an empty host is this machine (C4)` `left: NotFollowable` / `right: File { host: "", path: "/home/u/a.txt" }`
+  (3 passed; 2 failed)
+- green: `Address::File { host, path }`, a `file://` arm in `classify`, and a hand-written
+  `percent_decode` that answers `None` for an invalid escape or a non-UTF-8 result (T046) ->
+  `cargo test -p micold-core --all-targets` 0 failed
+- U32 is a guard; its mutant (an invalid escape passed through literally) fails it:
+  `file:///p/%ZZ cannot be decoded into a path, so it opens nothing (C10)`
+  `left: File { host: "", path: "/p/%ZZ" }` / `right: NotFollowable`. Restored by the reverse edit,
+  suite green again
+- refactor: none

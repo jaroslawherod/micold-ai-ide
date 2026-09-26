@@ -105,7 +105,8 @@ pub fn resolve(link: Link, _ctx: &LinkContext) -> Option<ResolvedLink> {
             target: Target::Url(address),
             needs_confirmation: false,
         }),
-        Address::NotFollowable => None,
+        // The `File` branch is Cycle 70; until then a file link opens nothing.
+        Address::File { .. } | Address::NotFollowable => None,
     }
 }
 
