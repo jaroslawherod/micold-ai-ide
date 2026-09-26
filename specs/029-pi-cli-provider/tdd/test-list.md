@@ -75,7 +75,7 @@ is covered by T070's visual pass.
   existing `sandbox_real_*` tests cover it.
 - Explaining in the UI why a CLI is hidden: not a requirement; documentation only (T068).
 - The fixture path in the user's `settings.json` (T069): an investigation, not a behavior.
-- Protocol bump 13 → 14 and schema hash (T065): structural; the existing schema-hash gate fails
+- Protocol bump and schema hash (T065; written as 13 → 14, rebased onto `main` as 14 → 15): structural; the existing schema-hash gate fails
   until it is regenerated.
 
 ## Verification commands
