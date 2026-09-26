@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M5 step 2: implement T084, T087, T042–T048, T088, T049–T054 (file links on the host)
+- **Next step**: M5 step 3: `mise run gate`, the macOS/Windows cross-checks and the visual pass
 
 ## Pull requests
 
@@ -70,6 +70,9 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | 30 | 4-milestones | M4 review B F2: contract §2's "inherited and set by the script" row had no real bash diff | Unix re-exec test through `resolve` (U163), guarded by a mutant | agent-resolved | tdd/cycle-log.md Cycle 64 |
 | 32 | 4-milestones | M4 CI red on windows-latest: the `.cmd` stand-in cannot be spawned (os error 193), the arm review B F3 flagged | Compile the stand-in with `rustc` into `claude.exe` per test process; a batch file is not an executable image and neither spawn can wrap it in `cmd.exe /C` | agent-resolved | tdd/cycle-log.md Cycle 65; run 35766841670 |
 | 31 | 4-milestones | Quickstart §B.17's second half (a *declared* link with `FORCE_HYPERLINK=1`) could not be observed: Claude Code 2.1.280 showed no declared run, and that run showed no hover feedback at all, so the two cannot be told apart. Block M4? | No. FR-006 is what micold removes and documents (Decision 5), which §B.14 shows; `osc8_passthrough.rs` shows a declared link reaching the grid on all three CI OSes, and §B.7 (M3) shows the pane opening one. Recorded as a follow-up to re-run when an AI CLI is known to declare links | agent-resolved | visual-pass.md §"Milestone M4" |
+| 33 | 4-milestones | T049 asks for `app::State.host_names`, but `tests/root_state_is_shared.rs` (G2) refuses a flat root field that is neither a feature's `State` nor declared in `SHARED`, and this one is written by no feature | It lives on `features::session::State`, with the sessions whose panes show the links, and boot fills it in `shell/startup.rs` (where `core` is built) rather than in `main.rs`; `main.rs` already writes `core.session.*` at boot the same way | agent-resolved | tests/root_state_is_shared.rs `every_root_field_is_a_feature_struct_or_a_declared_shared_member`; main.rs:570 `app.core.session.pending_tab_reveal = false` |
+| 34 | 4-milestones | The acceptance harness ran each published message through `update_inner` but dropped what its task produced, so A17's notification (raised on `LinkOpenFinished`, a second round) could never be observed | `Session::send` drains the queue to a fixed point, as iced's runtime does | agent-resolved | tdd/cycle-log.md Cycle 73 |
+| 35 | 4-milestones | T031 built the pane's context inline in `ui/mod.rs` through `material::local_link_context()`; T050 needs `state` and the sandbox | One `ui::terminal::link_context(state, sandbox)`, called by `ui::view` and by the acceptance tests, so A12/A14 cover the glue rather than a copy of it; `local_link_context` stays as `TerminalPane`'s own default | agent-resolved | tdd/test-list.md U134/U136 "covered at the outer loop" |
 
 ## Declined review findings
 

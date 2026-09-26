@@ -781,3 +781,22 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
 - A12 is still red — it waits on the boot glue, which is Cycle 74
 - refactor: the acceptance module's own runnable-file helper is gone; both modules use
   `tests::runnable_file`
+
+## Cycle 74: U134, U136 — the boot glue closes A12
+
+- tests: the glue has no unit test of its own. `crates/micold-client/src/shell/links.rs::acceptance::a_declared_file_link_naming_this_host_opens_the_decoded_path` (A12) is its test, as
+  Cycle 66 and tdd/test-list.md record: it drives the pane through `ui::terminal::link_context`,
+  the same function `ui::view` calls, with this machine's real names (T084, T087)
+- red: after Cycle 73, `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide
+  shell::links` -> 21 passed; 1 failed. A12 `left: []` /
+  `right: ["/tmp/.tmpzpfykH/readme a.txt"]` — the declared link named this host, and nothing knew
+  the host's names yet
+- green: `shell::startup` fills `session::State.host_names` from
+  `micold_core::link::host_names_from(gethostname())` (U134, T049 with Decision 33), and
+  `ui::terminal::link_context` builds the `LinkContext` from that state plus the running sandbox's
+  container names (U136, T050, Decision 35); `ui::view` now calls it instead of
+  `material::local_link_context` -> 22 passed
+- no mutant was needed: A12's own red above is the glue's red — with the boot line absent the names
+  are empty, which is exactly the mutant
+- refactor: `material::local_link_context` is no longer re-exported; the pane's context has one
+  producer

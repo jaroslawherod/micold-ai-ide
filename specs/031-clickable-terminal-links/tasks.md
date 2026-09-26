@@ -282,33 +282,33 @@ the `env_include.rs` builders (plan, Target Platform).
 
 ### Tests for US3: host file links ⚠️ write first, must fail
 
-- [ ] T084 [US3] [A12] [A14] [A15] [A16] [A17] [A18] Outer-loop acceptance tests in `mod acceptance` of `crates/micold-client/src/shell/links.rs`, over real files in a `tempfile` directory and `app::State.host_names` set to a known name: A18 is a guard, green on arrival (after T011 those addresses are already `NotFollowable`); its red is shown by the mutant in `tdd/test-list.md`.
+- [X] T084 [US3] [A12] [A14] [A15] [A16] [A17] [A18] Outer-loop acceptance tests in `mod acceptance` of `crates/micold-client/src/shell/links.rs`, over real files in a `tempfile` directory and `app::State.host_names` set to a known name: A18 is a guard, green on arrival (after T011 those addresses are already `NotFollowable`); its red is shown by the mutant in `tdd/test-list.md`.
   - A12: a declared `file://<host name><dir>/readme%20a.txt` link calls `opener.open` with the decoded existing path.
   - A14: a `file://` link to an existing document calls `opener.open` with its path.
   - A15: a `file://` link to an existing folder calls `opener.open` with the folder path.
   - A16: a `file://` link to a runnable file (the execute bit on Unix, a `%PATHEXT%` extension on Windows) calls `opener.reveal` and never `opener.open`.
   - A17: a link to a missing file calls no opener and raises `Couldn't open <address>: the file doesn't exist on this machine`.
   - A18: `file://otherhost/x`, `javascript:alert(1)` and `vscode://x` are not marked on hover, and activating them calls no opener.
-- [ ] T087 [US3] [U140] [U141] Unit tests in `crates/micold-core/src/link/resolve.rs` for two pure helpers.
+- [X] T087 [US3] [U140] [U141] Unit tests in `crates/micold-core/src/link/resolve.rs` for two pure helpers.
   - `host_names_from(raw: &str) -> Vec<String>`: `build.example.com` gives `["build.example.com", "build"]`; `devbox` gives `["devbox"]`; an empty name gives `[]`; a name whose first label equals the whole name is listed once.
   - `container_host_names(id: &str) -> Vec<String>`: a 64-character id gives its 12-character prefix and the full id; a 12-character id gives it once; an 8-character id gives it once.
-- [ ] T042 [P] [US3] [U31] [U32] [U35] [U36] [U37] [U41] [U46] Replace the `file:` → `None` test from T006 in `crates/micold-core/src/link/address.rs` and `crates/micold-core/src/link/resolve.rs` with contract link-recognition C4–C10 and C18, plus the rules below. Extend the SC-006 property to `HostPath`.
+- [X] T042 [P] [US3] [U31] [U32] [U35] [U36] [U37] [U41] [U46] Replace the `file:` → `None` test from T006 in `crates/micold-core/src/link/address.rs` and `crates/micold-core/src/link/resolve.rs` with contract link-recognition C4–C10 and C18, plus the rules below. Extend the SC-006 property to `HostPath`.
   - C5 compares hosts ASCII case-insensitively.
   - C6 covers `file://otherhost/…` and `file://server/share/…` (US3 scenario 6).
   - C9 percent-decodes `%20`.
   - C10: "Percent-decoding failure or non-UTF-8 ⇒ `NotFollowable`".
   - U32 and U36 are guards: `file:` is `NotFollowable` and resolves to `None` until T046–T047, so they pass when written. Their red is shown after T046–T047 by the mutants in `tdd/test-list.md`.
   - With `ctx.sandbox = Some` and no locations, a file link gives `Target::Unreachable`, with `display = "<path> — not reachable from this machine"` (C12).
-- [ ] T043 [P] [US3] [U50] [U51] [U52] [U53] [U54] [U55] Unit tests for `action_for(platform, name, facts, pathext) -> FileAction` in the new `crates/micold-core/src/link/runnable.rs`, declared as `pub mod runnable;` in `crates/micold-core/src/link/mod.rs` so it compiles and its red is seen. Add `runnable.rs` to T007's `include_str!` list in the same change.
+- [X] T043 [P] [US3] [U50] [U51] [U52] [U53] [U54] [U55] Unit tests for `action_for(platform, name, facts, pathext) -> FileAction` in the new `crates/micold-core/src/link/runnable.rs`, declared as `pub mod runnable;` in `crates/micold-core/src/link/mod.rs` so it compiles and its red is seen. Add `runnable.rs` to T007's `include_str!` list in the same change.
   - Every row of contract link-opening §3 for Linux, macOS and Windows, run on every OS.
   - Extensions compare ASCII case-insensitively on the last extension, and `AppImage` matches.
   - A macOS bundle directory (by extension or `is_bundle`) reveals. Other folders open.
   - Windows `pathext` entries reveal, and `any_exec_bit` is ignored on Windows.
-- [ ] T044 [P] [US3] [U77] [U78] [U79] Extend `crates/micold-client/tests/features_session_links.rs`.
+- [X] T044 [P] [US3] [U77] [U78] [U79] Extend `crates/micold-client/tests/features_session_links.rs`.
   - T6: `HostPath(p)` with `!needs_confirmation` gives `OpenLink(Path { path: p, address: r.link.address })`.
   - T8: `Unreachable` notifies `Couldn't open <address>: the sandbox doesn't share that location with this machine`.
   - `LinkOpenFinished` with `Err(NotFound)` notifies `Couldn't open <address>: the file doesn't exist on this machine`.
-- [ ] T045 [P] [US3] [U95] [U96] [U97] [U146] Extend the `#[cfg(test)]` module of `crates/micold-client/src/shell/links.rs` with T11 using the recording opener.
+- [X] T045 [P] [US3] [U95] [U96] [U97] [U146] Extend the `#[cfg(test)]` module of `crates/micold-client/src/shell/links.rs` with T11 using the recording opener.
   - A missing path gives `LinkOpenFinished { address, result: Err(NotFound) }`.
   - A document calls `open(p)`, and a runnable file calls `reveal(p)`.
   - SC-007 real files, on each CI OS, through the real fact gatherer:
@@ -317,24 +317,24 @@ the `env_include.rs` builders (plan, Target Platform).
 
 ### Implementation for US3: host file links
 
-- [ ] T046 [US3] [U31] [U32] In `crates/micold-core/src/link/address.rs`, add `Address::File { host: String, path: String }` for `file://host/path`, with a hand-written percent-decoder (about 20 lines, no new crate). An invalid escape or non-UTF-8 gives `NotFollowable`.
-- [ ] T047 [US3] [U35] [U36] [U37] [U41] [A12] [A14] [A15] [A16] [A17] [A18] The `File` branch of `resolve` in `crates/micold-core/src/link/resolve.rs`.
+- [X] T046 [US3] [U31] [U32] In `crates/micold-core/src/link/address.rs`, add `Address::File { host: String, path: String }` for `file://host/path`, with a hand-written percent-decoder (about 20 lines, no new crate). An invalid escape or non-UTF-8 gives `NotFollowable`.
+- [X] T047 [US3] [U35] [U36] [U37] [U41] [A12] [A14] [A15] [A16] [A17] [A18] The `File` branch of `resolve` in `crates/micold-core/src/link/resolve.rs`.
   - The host must be "empty, `localhost`, or in `host_names` / `sandbox.host_names` (ASCII case-insensitive)", otherwise `None`.
   - Not sandboxed: `windows_host` turns `/C:/…` into `C:\…`, and a path without a drive gives `None`. Otherwise `HostPath(path)` with `display = path` and `needs_confirmation = false`.
   - Sandboxed: `Unreachable` for now. T062 adds translation.
-- [ ] T048 [US3] [U50] [U51] [U52] [U53] [U54] [U55] Implement `HostPlatform { Linux, MacOs, Windows }`, `FileFacts { kind: Kind{File, Dir}, any_exec_bit: bool, is_bundle: bool }`, `FileAction { Open, Reveal }` and `action_for`, with FR-013's lists verbatim, in `crates/micold-core/src/link/runnable.rs` (declared by T043).
-- [ ] T088 [US3] [U140] [U141] Implement `host_names_from` and `container_host_names` in `crates/micold-core/src/link/resolve.rs`, re-exported from `link`.
-- [ ] T049 [US3] [U136] Add `app::State.host_names: Vec<String>` (empty by `Default`) in `crates/micold-client/src/app.rs`. `crates/micold-client/src/main.rs` fills it at boot with `link::host_names_from(&gethostname().to_string_lossy())` (glue). Add `gethostname = "1.1"` to `crates/micold-client/Cargo.toml` (already in `Cargo.lock`).
-- [ ] T050 [US3] [U134] In `crates/micold-client/src/ui/terminal.rs`, build the `LinkContext` with `host_names` from `state.host_names`. While `sandbox.state` is `Running(id)` or `Stale(id)`, set `sandbox = Some(SandboxLinkContext { host_names: link::container_host_names(id), locations: vec![], denied: vec![] })`; otherwise `None`. So every sandboxed file link is "not reachable" until T066 (glue).
-- [ ] T051 [US3] [U95] [U96] [U97] [U146] [A12] [A14] [A15] [A16] `perform(OpenRequest::Path { path, address })` in `crates/micold-client/src/shell/links.rs`, in one `spawn_blocking` task.
+- [X] T048 [US3] [U50] [U51] [U52] [U53] [U54] [U55] Implement `HostPlatform { Linux, MacOs, Windows }`, `FileFacts { kind: Kind{File, Dir}, any_exec_bit: bool, is_bundle: bool }`, `FileAction { Open, Reveal }` and `action_for`, with FR-013's lists verbatim, in `crates/micold-core/src/link/runnable.rs` (declared by T043).
+- [X] T088 [US3] [U140] [U141] Implement `host_names_from` and `container_host_names` in `crates/micold-core/src/link/resolve.rs`, re-exported from `link`.
+- [X] T049 [US3] [U136] Add `app::State.host_names: Vec<String>` (empty by `Default`) in `crates/micold-client/src/app.rs`. `crates/micold-client/src/main.rs` fills it at boot with `link::host_names_from(&gethostname().to_string_lossy())` (glue). Add `gethostname = "1.1"` to `crates/micold-client/Cargo.toml` (already in `Cargo.lock`).
+- [X] T050 [US3] [U134] In `crates/micold-client/src/ui/terminal.rs`, build the `LinkContext` with `host_names` from `state.host_names`. While `sandbox.state` is `Running(id)` or `Stale(id)`, set `sandbox = Some(SandboxLinkContext { host_names: link::container_host_names(id), locations: vec![], denied: vec![] })`; otherwise `None`. So every sandboxed file link is "not reachable" until T066 (glue).
+- [X] T051 [US3] [U95] [U96] [U97] [U146] [A12] [A14] [A15] [A16] `perform(OpenRequest::Path { path, address })` in `crates/micold-client/src/shell/links.rs`, in one `spawn_blocking` task.
   - `std::fs::metadata(path)` follows symlinks. `NotFound` gives `LinkOpenFinished { address, result: Err(NotFound) }`.
   - Otherwise gather `FileFacts`:
     - `#[cfg(unix)]`: `PermissionsExt::mode() & 0o111 != 0`;
     - macOS: `is_bundle` by extension or `Contents/Info.plist`;
     - `#[cfg(windows)]`: `any_exec_bit = false`, with `PATHEXT` read from the environment.
   - Then call `action_for` with the `cfg`-selected `HostPlatform`, followed by `opener.open(path)` or `opener.reveal(path)`.
-- [ ] T052 [US3] [U77] [U78] [U79] [A17] Reducers T6 and T8 for `LinkActivated`, and the `NotFound` notification text, in `crates/micold-client/src/features/session.rs`
-- [ ] T053 [US3] Extend "Links" in `docs/user-guide/worktrees-and-sessions.md`.
+- [X] T052 [US3] [U77] [U78] [U79] [A17] Reducers T6 and T8 for `LinkActivated`, and the `NotFound` notification text, in `crates/micold-client/src/features/session.rs`
+- [X] T053 [US3] Extend "Links" in `docs/user-guide/worktrees-and-sessions.md`.
   - `file://` links: documents open in their application, and folders in the file manager.
   - Runnable files (an execute bit, launchers, installers, per platform) are revealed, never run.
   - A `file` link naming another machine is not a link.

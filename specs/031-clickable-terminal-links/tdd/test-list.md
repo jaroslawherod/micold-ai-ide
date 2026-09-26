@@ -50,13 +50,13 @@ rendered pixels — is covered by the quickstart §B visual pass.
 | A9  | Two adjacent runs with different declared addresses each resolve to their own address when hovered | US2.3 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::adjacent_declared_runs_open_their_own_addresses` |
 | A10 | With the same declared address on two runs separated by undeclared text, hovering one marks only that run | US2.4 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::same_address_runs_apart_are_marked_one_at_a_time` |
 | A11 | Declared text that reads `https://a.example` but declares `https://b.example` shows and opens `https://b.example` | US2.5, FR-008 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::declared_text_that_reads_as_another_address_shows_and_opens_the_declared_one` |
-| A12 | A `file://<this host>/<tmp>/readme%20a.txt` declared name, as `ls --hyperlink=always` prints it, calls `opener.open` with the decoded existing path | US2.6, FR-012 | example | PENDING | |
+| A12 | A `file://<this host>/<tmp>/readme%20a.txt` declared name, as `ls --hyperlink=always` prints it, calls `opener.open` with the decoded existing path | US2.6, FR-012 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::a_declared_file_link_naming_this_host_opens_the_decoded_path` |
 | A13 | Activating `mailto:team@example.com` calls the opener with `mailto:team@example.com` | US3.1, FR-010 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::a_mail_address_reaches_the_opener_verbatim` |
-| A14 | Activating a `file://` link to an existing document calls `opener.open` with its host path | US3.2, FR-010 | example | PENDING | |
-| A15 | Activating a `file://` link to an existing folder calls `opener.open` with the folder path | US3.3, FR-010 | example | PENDING | |
-| A16 | Activating a `file://` link to a runnable file calls `opener.reveal` and never `opener.open` | US3.4, FR-013 | example | PENDING | |
-| A17 | Activating a `file://` link to a missing file calls no opener and raises `Couldn't open <address>: the file doesn't exist on this machine` | US3.5, FR-015 | example | PENDING | |
-| A18 | `file://otherhost/x`, `javascript:alert(1)` and `vscode://x` are not marked on hover and activating them calls no opener | US3.6, FR-011, FR-012 | example | PENDING | |
+| A14 | Activating a `file://` link to an existing document calls `opener.open` with its host path | US3.2, FR-010 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::activating_a_file_link_to_a_document_opens_its_host_path` |
+| A15 | Activating a `file://` link to an existing folder calls `opener.open` with the folder path | US3.3, FR-010 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::activating_a_file_link_to_a_folder_opens_the_folder` |
+| A16 | Activating a `file://` link to a runnable file calls `opener.reveal` and never `opener.open` | US3.4, FR-013 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::activating_a_file_link_to_a_runnable_file_reveals_it_and_never_opens_it` |
+| A17 | Activating a `file://` link to a missing file calls no opener and raises `Couldn't open <address>: the file doesn't exist on this machine` | US3.5, FR-015 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::activating_a_file_link_to_a_missing_file_opens_nothing_and_says_so` |
+| A18 | `file://otherhost/x`, `javascript:alert(1)` and `vscode://x` are not marked on hover and activating them calls no opener | US3.6, FR-011, FR-012 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::a_file_link_to_another_machine_and_an_application_scheme_are_no_links` (guard; mutant: `known` accepts any host) |
 | A19 | In a sandboxed session with a shared project, activating `file:///work/<project>/readme.txt` opens a confirmation naming the host path; **Open** calls `opener.open` with that host path | US3.7, FR-018, FR-018a | example | PENDING | |
 | A20 | A right press over a link opens the terminal menu with **Open Link** and **Copy Link Address** ahead of today's items | US4.1, FR-020 | example | PENDING | |
 | A21 | Choosing **Copy Link Address** on a declared link writes its declared address to the clipboard, and on a wrapped detected link the complete unwrapped address | US4.2, FR-021 | example | PENDING | |
@@ -65,7 +65,7 @@ rendered pixels — is covered by the quickstart §B visual pass.
 Guards, green on arrival, each with the deliberate mutant that shows its red:
 
 - A5: selection already works and nothing opens before T029. Mutant: `link_gesture` activates on a press without the Ctrl/Cmd modifier.
-- A18: after T011 these addresses are already `NotFollowable`. Mutants: `classify` returns `Web` for `javascript:`; the `File` branch of `resolve` accepts any host.
+- A18: after T011 these addresses are already `NotFollowable`. Mutants: `classify` returns `Web` for `javascript:`; the `File` branch of `resolve` accepts any host — the second was run in Cycle 70 and fails it.
 - A22: the menu has no link items before T073. Mutant: `link_menu_items(None)` returns both items.
 
 ## Inner loop: unit behaviors
@@ -131,10 +131,10 @@ Guards, green on arrival, each with the deliberate mutant that shows its red:
 | U28 | `http`/`https` classify as `Web` and `mailto` as `Mail`, verbatim | FR-010, C1, C2 | example | DONE | `crates/micold-core/src/link/address.rs::tests::web_and_mail_addresses_classify_verbatim` |
 | U29 | Scheme classification is ASCII case-insensitive | FR-011 | example | DONE | `crates/micold-core/src/link/address.rs::tests::the_scheme_classifies_whatever_its_case` |
 | U30 | `vscode:`, `slack:`, `zoommtg:`, `javascript:`, `data:`, `vbscript:` and an unknown scheme classify as `NotFollowable` | FR-011, C3 | example | DONE | `crates/micold-core/src/link/address.rs::tests::application_script_data_and_unknown_schemes_are_not_followable` |
-| U31 | `file://host/path` classifies as `File { host, path }` with `%20` decoded to a space | FR-012, C9 | example | PENDING | |
-| U32 | An invalid percent escape, or a decoding that is not UTF-8, classifies as `NotFollowable` | FR-012, C10 | example | PENDING | |
+| U31 | `file://host/path` classifies as `File { host, path }` with `%20` decoded to a space | FR-012, C9 | example | DONE | `crates/micold-core/src/link/address.rs::tests::a_file_address_carries_its_host_and_its_decoded_path` |
+| U32 | An invalid percent escape, or a decoding that is not UTF-8, classifies as `NotFollowable` | FR-012, C10 | example | DONE | `crates/micold-core/src/link/address.rs::tests::a_file_path_that_cannot_be_decoded_is_not_followable` (guard; mutant: an invalid escape passes through) |
 
-U32 is a guard: `file:` is `NotFollowable` until T046. Its red is shown after T046 by a decoder that passes an invalid escape through literally.
+U32 is a guard: `file:` was `NotFollowable` until T046. Its red was shown in Cycle 69 by a decoder that passes an invalid escape through literally.
 
 ### `crates/micold-core/src/link/resolve.rs`
 
@@ -142,18 +142,18 @@ U32 is a guard: `file:` is `NotFollowable` until T046. Its red is shown after T0
 | --- | -------- | ------ | ---- | ----- | ---- |
 | U33 | A web or mail link resolves to `Url(address)` with `display == address` and no confirmation | FR-008, C1, C2 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::a_web_or_mail_link_opens_its_address_as_shown` |
 | U34 | A declared non-followable URI resolves to `None` | FR-011, C3 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::a_declared_uri_that_is_not_followable_resolves_to_nothing` |
-| U35 | A `file` link with host empty, `localhost` or one of `host_names` (any ASCII case) resolves to `HostPath(path)` | FR-012, C4, C5 | example | PENDING | |
-| U36 | A `file` link naming another host, including `file://server/share/…` and an unresolvable `file://build-host.invalid/…`, resolves to `None` with no lookup | FR-012, US3.6, C6, C18 | example | PENDING | |
-| U37 | With `windows_host`, `/C:/Users/x` resolves to `C:\Users\x`, and a path with no drive resolves to `None` | FR-012, C7, C8 | example | PENDING | |
+| U35 | A `file` link with host empty, `localhost` or one of `host_names` (any ASCII case) resolves to `HostPath(path)` | FR-012, C4, C5 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::a_file_link_to_this_machine_is_a_path_on_it` |
+| U36 | A `file` link naming another host, including `file://server/share/…` and an unresolvable `file://build-host.invalid/…`, resolves to `None` with no lookup | FR-012, US3.6, C6, C18 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::a_file_link_naming_another_machine_is_no_link` (guard; mutant: `known` accepts any host) |
+| U37 | With `windows_host`, `/C:/Users/x` resolves to `C:\Users\x`, and a path with no drive resolves to `None` | FR-012, C7, C8 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::on_a_windows_host_a_file_path_needs_a_drive` |
 | U38 | In a sandboxed context, the container id's 12-character prefix and the full id are accepted as hosts | FR-018, C11 | example | PENDING | |
 | U39 | A sandboxed path under a shared location resolves to that location's host path, with `needs_confirmation` | FR-018, FR-018a, C11 | example | PENDING | |
-| U41 | A sandboxed path under no shared location resolves to `Unreachable`, displayed as `<path> — not reachable from this machine` | FR-018, C12 | example | PENDING | |
+| U41 | A sandboxed path under no shared location resolves to `Unreachable`, displayed as `<path> — not reachable from this machine` | FR-018, C12 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::a_sandboxed_file_link_outside_every_shared_location_is_not_reachable` |
 | U46 | For every resolved link, `display` equals the string its target carries (`Url` and `HostPath`), sampled over every case above | SC-006 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::what_the_hint_shows_is_exactly_what_opens` |
 | U47 | In a sandboxed context, this machine's `host_names` still translate through the shared locations | FR-018, C17 | example | PENDING | |
-| U140 | `host_names_from` lists the full name and its first DNS label (`build.example.com` → both), a dotless name once, an empty name as none | FR-012 | example | PENDING | |
-| U141 | `container_host_names` gives a 64-character id's 12-character prefix and the full id, and a 12- or 8-character id once | FR-018, C11 | example | PENDING | |
+| U140 | `host_names_from` lists the full name and its first DNS label (`build.example.com` → both), a dotless name once, an empty name as none | FR-012 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::this_machines_names_are_its_hostname_and_its_first_dns_label` |
+| U141 | `container_host_names` gives a 64-character id's 12-character prefix and the full id, and a 12- or 8-character id once | FR-018, C11 | example | DONE | `crates/micold-core/src/link/resolve.rs::tests::a_containers_names_are_its_twelve_character_prefix_and_its_full_id` |
 
-U36 is a guard: `file:` resolves to `None` until T047. Its red is shown after T047 by a `File` branch that accepts any host.
+U36 is a guard: `file:` resolved to `None` until T047. Its red was shown in Cycle 70 by a `File` branch that accepts any host.
 
 U40, U42–U44 and U48 were placed on `sandbox/pathmap.rs` below; U46 is sampled by hand because the
 profile has no property library.
@@ -179,12 +179,12 @@ U49 is a guard: it is green on arrival. Its red is shown by adding `use std::fs;
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U50 | Linux and macOS: a file with any execute bit reveals; the same file with none opens | FR-013 | example | PENDING | |
-| U51 | Linux: each listed launcher extension (`AppImage` in any case) reveals; `.txt` opens | FR-013 | example | PENDING | |
-| U52 | macOS: a bundle directory (by extension or `is_bundle`) reveals; an ordinary folder opens | FR-013 | example | PENDING | |
-| U53 | macOS: each listed extension reveals | FR-013 | example | PENDING | |
-| U54 | Windows: `%PATHEXT%` entries and each listed extension reveal; the execute bit is ignored, so `.txt` with it opens | FR-013 | example | PENDING | |
-| U55 | Only the last extension counts: `x.exe.txt` opens and `x.txt.exe` reveals on Windows | FR-013 | example | PENDING | |
+| U50 | Linux and macOS: a file with any execute bit reveals; the same file with none opens | FR-013 | example | DONE | `crates/micold-core/src/link/runnable.rs::tests::on_linux_and_macos_the_execute_bit_reveals_the_file` |
+| U51 | Linux: each listed launcher extension (`AppImage` in any case) reveals; `.txt` opens | FR-013 | example | DONE | `crates/micold-core/src/link/runnable.rs::tests::on_linux_each_listed_launcher_extension_reveals` |
+| U52 | macOS: a bundle directory (by extension or `is_bundle`) reveals; an ordinary folder opens | FR-013 | example | DONE | `crates/micold-core/src/link/runnable.rs::tests::on_macos_a_bundle_directory_reveals_and_an_ordinary_folder_opens` |
+| U53 | macOS: each listed extension reveals | FR-013 | example | DONE | `crates/micold-core/src/link/runnable.rs::tests::on_macos_each_listed_extension_reveals` |
+| U54 | Windows: `%PATHEXT%` entries and each listed extension reveal; the execute bit is ignored, so `.txt` with it opens | FR-013 | example | DONE | `crates/micold-core/src/link/runnable.rs::tests::on_windows_the_extension_decides_and_the_execute_bit_is_ignored` |
+| U55 | Only the last extension counts: `x.exe.txt` opens and `x.txt.exe` reveals on Windows | FR-013 | example | DONE | `crates/micold-core/src/link/runnable.rs::tests::only_the_last_extension_counts` |
 
 ### `crates/micold-core/src/sandbox/pathmap.rs`
 
@@ -245,9 +245,9 @@ untouched code, and it is recorded as `BASELINE`.
 | U74 | `LinkOpenFinished` with `NoApplication` notifies `Couldn't open <address>: no application is set up to open it` | FR-015, T12 | example | DONE | `crates/micold-client/tests/features_session_links.rs::an_open_with_no_application_notifies_that_nothing_is_set_up` |
 | U75 | `LinkOpenFinished` with `LaunchFailed(e)` notifies `Couldn't open <address>: <e>` | FR-015, T12 | example | DONE | `crates/micold-client/tests/features_session_links.rs::a_failed_launch_notifies_the_reason` |
 | U76 | `LinkOpenFinished` with `Ok` notifies nothing | FR-015, T13 | example | DONE | `crates/micold-client/tests/features_session_links.rs::an_open_that_worked_notifies_nothing` |
-| U77 | `LinkOpenFinished` with `NotFound` notifies `Couldn't open <address>: the file doesn't exist on this machine` | FR-015, US3.5 | example | PENDING | |
-| U78 | `LinkActivated` with `HostPath(p)` and no confirmation emits `OpenLink(Path { path: p, address })` | FR-010, T6 | example | PENDING | |
-| U79 | `LinkActivated` with `Unreachable` notifies `Couldn't open <address>: the sandbox doesn't share that location with this machine` and emits no open | FR-015, FR-018, T8 | example | PENDING | |
+| U77 | `LinkOpenFinished` with `NotFound` notifies `Couldn't open <address>: the file doesn't exist on this machine` | FR-015, US3.5 | example | DONE | `crates/micold-client/tests/features_session_links.rs::an_open_of_a_file_that_is_not_there_notifies_that_it_does_not_exist` (mutant: the `NotFound` arm reports no application) |
+| U78 | `LinkActivated` with `HostPath(p)` and no confirmation emits `OpenLink(Path { path: p, address })` | FR-010, T6 | example | DONE | `crates/micold-client/tests/features_session_links.rs::activating_a_file_link_asks_to_open_its_host_path` |
+| U79 | `LinkActivated` with `Unreachable` notifies `Couldn't open <address>: the sandbox doesn't share that location with this machine` and emits no open | FR-015, FR-018, T8 | example | DONE | `crates/micold-client/tests/features_session_links.rs::activating_an_unreachable_link_opens_nothing_and_says_the_sandbox_does_not_share_it` |
 | U80 | `LinkActivated` needing confirmation records the pending open and shows the confirm surface with the host path | FR-018a, T7 | example | PENDING | |
 | U81 | Confirming while the session exists and the sandbox is live emits `OpenLink(Path)` | FR-018a, T9 | example | PENDING | |
 | U82 | Confirming after the session closed notifies `Couldn't open <host path>: the session has closed` and opens nothing | FR-018a, T9 | example | PENDING | |
@@ -274,10 +274,10 @@ untouched code, and it is recorded as `BASELINE`.
 | --- | -------- | ------ | ---- | ----- | ---- |
 | U93 | `LinkActivated` for a URL, through `update_inner`, calls `opener.open` with the URL verbatim | FR-010 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::activating_a_url_through_update_inner_opens_it_verbatim_and_without_delay` |
 | U94 | No timer or debounce stands between the `OpenLink` outcome and the opener call | SC-003 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::activating_a_url_through_update_inner_opens_it_verbatim_and_without_delay` |
-| U95 | An `OpenLink(Path)` for a missing path finishes with `NotFound` and calls no opener | FR-015, T11 | example | PENDING | |
-| U96 | An existing document or folder is passed to `opener.open` | FR-010, T11 | example | PENDING | |
-| U97 | On each CI OS, real runnable files of every kind that OS lists (including a symlink to an executable file, the extension-only kinds such as Linux `.desktop`/`.AppImage` and macOS `.command`, and inside a directory whose name has a space) are passed to `reveal` 100%, and `.txt`, `.png`, `.pdf`, `.html` to `open` 100% | FR-013, SC-007 | example | PENDING | |
-| U146 | macOS: a real directory without a bundle extension that holds `Contents/Info.plist` is passed to `reveal` | FR-013 | example | PENDING | |
+| U95 | An `OpenLink(Path)` for a missing path finishes with `NotFound` and calls no opener | FR-015, T11 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::opening_a_path_that_is_not_there_finishes_as_not_found_and_calls_no_opener` |
+| U96 | An existing document or folder is passed to `opener.open` | FR-010, T11 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::a_document_is_opened_and_a_runnable_file_is_revealed` |
+| U97 | On each CI OS, real runnable files of every kind that OS lists (including a symlink to an executable file, the extension-only kinds such as Linux `.desktop`/`.AppImage` and macOS `.command`, and inside a directory whose name has a space) are passed to `reveal` 100%, and `.txt`, `.png`, `.pdf`, `.html` to `open` 100% | FR-013, SC-007 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::every_runnable_kind_is_revealed_and_every_document_opened` (the macOS kinds run on CI's macOS leg) |
+| U146 | macOS: a real directory without a bundle extension that holds `Contents/Info.plist` is passed to `reveal` | FR-013 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::every_runnable_kind_is_revealed_and_every_document_opened` (macOS only; CI's macOS leg) |
 | U98 | `LinkOpenConfirmed` calls the opener when `App.sandbox` is `Running`, and notifies without calling it when the sandbox has stopped | FR-018a | example | PENDING | |
 | U99 | `ContextMenuCopyLinkAddress` through `update_inner` returns the clipboard write task rather than dropping it | FR-021 | example | PENDING | |
 | U100 | `ContextMenuOpenLink` on a URL link reaches the opener | FR-020 | example | PENDING | |
@@ -335,8 +335,8 @@ untouched code, and it is recorded as `BASELINE`.
 
 | id   | behavior | traces | kind | state | test |
 | ---- | -------- | ------ | ---- | ----- | ---- |
-| U134 | The pane's `LinkContext` is sandboxed exactly while the sandbox is `Running`/`Stale`, carrying its locations, denied paths and container-id host names; otherwise it has no sandbox part | FR-018 | example | PENDING | covered at the outer loop by A19 and A14 |
-| U136 | Boot fills `app::State.host_names` from `host_names_from(gethostname())` | FR-012 | example | PENDING | glue; the branching is U140, the wiring is covered at the outer loop by A12 |
+| U134 | The pane's `LinkContext` is sandboxed exactly while the sandbox is `Running`/`Stale`, carrying its locations, denied paths and container-id host names; otherwise it has no sandbox part | FR-018 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::a_declared_file_link_naming_this_host_opens_the_decoded_path` (glue, via `ui::terminal::link_context`) |
+| U136 | Boot fills `session::State.host_names` from `host_names_from(gethostname())` (it lives on the session feature's state, not flat on the root: G2) | FR-012 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::a_declared_file_link_naming_this_host_opens_the_decoded_path` (glue, via `shell::startup`) |
 
 These are glue (Constitution: glue is covered by the composed tests), so their test is the named
 acceptance behavior rather than a unit of their own. AI CLI and Regular Terminal panes are the same

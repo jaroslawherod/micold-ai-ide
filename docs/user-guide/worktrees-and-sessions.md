@@ -969,6 +969,21 @@ Web and mail addresses in a terminal are links, and so is text a program marked 
   a long address as several rows, so only the first row's piece is a link and it opens a truncated
   address. Check the label before you click; with `FORCE_HYPERLINK=1` the CLI declares the whole
   address instead.
+- **Files and folders on this computer.** A `file://` link — the kind `ls --hyperlink=always` prints
+  — opens a document in the application set up for it, and a folder in your file manager.
+- **A file your computer would run is shown, never run.** A program, a script with its execute bit
+  set, an installer or a launcher (`.desktop` and `.AppImage` on Linux, an app bundle, `.command` or
+  `.pkg` on macOS, `.exe`, `.bat`, `.ps1`, `.msi` and the rest of `%PATHEXT%` on Windows) is revealed
+  in your file manager with the file selected, so clicking a link can never start something.
+- **A file on another machine is not a link.** `file://otherhost/share/report.docx` names a file this
+  computer does not have, so it is not underlined and a click does nothing.
+- **A file that is not there.** If the file has been moved or deleted since the program printed it,
+  nothing opens and a notification says
+  `Couldn't open file:///home/you/notes.txt: the file doesn't exist on this machine`.
+- **Sessions in the sandbox.** A session running in the sandbox prints the paths it sees inside the
+  container, which are not this computer's paths. Their labels read
+  `/work/project/readme.txt — not reachable from this machine`, and a click opens nothing rather than
+  the wrong file.
 - **When it can't open.** If nothing on your computer is set up to open the address, or the
   browser fails to start, a notification says so, for example
   `Couldn't open https://example.com/docs: no application is set up to open it`.

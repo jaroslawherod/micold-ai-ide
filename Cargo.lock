@@ -2022,6 +2022,7 @@ dependencies = [
  "dark-light",
  "directories",
  "embed-resource",
+ "gethostname",
  "iced",
  "iced_renderer",
  "iced_runtime",

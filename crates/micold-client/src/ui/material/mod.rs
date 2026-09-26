@@ -179,7 +179,6 @@ pub use surface::{Kind as SurfaceKind, Surface};
 pub use tab::{content_colour as tab_content_colour, IndicatorEdge, Tab, WIDTH as TAB_WIDTH};
 pub use tab_strip::TabStrip;
 pub use tag::Tag;
-pub(crate) use terminal_pane::local_link_context;
 #[cfg(test)]
 pub(crate) use terminal_pane::scrollbar_metrics;
 pub use terminal_pane::target_offset_delta;
