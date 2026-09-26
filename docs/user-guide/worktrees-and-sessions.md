@@ -538,6 +538,12 @@ clears out that conversation's records.
 and that newer name is the one that comes back next time. Names are per session: re-titling one
 never touches another.
 
+**A name you chose in the CLI yourself is the one that sticks.** Rename a conversation in Claude
+Code — `/rename` — and that is the name the row keeps. The name the CLI had generated for it before
+does not come back, not when you reopen the project, not when the app looks the conversation up in
+the CLI's records again, and not when it meets that conversation for the first time on another
+machine.
+
 **Sessions from before this was true get their names back.** If you have sessions that were showing
 "New session" even though you had talked in them, opening the project is enough — each one is
 looked up in its own CLI's records, once, and keeps the name it finds, or failing a name, the first

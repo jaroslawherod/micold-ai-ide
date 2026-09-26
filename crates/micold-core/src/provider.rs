@@ -382,13 +382,19 @@ impl ClaudeProvider {
     /// The latest non-empty `{"type":"custom-title","customTitle":"…}` if there is one: that kind
     /// alone ranks above position, because `claude` re-emits the *pre-rename*
     /// `{"type":"ai-title","aiTitle":"…"}` on every turn after a `/rename`, so the last name record
-    /// written is not the current name (C16.1, BUG-002). Failing that, the latest `ai-title` by
-    /// position — the title grows and changes with the conversation.
+    /// written is not the current name (C16.1, BUG-002).
+    ///
+    /// Failing that, the latest `{"type":"agent-name","agentName":"…"}` **or** `ai-title` **by
+    /// position**. Those two stay positional rather than ranked by kind: they agree on every
+    /// observed transcript and `claude` writes `agent-name` last, so position gives today's answer,
+    /// and it stays right if a later `claude` re-titles a conversation without re-emitting
+    /// `agent-name` — where ranking that kind above position would pin an early name for ever,
+    /// which is this bug again.
     ///
     /// Best-effort: blank and unparseable lines are skipped, and an empty value is not a name.
     fn parse_title(&self, transcript: &str) -> Option<String> {
         let mut custom = None;
-        let mut latest = None;
+        let mut positional = None;
         for line in transcript.lines() {
             let line = line.trim();
             if line.is_empty() {
@@ -399,7 +405,8 @@ impl ClaudeProvider {
             };
             let (slot, field) = match value.get("type").and_then(|t| t.as_str()) {
                 Some("custom-title") => (&mut custom, "customTitle"),
-                Some("ai-title") => (&mut latest, "aiTitle"),
+                Some("agent-name") => (&mut positional, "agentName"),
+                Some("ai-title") => (&mut positional, "aiTitle"),
                 _ => continue,
             };
             if let Some(name) = value.get(field).and_then(|t| t.as_str()) {
@@ -408,7 +415,7 @@ impl ClaudeProvider {
                 }
             }
         }
-        custom.or(latest)
+        custom.or(positional)
     }
 }
 

@@ -454,3 +454,168 @@ fn a_rename_is_the_current_name_not_the_ai_title_it_replaced() {
          it is stale by construction and must not come back (C16.1)"
     );
 }
+
+#[test]
+fn an_agent_name_is_a_name_record_and_not_a_kind_to_ignore() {
+    // `agent-name` is `claude`'s resolved display name and one of the three name records C16.1
+    // resolves. The fixture gives it *alone*, with no `ai-title` to fall back on, on purpose: on
+    // every real transcript observed for BUG-002 the two carry the same string, so a fixture with
+    // both cannot tell a read that honours `agent-name` from one that ignores it.
+    let id = fixed_id();
+    let config = tempfile::tempdir().unwrap();
+    write_transcript(
+        config.path(),
+        CWD,
+        id,
+        &[
+            r#"{"type":"user","text":"hi"}"#,
+            r#"{"type":"agent-name","agentName":"Token usage optimization"}"#,
+            "",
+        ]
+        .join("\n"),
+    );
+
+    assert_eq!(
+        ClaudeProvider.read_title(config.path(), Path::new(CWD), id),
+        Some("Token usage optimization".to_string()),
+        "`agent-name` is a name record like the others, not a record kind to ignore (C16.1)"
+    );
+}
+
+#[test]
+fn an_ai_title_written_after_the_last_agent_name_wins_by_position() {
+    // The reason `agent-name` is *not* ranked above `ai-title` by kind: a later `claude` that
+    // re-titles a conversation without re-emitting `agent-name` must still read the new title. A
+    // kind ranking would pin the first `agent-name` for ever, which is BUG-002 again (C16.1, D4).
+    let id = fixed_id();
+    let config = tempfile::tempdir().unwrap();
+    write_transcript(
+        config.path(),
+        CWD,
+        id,
+        &[
+            r#"{"type":"ai-title","aiTitle":"An early guess"}"#,
+            r#"{"type":"agent-name","agentName":"An early guess"}"#,
+            r#"{"type":"ai-title","aiTitle":"What it turned out to be"}"#,
+            "",
+        ]
+        .join("\n"),
+    );
+
+    assert_eq!(
+        ClaudeProvider.read_title(config.path(), Path::new(CWD), id),
+        Some("What it turned out to be".to_string()),
+        "with neither kind renamed, the latest of `agent-name` and `ai-title` by position is the \
+         current name (C16.1)"
+    );
+}
+
+#[test]
+fn the_latest_custom_title_wins_however_early_it_sits() {
+    // Only `custom-title` ranks above position, and it does so from wherever it sits: the rename is
+    // sticky in `claude`'s records, so no number of later `ai-title`/`agent-name` lines unseats it.
+    // Two renames, and the later one is the name (C16.1).
+    let id = fixed_id();
+    let config = tempfile::tempdir().unwrap();
+    write_transcript(
+        config.path(),
+        CWD,
+        id,
+        &[
+            r#"{"type":"custom-title","customTitle":"First choice"}"#,
+            r#"{"type":"custom-title","customTitle":"What I settled on"}"#,
+            r#"{"type":"ai-title","aiTitle":"The CLI's own guess"}"#,
+            r#"{"type":"agent-name","agentName":"What I settled on"}"#,
+            r#"{"type":"ai-title","aiTitle":"A later guess still"}"#,
+            "",
+        ]
+        .join("\n"),
+    );
+
+    assert_eq!(
+        ClaudeProvider.read_title(config.path(), Path::new(CWD), id),
+        Some("What I settled on".to_string()),
+        "the latest `custom-title` outranks every later `ai-title`, and an earlier rename does not \
+         outrank a later one (C16.1)"
+    );
+}
+
+#[test]
+fn an_empty_name_in_any_record_kind_is_not_a_name() {
+    // C17: an empty value is a missing name, not a name — in all three kinds. Each falls through to
+    // whatever the remaining records say, and a transcript of nothing but empties reads `None`.
+    let config = tempfile::tempdir().unwrap();
+
+    let empty_custom = Uuid::from_u128(11);
+    write_transcript(
+        config.path(),
+        CWD,
+        empty_custom,
+        &[
+            r#"{"type":"custom-title","customTitle":""}"#,
+            r#"{"type":"ai-title","aiTitle":"The CLI's name"}"#,
+            "",
+        ]
+        .join("\n"),
+    );
+
+    let empty_agent = Uuid::from_u128(12);
+    write_transcript(
+        config.path(),
+        CWD,
+        empty_agent,
+        &[
+            r#"{"type":"ai-title","aiTitle":"The CLI's name"}"#,
+            r#"{"type":"agent-name","agentName":""}"#,
+            "",
+        ]
+        .join("\n"),
+    );
+
+    let all_empty = Uuid::from_u128(13);
+    write_transcript(
+        config.path(),
+        CWD,
+        all_empty,
+        &[
+            r#"{"type":"custom-title","customTitle":""}"#,
+            r#"{"type":"ai-title","aiTitle":""}"#,
+            r#"{"type":"agent-name","agentName":""}"#,
+            "",
+        ]
+        .join("\n"),
+    );
+
+    let unparsable_beside_a_rename = Uuid::from_u128(14);
+    write_transcript(
+        config.path(),
+        CWD,
+        unparsable_beside_a_rename,
+        &[
+            "not json at all",
+            r#"{"type":"custom-title","customTitle":"Survives the noise"}"#,
+            "{ broken json",
+            r#"{"type":"ai-title","aiTitle":"The replaced name"}"#,
+            "",
+        ]
+        .join("\n"),
+    );
+
+    let read = |id| ClaudeProvider.read_title(config.path(), Path::new(CWD), id);
+    assert_eq!(
+        read(empty_custom),
+        Some("The CLI's name".to_string()),
+        "an empty `customTitle` is not a rename, so it does not mask the CLI's own name"
+    );
+    assert_eq!(
+        read(empty_agent),
+        Some("The CLI's name".to_string()),
+        "an empty `agentName` is not a name, so the positional read falls through to the `ai-title`"
+    );
+    assert_eq!(read(all_empty), None, "nothing but empty values is no name");
+    assert_eq!(
+        read(unparsable_beside_a_rename),
+        Some("Survives the noise".to_string()),
+        "a read still never errors on unparsable lines, and still finds the rename (C17)"
+    );
+}
