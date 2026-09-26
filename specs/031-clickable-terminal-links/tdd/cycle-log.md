@@ -641,3 +641,16 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
 - passed on arrival: it guards cycle 60's strip. Mutant, `bash_command` ignoring `inherited` -> `the script's FORCE_HYPERLINK=1 is reported even though the resolver inherited the same value (contract §3): []`; restored with `git checkout` -> `env_include_resolve` 13 passed
 - Unix only: the PowerShell builders keep U67's `get_envs()` check, as this machine cannot run them
 - commit: `test(031): a real include diff reports an inherited identity variable it sets (U163)`
+
+## Cycle 65: the Windows arm of `session_identity_env.rs`, proven by CI
+
+- red, on CI (the evidence this arm can only have): PR #393 "build + test (windows-latest)" —
+  all four tests failed with `CreateProcessW "…\claude.cmd" … failed: %1 is not a valid Win32
+  application. (os error 193)`; run 35766841670, job 106879055673. Exactly the gap review B F3 named
+- green: the Windows stand-in is compiled with `rustc` once per test process and copied in as
+  `claude.exe`. A batch file is not an executable image, and neither spawn leaves room to wrap it in
+  `cmd.exe /C` (`spawn_shell` runs `COMSPEC` with no arguments of its own)
+- local: `scripts/build-lock.sh cargo test -p micold-daemon --test session_identity_env` -> 5 passed
+  (Unix arm unchanged); `cargo clippy --target x86_64-pc-windows-msvc -p micold-daemon --all-targets
+  -- -D warnings` clean; `mise run gate` -> `GATE_EXIT=0` (3433 passed)
+- commit: `fix(031): the Windows stand-in is a compiled exe, not a .cmd CreateProcessW refuses`
