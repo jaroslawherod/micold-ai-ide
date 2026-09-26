@@ -335,8 +335,8 @@ untouched code, and it is recorded as `BASELINE`.
 
 | id   | behavior | traces | kind | state | test |
 | ---- | -------- | ------ | ---- | ----- | ---- |
-| U134 | The pane's `LinkContext` is sandboxed exactly while the sandbox is `Running`/`Stale`, carrying its locations, denied paths and container-id host names; otherwise it has no sandbox part | FR-018 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::a_declared_file_link_naming_this_host_opens_the_decoded_path` (glue, via `ui::terminal::link_context`) |
-| U136 | Boot fills `session::State.host_names` from `host_names_from(gethostname())` (it lives on the session feature's state, not flat on the root: G2) | FR-012 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::a_declared_file_link_naming_this_host_opens_the_decoded_path` (glue, via `shell::startup`) |
+| U134 | The pane's `LinkContext` is sandboxed exactly while the sandbox is `Running`/`Stale`, carrying its locations, denied paths and container-id host names; otherwise it has no sandbox part | FR-018 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::{a_declared_file_link_naming_this_host_opens_the_decoded_path, a_file_link_in_a_sandboxed_session_reaches_nothing_and_says_why}` (glue, via `ui::terminal::link_context`; the locations and denied paths arrive with M6) |
+| U136 | Boot fills `session::State.host_names` from `host_names_from(gethostname())` (it lives on the session feature's state, not flat on the root: G2) | FR-012 | example | DONE | `crates/micold-client/src/shell/startup.rs::tests::boot_names_this_machine_from_its_hostname`, with the pane's use of it in `shell/links.rs::acceptance::a_declared_file_link_naming_this_host_opens_the_decoded_path` |
 
 These are glue (Constitution: glue is covered by the composed tests), so their test is the named
 acceptance behavior rather than a unit of their own. AI CLI and Regular Terminal panes are the same

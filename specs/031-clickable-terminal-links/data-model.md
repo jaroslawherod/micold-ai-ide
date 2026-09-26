@@ -118,7 +118,7 @@ new values live there and its signature does not change:
 | Owner | Field | Type | Meaning |
 |---|---|---|---|
 | `features::sandbox::Sandbox` | `locations` | `Option<SandboxLocations { shared: Vec<SharedLocation>, denied: Vec<String> }>` | Set by `started(started, locations)`. `locations()` returns it only while the state is `Running` or `Stale`; every other transition, and `for_placement` (which `shell/persist.rs::apply_placement` calls), drops it (R10) |
-| `app::State` | `host_names` | `Vec<String>` | Read once at boot through `gethostname` in `main.rs`; empty by `Default` in tests |
+| `features::session::State` | `host_names` | `Vec<String>` | Read once at boot through `gethostname` in `shell/startup.rs::boot` (Decision 33: a flat root field fails G2); empty by `Default` in tests |
 
 `ui/terminal.rs::pane` builds the `LinkContext`: `host_names` from `state`, `windows_host` from
 `cfg!(windows)`, and `sandbox = Some` **iff** `sandbox.locations()` is `Some`, which holds only while

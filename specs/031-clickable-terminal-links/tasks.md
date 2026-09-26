@@ -282,7 +282,7 @@ the `env_include.rs` builders (plan, Target Platform).
 
 ### Tests for US3: host file links ⚠️ write first, must fail
 
-- [X] T084 [US3] [A12] [A14] [A15] [A16] [A17] [A18] Outer-loop acceptance tests in `mod acceptance` of `crates/micold-client/src/shell/links.rs`, over real files in a `tempfile` directory and `app::State.host_names` set to a known name: A18 is a guard, green on arrival (after T011 those addresses are already `NotFollowable`); its red is shown by the mutant in `tdd/test-list.md`.
+- [X] T084 [US3] [A12] [A14] [A15] [A16] [A17] [A18] Outer-loop acceptance tests in `mod acceptance` of `crates/micold-client/src/shell/links.rs`, over real files in a `tempfile` directory and the session feature's `host_names` set to a known name (Decision 33): A18 is a guard, green on arrival (after T011 those addresses are already `NotFollowable`); its red is shown by the mutant in `tdd/test-list.md`.
   - A12: a declared `file://<host name><dir>/readme%20a.txt` link calls `opener.open` with the decoded existing path.
   - A14: a `file://` link to an existing document calls `opener.open` with its path.
   - A15: a `file://` link to an existing folder calls `opener.open` with the folder path.
@@ -324,7 +324,7 @@ the `env_include.rs` builders (plan, Target Platform).
   - Sandboxed: `Unreachable` for now. T062 adds translation.
 - [X] T048 [US3] [U50] [U51] [U52] [U53] [U54] [U55] Implement `HostPlatform { Linux, MacOs, Windows }`, `FileFacts { kind: Kind{File, Dir}, any_exec_bit: bool, is_bundle: bool }`, `FileAction { Open, Reveal }` and `action_for`, with FR-013's lists verbatim, in `crates/micold-core/src/link/runnable.rs` (declared by T043).
 - [X] T088 [US3] [U140] [U141] Implement `host_names_from` and `container_host_names` in `crates/micold-core/src/link/resolve.rs`, re-exported from `link`.
-- [X] T049 [US3] [U136] Add `app::State.host_names: Vec<String>` (empty by `Default`) in `crates/micold-client/src/app.rs`. `crates/micold-client/src/main.rs` fills it at boot with `link::host_names_from(&gethostname().to_string_lossy())` (glue). Add `gethostname = "1.1"` to `crates/micold-client/Cargo.toml` (already in `Cargo.lock`).
+- [X] T049 [US3] [U136] Add `features::session::State.host_names: Vec<String>` (empty by `Default`) in `crates/micold-client/src/features/session.rs` — not flat on `app::State`, which `tests/root_state_is_shared.rs` (G2) refuses; see Decision 33. `crates/micold-client/src/shell/startup.rs::boot` fills it at boot with `host_names_at_boot()`, which reads `link::host_names_from(&gethostname().to_string_lossy())` (glue). Add `gethostname = "1.1"` to `crates/micold-client/Cargo.toml` (already in `Cargo.lock`).
 - [X] T050 [US3] [U134] In `crates/micold-client/src/ui/terminal.rs`, build the `LinkContext` with `host_names` from `state.host_names`. While `sandbox.state` is `Running(id)` or `Stale(id)`, set `sandbox = Some(SandboxLinkContext { host_names: link::container_host_names(id), locations: vec![], denied: vec![] })`; otherwise `None`. So every sandboxed file link is "not reachable" until T066 (glue).
 - [X] T051 [US3] [U95] [U96] [U97] [U146] [A12] [A14] [A15] [A16] `perform(OpenRequest::Path { path, address })` in `crates/micold-client/src/shell/links.rs`, in one `spawn_blocking` task.
   - `std::fs::metadata(path)` follows symlinks. `NotFound` gives `LinkOpenFinished { address, result: Err(NotFound) }`.

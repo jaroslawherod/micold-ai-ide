@@ -318,8 +318,7 @@ fn boot() -> (App, Task<Message>) {
     // FR-012). Reading the hostname is I/O, so the shell does it once here and the pure resolver
     // compares against the names — `ls --hyperlink=always` prints whichever of the two the machine
     // answers to, and a link naming any other host is a file on another machine.
-    core.session.host_names =
-        micold_core::link::host_names_from(&gethostname::gethostname().to_string_lossy());
+    core.session.host_names = host_names_at_boot();
     // If a project is already active from a previous run, discover its worktrees for the initial
     // render. Session recovery from transcripts is now the daemon's responsibility (it owns
     // sessions); the client adopts them from the welcome catalog on connect (T055).
@@ -397,9 +396,18 @@ fn boot() -> (App, Task<Message>) {
     )
 }
 
+/// The names this machine answers to, read once at boot (feature 031, FR-012, U136).
+///
+/// Reading the hostname is I/O, so it happens here and `micold_core::link` stays pure.
+fn host_names_at_boot() -> Vec<String> {
+    micold_core::link::host_names_from(&gethostname::gethostname().to_string_lossy())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{restore_catalog, restore_from_disk, window_settings, MIN_WINDOW_SIZE};
+    use super::{
+        host_names_at_boot, restore_catalog, restore_from_disk, window_settings, MIN_WINDOW_SIZE,
+    };
     use micold_client::app::State;
     use micold_core::fs_scan::FakeFolderScanner;
     use micold_core::project::{Availability, Project};
@@ -625,6 +633,23 @@ mod tests {
             window_settings().min_size,
             Some(MIN_WINDOW_SIZE),
             "no minimum window size, so there is no narrowest supported width to hold the layout to"
+        );
+    }
+
+    /// U136: boot names this machine, so a `file://<this host>/…` link printed in a session is a
+    /// link at all. The hostname is read here, which is why no pure test can cover it.
+    #[test]
+    fn boot_names_this_machine_from_its_hostname() {
+        let names = host_names_at_boot();
+        assert_eq!(
+            names,
+            micold_core::link::host_names_from(&gethostname::gethostname().to_string_lossy()),
+            "the names are this machine's hostname and that name's first DNS label (FR-012)"
+        );
+        assert!(
+            !names.is_empty(),
+            "a machine always answers to something: empty names make every hostname-qualified \
+             file link a file on another machine"
         );
     }
 }

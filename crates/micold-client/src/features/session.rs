@@ -80,7 +80,7 @@ pub struct State {
     /// The names this machine answers to: its hostname and that name's first DNS label (feature
     /// 031, FR-012).
     ///
-    /// Filled once at boot by `main.rs` from `link::host_names_from(gethostname())` — reading the
+    /// Filled once at boot by `shell::startup::boot` from `link::host_names_from(gethostname())` — reading the
     /// hostname is I/O, which the shell owns, and the names never change while the window is open.
     /// A `file://` link whose host is one of these names points at this machine, so it opens; every
     /// other name is another machine and is no link at all. Empty by `Default`, which is the safe
@@ -1492,7 +1492,9 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
 /// What activating `link` asks for (contract link-opening §3, O1, O2, O5).
 ///
 /// A confirmation before a sandboxed path opens arrives with M6 (T7/T9); until then a sandboxed
-/// path never reaches here as a `HostPath`, because `resolve` reports it as `Unreachable`.
+/// path never reaches here as a `HostPath`, because `resolve` reports it as `Unreachable`. A path
+/// that is nevertheless marked as needing one opens nothing, so the confirmation O3 requires cannot
+/// be skipped by a resolver that sets the flag before M6 builds the surface.
 fn link_activated(
     state: &mut crate::app::State,
     link: micold_core::link::ResolvedLink,
@@ -1501,6 +1503,7 @@ fn link_activated(
     use micold_core::link::Target;
     match link.target {
         Target::Url(address) => vec![Outcome::OpenLink(OpenRequest::Url(address))],
+        Target::HostPath(_) if link.needs_confirmation => Vec::new(),
         Target::HostPath(path) => vec![Outcome::OpenLink(OpenRequest::Path {
             path,
             // The address the program printed, so a failure is reported against what the user read.

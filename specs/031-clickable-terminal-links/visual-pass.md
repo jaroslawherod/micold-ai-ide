@@ -245,3 +245,135 @@ is known to declare links.
 ![B.17 Claude Code v2.1.280](images/m4-b17-declared-claude-version.png)
 ![B.17 FORCE_HYPERLINK reaches the session](images/m4-b17-declared-force-hyperlink-confirmed.png)
 ![B.17 no hover feedback in that run](images/m4-b17-declared-no-hover-feedback.png)
+
+---
+
+# Milestone M5 (quickstart §B.9, §B.10, §B.13)
+
+**Date**: 2026-09-26
+**Environment**: private Xvfb display `:92` (1600×1400×24, no window manager), Mesa lavapipe
+(`WGPU_BACKEND=vulkan`, `lvp_icd.json`), `XDG_RUNTIME_DIR=/tmp/vp92`, private `XDG_DATA_HOME`
+(`/tmp/vp92/data`) and `XDG_CONFIG_HOME` (`/tmp/vp92/config`), one seeded project
+(`/tmp/vp92/project`, an initialized git repo) via a hand-written `projects.json` (the client binary
+has no CLI). `/tmp/vp92/fakebin` was put first on `PATH`, holding a fake `xdg-open` and a fake
+`dbus-send`, both of which append their full argv to `/tmp/vp92/opener.log` and exit 0 instead of
+doing anything real — the same technique milestone M3 used for URL/mailto opens, extended here to
+the file-manager `ShowItems` call `reveal_linux` makes. Not a real display or GPU: perceived
+smoothness is out of scope and nothing below depends on it.
+
+**Scope**: quickstart §B.9, §B.10 and §B.13 only, per the milestone's ask (M5: file:// links open
+documents and folders, runnable files are revealed and never run, a missing file notifies "doesn't
+exist").
+
+## Binaries and pin check
+
+| Pin dir | Built from | Build output |
+|---|---|---|
+| `~/vp/bin-031-m5/` | this branch (`feat/links-in-terminal-should-be-clickable`) at `1c3b0bdf`, clean tree, one `cargo build -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon` (`Compiling micold-client v0.15.0`, daemon already current from an earlier build at the same commit) | matched `md5sum` between `target-shared/debug/{micold-ai-ide,micold-daemon}` and the pin dir, copied immediately after the build finished |
+
+- Pin check: `strings <bin> | grep -c "doesn't exist on this machine"` (the FR-015 notification text
+  this milestone's code path adds, `crates/micold-client/src/shell/links.rs`) gives **1** for
+  `micold-ai-ide` and **0** for `micold-daemon` — expected, since the missing-file notification text
+  lives client-side.
+- **Connects**: confirmed by using the pinned pair to drive the whole session below (worktree list,
+  a running terminal session, hover and clicks all worked); no `refusing client: contract or build
+  mismatch` line, and no crash, over the whole run.
+
+## Fixture
+
+`specs/031-clickable-terminal-links/scripts/links-fixture.sh` was run inside a plain shell tab (the
+client tried to start an AI CLI by default, printed `Command 'usage' not found` — no `claude`
+executable reachable in this sandboxed `PATH` — and dropped to an interactive shell in the same
+pane; this still exercises the identical terminal-pane widget the fixture targets, independent of
+what program runs inside the PTY). It created `/tmp/031-fixture/{readme.txt,run.sh,folder}` and
+printed the fixture's file:// lines among the others.
+
+Locating each link's on-screen position precisely (rather than eyeballing) was done by measuring
+text-pixel column extents per row with Pillow against the raw screenshot, and used to compute exact
+per-character pixel width from a line of known text length; each candidate coordinate was then
+confirmed by hovering and checking for the underline in a cropped, magnified screenshot before any
+click.
+
+## Steps
+
+| Step | Result |
+|---|---|
+| B.9 Ctrl+click `readme.txt`, then `folder` | **Pass** |
+| B.10 Ctrl+click `run.sh` | **Pass** |
+| B.13 move `readme.txt` away, Ctrl+click it | **Pass** |
+
+### B.9 — Ctrl+click `readme.txt`, then `folder` — pass
+
+Hovering `file://<hostname>/tmp/031-fixture/readme.txt` underlined the whole address (screenshot
+below). Ctrl+click on it appended exactly one line to `opener.log`:
+
+```
+xdg-open /tmp/031-fixture/readme.txt
+```
+
+— the plain host path, handed to the system opener as a document (`FileAction::Open`, since it is a
+regular file with no execute bit) — "the text editor opens it".
+
+Hovering `file:///tmp/031-fixture/folder` (a plain directory, not a macOS bundle) also underlined the
+whole address. Ctrl+click appended:
+
+```
+xdg-open /tmp/031-fixture/folder
+```
+
+A plain directory is also `FileAction::Open` (`crates/micold-core/src/link/runnable.rs`: only
+specific launcher/installer extensions and, on macOS, bundle directories are `Reveal` — an ordinary
+folder is handed to the opener like a document), and `xdg-open` on a directory is exactly how a
+Linux file manager opens it as its own window — "the file manager opens the folder" is `xdg-open`
+opening it, not a `ShowItems` select.
+
+![B.9 readme.txt and run.sh, hover underline](images/m5-b9-readme-underline.png) — hover underline on
+`file://.../readme.txt`, taken right after its Ctrl+click (the two lines below, `run.sh` and
+`folder`, not yet activated).
+
+### B.10 — Ctrl+click `run.sh` — pass
+
+`run.sh` has its execute bit set (`chmod +x` in the fixture script) and no bundle exception applies,
+so `action_for` classifies it `Reveal`. Hovering it underlined the address (screenshot below).
+Ctrl+click appended:
+
+```
+dbus-send --session --print-reply --dest=org.freedesktop.FileManager1 --type=method_call /org/freedesktop/FileManager1 org.freedesktop.FileManager1.ShowItems array:string:file:///tmp/031-fixture/run.sh string:
+```
+
+— `reveal_linux`'s `ShowItems` call, selecting the file itself in the file manager ("the file manager
+shows it selected"). The fake `dbus-send` exits 0 (simulating a file manager that answers), so the
+`xdg-open <parent-folder>` fallback path was not exercised in this run; that fallback is exact
+`xdg-open` on `run.sh`'s parent folder, which is exercised by
+`linux_reveal_opens_the_folder_when_the_file_manager_cannot_select_the_item` in
+`crates/micold-client/src/shell/link_opener.rs` under `mise run gate`, not re-verified here.
+Critically, `run.sh` was never executed: the fixture's `run.sh` prints `run.sh ran: it should have
+been revealed, not run` if it runs, and no such text ever appeared anywhere in the pane's scrollback
+after the click (screenshot below shows the pane immediately after the click — only the link lines,
+the prompt, and the hint tooltip naming the file, no execution output).
+
+![B.10 run.sh, hover underline and hint after Ctrl+click](images/m5-b10-runsh-underline.png) — hover
+underline on `file:///tmp/031-fixture/run.sh`.
+
+### B.13 — move `readme.txt` away, Ctrl+click it — pass
+
+`readme.txt` was renamed out from under the same address (`mv readme.txt readme-moved.txt`, same
+directory) so the link's address no longer resolves to an existing file, then Ctrl+clicked at the
+same on-screen position as in B.9. `opener.log` gained **no** new line (the shell never launched an
+opener for a file that isn't there), and a notification appeared:
+
+> Couldn't open file://\<hostname\>/tmp/031-fixture/readme.txt: the file doesn't exist on this
+> machine
+
+naming the full address and stating "doesn't exist", exactly the string
+`crates/micold-client/src/shell/links.rs` builds for `OpenFailure::NotFound` (FR-015).
+
+![B.13 missing-file notification](images/m5-b13-missing-file-notification.png)
+
+## Not covered (out of scope this milestone)
+
+- Every other quickstart §B step (B.1–B.8, B.11, B.12, B.14–B.18) — covered by milestones M3/M4 or
+  not yet run; only B.9, B.10 and B.13 were in scope for this pass.
+- The real freedesktop file-manager `ShowItems` answer and its "no file manager available" fallback
+  — simulated with a fake `dbus-send` that always answers; the fallback path already has its own
+  gated unit test (`link_opener.rs`, cited above) and was not re-run here.

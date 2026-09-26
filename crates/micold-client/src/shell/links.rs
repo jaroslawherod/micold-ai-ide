@@ -238,31 +238,106 @@ mod tests {
             std::os::unix::fs::symlink(&kinds[0], &link).expect("symlink to an executable file");
             kinds.push(link);
         }
+        // FR-013's list for this platform, transcribed from the spec, every entry as a real file —
+        // SC-007 asks for one file of every runnable kind, not a sample.
         #[cfg(target_os = "linux")]
-        for name in ["app.desktop", "Tool.AppImage"] {
-            let path = dir.join(name);
-            std::fs::write(&path, b"x").expect("write a launcher");
+        let extensions: &[&str] = &[
+            "desktop",
+            "appimage",
+            "jar",
+            "deb",
+            "rpm",
+            "snap",
+            "flatpak",
+            "flatpakref",
+            "run",
+        ];
+        #[cfg(target_os = "macos")]
+        let extensions: &[&str] = &[
+            "app",
+            "command",
+            "terminal",
+            "tool",
+            "pkg",
+            "mpkg",
+            "jar",
+            "workflow",
+            "action",
+            "scpt",
+            "applescript",
+            "webloc",
+            "fileloc",
+            "inetloc",
+            "url",
+            "shortcut",
+        ];
+        #[cfg(windows)]
+        let extensions: &[&str] = &[
+            "exe",
+            "com",
+            "bat",
+            "cmd",
+            "ps1",
+            "psm1",
+            "vbs",
+            "vbe",
+            "js",
+            "jse",
+            "wsf",
+            "wsh",
+            "hta",
+            "scr",
+            "pif",
+            "cpl",
+            "msc",
+            "msi",
+            "msp",
+            "reg",
+            "lnk",
+            "url",
+            "jar",
+            "appref-ms",
+            "application",
+            "appx",
+            "msix",
+            "chm",
+            "inf",
+            "scf",
+            "settingcontent-ms",
+            "library-ms",
+            "search-ms",
+        ];
+        for (index, extension) in extensions.iter().enumerate() {
+            // A distinct stem per entry, and mixed case on one of them, so an extension that only
+            // matches lowercase fails here.
+            let stem = if index == 0 { "Thing" } else { "thing" };
+            let path = dir.join(format!("{stem}.{extension}"));
+            std::fs::write(&path, b"x").expect("write a runnable file");
             kinds.push(path);
         }
         #[cfg(target_os = "macos")]
         {
-            let bundle = dir.join("Thing.app");
-            std::fs::create_dir_all(bundle.join("Contents")).expect("create a bundle");
-            kinds.push(bundle);
+            // A folder is runnable on macOS only as a bundle, by its extension or by what it holds
+            // (FR-013's Folders bullet, U146).
+            for extension in [
+                "app",
+                "bundle",
+                "framework",
+                "plugin",
+                "kext",
+                "prefPane",
+                "appex",
+                "xpc",
+            ] {
+                let bundle = dir.join(format!("Bundled.{extension}"));
+                std::fs::create_dir_all(bundle.join("Contents")).expect("create a bundle");
+                kinds.push(bundle);
+            }
             // U146: a bundle the Finder knows only by what it holds.
             let plain = dir.join("Plain");
             std::fs::create_dir_all(plain.join("Contents")).expect("create a directory");
             std::fs::write(plain.join("Contents/Info.plist"), b"<plist/>").expect("write a plist");
             kinds.push(plain);
-            let command = dir.join("run.command");
-            std::fs::write(&command, b"echo hi\n").expect("write a .command file");
-            kinds.push(command);
-        }
-        #[cfg(windows)]
-        for name in ["a.exe", "b.ps1", "c.cmd", "d.vbs"] {
-            let path = dir.join(name);
-            std::fs::write(&path, b"x").expect("write a runnable file");
-            kinds.push(path);
         }
         kinds
     }
@@ -1133,6 +1208,8 @@ mod acceptance {
                 "{address} is not offered as a link (US3.6, FR-011, FR-012)"
             );
             session.hold(keyboard::Modifiers::empty());
+            // The whole gesture, not only the hover: A18 asks that activating them opens nothing.
+            session.activate(3, 0);
             assert_eq!(
                 session.opened(),
                 Vec::<String>::new(),
@@ -1140,5 +1217,31 @@ mod acceptance {
             );
             assert!(session.revealed().is_empty(), "{address} reveals nothing");
         }
+    }
+
+    /// A19's M5 half (U134): inside a sandboxed session every host path is out of reach until M6
+    /// translates it, and the hint says so rather than pointing at this machine's own file (C12).
+    #[test]
+    fn a_file_link_in_a_sandboxed_session_reaches_nothing_and_says_why() {
+        use micold_core::sandbox::lifecycle::SandboxState;
+        let address = "file:///tmp/x";
+        let mut session = Session::on_screen(vec![line(address)]).named(&["devbox"]);
+        session.app.sandbox.state = SandboxState::Running(
+            micold_core::sandbox::runtime::ContainerId("0123456789abcdef0123".to_string()),
+        );
+        session.activate(3, 0);
+        assert_eq!(
+            session.opened(),
+            Vec::<String>::new(),
+            "a container path opens nothing on this machine (C12)"
+        );
+        assert!(session.revealed().is_empty(), "and reveals nothing");
+        assert_eq!(
+            session.notifications(),
+            vec![format!(
+                "Couldn't open {address}: the sandbox doesn't share that location with this machine"
+            )],
+            "the user is told why, in the contract's words (FR-015, contract link-opening §5)"
+        );
     }
 }
