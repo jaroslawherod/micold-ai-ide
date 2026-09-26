@@ -725,3 +725,19 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
   another machine …` `left: Some(HostPath("/x"))` / `right: None`. That is also A18's second mutant.
   Restored by the reverse edit, suite green again
 - refactor: the Windows rule is its own `windows_path`, so `file` reads as the host rule it is
+
+## Cycle 71: U50–U55 `runnable::action_for`
+
+- tests: `crates/micold-core/src/link/runnable.rs::tests::*` — six tests, one per platform rule
+  (T043). FR-013's four extension lists are transcribed **into the test module** rather than read
+  from the production constants, so dropping an entry fails here
+- deviation: the first draft of this file was written with its implementation. It was cut back to a
+  stub (`action_for` returning `Open`) before anything was run, so the red below is a real one
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::runnable` -> 0 passed; 6 failed,
+  e.g. `thing.exe is run by Windows, so it is shown (FR-013)` `left: Open` / `right: Reveal`
+- green: `HostPlatform`, `Kind`, `FileFacts`, `FileAction` and `action_for` with FR-013's lists
+  verbatim, the last extension only and ASCII case-insensitive comparison; `%PATHEXT%` entries are
+  matched with their leading dot trimmed (T048). `runnable` is declared by `link/mod.rs` and added to
+  T007's `include_str!` list in the same change -> 6 passed;
+  `cargo test -p micold-core --all-targets` 0 failed (the FR-019 no-I/O guard covers the new module)
+- refactor: the shared Unix rule is the named `unix_bit`, read by the Linux and macOS arms
