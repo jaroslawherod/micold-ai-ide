@@ -706,3 +706,22 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
   `left: File { host: "", path: "/p/%ZZ" }` / `right: NotFollowable`. Restored by the reverse edit,
   suite green again
 - refactor: none
+
+## Cycle 70: U35, U36, U37, U41, U46 — the `File` branch of `resolve`
+
+- tests: `crates/micold-core/src/link/resolve.rs::tests::{a_file_link_to_this_machine_is_a_path_on_it, a_file_link_naming_another_machine_is_no_link, on_a_windows_host_a_file_path_needs_a_drive, a_sandboxed_file_link_outside_every_shared_location_is_not_reachable}`,
+  and `what_the_hint_shows_is_exactly_what_opens` extended over both contexts and `HostPath` (T042).
+  The T006 placeholder `a_file_link_resolves_to_nothing_before_file_links_land` is replaced by them
+- red: `scripts/build-lock.sh cargo test -p micold-core --lib link::resolve` -> 5 passed; 4 failed.
+  U35 `left: None` / `right: Some(ResolvedLink { … HostPath("/home/u/a.txt") … })`; U37
+  `left: None` / `right: Some(HostPath("C:\\Users\\u\\a.txt"))`; U41 `left: None` /
+  `right: Some(… Unreachable(NotShared), display "/tmp/x — not reachable from this machine")`;
+  U46 `left: 6` / `right: 8`
+- green: `fn file` — the host must be empty, `localhost`, or one of this machine's or the sandbox's
+  names (ASCII case-insensitively, no lookup); a sandboxed session answers `Unreachable` until M6;
+  otherwise `HostPath`, through `windows_path` when the host is Windows (T047) ->
+  `cargo test -p micold-core --all-targets` 0 failed
+- U36 is a guard; its mutant (`known` accepting any host) fails it: `file://otherhost/x is a file on
+  another machine …` `left: Some(HostPath("/x"))` / `right: None`. That is also A18's second mutant.
+  Restored by the reverse edit, suite green again
+- refactor: the Windows rule is its own `windows_path`, so `file` reads as the host rule it is

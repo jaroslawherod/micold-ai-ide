@@ -97,7 +97,7 @@ const CONTAINER_ID_PREFIX: usize = 12;
 
 /// What `link` opens on this machine, or `None` when it is not followable here (FR-008, FR-012,
 /// FR-018).
-pub fn resolve(link: Link, _ctx: &LinkContext) -> Option<ResolvedLink> {
+pub fn resolve(link: Link, ctx: &LinkContext) -> Option<ResolvedLink> {
     match classify(&link.address) {
         Address::Web(address) | Address::Mail(address) => Some(ResolvedLink {
             link,
@@ -105,9 +105,57 @@ pub fn resolve(link: Link, _ctx: &LinkContext) -> Option<ResolvedLink> {
             target: Target::Url(address),
             needs_confirmation: false,
         }),
-        // The `File` branch is Cycle 70; until then a file link opens nothing.
-        Address::File { .. } | Address::NotFollowable => None,
+        Address::File { host, path } => file(link, &host, &path, ctx),
+        Address::NotFollowable => None,
     }
+}
+
+/// What a `file://host/path` link opens here (C4–C12).
+///
+/// The host decides *whose* file it is, and only this machine's own names and the sandbox's own
+/// names pass — an unknown name is another machine, decided without any lookup (C18, FR-019).
+fn file(link: Link, host: &str, path: &str, ctx: &LinkContext) -> Option<ResolvedLink> {
+    let known = |names: &[String]| names.iter().any(|n| n.eq_ignore_ascii_case(host));
+    let sandbox_names = ctx.sandbox.as_ref().map(|s| s.host_names.as_slice());
+    if !(host.is_empty()
+        || host.eq_ignore_ascii_case("localhost")
+        || known(&ctx.host_names)
+        || sandbox_names.is_some_and(known))
+    {
+        return None;
+    }
+    // A sandboxed session's paths are the container's, not this machine's. Until M6 translates them
+    // through the shared locations, every one of them is reported as out of reach (C12), which is
+    // the safe direction: nothing opens the host's own file of the same name.
+    if ctx.sandbox.is_some() {
+        return Some(ResolvedLink {
+            link,
+            display: format!("{path} — not reachable from this machine"),
+            target: Target::Unreachable(Reason::NotShared),
+            needs_confirmation: false,
+        });
+    }
+    let path = if ctx.windows_host {
+        windows_path(path)?
+    } else {
+        path.to_string()
+    };
+    Some(ResolvedLink {
+        link,
+        display: path.clone(),
+        target: Target::HostPath(path),
+        needs_confirmation: false,
+    })
+}
+
+/// `/C:/Users/u/a.txt` as `C:\Users\u\a.txt`, or `None` when the path names no drive (C7, C8).
+fn windows_path(path: &str) -> Option<String> {
+    let drive = path.strip_prefix('/')?;
+    let (letter, rest) = drive.split_at_checked(1)?;
+    if !letter.chars().all(|c| c.is_ascii_alphabetic()) || !rest.starts_with(':') {
+        return None;
+    }
+    Some(drive.replace('/', "\\"))
 }
 
 #[cfg(test)]
@@ -169,13 +217,95 @@ mod tests {
         }
     }
 
-    /// Replaced by contract link-recognition C4–C10 when file links land (T042).
+    /// A session in a sandbox that shares nothing (C12); M6 fills the locations in.
+    fn sandboxed() -> LinkContext {
+        LinkContext {
+            sandbox: Some(SandboxLinkContext {
+                host_names: container_host_names("0123456789abcdef"),
+                locations: Vec::new(),
+                denied: Vec::new(),
+            }),
+            ..local()
+        }
+    }
+
+    /// What `address` resolves to in `ctx`, as the pane would ask.
+    fn target(address: &str, ctx: &LinkContext) -> Option<Target> {
+        resolve(detected(address), ctx).map(|r| r.target)
+    }
+
+    /// U35: C4, C5 — a file on this machine, however it named this machine.
     #[test]
-    fn a_file_link_resolves_to_nothing_before_file_links_land() {
+    fn a_file_link_to_this_machine_is_a_path_on_it() {
+        for address in [
+            "file:///home/u/a.txt",
+            "file://localhost/home/u/a.txt",
+            "file://LocalHost/home/u/a.txt",
+            "file://devbox/home/u/a.txt",
+            "file://DevBox/home/u/a.txt",
+        ] {
+            assert_eq!(
+                resolve(detected(address), &local()),
+                Some(ResolvedLink {
+                    link: detected(address),
+                    display: "/home/u/a.txt".to_string(),
+                    target: Target::HostPath("/home/u/a.txt".to_string()),
+                    needs_confirmation: false,
+                }),
+                "{address} names this machine, so it opens its path and nothing asks first (C4, C5)"
+            );
+        }
+    }
+
+    /// U36: C6, C18 — a guard. Its red is the mutant in tdd/test-list.md: a `File` branch that
+    /// accepts any host.
+    #[test]
+    fn a_file_link_naming_another_machine_is_no_link() {
+        for address in [
+            "file://otherhost/x",
+            "file://server/share/report.docx",
+            "file://build-host.invalid/home/u/a.txt",
+        ] {
+            assert_eq!(
+                target(address, &local()),
+                None,
+                "{address} is a file on another machine, which this one cannot open (C6, C18) — \
+                 and no name is looked up to decide it (FR-019)"
+            );
+        }
+    }
+
+    /// U37: C7, C8 — a Windows host reads the drive out of the path.
+    #[test]
+    fn on_a_windows_host_a_file_path_needs_a_drive() {
+        let windows = LinkContext {
+            windows_host: true,
+            ..local()
+        };
         assert_eq!(
-            resolve(detected("file:///tmp/x"), &local()),
+            target("file:///C:/Users/u/a.txt", &windows),
+            Some(Target::HostPath(r"C:\Users\u\a.txt".to_string())),
+            "the drive letter is what makes it a Windows path, and the separators are its own (C7)"
+        );
+        assert_eq!(
+            target("file:///home/u/a.txt", &windows),
             None,
-            "file links open nothing until their resolution exists"
+            "a path with no drive names nothing on a Windows machine (C8)"
+        );
+    }
+
+    /// U41: C12 — a sandboxed session shares nothing yet, which is the safe direction.
+    #[test]
+    fn a_sandboxed_file_link_outside_every_shared_location_is_not_reachable() {
+        assert_eq!(
+            resolve(detected("file:///tmp/x"), &sandboxed()),
+            Some(ResolvedLink {
+                link: detected("file:///tmp/x"),
+                display: "/tmp/x — not reachable from this machine".to_string(),
+                target: Target::Unreachable(Reason::NotShared),
+                needs_confirmation: false,
+            }),
+            "the hint says the path is not reachable rather than opening the host's own /tmp/x (C12)"
         );
     }
 
@@ -228,22 +358,30 @@ mod tests {
             "mailto:team@example.com?subject=Hi%20there",
             "vscode://file/home/u/a.rs",
             "file:///tmp/x",
+            "file://devbox/p/My%20Doc.pdf",
+            "file://otherhost/x",
         ];
         let mut followable = 0;
-        for address in addresses {
-            let Some(resolved) = resolve(detected(address), &local()) else {
-                continue;
-            };
-            followable += 1;
-            let opens = match &resolved.target {
-                Target::Url(opens) | Target::HostPath(opens) => opens,
-                Target::Unreachable(_) => continue,
-            };
-            assert_eq!(
-                &resolved.display, opens,
-                "{address}: the hint shows exactly the string handed to the opener (SC-006)"
-            );
+        // Every context resolution reads, so a `HostPath` and an `Unreachable` are both sampled.
+        for ctx in [local(), sandboxed()] {
+            for address in addresses {
+                let Some(resolved) = resolve(detected(address), &ctx) else {
+                    continue;
+                };
+                let opens = match &resolved.target {
+                    Target::Url(opens) | Target::HostPath(opens) => opens,
+                    Target::Unreachable(_) => continue,
+                };
+                followable += 1;
+                assert_eq!(
+                    &resolved.display, opens,
+                    "{address}: the hint shows exactly the string handed to the opener (SC-006)"
+                );
+            }
         }
-        assert_eq!(followable, 3, "the sample holds three followable links");
+        assert_eq!(
+            followable, 8,
+            "the sample holds three web or mail links in each context, and two host paths on this one"
+        );
     }
 }
