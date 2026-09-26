@@ -65,6 +65,9 @@ failed before the implementation.
 
 ## Structural step: the request carries its directory, protocol 13 -> 14 (T065)
 
+Rebased onto `main` as 14 -> 15: feature 032's `SessionLabel::Derived` took 14 while this was in
+flight, so the numbers below read one lower than what ships.
+
 - change: `ClientMsg::AiCliAvailabilityRequest` gains `cwd: Option<PathBuf>`; `PROTOCOL_VERSION`
   13 -> 14 (`SCHEMA_HASH` regenerates in `build.rs`); the two literal pins
   (`protocol_auth.rs::the_protocol_version_is_fourteen`, `schema_hash.rs`'s
