@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-19
 
-**Status**: Draft
+**Status**: Closed 2026-09-26 — shipped in PRs #386, #388, #395, #396, #399
 
 **Input**: User description: "bug: see the screen show the name of past session is still not displayed
 even when the bug was reported and fixed". Traced in

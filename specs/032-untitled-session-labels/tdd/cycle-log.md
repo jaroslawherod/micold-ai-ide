@@ -242,3 +242,67 @@ Opened by M3's review A, which found that cycle 5's re-arm is **one-shot per liv
   writes the transcript *before* letting the spinner fire, so its single transition lands after the
   records exist.
 - refactor: none.
+
+## Cycle 6 — close-phase mutation evidence: attempted, not obtained (2026-09-26)
+
+Opened by the close phase's `speckit-tdd-verify` (`tdd/verification.md`, verdict FAIL), to supply the
+red that cycle 2 lost to a rate-limit kill. **It did not succeed, and this entry says so rather than
+leaving the gap to be inferred from a missing section.** Nothing below is evidence; the mutant table
+is a design read off the code, which is a head start for whoever runs it, not a result.
+
+- what was asked: a killed deliberate mutant for each behaviour with neither a recorded red nor a
+  demonstrated kill — U30, U32, U33, U34 (cycle 2, missed by cycle 3's two mutants), U46–U49, U61,
+  U62 (cycle 2, no mutation evidence at all), and A7, A8 (`example` rows that passed on arrival).
+- what happened: one mutant was applied (`|| flag("isMeta")` deleted from `claude_candidate_text`,
+  targeting U30) and its test run never reached a compiled binary — it queued behind another
+  worktree's build for the whole attempt, and by the time the lock came free the file had been
+  restored, so the `30 passed` it printed was unmutated code. **Zero valid mutants ran.** An earlier
+  attempt in the same phase was abandoned when two audit instances collided in this worktree and one
+  reverted the other's mutant mid-run; that collision also left a stray duplicate of the
+  `if !unlabelled` guard in `state.rs`, which was found and removed before the close PR (it is not in
+  `origin/main` and it is not in the PR).
+- **unproven, carried as `tasks.md` T048–T050 and as ledger follow-ups**: U30, U32, U33, U34, U46,
+  U47, U48, U49, U61, U62, A7, A8. They pass today and every contract clause they cover was
+  re-verified against the code in the close phase's `speckit-converge` pass; what is missing is
+  evidence that they *discriminate*, which is a different claim and is not made here.
+- designed mutants, from reading the code only (predictions, not observations):
+
+  | # | file, function | the one-line change | predicted to kill |
+  |---|---|---|---|
+  | 1 | `micold-core/src/first_turn.rs` `claude_candidate_text` | delete `\|\| flag("isMeta")` | U30 |
+  | 2 | `first_turn.rs` `content_text` | `part_type(part) == Some("text")` → `!=` | U32 |
+  | 3 | `first_turn.rs` `claude_first_turn` | `if label.is_some() { return label; }` → `return label;` | U33 |
+  | 4 | `first_turn.rs` `claude_first_turn` | a parse error aborts instead of being skipped | U34 |
+  | 5 | `micold-core/src/provider.rs` `ClaudeProvider::read_label` | body → `self.read_title(..)` | U46, U49 |
+  | 6 | `first_turn.rs` `read_prefix` | `.take(LABEL_BUDGET_BYTES)` → `.take(u64::MAX)` | U48 (U21 too) |
+  | 7 | `micold-daemon/src/state.rs` `discover_external_sessions` | read `read_label` before `read_title` | U61 |
+  | 8 | `state.rs` `recover_session_names` candidate filter | negate the `Named` exclusion | U62 (A1, A2, A9, U63 too) |
+  | 9 | `micold-daemon/src/catalog.rs` `record_session_name` | match `Derived(_)` where it matches `Named(current) if current == name` | A8 (U60, U63, A9, U75 too) |
+
+- three findings that stand on code reading alone, and are worth more than the mutants would have
+  been:
+  - **A7 is defended three times over, so mutant 8 alone would survive it.** `a_titled_session_is_
+    never_given_a_label` is held up by (a) the recovery candidate filter excluding `Named`, (b)
+    `RecoveryCandidate::of` setting `unlabelled = matches!(label, Pending)`, so even a `Named`
+    candidate that slipped the filter is asked for a title only, and (c) `set_derived_label`
+    refusing a non-`Pending` session. Negating (a) leaves (b) returning `None` — that test writes no
+    `ai-title` — so the pass still returns 0 and nothing changes. A7's red needs two simultaneous
+    changes, or a test that observes the read. Layer (c) is the one already covered, by cycle 1's U3
+    mutant. Defence in depth is why FR-005 does not rest on caller care (plan, *Post-Design
+    Re-check*), and it is also why a single mutation cannot express its absence.
+  - **U47 looks unkillable by one small mutation.** `a_missing_transcript_has_no_label_and_does_not_
+    fail` asserts `None` for a file that is not there; no single small change makes text out of
+    nothing. Recorded as a negative behaviour whose value is regression protection, not
+    discrimination.
+  - **The read-layer guard is untested, verified.** Deleting `if !unlabelled { return None; }`
+    (`state.rs:1355`) **survives** U64: the already-`Derived` session's records are re-read, the
+    catalog then refuses the second label, and the pass still returns 0 with the label unchanged —
+    exactly the two things U64 asserts. The guard exists to avoid the read itself (its doc comment;
+    SC-006). Observing it needs a read-counting provider, and `DaemonState` builds its providers from
+    the environment with no injection seam (`tasks.md` *Daemon tests*), so closing it means adding
+    production structure for a test. `verification.md` finding 6; a ledger follow-up, not this PR.
+- suite after every restore: `crates/micold-core/src/first_turn.rs` restored with
+  `git checkout --`, and the stray duplicate of the `if !unlabelled` guard removed from `state.rs`.
+  `git diff origin/main -- crates/` was then read in full, in the worktree **and** in the index, and
+  is empty: the close phase changes no code at all. `mise run gate` passed on that tree, 0 failures;
+  the SHA is recorded in `autopilot.md` and in the close PR body.
