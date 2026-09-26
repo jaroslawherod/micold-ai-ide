@@ -38,7 +38,7 @@ expect specs/001-app-shell-about/spec.md          set
 expect README.md                                  set
 expect CLAUDE.md                                  set
 expect LICENSE                                    set
-expect .claude/skills/visual-pass/SKILL.md        set
+expect .claude/skills/reclaim-disk/SKILL.md       set
 
 echo
 echo "== deleted paths still classify (check-attr never touches the worktree) =="
@@ -75,6 +75,12 @@ expect specs/028-client-managed-daemon/tasks.md    set
 # macOS packaging step to §B of this quickstart.
 expect specs/028-macos-package/quickstart.md       unset
 expect specs/028-macos-package/spec.md             set
+
+# The same shape again, outside `docs/` and `specs/`:
+# `crates/micold-core/tests/tests_never_write_the_real_data_directory.rs` holds the visual-pass
+# skill's launch recipe to isolating the data directory, so dropping a variable from it must run the
+# suite. The other skills stay documentation -- the exception is one file, not `.claude/skills/`.
+expect .claude/skills/visual-pass/SKILL.md         unset
 
 echo
 echo "== code (everything not declared) =="
