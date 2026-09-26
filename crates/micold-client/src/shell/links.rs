@@ -38,9 +38,99 @@ fn perform(app: &App, request: OpenRequest) -> Task<Message> {
             },
             |(address, result)| Message::Session(SessionMsg::LinkOpenFinished { address, result }),
         ),
-        // File links arrive with M5 (contract §3, O4); nothing emits this request before then.
-        OpenRequest::Path { .. } => Task::none(),
+        OpenRequest::Path { path, address } => Task::perform(
+            async move {
+                // One blocking task for the whole of O4: the file's facts are read and acted on back
+                // to back, so the window between the check and the open is two syscalls wide.
+                let result = tokio::task::spawn_blocking(move || open_path(&*opener, &path))
+                    .await
+                    .unwrap_or_else(|e| Err(OpenFailure::LaunchFailed(e.to_string())));
+                (address, result)
+            },
+            |(address, result)| Message::Session(SessionMsg::LinkOpenFinished { address, result }),
+        ),
     }
+}
+
+/// Open `path`, or reveal it when this machine would run it (contract link-opening §3, O4).
+///
+/// `std::fs::metadata` follows symbolic links, so a link is judged by the file it points to
+/// (FR-013). Everything platform-specific is read here and handed to
+/// `micold_core::link::runnable::action_for`, which decides.
+fn open_path(opener: &dyn crate::shell::link_opener::LinkOpener, path: &str) -> Result<(), OpenFailure> {
+    use micold_core::link::runnable::{action_for, FileAction};
+
+    let file = std::path::Path::new(path);
+    let meta = match std::fs::metadata(file) {
+        Ok(meta) => meta,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(OpenFailure::NotFound),
+        Err(e) => return Err(OpenFailure::LaunchFailed(e.to_string())),
+    };
+    let name = file
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    match action_for(HOST_PLATFORM, &name, facts_for(&meta, file), &pathext()) {
+        FileAction::Open => opener.open(path),
+        FileAction::Reveal => opener.reveal(file),
+    }
+}
+
+/// Which platform's runnable rules apply here (research R9: a parameter, never a `cfg` in core).
+#[cfg(target_os = "linux")]
+const HOST_PLATFORM: micold_core::link::runnable::HostPlatform =
+    micold_core::link::runnable::HostPlatform::Linux;
+#[cfg(target_os = "macos")]
+const HOST_PLATFORM: micold_core::link::runnable::HostPlatform =
+    micold_core::link::runnable::HostPlatform::MacOs;
+#[cfg(windows)]
+const HOST_PLATFORM: micold_core::link::runnable::HostPlatform =
+    micold_core::link::runnable::HostPlatform::Windows;
+
+/// What this machine can say about the file, without opening it.
+fn facts_for(
+    meta: &std::fs::Metadata,
+    path: &std::path::Path,
+) -> micold_core::link::runnable::FileFacts {
+    use micold_core::link::runnable::{FileFacts, Kind};
+
+    let kind = if meta.is_dir() { Kind::Dir } else { Kind::File };
+    #[cfg(unix)]
+    let any_exec_bit = {
+        use std::os::unix::fs::PermissionsExt;
+        meta.permissions().mode() & 0o111 != 0
+    };
+    // Windows has no execute bit; there the extension decides (FR-013).
+    #[cfg(windows)]
+    let any_exec_bit = false;
+    // A macOS bundle the Finder knows only by what it holds; the extension list is core's.
+    #[cfg(target_os = "macos")]
+    let is_bundle = kind == Kind::Dir && path.join("Contents/Info.plist").exists();
+    #[cfg(not(target_os = "macos"))]
+    let is_bundle = {
+        let _ = path;
+        false
+    };
+    FileFacts {
+        kind,
+        any_exec_bit,
+        is_bundle,
+    }
+}
+
+/// The `%PATHEXT%` entries this machine runs, empty off Windows (FR-013).
+fn pathext() -> Vec<String> {
+    #[cfg(windows)]
+    {
+        std::env::var("PATHEXT")
+            .unwrap_or_default()
+            .split(';')
+            .filter(|entry| !entry.is_empty())
+            .map(|entry| entry.to_string())
+            .collect()
+    }
+    #[cfg(not(windows))]
+    Vec::new()
 }
 
 #[cfg(test)]
@@ -111,6 +201,204 @@ mod tests {
                 .collect()
                 .await
         })
+    }
+
+    /// A real file in `dir` this machine would run rather than read: the execute bit on Unix, a
+    /// `%PATHEXT%` extension on Windows (FR-013).
+    pub(super) fn runnable_file(dir: &std::path::Path, stem: &str) -> std::path::PathBuf {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let path = dir.join(stem);
+            std::fs::write(&path, b"#!/bin/sh\n").expect("write the runnable file");
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+                .expect("set the execute bit");
+            path
+        }
+        #[cfg(windows)]
+        {
+            let path = dir.join(format!("{stem}.bat"));
+            std::fs::write(&path, b"@echo off\n").expect("write the runnable file");
+            path
+        }
+    }
+
+    /// Every kind of file this OS runs, as real files inside `dir` (SC-007, FR-013).
+    ///
+    /// Each entry is what the spec's FR-013 list names for this platform, created for real so the
+    /// fact gatherer reads a real `metadata` rather than a fixture.
+    fn every_runnable_kind(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+        let mut kinds = vec![runnable_file(dir, "build")];
+        #[cfg(unix)]
+        {
+            let link = dir.join("link-to-build");
+            std::os::unix::fs::symlink(&kinds[0], &link).expect("symlink to an executable file");
+            kinds.push(link);
+        }
+        #[cfg(target_os = "linux")]
+        for name in ["app.desktop", "Tool.AppImage"] {
+            let path = dir.join(name);
+            std::fs::write(&path, b"x").expect("write a launcher");
+            kinds.push(path);
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let bundle = dir.join("Thing.app");
+            std::fs::create_dir_all(bundle.join("Contents")).expect("create a bundle");
+            kinds.push(bundle);
+            // U146: a bundle the Finder knows only by what it holds.
+            let plain = dir.join("Plain");
+            std::fs::create_dir_all(plain.join("Contents")).expect("create a directory");
+            std::fs::write(plain.join("Contents/Info.plist"), b"<plist/>").expect("write a plist");
+            kinds.push(plain);
+            let command = dir.join("run.command");
+            std::fs::write(&command, b"echo hi\n").expect("write a .command file");
+            kinds.push(command);
+        }
+        #[cfg(windows)]
+        for name in ["a.exe", "b.ps1", "c.cmd", "d.vbs"] {
+            let path = dir.join(name);
+            std::fs::write(&path, b"x").expect("write a runnable file");
+            kinds.push(path);
+        }
+        kinds
+    }
+
+    /// Files every OS reads rather than runs (SC-007).
+    fn every_document_kind(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+        ["notes.txt", "pic.png", "report.pdf", "page.html"]
+            .iter()
+            .map(|name| {
+                let path = dir.join(name);
+                std::fs::write(&path, b"x").expect("write a document");
+                path
+            })
+            .collect()
+    }
+
+    /// U97, U146 (SC-007): on this OS, every runnable kind is revealed and every document opened,
+    /// including inside a directory whose name has a space.
+    #[test]
+    fn every_runnable_kind_is_revealed_and_every_document_opened() {
+        let root = tempfile::tempdir().expect("a temp dir");
+        for holder in ["plain", "with space"] {
+            let dir = root.path().join(holder);
+            std::fs::create_dir(&dir).expect("create the holding directory");
+            for path in every_runnable_kind(&dir) {
+                let (opener, _) = activate(path_link("file:///x", &path));
+                assert_eq!(
+                    *opener.revealed.lock().unwrap(),
+                    vec![path.clone()],
+                    "{} is a kind this machine runs, so it is revealed (SC-007, FR-013)",
+                    path.display()
+                );
+                assert!(
+                    opened(&opener).is_empty(),
+                    "{} must never be handed to the system opener",
+                    path.display()
+                );
+            }
+            for path in every_document_kind(&dir) {
+                let (opener, _) = activate(path_link("file:///x", &path));
+                assert_eq!(
+                    opened(&opener),
+                    vec![path.to_string_lossy().to_string()],
+                    "{} is a document, so it opens in its application (SC-007)",
+                    path.display()
+                );
+                assert!(
+                    opener.revealed.lock().unwrap().is_empty(),
+                    "{} is not revealed",
+                    path.display()
+                );
+            }
+        }
+    }
+
+    fn path_link(address: &str, path: &std::path::Path) -> ResolvedLink {
+        ResolvedLink {
+            target: Target::HostPath(path.to_string_lossy().into_owned()),
+            display: path.to_string_lossy().into_owned(),
+            ..url_link(address)
+        }
+    }
+
+    /// Activate `link` through `update_inner` with a recording opener, and return what the opener
+    /// was asked for and what came back.
+    fn activate(link: ResolvedLink) -> (Arc<RecordingOpener>, Vec<Message>) {
+        let opener = Arc::new(RecordingOpener::default());
+        let mut app = crate::tests::base_app();
+        app.caps = app.caps.clone().with_link_opener(opener.clone());
+        let messages = run(crate::update_inner(
+            &mut app,
+            Message::Session(SessionMsg::LinkActivated(link)),
+        ));
+        (opener, messages)
+    }
+
+    fn opened(opener: &RecordingOpener) -> Vec<String> {
+        opener
+            .opened
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(t, _)| t.clone())
+            .collect()
+    }
+
+    /// U95 (T11): a file the program named but this machine does not have.
+    #[test]
+    fn opening_a_path_that_is_not_there_finishes_as_not_found_and_calls_no_opener() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let missing = dir.path().join("gone.txt");
+        let address = "file:///gone.txt";
+        let (opener, messages) = activate(path_link(address, &missing));
+        assert_eq!(
+            messages,
+            vec![Message::Session(SessionMsg::LinkOpenFinished {
+                address: address.to_string(),
+                result: Err(OpenFailure::NotFound),
+            })],
+            "the answer is NotFound for the address the program printed (FR-015)"
+        );
+        assert!(
+            opened(&opener).is_empty() && opener.revealed.lock().unwrap().is_empty(),
+            "nothing is handed to the operating system for a file that is not there"
+        );
+    }
+
+    /// U96 (T11): a document is opened and a runnable file is revealed, through the real facts.
+    #[test]
+    fn a_document_is_opened_and_a_runnable_file_is_revealed() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let doc = dir.path().join("notes.txt");
+        std::fs::write(&doc, b"x").expect("write the document");
+        let (opener, messages) = activate(path_link("file:///notes.txt", &doc));
+        assert_eq!(
+            opened(&opener),
+            vec![doc.to_string_lossy().to_string()],
+            "a document goes to the system opener (FR-010)"
+        );
+        assert_eq!(
+            messages,
+            vec![Message::Session(SessionMsg::LinkOpenFinished {
+                address: "file:///notes.txt".to_string(),
+                result: Ok(()),
+            })],
+            "and the answer comes back for the same address"
+        );
+
+        let runnable = runnable_file(dir.path(), "run");
+        let (opener, _) = activate(path_link("file:///run", &runnable));
+        assert_eq!(
+            *opener.revealed.lock().unwrap(),
+            vec![runnable],
+            "a file this machine runs is revealed, never opened (FR-013)"
+        );
+        assert!(
+            opened(&opener).is_empty(),
+            "and never handed to the system opener, which would run it"
+        );
     }
 
     /// U93 and U94: through `update_inner`, the opener receives the address as written, at once.
@@ -384,8 +672,13 @@ mod acceptance {
             };
             let (published, pointer) = published;
             self.pointer = Some(pointer);
-            for message in published.clone() {
-                run(crate::update_inner(&mut self.app, message));
+            // Every message, and every message its task produces in turn, exactly as iced's runtime
+            // feeds them back: an open's `LinkOpenFinished` is a second round, and the notification
+            // it raises is only visible once that round has run.
+            let mut pending: std::collections::VecDeque<Message> =
+                published.iter().cloned().collect();
+            while let Some(message) = pending.pop_front() {
+                pending.extend(run(crate::update_inner(&mut self.app, message)));
             }
             published
         }
@@ -725,25 +1018,6 @@ mod acceptance {
         path.to_string_lossy().into_owned()
     }
 
-    /// A file whose kind this platform runs rather than reads: the execute bit on Unix, a
-    /// `%PATHEXT%` extension on Windows (FR-013).
-    fn runnable_in(dir: &std::path::Path) -> std::path::PathBuf {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let path = dir.join("build");
-            std::fs::write(&path, b"#!/bin/sh\n").expect("write the runnable file");
-            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
-                .expect("set the execute bit");
-            path
-        }
-        #[cfg(windows)]
-        {
-            let path = dir.join("build.bat");
-            std::fs::write(&path, b"@echo off\n").expect("write the runnable file");
-            path
-        }
-    }
 
     /// A12: `ls --hyperlink=always` declares the host's name and percent-encodes the space.
     #[test]
@@ -802,7 +1076,7 @@ mod acceptance {
     #[test]
     fn activating_a_file_link_to_a_runnable_file_reveals_it_and_never_opens_it() {
         let dir = tempfile::tempdir().expect("a temp dir");
-        let file = runnable_in(dir.path());
+        let file = super::tests::runnable_file(dir.path(), "build");
         let address = file_url("", &file);
         let mut session = Session::on_screen(vec![line(&address)]);
         session.activate(10, 0);
