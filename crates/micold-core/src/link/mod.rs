@@ -10,6 +10,7 @@ pub mod address;
 pub mod detect;
 pub mod line;
 pub mod resolve;
+pub mod runnable;
 
 pub use resolve::{
     container_host_names, host_names_from, LinkContext, Reason, ResolvedLink, SandboxLinkContext,
@@ -64,12 +65,13 @@ pub struct CellSpan {
 mod tests {
     /// Every source in `link/`, by module name. A module `mod.rs` declares but this list omits
     /// fails [`link_performs_no_io`] rather than escaping it.
-    const SOURCES: [(&str, &str); 5] = [
+    const SOURCES: [(&str, &str); 6] = [
         ("mod", include_str!("mod.rs")),
         ("address", include_str!("address.rs")),
         ("detect", include_str!("detect.rs")),
         ("line", include_str!("line.rs")),
         ("resolve", include_str!("resolve.rs")),
+        ("runnable", include_str!("runnable.rs")),
     ];
 
     #[test]
