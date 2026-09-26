@@ -654,3 +654,17 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
   (Unix arm unchanged); `cargo clippy --target x86_64-pc-windows-msvc -p micold-daemon --all-targets
   -- -D warnings` clean; `mise run gate` -> `GATE_EXIT=0` (3433 passed)
 - commit: `fix(031): the Windows stand-in is a compiled exe, not a .cmd CreateProcessW refuses`
+
+## Cycle 66: the outer loop for M5 opens — A12, A14–A18
+
+- tests: `crates/micold-client/src/shell/links.rs::acceptance::{a_declared_file_link_naming_this_host_opens_the_decoded_path, activating_a_file_link_to_a_document_opens_its_host_path, activating_a_file_link_to_a_folder_opens_the_folder, activating_a_file_link_to_a_runnable_file_reveals_it_and_never_opens_it, activating_a_file_link_to_a_missing_file_opens_nothing_and_says_so, a_file_link_to_another_machine_and_an_application_scheme_are_no_links}`
+  over real files in a `tempfile` directory, driving the pane through the context the application
+  builds (`ui::terminal::link_context`), so the glue U134/U136 is covered here (T084)
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide shell::links::acceptance`
+  -> 13 passed; 5 failed. A12 `left: []` / `right: ["/tmp/.tmpzpfykH/readme a.txt"]`; A14
+  `right: ["/tmp/.tmpJJPaYO/notes.txt"]`; A15 `right: ["/tmp/.tmp6ZJNQv/notes"]`; A16
+  `right: ["/tmp/.tmpMT7IqX/build"]`; A17 `right: ["Couldn't open file:///tmp/.tmpj9fTYi/gone.txt:
+  the file doesn't exist on this machine"]`
+- A18 passed on arrival, as tdd/test-list.md records: after T011 those addresses are already
+  `NotFollowable`. Its mutants are checked in the cycle that adds the `File` branch (Cycle 69)
+- the outer red stays red until Cycle 73 closes it; the inner cycles below are its units
