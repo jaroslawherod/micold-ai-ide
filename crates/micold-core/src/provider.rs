@@ -379,7 +379,7 @@ impl ClaudeProvider {
 
     /// The name `claude` **currently** holds for the conversation, from its JSONL transcript.
     ///
-    /// The latest non-empty `{"type":"custom-title","customTitle":"…}` if there is one: that kind
+    /// The latest non-empty `{"type":"custom-title","customTitle":"…"}` if there is one: that kind
     /// alone ranks above position, because `claude` re-emits the *pre-rename*
     /// `{"type":"ai-title","aiTitle":"…"}` on every turn after a `/rename`, so the last name record
     /// written is not the current name (C16.1, BUG-002).
