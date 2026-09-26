@@ -284,8 +284,11 @@ fn only_the_ai_cli_sign_in_is_mounted_writable() {
         .iter()
         .map(|c| c.host.to_string_lossy().into_owned())
         .collect();
+    // Joined a segment at a time: `Path::join` keeps a `/` inside a segment verbatim, so the one
+    // string spelling of this path does not match the layout's on Windows.
     let sign_in = Path::new(NIX_HOME)
-        .join(".claude/.credentials.json")
+        .join(".claude")
+        .join(".credentials.json")
         .to_string_lossy()
         .into_owned();
     assert!(

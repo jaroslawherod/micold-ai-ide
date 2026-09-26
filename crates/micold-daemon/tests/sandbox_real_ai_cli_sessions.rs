@@ -80,6 +80,15 @@ async fn sandbox_real_ai_cli_sessions_survive_the_sandbox_with_the_sign_in_share
     probe(true, "micold-sessions-shared-probe", 17751).await;
 }
 
+/// The host's own sign-in token, as the application's layout names it.
+///
+/// Read through `CredentialLayout` rather than spelled here, so that a layout which moves the
+/// token moves this probe's precondition with it.
+fn host_sign_in() -> Option<PathBuf> {
+    let home = std::env::var("HOME").ok()?;
+    CredentialLayout::conventional(Path::new(&home), None).ai_cli_auth
+}
+
 /// The sessions one run seeds: a shell to type into, one pending session per CLI, and a control.
 struct Seeded {
     shell: SessionId,
@@ -88,6 +97,14 @@ struct Seeded {
 }
 
 async fn probe(shared: bool, container: &str, port: u16) {
+    // The shared run needs a signed-in host `claude`, which a CI runner does not have and cannot
+    // be given: the token is the user's. Skipped rather than failed, because the question this
+    // probe asks — does a conversation recorded in the sandbox survive it — is answered for the
+    // unshared run on every machine, and for the shared run on a developer's own.
+    if shared && !host_sign_in().is_some_and(|token| token.exists()) {
+        eprintln!("skipped: no signed-in host `claude` to share. Sign in on this host to run it.");
+        return;
+    }
     let network = format!("{container}-net");
     let dir = tempfile::tempdir().unwrap();
     let data = dir.path().join("data");
