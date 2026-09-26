@@ -8,8 +8,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/the-name-of-past-session-is-still-not-shown
 - **Started**: 2026-09-19
 - **Phase**: done
-- **Next step**: handoff. The close PR must read `MERGED` first (the orchestrator merges it); then
-  send the WORK COMPLETE handoff with the *Follow-ups not done* list below.
+- **Next step**: handoff. Close PR **#401** is open and must read `MERGED` first (the orchestrator
+  merges it); then send the WORK COMPLETE handoff with the *Follow-ups not done* list below.
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #395 | M1 — untitled `claude` sessions read their first turn | MERGED 2026-09-25 | c5135f57 |
 | #396 | M2 — Copilot `summary:` titles and first-turn labels | MERGED 2026-09-25 | bc3bd95a |
 | #399 | M3 — a running session reads its label whichever signal arrives first | MERGED 2026-09-26 | 4890b91e |
-| #PENDING | Close — spec `Closed`, the close-phase audits and their remediation | open | — |
+| #401 | Close — spec `Closed`, the close-phase audits and their remediation | open | — |
 
 ## Milestones
 
