@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M5 step 6: wait for `ci complete`, then rebase-merge
+- **Next step**: M6 step 6: wait for `ci complete`, then rebase-merge
 
 ## Pull requests
 
@@ -20,7 +20,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #361 | M2 Opening pipeline | merged | 9995dbdb |
 | #385 | M3 Clickable web, mail and declared links in the pane | merged | e5bdc804 |
 | #393 | M4 Session terminal identity and the FORCE_HYPERLINK opt-in | merged | 59132a50 |
-| #402 | M5 File links on the host: open, reveal runnables, not-found | open | — |
+| #402 | M5 File links on the host: open, reveal runnables, not-found | merged | 5b5db19c |
+| #408 | M6 Sandboxed file links, translated and confirmed | open | — |
 
 ## Milestones
 
@@ -30,8 +31,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M2 | T013–T022 | Opening pipeline: `LinkActivated` through `update_inner` to the system opener | #361 | merged |
 | M3 | T082, T083, T037, T023–T034 | Clickable web, mail and declared links in the pane | #385 | merged |
 | M4 | T035, T036, T038–T041 | Session terminal identity and the FORCE_HYPERLINK opt-in | #393 | merged |
-| M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | #402 | in review |
-| M6 | T085, T055–T067, T069, T068 | Sandboxed file links, translated and confirmed | — | pending |
+| M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | #402 | merged |
+| M6 | T085, T055–T067, T069, T068 | Sandboxed file links, translated and confirmed | #408 | in review |
 | M7 | T086, T070–T077 | Link context menu | — | pending |
 | M8 | T078–T081 | Close: SC-005 measurement, full visual walkthrough | — | pending |
 
@@ -79,6 +80,21 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | 38 | 4-milestones | M5 review A finding 5: `link_activated` ignored `needs_confirmation`, which no resolver sets before M6 | The `HostPath` arm refuses a link that needs one, so M6's confirmation cannot be bypassed the day the flag is first set (O3) | agent-resolved | tests/features_session_links.rs `a_host_path_that_needs_confirmation_opens_nothing_yet`, proved by a mutant |
 | 39 | 4-milestones | M5 review B finding 1: U136 was recorded as covered by A12, but A12 sets the names itself and nothing called `boot()` | The boot read is now `shell::startup::host_names_at_boot`, with its own test against `gethostname` (red: `left: []`); Cycle 74's wrong "no mutant was needed" note and its swapped U134/U136 ids are corrected | agent-resolved | tdd/cycle-log.md Cycles 74–75 |
 
+| 40 | 4-milestones | M5 review A finding 4, deferred to M6: `container_host_names` assumed the container's hostname is the id's 12-character prefix, which podman does not default to | `container_host_names(id, name)` also accepts the container's name (`micold_core::sandbox::CONTAINER_NAME`). Research R10 rejects setting `--hostname` — it would change feature 027's container contract — and a real `docker create` probe showed Docker defaults `Config.Hostname` to the id prefix while podman defaults it to the name, so the name is the missing spelling rather than a new contract. Safe because a host name only decides that the address means *this sandbox*; the path still goes through `pathmap::reverse` and the confirmation | agent-resolved | tdd/cycle-log.md Cycle 78; `resolve.rs::tests::{a_containers_names_are_its_prefix_its_full_id_and_the_name_it_was_created_with, a_sandboxed_file_link_is_accepted_from_every_name_the_container_answers_to}`; C11 updated |
+| 41 | 4-milestones | `CONTAINER_NAME` lived in the binary's `shell/sandbox.rs`, which the library's `ui/terminal.rs` cannot reach, and `link_context` needs the name | The constant moved to `micold_core::sandbox`, where the mount set and the spec already live; `shell/sandbox.rs` re-exports it, so every existing use including its own `assert_eq!(CONTAINER_NAME, "micold-sandbox")` is unchanged | agent-resolved | `crates/micold-core/src/sandbox/mod.rs`; tdd/cycle-log.md Cycle 79 |
+| 42 | 4-milestones | `pathmap::reverse` had to choose a location when several match a container path, and C15 only says "most specific" | Longest matched prefix wins, not the first in the list, with the location's own length as the tie-break; `shared_locations` sorts most-specific-first as well, so the two agree even if one is used without the other | agent-resolved | `pathmap.rs::tests::the_most_specific_of_nested_shared_locations_maps_the_path` |
+| 43 | 4-milestones | Whether `reverse`'s denied-path check may compare host paths literally | No: on a Windows host it compares case-insensitively and reads `/` as `\`, because a case-sensitive denial on Windows is no denial at all — `C:\Users\U\...` would walk straight past `C:\Users\u\...` and hand the client's own token to the system opener | agent-resolved | `pathmap.rs::tests::a_denied_windows_path_is_denied_whatever_its_case`, proved by a mutant (Cycle 76) |
+| 44 | 4-milestones | U56 needs both runtimes' `Mounts` shape, and only docker is installed here | `docker_inspect_container.json` gained a **captured** `Mounts` array from a real container; `podman_inspect_container.json` is new and marked **transcribed** in the fixtures README, which is exactly the provenance that README demands be stated | agent-resolved | `crates/micold-core/tests/fixtures/runtime/README.md` |
+| 45 | 4-milestones | The assertion-level red text for M6 Cycles 76–80 was lost when this session's context was compacted | Each of those cycles is re-recorded with a mutant-derived red against the finished code, and says so in the entry. Nothing is reported as captured that was not captured | agent-resolved | tdd/cycle-log.md Cycles 76–80 |
+
+| 46 | 4-milestones | M6 review A1/B1 (HIGH): `is_at_or_under` sliced `&str` by `denied[i].len()`, so a container-chosen file name whose multi-byte character straddled that length panicked — and `resolve` runs from the pane, so the panic repeated on every hover | Compare by byte and never slice at an unchecked index; the separator is ASCII, so a byte equal to it is a character boundary by construction | agent-resolved | tdd/cycle-log.md Cycle 84; `pathmap.rs::tests::a_multi_byte_name_at_the_denied_paths_own_length_is_answered_not_panicked` (red: `start byte index 48 is not a char boundary`) |
+| 47 | 4-milestones | M6 review B2 (HIGH): on a Windows host a container-chosen component holding `\` is a separator to Win32, so `..\..\..` escaped the shared location and the denial compared a string Windows would never open | `reverse` refuses a component containing `\`, `/` or `:`, or ending in a dot or a space, when the host is Windows. Refusing is the safe answer: such a name is not a path this machine can be asked to open | agent-resolved | `pathmap.rs::tests::a_windows_host_refuses_a_component_windows_would_read_as_more_than_a_name` |
+| 48 | 4-milestones | M6 review A2/B3 (HIGH): `locations()` gated on the state alone, but `bring_up` reports `observe(Running(id))` before `Started`, and a replaced container reaches `Running` under a new id — so a sandboxed pane could read a container path as this machine's own with no confirmation, or translate through a container that no longer exists | `Sandbox.locations` keeps the `ContainerId` it was read from, and `locations()` answers only while the live state names that same container | agent-resolved | `features/sandbox.rs::tests::locations_answer_only_for_the_container_they_were_read_from` |
+| 49 | 4-milestones | `tests/feature_registration_cost.rs::only_the_root_drives_a_feature` (SC-002) refused `shell/links.rs` calling `session::link_open_confirmed`, which contract link-opening §4 asks the shell to call | The call moved to `app::State::confirm_link_open_for_effects`, beside `update_session_for_effects` and for the same reason: the shell hands in the sandbox's liveness, the root drives the feature. The contract's decision — the reducer decides, given a fact only the shell has — is unchanged | agent-resolved | `crates/micold-client/src/app.rs`; the guard passes |
+| 50 | 4-milestones | `session.pending_link_open` ends in `_open`, so `overlay_registration.rs` read it as an unregistered popover | Named in `DIALOG_FLAGS` as `confirm_link_open`, not exempted by name — the same treatment `help.about_open` gets, and `a_dialog_flag_registers_in_the_dialog_band` then holds it true | agent-resolved | `crates/micold-client/tests/overlay_registration.rs` |
+
+| 51 | 4-milestones | PR #408's Windows CI job failed on M6's `shared_locations` fixture: the credential's container path came out as `/home/u\.claude\.credentials.json` and so lost its place in C15's order | A fixture fault, not a production one: it asked `build_for` for a Linux host while running on Windows, where the identity mapping echoes a host path that `PathBuf::join` spelled with `\`. Production always passes its own platform, and the Windows mapping builds the container path as a string (feature 027 T115). The exact-list assertion moved to a Windows-host fixture whose inputs are all literals — identical on every platform — and the identity-mapping list is now `#[cfg(unix)]` | agent-resolved | tdd/cycle-log.md Cycle 85; `sandbox/mod.rs::tests::shared_locations_on_a_windows_host_are_posix_and_most_specific_first` |
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
@@ -93,6 +109,9 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M5 | B | Finding 5 (MINOR): the real-file leg of SC-007 sampled only some of FR-013's extensions | Fixed rather than declined: `every_runnable_kind` now creates one real file per entry of FR-013's list for this platform, plus every macOS bundle extension as a directory |
 | M5 | B | Finding 6 (MINOR): FR-013's lists are transcribed twice in one file, so one careless edit changes both | Accepted as is: the test copy is the spec's list and the production copy is the code's, and a single file is what a reviewer can compare. A generator or an `include_str!` of spec.md would couple the crate to the spec's prose |
 
+| M6 | B | Finding 7 (LOW): `PendingLinkOpen.session` is taken from `state.session.active` rather than from the pane the link was activated in | The pane draws the active session and nothing else — `ui::terminal::pane` is built from `state` with one session shown — so the active session *is* the pane the pointer was over. Carrying an id on `LinkActivated` would add a second source for the same fact. Revisit if the window ever shows two panes at once |
+| M6 | A | Finding 5 (LOW, efficiency): `link_context` now clones the shared locations and denied paths once per frame | The same finding as M5 review A finding 9, already a follow-up: SC-005 is measured over the hover path in M8 (T078), and caching the context adds a second source of truth for the sandbox state. The vectors are a handful of short strings |
+
 ## Open escalation
 
 None. (M2's block on the Windows install smoke was resolved by #358; see Decisions 20 and git history of this file.)
@@ -101,6 +120,6 @@ None. (M2's block on the Windows install smoke was resolved by #358; see Decisio
 
 - Quickstart §B.17's second half is unconfirmed: no AI CLI on this machine was seen to declare an OSC 8 link with `FORCE_HYPERLINK=1` (Claude Code 2.1.280), and that visual-pass run surfaced no hover feedback at all. Re-run it when a CLI is known to declare links (M4, minor).
 - Scrollback lines fetched by `apply_scrollback` do not bump the grid `seq`, so a resting pointer over just-fetched lines refreshes its hover only on the next pointer move or modifier change (M3, minor).
-- The sandbox is created with `--name`, never `--hostname`, so `container_host_names`' 12-character-prefix assumption (C11) holds on docker and not on podman. Pass `--hostname <id prefix>` at create time, or add the container name to the list, when M6 translates container paths (M5 review A finding 4, medium).
+- A translated host path is not symlink-resolved, so a sandboxed agent can leave `<project>/readme.txt` pointing at `~/.ssh/id_rsa`: the confirmation names the link's own path while the host opener follows the link. `reverse` consults no filesystem by design (SC-006 wants the hint and the opened path to be one string). Decide in the spec whether the confirmation should name the resolved target (M6 review B finding 10, low).
 - A `file://` path keeps a `?query` or `#fragment` and then reports as missing. Decide in the spec whether either is stripped (M5 review A finding 8, low).
 - `ui::terminal::link_context` is rebuilt on every frame; cache it on the session state if T078's SC-005 measurement shows it (M5 review A finding 9, low).

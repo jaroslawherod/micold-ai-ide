@@ -351,6 +351,26 @@ impl State {
         effects
     }
 
+    /// Answer the sandbox open confirmation, given whether the sandbox is still live (feature 031,
+    /// FR-018a, contract link-opening §4).
+    ///
+    /// Whether the sandbox is `Running` or `Stale` is the binary's fact, not this state's, so the
+    /// shell reads it and hands it in. It arrives here rather than calling the reducer itself,
+    /// because the root is the only thing that drives a feature (SC-002,
+    /// `tests/feature_registration_cost.rs::only_the_root_drives_a_feature`).
+    pub fn confirm_link_open_for_effects(
+        &mut self,
+        sandbox_live: bool,
+    ) -> Vec<crate::features::Outcome> {
+        use crate::features::Outcome;
+        let (effects, rest): (Vec<Outcome>, Vec<Outcome>) =
+            crate::features::session::link_open_confirmed(self, sandbox_live)
+                .into_iter()
+                .partition(|o| matches!(o, Outcome::ClipboardWrite(_) | Outcome::OpenLink(_)));
+        drain(rest, |outcome| interpret(self, outcome));
+        effects
+    }
+
     /// Apply a [`Message`], transitioning the state. Pure and side-effect free.
     pub fn update(&mut self, message: Message) {
         match message {

@@ -68,7 +68,7 @@ viewport height (below it). The client implements `LinkRows` over `GridCache` as
 | C8 | `file:///home/u/a.txt` | not sandboxed, Windows | `None` (no drive) |
 | C9 | `file:///p/My%20Doc.pdf` | any | path decoded to `/p/My Doc.pdf` before C4–C12 |
 | C10 | `file:///p/%ZZ`, or non-UTF-8 after decoding | any | `None` |
-| C11 | `file:///work/proj/a.md`, or `file://<container-id-prefix>/work/proj/a.md` (the prefix is `id.get(..12).unwrap_or(id)`, so an id shorter than 12 is its own prefix) | sandboxed; a location `/work/proj` → `/home/u/proj` | `HostPath("/home/u/proj/a.md")`, `display` the same, `needs_confirmation = true` |
+| C11 | `file:///work/proj/a.md`, or `file://<container-id-prefix>/work/proj/a.md` (the prefix is `id.get(..12).unwrap_or(id)`, so an id shorter than 12 is its own prefix), or `file://micold-sandbox/work/proj/a.md` (the container's name: Docker defaults the hostname to the id prefix, podman to the name, and research R10 rejects setting `--hostname`) | sandboxed; a location `/work/proj` → `/home/u/proj` | `HostPath("/home/u/proj/a.md")`, `display` the same, `needs_confirmation = true` |
 | C12 | `file:///tmp/x` | sandboxed; no location contains `/tmp` | `Unreachable`, `display = "/tmp/x — not reachable from this machine"` |
 | C13 | `file:///work/proj/../../etc/passwd` | sandboxed | lexically `/etc/passwd`; C12 unless a location contains it |
 | C14 | `file:///mnt/host/c/Users/u/p/a.md` | sandboxed, Windows host; location `/mnt/host/c/Users/u/p` → `C:\Users\u\p` | `HostPath("C:\Users\u\p\a.md")` |

@@ -21,6 +21,7 @@ use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
+use micold_client::features::session::PendingLinkOpen;
 use micold_client::features::sidebar;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
@@ -91,7 +92,31 @@ const MODALS: &[(&str, fn(&mut State), Message)] = &[
         |s| s.project.forget_target = Some(PathBuf::from("/p")),
         Message::Project(ProjectMsg::ForgetCancelled),
     ),
+    (
+        "confirm_link_open",
+        |s| {
+            s.session.pending_link_open = Some(PendingLinkOpen {
+                session: SessionId::new(),
+                link: a_sandboxed_link(),
+            })
+        },
+        Message::Session(SessionMsg::LinkOpenDeclined),
+    ),
 ];
+
+/// A resolved sandboxed file link: one that translated to a host path and so needs a confirmation.
+fn a_sandboxed_link() -> micold_core::link::ResolvedLink {
+    micold_core::link::ResolvedLink {
+        link: micold_core::link::Link {
+            address: "file:///work/p/a.md".to_string(),
+            origin: micold_core::link::LinkOrigin::Detected,
+            cells: Vec::new(),
+        },
+        display: "/home/u/p/a.md".to_string(),
+        target: micold_core::link::Target::HostPath("/home/u/p/a.md".to_string()),
+        needs_confirmation: true,
+    }
+}
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037.
 fn open_dialog(state: &State) -> Option<&'static str> {

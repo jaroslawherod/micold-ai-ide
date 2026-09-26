@@ -130,6 +130,14 @@ pub struct State {
     /// FR-015c). Its presence *is* the confirm dialog being shown (T037). Mirrors
     /// `worktree.delete_target`.
     pub remove_target: Option<SessionId>,
+    /// A sandboxed file open awaiting the user's confirmation (feature 031, FR-018a).
+    ///
+    /// Its presence *is* the confirm surface being shown, mirroring [`Self::remove_target`]. It
+    /// holds the link resolved at activation rather than re-resolving on confirm: output moves, and
+    /// the path the user agreed to is the one named in the prompt they read (FR-017). It holds the
+    /// session too, because a session that closes while the prompt is up must not have a file
+    /// opened on its behalf (edge case "Pending opens").
+    pub pending_link_open: Option<PendingLinkOpen>,
     /// Which location's "start a session on…" list is open, if any, and where it hangs from
     /// (feature 026, FR-004).
     ///
@@ -778,6 +786,49 @@ impl Registered for ShellInstanceMenu {
     }
 }
 
+/// A sandboxed file open the user has been asked to confirm (feature 031, FR-018a).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingLinkOpen {
+    /// The session whose pane the link was activated in.
+    pub session: SessionId,
+    /// The link as it resolved at activation - the host path in it is what the prompt names.
+    pub link: micold_core::link::ResolvedLink,
+}
+
+/// The confirm-open-a-sandboxed-file dialog, as a floating surface (feature 031, FR-018a;
+/// contract link-opening section 4).
+///
+/// Built exactly like [`ConfirmSessionRemoveDialog`], including that Escape and a scrim click
+/// **decline**: the safe answer to a prompt the user dismissed without reading is not to open a
+/// file the sandboxed agent chose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfirmLinkOpenDialog;
+
+impl FloatingSurface for ConfirmLinkOpenDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("confirm_link_open")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog)
+            .cancelled_by(Message::Session(Msg::LinkOpenDeclined))
+    }
+}
+
+impl Registered for ConfirmLinkOpenDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .session
+            .pending_link_open
+            .as_ref()
+            .map(|_| ConfirmLinkOpenDialog)
+    }
+}
+
 /// The confirm-remove-session dialog, as a floating surface (feature 021, T032).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfirmSessionRemoveDialog;
@@ -1380,6 +1431,13 @@ pub enum Msg {
     /// The user activated this link (feature 031, FR-010). Emits `Outcome::OpenLink`; the shell
     /// performs it and answers with [`Msg::LinkOpenFinished`].
     LinkActivated(micold_core::link::ResolvedLink),
+    /// The user confirmed the sandboxed file open the prompt named (feature 031, FR-018a).
+    ///
+    /// Routed by `main.rs` to `shell::links`, which alone can read whether the sandbox is still up
+    /// and calls [`link_open_confirmed`] with the answer.
+    LinkOpenConfirmed,
+    /// The user declined it, or dismissed the prompt (feature 031, FR-018a).
+    LinkOpenDeclined,
     /// The opener answered for `address`, the text the program printed or declared (FR-015).
     LinkOpenFinished {
         address: String,
@@ -1480,6 +1538,12 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         | Msg::TerminalSelectionReleased
         | Msg::TerminalPasteRequested => {}
         Msg::LinkActivated(link) => return link_activated(state, link),
+        // `LinkOpenConfirmed` needs the sandbox's state, which lives on the binary's `App` and not
+        // here, so `shell/links.rs` reads it and calls `link_open_confirmed` directly. Reaching
+        // this arm means it was published without that route, and opening nothing is the safe
+        // answer (contract link-opening section 4).
+        Msg::LinkOpenConfirmed => {}
+        Msg::LinkOpenDeclined => link_open_declined(state),
         Msg::LinkOpenFinished { address, result } => link_open_finished(state, &address, result),
     }
     Vec::new()
@@ -1503,7 +1567,10 @@ fn link_activated(
     use micold_core::link::Target;
     match link.target {
         Target::Url(address) => vec![Outcome::OpenLink(OpenRequest::Url(address))],
-        Target::HostPath(_) if link.needs_confirmation => Vec::new(),
+        Target::HostPath(_) if link.needs_confirmation => {
+            link_open_requested(state, link);
+            Vec::new()
+        }
         Target::HostPath(path) => vec![Outcome::OpenLink(OpenRequest::Path {
             path,
             // The address the program printed, so a failure is reported against what the user read.
@@ -1517,6 +1584,59 @@ fn link_activated(
             Vec::new()
         }
     }
+}
+
+/// A sandboxed file open asks first (T7 - FR-018a).
+///
+/// The sandboxed agent writes the files it links to, and a document with macros or a runnable file
+/// opens with whatever the host has registered for it. So the prompt is not a courtesy: it is the
+/// only point at which the user sees the host path a container path became.
+fn link_open_requested(state: &mut crate::app::State, link: micold_core::link::ResolvedLink) {
+    let Some(session) = state.session.active else {
+        // No session is displayed, so nothing printed this link in a pane the user is looking at.
+        return;
+    };
+    state.clear_for_dialog();
+    state.session.pending_link_open = Some(PendingLinkOpen { session, link });
+}
+
+/// The user confirmed the pending open (T9 - FR-018a).
+///
+/// `sandbox_live` is whether the sandbox is still `Running` or `Stale`, which only the binary can
+/// see. Both refusals below are the edge case "Pending opens": the prompt can outlive what it
+/// describes, and opening the path anyway would open a file whose provenance has changed.
+pub fn link_open_confirmed(
+    state: &mut crate::app::State,
+    sandbox_live: bool,
+) -> Vec<crate::features::Outcome> {
+    use crate::features::{OpenRequest, Outcome};
+    let Some(pending) = state.session.pending_link_open.take() else {
+        return Vec::new();
+    };
+    // The host path, not the address: it is what the prompt named and what the user agreed to.
+    let micold_core::link::Target::HostPath(path) = &pending.link.target else {
+        // Only a host path ever opens this surface; anything else cannot reach here.
+        return Vec::new();
+    };
+    let path = path.clone();
+    if state.workspace.find_session(pending.session).is_none() {
+        state.notify_error(format!("Couldn't open {path}: the session has closed"));
+        return Vec::new();
+    }
+    if !sandbox_live {
+        state.notify_error(format!("Couldn't open {path}: the sandbox has stopped"));
+        return Vec::new();
+    }
+    vec![Outcome::OpenLink(OpenRequest::Path {
+        path,
+        // The address the program printed, so a failure is reported against what the user read.
+        address: pending.link.link.address,
+    })]
+}
+
+/// The user declined it, or dismissed the prompt (T10 - FR-018a).
+fn link_open_declined(state: &mut crate::app::State) {
+    state.session.pending_link_open = None;
 }
 
 /// One notification per failed open, and nothing for one that worked (contract link-opening §5).

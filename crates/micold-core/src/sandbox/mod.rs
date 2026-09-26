@@ -347,6 +347,15 @@ impl ProjectMount {
     }
 }
 
+/// The container's name, which is also how an existing sandbox is found and adopted.
+///
+/// One fixed name, never a per-run one: a sandbox outlives the application, and a second container
+/// under another name would leave the first holding the control port and the state directory
+/// (feature 027, `lifecycle::adopt`). It lives here rather than in the client because the container
+/// is created with `--name` and no `--hostname`, so under podman — which defaults a container's
+/// hostname to its name — this *is* the hostname its sessions print (feature 031, C11).
+pub const CONTAINER_NAME: &str = "micold-sandbox";
+
 /// Where the daemon's state directory appears inside the container.
 ///
 /// Not an arbitrary path. The daemon resolves its own state directory through the platform's data
@@ -449,6 +458,11 @@ pub struct MountSet {
     pub secret: SecretMount,
     /// Credential mounts, one per active opt-in. Empty unless the user opted in (rule N-1).
     pub credentials: Vec<CredentialMount>,
+}
+
+/// How many components an absolute container path has, which is how specific it is (C15).
+fn components(container_path: &str) -> usize {
+    container_path.split('/').filter(|c| !c.is_empty()).count()
 }
 
 /// A host credential path shared because the user opted into it.
@@ -660,6 +674,59 @@ impl MountSet {
         files
     }
 
+    /// The locations this sandbox shares with the host, most specific container path first
+    /// (feature 031, FR-018; research R10 decision 2).
+    ///
+    /// **The secret mount is absent, and that is a security property, not an omission.** A link to
+    /// the container's token path must not translate to this client's own token file, which is what
+    /// including it here would do. [`Self::denied_host_paths`] closes the other route to it.
+    ///
+    /// `mounted` is what the *running* container really mounts, from
+    /// [`ContainerFacts::mount_destinations`](super::parse::ContainerFacts::mount_destinations).
+    /// `None` means this bring-up created the container from this very set, so all of it is shared.
+    /// `Some` means it attached to one that already existed, which may have been created with other
+    /// projects — and a location that container lacks is not shared, because on Linux and macOS a
+    /// container path equals its host path, so translating it would open the host's own file of the
+    /// same name (C16c).
+    ///
+    /// Sorted by container-path component count, descending, so a nested location wins over the one
+    /// it sits inside: a shared credential folder lives in the sandbox's home, and the home's
+    /// mapping would send its files to the application-owned copy instead of the host's real one
+    /// (C15). Ties keep this set's own order — projects, state, home, then credentials.
+    pub fn shared_locations(&self, mounted: Option<&[String]>) -> Vec<crate::link::SharedLocation> {
+        let pairs = self
+            .projects
+            .iter()
+            .map(|m| (&m.container, &m.host))
+            .chain(std::iter::once((&self.state.container, &self.state.host)))
+            .chain(std::iter::once((&self.home.container, &self.home.host)))
+            .chain(self.credentials.iter().map(|c| (&c.container, &c.host)));
+
+        let mut locations: Vec<crate::link::SharedLocation> = pairs
+            .map(|(container, host)| crate::link::SharedLocation {
+                container: container.to_string_lossy().into_owned(),
+                host: host.to_string_lossy().into_owned(),
+            })
+            .filter(|l| match mounted {
+                None => true,
+                Some(mounted) => mounted.contains(&l.container),
+            })
+            .collect();
+        // Stable, so equally specific locations keep the order above rather than an arbitrary one.
+        locations.sort_by_key(|l| std::cmp::Reverse(components(&l.container)));
+        locations
+    }
+
+    /// Host paths a sandboxed link must never resolve to, whatever location it came through
+    /// (feature 031, FR-018a; C16b).
+    ///
+    /// Just the token today. Excluding the secret mount from [`Self::shared_locations`] is not
+    /// enough on its own: the token file lives *in* the state directory, which is shared, so
+    /// `/var/lib/micold-ai-ide/sandbox.token` reverse-maps straight onto it.
+    pub fn denied_host_paths(&self) -> Vec<String> {
+        vec![self.secret.host.to_string_lossy().into_owned()]
+    }
+
     /// Every host path this sandbox can reach. Used by the denylist assertion, which checks that
     /// generated argv mounts nothing outside this set (obligation C-3, conformance check K-4).
     pub fn host_paths(&self) -> Vec<&Path> {
@@ -812,6 +879,165 @@ mod tests {
         assert_eq!(budget.pids, Some(MIN_PIDS));
         // Clamping is idempotent: a corrected budget has nothing left to correct.
         assert!(budget.clamp().is_empty());
+    }
+
+    /// The mount set a sandboxed session's links are translated through (research R10).
+    fn shared() -> MountSet {
+        let profile = SandboxProfile {
+            credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
+            ..SandboxProfile::default()
+        };
+        MountSet::build_for(
+            &[PathBuf::from("/home/u/p"), PathBuf::from("/srv/other")],
+            &profile,
+            &CredentialLayout::conventional(Path::new("/home/u"), None),
+            PathBuf::from("/home/u/.local/share/micold-ai-ide"),
+            Path::new("/home/u"),
+            SecretMount {
+                host: PathBuf::from("/home/u/.local/share/micold-ai-ide/sandbox.token"),
+                container: PathBuf::from("/run/micold/token"),
+            },
+            false,
+        )
+    }
+
+    /// The same set for a *Windows* host, which is the one whose spelling every platform can check.
+    ///
+    /// The identity mapping below echoes host paths, and a host path is built with `PathBuf::join`
+    /// — so a Linux-host set assembled on Windows comes out with `\` in paths the container would
+    /// read as names (`/home/u\.claude\.credentials.json`), and the component count that orders
+    /// C15 is then wrong. That set does not exist in production, where `windows_host` is this
+    /// platform: the Windows mapping does, and `pathmap::map_for` joins it as a string precisely so
+    /// the container path is POSIX whatever compiled it. Every input here is a literal, so this
+    /// fixture is identical on Linux, macOS and Windows.
+    fn shared_windows() -> MountSet {
+        let profile = SandboxProfile {
+            credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
+            ..SandboxProfile::default()
+        };
+        MountSet::build_for(
+            &[
+                PathBuf::from(r"C:\Users\u\p"),
+                PathBuf::from(r"D:\srv\other"),
+            ],
+            &profile,
+            &CredentialLayout::conventional(Path::new(r"C:\Users\u"), None),
+            PathBuf::from(r"C:\Users\u\AppData\micold"),
+            Path::new(r"C:\Users\u"),
+            SecretMount {
+                host: PathBuf::from(r"C:\Users\u\AppData\micold\sandbox.token"),
+                container: PathBuf::from("/run/micold/token"),
+            },
+            true,
+        )
+    }
+
+    /// U60, U61, C15, C16 on a Windows host: the container paths are POSIX whatever platform built
+    /// them, and the order is by their components.
+    #[test]
+    fn shared_locations_on_a_windows_host_are_posix_and_most_specific_first() {
+        let containers: Vec<String> = shared_windows()
+            .shared_locations(None)
+            .into_iter()
+            .map(|l| l.container)
+            .collect();
+        assert_eq!(
+            containers,
+            vec![
+                "/mnt/host/c/Users/u/.claude/.credentials.json".to_string(),
+                "/mnt/host/c/Users/u/p".to_string(),
+                "/mnt/host/d/srv/other".to_string(),
+                "/mnt/host/c/Users/u".to_string(),
+                "/var/lib/micold-ai-ide".to_string(),
+            ],
+            "a container path is Linux's even when the host is Windows, so none of these carries a \
+             `\\` — and the credential still sorts ahead of the home it sits in (C15)"
+        );
+    }
+
+    /// U60, U61, C15, C16: what is shared, in most-specific-first order, and what never is.
+    ///
+    /// The identity mapping, so this is a Unix host's set: see [`shared_windows`] for why the
+    /// fixture cannot be spelled this way on Windows.
+    #[cfg(unix)]
+    #[test]
+    fn shared_locations_list_the_projects_state_home_and_credentials_most_specific_first() {
+        let mounts = shared();
+        let locations = mounts.shared_locations(None);
+        let pairs: Vec<(&str, &str)> = locations
+            .iter()
+            .map(|l| (l.container.as_str(), l.host.as_str()))
+            .collect();
+        assert_eq!(
+            pairs,
+            vec![
+                (
+                    "/home/u/.claude/.credentials.json",
+                    "/home/u/.claude/.credentials.json"
+                ),
+                ("/home/u/p", "/home/u/p"),
+                (
+                    "/var/lib/micold-ai-ide",
+                    "/home/u/.local/share/micold-ai-ide"
+                ),
+                ("/srv/other", "/srv/other"),
+                ("/home/u", "/home/u/.local/share/micold-ai-ide/sandbox-home"),
+            ],
+            "every project, the state directory, the sandbox's home and each active credential, \
+             deepest container path first so the nested credential wins over the home it sits in \
+             (C15)"
+        );
+        assert!(
+            !locations
+                .iter()
+                .any(|l| l.container == "/run/micold/token" || l.host.ends_with("sandbox.token")),
+            "the secret mount is never a shared location: a link to it would hand this client's \
+             own token to the system opener (C16, FR-018a)"
+        );
+    }
+
+    /// U62, C16c: only what the *running* container mounts is shared.
+    #[test]
+    fn a_location_the_running_container_does_not_mount_is_not_shared() {
+        let mounts = shared();
+        let mounted = [
+            "/home/u/p".to_string(),
+            "/var/lib/micold-ai-ide".to_string(),
+            "/home/u".to_string(),
+        ];
+        let containers: Vec<String> = mounts
+            .shared_locations(Some(&mounted))
+            .into_iter()
+            .map(|l| l.container)
+            .collect();
+        assert_eq!(
+            containers,
+            vec![
+                "/home/u/p".to_string(),
+                "/var/lib/micold-ai-ide".to_string(),
+                "/home/u".to_string(),
+            ],
+            "this client would share /srv/other and the AI CLI's sign-in, but the container it \
+             attached to was created without them — so a link into either is out of reach rather \
+             than opened from a same-named host path (C16c)"
+        );
+        assert_eq!(
+            mounts.shared_locations(None).len(),
+            5,
+            "with nothing known about what is mounted — a container this bring-up created from \
+             this very set — every location is shared"
+        );
+    }
+
+    /// U63, C16b: the token's host path is denied, because the state mount reaches it.
+    #[test]
+    fn the_denied_host_paths_hold_the_secret_mounts_own_path() {
+        assert_eq!(
+            shared().denied_host_paths(),
+            vec!["/home/u/.local/share/micold-ai-ide/sandbox.token".to_string()],
+            "excluding the secret mount is not enough: the token lives in the state directory, \
+             which is shared, so the reverse map must refuse this host path outright (C16b)"
+        );
     }
 
     #[test]

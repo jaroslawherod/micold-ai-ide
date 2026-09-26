@@ -17,11 +17,32 @@ use crate::App;
 /// The root applies the message and returns the effect requests: an open goes to [`perform`], a
 /// clipboard write to `shell::clipboard::interpret`.
 pub fn on_link_message(app: &mut App, msg: SessionMsg) -> Task<Message> {
-    let effects = app.core.update_session_for_effects(msg);
+    let effects = match msg {
+        // The confirmation's answer turns on whether the sandbox is still live (contract
+        // link-opening §4). That lives on `App`, so the shell reads it and the reducer decides.
+        SessionMsg::LinkOpenConfirmed => {
+            let live = sandbox_is_live(app);
+            app.core.confirm_link_open_for_effects(live)
+        }
+        other => app.core.update_session_for_effects(other),
+    };
     Task::batch(effects.into_iter().map(|effect| match effect {
         Outcome::OpenLink(request) => perform(app, request),
         other => crate::shell::clipboard::interpret(other),
     }))
+}
+
+/// Whether the sandbox is up enough for a path it shared to still mean that path.
+///
+/// `Running` and `Stale` both have a container: a stale sandbox's mounts are the ones it was created
+/// with, so its translations hold. Every other state has no container, and a path translated through
+/// a sandbox that is gone is not a path this machine should open (contract link-opening §4).
+fn sandbox_is_live(app: &App) -> bool {
+    use micold_core::sandbox::lifecycle::SandboxState;
+    matches!(
+        app.sandbox.state,
+        SandboxState::Running(_) | SandboxState::Stale(_)
+    )
 }
 
 /// Hand `request` to the opener on a blocking task, with nothing in between (SC-003).
@@ -514,6 +535,127 @@ mod tests {
             "the opener's answer comes back as LinkOpenFinished for the same address"
         );
     }
+
+    /// An app with one session, a confirmation pending for `path`, and the sandbox either live or
+    /// stopped — the two halves the confirmation's answer depends on (contract link-opening §4).
+    fn awaiting_confirmation(path: &std::path::Path, sandbox_live: bool) -> crate::App {
+        use micold_client::features::session::PendingLinkOpen;
+        use micold_core::sandbox::lifecycle::SandboxState;
+        use micold_core::session::{AiCli, Session, SessionLocation};
+
+        let mut app = crate::tests::base_app();
+        let session = Session::start_new(
+            SessionLocation::Worktree("feat-a".to_string()),
+            AiCli::ClaudeCode,
+        );
+        let id = session.id;
+        app.core
+            .workspace
+            .sessions
+            .insert(std::path::PathBuf::from("/p"), vec![session]);
+        app.core.session.active = Some(id);
+        app.sandbox.state = if sandbox_live {
+            SandboxState::Running(micold_core::sandbox::runtime::ContainerId(
+                "0123456789abcdef0123".to_string(),
+            ))
+        } else {
+            SandboxState::Starting
+        };
+        app.core.session.pending_link_open = Some(PendingLinkOpen {
+            session: id,
+            link: ResolvedLink {
+                needs_confirmation: true,
+                ..path_link("file:///work/p/notes.txt", path)
+            },
+        });
+        app
+    }
+
+    /// Every notification raised so far, in arrival order.
+    fn notifications(app: &mut crate::App) -> Vec<String> {
+        let mut seen = Vec::new();
+        while let Some(n) = app.core.notifications.queue.visible().cloned() {
+            seen.push(n.message);
+            app.core.notifications.queue.dismiss();
+        }
+        seen
+    }
+
+    /// U98 (T13): the shell answers the confirmation with the sandbox's live state read from `App`,
+    /// which is the one fact the pure reducer cannot see. A live sandbox opens the host path.
+    #[test]
+    fn confirming_while_the_sandbox_runs_opens_the_translated_host_path() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let doc = dir.path().join("notes.txt");
+        std::fs::write(&doc, b"x").expect("write the document");
+
+        let opener = Arc::new(RecordingOpener::default());
+        let mut app = awaiting_confirmation(&doc, true);
+        app.caps = app.caps.clone().with_link_opener(opener.clone());
+
+        let messages = run(crate::update_inner(
+            &mut app,
+            Message::Session(SessionMsg::LinkOpenConfirmed),
+        ));
+
+        assert_eq!(
+            opened(&opener),
+            vec![doc.to_string_lossy().to_string()],
+            "the confirmed open reaches the opener with the host path (FR-018a)"
+        );
+        assert_eq!(
+            messages,
+            vec![Message::Session(SessionMsg::LinkOpenFinished {
+                address: "file:///work/p/notes.txt".to_string(),
+                result: Ok(()),
+            })],
+            "and its answer is reported against the address the program printed (FR-015)"
+        );
+        assert!(
+            app.core.session.pending_link_open.is_none(),
+            "the confirmation is spent, so the dialog closes"
+        );
+        assert!(
+            notifications(&mut app).is_empty(),
+            "a confirmed open that succeeded says nothing"
+        );
+    }
+
+    /// U98 (T13): the same confirmation with the sandbox stopped opens nothing and says why. The
+    /// path was only ever valid because the sandbox shared that location.
+    #[test]
+    fn confirming_after_the_sandbox_stopped_opens_nothing_and_says_so() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let doc = dir.path().join("notes.txt");
+        std::fs::write(&doc, b"x").expect("write the document");
+
+        let opener = Arc::new(RecordingOpener::default());
+        let mut app = awaiting_confirmation(&doc, false);
+        app.caps = app.caps.clone().with_link_opener(opener.clone());
+
+        let messages = run(crate::update_inner(
+            &mut app,
+            Message::Session(SessionMsg::LinkOpenConfirmed),
+        ));
+
+        assert!(
+            opened(&opener).is_empty() && opener.revealed.lock().unwrap().is_empty(),
+            "nothing is handed to the operating system once the sandbox has stopped"
+        );
+        assert_eq!(
+            messages,
+            Vec::new(),
+            "and no open is performed to report on"
+        );
+        assert_eq!(
+            notifications(&mut app),
+            vec![format!(
+                "Couldn't open {}: the sandbox has stopped",
+                doc.to_string_lossy()
+            )],
+            "the reason is the sandbox, named against the host path (contract link-opening §4)"
+        );
+    }
 }
 
 /// The outer loop for the pane (feature 031, A1–A18): the real session pane from
@@ -690,6 +832,76 @@ mod acceptance {
         fn named(mut self, host_names: &[&str]) -> Self {
             self.app.core.session.host_names = host_names.iter().map(|n| n.to_string()).collect();
             self
+        }
+
+        /// This session runs in a sandbox sharing `container` from the host's `host` (U134, A19).
+        ///
+        /// Both halves, as the bring-up reports them: without the locations `Sandbox::locations`
+        /// answers `None` and the pane would read the container's paths as this machine's own.
+        fn in_a_sandbox(mut self, shared: &[(&str, &std::path::Path)]) -> Self {
+            use micold_client::features::sandbox::SandboxLocations;
+            use micold_core::sandbox::lifecycle::SandboxState;
+            use micold_core::sandbox::runtime::ContainerId;
+            let container = ContainerId("0123456789abcdef0123".to_string());
+            self.app.sandbox.state = SandboxState::Running(container.clone());
+            self.app.sandbox.locations = Some((
+                container,
+                SandboxLocations {
+                    shared: shared
+                        .iter()
+                        .map(|(container, host)| micold_core::link::SharedLocation {
+                            container: (*container).to_string(),
+                            host: host.to_string_lossy().into_owned(),
+                        })
+                        .collect(),
+                    denied: Vec::new(),
+                },
+            ));
+            self
+        }
+
+        /// The catalog holds a record for this session, as it does for a session the user can see.
+        ///
+        /// The pane alone needs no record — it draws from the grid — but a confirmation answered
+        /// later checks that the session it was asked about is still open (contract link-opening §4).
+        fn with_a_session_record(mut self) -> Self {
+            use micold_core::session::{AiCli, Session as Record, SessionLocation};
+            let mut record = Record::start_new(
+                SessionLocation::Worktree("proj".to_string()),
+                AiCli::ClaudeCode,
+            );
+            record.id = self.id;
+            self.app
+                .core
+                .workspace
+                .sessions
+                .insert(std::path::PathBuf::from("/p"), vec![record]);
+            self
+        }
+
+        /// Which dialog the application would draw, by name.
+        fn dialog(&self) -> Option<&'static str> {
+            micold_client::overlay::registry::open_dialog(&self.app.core)
+                .map(|open| open.id().as_str())
+        }
+
+        /// The path the open confirmation is asking about, as the dialog shows it.
+        fn confirming(&self) -> Option<String> {
+            self.app
+                .core
+                .session
+                .pending_link_open
+                .as_ref()
+                .map(|pending| pending.link.display.clone())
+        }
+
+        /// Answer the confirmation the way its **Open** button does, and run what follows.
+        fn confirm_open(&mut self) {
+            let mut pending: std::collections::VecDeque<Message> =
+                [Message::Session(SessionMsg::LinkOpenConfirmed)].into();
+            while let Some(message) = pending.pop_front() {
+                pending.extend(run(crate::update_inner(&mut self.app, message)));
+            }
         }
 
         fn on_screen(lines: Vec<Line>) -> Self {
@@ -1219,16 +1431,15 @@ mod acceptance {
         }
     }
 
-    /// A19's M5 half (U134): inside a sandboxed session every host path is out of reach until M6
-    /// translates it, and the hint says so rather than pointing at this machine's own file (C12).
+    /// A19's other half (U134): a container path outside every shared location is out of reach, and
+    /// the hint says so rather than pointing at this machine's own file of the same name (C12).
     #[test]
     fn a_file_link_in_a_sandboxed_session_reaches_nothing_and_says_why() {
-        use micold_core::sandbox::lifecycle::SandboxState;
+        let dir = tempfile::tempdir().expect("a temp dir");
         let address = "file:///tmp/x";
-        let mut session = Session::on_screen(vec![line(address)]).named(&["devbox"]);
-        session.app.sandbox.state = SandboxState::Running(
-            micold_core::sandbox::runtime::ContainerId("0123456789abcdef0123".to_string()),
-        );
+        let mut session = Session::on_screen(vec![line(address)])
+            .named(&["devbox"])
+            .in_a_sandbox(&[("/work/proj", dir.path())]);
         session.activate(3, 0);
         assert_eq!(
             session.opened(),
@@ -1242,6 +1453,58 @@ mod acceptance {
                 "Couldn't open {address}: the sandbox doesn't share that location with this machine"
             )],
             "the user is told why, in the contract's words (FR-015, contract link-opening §5)"
+        );
+    }
+
+    /// A19: a container path the sandbox does share asks before anything is opened, names the host
+    /// path in the question, and opens that host path once the answer is yes (FR-018a).
+    #[test]
+    fn a_shared_sandboxed_file_link_asks_first_and_then_opens_the_host_path() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let host = dir.path().join("readme.txt");
+        std::fs::write(&host, b"x").expect("write the shared file");
+        let host = host.to_string_lossy().into_owned();
+
+        let address = "file:///work/proj/readme.txt";
+        let mut session = Session::on_screen(vec![line(address)])
+            .named(&["devbox"])
+            .in_a_sandbox(&[("/work/proj", dir.path())])
+            .with_a_session_record();
+        session.activate(3, 0);
+
+        assert_eq!(
+            session.opened(),
+            Vec::<String>::new(),
+            "nothing is opened before the question is answered (FR-018a)"
+        );
+        assert!(session.revealed().is_empty(), "and nothing is revealed");
+        assert_eq!(
+            session.dialog(),
+            Some("confirm_link_open"),
+            "the activation opens the confirmation and not something else"
+        );
+        assert_eq!(
+            session.confirming(),
+            Some(host.clone()),
+            "the question is about the host path, which is what opening would touch"
+        );
+
+        session.confirm_open();
+
+        assert_eq!(
+            session.opened(),
+            vec![host],
+            "answering yes opens the translated host path (A19, C14)"
+        );
+        assert_eq!(
+            session.dialog(),
+            None,
+            "and the answered question is gone from the screen"
+        );
+        assert_eq!(
+            session.notifications(),
+            Vec::<String>::new(),
+            "an open that worked says nothing"
         );
     }
 }

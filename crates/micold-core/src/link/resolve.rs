@@ -81,13 +81,24 @@ pub fn host_names_from(raw: &str) -> Vec<String> {
 
 /// The names a container answers to (FR-018, C11).
 ///
-/// A container's hostname is its id's 12-character prefix, which is also what its shell prompt
-/// shows; a program may print the full id instead. An id shorter than the prefix is its own prefix.
-pub fn container_host_names(id: &str) -> Vec<String> {
+/// Docker defaults a container's hostname to its id's 12-character prefix, which is also what its
+/// shell prompt shows; a program may print the full id instead. Podman defaults it to the
+/// container's **name**, so that is accepted too — the sandbox is created with `--name` and no
+/// `--hostname`, and changing that would change feature 027's container contract (research R10,
+/// Rejected). An id shorter than the prefix is its own prefix, and an empty name is no name.
+///
+/// Every name here only decides that the address names *the sandbox*. The path it carries is still
+/// a container path, translated through the shared locations and confirmed before anything opens
+/// (C17, FR-018a) — so accepting one name too many cannot open a host file the sandbox does not
+/// share, while accepting one too few leaves a real link unfollowable.
+pub fn container_host_names(id: &str, name: &str) -> Vec<String> {
     let prefix = id.get(..CONTAINER_ID_PREFIX).unwrap_or(id);
     let mut names = vec![prefix.to_string()];
     if prefix != id {
         names.push(id.to_string());
+    }
+    if !name.is_empty() && !names.iter().any(|n| n == name) {
+        names.push(name.to_string());
     }
     names
 }
@@ -124,15 +135,32 @@ fn file(link: Link, host: &str, path: &str, ctx: &LinkContext) -> Option<Resolve
     {
         return None;
     }
-    // A sandboxed session's paths are the container's, not this machine's. Until M6 translates them
-    // through the shared locations, every one of them is reported as out of reach (C12), which is
-    // the safe direction: nothing opens the host's own file of the same name.
-    if ctx.sandbox.is_some() {
-        return Some(ResolvedLink {
-            link,
-            display: format!("{path} — not reachable from this machine"),
-            target: Target::Unreachable(Reason::NotShared),
-            needs_confirmation: false,
+    // A sandboxed session's paths are the container's, not this machine's, whichever name the
+    // address used to say so (C17). They are translated through the locations the sandbox really
+    // shares — and a path outside every one of them is reported as out of reach (C12) rather than
+    // opened as the host's own file of the same name, which is what FR-018 forbids outright.
+    if let Some(sandbox) = &ctx.sandbox {
+        let host = crate::sandbox::pathmap::reverse(
+            &sandbox.locations,
+            &sandbox.denied,
+            path,
+            ctx.windows_host,
+        );
+        return Some(match host {
+            // FR-018a: the sandboxed agent writes the files it links to, so the user confirms the
+            // host path before anything opens it.
+            Some(host) => ResolvedLink {
+                link,
+                display: host.clone(),
+                target: Target::HostPath(host),
+                needs_confirmation: true,
+            },
+            None => ResolvedLink {
+                link,
+                display: format!("{path} — not reachable from this machine"),
+                target: Target::Unreachable(Reason::NotShared),
+                needs_confirmation: false,
+            },
         });
     }
     let path = if ctx.windows_host {
@@ -227,16 +255,115 @@ mod tests {
         }
     }
 
-    /// A session in a sandbox that shares nothing (C12); M6 fills the locations in.
+    /// A shared pair, as `MountSet::shared_locations` produces them.
+    fn at(container: &str, host: &str) -> SharedLocation {
+        SharedLocation {
+            container: container.to_string(),
+            host: host.to_string(),
+        }
+    }
+
+    /// A session in a sandbox that shares a project, the state directory and its own home, with the
+    /// client's token denied through the state mount (C11, C16b).
     fn sandboxed() -> LinkContext {
         LinkContext {
             sandbox: Some(SandboxLinkContext {
-                host_names: container_host_names("0123456789abcdef"),
-                locations: Vec::new(),
-                denied: Vec::new(),
+                host_names: container_host_names("0123456789abcdef", "micold-sandbox"),
+                locations: vec![
+                    at("/work/proj", "/home/u/proj"),
+                    at(
+                        "/var/lib/micold-ai-ide",
+                        "/home/u/.local/share/micold-ai-ide",
+                    ),
+                    at("/home/u", "/home/u/.local/share/micold-ai-ide/sandbox-home"),
+                ],
+                denied: vec!["/home/u/.local/share/micold-ai-ide/sandbox.token".to_string()],
             }),
             ..local()
         }
+    }
+
+    /// U38, C11: which names a container answers to in a `file://` address.
+    #[test]
+    fn a_sandboxed_file_link_is_accepted_from_every_name_the_container_answers_to() {
+        let full = "0123456789abcdef";
+        for host in [
+            "",
+            "localhost",
+            "0123456789ab",
+            full,
+            "0123456789AB",
+            "micold-sandbox",
+        ] {
+            assert_eq!(
+                target(&format!("file://{host}/work/proj/a.md"), &sandboxed()),
+                Some(Target::HostPath("/home/u/proj/a.md".to_string())),
+                "{host:?} is the container itself, so its path is translated rather than refused \
+                 (C11)"
+            );
+        }
+        assert_eq!(
+            target("file://otherhost/work/proj/a.md", &sandboxed()),
+            None,
+            "a name that is neither this machine's nor the container's is another machine (C6)"
+        );
+    }
+
+    /// U39, C11: a shared path becomes the host path that holds the same file, and asks first.
+    #[test]
+    fn a_sandboxed_path_under_a_shared_location_opens_its_host_path_after_a_confirmation() {
+        assert_eq!(
+            resolve(detected("file:///work/proj/a.md"), &sandboxed()),
+            Some(ResolvedLink {
+                link: detected("file:///work/proj/a.md"),
+                display: "/home/u/proj/a.md".to_string(),
+                target: Target::HostPath("/home/u/proj/a.md".to_string()),
+                needs_confirmation: true,
+            }),
+            "the hint shows the host path that will open, and the sandbox's own file gets a \
+             confirmation before it does (FR-018, FR-018a)"
+        );
+    }
+
+    /// U47, C17: this machine's own names in a sandboxed session still name a *container* path.
+    #[test]
+    fn in_a_sandboxed_session_this_machines_names_still_translate() {
+        assert_eq!(
+            target("file://devbox/work/proj/a.md", &sandboxed()),
+            Some(Target::HostPath("/home/u/proj/a.md".to_string())),
+            "the program printing the link runs in the container whatever host name it used, so \
+             the path is the container's and goes through the shared locations (C17)"
+        );
+        assert_eq!(
+            target("file://devbox/home/u/p/a.md", &sandboxed()),
+            Some(Target::HostPath(
+                "/home/u/.local/share/micold-ai-ide/sandbox-home/p/a.md".to_string()
+            )),
+            "and it is not read as this machine's own /home/u/p/a.md, which is the one outcome \
+             FR-018 forbids outright"
+        );
+    }
+
+    /// C16b, C16c: what a sandboxed session may not reach even through a shared location.
+    #[test]
+    fn a_denied_or_unmounted_sandboxed_path_is_not_reachable() {
+        assert_eq!(
+            target("file:///var/lib/micold-ai-ide/sandbox.token", &sandboxed()),
+            Some(Target::Unreachable(Reason::NotShared)),
+            "the client's own token is inside the shared state directory, and handing it to the \
+             system opener is what `denied` exists to stop (C16b)"
+        );
+        assert_eq!(
+            target("file:///srv/other/a.md", &sandboxed()),
+            Some(Target::Unreachable(Reason::NotShared)),
+            "a project the running container was not created with is out of reach, not opened \
+             from this machine's own /srv/other (C16c)"
+        );
+        assert_eq!(
+            target("file:///work/proj/../../etc/passwd", &sandboxed()),
+            Some(Target::Unreachable(Reason::NotShared)),
+            "and a path that climbs out of its location names nothing shared (C13)"
+        );
     }
 
     /// What `address` resolves to in `ctx`, as the pane would ask.
@@ -355,24 +482,31 @@ mod tests {
         );
     }
 
-    /// U141: a container reports itself by the short id a shell prompt shows, or by the full one.
+    /// U141: a container reports itself by the short id a shell prompt shows, by the full one, or —
+    /// under podman — by the name it was created with.
     #[test]
-    fn a_containers_names_are_its_twelve_character_prefix_and_its_full_id() {
+    fn a_containers_names_are_its_prefix_its_full_id_and_the_name_it_was_created_with() {
         let full = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         assert_eq!(
-            container_host_names(full),
-            vec!["0123456789ab".to_string(), full.to_string()],
-            "a 64-character id answers to its 12-character prefix and to itself (C11)"
+            container_host_names(full, "micold-sandbox"),
+            vec![
+                "0123456789ab".to_string(),
+                full.to_string(),
+                "micold-sandbox".to_string()
+            ],
+            "Docker defaults the hostname to the id's 12-character prefix and a program may print \
+             the full id; podman defaults it to the container's name, and none of the three is a \
+             name this machine answers to (C11)"
         );
         assert_eq!(
-            container_host_names("0123456789ab"),
-            vec!["0123456789ab".to_string()],
+            container_host_names("0123456789ab", "micold-sandbox"),
+            vec!["0123456789ab".to_string(), "micold-sandbox".to_string()],
             "an id that is its own prefix is listed once"
         );
         assert_eq!(
-            container_host_names("01234567"),
+            container_host_names("01234567", ""),
             vec!["01234567".to_string()],
-            "an id shorter than the prefix length is its own prefix (C11)"
+            "an id shorter than the prefix length is its own prefix, and an empty name is no name"
         );
     }
 
@@ -384,6 +518,7 @@ mod tests {
             "mailto:team@example.com?subject=Hi%20there",
             "vscode://file/home/u/a.rs",
             "file:///tmp/x",
+            "file:///work/proj/a.md",
             "file://devbox/p/My%20Doc.pdf",
             "file://otherhost/x",
         ];
@@ -408,8 +543,9 @@ mod tests {
             }
         }
         assert_eq!(
-            followable, 8,
-            "the sample holds three web or mail links in each context, and two host paths on this one"
+            followable, 10,
+            "the sample holds three web or mail links in each context, three host paths on this \
+             machine, and one translated out of the sandbox"
         );
     }
 }
