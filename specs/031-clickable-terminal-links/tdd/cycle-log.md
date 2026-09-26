@@ -1028,3 +1028,25 @@ reasons are in autopilot.md. A1 and B1 are the same finding, as are A2 and B3.
   holds (B6); the fixtures README no longer implies the docker fixture carries the `Config.Hostname`
   the probe read (B9)
 - refactor: none beyond the guard-driven move above
+
+## Cycle 85: the Windows CI failure in the M6 fixture (PR #408)
+
+`build + test (windows-latest)` failed on
+`sandbox::tests::shared_locations_list_the_projects_state_home_and_credentials_most_specific_first`:
+`left: [… ("/home/u\\.claude\\.credentials.json", …)]`, and with `\` in it that entry no longer
+sorted deepest-first, so C15's order broke.
+
+- diagnosis: the fixture asks `build_for` for a **Linux** host (`windows_host: false`) while running
+  on Windows. That branch echoes host paths, and a host path is assembled with `PathBuf::join`, so
+  on Windows the echo carries `\` into a path the container would read as a name. Production never
+  builds that combination — `windows_host` is the platform it runs on — and the real Windows
+  mapping is already correct: `pathmap::map_for` joins the container path as a **string** for exactly
+  this reason (feature 027, T115), so no production code was at fault
+- test: `shared_locations_on_a_windows_host_are_posix_and_most_specific_first`, over a new
+  `shared_windows()` fixture whose every input is a literal, so it spells the same set on Linux,
+  macOS and Windows. It asserts that no container path carries a `\` and that the credential still
+  sorts ahead of the home it sits inside
+- the identity-mapping fixture keeps its exact host-and-container list under `#[cfg(unix)]`, where a
+  Unix host's set is what the platform actually builds
+- verified: `cargo test -p micold-core --lib sandbox::tests` 10 passed,
+  `cargo clippy --target x86_64-pc-windows-msvc --all-targets -D warnings` clean, `mise run gate` green
