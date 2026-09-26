@@ -80,8 +80,9 @@ would not either.
 **If your default names a CLI that isn't installed, the app keeps it rather than quietly changing
 it.** That is deliberate. A CLI can be missing for a moment — a startup file that failed or timed
 out, environment-include switched off, an upgrade in progress — and silently rewriting your
-preference would lose a choice you made without saying so. The setting stays as you left it, and when you start a session the app tells you what is
-missing and offers the CLIs that are available instead of substituting one.
+preference would lose a choice you made without saying so. The setting stays as you left it, and
+when you start a session the app tells you what is missing and offers the CLIs that are available
+instead of substituting one.
 
 ### Show activity for Pi sessions
 
