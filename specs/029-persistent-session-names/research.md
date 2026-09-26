@@ -139,8 +139,10 @@ filling only labels that are `Pending` and only from that session's own provider
 narrow: the latest `{"type":"ai-title"}` record. `claude` keeps re-emitting the **pre-rename**
 `ai-title` after a user's `/rename`, and records the chosen name as `{"type":"custom-title"}`, mirrored
 in `{"type":"agent-name"}` — its own resolved display name. So the pass must read the CLI's *current*
-name for the conversation: the latest `custom-title`, else the latest `agent-name`, else the latest
-`ai-title`, with kind ranking above position because a rename is sticky in those records. Nothing else
+name for the conversation: the latest `custom-title` if there is one — that kind alone ranks above
+position, because a rename is sticky in those records — else the latest of `agent-name` or `ai-title`
+**by position**, which is what stays correct if a later `claude` stops writing `agent-name`
+(contract C16.1). Nothing else
 about R4 changes — same pass, same hop, same inputs, same cost, same precedence against the live
 terminal title.
 
