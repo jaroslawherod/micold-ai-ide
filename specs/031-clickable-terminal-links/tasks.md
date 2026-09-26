@@ -340,7 +340,7 @@ the `env_include.rs` builders (plan, Target Platform).
   - A `file` link naming another machine is not a link.
   - A missing file shows a notification.
   - A sandboxed session's file links show as not reachable. T069 replaces this.
-- [ ] T054 [US3] Verify the milestone: `mise run gate`, `cargo check --target aarch64-apple-darwin -p micold-client`, then the `visual-pass` skill for quickstart §B.8–B.10 and §B.13. This part of US3 is complete only when the T084 acceptance tests A12 and A14–A18 are green. It confirms acceptance rows A12 and A14–A18 and carries no markers, so it is not ticked by them.
+- [X] T054 [US3] Verify the milestone: `mise run gate`, `cargo check --target aarch64-apple-darwin -p micold-client`, then the `visual-pass` skill for quickstart §B.8–B.10 and §B.13. This part of US3 is complete only when the T084 acceptance tests A12 and A14–A18 are green. It confirms acceptance rows A12 and A14–A18 and carries no markers, so it is not ticked by them.
 
 **Checkpoint (M5)**: host `file` links open, and runnable files are revealed.
 
