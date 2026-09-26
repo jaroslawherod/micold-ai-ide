@@ -104,16 +104,30 @@ Xvfb :77 -screen 0 1600x1400x24 -nolisten tcp &
 1600×1400 is deliberate: tall enough that a section and the list it floats fit in one frame, so a
 comparison is one screenshot rather than two you have to hold in your head.
 
-### 4. Launch — **with lavapipe, or it will not start**
+### 4. Launch — **with lavapipe, and with a data directory of your own**
 
 ```bash
+data=<your scratchpad>/data      # anywhere only you write
+mkdir -p /tmp/vp77 "$data"
 env -u WAYLAND_DISPLAY DISPLAY=:77 \
+    XDG_RUNTIME_DIR=/tmp/vp77 \
+    XDG_DATA_HOME="$data" \
     WGPU_BACKEND=vulkan \
     VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
     setsid nohup <binary> > run.log 2>&1 &
 ```
 
 `env -u WAYLAND_DISPLAY` is required — winit prefers Wayland and will ignore `DISPLAY` entirely.
+
+**`XDG_DATA_HOME` is not optional, and neither is `XDG_RUNTIME_DIR`.** Without them the client and
+the daemon you just launched resolve their data directory to the developer's own
+`~/.local/share/micold-ai-ide` and write into it: `settings.json`, `projects.json`,
+`micold-client.log`, the materialised Pi component. A pass that drives the Settings screen then
+leaves the fixture values it typed in the user's real settings file, where they surface later as a
+bug report about a setting nobody chose. Seed the project you want opened into *your* data home's
+`projects.json`, never the real one — the client binary has no command line to open a project with.
+`XDG_RUNTIME_DIR` is also the "is this process mine?" predicate the cleanup step below depends on,
+so a run without it cannot be cleaned up.
 
 **`WGPU_BACKEND=gl` fails**, with `wgpu error: Validation Error / In Surface::configure / Invalid
 surface`. Xvfb has no usable GLX. `lvp_icd.json` is Mesa's lavapipe, a software Vulkan rasteriser,

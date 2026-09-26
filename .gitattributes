@@ -43,6 +43,16 @@ specs/**      micold-docs
 # own runtime state (`worktrees/`, local settings), which is untracked and not prose.
 .claude/skills/** micold-docs
 
+# Read by a test, so a test input rather than documentation: the visual-pass skill is the one recipe
+# in the repository that launches the real client and the real daemon, and
+# `crates/micold-core/tests/tests_never_write_the_real_data_directory.rs` holds its launch block to
+# setting `XDG_DATA_HOME` and `XDG_RUNTIME_DIR`. Without them a pass writes the developer's own
+# `~/.local/share/micold-ai-ide`, which is how a test fixture's settings draft once reached a real
+# settings file (029 T069). If this stayed documentation, dropping a variable from the recipe would
+# skip the whole pipeline -- so the one edit the gate exists to catch would be the one edit it never
+# sees. Must stay after `.claude/skills/**`, which sets the attribute.
+/.claude/skills/visual-pass/SKILL.md -micold-docs
+
 # Compiled into the binary, so a build input rather than documentation: micold-core's
 # `metadata.rs` does `include_str!("../../../CHANGELOG.md")` so the app can show a "what's new"
 # view with no filesystem or network access (Constitution Principle IV). Changing it changes the
