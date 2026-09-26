@@ -171,6 +171,7 @@ the cycle log; a red is not required.
 | U68 | `recover_live_session_names` records a label after `note_activity` and returns > 0 | FR-010, C6.3a | guard | DONE | untitled_session_labels.rs `a_running_untitled_session_reads_its_label_on_the_tick_after_its_first_prompt` |
 | U69 | A spinner-driven activity change in `drain_signals` sets `name_stale` | FR-010, C6.3b | example | DONE | untitled_session_labels.rs `a_spinner_drained_before_the_prompt_hook_still_gets_the_label` |
 | U70 | A drain with no activity change leaves `name_stale` unset (idle tick reads nothing) | SC-006 | guard | DONE | untitled_session_labels.rs `an_idle_tick_that_changed_nothing_reads_no_records` |
+| U72 | A `UserPromptSubmit` hook sets `name_stale` even when it changes no signal (a startup spinner already spent the one `Unknown → Working` move) | FR-010, C6.3c | example | DONE | untitled_session_labels.rs `a_spinner_seen_before_the_first_prompt_does_not_cost_the_session_its_label` |
 | U71 | Nothing but the recovery and title paths writes a label (no client message sets one) | FR-013 | guard | DONE | untitled_session_labels.rs `nothing_but_the_recovery_path_writes_a_label` |
 
 ## Invariants and edge cases still to place

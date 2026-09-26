@@ -1195,3 +1195,61 @@ fn an_idle_tick_that_changed_nothing_reads_no_records() {
 
     pty.kill().expect("kill");
 }
+
+#[test]
+fn a_spinner_seen_before_the_first_prompt_does_not_cost_the_session_its_label() {
+    // A10 (US3 #1, FR-010) in its third order, and U72 (C6.3c). `claude` draws a braille spinner in
+    // its terminal title while it starts up — connecting its servers, loading its plugins — before
+    // the user has typed anything. That drain is the FSM's one and only `Unknown → Working` move
+    // (`SpinnerObserved` is a no-op from every other state, H1a), and it is spent on a tick where
+    // the conversation is still empty. The `UserPromptSubmit` hook that follows therefore changes
+    // no badge, so re-arming on a *change* alone would leave the first turn unread until the turn
+    // ended. The prompt is the event that puts the turn on disk, so it re-arms the lookup whether
+    // or not it moved the badge.
+    let stores = ProviderStores::new();
+    let id = Uuid::from_u128(0x3285);
+    let data = tempfile::tempdir().unwrap();
+    let state = state_with(data.path(), vec![session(id, SessionLabel::Pending)]);
+    let pty = register_titler(&state, SessionId::from_uuid(id), SPINNER_TITLE);
+
+    // Spend the flag the spawn set, and then the one the startup spinner sets, both while there is
+    // still nothing typed to read.
+    assert_eq!(state.recover_live_session_names(), 0);
+    let spun = wait_until(Duration::from_secs(10), || {
+        state.drain_signals();
+        activity_of(&state, id) == ActivitySignal::Working
+    });
+    assert!(
+        spun,
+        "the startup spinner must reach the FSM as Working evidence"
+    );
+    assert_eq!(
+        state.recover_live_session_names(),
+        0,
+        "nothing has been typed yet, so the pass finds nothing and clears the flag"
+    );
+
+    // Only now does the user type their first prompt.
+    stores.claude_transcript(&cwd(), id, &claude_fixture("bare_skill.jsonl"));
+    assert!(
+        !state.note_activity(
+            SessionId::from_uuid(id),
+            ActivityEvent::Hook(HookKind::UserPromptSubmit)
+        ),
+        "the badge is already Working, so the hook moves nothing — and a spinner cannot move it \
+         again either"
+    );
+
+    assert_eq!(
+        state.recover_live_session_names(),
+        1,
+        "the first prompt re-arms the lookup even when it changes no badge (C6.3c), or the row \
+         reads \"New session\" until the end of the turn"
+    );
+    assert_eq!(
+        label_of(&state, id),
+        SessionLabel::Derived("/speckit-autopilot".into())
+    );
+
+    pty.kill().expect("kill");
+}

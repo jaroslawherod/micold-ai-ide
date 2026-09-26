@@ -209,8 +209,36 @@ observed failing first, then the two unit groups, then the implementation.
   `scripts/build-lock.sh cargo test -p micold-daemon --test untitled_session_labels` → 25 passed,
   0 failed.
 - outer loop closed: the US3 acceptance tests pass with the full suite (T044); see the gate below.
-- suite: `mise run gate` (see the milestone's ledger entry).
+- suite: `mise run gate` — see the milestone's ledger entry for the passing SHA (recorded there
+  rather than here, because the gate is run once per milestone, after cycle 5a below).
 - refactor: none. The change is one field assignment in a branch that already existed; the honest
   alternative — routing the drain's spinner through `note_activity` — would take the state lock
   twice per tick per session on the 250 ms path, which is the very thing `drain_signals` is
   written to avoid (module invariant, research R2).
+
+## Cycle 5a — the spinner that arrives before anything is typed (U72; T047)
+
+Opened by M3's review A, which found that cycle 5's re-arm is **one-shot per live session**.
+
+- test: `crates/micold-daemon/tests/untitled_session_labels.rs`
+  `a_spinner_seen_before_the_first_prompt_does_not_cost_the_session_its_label` (U72, A10's third
+  order). The titler is drained to `Working` while the conversation is still empty — the FSM's one
+  and only `Unknown → Working` move, since `SpinnerObserved` is a no-op from every other state
+  (H1a) — the recovery pass then finds nothing and clears the flag, and only then does the user
+  type.
+- red: `scripts/build-lock.sh --no-lock cargo test -p micold-daemon --test untitled_session_labels
+  a_spinner_seen_before` → `assertion left == right failed: the first prompt re-arms the lookup
+  even when it changes no badge (C6.3c), or the row reads "New session" until the end of the turn`
+  `left: 0` / `right: 1`. So a CLI that draws a spinner while it starts up — connecting its servers,
+  loading its plugins — spent the session's only spinner-driven re-arm before the prompt, and
+  nothing re-armed the lookup again until the closing `Stop`: the row read "New session" for the
+  whole first turn, the delay FR-010 exists to prevent.
+- green: `crates/micold-daemon/src/state.rs` `note_activity` re-arms on a `UserPromptSubmit` hook
+  whether or not the signal changed (T047, C6.3c) — the prompt is the event that wrote the turn,
+  and it fires at most once per turn, so SC-006's bound is unmoved. Contract C6.3c and research R9
+  amended to say so.
+- notes: the reviewer's own observation that cycle 5's test cannot catch this is right, and is why
+  U72 is a separate behaviour rather than a stronger assertion on the same test: cycle 5's test
+  writes the transcript *before* letting the spinner fire, so its single transition lands after the
+  records exist.
+- refactor: none.

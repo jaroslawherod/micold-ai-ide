@@ -30,7 +30,7 @@ use micold_core::terminal::{LaunchMode, LaunchSpec};
 use micold_core::worktree::{self, Worktree};
 use tokio::sync::mpsc;
 
-use crate::activity::{Activity, ActivityEvent};
+use crate::activity::{Activity, ActivityEvent, HookKind};
 use crate::catalog::Catalog;
 use crate::framer::Framer;
 use crate::idle::Presence;
@@ -2121,15 +2121,25 @@ impl DaemonState {
     /// derived signal changed, so the caller can push a `CatalogChanged` reflecting the new badge.
     /// A no-op (returns `false`) for an unknown/not-live session — a hook for a session the daemon is
     /// not hosting reports nothing, matching invariant H1 (never invent state).
+    ///
+    /// It also re-arms the live name lookup (`name_stale`): on any signal change, and on a
+    /// `UserPromptSubmit` hook **whether or not the signal changed** (feature 032, FR-010, C6.3c).
+    /// The unconditional case is not belt-and-braces. `SpinnerObserved` can only move the FSM from
+    /// `Unknown` to `Working`, so a CLI that draws a spinner while it starts up spends that one
+    /// transition before the user has typed anything; the prompt hook then finds the session already
+    /// `Working` and changes nothing, and re-arming on a change alone would leave the first turn
+    /// unread until the closing `Stop`. The prompt is the event that wrote the turn, and it fires
+    /// at most once per turn, so the bound SC-006 rests on is unmoved.
     pub fn note_activity(&self, session: SessionId, event: ActivityEvent) -> bool {
         let mut inner = self.lock();
         let Some(live) = inner.sessions.get_mut(&session) else {
             return false;
         };
+        let first_turn_evidence = matches!(event, ActivityEvent::Hook(HookKind::UserPromptSubmit));
         let before = live.activity.signal().clone();
         live.activity.apply(event);
         let changed = live.activity.signal() != &before;
-        live.name_stale |= changed;
+        live.name_stale |= changed || first_turn_evidence;
         changed
     }
 
