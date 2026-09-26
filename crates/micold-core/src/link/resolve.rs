@@ -62,6 +62,23 @@ pub enum Reason {
     NotShared,
 }
 
+/// The names this machine answers to in a `file://` address (FR-012).
+///
+/// The hostname as reported, plus its first DNS label when that is shorter: `ls --hyperlink=always`
+/// prints whichever of the two the machine calls itself, and both mean this machine. An empty name
+/// gives none, so a link naming a host opens nothing rather than the wrong thing.
+pub fn host_names_from(raw: &str) -> Vec<String> {
+    if raw.is_empty() {
+        return Vec::new();
+    }
+    let mut names = vec![raw.to_string()];
+    let label = raw.split('.').next().unwrap_or(raw);
+    if label != raw && !label.is_empty() {
+        names.push(label.to_string());
+    }
+    names
+}
+
 /// What `link` opens on this machine, or `None` when it is not followable here (FR-008, FR-012,
 /// FR-018).
 pub fn resolve(link: Link, _ctx: &LinkContext) -> Option<ResolvedLink> {
@@ -142,6 +159,26 @@ mod tests {
             resolve(detected("file:///tmp/x"), &local()),
             None,
             "file links open nothing until their resolution exists"
+        );
+    }
+
+    /// U140: the names a `file://` host is compared against, from this machine's hostname.
+    #[test]
+    fn this_machines_names_are_its_hostname_and_its_first_dns_label() {
+        assert_eq!(
+            host_names_from("build.example.com"),
+            vec!["build.example.com".to_string(), "build".to_string()],
+            "a qualified name answers to itself and to its first label (FR-012)"
+        );
+        assert_eq!(
+            host_names_from("devbox"),
+            vec!["devbox".to_string()],
+            "a dotless name is listed once, not twice"
+        );
+        assert_eq!(
+            host_names_from(""),
+            Vec::<String>::new(),
+            "no hostname is no name: a file link naming any host then opens nothing"
         );
     }
 
