@@ -55,8 +55,11 @@ since it was attached", and the catalog's own label answers instead.
 
 ### AI CLI records (`micold-core/src/provider.rs`) — unchanged, read-only
 
-Each provider's own on-disk store of the conversation, read through `AiCliProvider::read_title`
-(`claude`'s latest `{"type":"ai-title",...}` record; Copilot's `workspace.yaml` `name:` scalar).
+Each provider's own on-disk store of the conversation, read through `AiCliProvider::read_title`,
+which answers with the name that CLI **currently** holds for the conversation when its records hold
+several — the precedence is [C16.1](./contracts/session-name-persistence.md) (for `claude`:
+`custom-title` over `agent-name`/`ai-title`; BUG-002). Copilot's is the `workspace.yaml` `name:`
+scalar, and has no second name record.
 A **secondary** source, consulted only for a session whose label is `Pending` (recovery, FR-006),
 and never depended on for a name already recorded (FR-008).
 
@@ -125,7 +128,7 @@ changes the in-memory state anyway and is logged, never surfaced (FR-009).
 
 | Rule | Source | Where enforced |
 |---|---|---|
-| An empty or whitespace-only name is not a name | FR-004 | Already: `parse_title` ignores an empty `aiTitle`; the recovery pass must not turn `Some("")` into `Named("")` — it takes `read_title`'s `Option` as-is. |
+| An empty or whitespace-only name is not a name | FR-004 | Already: `parse_title` ignores an empty `aiTitle` — and, after BUG-002, an empty `customTitle` or `agentName` too, each falling through to the next kind (C16.1); the recovery pass must not turn `Some("")` into `Named("")` — it takes `read_title`'s `Option` as-is. |
 | A name equal to the one recorded writes nothing | FR-003 / SC-007 | The catalog method compares before persisting and reports whether it wrote (research R3). |
 | A name is stored exactly as the CLI recorded it | Assumptions | No truncation, no trimming beyond the existing leading-status-glyph strip; row-level shortening stays a display concern. |
 | Recovery only ever fills `Pending` | FR-006, FR-008 | The recovery pass filters on the label before it does any I/O — which is also what bounds its cost. |
