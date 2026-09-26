@@ -901,7 +901,65 @@ mod tests {
         )
     }
 
+    /// The same set for a *Windows* host, which is the one whose spelling every platform can check.
+    ///
+    /// The identity mapping below echoes host paths, and a host path is built with `PathBuf::join`
+    /// — so a Linux-host set assembled on Windows comes out with `\` in paths the container would
+    /// read as names (`/home/u\.claude\.credentials.json`), and the component count that orders
+    /// C15 is then wrong. That set does not exist in production, where `windows_host` is this
+    /// platform: the Windows mapping does, and `pathmap::map_for` joins it as a string precisely so
+    /// the container path is POSIX whatever compiled it. Every input here is a literal, so this
+    /// fixture is identical on Linux, macOS and Windows.
+    fn shared_windows() -> MountSet {
+        let profile = SandboxProfile {
+            credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
+            ..SandboxProfile::default()
+        };
+        MountSet::build_for(
+            &[
+                PathBuf::from(r"C:\Users\u\p"),
+                PathBuf::from(r"D:\srv\other"),
+            ],
+            &profile,
+            &CredentialLayout::conventional(Path::new(r"C:\Users\u"), None),
+            PathBuf::from(r"C:\Users\u\AppData\micold"),
+            Path::new(r"C:\Users\u"),
+            SecretMount {
+                host: PathBuf::from(r"C:\Users\u\AppData\micold\sandbox.token"),
+                container: PathBuf::from("/run/micold/token"),
+            },
+            true,
+        )
+    }
+
+    /// U60, U61, C15, C16 on a Windows host: the container paths are POSIX whatever platform built
+    /// them, and the order is by their components.
+    #[test]
+    fn shared_locations_on_a_windows_host_are_posix_and_most_specific_first() {
+        let containers: Vec<String> = shared_windows()
+            .shared_locations(None)
+            .into_iter()
+            .map(|l| l.container)
+            .collect();
+        assert_eq!(
+            containers,
+            vec![
+                "/mnt/host/c/Users/u/.claude/.credentials.json".to_string(),
+                "/mnt/host/c/Users/u/p".to_string(),
+                "/mnt/host/d/srv/other".to_string(),
+                "/mnt/host/c/Users/u".to_string(),
+                "/var/lib/micold-ai-ide".to_string(),
+            ],
+            "a container path is Linux's even when the host is Windows, so none of these carries a \
+             `\\` — and the credential still sorts ahead of the home it sits in (C15)"
+        );
+    }
+
     /// U60, U61, C15, C16: what is shared, in most-specific-first order, and what never is.
+    ///
+    /// The identity mapping, so this is a Unix host's set: see [`shared_windows`] for why the
+    /// fixture cannot be spelled this way on Windows.
+    #[cfg(unix)]
     #[test]
     fn shared_locations_list_the_projects_state_home_and_credentials_most_specific_first() {
         let mounts = shared();
