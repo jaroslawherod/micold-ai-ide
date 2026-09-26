@@ -2144,6 +2144,11 @@ impl DaemonState {
     /// does not belong on the async runtime — let alone on the 250 ms tick path while the state
     /// lock is held. The write is the caller's job, in its own `spawn_blocking` hop, and only when
     /// there is something to write. See [`Self::record_observed_names`].
+    ///
+    /// It has one other effect, and it is on runtime state rather than on disk: an activity change
+    /// it makes here **re-arms the live name lookup** (`name_stale`), exactly as
+    /// [`Self::note_activity`] does for a hook, so the next supervisor pass reads the conversation
+    /// of a session the spinner has just shown to be working (feature 032, FR-010, C6.3b).
     pub fn drain_signals(&self) -> DrainedSignals {
         let mut out = DrainedSignals::default();
         let mut guard = self.lock();

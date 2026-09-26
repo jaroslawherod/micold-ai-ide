@@ -47,8 +47,8 @@ the cycle log; a red is not required.
 | A7  | A titled session reads its title, running or not, and never a derived label | US2.1, FR-005, SC-003 | example | DONE | untitled_session_labels.rs `a_titled_session_is_never_given_a_label` |
 | A8  | A session showing a label switches to the title the terminal reports, and still reads the title after a restart | US2.2, FR-006 | example | DONE | untitled_session_labels.rs `an_observed_terminal_title_replaces_a_label_and_is_persisted` |
 | A9  | A stopped session showing a label reads the title its records gained, after the next project open | US2.3, FR-006 | example | DONE | untitled_session_labels.rs `a_labelled_session_reads_the_title_its_records_gained` |
-| A10 | A running untitled session reads its label within one supervisor pass of its first prompt, whether the prompt hook or the spinner arrives first, and the snapshot is broadcast | US3.1, FR-010, SC-007 | example | DONE | untitled_session_labels.rs `a_running_untitled_session_reads_its_label_on_the_tick_after_its_first_prompt`, `a_spinner_drained_before_the_prompt_hook_still_gets_the_label` |
-| A11 | A running session showing a label switches to the title as the terminal reports it | US3.2, FR-006 | example | DONE | untitled_session_labels.rs `a_running_labelled_session_switches_to_the_title_its_terminal_reports` |
+| A10 | A running untitled session reads its label within one supervisor pass of its first prompt, whether the prompt hook or the spinner arrives first, and the snapshot is broadcast | US3.1, FR-010, SC-007 | example (spinner-first half; the prompt-hook-first half is a guard over M1) | DONE | untitled_session_labels.rs `a_running_untitled_session_reads_its_label_on_the_tick_after_its_first_prompt`, `a_spinner_drained_before_the_prompt_hook_still_gets_the_label` |
+| A11 | A running session showing a label switches to the title as the terminal reports it | US3.2, FR-006 | guard | DONE | untitled_session_labels.rs `a_running_labelled_session_switches_to_the_title_its_terminal_reports` |
 
 ## Inner loop: unit behaviors
 
@@ -168,9 +168,9 @@ the cycle log; a red is not required.
 | U65 | A title arriving between the off-lock read and the label write wins; a label arriving after a title is dropped | FR-005, C6.3, C6.6 | guard | DONE | untitled_session_labels.rs `a_title_and_a_label_racing_for_one_session_end_named` |
 | U66 | A `None` read and a failed label write change nothing and report no session failure | FR-011, C6.7 | example | DONE | untitled_session_labels.rs `a_failed_read_or_a_failed_label_write_changes_nothing_else` |
 | U67 | A `Derived` session is not pruned; a `Pending` session with no conversation is pruned as before | FR-004, data-model inv. 4 | example | DONE | untitled_session_labels.rs `a_labelled_session_is_never_pruned_and_an_empty_one_still_is` |
-| U68 | `recover_live_session_names` records a label after `note_activity` and returns > 0 | FR-010, C6.3a | example | DONE | untitled_session_labels.rs `a_running_untitled_session_reads_its_label_on_the_tick_after_its_first_prompt` |
+| U68 | `recover_live_session_names` records a label after `note_activity` and returns > 0 | FR-010, C6.3a | guard | DONE | untitled_session_labels.rs `a_running_untitled_session_reads_its_label_on_the_tick_after_its_first_prompt` |
 | U69 | A spinner-driven activity change in `drain_signals` sets `name_stale` | FR-010, C6.3b | example | DONE | untitled_session_labels.rs `a_spinner_drained_before_the_prompt_hook_still_gets_the_label` |
-| U70 | A drain with no activity change leaves `name_stale` unset (idle tick reads nothing) | SC-006 | example | DONE | untitled_session_labels.rs `an_idle_tick_that_changed_nothing_reads_no_records` |
+| U70 | A drain with no activity change leaves `name_stale` unset (idle tick reads nothing) | SC-006 | guard | DONE | untitled_session_labels.rs `an_idle_tick_that_changed_nothing_reads_no_records` |
 | U71 | Nothing but the recovery and title paths writes a label (no client message sets one) | FR-013 | guard | DONE | untitled_session_labels.rs `nothing_but_the_recovery_path_writes_a_label` |
 
 ## Invariants and edge cases still to place
