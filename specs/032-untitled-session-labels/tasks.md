@@ -191,8 +191,8 @@ without reopening (quickstart B3).
 ## Phase 7: Polish & Cross-Cutting Concerns
 
 - [X] T039 Update the module doc of `crates/micold-core/src/provider.rs` (seam method list, contract links: add `specs/032-untitled-session-labels/contracts/first-turn-label.md`) and the doc comments of `recover_session_names` / `record_recovered_names` in `crates/micold-daemon/src/state.rs` that still say "unnamed = `Pending`"
-- [ ] T040 Run quickstart §B1 for Copilot rows and §B3 (running session, `claude` and Copilot) on the development machine and append the output and pass/fail per step to `specs/032-untitled-session-labels/evidence/quickstart-b.md` (created by T046)
-- [ ] T041 Run `mise run gate` and record the passing SHA in the milestone PR body
+- [X] T040 Run quickstart §B1 for Copilot rows and §B3 (running session, `claude` and Copilot) on the development machine and append the output and pass/fail per step to `specs/032-untitled-session-labels/evidence/quickstart-b.md` (created by T046)
+- [X] T041 Run `mise run gate` and record the passing SHA in the milestone PR body
 
 ---
 
