@@ -99,3 +99,32 @@ confined to `micold-core`, and the full-workspace suite runs once at the end as 
 - **No `cfg(target_os)` arm changed** (the whole source diff is inside `ClaudeProvider::parse_title`),
   so no `aarch64-apple-darwin` cross-check was required. Nothing visible changed, so no visual pass.
 - **T034 `mise run site-check`**: recorded in the *Post-review* entry below, with the second gate run.
+
+## Post-review — the second gate run, and T034's site checks
+
+- **Review fixes** (4 accepted from reviews A and B, 5 declined — see the ledger): the user-guide
+  paragraph, `BUG-002.md`'s *Impact* line, a doc comment's unbalanced quote, and recording the
+  evidence above. Only one Rust line changed and it is a doc comment, so no behaviour moved and no
+  test changed.
+- **`mise run gate`, second run**: `GATE_EXIT=0`, 0 failed binaries, 3504 tests passed, 0 failed.
+  `session_name_recovery.rs` passes unmodified in this run too.
+- **T034 `mise run site-check`**: `site-check` alone refuses without a build
+  (`there is no built site … run without --checks-only first`), so `mise run site-build` was run,
+  which ends in the same checks. Three of the four passed:
+
+  ```
+  -- media completeness
+  -- internal links
+  🔍 886 Total (in 33ms) 🔗 443 Unique ✅ 793 OK 🚫 0 Errors 👻 93 Excluded
+  links: 25 built page(s) -- every internal link and fragment resolves
+  -- media budget
+  media-budget: 25 page(s) -- every page inside 1.0 MB of stills, every clip inside 3.0 MB,
+  nothing published unreferenced
+  ```
+
+  The fourth, `-- page checks`, **could not run here**:
+  `Cannot find package 'playwright' imported from site/checks/page-checks.mjs`. There is no
+  `site/package.json` and no local install path — `.github/workflows/pages.yml:202` installs it with
+  `npx playwright install --with-deps chromium` — so that check is CI-only by construction, not
+  something this change broke. `mdbook build` rendered the edited page without a warning, and the
+  edit is prose inside an existing section, adding no link, image or heading anchor.
