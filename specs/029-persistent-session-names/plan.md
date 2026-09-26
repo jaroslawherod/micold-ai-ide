@@ -6,6 +6,13 @@
 
 ## Summary
 
+**Bugfix**: 2026-09-26 — [BUG-002](./bugs/BUG-002.md) The record-reading source below is
+`AiCliProvider::read_title`, and for `claude` it read only the transcript's `ai-title`. It must read
+the name that CLI *currently* holds for the conversation, because `claude` keeps re-emitting the
+pre-rename `ai-title` after a user's `/rename` (research R4, contract C16.1). Neither source, hop nor
+precedence changes — only which string the record-reading one returns.
+
+
 A session's name is observed but never written down. The daemon reads the AI CLI's OSC-0 terminal
 title on the supervisor tick, keeps it in the live registry as `LiveSession::last_title`, and
 projects it onto the wire snapshot in `overlay_live_summaries` — a *projection*, discarded with the

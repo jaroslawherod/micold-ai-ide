@@ -135,6 +135,15 @@ and it adds a window in which a crash loses a name change that the simpler desig
 **Decision**: A recovery pass in the attach-time blocking hop, beside the existing FR-014 discovery,
 filling only labels that are `Pending` and only from that session's own provider records.
 
+**Bugfix**: 2026-09-26 — [BUG-002](./bugs/BUG-002.md). What `read_title` returns for `claude` was too
+narrow: the latest `{"type":"ai-title"}` record. `claude` keeps re-emitting the **pre-rename**
+`ai-title` after a user's `/rename`, and records the chosen name as `{"type":"custom-title"}`, mirrored
+in `{"type":"agent-name"}` — its own resolved display name. So the pass must read the CLI's *current*
+name for the conversation: the latest `custom-title`, else the latest `agent-name`, else the latest
+`ai-title`, with kind ranking above position because a rename is sticky in those records. Nothing else
+about R4 changes — same pass, same hop, same inputs, same cost, same precedence against the live
+terminal title.
+
 **Rationale**: `refresh_worktrees_off_runtime` (`micold-daemon/src/server.rs:1516`) already does
 exactly the surrounding work in one `spawn_blocking`: it refreshes the project's worktrees and then
 runs `discover_external_sessions`, which enumerates the same location list, resolves each cwd, and

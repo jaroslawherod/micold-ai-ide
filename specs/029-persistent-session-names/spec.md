@@ -6,6 +6,11 @@
 
 **Status**: Closed 2026-09-14 — implemented and shipped; all 30 tasks in [tasks.md](./tasks.md) are done
 
+**Bugfix**: 2026-09-26 — [BUG-002](./bugs/BUG-002.md) FR-005 and FR-006 now say *which* of the AI
+CLI's several name records is the one to take: the name that CLI currently holds for the
+conversation. `claude` keeps re-emitting the pre-rename `ai-title` after a user's `/rename`, so
+"the latest `ai-title`" was not the latest name.
+
 **Input**: User description: "the name of session should be always visible when it was set. Currently after daemon restart when session is not yet active it's shown as `New Session` but it already has name that was assigned once and should be persistent and remembered"
 
 ## User Scenarios & Testing *(mandatory)*
@@ -118,6 +123,11 @@ background service, and confirm the row shows the new name rather than the old o
   display concern of the row, unchanged by this feature.
 - **A session that has a name in the AI CLI's records but was started outside this application.**
   It is treated like any other session with a recoverable name (US2).
+- **The AI CLI's records hold two names for one conversation** — the name it generated, and a name
+  the user set by hand there afterwards, which it keeps beside the generated one rather than
+  replacing it. The row reads the name the CLI currently uses, which is the user's; the generated one
+  it superseded is never recorded or shown, however many times the CLI re-writes it (FR-005,
+  BUG-002).
 
 ## Requirements *(mandatory)*
 
@@ -134,9 +144,13 @@ background service, and confirm the row shows the new name rather than the old o
   one; such a session MUST continue to show the neutral "New session" placeholder.
 - **FR-005**: When a session's conversation is re-titled, the application MUST replace the
   remembered name with the new one — the remembered name is the latest known name, never the first.
+  When the AI CLI's records hold **more than one** name for the conversation, the latest known name is
+  the one that CLI itself currently uses for it, and a name the user set by hand in the CLI is that
+  name for as long as the CLI keeps it (BUG-002).
 - **FR-006**: For a session the application has no remembered name for, the application MUST
   recover the name from the AI CLI's own records for that conversation when one is available there,
-  without requiring the user to open the session.
+  without requiring the user to open the session. The name recovered MUST be the one FR-005 calls the
+  latest, never an earlier name the CLI still keeps beside it (BUG-002).
 - **FR-007**: A name recovered under FR-006 MUST be recorded like any other, so that the recovery is
   performed once rather than repeated on every restart.
 - **FR-008**: The application MUST keep a remembered name after the AI CLI's own records for that
@@ -146,7 +160,9 @@ background service, and confirm the row shows the new name rather than the old o
 - **FR-010**: Sessions created before this feature exists MUST get their names back under FR-006;
   the change MUST NOT require the user to re-create, re-open, or rename anything.
 - **FR-011**: A session's name MUST remain derived from its conversation and MUST NOT become
-  user-editable as a consequence of this feature.
+  user-editable as a consequence of this feature. Taking a name the user set inside the AI CLI is
+  still deriving it from the conversation — the name comes from that conversation's own records, and
+  no part of this application gains a way to edit it (BUG-002).
 - **FR-012**: Each session's remembered name MUST belong to that session alone — no session may
   display, inherit, or overwrite another session's name, including sessions sharing a location or a
   project.
@@ -160,7 +176,9 @@ background service, and confirm the row shows the new name rather than the old o
   the session's life; the latest is the one that counts.
 - **AI CLI records**: The conversation records the AI CLI keeps for itself, outside the
   application's own storage. A secondary source a name can be recovered from, and one the
-  application must not depend on for a name it has already recorded.
+  application must not depend on for a name it has already recorded. They may hold several names for
+  one conversation, of which exactly one is the name that CLI currently uses; that is the one this
+  feature reads (FR-005, BUG-002).
 
 ## Success Criteria *(mandatory)*
 
@@ -185,9 +203,15 @@ background service, and confirm the row shows the new name rather than the old o
 
 - "Daemon restart" in the report means the background service that owns sessions restarting, and the
   same requirement applies when the whole application is closed and reopened; both are covered.
-- The name already has a single source — the AI CLI's title for the conversation — and this feature
-  changes when and where that name is remembered, not where it comes from. Naming a session by hand
-  stays out of scope.
+- ~~The name already has a single source — the AI CLI's title for the conversation~~ — and this
+  feature changes when and where that name is remembered, not where it comes from. Naming a session
+  by hand *in this application* stays out of scope (FR-011).
+
+  Superseded twice, and both times the second half held: by
+  [032-untitled-session-labels](../032-untitled-session-labels/spec.md), which adds a lower-priority
+  derived label; and by [BUG-002](./bugs/BUG-002.md), which found the CLI's own records holding
+  several names for one conversation, of which the latest is the one to read (FR-005). Where the name
+  comes from is still the conversation, and still not this application's UI.
 - The existing per-project storage is where a session's name belongs; this feature adds no new
   storage location and no separate cache the user has to manage.
 - Recovering a name from the AI CLI's records is best-effort: a missing, unreadable, or unparsable

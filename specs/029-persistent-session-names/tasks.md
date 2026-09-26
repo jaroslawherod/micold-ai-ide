@@ -221,3 +221,29 @@ you want the fix out before the recovery pass exists.
 ## Phase 9: Integration with `main`
 
 - [X] T030 Carry the FR-004 title rule to the Pi provider that landed on `main` while this branch was open: `pi` has no fixed startup title (`π - <folder>` unnamed, `π - <name> - <folder>` named), so replace `AiCliProvider::startup_title` with `name_in_terminal_title(title, cwd)` in `crates/micold-core/src/provider.rs`, call it from `drain_signals`, and add the Pi case to `an_ai_clis_own_startup_title_is_not_a_name` (failing first) plus a parser test in `crates/micold-core/tests/pi_provider.rs` per FR-004 (partial)
+
+## Phase 10: Bugfix BUG-002 — the name the CLI currently holds, not the one it replaced
+
+**Bugfix**: 2026-09-26 — [BUG-002](./bugs/BUG-002.md) Added T031–T035. No task was reopened:
+`parse_title` predates this feature and every 029 task does what it says; what was never pinned down
+is *which* of the AI CLI's name records is the latest name (FR-005, FR-006, contract C16.1). T012–T016
+(US2 recovery) are the tasks whose read is corrected, and T017's FR-005 gate tests the catalog's
+replacement rather than the record the name came from, which is why it could not have caught this.
+
+- [ ] T031 Write the failing regression gate first in `crates/micold-core/tests/ai_cli_provider.rs`, over a temp `<config>/projects/<encoded cwd>/<id>.jsonl` like the tests already there: after a `/rename`, `ClaudeProvider::read_title` returns the `custom-title` and **not** the pre-rename `ai-title` that `claude` keeps re-emitting beside it — fixture in the real record order `custom-title`, `ai-title`, `agent-name`, repeated over later turns (BUG-002 *What `claude` writes after a `/rename`*). Red on `origin/main` with `left: Some("PR 284 macOS feature")`, `right: Some("Windows package")` per FR-005 / C16.1
+- [ ] T032 Extend the same file with the rest of C16.1, still failing first: a transcript with `agent-name` but no `custom-title` reads the `agent-name`; the latest record of the winning kind wins when there are several; an empty `customTitle`, `agentName` or `aiTitle` is not a name and falls through to the next kind; a transcript with only `ai-title` is unchanged (this is 032's C1.4 / U49 restated — it must keep passing); and a read still never errors on unparsable lines per FR-005 / C17
+- [ ] T033 Implement it in `ClaudeProvider::parse_title` (`crates/micold-core/src/provider.rs:384`): one pass over the transcript keeping the latest non-empty value of each of the three kinds, then answer `custom-title` → `agent-name` → `ai-title`. Kind ranks above position — a rename is sticky in `claude`'s records, so the last line written is not the current name. Update the doc comment, which today says "the latest `ai-title` record". `PiProvider` and `CopilotProvider` are untouched per FR-005 / FR-006 / C16.1
+- [ ] T034 Extend *The name on a session row* in `docs/user-guide/worktrees-and-sessions.md` ("The newest name wins"): if you rename a conversation in the CLI yourself, that is the name the row keeps — the CLI's own earlier name does not come back when the app reads the conversation's records again. Verify with `mise run site-check` per Constitution VII / FR-005
+- [ ] T035 Run `mise run gate`, and confirm the BUG-002 reproduction is fixed end to end: the real transcript `c4cc3dca-36e3-4480-b76f-27ad4584181c.jsonl` now reads `"Windows package"` through `read_title`, and `crates/micold-daemon/tests/session_name_recovery.rs` still passes unchanged — the recovery pass's shape, cost and precedence are untouched (C14–C20, 032 C6.3/C6.6)
+
+### Milestone M1 (BUG-002) — deliverable
+
+A session renamed with `claude`'s `/rename` keeps that name when the app reads it back from the CLI's
+records: discovered from disk, recovered, or restarted. It no longer reverts to the name the CLI
+generated before the rename.
+
+**Verify**: `mise run gate` is green, and the T031 gate fails on `origin/main` with
+`left: Some("PR 284 macOS feature")` / `right: Some("Windows package")` and passes on the branch.
+
+**Depends on**: nothing — T031 → T032 → T033 → T034 → T035 in order (T031 and T032 touch one file, so
+neither is `[P]`).
