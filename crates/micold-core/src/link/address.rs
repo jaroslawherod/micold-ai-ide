@@ -51,8 +51,12 @@ fn file(rest: &str) -> Address {
     }
 }
 
-/// `text` with each `%XX` turned into its byte, or `None` for an invalid escape or a result that is
-/// not UTF-8 (C10).
+/// `text` with each `%XX` turned into its byte, or `None` for an invalid escape, a result that is
+/// not UTF-8, or one holding a control character (C10).
+///
+/// Both digits must be hex digits of their own: an integer parser also reads a sign, which would
+/// turn `%+A` into a newline. A control character is no part of a path, and a decoded newline in a
+/// path would forge a second line in the hover hint.
 fn percent_decode(text: &str) -> Option<String> {
     let bytes = text.as_bytes();
     let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
@@ -64,10 +68,14 @@ fn percent_decode(text: &str) -> Option<String> {
             continue;
         }
         let hex = text.get(i + 1..i + 3)?;
+        if !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return None;
+        }
         out.push(u8::from_str_radix(hex, 16).ok()?);
         i += 3;
     }
-    String::from_utf8(out).ok()
+    let decoded = String::from_utf8(out).ok()?;
+    (!decoded.chars().any(char::is_control)).then_some(decoded)
 }
 
 #[cfg(test)]
@@ -153,6 +161,14 @@ mod tests {
             "file:///p/%",
             // `%FF` alone is not UTF-8.
             "file:///p/%FF",
+            // A sign is not a hex digit, however willingly an integer parser reads one (review A
+            // finding 2).
+            "file:///p/%+A",
+            "file:///p/%-1",
+            // A control character is no part of a path, and a decoded newline would forge a second
+            // line in the hover hint (review A finding 2).
+            "file:///tmp/%00x",
+            "file:///tmp/a%0Ab",
         ] {
             assert_eq!(
                 classify(uri),

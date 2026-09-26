@@ -132,13 +132,23 @@ pub fn action_for(
     facts: FileFacts,
     pathext: &[String],
 ) -> FileAction {
+    // Win32 drops trailing dots and spaces before it resolves a path, so `x.exe.` opens `x.exe`.
+    let name = if platform == HostPlatform::Windows {
+        name.trim_end_matches(['.', ' ', '\t'])
+    } else {
+        name
+    };
     let ext = last_extension(name);
     let listed = |list: &[&str]| {
         ext.is_some_and(|ext| list.iter().any(|known| known.eq_ignore_ascii_case(ext)))
     };
-    let unix_bit = facts.kind == Kind::File && facts.any_exec_bit;
+    let is_file = facts.kind == Kind::File;
+    let unix_bit = is_file && facts.any_exec_bit;
+    // FR-013's Folders bullet: off macOS a folder opens in the file manager whatever it is called,
+    // so an extension only speaks for a file. On macOS a folder with one of those extensions is a
+    // bundle, which the Finder runs.
     let runs = match platform {
-        HostPlatform::Linux => unix_bit || listed(&LINUX_RUNNABLE),
+        HostPlatform::Linux => unix_bit || (is_file && listed(&LINUX_RUNNABLE)),
         HostPlatform::MacOs => {
             unix_bit
                 || (facts.kind == Kind::Dir && (facts.is_bundle || listed(&MACOS_BUNDLE)))
@@ -147,12 +157,13 @@ pub fn action_for(
         // Windows has no execute bit: the extension decides, and `%PATHEXT%` is what this machine
         // itself says it runs.
         HostPlatform::Windows => {
-            listed(&WINDOWS_RUNNABLE)
-                || ext.is_some_and(|ext| {
-                    pathext
-                        .iter()
-                        .any(|entry| entry.trim_start_matches('.').eq_ignore_ascii_case(ext))
-                })
+            is_file
+                && (listed(&WINDOWS_RUNNABLE)
+                    || ext.is_some_and(|ext| {
+                        pathext
+                            .iter()
+                            .any(|entry| entry.trim_start_matches('.').eq_ignore_ascii_case(ext))
+                    }))
         }
     };
     if runs {
@@ -394,5 +405,42 @@ mod tests {
             FileAction::Reveal,
             "a name ending in .exe is run, whatever lies before it"
         );
+    }
+
+    /// U55: Win32 drops trailing dots and spaces before it opens a path, so a name that ends in
+    /// them names — and runs — the file without them (review A finding 1).
+    #[test]
+    fn on_windows_a_trailing_dot_or_space_never_hides_a_runnable_extension() {
+        for name in ["x.exe.", "x.exe ", "x.exe. .", "x.myapp."] {
+            assert_eq!(
+                action_for(HostPlatform::Windows, name, file(false), &pathext()),
+                FileAction::Reveal,
+                "{name:?}: Windows opens the same file as x.exe, so it is shown, never run (FR-013)"
+            );
+        }
+        assert_eq!(
+            action_for(HostPlatform::Windows, "notes.txt.", file(false), &pathext()),
+            FileAction::Open,
+            "a document is still a document with a dot after it"
+        );
+    }
+
+    /// U51, U54: FR-013's Folders bullet — off macOS a folder opens whatever it is called. On macOS
+    /// a folder carrying a listed extension is a bundle, which U52 covers, so it stays runnable.
+    #[test]
+    fn a_folder_named_like_a_runnable_file_still_opens() {
+        for (platform, name) in [
+            (HostPlatform::Linux, "pkg.run"),
+            (HostPlatform::Linux, "thing.desktop"),
+            (HostPlatform::Windows, "thing.exe"),
+            (HostPlatform::Windows, "thing.myapp"),
+        ] {
+            assert_eq!(
+                action_for(platform, name, dir(false), &pathext()),
+                FileAction::Open,
+                "{platform:?} {name}: every folder but a macOS bundle opens in the file manager \
+                 (FR-013, Folders)"
+            );
+        }
     }
 }
