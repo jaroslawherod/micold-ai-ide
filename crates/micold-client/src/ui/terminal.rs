@@ -332,6 +332,21 @@ pub fn encode_mouse_report(
     }
 }
 
+/// What this window's links resolve against (feature 031, FR-012, FR-018).
+///
+/// Glue: it reads the hostname boot recorded and the sandbox's state, and names neither a platform
+/// nor a filesystem — `micold_core::link::resolve` decides everything from it (U134, U136).
+pub fn link_context(
+    _state: &State,
+    _sandbox: &crate::features::sandbox::Sandbox,
+) -> micold_core::link::LinkContext {
+    micold_core::link::LinkContext {
+        host_names: Vec::new(),
+        windows_host: cfg!(windows),
+        sandbox: None,
+    }
+}
+
 /// Render the terminal pane for the active session (FR-012). `grid` is the active session's
 /// daemon-streamed grid cache (colour-rendered); `None` renders an empty state. `selection` is the
 /// active `LineId`-anchored text selection, and `display_offset` how far the view is scrolled back.

@@ -741,3 +741,19 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
   T007's `include_str!` list in the same change -> 6 passed;
   `cargo test -p micold-core --all-targets` 0 failed (the FR-019 no-I/O guard covers the new module)
 - refactor: the shared Unix rule is the named `unix_bit`, read by the Linux and macOS arms
+
+## Cycle 72: U77, U78, U79 — the session reducer's file arms
+
+- tests: `crates/micold-client/tests/features_session_links.rs::{activating_a_file_link_asks_to_open_its_host_path, activating_an_unreachable_link_opens_nothing_and_says_the_sandbox_does_not_share_it, an_open_of_a_file_that_is_not_there_notifies_that_it_does_not_exist}` (T044)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test features_session_links` -> 5 passed;
+  2 failed. U78 `left: []` /
+  `right: [OpenLink(Path { path: "/home/u/My Doc.pdf", address: "file:///home/u/My%20Doc.pdf" })]`;
+  U79 `left: []` / `right: [(Error, "Couldn't open file:///tmp/x: the sandbox doesn't share that
+  location with this machine")]`
+- green: `link_activated` takes `&mut State`, turns `HostPath` into `OpenRequest::Path { path,
+  address }` and reports `Unreachable(NotShared)` in contract §5's words (T052) -> 7 passed
+- U77 passed on arrival: its arm exists from M2, where review B F1 was declined on the condition that
+  M5's cycle show its own red. The mutant (the `NotFound` arm reporting "no application is set up to
+  open it") fails it: `left: [(Error, "Couldn't open file:///home/u/gone.txt: no application is set
+  up to open it")]` / `right: [… "the file doesn't exist on this machine")]`. Restored, 28 + 7 passed
+- refactor: none

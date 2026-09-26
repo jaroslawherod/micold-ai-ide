@@ -56,10 +56,11 @@ mod tests {
 
     use crate::shell::link_opener::LinkOpener;
 
-    /// Records each `open` with the moment it was called.
+    /// Records each `open` with the moment it was called, and each `reveal`.
     #[derive(Default)]
     pub(super) struct RecordingOpener {
         pub(super) opened: Mutex<Vec<(String, Instant)>>,
+        pub(super) revealed: Mutex<Vec<std::path::PathBuf>>,
     }
 
     impl LinkOpener for RecordingOpener {
@@ -71,7 +72,8 @@ mod tests {
             Ok(())
         }
 
-        fn reveal(&self, _path: &std::path::Path) -> Result<(), OpenFailure> {
+        fn reveal(&self, path: &std::path::Path) -> Result<(), OpenFailure> {
+            self.revealed.lock().unwrap().push(path.to_path_buf());
             Ok(())
         }
     }
@@ -148,7 +150,7 @@ mod tests {
     }
 }
 
-/// The outer loop for the pane (feature 031, A1–A11 and A13): the real session pane from
+/// The outer loop for the pane (feature 031, A1–A18): the real session pane from
 /// `ui::terminal::pane`, laid out headless, pointer and modifier events in, and every message it
 /// publishes run through `update_inner` on a `base_app()` whose opener records.
 #[cfg(test)]
@@ -163,7 +165,7 @@ mod acceptance {
     use micold_client::features::session::Msg as SessionMsg;
     use micold_client::grid::GridCache;
     use micold_client::ui::terminal::{CellMetrics, TERM_FONT_SIZE};
-    use micold_core::link::{CellSpan, LinkContext, ResolvedLink};
+    use micold_core::link::{CellSpan, ResolvedLink};
     use micold_core::protocol::grid::{
         CellExtras, GridFrame, LineId, StyleRun, WireColor, WireCursor, WireCursorShape, WireLine,
         WireStyle,
@@ -186,7 +188,7 @@ mod acceptance {
     struct Line {
         text: String,
         wrapped: bool,
-        declared: Vec<(std::ops::Range<u16>, &'static str)>,
+        declared: Vec<(std::ops::Range<u16>, String)>,
     }
 
     fn line(text: &str) -> Line {
@@ -202,8 +204,8 @@ mod acceptance {
             self.wrapped = true;
             self
         }
-        fn declare(mut self, cols: std::ops::Range<u16>, uri: &'static str) -> Self {
-            self.declared.push((cols, uri));
+        fn declare(mut self, cols: std::ops::Range<u16>, uri: &str) -> Self {
+            self.declared.push((cols, uri.to_string()));
             self
         }
     }
@@ -246,8 +248,8 @@ mod acceptance {
                     let text = format!("{:<width$}", line.text, width = COLS as usize);
                     let mut extras = Vec::new();
                     for (cols, uri) in line.declared {
-                        let index = hyperlinks.iter().position(|u| u == uri).unwrap_or_else(|| {
-                            hyperlinks.push(uri.to_string());
+                        let index = hyperlinks.iter().position(|u| *u == uri).unwrap_or_else(|| {
+                            hyperlinks.push(uri.clone());
                             hyperlinks.len() - 1
                         });
                         extras.extend(cols.map(|col| CellExtras {
@@ -314,6 +316,13 @@ mod acceptance {
             }
         }
 
+        /// The names this machine answers to, as boot fills them (U136).
+        fn named(mut self, host_names: &[&str]) -> Self {
+            self.app.core.session.host_names =
+                host_names.iter().map(|n| n.to_string()).collect();
+            self
+        }
+
         fn on_screen(lines: Vec<Line>) -> Self {
             Self::showing(
                 lines
@@ -330,11 +339,10 @@ mod acceptance {
         fn send(&mut self, cursor: Point, event: Event) -> Vec<Message> {
             self.cursor = cursor;
             let published = {
-                let context = LinkContext {
-                    host_names: Vec::new(),
-                    windows_host: cfg!(windows),
-                    sandbox: None,
-                };
+                // The context the application builds, so these tests cover the glue that fills it
+                // (U134, U136).
+                let context =
+                    micold_client::ui::terminal::link_context(&self.app.core, &self.app.sandbox);
                 let mut element = micold_client::ui::terminal::pane(
                     &self.app.core,
                     self.app.grids.get(&self.id),
@@ -417,6 +425,20 @@ mod acceptance {
                 .iter()
                 .map(|(target, _)| target.clone())
                 .collect()
+        }
+
+        fn revealed(&self) -> Vec<std::path::PathBuf> {
+            self.opener.revealed.lock().unwrap().clone()
+        }
+
+        /// Every notification raised so far, in arrival order.
+        fn notifications(&mut self) -> Vec<String> {
+            let mut seen = Vec::new();
+            while let Some(n) = self.app.core.notifications.queue.visible().cloned() {
+                seen.push(n.message);
+                self.app.core.notifications.queue.dismiss();
+            }
+            seen
         }
     }
 
@@ -680,5 +702,164 @@ mod acceptance {
             vec!["https://b.example".to_string()],
             "FR-008"
         );
+    }
+
+    // -----------------------------------------------------------------------------------
+    // File links on this machine (US3 scenarios 2–6, US2 scenario 6)
+    // -----------------------------------------------------------------------------------
+
+    /// A `file://` address for `path`, as a program prints it: the host, then the path with each
+    /// space percent-encoded and each separator a `/`.
+    fn file_url(host: &str, path: &std::path::Path) -> String {
+        let path = path.to_string_lossy().replace('\\', "/");
+        let path = if path.starts_with('/') {
+            path
+        } else {
+            format!("/{path}")
+        };
+        format!("file://{host}{}", path.replace(' ', "%20"))
+    }
+
+    /// What the opener is handed for `path` on this platform.
+    fn host_path(path: &std::path::Path) -> String {
+        path.to_string_lossy().into_owned()
+    }
+
+    /// A file whose kind this platform runs rather than reads: the execute bit on Unix, a
+    /// `%PATHEXT%` extension on Windows (FR-013).
+    fn runnable_in(dir: &std::path::Path) -> std::path::PathBuf {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let path = dir.join("build");
+            std::fs::write(&path, b"#!/bin/sh\n").expect("write the runnable file");
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+                .expect("set the execute bit");
+            path
+        }
+        #[cfg(windows)]
+        {
+            let path = dir.join("build.bat");
+            std::fs::write(&path, b"@echo off\n").expect("write the runnable file");
+            path
+        }
+    }
+
+    /// A12: `ls --hyperlink=always` declares the host's name and percent-encodes the space.
+    #[test]
+    fn a_declared_file_link_naming_this_host_opens_the_decoded_path() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let file = dir.path().join("readme a.txt");
+        std::fs::write(&file, b"hello").expect("write the document");
+        let address = file_url("devbox", &file);
+        let mut session = Session::on_screen(vec![line("readme a.txt").declare(0..12, &address)])
+            .named(&["devbox.example.com", "devbox"]);
+        session.activate(3, 0);
+        assert_eq!(
+            session.opened(),
+            vec![host_path(&file)],
+            "a declared file link naming this machine opens the decoded path (US2.6, FR-012)"
+        );
+    }
+
+    /// A14.
+    #[test]
+    fn activating_a_file_link_to_a_document_opens_its_host_path() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let file = dir.path().join("notes.txt");
+        std::fs::write(&file, b"hello").expect("write the document");
+        let address = file_url("", &file);
+        let mut session = Session::on_screen(vec![line(&address)]);
+        session.activate(10, 0);
+        assert_eq!(
+            session.opened(),
+            vec![host_path(&file)],
+            "a document opens in its application (US3.2, FR-010)"
+        );
+        assert!(
+            session.revealed().is_empty(),
+            "a document is opened, not revealed"
+        );
+    }
+
+    /// A15.
+    #[test]
+    fn activating_a_file_link_to_a_folder_opens_the_folder() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let folder = dir.path().join("notes");
+        std::fs::create_dir(&folder).expect("create the folder");
+        let address = file_url("", &folder);
+        let mut session = Session::on_screen(vec![line(&address)]);
+        session.activate(10, 0);
+        assert_eq!(
+            session.opened(),
+            vec![host_path(&folder)],
+            "a folder opens in the file manager (US3.3, FR-010)"
+        );
+    }
+
+    /// A16.
+    #[test]
+    fn activating_a_file_link_to_a_runnable_file_reveals_it_and_never_opens_it() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let file = runnable_in(dir.path());
+        let address = file_url("", &file);
+        let mut session = Session::on_screen(vec![line(&address)]);
+        session.activate(10, 0);
+        assert_eq!(
+            session.revealed(),
+            vec![file.clone()],
+            "a runnable file is shown in the file manager (US3.4, FR-013)"
+        );
+        assert_eq!(
+            session.opened(),
+            Vec::<String>::new(),
+            "and is never handed to the system opener, which would run it"
+        );
+    }
+
+    /// A17.
+    #[test]
+    fn activating_a_file_link_to_a_missing_file_opens_nothing_and_says_so() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let missing = dir.path().join("gone.txt");
+        let address = file_url("", &missing);
+        let mut session = Session::on_screen(vec![line(&address)]);
+        session.activate(10, 0);
+        assert_eq!(
+            session.opened(),
+            Vec::<String>::new(),
+            "nothing opens for a file that is not there (US3.5)"
+        );
+        assert_eq!(
+            session.notifications(),
+            vec![format!(
+                "Couldn't open {address}: the file doesn't exist on this machine"
+            )],
+            "one notification naming the address the program printed (FR-015)"
+        );
+    }
+
+    /// A18: a guard, green on arrival; its red is the mutant in tdd/test-list.md.
+    #[test]
+    fn a_file_link_to_another_machine_and_an_application_scheme_are_no_links() {
+        for address in ["file://otherhost/x", "javascript:alert(1)", "vscode://x"] {
+            let mut session =
+                Session::on_screen(vec![line("open this").declare(0..9, address)]).named(&["devbox"]);
+            session.hover(3, 0);
+            session.hold(keyboard::Modifiers::COMMAND);
+            assert_eq!(
+                session.pointer(),
+                Some(mouse::Interaction::Text),
+                "{address} is not offered as a link (US3.6, FR-011, FR-012)"
+            );
+            session.hold(keyboard::Modifiers::empty());
+            assert_eq!(
+                session.opened(),
+                Vec::<String>::new(),
+                "{address} opens nothing"
+            );
+            assert!(session.revealed().is_empty(), "{address} reveals nothing");
+        }
     }
 }

@@ -77,6 +77,18 @@ use std::path::Path;
 /// struct.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
+    /// The names this machine answers to: its hostname and that name's first DNS label (feature
+    /// 031, FR-012).
+    ///
+    /// Filled once at boot by `main.rs` from `link::host_names_from(gethostname())` — reading the
+    /// hostname is I/O, which the shell owns, and the names never change while the window is open.
+    /// A `file://` link whose host is one of these names points at this machine, so it opens; every
+    /// other name is another machine and is no link at all. Empty by `Default`, which is the safe
+    /// direction: a link naming a host then opens nothing.
+    ///
+    /// It lives here, with the sessions whose panes show the links, rather than as a flat root
+    /// field, which `tests/root_state_is_shared.rs` (G2) would refuse.
+    pub host_names: Vec<String>,
     /// The currently displayed session, if any (FR-012, FR-015).
     ///
     /// Feature 024: written through [`crate::app::State::set_current_session`] by everything except
@@ -1467,7 +1479,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         | Msg::TerminalCopyRequested
         | Msg::TerminalSelectionReleased
         | Msg::TerminalPasteRequested => {}
-        Msg::LinkActivated(link) => return link_activated(link),
+        Msg::LinkActivated(link) => return link_activated(state, link),
         Msg::LinkOpenFinished { address, result } => link_open_finished(state, &address, result),
     }
     Vec::new()
@@ -1477,16 +1489,30 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
 // Opening a link (feature 031, T018 — FR-010, FR-015)
 // ---------------------------------------------------------------------------------------
 
-/// What activating `link` asks for (contract link-opening §3, O1).
+/// What activating `link` asks for (contract link-opening §3, O1, O2, O5).
 ///
-/// Only a web or mail address opens so far; host paths arrive with M5 and M6, and `resolve` gives
-/// nothing else a `ResolvedLink` yet.
-fn link_activated(link: micold_core::link::ResolvedLink) -> Vec<crate::features::Outcome> {
+/// A confirmation before a sandboxed path opens arrives with M6 (T7/T9); until then a sandboxed
+/// path never reaches here as a `HostPath`, because `resolve` reports it as `Unreachable`.
+fn link_activated(
+    state: &mut crate::app::State,
+    link: micold_core::link::ResolvedLink,
+) -> Vec<crate::features::Outcome> {
     use crate::features::{OpenRequest, Outcome};
     use micold_core::link::Target;
     match link.target {
         Target::Url(address) => vec![Outcome::OpenLink(OpenRequest::Url(address))],
-        Target::HostPath(_) | Target::Unreachable(_) => Vec::new(),
+        Target::HostPath(path) => vec![Outcome::OpenLink(OpenRequest::Path {
+            path,
+            // The address the program printed, so a failure is reported against what the user read.
+            address: link.link.address,
+        })],
+        Target::Unreachable(micold_core::link::Reason::NotShared) => {
+            state.notify_error(format!(
+                "Couldn't open {}: the sandbox doesn't share that location with this machine",
+                link.link.address
+            ));
+            Vec::new()
+        }
     }
 }
 
