@@ -757,3 +757,27 @@ Per ledger decision 14, a cycle's suite is the tests of the files it touches; th
   open it") fails it: `left: [(Error, "Couldn't open file:///home/u/gone.txt: no application is set
   up to open it")]` / `right: [… "the file doesn't exist on this machine")]`. Restored, 28 + 7 passed
 - refactor: none
+
+## Cycle 73: U95, U96, U97, U146 — `perform(OpenRequest::Path)`, and A14–A17 close
+
+- tests: `crates/micold-client/src/shell/links.rs::tests::{opening_a_path_that_is_not_there_finishes_as_not_found_and_calls_no_opener, a_document_is_opened_and_a_runnable_file_is_revealed, every_runnable_kind_is_revealed_and_every_document_opened}` (T045).
+  The last one creates **real** files of every kind FR-013 lists for the OS it runs on — the Unix
+  execute bit and a symlink to it, Linux `.desktop`/`.AppImage`, macOS `.app`, a plist-only bundle
+  directory (U146) and `.command`, Windows `.exe`/`.ps1`/`.cmd`/`.vbs` — each also inside a directory
+  whose name has a space, plus `.txt`, `.png`, `.pdf`, `.html` as documents (SC-007)
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide shell::links` ->
+  14 passed; 8 failed. U95 `left: []` /
+  `right: [Session(LinkOpenFinished { address: "file:///gone.txt", result: Err(NotFound) })]`; U96
+  `right: ["/tmp/.tmpo6kqpd/notes.txt"]`; U97 `/tmp/.tmpk0x0Ca/plain/build is a kind this machine
+  runs, so it is revealed` `left: []`
+- green: `open_path` in one `spawn_blocking` — `metadata` (which follows symlinks), then `facts_for`
+  and the `cfg`-selected `HOST_PLATFORM` and `%PATHEXT%` into `runnable::action_for`, then `open` or
+  `reveal` (T051) -> 21 of 22 passed; A14, A15, A16 closed with it
+- A17 needed the acceptance harness to feed a task's own messages back, as iced's runtime does (an
+  open answers with `LinkOpenFinished`, and the notification is raised only on that second round).
+  `Session::send` now drains that queue; A17 green
+- the macOS arms of U97 and U146 cannot run on this host: their red and green are the macOS CI leg of
+  this PR, as the profile records for platform-only behaviour
+- A12 is still red — it waits on the boot glue, which is Cycle 74
+- refactor: the acceptance module's own runnable-file helper is gone; both modules use
+  `tests::runnable_file`
