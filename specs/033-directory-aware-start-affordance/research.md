@@ -189,7 +189,7 @@ the source and must stay green:
 - `tests/support/state_scan.rs`, which classifies every method called on a state path
   (`feature_write_isolation.rs` `every_method_called_on_state_is_classified`):
   - add `asked` and `answered` to `MUTATORS` (`clear` and `retain` are already there)
-  - add `for_dir`, `home`, `unasked` and `available_in` to `READERS`
+  - add `for_dir`, `home`, `unasked` and `known_clis` to `READERS`
   - remove `known_available`, which the rename leaves stale
 - `tests/feature_write_isolation.rs` and `tests/root_state_is_shared.rs`
 - `tests/cli_availability_comes_from_the_service.rs` (its vacuity check greps `shell/` for

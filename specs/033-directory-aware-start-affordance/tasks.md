@@ -80,15 +80,15 @@ through. It replaces `session::State::available_providers` and `App::cli_availab
   - The fields are `home`, `dirs`, `latest`, `in_flight` and `asked_under`. The operations are `asked`, `answered`, `for_dir`, `home`, `retain`, `unasked`, `clear` and `env_include_changed`, exactly as data-model.md specifies.
   - Replace `session::State::available_providers` with `availability: AvailabilityAnswers`, and move its doc comment's R11 note ("never persisted") onto the new field.
 - [X] T005 [U11] [U12] [U13] [U14] [U15] [U16] [U17] [U18] [U19] [U20] [U21] Change the readers in `crates/micold-client/src/features/session.rs` to take the answer to read, per data-model.md "Readers":
-  - `available_in(Option<&Path>)` replaces `known_available()`, and `default_ai_cli_is_available`, `offered_providers`, `start_affordance_offers_a_choice(&Path)` and `start_intent(target, &Path)` take the directory.
+  - `known_clis(Option<&Path>)` replaces `known_available()`, and `default_ai_cli_is_available`, `offered_providers`, `start_affordance_offers_a_choice(&Path)` and `start_intent(target, &Path)` take the directory.
   - Add `app::State::location_dir(&SessionLocation) -> Option<PathBuf>` in `crates/micold-client/src/app.rs`, through `SessionLocation::cwd`.
   - Add `features::session::wanted_availability_dirs(&app::State) -> BTreeSet<PathBuf>` over `visible_worktrees()`.
 - [X] T040 Move every existing consumer onto the new API **with today's behaviour**, so the crate builds and the US1 tests can go red for the right reason:
-  - `crates/micold-client/src/ui/sidebar.rs` and `ui/mod.rs` read the home answer (`available_in(None)` and the readers with the home key).
+  - `crates/micold-client/src/ui/sidebar.rs` and `ui/mod.rs` read the home answer (`known_clis(None)` and the readers with the home key).
   - `crates/micold-client/src/shell/daemon_sync.rs`: `ask_cli_availability` records `asked(req, AvailabilityKey::Home)` for every existing call, and the `DaemonMsg::AiCliAvailability` arm files through `answered`.
   - Delete `App::cli_availability_asked` from `crates/micold-client/src/main.rs`, `shell/startup.rs` and the `App` literals in `src/main_tests.rs`.
   - T013, T016 and T017 then switch these sites to per-directory keys.
-- [X] T006 Update `crates/micold-client/tests/support/state_scan.rs`: `MUTATORS` gains `asked`, `answered` and `env_include_changed`; `READERS` gains `for_dir`, `home`, `unasked` and `available_in`; `READERS` loses `known_available` (data-model.md "Source-scan vocabulary"). Run `feature_write_isolation.rs` and `root_state_is_shared.rs` green.
+- [X] T006 Update `crates/micold-client/tests/support/state_scan.rs`: `MUTATORS` gains `asked`, `answered` and `env_include_changed`; `READERS` gains `for_dir`, `home`, `unasked` and `known_clis`; `READERS` loses `known_available` (data-model.md "Source-scan vocabulary"). Run `feature_write_isolation.rs` and `root_state_is_shared.rs` green.
 - [X] T007 Migrate the existing tests that seed `state.session.available_providers` to seed `AvailabilityAnswers` (home, or a directory where the test is about a row): `crates/micold-client/tests/unavailable_default_says_so.rs`, `session_start_press.rs`, `provider_choice_surfaces.rs`, `missing_cli_is_reported_where_it_is_chosen.rs`, `a_field_note_shares_its_fields_column.rs` and `features_session.rs`. In `crates/micold-client/src/main_tests.rs`, migrate `connecting_asks_which_clis_the_service_can_run` to read the home answer, and rewrite `an_answer_to_an_earlier_question_does_not_replace_a_later_one`: its premise (a later directory ask discards the home answer) is reversed by FR-002/FR-009, so it becomes a home-plus-directory "both kept" case (U2/U3 own the same-directory rule). In `cli_availability_comes_from_the_service.rs`, replace the vacuity spelling `available_providers = Some(` with the new write (`.answered(`).
 
 **Checkpoint**: `mise run test-core` is unchanged, the workspace builds, and `cargo test -p micold-client` passes with T001–T003 green. Behaviour is still today's: every consumer reads home (T040).
@@ -119,7 +119,7 @@ the project opens. Settings and reconnects no longer overwrite it.
 - [X] T012 [P] [US1] [A1] [U35] [U36] In `crates/micold-client/tests/provider_choice_surfaces.rs`, test rendered surfaces (FR-008, US1-1):
   - The Settings default select lists the home answer.
   - The start list opened on `P`'s row lists `P`'s answer, `Pi` included, while home lacks it.
-  - The missing-default notice in `missing_cli_is_reported_where_it_is_chosen.rs` reads the list's directory.
+  - The missing-default notice reads the list's directory (tested in `unavailable_default_says_so.rs::a_default_the_lists_directory_provides_is_not_reported_missing`).
 
 ### Implementation for User Story 1
 

@@ -63,7 +63,7 @@ Each takes the answer to read instead of reading one window-wide set:
 
 | Reader | Today | After |
 |---|---|---|
-| `known_available()` | window-wide slice | `available_in(key_dir: Option<&Path>) -> &[AiCli]`: `None` = home, `Some(d)` = `for_dir(d)`. Empty when nothing is held |
+| `known_available()` | window-wide slice | `known_clis(key_dir: Option<&Path>) -> &[AiCli]` (not `available_in`: the source scan forbids that spelling): `None` = home, `Some(d)` = `for_dir(d)`. Empty when nothing is held |
 | `default_ai_cli_is_available()` | window-wide | takes `Option<&Path>` |
 | `offered_providers()` | window-wide | takes `Option<&Path>` |
 | `start_affordance_offers_a_choice()` | window-wide | takes `&Path` (the row directory) |
@@ -83,7 +83,7 @@ for included worktrees. Empty when no project is active.
 ## Source-scan vocabulary (`crates/micold-client/tests/support/state_scan.rs`)
 
 - `MUTATORS` gains `asked`, `answered` and `env_include_changed` (`clear`, `retain` already listed).
-- `READERS` gains `for_dir`, `home`, `unasked` and `available_in`, and loses `known_available`.
+- `READERS` gains `for_dir`, `home`, `unasked` and `known_clis`, and loses `known_available`.
 
 ## Removed
 

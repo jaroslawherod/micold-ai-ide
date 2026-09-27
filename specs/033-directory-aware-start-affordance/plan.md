@@ -168,7 +168,7 @@ crates/micold-client/
     │   missing_cli_is_reported_where_it_is_chosen.rs # seeded through the new type
     ├── cli_availability_comes_from_the_service.rs    # vacuity spelling updated
     └── support/state_scan.rs                         # MUTATORS += asked, answered, env_include_changed;
-                                                      #   READERS += for_dir, home, unasked, available_in;
+                                                      #   READERS += for_dir, home, unasked, known_clis;
                                                       #   READERS -= known_available
 
 docs/user-guide/
