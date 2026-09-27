@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/a-project-local-cli-stays-unreachable-in-that-project
 - **Started**: 2026-09-27
 - **Phase**: 4-milestones
-- **Next step**: Phase 4 — wait for the M2 PR's `ci complete`, merge, then M3.
+- **Next step**: Phase 4 — M3 (T028–T029): visual pass, comment sweep, gate, reviews, PR.
 
 ## Pull requests
 
@@ -17,15 +17,15 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #413 | Spec | merged | 2e28015f |
 | #417 | Design (clarify, plan, tasks, milestones) | merged | 84d61968 |
 | #426 | M1 | merged | 2bd447b2 |
-| #443 | M2 | open | — |
+| #443 | M2 | merged | 7f9b23be |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
 | M1 | T001–T019, T030–T036, T040 | Each row offers the CLIs its own directory provides; Settings, reconnect and another row's list never replace it | #426 | merged |
-| M2 | T020–T027, T037–T039 | Env-include changes refresh every row; rows that go drop answers, rows that come back are asked; tripwire pins the askers | #443 | in-review |
-| M3 | T028–T029 | quickstart §B recorded passing end to end; no comment describes the window-wide set | — | planned |
+| M2 | T020–T027, T037–T039 | Env-include changes refresh every row; rows that go drop answers, rows that come back are asked; tripwire pins the askers | #443 | merged |
+| M3 | T028–T029 | quickstart §B recorded passing end to end; no comment describes the window-wide set | — | in-progress |
 
 ## Decisions
 
