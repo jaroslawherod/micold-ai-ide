@@ -425,6 +425,9 @@ pub fn view<'a>(
         roles,
     )
     .open(state.project.switcher_open)
+    // A long catalog scrolls inside the panel (002 FR-011a); a row's context menu does not follow
+    // its row, so it closes instead.
+    .on_scroll(Message::Project(ProjectMsg::MenuDismissed))
     .into();
 
     // The right-clicked project's context menu, at the cursor (feature 015), like a normal desktop

@@ -946,6 +946,86 @@ pub fn painted_text_scrolled<'a, M: 'a>(
     painted(element, renderer, true, Before::Scrolled(at))
 }
 
+/// One thing a person does with the mouse, for [`messages_after`].
+#[derive(Debug, Clone, Copy)]
+pub enum Input {
+    /// Turn the wheel a long way down with the pointer here.
+    Wheel(iced::Point),
+    /// Move the pointer here.
+    Move(iced::Point),
+    /// Press this button with the pointer here.
+    Press(iced::Point, iced::mouse::Button),
+}
+
+/// The messages the element published in answer to `inputs`, dispatched in order — each one to the
+/// tree as the runtime would, with the tree laid out and settled after it.
+///
+/// For asking what a gesture *means* rather than what it paints: which message a right-click on a
+/// scrolled row carries, whether a scroll reports itself (002 BUG-005). Messages published while
+/// settling (animation ticks, a scrollable's first report of its own viewport) are not included.
+pub fn messages_after<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &iced::Renderer,
+    inputs: &[Input],
+) -> Vec<M> {
+    use iced::advanced::{clipboard, mouse, Shell};
+
+    let mut element = element;
+    let mut tree = Tree::new(element.as_widget());
+    let limits = layout::Limits::new(Size::ZERO, WINDOW);
+    let mut node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+    let origin = std::time::Instant::now();
+    settle(
+        &mut element,
+        &mut tree,
+        &node,
+        renderer,
+        origin,
+        0..SETTLE_FRAMES,
+    );
+    node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+
+    let mut published: Vec<M> = Vec::new();
+    for (step, input) in inputs.iter().enumerate() {
+        let (event, at) = match *input {
+            Input::Wheel(at) => (
+                mouse::Event::WheelScrolled {
+                    delta: mouse::ScrollDelta::Lines {
+                        x: 0.0,
+                        y: -10_000.0,
+                    },
+                },
+                at,
+            ),
+            Input::Move(at) => (mouse::Event::CursorMoved { position: at }, at),
+            Input::Press(at, button) => (mouse::Event::ButtonPressed(button), at),
+        };
+        let mut shell = Shell::new(&mut published);
+        element.as_widget_mut().update(
+            &mut tree,
+            &iced::Event::Mouse(event),
+            Layout::new(&node),
+            mouse::Cursor::Available(at),
+            renderer,
+            &mut clipboard::Null,
+            &mut shell,
+            &Rectangle::with_size(WINDOW),
+        );
+        node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+        let start = SETTLE_FRAMES * (step as u32 + 1);
+        settle(
+            &mut element,
+            &mut tree,
+            &node,
+            renderer,
+            origin,
+            start..start + SETTLE_FRAMES,
+        );
+        node = element.as_widget_mut().layout(&mut tree, renderer, &limits);
+    }
+    published
+}
+
 /// Settle, turn the wheel down by `LINES` with the cursor at `at`, then settle again.
 fn scroll_and_settle<'a, M: 'a>(
     element: &mut Element<'a, M>,

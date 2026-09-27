@@ -173,7 +173,8 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             Text::new("Known projects", TypeRole::Section, r),
             material::Scrollable::new(rows, r)
                 .width(Length::Fill)
-                .height(Length::Fill),
+                .height(Length::Fill)
+                .on_scroll(Message::Project(ProjectMsg::ListScrolled)),
         ]
         .spacing(spacing::SM)
         .height(Length::Fill);

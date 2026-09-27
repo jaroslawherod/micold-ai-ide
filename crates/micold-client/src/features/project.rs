@@ -538,11 +538,15 @@ pub enum Msg {
     /// Toggle the top-bar project switcher panel (feature 008, FR-004). Mutually exclusive
     /// with the overflow menu.
     SwitcherToggled,
+    /// The body's known-projects list scrolled (002 FR-011a, BUG-005). The ground moved under
+    /// whatever floats over it, so the transient popovers close — as they do when the sidebar
+    /// scrolls (017 FR-009).
+    ListScrolled,
 }
 
 /// The pure half of this feature's reducer surface: shape A (contract M2).
 ///
-/// All nineteen arms are here. Six of them additionally need an effect — the folder browser
+/// All twenty arms are here. Six of them additionally need an effect — the folder browser
 /// opened and walked, a project opened, reopened, renamed or forgotten — and those six are
 /// matched a second time in `main.rs`, which runs the effect and lets the message reach here.
 /// The split is by *effect*, not by variant, as `worktree_form` established and M2 names as the
@@ -563,6 +567,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::RenameConfirmed => rename_confirmed(state),
         Msg::RenameCancelled => rename_cancelled(state),
         Msg::MenuDismissed => menu_dismissed(state),
+        Msg::ListScrolled => state.dismiss_on_scroll_beneath(),
         Msg::ForgetRequested(path) => forget_requested(state, path),
         Msg::ForgetCancelled => forget_cancelled(state),
         // Performed by the binary at the I/O boundary: the home directory and a folder scan, a
