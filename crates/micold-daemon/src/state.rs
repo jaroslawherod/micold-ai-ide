@@ -162,8 +162,10 @@ struct Inner {
     /// pyenv, rbenv, …) computes its `PATH` contribution from the sourcing shell's own cwd, so one
     /// directory-agnostic snapshot can never be correct for more than one project. Never persisted.
     /// Cleared entirely on a `SettingsSet` that changes any env-include field; a single entry is
-    /// removed on that directory's `WorktreeDelete`.
-    env_include_cache: HashMap<PathBuf, Vec<(String, String)>>,
+    /// removed on that directory's `WorktreeDelete`. An entry is either ready or a resolve in
+    /// progress that later askers share, and an invalidation removes either kind (FR-021, BUG-005):
+    /// see [`EnvIncludeEntry`].
+    env_include_cache: HashMap<PathBuf, EnvIncludeEntry>,
     /// One mutual-exclusion gate per project for mutating worktree work (BUG-009, T120). Worktree
     /// creates run as spawned tasks now — they must not park the connection loop that dispatched
     /// them (FR-026a) — so the serialization the old inline `.await` provided as a side effect is
@@ -187,6 +189,98 @@ struct Inner {
     /// still that size); dropped when the session is archived. Never persisted — it describes a
     /// client's window, not the session.
     sizes: HashMap<SessionId, (u16, u16)>,
+}
+
+/// One directory's entry in `Inner::env_include_cache` (feature 011, FR-021; BUG-005).
+enum EnvIncludeEntry {
+    /// The resolved variables, merged with `TERM`.
+    Ready(Vec<(String, String)>),
+    /// A resolve is running for this directory, off the state lock. Later askers wait on the slot
+    /// instead of running the script again. The slot's identity is the entry's generation: the
+    /// resolver caches its result only while this very slot is still the directory's entry, so an
+    /// invalidation that removed it (or replaced it with a newer resolve) wins.
+    Resolving(Arc<EnvIncludeSlot>),
+}
+
+/// Where a resolve in progress hands its result to the askers waiting on it.
+#[derive(Default)]
+struct EnvIncludeSlot {
+    outcome: Mutex<Option<SlotOutcome>>,
+    done: std::sync::Condvar,
+}
+
+#[derive(Clone)]
+enum SlotOutcome {
+    Filled(Vec<(String, String)>),
+    /// The resolver unwound before it had a result: a waiter asks again rather than waiting forever.
+    Abandoned,
+}
+
+impl EnvIncludeSlot {
+    fn finish(&self, outcome: SlotOutcome) {
+        *self.outcome.lock().unwrap_or_else(|e| e.into_inner()) = Some(outcome);
+        self.done.notify_all();
+    }
+
+    /// Blocks until the resolver finishes — never call it under the state lock. Bounded by the
+    /// resolver's own environment-include timeout.
+    fn wait(&self) -> SlotOutcome {
+        let guard = self.outcome.lock().unwrap_or_else(|e| e.into_inner());
+        let guard = self
+            .done
+            .wait_while(guard, |outcome| outcome.is_none())
+            .unwrap_or_else(|e| e.into_inner());
+        guard.clone().expect("wait_while returned with an outcome")
+    }
+}
+
+/// Held by the caller that runs a directory's resolve. Dropped without [`Self::complete`] — the
+/// resolve unwound — it removes its own entry and releases the waiters, so none parks on a slot
+/// nobody will fill.
+struct ResolveGuard<'a> {
+    state: &'a DaemonState,
+    cwd: &'a Path,
+    slot: Arc<EnvIncludeSlot>,
+    completed: bool,
+}
+
+impl ResolveGuard<'_> {
+    /// Whether `entry` is still this resolve's own slot.
+    fn owns(&self, entry: Option<&EnvIncludeEntry>) -> bool {
+        matches!(entry, Some(EnvIncludeEntry::Resolving(slot)) if Arc::ptr_eq(slot, &self.slot))
+    }
+
+    /// Caches `merged` if no invalidation removed this resolve's entry meanwhile, and hands it to
+    /// the waiters either way: they asked before any such invalidation.
+    fn complete(mut self, merged: &[(String, String)]) {
+        {
+            let mut inner = self.state.lock();
+            if self.owns(inner.env_include_cache.get(self.cwd)) {
+                inner.env_include_cache.insert(
+                    self.cwd.to_path_buf(),
+                    EnvIncludeEntry::Ready(merged.to_vec()),
+                );
+            }
+        }
+        self.slot.finish(SlotOutcome::Filled(merged.to_vec()));
+        self.completed = true;
+    }
+}
+
+impl Drop for ResolveGuard<'_> {
+    fn drop(&mut self) {
+        if self.completed {
+            return;
+        }
+        // `inner` rather than `lock()`: this can run while unwinding, and a poisoned state must not
+        // turn one panic into an abort.
+        let mut inner = self.state.inner.lock().unwrap_or_else(|e| e.into_inner());
+        if self.owns(inner.env_include_cache.get(self.cwd)) {
+            inner.env_include_cache.remove(self.cwd);
+        }
+        drop(inner);
+        self.slot.finish(SlotOutcome::Abandoned);
+    }
 }
 
 /// One live process of a session: its PTY and its framer. The [`PtySession`] is behind an `Arc` so
@@ -525,37 +619,70 @@ impl DaemonState {
     ///
     /// Sourcing the script (`env_include::resolve`) spawns a real, disposable subprocess and may
     /// block for up to the configured timeout (module invariant: never done under the state lock,
-    /// same reason PTY spawning itself happens off-lock) — so the settings/cache are read under a
-    /// short lock, the lock is dropped before resolving, and the result is written back under a
-    /// second short lock.
+    /// same reason PTY spawning itself happens off-lock). So the settings are read, the cache
+    /// probed and, on a miss, a resolve-in-progress entry claimed, all under **one** short lock;
+    /// the script then runs off-lock (FR-021, BUG-005):
+    ///
+    /// - **Concurrent first asks share one run.** An ask that finds a resolve in progress for `cwd`
+    ///   waits for it, off the state lock, instead of running the script again (FR-020).
+    /// - **An invalidation wins over a resolve in progress.** [`Self::invalidate_env_include`] and
+    ///   [`Self::invalidate_env_include_all`] remove in-progress entries too, and a resolver caches
+    ///   its result only while its own entry is still there. Otherwise it answers the callers that
+    ///   asked before the invalidation and caches nothing, so the next ask resolves afresh under
+    ///   the settings as they are now (FR-007, FR-016).
+    /// - **A resolver that unwinds** removes its entry and releases its waiters, which then ask
+    ///   again rather than wait forever.
     fn env_include_vars_for(&self, cwd: &Path) -> Vec<(String, String)> {
-        let (enabled, script_path, timeout_secs) = {
-            let settings = self.lock().catalog.settings_wire();
-            (
-                settings.env_include_enabled,
-                settings.env_include_script_path,
-                settings.env_include_timeout_secs,
-            )
-        };
-        if !enabled || script_path.trim().is_empty() {
-            return micold_core::env_include::merge_with_term(&[]);
+        loop {
+            let (script_path, timeout_secs, slot) = {
+                let mut inner = self.lock();
+                let settings = inner.catalog.settings_wire();
+                if !settings.env_include_enabled || settings.env_include_script_path.trim().is_empty()
+                {
+                    return micold_core::env_include::merge_with_term(&[]);
+                }
+                match inner.env_include_cache.get(cwd) {
+                    Some(EnvIncludeEntry::Ready(cached)) => return cached.clone(),
+                    Some(EnvIncludeEntry::Resolving(slot)) => {
+                        let slot = Arc::clone(slot);
+                        drop(inner);
+                        match slot.wait() {
+                            SlotOutcome::Filled(merged) => return merged,
+                            SlotOutcome::Abandoned => continue,
+                        }
+                    }
+                    None => {
+                        let slot = Arc::new(EnvIncludeSlot::default());
+                        inner.env_include_cache.insert(
+                            cwd.to_path_buf(),
+                            EnvIncludeEntry::Resolving(Arc::clone(&slot)),
+                        );
+                        (
+                            settings.env_include_script_path,
+                            settings.env_include_timeout_secs,
+                            slot,
+                        )
+                    }
+                }
+            };
+            let guard = ResolveGuard {
+                state: self,
+                cwd,
+                slot,
+                completed: false,
+            };
+            let (vars, outcome) = micold_core::env_include::resolve(
+                Path::new(&script_path),
+                cwd,
+                std::time::Duration::from_secs(timeout_secs),
+            );
+            if outcome != micold_core::env_include::EnvIncludeOutcome::Success {
+                tracing::warn!(?outcome, cwd = %cwd.display(), "env-include resolution did not succeed");
+            }
+            let merged = micold_core::env_include::merge_with_term(&vars);
+            guard.complete(&merged);
+            return merged;
         }
-        if let Some(cached) = self.lock().env_include_cache.get(cwd) {
-            return cached.clone();
-        }
-        let (vars, outcome) = micold_core::env_include::resolve(
-            Path::new(&script_path),
-            cwd,
-            std::time::Duration::from_secs(timeout_secs),
-        );
-        if outcome != micold_core::env_include::EnvIncludeOutcome::Success {
-            tracing::warn!(?outcome, cwd = %cwd.display(), "env-include resolution did not succeed");
-        }
-        let merged = micold_core::env_include::merge_with_term(&vars);
-        self.lock()
-            .env_include_cache
-            .insert(cwd.to_path_buf(), merged.clone());
-        merged
     }
 
     /// The environment an **AI-CLI** launch runs in: the session's resolved environment
@@ -593,8 +720,10 @@ impl DaemonState {
     /// fail to start — and closing it belongs with the registry read, not here.
     ///
     /// Through [`Self::env_include_vars_for`], so it shares that per-directory cache with the
-    /// spawns themselves, is invalidated by the same `SettingsSet` and `WorktreeDelete` paths, and
-    /// may block on a first resolution: never call it under the state lock. Matched without regard
+    /// spawns themselves, is invalidated by the same `SettingsSet` and `WorktreeDelete` paths
+    /// (which win over a resolve in progress), and may block on a first resolution — its own, or
+    /// one already in progress for `cwd` that it shares rather than repeats (FR-021, BUG-005):
+    /// never call it under the state lock. Matched without regard
     /// to case, because Windows spells it `Path`.
     fn spawn_path_for(&self, cwd: &Path) -> std::ffi::OsString {
         self.env_include_vars_for(cwd)
@@ -616,6 +745,10 @@ impl DaemonState {
     /// `specs/011-env-include-script/bugs/BUG-002.md`'s Resolution: a worktree recreated for the
     /// same branch reuses the exact same path (dir names are derived from the branch name), so a
     /// stale pre-deletion snapshot would otherwise be served forever for that path.
+    ///
+    /// Removes a resolve in progress for `cwd` too, which then answers only the callers already
+    /// waiting on it and caches nothing: the invalidation wins, and the next ask resolves afresh
+    /// (FR-021, BUG-005).
     pub fn invalidate_env_include(&self, cwd: &Path) {
         self.lock().env_include_cache.remove(cwd);
     }
@@ -623,6 +756,11 @@ impl DaemonState {
     /// Invalidate every cached environment-include resolution (BUG-003) — called when the
     /// enabled/path/timeout settings themselves change (`SettingsSet`), since every cached
     /// directory's snapshot was resolved under the now-stale configuration.
+    ///
+    /// Resolves in progress are removed too, so none of them caches a result computed under the old
+    /// configuration (FR-021, BUG-005). [`Self::set_env_include`] clears the cache in the same
+    /// critical section that persists the new settings instead of calling this, so no resolve can
+    /// read the old settings and claim its entry after the clear.
     pub fn invalidate_env_include_all(&self) {
         self.lock().env_include_cache.clear();
     }
@@ -992,6 +1130,10 @@ impl DaemonState {
     /// Set any of the three environment-include settings and push `SettingsChanged` to every
     /// client (FR-012b, FR-011). Invalidates every cached per-directory resolution (T098/BUG-003):
     /// each cached directory's snapshot was resolved under the now-stale configuration.
+    ///
+    /// The cache is cleared in the same critical section that persists the settings (FR-021,
+    /// BUG-005): [`Self::env_include_vars_for`] reads the settings and claims its entry under one
+    /// lock, so every resolve either started under the new settings or had its entry cleared here.
     pub fn set_env_include(
         &self,
         enabled: Option<bool>,
@@ -1003,9 +1145,9 @@ impl DaemonState {
             inner
                 .catalog
                 .set_env_include(enabled, script_path, timeout_secs)?;
+            inner.env_include_cache.clear();
             inner.catalog.settings_wire()
         };
-        self.invalidate_env_include_all();
         self.broadcast(DaemonMsg::SettingsChanged { settings });
         Ok(())
     }

@@ -138,7 +138,8 @@ This section holds three fields:
   seconds. **Range**: 1 – 60 seconds; out-of-range or non-numeric input is rejected with a message
   and not saved (same as the scrollback field).
 
-A saved change takes effect on the next session or terminal launch — no app restart needed.
+A saved change takes effect on the next session or terminal launch — no app restart needed — even
+while a session in the same project is still starting under the old settings.
 
 **Persistence**: only the enabled flag, script path, and timeout are ever saved to disk. The
 variables the script resolves — and any diagnostic text captured while troubleshooting a failure
