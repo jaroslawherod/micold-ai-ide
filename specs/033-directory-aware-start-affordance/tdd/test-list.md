@@ -41,16 +41,16 @@ Tests: `crates/micold-client/tests/directory_availability.rs` (new).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U1  | `asked(req, Dir(d))` then `answered(req, a)` stores `a` for `d` and returns `true` | FR-003, R1 | example | TODO | `an_answer_is_filed_under_the_directory_its_request_named` |
-| U2  | Same directory: `answered(older_req)` after `asked(newer_req)` is dropped and returns `false`, and `answered(newer_req)` is kept (both sides of the boundary) | FR-009 | example | TODO | `a_late_answer_to_an_older_request_for_the_same_directory_is_dropped` |
-| U3  | Two directories answered in either order are both held | FR-009, FR-002 | example | TODO | `answers_for_different_directories_are_all_kept_in_any_order` |
-| U4  | `answered(req)` for a `req` never asked is dropped and returns `false` | FR-011, R4 | example | TODO | `an_answer_to_an_unknown_request_is_dropped` |
-| U5  | A `Home` answer changes no `Dir` answer, and a `Dir` answer does not change `home()` | FR-002, FR-008 | example | TODO | `home_and_directory_answers_never_replace_each_other` |
-| U6  | `for_dir(d)`: `d`'s answer when held, the home answer when not, `None` when neither | FR-005 | example | TODO | `a_directory_reads_its_own_answer_and_falls_back_to_home` |
-| U7  | `retain(wanted)` drops unwanted `Dir` answers and requests and keeps `Home`. A request to a pruned directory answered later is dropped | FR-003, FR-012 | example | TODO | `retain_drops_answers_and_requests_for_directories_no_row_has` |
-| U8  | `unasked(wanted)` lists each wanted directory once, excluding ones held or in flight | FR-006 | example | TODO | `unasked_lists_only_directories_neither_held_nor_asked` |
-| U9  | `clear()` drops every answer (home too) and every in-flight request | FR-011 | example | TODO | `clear_forgets_every_answer_and_request` |
-| U10 | `env_include_changed(s)`: `false` when `s == asked_under`, `true` and recorded when different or unset | FR-004, R6 | example | TODO | `env_include_changed_reports_only_a_real_change` |
+| U1  | `asked(req, Dir(d))` then `answered(req, a)` stores `a` for `d` and returns `true` | FR-003, R1 | example | DONE | `directory_availability.rs::an_answer_is_filed_under_the_directory_its_request_named` |
+| U2  | Same directory: `answered(older_req)` after `asked(newer_req)` is dropped and returns `false`, and `answered(newer_req)` is kept (both sides of the boundary) | FR-009 | example | DONE | `directory_availability.rs::a_late_answer_to_an_older_request_for_the_same_directory_is_dropped` |
+| U3  | Two directories answered in either order are both held | FR-009, FR-002 | example | DONE | `directory_availability.rs::answers_for_different_directories_are_all_kept_in_any_order` |
+| U4  | `answered(req)` for a `req` never asked is dropped and returns `false` | FR-011, R4 | example | DONE | `directory_availability.rs::an_answer_to_an_unknown_request_is_dropped` |
+| U5  | A `Home` answer changes no `Dir` answer, and a `Dir` answer does not change `home()` | FR-002, FR-008 | example | DONE | `directory_availability.rs::home_and_directory_answers_never_replace_each_other` |
+| U6  | `for_dir(d)`: `d`'s answer when held, the home answer when not, `None` when neither | FR-005 | example | DONE | `directory_availability.rs::a_directory_reads_its_own_answer_and_falls_back_to_home` |
+| U7  | `retain(wanted)` drops unwanted `Dir` answers and requests and keeps `Home`. A request to a pruned directory answered later is dropped | FR-003, FR-012 | example | DONE | `directory_availability.rs::retain_drops_answers_and_requests_for_directories_no_row_has` |
+| U8  | `unasked(wanted)` lists each wanted directory once, excluding ones held or in flight | FR-006 | example | DONE | `directory_availability.rs::unasked_lists_only_directories_neither_held_nor_asked` |
+| U9  | `clear()` drops every answer (home too) and every in-flight request | FR-011 | example | DONE | `directory_availability.rs::clear_forgets_every_answer_and_request` |
+| U10 | `env_include_changed(s)`: `false` when `s == asked_under`, `true` and recorded when different or unset | FR-004, R6 | example | DONE | `directory_availability.rs::env_include_changed_reports_only_a_real_change` |
 
 ### `crates/micold-client/src/features/session.rs`: readers, and `app.rs` `location_dir`
 
@@ -63,7 +63,7 @@ Tests: `crates/micold-client/tests/features_session.rs` (extended) and `director
 | U13 | `start_intent(Primary, d)` is `OfferChoice { unavailable_default: Some(default) }` when `d`'s answer lacks the default and home has it | FR-010 | example | TODO | `a_default_missing_in_the_row_opens_its_list_marked` |
 | U14 | A held **empty** answer for `d` yields `NothingAvailable` and does not fall back to home. Nothing held anywhere also yields `NothingAvailable` | FR-005, 027 FR-023b | example | TODO | `an_empty_answer_is_an_answer_not_a_fallback` |
 | U15 | `offered_providers(None)` reads home only, with directory answers held | FR-008 | example | TODO | `settings_reads_home_only` |
-| U16 | `location_dir`: `Default` → the active root; `Worktree(d)` → `root/.claude/worktrees/d`; no active project → `None` | FR-007 | example | TODO | `a_row_is_answered_for_the_directory_its_session_would_run_in` |
+| U16 | `location_dir`: `Default` → the active root; `Worktree(d)` → `root/.claude/worktrees/d`; no active project → `None` | FR-007 | example | DONE | `directory_availability.rs::a_row_is_answered_for_the_directory_its_session_would_run_in` |
 
 ### `crates/micold-client/src/features/session.rs`: `wanted_availability_dirs`
 
@@ -71,11 +71,11 @@ Tests: `crates/micold-client/tests/directory_availability.rs`.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U17 | The wanted set is the active root plus each visible valid worktree's `location_dir` | FR-006, FR-007 | example | TODO | `the_wanted_set_is_the_rows_on_screen` |
-| U18 | A hidden agent worktree is excluded, and is included once the reveal control is on | FR-003, SC-004 | example | TODO | `hidden_agent_worktrees_are_not_asked_about_until_revealed` |
-| U19 | A `Missing` worktree is excluded | FR-004 (deleted) | example | TODO | `a_worktree_whose_directory_is_gone_is_not_asked_about` |
-| U20 | An included worktree is keyed by `location_dir`, not `Worktree::path` | FR-007, R3 | example | TODO | `an_included_worktree_is_keyed_like_its_reader` |
-| U21 | No active project yields an empty set | FR-012 | example | TODO | `no_project_no_wanted_directories` |
+| U17 | The wanted set is the active root plus each visible valid worktree's `location_dir` | FR-006, FR-007 | example | DONE | `directory_availability.rs::the_wanted_set_is_the_rows_on_screen` |
+| U18 | A hidden agent worktree is excluded, and is included once the reveal control is on | FR-003, SC-004 | example | DONE | `directory_availability.rs::hidden_agent_worktrees_are_not_asked_about_until_revealed` |
+| U19 | A `Missing` worktree is excluded | FR-004 (deleted) | example | DONE | `directory_availability.rs::a_worktree_whose_directory_is_gone_is_not_asked_about` |
+| U20 | An included worktree is keyed by `location_dir`, not `Worktree::path` | FR-007, R3 | example | DONE | `directory_availability.rs::an_included_worktree_is_keyed_like_its_reader` |
+| U21 | No active project yields an empty set | FR-012 | example | DONE | `directory_availability.rs::no_project_no_wanted_directories` |
 
 ### `crates/micold-client/src/shell/daemon_sync.rs`, `shell/workspace.rs`, `shell/persist.rs`, `main.rs`
 

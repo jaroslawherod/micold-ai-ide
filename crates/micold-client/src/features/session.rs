@@ -57,8 +57,8 @@ use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::overlay::Layer;
 use micold_core::project::canonicalize_best_effort;
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation, ShellInstanceId};
-use std::collections::BTreeSet;
-use std::path::Path;
+use std::collections::{BTreeSet, HashMap};
+use std::path::{Path, PathBuf};
 
 /// What this feature remembers (feature 028, contract S1).
 ///
@@ -298,6 +298,151 @@ impl CliAvailability {
             .filter(|which| !self.available.contains(which))
             .collect()
     }
+}
+
+/// What one availability answer is *about* (feature 033, data-model.md).
+///
+/// A closed enum rather than an `Option<PathBuf>` (Principle V): the home directory is a fixed place
+/// with consumers of its own — the Settings default and every row's fallback — not a directory that
+/// happens to be missing.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum AvailabilityKey {
+    /// The user's home directory, asked with `cwd: None` (FR-005, FR-008).
+    Home,
+    /// One sidebar row's directory — a project root or a worktree — asked with `cwd: Some(dir)`
+    /// (FR-007).
+    Dir(PathBuf),
+}
+
+/// The environment-include settings an availability answer was asked under (feature 033, R6).
+///
+/// Held so a `SettingsChanged` can be diffed against what the answers *describe*, not against the
+/// window's own fields — this window's save has already overwritten those by the time its echo
+/// arrives.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnvIncludeSettings {
+    /// Whether sessions start with the script's environment.
+    pub enabled: bool,
+    /// The script that is sourced.
+    pub script_path: String,
+    /// How long the script may run.
+    pub timeout_secs: u64,
+}
+
+/// Which AI CLIs each directory has, as far as the service has said (feature 033, FR-001–FR-012).
+///
+/// One home answer plus at most one answer per row directory (FR-003). An answer is filed under
+/// the key its request named, and only while that request is still the newest for the key
+/// (FR-009): two keys' answers never replace one another, whatever order they arrive in (FR-002).
+///
+/// In memory only — never persisted (026 research R11) — and emptied on every connect, because a
+/// reconnect may be to a different service whose answers differ (FR-011).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AvailabilityAnswers {
+    home: Option<CliAvailability>,
+    dirs: HashMap<PathBuf, CliAvailability>,
+    latest: HashMap<AvailabilityKey, u64>,
+    in_flight: HashMap<u64, AvailabilityKey>,
+    asked_under: Option<EnvIncludeSettings>,
+}
+
+impl AvailabilityAnswers {
+    /// A request `req` was sent about `key`; it is now the newest for that key.
+    pub fn asked(&mut self, req: u64, key: AvailabilityKey) {
+        self.latest.insert(key.clone(), req);
+        self.in_flight.insert(req, key);
+    }
+
+    /// File the answer to `req` under the key it asked about. `false` — and nothing filed — when
+    /// `req` was never asked (a reply from before a reconnect or for a pruned directory), or a
+    /// newer request for the same key has been sent since (FR-009).
+    pub fn answered(&mut self, req: u64, answer: CliAvailability) -> bool {
+        let Some(key) = self.in_flight.remove(&req) else {
+            return false;
+        };
+        if self.latest.get(&key) != Some(&req) {
+            return false;
+        }
+        match key {
+            AvailabilityKey::Home => self.home = Some(answer),
+            AvailabilityKey::Dir(dir) => {
+                self.dirs.insert(dir, answer);
+            }
+        }
+        true
+    }
+
+    /// The answer for `dir`, falling back to the home answer while `dir` has none (FR-005).
+    pub fn for_dir(&self, dir: &Path) -> Option<&CliAvailability> {
+        self.dirs.get(dir).or(self.home.as_ref())
+    }
+
+    /// The home answer alone — never a directory's (FR-008).
+    pub fn home(&self) -> Option<&CliAvailability> {
+        self.home.as_ref()
+    }
+
+    /// Drop every directory answer and request outside `wanted`; the home answer stays (FR-003,
+    /// FR-012).
+    pub fn retain(&mut self, wanted: &BTreeSet<PathBuf>) {
+        let keep = |key: &AvailabilityKey| match key {
+            AvailabilityKey::Home => true,
+            AvailabilityKey::Dir(dir) => wanted.contains(dir),
+        };
+        self.dirs.retain(|dir, _| wanted.contains(dir));
+        self.latest.retain(|key, _| keep(key));
+        self.in_flight.retain(|_, key| keep(key));
+    }
+
+    /// The wanted directories with no answer held and no request in flight, each once (FR-006).
+    pub fn unasked(&self, wanted: &BTreeSet<PathBuf>) -> Vec<PathBuf> {
+        wanted
+            .iter()
+            .filter(|dir| {
+                !self.dirs.contains_key(*dir)
+                    && !self
+                        .in_flight
+                        .values()
+                        .any(|key| matches!(key, AvailabilityKey::Dir(d) if d == *dir))
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Forget every answer and every request, the home answer included (FR-011).
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// Whether `settings` differ from the ones the held answers were asked under; records them
+    /// when they do (research R6).
+    pub fn env_include_changed(&mut self, settings: &EnvIncludeSettings) -> bool {
+        if self.asked_under.as_ref() == Some(settings) {
+            return false;
+        }
+        self.asked_under = Some(settings.clone());
+        true
+    }
+}
+
+/// The directories the sidebar currently shows a startable row for (feature 033, research R3).
+///
+/// The active project's root (its Default row) plus each visible worktree a session can start in,
+/// each keyed by [`crate::app::State::location_dir`] — never by `Worktree::path`, which differs for
+/// an included worktree, so the key asked about is the key the row reads. Hidden agent worktrees
+/// have no row and are not asked about until revealed (SC-004). Empty with no project open.
+pub fn wanted_availability_dirs(state: &crate::app::State) -> BTreeSet<PathBuf> {
+    let Some(root) = state.location_dir(&SessionLocation::Default) else {
+        return BTreeSet::new();
+    };
+    std::iter::once(root)
+        .chain(
+            state
+                .visible_worktrees()
+                .filter(|w| w.can_start_session())
+                .filter_map(|w| state.location_dir(&SessionLocation::Worktree(w.dir_name.clone()))),
+        )
+        .collect()
 }
 
 /// Why entering a project landed on the session it did — or on none (feature 008 FR-003).
