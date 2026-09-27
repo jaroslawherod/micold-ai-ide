@@ -130,7 +130,9 @@ trait ProjectStore {
 - Production: `StdFolderScanner` (uses `std::fs`), `JsonFileStore` (uses `serde_json` +
   `directories`). Tests: in-memory fakes and a `tempfile`-backed store.
 - `LoadOutcome` distinguishes a clean empty (first run) from a recovered-from-corruption load so
-  the app can optionally note the recovery, but neither aborts startup.
+  the app can optionally note the recovery, but neither aborts startup. *(Bugfix BUG-007: the
+  note is no longer optional — a recovered load MUST be reported, FR-012d; `ProjectStore` gains
+  `recovery_path()` so the notice can name the preserved file.)*
 
 ## Root application state (integration into `app.rs`)
 
