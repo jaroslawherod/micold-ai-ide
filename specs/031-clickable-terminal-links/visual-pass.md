@@ -498,3 +498,89 @@ machine.
   itself and reopens the file, or lands on "the session has closed" instead, before the sandbox-down
   state can be observed; this was reproduced deterministically only by making the restart
   structurally impossible.
+
+---
+
+# Visual pass — 031 clickable terminal links, milestone M7 (quickstart §B.11)
+
+**Date**: 2026-09-27
+**Environment**: private Xvfb display `:77` (1600×1400×24, no window manager), Mesa lavapipe
+(`WGPU_BACKEND=vulkan`, `lvp_icd.json`), `XDG_RUNTIME_DIR=/tmp/vp031b11rt`, private `XDG_DATA_HOME`
+(`/tmp/vp031b11/data`) and `XDG_CONFIG_HOME` (`/tmp/vp031b11/config`), one seeded project
+(`/tmp/vp031b11/project`, an initialized git repo) via a hand-written `projects.json` — placed at
+`<data_home>/micold-ai-ide/projects.json` (the daemon's `ProjectDirs`-qualified subdirectory, not
+`<data_home>/projects.json` directly; a first attempt at the flat path logged `catalog adopted
+load_status=Missing` and the client showed "No project open" until this was corrected). A fake
+`xdg-open` on `PATH` (`/tmp/vp031b11/fakebin/xdg-open`) logs invocations instead of opening anything
+real (not exercised by this step; §B.11 only needs the menu and the clipboard). Not a real display
+or GPU: perceived smoothness is out of scope and nothing below depends on it.
+
+**Scope**: quickstart §B.11 only, per the milestone's ask.
+
+## Binaries and pin check
+
+| Pin dir | Built from | Build output |
+|---|---|---|
+| `~/vp/bin-031-b11/` | this branch (`feat/links-in-terminal-should-be-clickable`) at `68460c8d`, clean tree, one `cargo build -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon` under `CARGO_INCREMENTAL=0` via `scripts/build-lock.sh` | `Compiling micold-client v0.15.0`; core and daemon already current from an earlier build at this commit |
+
+- Pin check: `strings <bin> | grep -c "Copy Link Address"` gives **1** for `micold-ai-ide` and **0**
+  for `micold-daemon`; `grep -c "Open Link"` gives **1** for `micold-ai-ide` — expected, since the
+  context-menu labels (`crates/micold-client/src/ui/terminal.rs`) are client-side only.
+- Copied straight out of `target-shared/debug/` right after the build finished, inside the same
+  window, before launching anything.
+- **Connects**: `micold-daemon.log` shows `client attached to daemon client_build=micold-ai-ide/0.15.0`
+  and `project attached client=1 project=/tmp/vp031b11/project`; the client's own log shows `attach:
+  connected projects=1 sessions=0 active=/tmp/vp031b11/project`. No `refusing client` anywhere.
+
+## Fixture
+
+No fixture script. A plain shell tab was opened via the tab strip's "+" (`claude` is not on this
+sandboxed `PATH`, so the client's default AI-CLI launch dropped to an interactive shell in the same
+pane, the same behaviour milestone M5 recorded — it still exercises the identical terminal-pane
+widget the test targets). From that shell prompt:
+
+```
+printf 'See https://example.com/docs/page.html for details.\n'
+echo plain text with no link here
+```
+
+Hovering the address confirmed the underline (`h` through `.html`, not the surrounding words) before
+any click, and the on-screen position was located precisely by cropping and magnifying the raw
+screenshot rather than eyeballing.
+
+## Steps
+
+| Step | Result |
+|---|---|
+| B.11 right-click a link → menu order/no divider; Copy Link Address → paste; right-click plain text → Copy/Paste only | **Pass** |
+
+### B.11 — link context menu, Copy Link Address, plain-text menu — pass
+
+**(a) Menu contents and order.** Right-clicking the hovered, underlined address opened a menu with
+exactly four items, top to bottom: **Open Link**, **Copy Link Address**, **Copy**, **Paste** — same
+row spacing throughout, no divider anywhere in the list (contract link-opening §6;
+`crates/micold-client/src/ui/terminal.rs::context_menu_items` builds exactly this list: the link
+items first, then today's Copy/Paste, no separator inserted between them).
+
+![B.11 link context menu](images/m7-b11-01-link-context-menu.png)
+
+**(b) Copy Link Address puts the complete address on the clipboard.** Chose **Copy Link Address**,
+then (no `xclip`/`xsel` available in this sandbox to read the X11 clipboard directly) verified by
+right-clicking a blank prompt line and choosing **Paste**: the terminal's command line filled with
+`https://example.com/docs/page.html` — the complete address, character-for-character, with no
+truncation and no extra text (confirmed by cropping and magnifying the pasted line).
+
+![B.11 pasted link address](images/m7-b11-03-pasted-link-address.png)
+
+**(c) Plain text shows Copy/Paste only.** Right-clicking a blank line of plain output (`plain text
+with no link here`, printed with no OSC 8 link and no bare-address match) opened a menu with only
+**Copy** and **Paste** — no Open Link, no Copy Link Address, no divider.
+
+![B.11 plain-text context menu](images/m7-b11-02-plaintext-context-menu.png)
+
+## Not covered (out of scope this milestone)
+
+- Every other quickstart §B step outside B.11 — covered by milestones M3/M4/M5/M6 or not yet run.
+- Reading the X11 clipboard directly (no `xclip`/`xsel` in this sandbox); verified instead by
+  pasting into the terminal itself, which round-trips through the same clipboard the menu item
+  writes to.

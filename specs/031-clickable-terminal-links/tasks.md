@@ -440,7 +440,7 @@ the `env_include.rs` builders (plan, Target Platform).
 - [X] T074 [US4] [U117] In `crates/micold-client/src/ui/material/terminal_pane.rs`, resolve the link at the right press and include it in `TerminalContextMenuOpened`
 - [X] T075 [US4] [U99] [U100] [A20] [A22] In `crates/micold-client/src/ui/terminal.rs`, render one leading `MenuItem` per entry of `link_menu_items(menu_link)`, with no divider (glue). In `crates/micold-client/src/main.rs` `update_inner`, add `ContextMenuOpenLink` and `ContextMenuCopyLinkAddress` arms ahead of `Message::Session`, calling `shell::links::on_link_message` (glue).
 - [X] T076 [US4] Extend "Links" in `docs/user-guide/worktrees-and-sessions.md`: right-click a link for Open Link and Copy Link Address, which copies the complete address (the declared one for a declared link)
-- [ ] T077 [US4] Verify the milestone: `mise run gate` (including `tests/gates/context_menu_anchor.rs` and `tests/context_menu_anchor_call_sites.rs` with the two new items), then the `visual-pass` skill for quickstart §B.11. US4 is complete only when the T086 acceptance tests A20–A22 are green. It confirms acceptance rows A20–A22 and carries no markers, so it is not ticked by them.
+- [X] T077 [US4] Verify the milestone: `mise run gate` (including `tests/gates/context_menu_anchor.rs` and `tests/context_menu_anchor_call_sites.rs` with the two new items), then the `visual-pass` skill for quickstart §B.11. US4 is complete only when the T086 acceptance tests A20–A22 are green. It confirms acceptance rows A20–A22 and carries no markers, so it is not ticked by them.
 
 **Checkpoint (M7)**: all four stories work.
 
