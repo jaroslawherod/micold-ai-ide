@@ -1029,7 +1029,7 @@ mod acceptance {
             // Every message, and every message its task produces in turn, exactly as iced's runtime
             // feeds them back: an open's `LinkOpenFinished` is a second round, and the notification
             // it raises is only visible once that round has run.
-            self.drive(published.iter().cloned().collect());
+            self.drive(published.to_vec());
             published
         }
 
@@ -1044,7 +1044,13 @@ mod acceptance {
         }
 
         /// The labels the terminal context menu shows, in order, as the view builds them (A20, A22).
+        ///
+        /// Empty while no menu is open, so a press that opened nothing cannot read as a menu with no
+        /// link items (review B F2).
         fn menu_labels(&self) -> Vec<&'static str> {
+            if self.app.core.session.terminal_context_menu.is_none() {
+                return Vec::new();
+            }
             micold_client::ui::terminal::context_menu_items(&self.app.core)
                 .into_iter()
                 .map(|(label, _)| label)

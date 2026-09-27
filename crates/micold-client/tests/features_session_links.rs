@@ -581,3 +581,36 @@ fn closing_the_menu_clears_the_captured_link() {
         "the link belongs to the menu that captured it (FR-017)"
     );
 }
+
+/// Review B F1: **Open Link** is the gesture's own path, confirmation included (FR-020, M3).
+///
+/// A guard: `context_menu_open_link` calls `link_activated`, so this holds on arrival. Its red is
+/// the mutant that asks the target directly — which is exactly the shortcut FR-020 forbids, since it
+/// would open a sandboxed file the gesture asks about first.
+#[test]
+fn open_link_on_a_sandboxed_path_asks_first_like_the_gesture_does() {
+    let (mut state, id) = with_a_session();
+    micold_client::features::session::update(
+        &mut state,
+        SessionMsg::TerminalContextMenuOpened {
+            x: 1,
+            y: 2,
+            link: Some(sandboxed_link()),
+        },
+    );
+    let outcomes =
+        micold_client::features::session::update(&mut state, SessionMsg::ContextMenuOpenLink);
+    assert_eq!(
+        outcomes,
+        Vec::new(),
+        "the sandbox's file is not opened from the menu either (FR-018a, FR-020)"
+    );
+    assert_eq!(
+        state.session.pending_link_open,
+        Some(PendingLinkOpen {
+            session: id,
+            link: sandboxed_link(),
+        }),
+        "the menu asks the same question the gesture asks, about the link it captured"
+    );
+}
