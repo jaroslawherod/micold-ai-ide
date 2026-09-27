@@ -503,8 +503,8 @@ two first asks for one directory while the script is blocked: it runs once.
   `ai_clis_available_in(dir)` on a thread, wait until the run log shows the script started, call
   `set_env_include(..)`, open the gate, join, ask again — assert the script ran twice. Case 2
   (`WorktreeDelete`): the same with `invalidate_env_include(dir)` in place of the save. Both fail on
-  `origin/main` with one run (the stale insert served the later ask) — reproduction in
-  `bugs/BUG-005.md`. FR-021(a).
+  `origin/main` with one run (the stale insert served the later ask) — Case 1 is the reproduction in
+  `bugs/BUG-005.md`; Case 2's red run is established when this test is written. FR-021(a).
 - [ ] T038 [BUG-005] Regression test, same file: concurrent first asks for one directory run the
   script once. Start one ask, wait until the script has started, start a second ask for the same
   directory, make sure it has reached the cache before opening the gate (prefer an observable
@@ -517,14 +517,18 @@ two first asks for one directory while the script is blocked: it runs once.
 - [ ] T039 [BUG-005] Make `DaemonState::env_include_vars_for`'s cache
   (`crates/micold-daemon/src/state.rs`) coherent under overlap: an entry per directory is either
   *ready* or *in progress* (a shared slot the resolving caller fills and other askers wait on, off
-  the state lock, bounded by the resolver's timeout); `invalidate_env_include_all` bumps a cache
+  the state lock, bounded by the resolver's timeout). Read the settings, probe the cache and claim
+  the in-progress entry (recording the generation) in one critical section, and have
+  `set_env_include` bump the generation in the same critical section that persists the settings;
+  a drop guard on the resolver fills or abandons its slot and removes its entry if the resolve
+  unwinds, so waiters fall back to resolving rather than parking forever. `invalidate_env_include_all` bumps a cache
   generation and clears in-progress entries too, `invalidate_env_include(path)` removes that path's
   entry in either state; a resolver inserts its result only if its own entry is still the one in
   the map, and otherwise hands it to its waiters and caches nothing. Keep the module invariant: no
   subprocess and no wait under the state lock. Makes T037 and T038 pass; U7 in
   `crates/micold-daemon/tests/ai_cli_availability.rs` stays green. Cross-feature: completes what
   feature 010's T098 built (see the note there). Depends on T037, T038.
-- [ ] T040 [P] [BUG-005] Docs (Principle VII): update the doc comments on `env_include_vars_for`,
+- [ ] T040 [BUG-005] Docs (Principle VII): update the doc comments on `env_include_vars_for`,
   `spawn_path_for`, `invalidate_env_include` and `invalidate_env_include_all` to state the
   in-progress sharing and that an invalidation wins over a resolve in progress; add one sentence to
   `docs/user-guide/settings.md`'s environment-include section that a saved change applies to the
