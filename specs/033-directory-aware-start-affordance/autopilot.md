@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/a-project-local-cli-stays-unreachable-in-that-project
 - **Started**: 2026-09-27
 - **Phase**: 3-design
-- **Next step**: Phase 3 — plan review round 1, then tasks, milestones, analyze, checklists; PR 2.
+- **Next step**: Phase 3 — tasks + milestone review, checklist closure, PR 2.
 
 ## Pull requests
 
@@ -20,12 +20,17 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
+| M1 | T001–T019, T030–T036 | Each row offers the CLIs its own directory provides; Settings, reconnect and another row's list never replace it | — | planned |
+| M2 | T020–T027, T037–T039 | Env-include changes refresh every row; rows that go drop answers, rows that come back are asked; tripwire pins the askers | — | planned |
+| M3 | T028–T029 | quickstart §B recorded passing end to end; no comment describes the window-wide set | — | planned |
 
 ## Decisions
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
-| D8 | design | Plan review round 1 outcome | CHANGES (1 BLOCKER: the env-include diff was against fields the window's own save overwrites; 1 MAJOR: the wanted set included hidden agent worktrees; 4 MINOR: A5 sites, key ambiguity for included worktrees, state_scan vocabulary, tripwire test scope). All fixed; the reveal toggle added as an asker (revealing makes rows appear, FR-004 first ask). | agent-resolved | fresh-subagent review, plan rubric |
+| D10 | design | Milestone cut: US2 folded into M1? M1 over 15 tasks? | US2 needs no code of its own (keyed filing from Phase 2 + T016); a US2-only milestone would ship tests only, so its tests ride in M1. M1 is 26 tasks incl. 7 outer-loop gates and ~800 lines; not split because Phase 2 + US1 wiring have no observable half (the cache without the asks, or the asks without the readers, changes nothing on screen). Pruning (FR-003 "rows that exist", FR-012) moved to M2 as the observable "rows that go drop answers" deliverable. | agent-resolved | references/milestones.md rules 1–3 |
+| D9 | design | speckit-analyze | 0 CRITICAL/HIGH; 2 MEDIUM (stale checklist item, SC-001/002 missing from plan map), 2 LOW (file count, FR order): all fixed. | agent-resolved | speckit-analyze report |
+| D8 | design | Plan review outcome | CHANGES (1 BLOCKER: the env-include diff was against fields the window's own save overwrites; 1 MAJOR: the wanted set included hidden agent worktrees; 4 MINOR: A5 sites, key ambiguity for included worktrees, state_scan vocabulary, tripwire test scope). All fixed; the reveal toggle added as an asker (revealing makes rows appear, FR-004 first ask). Round 2 (sonnet): CLEAN. | agent-resolved | fresh-subagent review, plan rubric |
 | D7 | design | Reuse the existing per-directory request or add a protocol message? | Reuse `AiCliAvailabilityRequest { req, cwd }` unchanged; the client maps `req → directory` (reply does not echo cwd). No PROTOCOL_VERSION/schema change. | agent-resolved | research.md R1 |
 | D6 | clarify | Round 2 scan: any critical ambiguity left? | None. Closing a project drops its held answers (FR-012, agent-resolved from FR-003). | agent-resolved | spec.md FR-003 |
 | D5 | clarify | FR-006: when is a row's first answer asked for? | Eagerly, as soon as its directory appears (project open incl. restore, worktree added/discovered), once per distinct directory. | user | AskUserQuestion 2026-09-27 |

@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,10 +31,8 @@
 
 ## Notes
 
-- Three `[NEEDS CLARIFICATION]` markers are left open for Phase 2 by design (the autopilot flow does
-  not ask in Phase 1): FR-001 (whether the affordance becomes directory-aware at all, or a cheaper
-  product answer), FR-006 (when a row's first answer is asked for), FR-007 (a worktree's own
-  directory or its project root).
+- The three `[NEEDS CLARIFICATION]` markers left open in Phase 1 (FR-001, FR-006, FR-007) were
+  resolved in the 2026-09-27 clarification session (spec.md *Clarifications*); none remain.
 - The spec names `PATH`, the environment-include script, the session service and the AI CLIs
   (`claude`, `pi`) because they are the product's domain — the user-visible settings and tools the
   answer is about — not an implementation choice. The *Background* section cites the code-level

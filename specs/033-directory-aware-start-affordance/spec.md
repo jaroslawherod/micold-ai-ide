@@ -218,10 +218,10 @@ application idle and confirm it schedules no timers or wakeups for this feature.
 - **FR-010**: The primary press MUST never start a CLI other than the stored default or the one the
   user chose; when the row's answer lacks the default, the press MUST open the row's list with the
   default marked unavailable (026 FR-002), exactly as today.
-- **FR-012**: Closing a project MUST drop the held answers for its rows' directories; reopening
-  it is a first ask (FR-004).
 - **FR-011**: On reconnecting to the session service, every held answer MUST be discarded and the
   answers re-asked for the rows that had one, by the same rule as a first ask (FR-006), since the service may now describe a different place.
+- **FR-012**: Closing a project MUST drop the held answers for its rows' directories; reopening
+  it is a first ask (FR-004).
 
 ### Key Entities
 
