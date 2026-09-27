@@ -1162,3 +1162,36 @@ sorted deepest-first, so C15's order broke.
   with no divider; Copy Link Address round-trips the complete address through a Paste; over plain
   text the menu is Copy and Paste alone. Recorded with three screenshots in
   `specs/031-clickable-terminal-links/visual-pass.md`
+
+## Cycle 94: the M7 review round — A F1, A F2, A F3
+
+- review A F1 (MEDIUM): the right press resolved the link from `cursor.position_over(content)` alone,
+  without the scrollbar-strip filter the hover applies (U159, FR-016). Over the strip a press pages
+  the view, so the menu offered **Open Link** for a link the pane never underlined and that a
+  Ctrl+click at the same point cannot open. Test:
+  `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_right_press_over_the_scrollbar_strip_carries_no_link`
+  (U161). Red:
+  `left: [Some(ResolvedLink { link: Link { address: "https://example.com/docs/page.html", origin: Detected, cells: [CellSpan { row: 0, cols: 26..60 }] }, … })]`
+  / `right: [None]`. Green: the press reads the position through the same
+  `strip`/`SCROLLBAR_WIDTH` filter the hover does
+- review A F2 (MEDIUM): the terminal menu was the one cursor-anchored menu in the app that handed its
+  raw press point to `cdk::overlay::Anchor::Point`, whose doc leaves clamping to the caller. With the
+  two link items the panel is 208dp rather than 112dp, so a right-click in the lower part of the pane
+  put **Copy** and **Paste** outside it. Test:
+  `terminal_pane.rs::tests::links::the_menu_anchor_keeps_the_panel_inside_the_pane` (U162). Red:
+  `left: [(84, 103)]` / `right: [(84, 0)]`. Green: the press clamps its point with
+  `features::project::clamp_menu_anchor` — the rule the other four menus already use — against the
+  pane's own box, which is the box the overlay is mounted in. The panel's item count comes from
+  `features::session::terminal_menu_item_count`, and
+  `tests/features_session_links.rs::the_menu_item_count_matches_the_list` pins that count to the list
+  `ui::terminal::context_menu_items` renders, both ways round, so the panel cannot be measured as two
+  items and rendered as four
+- review A F3 (LOW): the `COMPONENT_LOCAL` justification for `session.menu_link` held two runs of
+  literal spaces where `\`-continuations were meant. Cosmetic, nothing asserts the text; rewritten
+  with the continuations
+- gate: `mise run gate` green (fmt, clippy `-D warnings` core and workspace, `cargo test --workspace`,
+  `scripts/tests/*.test.sh` 15 cases / 0 failures); `cargo check --workspace --target
+  aarch64-apple-darwin` and `cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc
+  -- -D warnings` both exit 0
+- refactor: none. The §B.11 evidence stands: the clamp changes only a press with less than a panel's
+  height below it, which is not the placement B.11 recorded

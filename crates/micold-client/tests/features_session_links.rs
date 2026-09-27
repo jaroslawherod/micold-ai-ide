@@ -448,6 +448,32 @@ fn the_menus_link_items_are_open_link_then_copy_link_address_or_none() {
     );
 }
 
+/// U162: the count the pane clamps the anchor with is the list the view renders, both ways round.
+///
+/// Two answers about one menu would let the panel be measured as two items and rendered as four,
+/// which is the off-pane panel review A found (F2).
+#[test]
+fn the_menu_item_count_matches_the_list() {
+    use micold_client::features::session::terminal_menu_item_count;
+    let link = web_link(ADDRESS);
+    for over in [Some(&link), None] {
+        let mut state = State::default();
+        micold_client::features::session::update(
+            &mut state,
+            SessionMsg::TerminalContextMenuOpened {
+                x: 1,
+                y: 1,
+                link: over.cloned(),
+            },
+        );
+        assert_eq!(
+            terminal_menu_item_count(over),
+            micold_client::ui::terminal::context_menu_items(&state).len(),
+            "the count and the rendered list disagree for {over:?}"
+        );
+    }
+}
+
 /// U85, U86 (T070, T14): the menu remembers the link it was opened over, and only then offers its
 /// items.
 #[test]

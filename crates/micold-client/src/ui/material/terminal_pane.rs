@@ -1628,18 +1628,46 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     state.reporting_button = Some(2);
                     state.reported_cell = Some((col, line));
                 } else {
-                    let x = (pos.x - bounds.x).max(0.0) as u16;
-                    let y = (pos.y - bounds.y).max(0.0) as u16;
+                    let press = (
+                        (pos.x - bounds.x).max(0.0) as u16,
+                        (pos.y - bounds.y).max(0.0) as u16,
+                    );
                     // The link under the press, resolved now rather than taken from the hover: the
                     // menu's items act on what the user right-clicked, and the pointer may have
                     // arrived here without a move the hover saw (U117, FR-017). Read exactly as the
                     // release reads it, Shift included, so the menu offers a link precisely when
                     // the pane marks one.
-                    let link = cursor.position_over(content).and_then(|position| {
-                        let cell = grid_at(position, content, metrics);
-                        let now = resolve_hover(self.grid, &self.hover_key(cell));
-                        marked_link(Some(&now), self.mouse_mode(), state.modifiers.shift()).cloned()
-                    });
+                    // Over the scrollbar strip a press pages the view, so nothing under it is a
+                    // link — the same filter the hover applies above (U159, U161, FR-016).
+                    let strip = scrollbar_metrics(
+                        content.height,
+                        self.size().1 as usize,
+                        self.history_size(),
+                        self.display_offset,
+                    )
+                    .is_some();
+                    let link = cursor
+                        .position_over(content)
+                        .filter(|position| {
+                            !(strip && position.x >= content.x + content.width - SCROLLBAR_WIDTH)
+                        })
+                        .and_then(|position| {
+                            let cell = grid_at(position, content, metrics);
+                            let now = resolve_hover(self.grid, &self.hover_key(cell));
+                            marked_link(Some(&now), self.mouse_mode(), state.modifiers.shift())
+                                .cloned()
+                        });
+                    // Clamped here, where the pane's box is known, so the panel cannot open past
+                    // the pane's edges: `cdk::overlay::Anchor::Point` leaves that to its caller,
+                    // and the link items make the panel twice as tall as Copy and Paste alone
+                    // (U162, review A F2). The item count is the feature's, not the view's copy.
+                    let (x, y) = crate::features::project::clamp_menu_anchor(
+                        press,
+                        super::menu_panel_size(crate::features::session::terminal_menu_item_count(
+                            link.as_ref(),
+                        )),
+                        (bounds.width as u16, bounds.height as u16),
+                    );
                     shell.publish(Message::Session(SessionMsg::TerminalContextMenuOpened {
                         x,
                         y,
@@ -3439,6 +3467,9 @@ mod tests {
             session: SessionId,
             context: LinkContext,
             tree: Option<Tree>,
+            /// The box the pane is laid out in. [`window`] unless a test needs more room below a
+            /// press than six rows leave (the menu panel is taller than this pane).
+            viewport: Size,
             renderer: Renderer,
             /// Whether the last event marked the widget tree stale, which is what repaints it.
             invalidated: bool,
@@ -3453,6 +3484,7 @@ mod tests {
                     session: SessionId::from_uuid(uuid::Uuid::nil()),
                     context: local(),
                     tree: None,
+                    viewport: window(),
                     renderer: super::presses::headless(),
                     invalidated: false,
                 }
@@ -3460,6 +3492,12 @@ mod tests {
 
             fn unfocused(mut self) -> Self {
                 self.focused = false;
+                self
+            }
+
+            /// Lay the pane out in a taller box than [`window`].
+            fn sized(mut self, viewport: Size) -> Self {
+                self.viewport = viewport;
                 self
             }
 
@@ -3481,7 +3519,7 @@ mod tests {
                 let node = element.as_widget_mut().layout(
                     tree,
                     &self.renderer,
-                    &Limits::new(Size::ZERO, window()),
+                    &Limits::new(Size::ZERO, self.viewport),
                 );
                 let mut messages = Vec::new();
                 let mut shell = Shell::new(&mut messages);
@@ -3493,7 +3531,7 @@ mod tests {
                     &self.renderer,
                     &mut clipboard::Null,
                     &mut shell,
-                    &Rectangle::with_size(window()),
+                    &Rectangle::with_size(self.viewport),
                 );
                 self.invalidated = shell.are_widgets_invalid();
                 messages
@@ -3518,13 +3556,13 @@ mod tests {
                 let node = element.as_widget_mut().layout(
                     tree,
                     &self.renderer,
-                    &Limits::new(Size::ZERO, window()),
+                    &Limits::new(Size::ZERO, self.viewport),
                 );
                 element.as_widget().mouse_interaction(
                     tree,
                     Layout::new(&node),
                     mouse::Cursor::Available(cursor),
-                    &Rectangle::with_size(window()),
+                    &Rectangle::with_size(self.viewport),
                     &self.renderer,
                 )
             }
@@ -4574,6 +4612,80 @@ mod tests {
                 menu_links(&plain.send(at(1, 0), right_press())),
                 vec![None],
                 "over plain text the menu is opened over nothing"
+            );
+        }
+
+        /// The `(x, y)` each `TerminalContextMenuOpened` carries.
+        fn menu_anchors(published: &[Message]) -> Vec<(u16, u16)> {
+            published
+                .iter()
+                .filter_map(|m| match m {
+                    Message::Session(SessionMsg::TerminalContextMenuOpened { x, y, .. }) => {
+                        Some((*x, *y))
+                    }
+                    _ => None,
+                })
+                .collect()
+        }
+
+        /// U161: over the scrollbar strip a press pages the view, so the menu a right press opens
+        /// there carries no link — the rule the hover and the release already follow (U159, FR-016).
+        #[test]
+        fn a_right_press_over_the_scrollbar_strip_carries_no_link() {
+            let text = format!("{:>width$}", ADDRESS, width = COLS as usize);
+            let mut lines: Vec<(i64, Row)> = (0..9).map(|i| (i, row("history"))).collect();
+            lines.push((9, row(&text)));
+            lines.push((10, row("$ ")));
+            let mut grid = GridCache::default();
+            grid.apply(&frame(1, &lines, 10, 0, 0));
+            let mut pane = Pane::new(grid);
+            pane.display_offset = 1;
+            assert_eq!(
+                menu_links(&pane.send(at(COLS - 1, 0), right_press())),
+                vec![None],
+                "under the strip the pane marks no link, so the menu offers none"
+            );
+            assert_eq!(
+                menu_links(&pane.send(at(COLS - 20, 0), right_press())),
+                vec![Some(url_link(ADDRESS, 0, 26..60, LinkOrigin::Detected))],
+                "the same link left of the strip is the menu's link"
+            );
+        }
+
+        /// U162: the anchor the press publishes is clamped so the panel opens inside the pane, the
+        /// rule every other cursor-anchored menu applies (review A F2).
+        #[test]
+        fn the_menu_anchor_keeps_the_panel_inside_the_pane() {
+            let pane_height = window().height as u16;
+            let bottom = ROWS - 1;
+            let mut rows: Vec<Row> = (0..bottom).map(|_| row("$ ")).collect();
+            rows.push(row(SENTENCE));
+            let mut pane = Pane::new(screen(&rows));
+
+            let (_, with_link) = crate::ui::material::menu_panel_size(4);
+            assert_eq!(
+                menu_anchors(&pane.send(at(10, bottom), right_press())),
+                vec![(
+                    at(10, bottom).x as u16,
+                    pane_height.saturating_sub(with_link)
+                )],
+                "four items are taller than this pane, so the panel opens at its top edge"
+            );
+
+            let (_, plain) = crate::ui::material::menu_panel_size(2);
+            assert_eq!(
+                menu_anchors(&pane.send(at(1, bottom), right_press())),
+                vec![(at(1, bottom).x as u16, pane_height - plain)],
+                "over plain text the two-item panel is pushed up until its bottom edge fits"
+            );
+
+            let tall = Size::new(window().width, 600.0);
+            let mut roomy = Pane::new(screen(&rows)).sized(tall);
+            let top = at(10, 0);
+            assert_eq!(
+                menu_anchors(&roomy.send(top, right_press())),
+                vec![(top.x as u16, top.y as u16)],
+                "a press with room below it is answered at the press point itself"
             );
         }
 
