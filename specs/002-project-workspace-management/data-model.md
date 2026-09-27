@@ -131,8 +131,8 @@ trait ProjectStore {
   `directories`). Tests: in-memory fakes and a `tempfile`-backed store.
 - `LoadOutcome` distinguishes a clean empty (first run) from a recovered-from-corruption load so
   the app can optionally note the recovery, but neither aborts startup. *(Bugfix BUG-007: the
-  note is no longer optional — a recovered load MUST be reported, FR-012d; `ProjectStore` gains
-  `recovery_path()` so the notice can name the preserved file.)*
+  note is no longer optional — a recovered load MUST be reported, FR-012d; `LoadOutcome` gains
+  `preserved`, the copy that load made, so the notice can name it.)*
 
 ## Root application state (integration into `app.rs`)
 

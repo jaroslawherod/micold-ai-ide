@@ -417,6 +417,10 @@ async fn unwind(state: &Arc<DaemonState>, reason: StopReason) {
     };
     tracing::info!(reason = ?reason, "{why}");
 
+    // 002 BUG-007: the last chance to put a list that only this process still holds back on disk
+    // — a launch moved a damaged `projects.json` aside and never connected.
+    state.restore_missing_catalog_file();
+
     let worker = Arc::clone(state);
     let (marked, dropped) = tokio::task::spawn_blocking(move || {
         let marked = worker.mark_live_sessions_interrupted(); // step 3
@@ -442,6 +446,12 @@ where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     let mut framed = Framed::new(stream, DaemonCodec::new());
+
+    // A launch that met a damaged `projects.json` moved it aside before dialling; the list this
+    // daemon still holds goes back on disk (002 BUG-007). Before the handshake, not at `Welcome`:
+    // a client of another build is refused below and then replaces this daemon, and one that dies
+    // before its `Hello` never gets that far — either way this memory is the list's only copy.
+    state.restore_missing_catalog_file();
 
     // --- Handshake: the first frame must be a Hello, and it must match exactly. ---
     let intro = match framed.next().await {
@@ -496,9 +506,6 @@ where
     }
 
     // --- Welcome (sent synchronously, so it is unambiguously the first frame the client sees). ---
-    // A launch that met a damaged `projects.json` moved it aside before dialling; the list this
-    // daemon still holds goes back on disk before the window is told about it (002 BUG-007).
-    state.restore_missing_catalog_file();
     let (catalog, settings) = state.welcome_payload();
     framed
         .send(Frame::Control(DaemonMsg::Welcome {

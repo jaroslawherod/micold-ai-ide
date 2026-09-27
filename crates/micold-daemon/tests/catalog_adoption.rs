@@ -591,3 +591,32 @@ fn a_restored_session_resumes_on_the_cli_it_was_started_on() {
     assert_eq!(summary.lifecycle, WireLifecycle::InterruptedResumable);
     assert_eq!(summary.provider, AiCli::Copilot);
 }
+
+/// 002 BUG-007: the write-back does not wait for a handshake. A client of another build is refused
+/// and then replaces this daemon; one that dies before its `Hello` never gets that far. Here the
+/// client connects and hangs up without a word, and the list still goes back on disk.
+#[tokio::test]
+async fn a_connection_that_never_handshakes_still_writes_back_a_missing_catalog() {
+    let dir = tempfile::tempdir().unwrap();
+    let projects_path = dir.path().join("projects.json");
+    let mut ws = Workspace::empty();
+    ws.projects.push(Project::new(
+        PathBuf::from("/repo/alpha"),
+        true,
+        Availability::Available,
+    ));
+    JsonFileStore::at(projects_path.clone()).save(&ws).unwrap();
+    let state = std::sync::Arc::new(micold_daemon::state::DaemonState::new(Catalog::load(
+        Box::new(JsonFileStore::at(projects_path.clone())),
+        Box::new(JsonFileSettingsStore::at(dir.path().join("settings.json"))),
+    )));
+    std::fs::rename(&projects_path, projects_path.with_extension("json.bak")).unwrap();
+
+    let (server_io, client_io) = tokio::io::duplex(1024);
+    drop(client_io);
+    let _ = micold_daemon::server::serve_connection(state, server_io).await;
+
+    let reread = JsonFileStore::at(projects_path).load();
+    assert_eq!(reread.status, LoadStatus::Loaded);
+    assert_eq!(reread.workspace.projects.len(), 1);
+}

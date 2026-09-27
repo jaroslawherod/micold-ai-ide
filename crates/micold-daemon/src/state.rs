@@ -666,21 +666,21 @@ impl DaemonState {
         }
     }
 
-    /// The `Welcome` payload for a freshly-handshaked client.
     /// See [`Catalog::restore_missing_file`]: write the held list back if a launch moved the file
-    /// aside (002 BUG-007). Best-effort, like every catalog write — a failure is logged, and the
-    /// connection proceeds.
+    /// aside (002 BUG-007). Asked on every connection and at the stop. Best-effort, like every
+    /// catalog write — a failure is logged, and the caller proceeds.
     pub fn restore_missing_catalog_file(&self) {
         let inner = self.lock();
         match inner.catalog.restore_missing_file() {
             Ok(true) => tracing::warn!(
-                "projects.json was missing on connect; wrote back the project list this service holds"
+                "projects.json was missing; wrote back the project list this service holds"
             ),
             Ok(false) => {}
             Err(err) => tracing::warn!(%err, "could not write back a missing projects.json"),
         }
     }
 
+    /// The `Welcome` payload for a freshly-handshaked client.
     pub fn welcome_payload(&self) -> (CatalogSnapshot, DaemonSettings) {
         let inner = self.lock();
         (Self::snapshot_locked(&inner), inner.catalog.settings_wire())

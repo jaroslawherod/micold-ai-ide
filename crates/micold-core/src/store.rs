@@ -637,7 +637,11 @@ impl JsonFileStore {
                 name.push(format!(".{n}"));
                 PathBuf::from(name)
             }))
-            .find(|candidate| std::fs::symlink_metadata(candidate).is_err())?;
+            // Only a name that is certainly absent is free: a stat that fails for any other reason
+            // may be hiding an earlier copy, and `rename` would replace it.
+            .find(|candidate| {
+                matches!(std::fs::symlink_metadata(candidate), Err(err) if err.kind() == io::ErrorKind::NotFound)
+            })?;
         std::fs::rename(&self.path, &target).ok()?;
         Some(target)
     }

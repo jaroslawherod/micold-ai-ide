@@ -87,7 +87,7 @@ JSON, UTF-8. Top-level object:
   The preserved copy never replaces an earlier one: the first free name of `projects.json.bak`,
   `projects.json.bak.2`, … is used, and a file that cannot be read as text is preserved the same
   way. A running daemon whose `projects.json` has gone writes its catalog back when a client
-  connects (BUG-007).
+  connects and when it stops (BUG-007).
   **This clause is scoped to the catalog file only** (bugfix BUG-001) — see "Per-project
   storage split" below for why per-project state (sessions, worktree names, mode) no longer shares
   this file or this blast radius.
