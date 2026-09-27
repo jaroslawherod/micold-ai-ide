@@ -33,12 +33,6 @@ use micold_core::session::{AiCli, SessionLocation};
 use support::layout as lay;
 
 const PROJECT: &str = "/fixture/start-press";
-/// File `answer` as the home directory's, the way a reply to a `cwd: None` request lands (feature
-/// 033). Every row reads it while its own directory has no answer (FR-005).
-fn hold_home(state: &mut State, answer: CliAvailability) {
-    state.session.availability.asked(0, AvailabilityKey::Home);
-    state.session.availability.answered(0, answer);
-}
 
 /// A project open with no worktrees, so the only start affordance on screen is the Default row's.
 fn with_project(default_ai_cli: AiCli, available: &[AiCli]) -> State {
@@ -51,7 +45,7 @@ fn with_project(default_ai_cli: AiCli, available: &[AiCli]) -> State {
     state.sidebar.width = 300;
     state.window.window_size = (lay::WINDOW.width as u16, lay::WINDOW.height as u16);
     state.session.default_ai_cli = default_ai_cli;
-    hold_home(
+    support::hold_home(
         &mut state,
         CliAvailability {
             available: available.to_vec(),

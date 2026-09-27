@@ -86,3 +86,27 @@ pub fn workspace_with(projects: Vec<(&str, Vec<Session>)>) -> Workspace {
     ws.active = None;
     ws
 }
+
+/// File `answer` under `key`, the way a reply to the request that named it lands (feature 033,
+/// contract C2).
+pub fn hold(
+    state: &mut micold_client::app::State,
+    key: micold_client::features::session::AvailabilityKey,
+    answer: micold_client::features::session::CliAvailability,
+) {
+    state.session.availability.asked(0, key);
+    state.session.availability.answered(0, answer);
+}
+
+/// File `answer` as the home directory's, the way a reply to a `cwd: None` request lands (feature
+/// 033). Every row reads it while its own directory has no answer (FR-005).
+pub fn hold_home(
+    state: &mut micold_client::app::State,
+    answer: micold_client::features::session::CliAvailability,
+) {
+    hold(
+        state,
+        micold_client::features::session::AvailabilityKey::Home,
+        answer,
+    );
+}

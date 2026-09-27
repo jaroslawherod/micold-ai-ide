@@ -17,7 +17,6 @@ use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-const PROJECT: &str = "/repo";
 const P: &str = "/repo";
 const Q: &str = "/repo/.claude/worktrees/feat-q";
 
@@ -267,7 +266,7 @@ fn env_include_changed_reports_only_a_real_change() {
 fn worktree(name: &str, status: WorktreeStatus) -> Worktree {
     Worktree {
         dir_name: name.to_string(),
-        path: PathBuf::from(format!("{PROJECT}/.claude/worktrees/{name}")),
+        path: PathBuf::from(format!("{P}/.claude/worktrees/{name}")),
         branch: Some(format!("feat/{name}")),
         status,
         included: false,
@@ -278,7 +277,7 @@ fn worktree(name: &str, status: WorktreeStatus) -> Worktree {
 /// not (so they are hidden until revealed, 029 FR-004).
 fn state_with(recorded: Vec<Worktree>, agent: Vec<Worktree>) -> State {
     let mut state = State::default();
-    let root = PathBuf::from(PROJECT);
+    let root = PathBuf::from(P);
     state.workspace.projects.push(Project {
         path: root.clone(),
         display_name: "repo".to_string(),
@@ -294,7 +293,7 @@ fn state_with(recorded: Vec<Worktree>, agent: Vec<Worktree>) -> State {
 }
 
 fn worktree_dir(name: &str) -> PathBuf {
-    PathBuf::from(format!("{PROJECT}/.claude/worktrees/{name}"))
+    PathBuf::from(format!("{P}/.claude/worktrees/{name}"))
 }
 
 /// U16 (FR-007): the same rule the spawn uses, `SessionLocation::cwd`.
@@ -303,7 +302,7 @@ fn a_row_is_answered_for_the_directory_its_session_would_run_in() {
     let state = state_with(Vec::new(), Vec::new());
     assert_eq!(
         state.location_dir(&SessionLocation::Default),
-        Some(PathBuf::from(PROJECT))
+        Some(PathBuf::from(P))
     );
     assert_eq!(
         state.location_dir(&SessionLocation::Worktree("feat-a".into())),
@@ -329,7 +328,7 @@ fn the_wanted_set_is_the_rows_on_screen() {
     assert_eq!(
         wanted_availability_dirs(&state),
         [
-            PathBuf::from(PROJECT),
+            PathBuf::from(P),
             worktree_dir("feat-a"),
             worktree_dir("feat-b")
         ]

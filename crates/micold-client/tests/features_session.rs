@@ -18,6 +18,9 @@
 //! (data-model.md I1) and every step is individually plausible in the wrong place, which is exactly
 //! the kind of thing a refactor breaks quietly.
 
+#[path = "support/mod.rs"]
+mod support;
+
 use micold_client::app::State;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::session::{
@@ -483,9 +486,9 @@ const ROW: &str = "/repo";
 
 /// File `available` under `key`, the way a reply to the request that named it lands.
 fn hold(state: &mut State, key: AvailabilityKey, available: &[AiCli]) {
-    state.session.availability.asked(0, key);
-    state.session.availability.answered(
-        0,
+    support::hold(
+        state,
+        key,
         CliAvailability {
             available: available.to_vec(),
             source: AvailabilitySource::ThisComputer,
