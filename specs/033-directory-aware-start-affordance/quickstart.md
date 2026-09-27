@@ -33,8 +33,8 @@ real session service, and is run by the `visual-pass` skill on a private Xvfb di
 | A row reads its own answer, and falls back to home while pending | `directory_availability.rs`, `features_session.rs` | FR-001, FR-005, FR-010 |
 | Opening a project, a worktree list change and a reconnect ask once per distinct directory | `crates/micold-client/src/main_tests.rs` | FR-004, FR-006, FR-007, FR-011, SC-004 |
 | Settings and a start list never replace another directory's answer | `main_tests.rs` | FR-002, FR-008, US2 |
-| Closing, switching or forgetting a project drops its answers | `main_tests.rs` | FR-012 |
-| An env-include change re-asks, and another settings change does not | `main_tests.rs` | FR-004, SC-005 |
+| Closing, switching or forgetting a project drops its answers; hidden agent worktrees are not asked about until revealed | `main_tests.rs` | FR-012 |
+| An env-include change re-asks, whether this window saved it or another did, and another settings change does not | `main_tests.rs` | FR-004, SC-005 |
 | No other code path asks, and nothing under `ui/` does | `crates/micold-client/tests/availability_is_asked_only_on_named_events.rs` | SC-003, FR-006 |
 | Idle schedules nothing | `crates/micold-client/tests/idle_subscriptions.rs` (existing) | SC-003 |
 

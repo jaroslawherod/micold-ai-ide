@@ -15,16 +15,19 @@ Research: [R1–R11](../research.md).
 | A2 | Settings opened | `shell/persist.rs` `on_settings_opened` | `Home` |
 | A3 | A row's start list opened (chevron, or primary press with the default missing) | `main.rs` `SessionMsg::StartMenuOpened` arm | that row's directory (refresh) |
 | A4 | Project opened / reopened / switched to | `shell/workspace.rs` `open_verified_project`, `on_known_project_reopened` | sync: every wanted directory not held or in flight |
-| A5 | Worktree list replaced (created, discovered, deleted, `Missing` ↔ valid) | callers of `State::set_worktrees`: `CatalogChanged` reconcile, `features::worktree::loaded` | sync |
+| A5 | Worktree list changed (created, discovered, deleted, included, excluded, `Missing` ↔ valid) | `shell/daemon_sync.rs` `DaemonMsg::CatalogChanged` arm, after `reconcile_catalog(.., true)`. The optimistic local edits are followed by that push and do not ask themselves | sync |
+| A5b | Hidden agent worktrees revealed or hidden | `main.rs` shell arm for `SidebarMsg::ShowAgentWorktreesToggled` (reducer, then sync) | sync |
 | A6 | Project forgotten | `ProjectMsg::ForgetConfirmed` arm | sync (prunes; asks nothing new) |
-| A7 | Environment-include settings changed | `DaemonMsg::SettingsChanged` arm, only when an env-include field differs | `Home` and every wanted directory (refresh, held answers kept until replaced) |
+| A7 | Environment-include settings changed | `DaemonMsg::SettingsChanged` arm, only when the echoed env-include settings differ from `AvailabilityAnswers::asked_under` (not from `App`'s fields, which this window's own save has already overwritten) | `Home` and every wanted directory (refresh, held answers kept until replaced) |
 
 No other site sends the request. Nothing under `ui/` sends it, directly or through a message a view
 emits on draw. No `Subscription` and no timer sends it. Enforced by
 `crates/micold-client/tests/availability_is_asked_only_on_named_events.rs`.
 
-"Sync" (A4–A6) = `retain(wanted)` then ask each directory in `unasked(wanted)`. It is idempotent, so
-running it on an event that did not change the wanted set sends nothing.
+"Sync" (A1, A4–A6) = `retain(wanted)` then ask each directory in `unasked(wanted)`. It is idempotent, so
+running it on an event that did not change the wanted set sends nothing. The wanted set is the
+active project's root plus each visible (`visible_worktrees()`), startable (`can_start_session()`)
+worktree, each keyed by `app::State::location_dir` (research R3).
 
 ## C2 — Filing an answer (FR-002, FR-009)
 

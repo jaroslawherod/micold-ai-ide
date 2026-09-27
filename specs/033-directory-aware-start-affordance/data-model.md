@@ -28,6 +28,7 @@ describes (027 FR-023c). An empty `available` is a real answer.
 | `dirs` | `HashMap<PathBuf, CliAvailability>` | At most one per directory (FR-003). Only for wanted directories (R3) |
 | `latest` | `HashMap<AvailabilityKey, u64>` | The `req` of the newest request per key (R4) |
 | `in_flight` | `HashMap<u64, AvailabilityKey>` | Which key each unanswered request named (R1) |
+| `asked_under` | `Option<EnvIncludeSettings>` (`enabled: bool`, `script_path: String`, `timeout_secs: u64`) | The environment-include settings the held answers were asked under. Set on connect from `Welcome`, updated on an env-include refresh. `SettingsChanged` diffs against it (R6) |
 
 ### Operations
 
@@ -39,7 +40,8 @@ describes (027 FR-023c). An empty `available` is a real answer.
 | `home() -> Option<&CliAvailability>` | `home` only, never a directory's answer | FR-002, FR-008 |
 | `retain(&BTreeSet<PathBuf>)` | Drop `dirs`, `latest` and `in_flight` entries whose `Dir` is not wanted. `Home` is kept | FR-003, FR-012 |
 | `unasked(&BTreeSet<PathBuf>) -> Vec<PathBuf>` | Wanted directories with no held answer and no request in flight | FR-006 (once per distinct directory) |
-| `clear()` | Everything, `home` included | FR-011 |
+| `clear()` | Every answer and every in-flight request, `home` included (`asked_under` is then re-set from `Welcome`) | FR-011 |
+| `env_include_changed(&EnvIncludeSettings) -> bool` | `true` and records the new settings when they differ from `asked_under` | FR-004, SC-005 |
 
 ### State transitions for one directory `d`
 
@@ -74,8 +76,14 @@ directory rule is applied on the client, and it is the same rule as the spawn's.
 ## Wanted directories (derived, never stored)
 
 `features::session::wanted_availability_dirs(&app::State) -> BTreeSet<PathBuf>`: the active
-project's root plus `cwd` of each worktree with `can_start_session()`. Empty when no project is
-active.
+project's root, plus `location_dir(&SessionLocation::Worktree(w.dir_name))` for each `w` in
+`visible_worktrees()` with `w.can_start_session()`. It never uses `Worktree::path`, which differs
+for included worktrees. Empty when no project is active.
+
+## Source-scan vocabulary (`crates/micold-client/tests/support/state_scan.rs`)
+
+- `MUTATORS` gains `asked`, `answered` and `env_include_changed` (`clear`, `retain` already listed).
+- `READERS` gains `for_dir`, `home`, `unasked` and `available_in`, and loses `known_available`.
 
 ## Removed
 

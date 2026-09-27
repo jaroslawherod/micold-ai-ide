@@ -25,6 +25,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| D8 | design | Plan review round 1 outcome | CHANGES (1 BLOCKER: the env-include diff was against fields the window's own save overwrites; 1 MAJOR: the wanted set included hidden agent worktrees; 4 MINOR: A5 sites, key ambiguity for included worktrees, state_scan vocabulary, tripwire test scope). All fixed; the reveal toggle added as an asker (revealing makes rows appear, FR-004 first ask). | agent-resolved | fresh-subagent review, plan rubric |
 | D7 | design | Reuse the existing per-directory request or add a protocol message? | Reuse `AiCliAvailabilityRequest { req, cwd }` unchanged; the client maps `req → directory` (reply does not echo cwd). No PROTOCOL_VERSION/schema change. | agent-resolved | research.md R1 |
 | D6 | clarify | Round 2 scan: any critical ambiguity left? | None. Closing a project drops its held answers (FR-012, agent-resolved from FR-003). | agent-resolved | spec.md FR-003 |
 | D5 | clarify | FR-006: when is a row's first answer asked for? | Eagerly, as soon as its directory appears (project open incl. restore, worktree added/discovered), once per distinct directory. | user | AskUserQuestion 2026-09-27 |

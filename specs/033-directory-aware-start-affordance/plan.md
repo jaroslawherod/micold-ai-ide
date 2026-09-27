@@ -25,9 +25,10 @@ the daemon.
    `offered_providers` and `default_ai_cli_is_available` read the row's answer, falling back to home
    while it is pending (FR-005). Settings reads home only (FR-008).
 3. **Asks happen on events, never on draw.** A single idempotent `sync_cli_availability` derives the
-   wanted directories from state (active project root plus startable worktrees, R3). It prunes
+   wanted directories from state (active project root plus visible, startable worktrees, R3). It prunes
    answers for directories that are gone and asks for new ones. It runs after project
-   open/reopen/switch/forget, worktree-list changes and connect. Environment-include changes and
+   open/reopen/switch/forget, catalog pushes (worktree-list changes), the agent-worktree reveal
+   toggle and connect. Environment-include changes and
    start-list opens refresh (R6, R7). A source tripwire pins the closed list of askers (R10,
    SC-003).
 
@@ -144,11 +145,12 @@ crates/micold-client/
 │                                #   start_menu_toggled reads the list's directory
 ├── src/app.rs                   # State::location_dir
 ├── src/main.rs                  # drop App::cli_availability_asked; StartMenuOpened arm keys its ask;
-│                                #   ForgetConfirmed arm runs the sync
+│                                #   ForgetConfirmed and ShowAgentWorktreesToggled arms run the sync
 ├── src/shell/daemon_sync.rs     # ask_cli_availability(app, key) records in_flight;
 │                                #   sync_cli_availability / refresh_cli_availability;
 │                                #   AiCliAvailability arm files by req; on_connected clear+ask;
-│                                #   SettingsChanged env-include diff; CatalogChanged sync
+│                                #   SettingsChanged diffs env-include against asked_under;
+│                                #   CatalogChanged arm syncs after reconcile_catalog
 ├── src/shell/workspace.rs       # sync after open / reopen
 ├── src/shell/persist.rs         # Settings(Opened) asks Home (unchanged call, new key)
 ├── src/shell/startup.rs         # App construction without cli_availability_asked
@@ -163,7 +165,9 @@ crates/micold-client/
     ├── session_start_press.rs, unavailable_default_says_so.rs,
     │   missing_cli_is_reported_where_it_is_chosen.rs # seeded through the new type
     ├── cli_availability_comes_from_the_service.rs    # vacuity spelling updated
-    └── support/state_scan.rs                         # READERS vocabulary for the new readers
+    └── support/state_scan.rs                         # MUTATORS += asked, answered, env_include_changed;
+                                                      #   READERS += for_dir, home, unasked, available_in;
+                                                      #   READERS -= known_available
 
 docs/user-guide/
 ├── worktrees-and-sessions.md    # the chevron reflects the row's own directory

@@ -47,22 +47,29 @@ map on every change (a second cache to keep in step, to save a string join).
 ## R3 — Which directories are wanted: the rows that exist
 
 **Decision**: The set of directories whose answer is held is derived from state, never listed by
-hand: the active project's root (the Default row) plus the `cwd` of every worktree row whose
-`can_start_session()` is true (`crates/micold-core/src/worktree.rs:368`). The sidebar shows only the
-active project's rows (`workspace.active: Option<PathBuf>`, `crates/micold-core/src/workspace.rs`).
-One shell function, `sync_cli_availability`, computes that set, drops held and in-flight answers for
-directories not in it (FR-003, FR-012), and asks for each directory that has neither an answer nor
-a request in flight (FR-006, once per distinct directory).
+hand. It contains the active project's root (the Default row) and one entry per **visible** worktree
+row whose `can_start_session()` is true (`crates/micold-core/src/worktree.rs:368`). "Visible" means
+`app::State::visible_worktrees()` (`crates/micold-client/src/features/worktree.rs:191`), which hides
+agent worktrees unless the sidebar's reveal control is on (feature 029 FR-025). Each worktree maps to
+its directory through `app::State::location_dir(&SessionLocation::Worktree(dir_name))`, the same
+function the readers use. `Worktree::path` is never used as the key, because the two differ for
+included worktrees. Only the active project's rows exist, since the sidebar shows only
+`workspace.active` (`crates/micold-core/src/workspace.rs`).
+
+One shell function, `sync_cli_availability`, computes that set. It drops held and in-flight answers
+for directories not in the set (FR-003, FR-012) and asks for each directory that has neither an
+answer nor a request in flight (FR-006, once per distinct directory).
 
 **Rationale**: It turns the spec's list of "appear" and "disappear" events into one idempotent step
 run after each of them:
 
 | Spec event | Where the shell runs the sync |
 |---|---|
-| Project opened | `shell/workspace.rs` `open_verified_project` |
-| Known project reopened, active project switched | `shell/workspace.rs` `on_known_project_reopened` |
-| Project restored at launch | `shell/daemon_sync.rs` `on_connected` (the restore runs before a connection exists, so asking then is a no-op; the first connect is the first chance) |
-| Worktree added, discovered, deleted, or its directory gone (`WorktreeStatus::Missing`) or back | the arms that call `State::set_worktrees` (`catalog_sync.rs:187` on `CatalogChanged`, `features/worktree.rs` `loaded`) |
+| Project opened | `shell/workspace.rs` `open_verified_project` (after its `set_worktrees`) |
+| Known project reopened, active project switched | `shell/workspace.rs` `on_known_project_reopened` (after its `set_worktrees`) |
+| Project restored at launch | `shell/daemon_sync.rs` `on_connected`. The restore (`startup.rs:326`) runs before a connection exists, so asking then is a no-op, and the first connect is the first chance |
+| Worktree added, discovered, deleted, included, excluded, or its directory gone (`WorktreeStatus::Missing`) or back | `shell/daemon_sync.rs`, the `DaemonMsg::CatalogChanged` arm, after `reconcile_catalog(.., true)` (`daemon_sync.rs:489`). The optimistic local list edits (`features::worktree::created`, `included`, `excluded`, the delete confirm) are not askers: each is followed by the daemon's catalog push, which "also arrives, and agrees" (`daemon_sync.rs:626`), and the sync runs there |
+| Hidden agent worktrees revealed or hidden again | a new shell arm in `main.rs` for `SidebarMsg::ShowAgentWorktreesToggled`: apply the reducer, then sync. Revealing makes rows appear, so it is a first ask for them. Hiding removes rows, so their answers are dropped (FR-003) |
 | Project forgotten | the `ProjectMsg::ForgetConfirmed` arm (`main.rs:636`) |
 
 A worktree whose directory is deleted leaves the wanted set (it can no longer start a session), so
@@ -70,6 +77,10 @@ its answer is dropped. When the directory comes back, it re-enters the set and i
 first ask. That is FR-004's "deleted or recreated".
 
 **Alternatives rejected**:
+- *Every worktree of the project, hidden or not.* With agent worktrees hidden by default, opening a
+  project would run the environment-include script once for every hidden agent worktree. Those rows
+  do not exist, which contradicts FR-003's "only for rows that exist", SC-004's "N rows over D
+  directories" and the "Many rows" edge case.
 - *Run the sync after every message in `main.rs::update`.* It is robust against a missed call site,
   but it rebuilds the wanted set on every PTY output and hover message. That is per-event work
   growing with rows, which FR-006 and SC-003 are written against.
@@ -120,23 +131,34 @@ check reports any missing CLI (026 FR-010). The same is true on `main` at first 
 held answer is discarded, and a home answer from a container that is gone would be a leak of exactly
 the kind FR-002 forbids.
 
-## R6 — Environment-include change: refresh on `SettingsChanged` when the env-include fields differ
+## R6 — Environment-include change: refresh when the settings the answers were asked under change
 
-**Decision**: The `DaemonMsg::SettingsChanged` arm (`daemon_sync.rs:502`) compares the incoming
-`env_include_enabled`, `env_include_script_path` and `env_include_timeout_secs` with the values it
-is about to replace. Only when one differs does it re-ask home and every wanted directory, keeping
-the held answers until the new ones replace them (R4). A `SettingsChanged` that changes only, say,
-the scrollback length asks nothing.
+**Decision**: `AvailabilityAnswers` records the environment-include settings its answers were asked
+under (`asked_under`: enabled, script path, timeout). It is set on connect from the `Welcome`'s
+settings and updated when a refresh is sent. The `DaemonMsg::SettingsChanged` arm
+(`daemon_sync.rs:502`) compares the echoed values with `asked_under`, **not** with `App`'s
+`env_include_*` fields. Only when they differ does it re-ask home and every wanted directory and
+update `asked_under`. The held answers are kept until the new ones replace them (R4). A
+`SettingsChanged` that changes only, say, the scrollback length asks nothing.
 
-**Rationale**: FR-004 names "a saved change to the environment-include settings", not every
-settings save. `SettingsChanged` is the one place both this client's own save (echoed back) and
-another window's save arrive (029 FR-011). The daemon clears its whole environment-include cache in
-`set_env_include` *before* it broadcasts (`state.rs:1008–1009`), so the re-asks resolve afresh.
-Keeping held answers until replaced avoids a flash back to the home answer on every row.
+**Why not compare with `App`'s fields**: this window's own save writes them in `apply_save`
+(`shell/persist.rs:295–297`) *before* the daemon's echo arrives. A diff against them would find
+nothing changed for the window that saved, so SC-005's main case would never refresh.
 
-**Alternatives rejected**: refreshing in the local save path (`persist.rs:305–346`), which misses
-another window's change and fires before the daemon has applied it; dropping all answers first
-(each row would briefly fall back to home, a visible flicker for no correctness gain).
+**Rationale**: FR-004 names "a saved change to the environment-include settings", not every settings
+save. `SettingsChanged` is the one place where both this client's own save (echoed back) and
+another window's save (029 FR-011) arrive, and it arrives after the daemon has applied the change.
+The daemon clears its whole environment-include cache in `set_env_include` *before* it broadcasts
+(`crates/micold-daemon/src/state.rs:1008–1009`), so the re-asks resolve afresh. Keeping held answers
+until they are replaced avoids a flash back to the home answer on every row.
+
+**Alternatives rejected**:
+- *Refresh in the local save path* (`persist.rs:305–346`). It misses another window's change, and it
+  fires before the daemon has applied the change.
+- *A flag set in `apply_save` and consumed by the echo.* It is still blind to other windows, and a
+  save the daemon rejects would leave it set.
+- *Drop all answers first.* Each row would briefly fall back to home, a visible flicker for no
+  correctness gain.
 
 ## R7 — The start list asks for its own directory, as today
 
@@ -164,8 +186,11 @@ readers on `session::State`.
 them (`crates/micold-client/tests/features_session.rs`). The shell cannot be unit-tested without an
 `App`, and the correlation rule (R4) is the part most worth testing in isolation. These guards scan
 the source and must stay green:
-- `tests/support/state_scan.rs` (`READERS` lists `known_available`; update it when that reader is
-  renamed or re-shaped)
+- `tests/support/state_scan.rs`, which classifies every method called on a state path
+  (`feature_write_isolation.rs` `every_method_called_on_state_is_classified`):
+  - add `asked` and `answered` to `MUTATORS` (`clear` and `retain` are already there)
+  - add `for_dir`, `home`, `unasked` and `available_in` to `READERS`
+  - remove `known_available`, which the rename leaves stale
 - `tests/feature_write_isolation.rs` and `tests/root_state_is_shared.rs`
 - `tests/cli_availability_comes_from_the_service.rs` (its vacuity check greps `shell/` for
   `available_providers = Some(`; update it to the new write)
@@ -180,7 +205,10 @@ the source and must stay green:
 modelled on `tests/refresh_is_only_on_demand.rs`. It allowlists every non-comment line under
 `crates/micold-client/src/` that names `ask_cli_availability`, `sync_cli_availability`,
 `refresh_cli_availability` or `ClientMsg::AiCliAvailabilityRequest`, with one reason per line tied
-to an FR-004 event. A stale allowlist entry fails the test too. No such line may sit under `ui/`
+to an FR-004 event. A stale allowlist entry fails the test too. The scan skips
+`src/main_tests.rs` and every `#[cfg(test)]` module, because driving the request is how tests test
+it. `refresh_is_only_on_demand.rs` instead allowlists its one inline test line. Here the test sites
+are many and grow with every event test, so an allowlist of them would guard nothing. No such line may sit under `ui/`
 (render) or name `Subscription` or `time::every`. The existing `tests/idle_subscriptions.rs`
 continues to pin that idle schedules nothing.
 
