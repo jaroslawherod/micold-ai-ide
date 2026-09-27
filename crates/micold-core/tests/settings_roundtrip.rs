@@ -440,3 +440,51 @@ fn the_default_cli_round_trips_the_third_choice() {
         "the document should name the choice plainly:\n{raw}"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// A hand-written settings file that carries no version number (003 BUG-003).
+// ---------------------------------------------------------------------------------------
+
+/// Every other field of the document tolerates being absent, and the version number must too.
+///
+/// It is the one field a person writing the file by hand has no way to guess, and it is the one
+/// field nothing in the application reads. Rejecting the document over it moved a complete set of
+/// deliberately chosen settings to `settings.json.bak` and started the application on defaults,
+/// with nothing said.
+#[test]
+fn a_document_without_a_version_number_keeps_every_value_it_holds() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(
+        &path,
+        r#"{
+            "theme": "dark",
+            "scrollback_lines": 12345,
+            "env_include_enabled": false,
+            "env_include_script_path": "/custom/env.sh",
+            "env_include_timeout_secs": 42,
+            "default_ai_cli": "Pi",
+            "pi_activity_component": false
+        }"#,
+    )
+    .unwrap();
+
+    let outcome = JsonFileSettingsStore::at(path.clone()).load();
+
+    assert_eq!(
+        outcome.status,
+        LoadStatus::Loaded,
+        "a document missing only the version number is a document this build can read"
+    );
+    assert_eq!(outcome.settings.theme, ThemePreference::Dark);
+    assert_eq!(outcome.settings.scrollback_lines, 12_345);
+    assert!(!outcome.settings.env_include_enabled);
+    assert_eq!(outcome.settings.env_include_script_path, "/custom/env.sh");
+    assert_eq!(outcome.settings.env_include_timeout_secs, 42);
+    assert_eq!(outcome.settings.default_ai_cli, AiCli::Pi);
+    assert!(!outcome.settings.pi_activity_component);
+    assert!(
+        !path.with_extension("json.bak").exists(),
+        "the file was moved aside, so the settings in it were discarded"
+    );
+}

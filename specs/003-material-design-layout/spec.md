@@ -4,11 +4,13 @@
 
 **Created**: 2026-07-15
 
-**Status**: Closed (implemented and shipped; every task in tasks.md is done. The manual quickstart walkthrough ran 2026-08-21 on Linux — evidence: `evidence/T015-T033-manual-walkthrough.md`. §1, §5 and §6 pass; §3 passed but for FR-016, which passes on its 2026-09-13 re-run (`evidence/T039-resize-small-rerun.md`); §2 and §4 are partial. Every bug is fixed. The last, BUG-002, was a narrow window dropping the project name and clipping the actions in the known-projects list; rows now move their actions beneath an elided name (Phase 7, T036–T039). macOS/Windows parity and a live OS theme change (SC-003) are unrun.)
+**Status**: Closed (implemented and shipped; every task in tasks.md is done. The manual quickstart walkthrough ran 2026-08-21 on Linux — evidence: `evidence/T015-T033-manual-walkthrough.md`. §1, §5 and §6 pass; §3 passed but for FR-016, which passes on its 2026-09-13 re-run (`evidence/T039-resize-small-rerun.md`); §2 and §4 are partial. Every bug is fixed. The last, BUG-003, was a settings file omitting its schema version being discarded whole; the version number is now optional on read like every other field (Phase 8, T040–T041). Before it, BUG-002 was a narrow window dropping the project name and clipping the actions in the known-projects list; rows now move their actions beneath an elided name (Phase 7, T036–T039). macOS/Windows parity and a live OS theme change (SC-003) are unrun.)
 
 **Bugfix**: 2026-07-21 — BUG-001 Clarified FR-018/Edge Cases to distinguish a transient OS-theme-detection failure from a genuine, sustained "no preference" reading; added FR-021.
 
 **Bugfix**: 2026-09-13 — BUG-002 amended FR-016: a known-projects row too narrow for its name and its actions moves the actions beneath the name, elides the name on one line, and keeps every action labelled.
+
+**Bugfix**: 2026-09-27 — BUG-003 added FR-022: a stored settings document is read for the settings it holds even when it omits its schema version, which no longer makes it unreadable. `contracts/settings-schema.md` amended accordingly.
 
 **Input**: User description: "Adopt a Material Design layout and visual language across the Micold AI IDE application shell, with a single design system (color roles, typography scale, spacing, shape), light and dark themes that follow the OS by default and are user-overridable, and all existing surfaces restyled without behavior loss."
 
@@ -179,6 +181,13 @@ system" and confirm it returns to matching the OS.
   reporting no preference; the application MUST retain the last-known system theme and MUST NOT
   change the displayed theme until a subsequent detection attempt succeeds. Only a sustained
   inability to detect a preference invokes the FR-018 fallback. *(Added 2026-07-21 — BUG-001.)*
+- **FR-022**: The application MUST read a stored settings document for the settings it holds even
+  when the document omits fields, including its own schema version; a field the application does not
+  read MUST NOT be a field whose absence makes the document unreadable. Only a document that is not
+  a settings document at all is recovered from, and recovery MUST NOT be reached by a document whose
+  stored values are present and valid. *(Added 2026-09-27 — BUG-003: `settings_version` was the one
+  required field, so a hand-written settings file omitting it was moved to `settings.json.bak` and
+  every setting in it silently replaced by defaults.)*
 
 ### Key Entities *(include if feature involves data)*
 
