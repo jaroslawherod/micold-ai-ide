@@ -86,9 +86,11 @@ fn opener(id: &str) -> Message {
         "project_menu" => Message::Project(ProjectMsg::MenuToggled(PathBuf::from("/a"), (10, 10))),
         "worktree_menu" => Message::Worktree(WorktreeMsg::MenuToggled("w1".into(), (20, 20))),
         "session_menu" => Message::Session(SessionMsg::MenuToggled(SessionId::new(), (30, 30))),
-        "terminal_context_menu" => {
-            Message::Session(SessionMsg::TerminalContextMenuOpened { x: 10, y: 20 })
-        }
+        "terminal_context_menu" => Message::Session(SessionMsg::TerminalContextMenuOpened {
+            x: 10,
+            y: 20,
+            link: None,
+        }),
         "shell_instance_menu" => Message::Session(SessionMsg::StripTabMenuRequested(
             StripTab::Instance(ShellInstanceId(1)),
             30,

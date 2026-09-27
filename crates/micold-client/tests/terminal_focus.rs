@@ -129,6 +129,7 @@ fn context_menu_opens_at_a_point_and_dismisses() {
     s.update(Message::Session(SessionMsg::TerminalContextMenuOpened {
         x: 48,
         y: 16,
+        link: None,
     }));
     assert_eq!(
         s.session.terminal_context_menu,
@@ -717,6 +718,7 @@ fn the_terminals_own_context_menu_is_furniture() {
     s.update(Message::Session(SessionMsg::TerminalContextMenuOpened {
         x: 10,
         y: 4,
+        link: None,
     }));
     assert!(
         s.terminal_focused(),

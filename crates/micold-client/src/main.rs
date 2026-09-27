@@ -326,7 +326,7 @@ fn compose_scene(app: &mut App) -> Task<Message> {
     if !facts.context_menu_open {
         let (x, y) = SCENE_MENU_AT;
         steps.push(Task::done(Message::Session(
-            SessionMsg::TerminalContextMenuOpened { x, y },
+            SessionMsg::TerminalContextMenuOpened { x, y, link: None },
         )));
     }
 
@@ -702,6 +702,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Session(msg @ SessionMsg::LinkOpenConfirmed) => {
             shell::links::on_link_message(app, msg)
         }
+        // The context menu's two items (FR-020, FR-021): one asks for an open and the other for a
+        // clipboard write, and the root's `interpret` performs neither — so both go the same way as
+        // an activation rather than through `Message::Session`.
+        Message::Session(
+            msg @ (SessionMsg::ContextMenuOpenLink | SessionMsg::ContextMenuCopyLinkAddress),
+        ) => shell::links::on_link_message(app, msg),
         Message::Session(SessionMsg::TerminalAiCliSelected(id)) => {
             shell::daemon_sync::on_terminal_ai_cli_selected(app, id)
         }

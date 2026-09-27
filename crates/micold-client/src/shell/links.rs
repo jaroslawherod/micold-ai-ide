@@ -210,21 +210,32 @@ mod tests {
 
     /// Every message the task produces, run to its end on a tokio runtime, as iced's executor would.
     pub(super) fn run(task: iced::Task<Message>) -> Vec<Message> {
+        run_recording(task).0
+    }
+
+    /// The same, and what the task asked the clipboard to hold.
+    ///
+    /// A clipboard write is an *action* rather than a message, so a test that reads only the
+    /// messages cannot tell a performed write from a dropped one (U99, A21).
+    pub(super) fn run_recording(task: iced::Task<Message>) -> (Vec<Message>, Vec<String>) {
         let Some(stream) = iced_runtime::task::into_stream(task) else {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         };
         let runtime = tokio::runtime::Runtime::new().expect("a tokio runtime");
-        runtime.block_on(async {
-            stream
-                .filter_map(|action| async move {
-                    match action {
-                        iced_runtime::Action::Output(message) => Some(message),
-                        _ => None,
-                    }
-                })
-                .collect()
-                .await
-        })
+        let actions: Vec<_> = runtime.block_on(async { stream.collect().await });
+        let mut messages = Vec::new();
+        let mut copied = Vec::new();
+        for action in actions {
+            match action {
+                iced_runtime::Action::Output(message) => messages.push(message),
+                iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Write {
+                    contents,
+                    ..
+                }) => copied.push(contents),
+                _ => {}
+            }
+        }
+        (messages, copied)
     }
 
     /// A real file in `dir` this machine would run rather than read: the execute bit on Unix, a
@@ -536,6 +547,53 @@ mod tests {
         );
     }
 
+    /// U99, U100 (T071): both menu items are performed by the shell, not dropped by the root.
+    #[test]
+    fn the_menu_items_reach_the_opener_and_the_clipboard_through_update_inner() {
+        let address = "https://example.com/docs?q=%20x#frag";
+        let opener = Arc::new(RecordingOpener::default());
+        let mut app = crate::tests::base_app();
+        app.caps = app.caps.clone().with_link_opener(opener.clone());
+        let open_menu = || {
+            Message::Session(SessionMsg::TerminalContextMenuOpened {
+                x: 1,
+                y: 2,
+                link: Some(url_link(address)),
+            })
+        };
+
+        run(crate::update_inner(&mut app, open_menu()));
+        let (messages, copied) = run_recording(crate::update_inner(
+            &mut app,
+            Message::Session(SessionMsg::ContextMenuCopyLinkAddress),
+        ));
+        assert_eq!(
+            copied,
+            vec![address.to_string()],
+            "U99: the clipboard write is performed rather than dropped (FR-021, data-model §3)"
+        );
+        assert_eq!(messages, Vec::new(), "a copy answers with no message");
+
+        run(crate::update_inner(&mut app, open_menu()));
+        let messages = run(crate::update_inner(
+            &mut app,
+            Message::Session(SessionMsg::ContextMenuOpenLink),
+        ));
+        assert_eq!(
+            opened(&opener),
+            vec![address.to_string()],
+            "U100: Open Link reaches the opener with the captured address (FR-020)"
+        );
+        assert_eq!(
+            messages,
+            vec![Message::Session(SessionMsg::LinkOpenFinished {
+                address: address.to_string(),
+                result: Ok(()),
+            })],
+            "and its answer comes back for the same address"
+        );
+    }
+
     /// An app with one session, a confirmation pending for `path`, and the sandbox either live or
     /// stopped — the two halves the confirmation's answer depends on (contract link-opening §4).
     fn awaiting_confirmation(path: &std::path::Path, sandbox_live: bool) -> crate::App {
@@ -682,7 +740,7 @@ mod acceptance {
     use micold_core::theme::ColorScheme;
     use micold_core::tokens::state::FOCUS_RING_WIDTH;
 
-    use super::tests::{run, RecordingOpener};
+    use super::tests::{run, run_recording, RecordingOpener};
     use crate::App;
 
     const COLS: u16 = 60;
@@ -728,6 +786,8 @@ mod acceptance {
         /// Where the pointer is, and what it looks like after the last event.
         cursor: Point,
         pointer: Option<mouse::Interaction>,
+        /// Everything written to the clipboard so far, in order (A21).
+        clipboard: Vec<String>,
     }
 
     fn block_on<F: std::future::Future>(f: F) -> F::Output {
@@ -825,6 +885,7 @@ mod acceptance {
                 renderer,
                 cursor: Point::ORIGIN,
                 pointer: None,
+                clipboard: Vec::new(),
             }
         }
 
@@ -968,12 +1029,41 @@ mod acceptance {
             // Every message, and every message its task produces in turn, exactly as iced's runtime
             // feeds them back: an open's `LinkOpenFinished` is a second round, and the notification
             // it raises is only visible once that round has run.
-            let mut pending: std::collections::VecDeque<Message> =
-                published.iter().cloned().collect();
-            while let Some(message) = pending.pop_front() {
-                pending.extend(run(crate::update_inner(&mut self.app, message)));
-            }
+            self.drive(published.iter().cloned().collect());
             published
+        }
+
+        /// Run `messages`, and everything their tasks produce in turn, through `update_inner`.
+        fn drive(&mut self, messages: Vec<Message>) {
+            let mut pending: std::collections::VecDeque<Message> = messages.into();
+            while let Some(message) = pending.pop_front() {
+                let (produced, copied) = run_recording(crate::update_inner(&mut self.app, message));
+                pending.extend(produced);
+                self.clipboard.extend(copied);
+            }
+        }
+
+        /// The labels the terminal context menu shows, in order, as the view builds them (A20, A22).
+        fn menu_labels(&self) -> Vec<&'static str> {
+            micold_client::ui::terminal::context_menu_items(&self.app.core)
+                .into_iter()
+                .map(|(label, _)| label)
+                .collect()
+        }
+
+        /// Right-press over a cell, as a user opening the menu on what is there.
+        fn open_menu(&mut self, col: u16, row: u16) -> Vec<Message> {
+            self.send(at(col, row), right_press())
+        }
+
+        /// Choose the menu item with this label, and run what follows.
+        fn choose(&mut self, label: &str) {
+            let labels = self.menu_labels();
+            let (_, message) = micold_client::ui::terminal::context_menu_items(&self.app.core)
+                .into_iter()
+                .find(|(shown, _)| *shown == label)
+                .unwrap_or_else(|| panic!("the menu offers {label:?}; it offers {labels:?}"));
+            self.drive(vec![message]);
         }
 
         /// The pointer the pane shows after the last event.
@@ -1047,6 +1137,10 @@ mod acceptance {
 
     fn release() -> Event {
         Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+    }
+
+    fn right_press() -> Event {
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
     }
 
     fn activations(published: &[Message]) -> Vec<ResolvedLink> {
@@ -1505,6 +1599,59 @@ mod acceptance {
             session.notifications(),
             Vec::<String>::new(),
             "an open that worked says nothing"
+        );
+    }
+
+    /// A20 (T086).
+    #[test]
+    fn a_right_press_over_a_link_offers_open_link_and_copy_link_address_first() {
+        let mut session = Session::on_screen(vec![line(SENTENCE)]);
+        session.open_menu(20, 0);
+        assert_eq!(
+            session.menu_labels(),
+            vec!["Open Link", "Copy Link Address", "Copy", "Paste"],
+            "the link's two items come ahead of today's (US4.1, FR-020, contract M1)"
+        );
+    }
+
+    /// A21 (T086).
+    #[test]
+    fn copy_link_address_copies_the_declared_and_the_whole_wrapped_address() {
+        let mut declared =
+            Session::on_screen(vec![line("Read the docs today").declare(9..13, MANUAL)]);
+        declared.open_menu(10, 0);
+        declared.choose("Copy Link Address");
+        assert_eq!(
+            declared.clipboard,
+            vec![MANUAL.to_string()],
+            "a declared link copies what it declared, not the text the pointer was over (US4.2, FR-021)"
+        );
+
+        let address = format!("https://example.com/{}end.html", "segment/".repeat(8));
+        let prefix = "Read more at ";
+        let split = COLS as usize - prefix.len();
+        let mut wrapped = Session::on_screen(vec![
+            line(&format!("{prefix}{}", &address[..split])).wrapped(),
+            line(&format!("{} and more.", &address[split..])),
+        ]);
+        wrapped.open_menu(20, 0);
+        wrapped.choose("Copy Link Address");
+        assert_eq!(
+            wrapped.clipboard,
+            vec![address],
+            "a soft-wrapped address copies complete, as one line (US4.2, FR-021)"
+        );
+    }
+
+    /// A22 (T086): a guard, green before T073; its red is the mutant in tdd/test-list.md.
+    #[test]
+    fn a_right_press_over_plain_text_offers_no_link_items() {
+        let mut session = Session::on_screen(vec![line(SENTENCE)]);
+        session.open_menu(1, 0);
+        assert_eq!(
+            session.menu_labels(),
+            vec!["Copy", "Paste"],
+            "nothing was under the pointer to open or copy (US4.3, FR-020, contract M2)"
         );
     }
 }

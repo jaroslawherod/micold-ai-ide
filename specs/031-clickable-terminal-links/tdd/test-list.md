@@ -58,9 +58,9 @@ rendered pixels — is covered by the quickstart §B visual pass.
 | A17 | Activating a `file://` link to a missing file calls no opener and raises `Couldn't open <address>: the file doesn't exist on this machine` | US3.5, FR-015 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::activating_a_file_link_to_a_missing_file_opens_nothing_and_says_so` |
 | A18 | `file://otherhost/x`, `javascript:alert(1)` and `vscode://x` are not marked on hover and activating them calls no opener | US3.6, FR-011, FR-012 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::a_file_link_to_another_machine_and_an_application_scheme_are_no_links` (guard; mutant: `known` accepts any host) |
 | A19 | In a sandboxed session with a shared project, activating `file:///work/<project>/readme.txt` opens a confirmation naming the host path; **Open** calls `opener.open` with that host path | US3.7, FR-018, FR-018a | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::{a_shared_sandboxed_file_link_asks_first_and_then_opens_the_host_path, a_file_link_in_a_sandboxed_session_reaches_nothing_and_says_why}` |
-| A20 | A right press over a link opens the terminal menu with **Open Link** and **Copy Link Address** ahead of today's items | US4.1, FR-020 | example | PENDING | |
-| A21 | Choosing **Copy Link Address** on a declared link writes its declared address to the clipboard, and on a wrapped detected link the complete unwrapped address | US4.2, FR-021 | example | PENDING | |
-| A22 | A right press over plain text opens the menu with no link items | US4.3, FR-020 | example | PENDING | |
+| A20 | A right press over a link opens the terminal menu with **Open Link** and **Copy Link Address** ahead of today's items | US4.1, FR-020 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::a_right_press_over_a_link_offers_open_link_and_copy_link_address_first` |
+| A21 | Choosing **Copy Link Address** on a declared link writes its declared address to the clipboard, and on a wrapped detected link the complete unwrapped address | US4.2, FR-021 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::copy_link_address_copies_the_declared_and_the_whole_wrapped_address` |
+| A22 | A right press over plain text opens the menu with no link items | US4.3, FR-020 | example | DONE | `crates/micold-client/src/shell/links.rs::acceptance::a_right_press_over_plain_text_offers_no_link_items` (guard; the mutant `link_menu_items(None)` returning both items fails it, run in Cycle 91) |
 
 Guards, green on arrival, each with the deliberate mutant that shows its red:
 
@@ -253,12 +253,12 @@ untouched code, and it is recorded as `BASELINE`.
 | U82 | Confirming after the session closed notifies `Couldn't open <host path>: the session has closed` and opens nothing | FR-018a, T9 | example | DONE | `crates/micold-client/tests/features_session_links.rs::confirming_after_the_session_closed_opens_nothing_and_says_so` |
 | U83 | Confirming after the sandbox stopped notifies `Couldn't open <host path>: the sandbox has stopped` and opens nothing | FR-018a, T9 | example | DONE | `crates/micold-client/tests/features_session_links.rs::confirming_after_the_sandbox_stopped_opens_nothing_and_says_so` |
 | U84 | Declining opens nothing and clears the pending open | FR-018a, T10 | example | DONE | `crates/micold-client/tests/features_session_links.rs::declining_opens_nothing_and_clears_the_pending_open` |
-| U85 | A menu opened with a link lists **Open Link** and **Copy Link Address** first | FR-020, T14 | example | PENDING | |
-| U86 | A menu opened without a link lists today's items only | FR-020, T14 | example | PENDING | |
-| U87 | **Open Link** acts as `LinkActivated` on the captured link and closes the menu | FR-017, FR-020, T15 | example | PENDING | |
-| U88 | **Copy Link Address** emits `ClipboardWrite` with the captured link's address | FR-021, T16 | example | PENDING | |
-| U89 | Closing the menu clears the captured link | FR-017, T17 | example | PENDING | |
-| U143 | `link_menu_items` is Open Link then Copy Link Address for a link, and empty for none | FR-020, M1, M2 | example | PENDING | |
+| U85 | A menu opened with a link lists **Open Link** and **Copy Link Address** first | FR-020, T14 | example | DONE | `crates/micold-client/tests/features_session_links.rs::opening_the_menu_over_a_link_captures_it_and_offers_its_items` |
+| U86 | A menu opened without a link lists today's items only | FR-020, T14 | example | DONE | `crates/micold-client/tests/features_session_links.rs::opening_the_menu_over_a_link_captures_it_and_offers_its_items` |
+| U87 | **Open Link** acts as `LinkActivated` on the captured link and closes the menu | FR-017, FR-020, T15 | example | DONE | `crates/micold-client/tests/features_session_links.rs::choosing_open_link_opens_the_captured_link_and_closes_the_menu` |
+| U88 | **Copy Link Address** emits `ClipboardWrite` with the captured link's address | FR-021, T16 | example | DONE | `crates/micold-client/tests/features_session_links.rs::choosing_copy_link_address_asks_for_the_captured_address_verbatim` |
+| U89 | Closing the menu clears the captured link | FR-017, T17 | example | DONE | `crates/micold-client/tests/features_session_links.rs::closing_the_menu_clears_the_captured_link` |
+| U143 | `link_menu_items` is Open Link then Copy Link Address for a link, and empty for none | FR-020, M1, M2 | example | DONE | `crates/micold-client/tests/features_session_links.rs::the_menus_link_items_are_open_link_then_copy_link_address_or_none` |
 
 ### `crates/micold-client/src/features/sandbox.rs`
 
@@ -279,8 +279,8 @@ untouched code, and it is recorded as `BASELINE`.
 | U97 | On each CI OS, real runnable files of every kind that OS lists (including a symlink to an executable file, the extension-only kinds such as Linux `.desktop`/`.AppImage` and macOS `.command`, and inside a directory whose name has a space) are passed to `reveal` 100%, and `.txt`, `.png`, `.pdf`, `.html` to `open` 100% | FR-013, SC-007 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::every_runnable_kind_is_revealed_and_every_document_opened` (the macOS kinds run on CI's macOS leg) |
 | U146 | macOS: a real directory without a bundle extension that holds `Contents/Info.plist` is passed to `reveal` | FR-013 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::every_runnable_kind_is_revealed_and_every_document_opened` (macOS only; CI's macOS leg) |
 | U98 | `LinkOpenConfirmed` calls the opener when `App.sandbox` is `Running`, and notifies without calling it when the sandbox has stopped | FR-018a | example | DONE | `crates/micold-client/src/shell/links.rs::tests::{confirming_while_the_sandbox_runs_opens_the_translated_host_path, confirming_after_the_sandbox_stopped_opens_nothing_and_says_so}` |
-| U99 | `ContextMenuCopyLinkAddress` through `update_inner` returns the clipboard write task rather than dropping it | FR-021 | example | PENDING | |
-| U100 | `ContextMenuOpenLink` on a URL link reaches the opener | FR-020 | example | PENDING | |
+| U99 | `ContextMenuCopyLinkAddress` through `update_inner` returns the clipboard write task rather than dropping it | FR-021 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::the_menu_items_reach_the_opener_and_the_clipboard_through_update_inner` |
+| U100 | `ContextMenuOpenLink` on a URL link reaches the opener | FR-020 | example | DONE | `crates/micold-client/src/shell/links.rs::tests::the_menu_items_reach_the_opener_and_the_clipboard_through_update_inner` |
 
 ### `crates/micold-client/src/shell/link_opener.rs`, `shell/capabilities.rs`
 
@@ -311,7 +311,7 @@ untouched code, and it is recorded as `BASELINE`.
 | U115 | No gesture step publishes `TerminalBytes`, a selection change or a scroll | FR-014 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_command_click_on_a_link_publishes_one_activation_and_nothing_else` |
 | U116 | 100 scripted plain drag, double- and triple-click selections starting on links publish 0 activations | SC-004 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::plain_drags_and_double_and_triple_clicks_on_links_never_activate` |
 | U142 | A middle click or wheel over a link behaves as today and publishes no activation | FR-004, G7 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_middle_click_or_wheel_over_a_link_behaves_as_today` (guard; mutant publishing on a middle press fails it) |
-| U117 | A right press over a link publishes `TerminalContextMenuOpened` carrying the link resolved at the press; over plain text, `None` | FR-017, FR-020 | example | PENDING | |
+| U117 | A right press over a link publishes `TerminalContextMenuOpened` carrying the link resolved at the press; over plain text, `None` | FR-017, FR-020 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_right_press_carries_the_link_it_landed_on` |
 | U118 | Hover is recomputed when the pointer moves to another cell | FR-007 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::hover_follows_the_pointer_from_cell_to_cell` |
 | U119 | Hover is recomputed on redraw when the grid version moved and the consulted rows' content changed, including an in-place redraw of the same line | FR-007, spec Edge Cases (output moving under the pointer) | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_redraw_after_the_output_changed_under_a_resting_pointer_re_resolves_it` |
 | U120 | Hover is reused without re-resolving when the grid version moved but the consulted rows are unchanged | SC-005 | example | DONE | `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_grid_that_moved_without_touching_the_hovered_rows_keeps_the_hover` |

@@ -332,6 +332,37 @@ pub fn encode_mouse_report(
     }
 }
 
+/// The terminal context menu's items, in the order it shows them (feature 031, contract
+/// link-opening §6).
+///
+/// Glue: the link items are whatever `session::link_menu_items` lists for the link the menu was
+/// opened over, ahead of today's Copy and Paste and with no divider between them (M1, M2). Each
+/// item is its label and the message choosing it publishes, so the view and the acceptance tests
+/// read one list rather than two copies of it.
+pub fn context_menu_items(state: &State) -> Vec<(&'static str, Message)> {
+    use crate::features::session::LinkMenuItem;
+    let mut items: Vec<(&'static str, Message)> =
+        crate::features::session::link_menu_items(state.session.menu_link.as_ref())
+            .into_iter()
+            .map(|item| match item {
+                LinkMenuItem::OpenLink => (
+                    "Open Link",
+                    Message::Session(SessionMsg::ContextMenuOpenLink),
+                ),
+                LinkMenuItem::CopyLinkAddress => (
+                    "Copy Link Address",
+                    Message::Session(SessionMsg::ContextMenuCopyLinkAddress),
+                ),
+            })
+            .collect();
+    items.push(("Copy", Message::Session(SessionMsg::TerminalCopyRequested)));
+    items.push((
+        "Paste",
+        Message::Session(SessionMsg::TerminalPasteRequested),
+    ));
+    items
+}
+
 /// What this window's links resolve against (feature 031, FR-012, FR-018).
 ///
 /// Glue: it reads the hostname boot recorded and the sandbox's state, and names neither a platform
@@ -436,26 +467,26 @@ pub fn pane<'a>(
     // pane-local: the pane's origin is not known at render time, so there is nothing to translate
     // the point by. Same primitive, mounted one level down.
     let body: Element<'a, Message> = match state.session.terminal_context_menu {
-        Some((x, y)) => crate::ui::cdk::overlay::Overlay::new(body)
-            .push(
-                ContextMenu::new(
-                    vec![
-                        MenuItem::labeled(
-                            "Copy",
-                            Message::Session(SessionMsg::TerminalCopyRequested),
-                        ),
-                        MenuItem::labeled(
-                            "Paste",
-                            Message::Session(SessionMsg::TerminalPasteRequested),
-                        ),
-                    ],
-                    (x, y),
-                    Message::Session(SessionMsg::TerminalContextMenuClosed),
-                    r,
+        Some((x, y)) => {
+            // The link items the menu was opened over come first, with no divider (feature 031,
+            // contract link-opening §6 M1). One list, built by `context_menu_items`, so the
+            // acceptance tests read what the user sees rather than a copy of it.
+            let items = context_menu_items(state)
+                .into_iter()
+                .map(|(label, message)| MenuItem::labeled(label, message))
+                .collect();
+            crate::ui::cdk::overlay::Overlay::new(body)
+                .push(
+                    ContextMenu::new(
+                        items,
+                        (x, y),
+                        Message::Session(SessionMsg::TerminalContextMenuClosed),
+                        r,
+                    )
+                    .into(),
                 )
-                .into(),
-            )
-            .into(),
+                .into()
+        }
         None => body,
     };
 

@@ -235,6 +235,13 @@ pub struct State {
     /// The open terminal right-click context menu's anchor in pane-local pixels, or `None` when
     /// no menu is showing (feature 006, FR-013).
     pub terminal_context_menu: Option<(u16, u16)>,
+    /// The link the open terminal context menu was opened over, if it was opened over one
+    /// (feature 031, FR-017, FR-020).
+    ///
+    /// Captured at the press and acted on when an item is chosen, rather than re-resolved then:
+    /// output moves, and the menu's items must open and copy what the user right-clicked (FR-017).
+    /// Cleared with the menu, so a later menu over plain text offers nothing to open.
+    pub menu_link: Option<micold_core::link::ResolvedLink>,
     /// Whether the user has explicitly handed the keyboard from the terminal back to the
     /// application (feature 023, FR-021). Default `false`.
     ///
@@ -1072,14 +1079,75 @@ pub fn remove_cancelled(state: &mut crate::app::State) {
     state.session.remove_target = None;
 }
 
-/// The terminal's right-click menu opened at a pane-local anchor (feature 006, FR-013).
-pub fn context_menu_opened(state: &mut crate::app::State, x: u16, y: u16) {
+/// The terminal's right-click menu opened at a pane-local anchor (feature 006, FR-013), over
+/// `link` if the press landed on one (feature 031, FR-017).
+pub fn context_menu_opened(
+    state: &mut crate::app::State,
+    x: u16,
+    y: u16,
+    link: Option<micold_core::link::ResolvedLink>,
+) {
     state.session.terminal_context_menu = Some((x, y));
+    state.session.menu_link = link;
 }
 
-/// The terminal's right-click menu was dismissed.
+/// **Open Link**: open what the menu captured (contract link-opening §6 M3).
+///
+/// Exactly [`Msg::LinkActivated`] on that link — the confirmation a sandboxed path needs included —
+/// so the menu cannot become a second way to open a file that the gesture asks about first.
+fn context_menu_open_link(state: &mut crate::app::State) -> Vec<crate::features::Outcome> {
+    let Some(link) = chosen_menu_link(state) else {
+        return Vec::new();
+    };
+    link_activated(state, link)
+}
+
+/// **Copy Link Address**: copy what the menu captured (contract link-opening §6 M4).
+///
+/// The address the program printed or declared, whole: a soft-wrapped one is one address and a
+/// declared run's is the URI it declared, both of which `ResolvedLink` already holds (FR-021).
+fn context_menu_copy_link_address(state: &mut crate::app::State) -> Vec<crate::features::Outcome> {
+    let Some(link) = chosen_menu_link(state) else {
+        return Vec::new();
+    };
+    vec![crate::features::Outcome::ClipboardWrite(link.link.address)]
+}
+
+/// The link an item was chosen for, with the menu it was chosen from closed (M3, M4).
+///
+/// `None` when the menu was opened over plain text, where neither item is offered at all — so
+/// reaching either message without a link asks for nothing rather than guessing at one.
+fn chosen_menu_link(state: &mut crate::app::State) -> Option<micold_core::link::ResolvedLink> {
+    let link = state.session.menu_link.take();
+    context_menu_closed(state);
+    link
+}
+
+/// What the terminal context menu offers for the link it was opened over (feature 031, contract
+/// link-opening §6).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LinkMenuItem {
+    /// Open the captured link, exactly as a Ctrl/Cmd click on it would (M3).
+    OpenLink,
+    /// Put the captured link's address on the clipboard (M4).
+    CopyLinkAddress,
+}
+
+/// The link items a menu shows, in the order it shows them (M1, M2).
+///
+/// Pure and total: both items for a menu opened over a link, none otherwise. The view renders this
+/// list ahead of its own items, so what the menu offers is decided here rather than in the render.
+pub fn link_menu_items(link: Option<&micold_core::link::ResolvedLink>) -> Vec<LinkMenuItem> {
+    match link {
+        Some(_) => vec![LinkMenuItem::OpenLink, LinkMenuItem::CopyLinkAddress],
+        None => Vec::new(),
+    }
+}
+
+/// The terminal's right-click menu was dismissed, and the link it captured goes with it (U89).
 pub fn context_menu_closed(state: &mut crate::app::State) {
     state.session.terminal_context_menu = None;
+    state.session.menu_link = None;
 }
 
 /// A terminal *tab* was right-clicked (feature 012, BUG-005, FR-010b).
@@ -1443,10 +1511,23 @@ pub enum Msg {
         address: String,
         result: Result<(), crate::features::OpenFailure>,
     },
-    /// Open the terminal right-click context menu at a pane-local pixel point (FR-013).
-    TerminalContextMenuOpened { x: u16, y: u16 },
+    /// Open the terminal right-click context menu at a pane-local pixel point (FR-013), over the
+    /// link the pane resolved at that press if there was one (feature 031, FR-017, FR-020).
+    TerminalContextMenuOpened {
+        x: u16,
+        y: u16,
+        link: Option<micold_core::link::ResolvedLink>,
+    },
     /// Dismiss the terminal context menu (an outside click, or after an item is chosen) (FR-013).
     TerminalContextMenuClosed,
+    /// **Open Link** was chosen from the terminal context menu (feature 031, FR-020).
+    ///
+    /// Routed by `main.rs` to `shell::links`, which performs the open it asks for.
+    ContextMenuOpenLink,
+    /// **Copy Link Address** was chosen from the terminal context menu (feature 031, FR-021).
+    ///
+    /// Routed by `main.rs` to `shell::links`, because the root drops a clipboard write.
+    ContextMenuCopyLinkAddress,
 }
 
 /// The pure half of this feature's reducer surface: shape A (contract M2).
@@ -1498,8 +1579,10 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::RemoveRequested(id) => remove_requested(state, id),
         Msg::RemoveCancelled => remove_cancelled(state),
         Msg::TerminalFocusReleased => state.release_terminal(),
-        Msg::TerminalContextMenuOpened { x, y } => context_menu_opened(state, x, y),
+        Msg::TerminalContextMenuOpened { x, y, link } => context_menu_opened(state, x, y, link),
         Msg::TerminalContextMenuClosed => context_menu_closed(state),
+        Msg::ContextMenuOpenLink => return context_menu_open_link(state),
+        Msg::ContextMenuCopyLinkAddress => return context_menu_copy_link_address(state),
         Msg::StripTabMenuRequested(tab, x, y) => strip_tab_menu_requested(state, tab, x, y),
         Msg::ShellInstanceMenuClosed => shell_instance_menu_closed(state),
         Msg::TerminalTick => {}

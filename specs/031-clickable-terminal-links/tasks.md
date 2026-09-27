@@ -421,25 +421,25 @@ the `env_include.rs` builders (plan, Target Platform).
 
 ### Tests for US4 ⚠️ write first, must fail
 
-- [ ] T086 [US4] [A20] [A21] [A22] Outer-loop acceptance tests in `mod acceptance` of `crates/micold-client/src/shell/links.rs`. A20 and A21 must fail before T073–T075; A22 is a guard, green on arrival, whose red is shown by the mutant in `tdd/test-list.md`:
+- [X] T086 [US4] [A20] [A21] [A22] Outer-loop acceptance tests in `mod acceptance` of `crates/micold-client/src/shell/links.rs`. A20 and A21 must fail before T073–T075; A22 is a guard, green on arrival, whose red is shown by the mutant in `tdd/test-list.md`:
   - A20: a right press over a link opens the terminal menu with **Open Link** and **Copy Link Address** ahead of today's items.
   - A21: choosing **Copy Link Address** on a declared link writes its declared address to the recording clipboard, and on a soft-wrapped detected link the complete unwrapped address.
   - A22: a right press over plain text opens the menu with no link items.
-- [ ] T070 [P] [US4] [U85] [U86] [U87] [U88] [U89] [U143] Extend `crates/micold-client/tests/features_session_links.rs`.
+- [X] T070 [P] [US4] [U85] [U86] [U87] [U88] [U89] [U143] Extend `crates/micold-client/tests/features_session_links.rs`.
   - T14: `TerminalContextMenuOpened { x, y, link: Some(r) }` sets `menu_link` and the menu lists **Open Link** and **Copy Link Address** first (contract §6 M1). With `link: None`, today's items only (contract M2).
   - T15: `ContextMenuOpenLink` acts as `LinkActivated(captured)` and closes the menu (contract M3).
   - T16: `ContextMenuCopyLinkAddress` gives `Outcome::ClipboardWrite(captured.link.address)`, the declared URI or the trimmed, unwrapped detected text (contract M4).
   - T17: closing the menu clears `menu_link`.
   - `link_menu_items(Option<&ResolvedLink>) -> Vec<LinkMenuItem>`: `[OpenLink, CopyLinkAddress]` for `Some`, empty for `None`.
-- [ ] T071 [P] [US4] [U99] [U100] Extend the `#[cfg(test)]` module of `crates/micold-client/src/shell/links.rs`: `update_inner` with `ContextMenuCopyLinkAddress` returns the clipboard write task rather than dropping it, and with `ContextMenuOpenLink` on a URL it reaches the recording opener
-- [ ] T072 [P] [US4] [U117] A test in the `#[cfg(test)]` module of `crates/micold-client/src/ui/material/terminal_pane.rs`: a right press over a link publishes `TerminalContextMenuOpened` with `link` equal to the link resolved at the press, and over plain text with `link: None` (FR-017)
+- [X] T071 [P] [US4] [U99] [U100] Extend the `#[cfg(test)]` module of `crates/micold-client/src/shell/links.rs`: `update_inner` with `ContextMenuCopyLinkAddress` returns the clipboard write task rather than dropping it, and with `ContextMenuOpenLink` on a URL it reaches the recording opener
+- [X] T072 [P] [US4] [U117] A test in the `#[cfg(test)]` module of `crates/micold-client/src/ui/material/terminal_pane.rs`: a right press over a link publishes `TerminalContextMenuOpened` with `link` equal to the link resolved at the press, and over plain text with `link: None` (FR-017)
 
 ### Implementation for US4
 
-- [ ] T073 [US4] [U85] [U86] [U87] [U88] [U89] [U143] [A20] [A21] [A22] Menu state and reducers in `crates/micold-client/src/features/session.rs`: `TerminalContextMenuOpened` gains `link: Option<ResolvedLink>`, plus `menu_link`, the pure `link_menu_items`, `ContextMenuOpenLink` and `ContextMenuCopyLinkAddress`, and reducers T14–T17. Update every existing constructor or match of `TerminalContextMenuOpened` in `src/` and `tests/`.
-- [ ] T074 [US4] [U117] In `crates/micold-client/src/ui/material/terminal_pane.rs`, resolve the link at the right press and include it in `TerminalContextMenuOpened`
-- [ ] T075 [US4] [U99] [U100] [A20] [A22] In `crates/micold-client/src/ui/terminal.rs`, render one leading `MenuItem` per entry of `link_menu_items(menu_link)`, with no divider (glue). In `crates/micold-client/src/main.rs` `update_inner`, add `ContextMenuOpenLink` and `ContextMenuCopyLinkAddress` arms ahead of `Message::Session`, calling `shell::links::on_link_message` (glue).
-- [ ] T076 [US4] Extend "Links" in `docs/user-guide/worktrees-and-sessions.md`: right-click a link for Open Link and Copy Link Address, which copies the complete address (the declared one for a declared link)
+- [X] T073 [US4] [U85] [U86] [U87] [U88] [U89] [U143] [A20] [A21] [A22] Menu state and reducers in `crates/micold-client/src/features/session.rs`: `TerminalContextMenuOpened` gains `link: Option<ResolvedLink>`, plus `menu_link`, the pure `link_menu_items`, `ContextMenuOpenLink` and `ContextMenuCopyLinkAddress`, and reducers T14–T17. Update every existing constructor or match of `TerminalContextMenuOpened` in `src/` and `tests/`.
+- [X] T074 [US4] [U117] In `crates/micold-client/src/ui/material/terminal_pane.rs`, resolve the link at the right press and include it in `TerminalContextMenuOpened`
+- [X] T075 [US4] [U99] [U100] [A20] [A22] In `crates/micold-client/src/ui/terminal.rs`, render one leading `MenuItem` per entry of `link_menu_items(menu_link)`, with no divider (glue). In `crates/micold-client/src/main.rs` `update_inner`, add `ContextMenuOpenLink` and `ContextMenuCopyLinkAddress` arms ahead of `Message::Session`, calling `shell::links::on_link_message` (glue).
+- [X] T076 [US4] Extend "Links" in `docs/user-guide/worktrees-and-sessions.md`: right-click a link for Open Link and Copy Link Address, which copies the complete address (the declared one for a declared link)
 - [ ] T077 [US4] Verify the milestone: `mise run gate` (including `tests/gates/context_menu_anchor.rs` and `tests/context_menu_anchor_call_sites.rs` with the two new items), then the `visual-pass` skill for quickstart §B.11. US4 is complete only when the T086 acceptance tests A20–A22 are green. It confirms acceptance rows A20–A22 and carries no markers, so it is not ticked by them.
 
 **Checkpoint (M7)**: all four stories work.

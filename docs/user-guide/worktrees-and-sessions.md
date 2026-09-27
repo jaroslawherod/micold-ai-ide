@@ -964,6 +964,11 @@ Web and mail addresses in a terminal are links, and so is text a program marked 
   address opens in your default browser, a `mailto:` address in your default mail client.
 - **Selecting still works as before.** A plain click, a drag, and a double or triple click select
   text even when they start on a link, and never open it.
+- **Right-click a link** for **Open Link** and **Copy Link Address**, above the terminal's own Copy
+  and Paste. Both act on the link you right-clicked, even if the output has moved since. Copy Link
+  Address copies the complete address — an address the terminal wrapped onto the next row as one
+  line, and, for a link a program declared, the address it declared rather than the word you see.
+  Over anything that is not a link the menu offers Copy and Paste alone.
 - **Programs that use the mouse** (`vim` with `:set mouse=a`, `htop`, …) get Ctrl+clicks as they
   always did. Hold **Shift** as well, **Shift+Ctrl+click** (Shift+Cmd+click on macOS), to open a
   link there; the underline shows only while Shift is held.
