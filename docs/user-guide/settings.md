@@ -142,6 +142,12 @@ This section holds three fields:
 A saved change takes effect on the next session or terminal launch — no app restart needed — even
 while a session in the same project is still starting under the old settings.
 
+Saving a change to any of these three fields also refreshes which AI CLIs every sidebar row offers,
+with no restart. The script is what puts a project-local CLI on a directory's `PATH`, so each row
+is asked again; until its new answer arrives, a row keeps offering what it offered before. A change
+saved in another window refreshes the rows in this one too. Saving without changing these fields
+asks nothing.
+
 **Persistence**: only the enabled flag, script path, and timeout are ever saved to disk. The
 variables the script resolves — and any diagnostic text captured while troubleshooting a failure
 — are held in memory for the running app only and are never written to your settings file, since

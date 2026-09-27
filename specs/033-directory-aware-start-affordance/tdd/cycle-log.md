@@ -121,3 +121,42 @@ failed before the implementation.
 - green: sidebar restored -> `test result: ok. 7 passed; 0 failed`
 - refactor: none
 - commit: the commit that adds this entry
+
+## Cycle 5 (M2): the answer follows the events that change it — A8, U28–U34, A9, A10, U37
+
+- base: `origin/main` 2bd447b2 (M1 merged, its gate green)
+- tests: `main_tests.rs::availability_{saving_env_include_refreshes_every_row,
+  this_windows_env_include_save_refreshes_every_row, another_windows_env_include_change_refreshes,
+  an_unrelated_settings_change_asks_nothing, switching_projects_drops_and_reasks,
+  forgetting_a_project_drops_its_answers, a_deleted_then_recreated_worktree_is_asked_again,
+  revealing_agent_worktrees_asks_hiding_drops, nothing_is_asked_while_nothing_changes,
+  opening_a_rows_list_refreshes_its_answer}`; new `tests/availability_is_asked_only_on_named_events.rs`
+  (3 tests). Structural first: `connect_with_settings_keeping_outbox` and `catalog_with_worktree_in`
+  generalise two M1 helpers (M1 tests unchanged).
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide availability` ->
+  `test result: FAILED. 16 passed; 7 failed`. A8: `with the script off, P's Default row no longer
+  offers Pi`; U32: `home and each row are asked again, once each / left: [] right: [None,
+  Some("/repo/demo"), Some("/repo/demo/.claude/worktrees/feat-a")]`; U33: `left: []`; U28: `P has no
+  row on screen any more, so its answer is not kept (FR-012)`; U29: `the forgotten project's root
+  answer is dropped`; U30: `a worktree whose directory is gone keeps no answer`; U31: `the revealed
+  agent worktree is asked about, once / left: [] right: [Some(".../agent-1f")]`.
+  Passed on first run, as expected: U34 (nothing asked on settings changes before M2), A9 (no asker
+  on hover/scroll/view since M1), A10 (M1's T016 already refreshes on list open; M2 pins it as US3-3).
+- green: T026 `sync_cli_availability` does `retain(&wanted)` before `unasked`; T024 the
+  `SettingsChanged` arm builds `EnvIncludeSettings` from the echo and calls the new
+  `refresh_cli_availability` (Home + every wanted dir, held answers kept) when `env_include_changed`;
+  T025 `main.rs` arms: `ForgetConfirmed` syncs after its handler, and a new
+  `Sidebar(ShowAgentWorktreesToggled)` arm runs the reducer then syncs ->
+  `test result: ok. 23 passed; 0 failed` and tripwire `test result: ok. 3 passed; 0 failed`
+- mutant checks (one build, all at once): `env_include_changed(..) || true`, `StartMenuOpened` asking
+  nothing (`location_dir(..).filter(|_| false)`), and `view()` sending an `AiCliAvailabilityRequest`
+  -> `FAILED. 19 passed; 4 failed` (U34, U25, A10, A9) and tripwire
+  `nothing_but_the_contracts_named_events_asks_for_availability ... FAILED` naming the `main.rs`
+  line. Second set on the built tripwire binary: the `ForgetConfirmed` sync removed and a
+  `sync_cli_availability` line added to `ui/sidebar.rs` -> all 3 tripwire tests FAILED
+  (`expected 2, found 1`; the `ui/` line). Restored with `git checkout`; tree clean.
+- note: the tripwire was written before the implementation but its first run came after it (the
+  red build ran the bin tests only), so its red evidence is the mutant runs above, not a pre-change
+  run.
+- refactor: none beyond the helper generalisation above
+- commit: 342b3560 (tests + implementation), and the commit that adds this entry
