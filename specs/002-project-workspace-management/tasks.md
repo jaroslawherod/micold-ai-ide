@@ -489,7 +489,8 @@ hydrate the workspace from it at startup, and they do. None asked for the status
 - [ ] T073 [US2] Failing regression test first, in `crates/micold-client/src/shell/startup.rs`
   (`a_launch_that_recovers_the_project_list_tells_the_user_where_the_old_one_went`): a truncated
   `projects.json` behind a real `JsonFileStore`, launched through `restore_from_disk`, leaves a
-  visible notice that mentions the project list and names the `projects.json.bak` path; beside it,
+  visible notice that mentions the project list and names the `projects.json.bak` path (and does
+  not claim the list was reset — on a warm launch the daemon's catalog restores it); beside it,
   a launch with no `projects.json` shows no notice. Confirm the first fails on `origin/main` with an
   empty notice before T074 (FR-012d)
 - [ ] T074 Add `ProjectStore::recovery_path() -> Option<PathBuf>` (default `None`) in
