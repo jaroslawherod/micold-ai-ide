@@ -514,7 +514,7 @@ fn a_service_restart_resumes_only_the_session_being_restored() {
 }
 
 /// BUG-002: connecting is one of the moments the client asks which AI CLIs the service can run
-/// (027 FR-023c, T144; today contract C1's A2), and it is one the user does not trigger by hand.
+/// (027 FR-023c, T144; today contract C1's A1), and it is one the user does not trigger by hand.
 ///
 /// It asked into a handle it had not stored yet. `ask_cli_availability` returns early when
 /// `app.daemon` is `None`, which it is on a first connect and — since `on_disconnected` clears

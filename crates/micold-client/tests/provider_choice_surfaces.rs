@@ -2,11 +2,11 @@
 //! FR-006).
 //!
 //! FR-006's rule is about what the user is *shown*, and both surfaces read the per-directory
-//! answers on `State` (feature 033): the Settings select takes the home answer (`availability.home()`), the
-//! session start list takes `State::offered_providers(dir)`. The pure layer is covered in
-//! `features_session.rs`; what is covered here is that the drawn surfaces actually follow it —
-//! neither reaches for `AiCli::ALL`, which is the one-token change that would make both of them
-//! wrong while every pure test stayed green.
+//! answers on `State` (feature 033): the Settings select takes the home answer
+//! (`availability.home()`), the session start list takes `State::offered_providers(dir)`. The
+//! pure layer is covered in `features_session.rs`; what is covered here is that the drawn
+//! surfaces actually follow it — neither reaches for `AiCli::ALL`, which is the one-token change
+//! that would make both of them wrong while every pure test stayed green.
 //!
 //! So these tests read the pixels: render the real `ui::view`, open the control the way a person
 //! would, and assert on the strings the renderer painted. Each claim is asserted in both

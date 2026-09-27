@@ -38,6 +38,21 @@
 | 7 | PASS | Settings → Environment → turned **Source a script before each session** off, saved: P's Default row lost the chevron (only "+" remained). Turned it back on, saved: the chevron reappeared. Screenshots: `step7-off-no-chevron.png`, `step7-on-chevron-restored.png`. |
 | 8 | PASS | Left the window idle for 65s (blocking wait) with `MICOLD_LOG=debug` already active. The daemon's debug log file did not grow by a single line during the wait (151 lines before and after) — no new `AiCliAvailabilityRequest`/"AI CLI availability reported" entries, or any other daemon activity, appeared. Log tail (from just before the wait) in `step8-idle-log-tail.txt`. |
 
+## Review notes (M3 review B)
+
+- **Worktree rows' chevrons (steps 1, 6, 7).** A worktree row's action cluster is revealed on hover,
+  and no screenshot hovers a worktree row: the images show the chevron on the Default rows only.
+  The worktree-row claims rest on other evidence, not on the images: after each connect the daemon
+  log (`step4-log-excerpt.txt`) shows exactly two replies of `available=[ClaudeCode, Pi]`, and `P`
+  and `P-wt` are the only directories carrying the marker; the spawned processes' cwd and PATH were
+  read from `/proc`; and the M1 tests pin the per-row chevron decision.
+- **Step 5's method** deviated as recorded above; `quickstart.md` step 5 now says how to set Pi.
+- **The fixture's include script** was `[ -f … ] && export …`, which exits 1 where there is no
+  marker, so home, `Q` and `P-wt2` resolved through the env-include failure fallback
+  (`outcome=NonZeroExit { code: 1 }`). `pi` is absent either way, so the verdicts hold;
+  `quickstart.md` now uses an `if … fi` that exits 0.
+- The record names build `15f8643b`; the commits after it on this branch change comments only.
+
 ## Coverage note
 
 This pass exercised static appearance, state changes after settings/reconnect/idle, directory-specific
