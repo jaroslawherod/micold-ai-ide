@@ -138,6 +138,41 @@ fn ensure_writable_file(path: &std::path::Path) -> std::io::Result<()> {
     options.open(path).map(|_| ())
 }
 
+/// Add `hasCompletedOnboarding: true` to the sandbox home's `.claude.json` (FR-004f, BUG-007).
+///
+/// The merge is `onboarding_done`'s: one key added, every other one kept, and a file that already
+/// has it, or that is not a JSON object, left exactly as it is. Written to a temporary file beside
+/// it and renamed into place, so a `claude` reading it never sees half a file.
+fn record_onboarding_done(path: &std::path::Path) -> std::io::Result<()> {
+    let existing = match std::fs::read_to_string(path) {
+        Ok(text) => Some(text),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e),
+    };
+    let Some(text) = micold_core::sandbox::onboarding_done(existing.as_deref()) else {
+        return Ok(());
+    };
+    let tmp = path.with_extension(format!("json.micold-{}", std::process::id()));
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // `claude` keeps this file private too; it records per-project trust and account details.
+        options.mode(0o600);
+    }
+    let written = options.open(&tmp).and_then(|mut f| {
+        use std::io::Write;
+        f.write_all(text.as_bytes())?;
+        f.sync_all()
+    });
+    written
+        .and_then(|()| std::fs::rename(&tmp, path))
+        .inspect_err(|_| {
+            let _ = std::fs::remove_file(&tmp);
+        })
+}
+
 /// A bring-up that failed while preparing the host side, before the runtime ran.
 fn preparation_failed(stderr: String) -> Failure {
     Failure {
@@ -231,6 +266,20 @@ pub fn start<R: CommandRunner>(
                 "could not create {} in the sandbox home: {e}",
                 file.display()
             )));
+        }
+    }
+
+    // With the sign-in shared, tell the sandbox's `claude` its first-run setup is done, in the
+    // sandbox's own home (FR-004f, BUG-007). Otherwise its setup asks for a login method over the
+    // shared token, and a sign-in there replaces the host's. Not a reason to refuse the sandbox:
+    // without the record it works, and only asks one question too many.
+    if let Some(record) = mounts.onboarding_record() {
+        if let Err(e) = record_onboarding_done(&record) {
+            eprintln!(
+                "sandbox: could not record Claude Code's finished setup in {}: {e}. \
+                 Its first session may ask you to sign in; the shared sign-in is still valid.",
+                record.display()
+            );
         }
     }
 
@@ -1188,6 +1237,130 @@ mod tests {
             "{} was left for the runtime to create, which creates it as root",
             sign_in_dir.display()
         );
+    }
+
+    /// A bring-up over `state_dir` sharing exactly `credentials`, with a host that has a sign-in
+    /// token. The runner records rather than runs, so the runtime never starts.
+    fn bring_up_sharing(
+        state_dir: &std::path::Path,
+        credentials: std::collections::BTreeSet<micold_core::sandbox::CredentialShare>,
+    ) {
+        bring_up_from(std::path::Path::new("/home/u"), state_dir, credentials);
+    }
+
+    fn bring_up_from(
+        home: &std::path::Path,
+        state_dir: &std::path::Path,
+        credentials: std::collections::BTreeSet<micold_core::sandbox::CredentialShare>,
+    ) {
+        let home = home.to_path_buf();
+        let facts = HostFacts {
+            uid: 1000,
+            gid: 1000,
+            state_dir: state_dir.to_path_buf(),
+            layout: CredentialLayout::conventional(&home, None),
+            home,
+        };
+        let profile = SandboxProfile {
+            credentials,
+            ..SandboxProfile::default()
+        };
+        let _ = start(
+            &profile,
+            &[],
+            &facts,
+            DEFAULT_SANDBOX_PORT,
+            micold_core::sandbox::exec::RecordingRunner::new(),
+            &mut |_| {},
+        );
+    }
+
+    fn sandbox_claude_json(state_dir: &std::path::Path) -> PathBuf {
+        state_dir
+            .join(micold_core::sandbox::SANDBOX_HOME_DIR)
+            .join(".claude.json")
+    }
+
+    /// BUG-007 (FR-004f, GitHub #403): with the sign-in shared, the sandbox home records that
+    /// `claude`'s first-run setup is done, so the first interactive session starts signed in rather
+    /// than asking for a login method over the shared token.
+    #[test]
+    fn a_bring_up_sharing_the_sign_in_records_the_finished_setup() {
+        use micold_core::sandbox::CredentialShare;
+
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        bring_up_sharing(
+            state_dir.path(),
+            std::collections::BTreeSet::from([CredentialShare::AiCliAuth]),
+        );
+
+        let path = sandbox_claude_json(state_dir.path());
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("{} was not written: {e}", path.display()));
+        let json: serde_json::Value = serde_json::from_str(&text).expect("JSON");
+        assert_eq!(json["hasCompletedOnboarding"], serde_json::json!(true));
+    }
+
+    /// And it adds the key to what `claude` already wrote, rather than replacing the file.
+    #[test]
+    fn a_bring_up_sharing_the_sign_in_keeps_what_claude_recorded() {
+        use micold_core::sandbox::CredentialShare;
+
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        let path = sandbox_claude_json(state_dir.path());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, r#"{"firstStartVersion":"2.1.283","numStartups":3}"#).unwrap();
+
+        bring_up_sharing(
+            state_dir.path(),
+            std::collections::BTreeSet::from([CredentialShare::AiCliAuth]),
+        );
+
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).expect("JSON");
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "firstStartVersion": "2.1.283",
+                "numStartups": 3,
+                "hasCompletedOnboarding": true
+            })
+        );
+    }
+
+    /// The record goes in the sandbox's own home and nowhere else: the host's `~/.claude.json`,
+    /// which the user's own `claude` owns, is not read into it and not written (FR-004f).
+    #[test]
+    fn a_bring_up_sharing_the_sign_in_never_touches_the_hosts_claude_json() {
+        use micold_core::sandbox::CredentialShare;
+
+        let home = tempfile::tempdir().expect("tempdir");
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        let host_file = home.path().join(".claude.json");
+        let host_text = r#"{"hasCompletedOnboarding":false,"oauthAccount":{"x":1}}"#;
+        std::fs::write(&host_file, host_text).unwrap();
+
+        bring_up_from(
+            home.path(),
+            state_dir.path(),
+            std::collections::BTreeSet::from([CredentialShare::AiCliAuth]),
+        );
+
+        assert_eq!(std::fs::read_to_string(&host_file).unwrap(), host_text);
+        let sandbox: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(sandbox_claude_json(state_dir.path())).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(sandbox, serde_json::json!({ "hasCompletedOnboarding": true }));
+    }
+
+    /// Without the share there is no sign-in to skip the setup for: `claude`'s own setup is how the
+    /// user signs in, so the bring-up writes nothing.
+    #[test]
+    fn a_bring_up_without_the_sign_in_leaves_the_setup_to_claude() {
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        bring_up_sharing(state_dir.path(), std::collections::BTreeSet::new());
+        assert!(!sandbox_claude_json(state_dir.path()).exists());
     }
 
     #[test]

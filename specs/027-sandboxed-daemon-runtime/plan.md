@@ -467,6 +467,29 @@ The approach:
 
 **Bugfix**: 2026-09-18 — BUG-006. Section added; nothing above it changed. See `bugs/BUG-006.md`.
 
+### A shared sign-in starts signed in (FR-004f)
+
+`claude` decides whether to run its first-run setup from `hasCompletedOnboarding` in `~/.claude.json`,
+not from the token. The sign-in share mounts only the token, and `~/.claude.json` stays in the
+sandbox's home (above), so a fresh sandbox home is a first run to `claude` whatever token it finds.
+Its setup then asks for a login method, and a sign-in made there replaces the host's token through
+the writable share.
+
+- **The mount set says where.** `MountSet::onboarding_record` names `<sandbox-home>/.claude.json`
+  when, and only when, the set holds an `AiCliAuth` mount. `HostFacts::gather` has already dropped a
+  token this host does not have, so an absent token records nothing and `claude`'s own setup stays
+  the way to sign in.
+- **A pure merge decides what.** `sandbox::onboarding_done(existing)` takes the file's current text
+  (or none) and returns the text to write, or nothing when the key is already `true` or the text is
+  not a JSON object. Every other key survives; a file it cannot parse is `claude`'s to deal with,
+  not the application's to replace.
+- **The bring-up writes it**, after creating the credential's mount target and before the runtime
+  runs, through a temporary file renamed into place. A failure is logged and the bring-up carries
+  on: the sandbox works without the record, it only asks one question too many.
+- **Not the host's file.** Nothing reads or writes the host's `~/.claude.json`.
+
+**Bugfix**: 2026-09-27 — BUG-007. Section added; nothing above it changed. See `bugs/BUG-007.md`.
+
 ## Complexity Tracking
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
