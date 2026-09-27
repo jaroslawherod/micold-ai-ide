@@ -15,7 +15,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #413 | Spec | merged | 2e28015f |
-| PENDING | Design (clarify, plan, tasks, milestones) | open | — |
+| #417 | Design (clarify, plan, tasks, milestones) | open | — |
 
 ## Milestones
 
