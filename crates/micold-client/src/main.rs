@@ -157,11 +157,6 @@ struct App {
     build_mismatch: Option<(String, String)>,
     /// Correlation-id counter for the client's mutating RPCs (FR-009).
     next_req: u64,
-    /// The correlation id of the latest `AiCliAvailabilityRequest` (029 BUG-001). Answers are
-    /// resolved off the service's connection loop and can overtake each other, and each one is
-    /// about the directory its request named — so an answer to an older request is dropped rather
-    /// than shown for the directory asked about since.
-    cli_availability_asked: u64,
     /// In-flight mutating RPCs keyed by `req` (T055). Lets a reply be matched, a duplicate
     /// submission suppressed, and an in-flight op resolved as *unknown* if the connection drops.
     pending_ops: HashMap<u64, PendingOp>,
@@ -659,23 +654,22 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Session(SessionMsg::StartRequested { location, provider }) => {
             shell::daemon_sync::on_session_start_requested(app, location, provider)
         }
-        // The override list is opening: refresh the availability set first (feature 026, T014a).
-        // This and `Settings(Opened)` are the two named events research R11 means by "when the
-        // choice is offered" — the set is never re-probed per frame, which would be a `PATH`
-        // lookup per render and exactly the scheduled work SC-006 forbids.
+        // A row's start list is opening: refresh that row's answer first (feature 026, T014a;
+        // feature 033, contract C1 A3). It is asked about the directory a session started from
+        // this list would run in (029 FR-003b), filed under that directory alone, and replaces no
+        // other row's answer (FR-002). Opening a list is one of the named events contract C1
+        // lists; nothing asks per frame.
         Message::Session(SessionMsg::StartMenuOpened {
             location,
             unavailable_default,
         }) => {
-            // Asked about the directory a session started from this list would run in (029
-            // BUG-001, FR-003b): the start menu is always the active project's.
-            let cwd = app
-                .core
-                .workspace
-                .active
-                .as_deref()
-                .map(|project| location.cwd(project));
-            shell::daemon_sync::ask_cli_availability(app, cwd);
+            // `None` only with no project open — no row, so no list and nothing to ask about.
+            if let Some(dir) = app.core.location_dir(&location) {
+                shell::daemon_sync::ask_cli_availability(
+                    app,
+                    micold_client::features::session::AvailabilityKey::Dir(dir),
+                );
+            }
             app.core
                 .update(Message::Session(SessionMsg::StartMenuOpened {
                     location,

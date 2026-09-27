@@ -416,17 +416,19 @@ fn action_icon(
 /// Pressing start then offers the available CLIs and starts nothing, rather than sending the
 /// missing binary to the daemon and letting FR-010's failure arrive on a row that was never going
 /// to run. It publishes the same message the chevron does, which is also how the list it opens is
-/// current: the availability set is refreshed on `SessionStartMenuOpened`, one of the two named
-/// events research R11 allows it to be re-probed at.
+/// current: the row's answer is refreshed on `SessionStartMenuOpened`, one of the named events of
+/// feature 033's contract C1.
 ///
-/// The set this decision reads is therefore the one from the *last* of those events, and it can be
-/// out of date by a press. Both ways round are safe and neither is silent: a default that has since
+/// The answer this decision reads is this row's directory's (feature 033, FR-001) — the home
+/// directory's until the row's own arrives (FR-005) — as of the last event that asked for it, and
+/// it can be out of date by a press. Both ways round are safe and neither is silent: a default that has since
 /// been uninstalled reaches the daemon, whose launch-time check reports which CLI is missing
 /// (FR-010, T076); a default that has since been installed opens a list that — refreshed by this
 /// very press — contains it, one extra press away. What is ruled out is the third answer, which is
 /// starting something other than what the user asked for.
 fn start_press(state: &State, location: SessionLocation) -> Message {
-    match state.session.start_intent(PressTarget::Primary) {
+    let dir = state.location_dir(&location).unwrap_or_default();
+    match state.session.start_intent(PressTarget::Primary, &dir) {
         StartIntent::Start(provider) => {
             Message::Session(SessionMsg::StartRequested { location, provider })
         }
@@ -619,7 +621,11 @@ fn build_items(
             // see `State` (feature 026, T014a). Both answers come from the render-free layer —
             // nothing here decides what a press means or whether there is a choice to offer.
             start_press(state, SessionLocation::Worktree(dir.clone())),
-            state.session.start_affordance_offers_a_choice(),
+            state.session.start_affordance_offers_a_choice(
+                &state
+                    .location_dir(&SessionLocation::Worktree(dir.clone()))
+                    .unwrap_or_default(),
+            ),
             r,
         ));
         items.push(item);
@@ -710,7 +716,11 @@ fn build_default_item(
         "Start a new session in the project root",
         true,
         start_press(state, SessionLocation::Default),
-        state.session.start_affordance_offers_a_choice(),
+        state.session.start_affordance_offers_a_choice(
+            &state
+                .location_dir(&SessionLocation::Default)
+                .unwrap_or_default(),
+        ),
         r,
     );
 

@@ -198,6 +198,9 @@ fn open_verified_project(app: &mut App, path: PathBuf) -> Task<Message> {
     micold_client::app::drain(outcomes, |o| {
         micold_client::app::interpret(&mut app.core, o)
     });
+    // The project's rows are on screen now: ask about each one not already asked (feature 033,
+    // contract C1 A4).
+    crate::shell::daemon_sync::sync_cli_availability(app);
     app.core.worktree_form.worktree_error = None;
     crate::log_foreground_choice(app, &path);
     // The daemon is the single writer: tell it to learn this project (persist + discover),
@@ -233,6 +236,8 @@ pub(crate) fn on_known_project_reopened(app: &mut App, path: PathBuf) -> Task<Me
         micold_client::app::drain(outcomes, |o| {
             micold_client::app::interpret(&mut app.core, o)
         });
+        // Contract C1 A4, as for a project opened by browsing.
+        crate::shell::daemon_sync::sync_cli_availability(app);
         crate::log_foreground_choice(app, &path);
         // Already a known project (no ProjectAdd): move the daemon attachment, and tell the
         // catalog's single writer this is now the last-active project, or the next launch restores

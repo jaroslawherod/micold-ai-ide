@@ -155,33 +155,28 @@ pub struct State {
     ///
     /// Transient: where a row was a moment ago is worth nothing after a restart.
     pub start_press: Option<(u16, u16)>,
-    /// Which AI CLIs exist **where sessions run**, in `AiCli::ALL`'s order (feature 026 FR-006 and
-    /// T014a; re-sourced by feature 027 FR-023c).
+    /// Which AI CLIs exist **where sessions run**, per directory (feature 026 FR-006, re-sourced by
+    /// feature 027 FR-023c, keyed by directory in feature 033).
     ///
-    /// `None` means the service has not said yet — a state that is neither "none available" nor a
-    /// guess, and the reason this is an `Option` rather than an empty `Vec`. An empty *answer* is a
-    /// real answer (an image that ships no AI CLI is FR-023b's whole scenario) and has to be
-    /// distinguishable from not having asked.
+    /// Filled from `DaemonMsg::AiCliAvailability` — the service answers for the environment a
+    /// session in the named directory is spawned with (029 FR-003b), so a project's
+    /// environment-include script can put a CLI on one directory's `PATH` and not another's. Each
+    /// answer is filed under the directory its request named: the home directory's (Settings, and
+    /// every row's fallback) and one per sidebar row. None replaces another (033 FR-002). Asked only
+    /// on the named events of contract C1, never per frame.
     ///
-    /// **The client no longer probes its own `PATH` for this.** It used to, through
+    /// **The client does not probe its own `PATH` for this.** It used to, through
     /// `Capabilities::available_providers()`, and that was wrong the moment 027 let the service run
-    /// in a container: the client is on the host, the sessions are not, and the host's answer is
-    /// plausible enough to look right while describing a different machine. FR-023c says the
-    /// question is settled where sessions run, so it is now filled from
-    /// `DaemonMsg::AiCliAvailability` — asked on connect and on the same **named events** as
-    /// before (the Settings view opening, the override menu opening), never per frame. The answer
-    /// is stamped with what it describes as it arrives, so FR-023b's sentence can name it; see
-    /// [`CliAvailability`].
+    /// in a container: the client is on the host, the sessions are not.
     ///
-    /// It is here rather than reached for because there is no route to it otherwise, and the three
-    /// consumers each lack a different one: `features/` imports nothing from `shell::`;
-    /// `ui/settings_view.rs` sees a draft and nothing else; and the sidebar's
-    /// `row_actions_cluster` takes narrow arguments rather than the whole state.
+    /// It is here rather than reached for because there is no route to it otherwise: `features/`
+    /// imports nothing from `shell::`, and the sidebar's `row_actions_cluster` takes narrow
+    /// arguments rather than the whole state.
     ///
     /// Holding it in memory is not a violation of research R11's rule, which is "never
     /// *persisted*" — an in-memory snapshot refreshed when the choice is offered cannot go stale
     /// in a file.
-    pub available_providers: Option<CliAvailability>,
+    pub availability: AvailabilityAnswers,
     /// The default AI CLI a new session runs when nothing is chosen for it (feature 026, FR-003).
     ///
     /// Service-owned: this mirrors what the daemon reported in `DaemonSettings`, and is written
@@ -1954,43 +1949,46 @@ impl State {
         chosen.unwrap_or(self.default_ai_cli)
     }
 
-    /// The availability set as far as anything is known, treating "not asked yet" as "nothing".
+    /// The CLIs known to exist where a session in `dir` would run — the home directory's with
+    /// `None` — treating "not asked yet" as "nothing" (feature 033, data-model "Readers").
     ///
-    /// Every consumer below wants a slice, and every one of them is a decision about what to
-    /// *offer* — where an unanswered service and a service that answered "none" mean the same
-    /// thing: there is no CLI to offer. The distinction the `Option` preserves matters exactly
-    /// once, in the Settings sentence that has to say "the image provides none" rather than
-    /// "nothing is known yet" (FR-023b), and that call site reads the field directly.
-    fn known_available(&self) -> &[AiCli] {
-        self.available_providers
-            .as_ref()
-            .map(|a| a.available.as_slice())
-            .unwrap_or(&[])
+    /// Every consumer is a decision about what to *offer*, where an unanswered service and a
+    /// service that answered "none" mean the same thing. The distinction matters once, in the
+    /// Settings sentence (FR-023b), which reads [`AvailabilityAnswers::home`] directly.
+    pub fn known_clis(&self, dir: Option<&Path>) -> &[AiCli] {
+        match dir {
+            None => self.availability.home(),
+            Some(dir) => self.availability.for_dir(dir),
+        }
+        .map(|a| a.available.as_slice())
+        .unwrap_or(&[])
     }
 
-    /// Whether the stored default is currently installed (FR-002).
+    /// Whether the stored default is installed where a session in `dir` would run (FR-002).
     ///
     /// A `false` here is **not** a reason to rewrite the preference. The stored value stays as the
     /// user left it and is shown marked, so a temporary `PATH` problem cannot silently discard a
     /// choice (research R11).
-    pub fn default_ai_cli_is_available(&self) -> bool {
-        self.known_available().contains(&self.default_ai_cli)
+    pub fn default_ai_cli_is_available(&self, dir: Option<&Path>) -> bool {
+        self.known_clis(dir).contains(&self.default_ai_cli)
     }
 
-    /// The CLIs to offer in a menu — the Settings select and the override list (FR-006, T075).
+    /// The CLIs to offer in a menu — the Settings select (`None`, home) and a row's start list
+    /// (its directory) (FR-006, T075; 033 FR-008).
     ///
     /// A pure function over `State`, deliberately: `features/` cannot see `Capabilities` and must
-    /// not learn to, so the availability set arrives as state (T014a) and this reads it.
-    pub fn offered_providers(&self) -> Vec<AiCli> {
-        self.known_available().to_vec()
+    /// not learn to, so the availability arrives as state (T014a) and this reads it.
+    pub fn offered_providers(&self, dir: Option<&Path>) -> Vec<AiCli> {
+        self.known_clis(dir).to_vec()
     }
 
-    /// Whether the split affordance's secondary half exists at all (FR-006, SC-001).
+    /// Whether the split affordance's secondary half exists at all on the row for `dir` (FR-006,
+    /// SC-001; 033 FR-001).
     ///
-    /// Absent when fewer than two CLIs are available: a "choose which one" control that opens a
-    /// list of one is a worse single-CLI experience than the plain button it replaced.
-    pub fn start_affordance_offers_a_choice(&self) -> bool {
-        self.known_available().len() >= 2
+    /// Absent when fewer than two CLIs are available there: a "choose which one" control that
+    /// opens a list of one is a worse single-CLI experience than the plain button it replaced.
+    pub fn start_affordance_offers_a_choice(&self, dir: &Path) -> bool {
+        self.known_clis(Some(dir)).len() >= 2
     }
 
     /// Resolve a press into what should happen (T032a).
@@ -1999,21 +1997,22 @@ impl State {
     /// primary half with an unavailable default: it neither starts the default (FR-002 forbids
     /// substituting silently, and starting a missing binary is FR-010's failure, not FR-004's
     /// answer) nor does nothing.
-    pub fn start_intent(&self, target: PressTarget) -> StartIntent {
-        if self.known_available().is_empty() {
+    pub fn start_intent(&self, target: PressTarget, dir: &Path) -> StartIntent {
+        let dir = Some(dir);
+        if self.known_clis(dir).is_empty() {
             return StartIntent::NothingAvailable;
         }
         match target {
-            PressTarget::Primary if self.default_ai_cli_is_available() => {
+            PressTarget::Primary if self.default_ai_cli_is_available(dir) => {
                 StartIntent::Start(self.default_ai_cli)
             }
             // The default names a CLI that is not installed: say so, and offer what is.
             PressTarget::Primary => StartIntent::OfferChoice {
-                providers: self.offered_providers(),
+                providers: self.offered_providers(dir),
                 unavailable_default: Some(self.default_ai_cli),
             },
             PressTarget::Secondary => StartIntent::OfferChoice {
-                providers: self.offered_providers(),
+                providers: self.offered_providers(dir),
                 unavailable_default: None,
             },
         }
@@ -2061,6 +2060,9 @@ pub fn start_menu_toggled(
         .start_menu
         .as_ref()
         .is_some_and(|open| open.location == location);
+    // Judged where a session from this list would run (feature 033, FR-008): a default this row's
+    // directory provides is not missing here, whatever the home directory says.
+    let dir = state.location_dir(&location);
     state.session.start_menu = if closing {
         None
     } else {
@@ -2075,7 +2077,7 @@ pub fn start_menu_toggled(
         return Vec::new();
     }
     unavailable_default
-        .filter(|cli| !state.session.known_available().contains(cli))
+        .filter(|cli| !state.session.known_clis(dir.as_deref()).contains(cli))
         .map(|cli| {
             vec![crate::features::notifications::error(format!(
                 "{} isn't installed. Install it, or start this session on another AI CLI.",

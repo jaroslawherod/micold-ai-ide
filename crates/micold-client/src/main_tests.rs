@@ -111,7 +111,6 @@ fn update_inner_applies_window_focus_changed() {
         version_mismatch: None,
         build_mismatch: None,
         next_req: 0,
-        cli_availability_asked: 0,
         scrollback_inflight: HashMap::new(),
         pending_ops: HashMap::new(),
         probe: None,
@@ -166,7 +165,6 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
         version_mismatch: None,
         build_mismatch: None,
         next_req: 0,
-        cli_availability_asked: 0,
         scrollback_inflight: HashMap::new(),
         pending_ops: HashMap::new(),
         probe: None,
@@ -552,15 +550,33 @@ fn connecting_asks_which_clis_the_service_can_run() {
              that is gone. Sent instead: {sent:?}"
     );
 
+    let home = sent
+        .iter()
+        .find_map(|m| match m {
+            ClientMsg::AiCliAvailabilityRequest { req, cwd: None } => Some(*req),
+            _ => None,
+        })
+        .expect("connecting asks about the home directory");
     let _ = update_inner(
         &mut app,
         Message::Connection(ConnectionMsg::Event(DaemonMsg::AiCliAvailability {
-            req: 0,
+            req: home,
             available: vec![AiCli::ClaudeCode, AiCli::Copilot],
         })),
     );
+    assert_eq!(
+        app.core
+            .session
+            .availability
+            .home()
+            .map(|answer| answer.available.clone()),
+        Some(vec![AiCli::ClaudeCode, AiCli::Copilot]),
+        "the answer is filed as the home directory's"
+    );
     assert!(
-        app.core.session.start_affordance_offers_a_choice(),
+        app.core
+            .session
+            .start_affordance_offers_a_choice(Path::new("/repo/demo")),
         "with two CLIs reported, the sidebar row's override chevron must exist (026 FR-006) — \
              the answer arriving is the whole point of asking for it"
     );
@@ -706,7 +722,6 @@ pub(crate) fn base_app() -> App {
         version_mismatch: None,
         build_mismatch: None,
         next_req: 0,
-        cli_availability_asked: 0,
         scrollback_inflight: HashMap::new(),
         pending_ops: HashMap::new(),
         probe: None,
@@ -2066,7 +2081,6 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         version_mismatch: None,
         build_mismatch: None,
         next_req: 0,
-        cli_availability_asked: 0,
         scrollback_inflight: HashMap::new(),
         pending_ops: HashMap::new(),
         probe: None,
@@ -3064,9 +3078,11 @@ fn opening_settings_asks_about_no_directory() {
     );
 }
 
-/// U13: answers are resolved off the service's connection loop, so they can arrive out of order —
-/// a first resolution for one directory can take seconds while another directory's is cached. The
-/// set on screen is the one for the question asked last, never an older question's.
+/// U13, reversed by feature 033 (FR-002, FR-009): answers are resolved off the service's
+/// connection loop, so they can arrive out of order — and each is about the directory its request
+/// named. The home answer Settings asked for and a row's answer are both kept, whichever lands
+/// last. (A later answer replacing an earlier one is now only a same-directory rule, pinned in
+/// `tests/directory_availability.rs`.)
 #[test]
 fn an_answer_to_an_earlier_question_does_not_replace_a_later_one() {
     let mut app = base_app();
@@ -3100,14 +3116,557 @@ fn an_answer_to_an_earlier_question_does_not_replace_a_later_one() {
         );
     }
 
+    let worktree = Path::new("/repo/demo/.claude/worktrees/feature-x");
     assert_eq!(
         app.core
             .session
-            .available_providers
-            .as_ref()
+            .availability
+            .for_dir(worktree)
             .map(|answer| answer.available.clone()),
         Some(vec![AiCli::Pi]),
-        "the menu open now was asked about last, so its answer stands; the Settings answer that \
-         arrived after it describes a different directory (FR-003b)"
+        "the menu's answer is the worktree's, and the Settings answer arriving after it describes \
+         the home directory, not this one (FR-002)"
     );
+    assert_eq!(
+        app.core
+            .session
+            .availability
+            .home()
+            .map(|answer| answer.available.clone()),
+        Some(vec![AiCli::ClaudeCode]),
+        "and the home answer Settings reads is the one asked for it (FR-008)"
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Feature 033: each sidebar row is answered for its own directory
+// ---------------------------------------------------------------------------------------------
+
+use micold_client::features::session::{PressTarget, StartIntent};
+use micold_core::protocol::messages::{ProjectSnapshot, WorktreeSnapshot};
+
+const DEMO: &str = "/repo/demo";
+const FEAT_A: &str = "/repo/demo/.claude/worktrees/feat-a";
+const FEAT_B: &str = "/repo/demo/.claude/worktrees/feat-b";
+
+/// `/repo/demo` open with the given worktrees, each `(dir, status, created by this app)`. A
+/// worktree the app did not create is an agent's, hidden until revealed (029 FR-004).
+fn app_on_demo(worktrees: &[(&str, micold_core::worktree::WorktreeStatus, bool)]) -> App {
+    let mut app = base_app();
+    let root = PathBuf::from(DEMO);
+    app.core
+        .workspace
+        .projects
+        .push(micold_core::project::Project::new(
+            root.clone(),
+            true,
+            micold_core::project::Availability::Available,
+        ));
+    app.core.workspace.active = Some(root.clone());
+    for (dir, _, created) in worktrees {
+        if *created {
+            app.core.workspace.record_user_created(&root, dir);
+        }
+    }
+    app.core.worktree.worktrees = worktrees
+        .iter()
+        .map(|(dir, status, _)| micold_core::worktree::Worktree {
+            dir_name: dir.to_string(),
+            path: root.join(".claude/worktrees").join(dir),
+            branch: Some(format!("feat/{dir}")),
+            status: *status,
+            included: false,
+        })
+        .collect();
+    app
+}
+
+/// `/repo/demo` with one valid worktree of the user's, one hidden agent worktree and one whose
+/// directory is gone: D = 2 rows to answer for (the root and `feat-a`).
+fn app_with_mixed_rows() -> App {
+    use micold_core::worktree::WorktreeStatus::{Missing, Valid};
+    app_on_demo(&[
+        ("feat-a", Valid, true),
+        ("agent-1f", Valid, false),
+        ("feat-gone", Missing, true),
+    ])
+}
+
+/// Connect `app` with `catalog` on a channel this test keeps, **without** draining what the
+/// connection sent — the connect's own asks are what these tests are about.
+fn connect_with_catalog_keeping_outbox(
+    app: &mut App,
+    catalog: micold_core::protocol::messages::CatalogSnapshot,
+) -> iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg> {
+    let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+    let _ = update_inner(
+        app,
+        Message::Connection(ConnectionMsg::Connected {
+            outbox: micold_client::daemon::Outbox::new(tx),
+            catalog,
+            settings: quiet_settings(),
+        }),
+    );
+    rx
+}
+
+/// Every availability request sent since the last drain, as `(req, cwd)`.
+fn availability_requests(
+    rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+) -> Vec<(u64, Option<PathBuf>)> {
+    let mut asked = Vec::new();
+    while let Ok(msg) = rx.try_recv() {
+        if let ClientMsg::AiCliAvailabilityRequest { req, cwd } = msg {
+            asked.push((req, cwd));
+        }
+    }
+    asked
+}
+
+/// The service's reply to `req`.
+fn availability_answer(app: &mut App, req: u64, available: &[AiCli]) {
+    let _ = update_inner(
+        app,
+        Message::Connection(ConnectionMsg::Event(DaemonMsg::AiCliAvailability {
+            req,
+            available: available.to_vec(),
+        })),
+    );
+}
+
+/// Answer each request in `asked` with what its directory has: `home` for `cwd: None`, else the
+/// entry of `dirs` naming its directory.
+fn answer_each(
+    app: &mut App,
+    asked: &[(u64, Option<PathBuf>)],
+    home: &[AiCli],
+    dirs: &[(&str, &[AiCli])],
+) {
+    for (req, cwd) in asked {
+        let available = match cwd {
+            None => home,
+            Some(dir) => {
+                dirs.iter()
+                    .find(|(d, _)| Path::new(d) == dir)
+                    .unwrap_or_else(|| panic!("fixture: no answer given for {}", dir.display()))
+                    .1
+            }
+        };
+        availability_answer(app, *req, available);
+    }
+}
+
+fn offers_a_choice(app: &App, dir: &str) -> bool {
+    app.core
+        .session
+        .start_affordance_offers_a_choice(Path::new(dir))
+}
+
+/// What the primary half of `location`'s start affordance would do — the same reader
+/// `ui/sidebar.rs`'s `start_press` calls.
+fn primary_press(app: &App, location: &SessionLocation) -> StartIntent {
+    let dir = app
+        .core
+        .location_dir(location)
+        .expect("a row needs an active project");
+    app.core.session.start_intent(PressTarget::Primary, &dir)
+}
+
+const CLAUDE: &[AiCli] = &[AiCli::ClaudeCode];
+const CLAUDE_AND_PI: &[AiCli] = &[AiCli::ClaudeCode, AiCli::Pi];
+
+fn open_start_list(app: &mut App, location: SessionLocation) {
+    let _ = update_inner(
+        app,
+        Message::Session(SessionMsg::StartMenuOpened {
+            location,
+            unavailable_default: None,
+        }),
+    );
+}
+
+/// U22 (FR-006, FR-007, SC-004): the connect asks home once and each row's directory once — none
+/// for a hidden agent worktree or one whose directory is gone.
+#[test]
+fn availability_connect_asks_home_and_each_row_directory_once() {
+    let mut app = app_with_mixed_rows();
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+
+    let asked: Vec<Option<PathBuf>> = availability_requests(&mut rx)
+        .into_iter()
+        .map(|(_, cwd)| cwd)
+        .collect();
+    assert_eq!(
+        asked,
+        vec![None, Some(PathBuf::from(DEMO)), Some(PathBuf::from(FEAT_A))],
+        "home first, then one request per row on screen (D = 2)"
+    );
+}
+
+/// U23 (FR-011): a reconnect forgets every answer, asks again, and a reply to a request the
+/// previous connection sent is dropped.
+#[test]
+fn availability_reconnect_drops_answers_and_reasks() {
+    let mut app = app_with_mixed_rows();
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+    let before = availability_requests(&mut rx);
+    answer_each(
+        &mut app,
+        &before,
+        CLAUDE,
+        &[(DEMO, CLAUDE_AND_PI), (FEAT_A, CLAUDE_AND_PI)],
+    );
+
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+    let after = availability_requests(&mut rx);
+
+    assert_eq!(
+        after.iter().map(|(_, cwd)| cwd.clone()).collect::<Vec<_>>(),
+        vec![None, Some(PathBuf::from(DEMO)), Some(PathBuf::from(FEAT_A))],
+        "the reconnect asks the same set again"
+    );
+    assert_eq!(app.core.session.availability.home(), None);
+    assert_eq!(
+        app.core.session.availability.for_dir(Path::new(FEAT_A)),
+        None
+    );
+
+    let (stale, _) = before[2].clone();
+    availability_answer(&mut app, stale, CLAUDE_AND_PI);
+    assert_eq!(
+        app.core.session.availability.for_dir(Path::new(FEAT_A)),
+        None,
+        "an answer to the previous connection's request describes a service that may be gone"
+    );
+}
+
+/// A1 (US1-1, FR-001, FR-006, SC-001): no Settings, no list opened — once connected and answered,
+/// the project's rows offer the CLI its script provides.
+#[test]
+fn availability_a_project_whose_script_adds_a_cli_offers_it_on_its_rows() {
+    let mut app = app_with_mixed_rows();
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+    let asked = availability_requests(&mut rx);
+    // Rows first, home last: the arrival order a slow home resolution produces.
+    let mut reversed = asked.clone();
+    reversed.reverse();
+    answer_each(
+        &mut app,
+        &reversed,
+        CLAUDE,
+        &[(DEMO, CLAUDE_AND_PI), (FEAT_A, CLAUDE_AND_PI)],
+    );
+
+    assert!(
+        offers_a_choice(&app, DEMO),
+        "the Default row offers the choice"
+    );
+    assert!(
+        offers_a_choice(&app, FEAT_A),
+        "and so does the worktree row"
+    );
+    assert!(
+        app.core
+            .session
+            .offered_providers(Some(Path::new(DEMO)))
+            .contains(&AiCli::Pi),
+        "and the list it opens includes Pi"
+    );
+}
+
+/// A2 (US1-2, FR-001): a second project without the script offers no choice, and its primary
+/// press starts Claude.
+#[test]
+fn availability_a_project_without_the_script_offers_no_choice() {
+    let p = tempfile::tempdir().unwrap();
+    let q = tempfile::tempdir().unwrap();
+    let mut app = base_app();
+    let scanner = micold_core::fs_scan::FakeFolderScanner::new();
+    app.core
+        .workspace
+        .open_or_activate(q.path().to_path_buf(), &scanner);
+    app.core
+        .workspace
+        .open_or_activate(p.path().to_path_buf(), &scanner);
+    let p_dir = p.path().to_str().unwrap().to_owned();
+    let q_dir = q.path().to_str().unwrap().to_owned();
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(&p_dir, Vec::new()));
+    let asked = availability_requests(&mut rx);
+    answer_each(&mut app, &asked, CLAUDE, &[(&p_dir, CLAUDE_AND_PI)]);
+    assert!(offers_a_choice(&app, &p_dir), "fixture check: P offers Pi");
+
+    let _ = update_inner(
+        &mut app,
+        Message::Project(ProjectMsg::Reopened(q.path().to_path_buf())),
+    );
+    let asked = availability_requests(&mut rx);
+    answer_each(&mut app, &asked, CLAUDE, &[(&q_dir, CLAUDE)]);
+
+    assert!(!offers_a_choice(&app, &q_dir), "Q's rows offer no choice");
+    assert_eq!(
+        primary_press(&app, &SessionLocation::Default),
+        StartIntent::Start(AiCli::ClaudeCode),
+        "and Q's primary press starts Claude"
+    );
+}
+
+/// A3 (US1-3, FR-002, FR-008): Settings asks for home, and home's answer never replaces a row's.
+#[test]
+fn availability_opening_settings_never_replaces_a_rows_answer() {
+    let mut app = app_with_mixed_rows();
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+    let asked = availability_requests(&mut rx);
+    answer_each(
+        &mut app,
+        &asked,
+        CLAUDE,
+        &[(DEMO, CLAUDE_AND_PI), (FEAT_A, CLAUDE_AND_PI)],
+    );
+
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let asked = availability_requests(&mut rx);
+    answer_each(&mut app, &asked, CLAUDE, &[]);
+
+    assert!(
+        offers_a_choice(&app, DEMO),
+        "P's Default row still offers Pi"
+    );
+    assert!(
+        offers_a_choice(&app, FEAT_A),
+        "and so does its worktree row"
+    );
+}
+
+/// U24 (FR-008, C1 A2): Settings asks about the home directory and nothing else.
+#[test]
+fn availability_settings_asks_for_home_only() {
+    let mut app = app_with_mixed_rows();
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+    let _ = availability_requests(&mut rx);
+
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+
+    assert_eq!(
+        availability_requests(&mut rx)
+            .into_iter()
+            .map(|(_, cwd)| cwd)
+            .collect::<Vec<_>>(),
+        vec![None]
+    );
+}
+
+/// U25 (FR-004, C1 A3): a row's list asks for its own directory even with an answer held, and the
+/// answer lands under that directory.
+#[test]
+fn availability_a_start_list_asks_for_its_own_directory() {
+    let mut app = app_with_mixed_rows();
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+    let asked = availability_requests(&mut rx);
+    answer_each(
+        &mut app,
+        &asked,
+        CLAUDE,
+        &[(DEMO, CLAUDE), (FEAT_A, CLAUDE)],
+    );
+
+    open_start_list(&mut app, SessionLocation::Worktree("feat-a".into()));
+    let asked = availability_requests(&mut rx);
+    assert_eq!(
+        asked.iter().map(|(_, cwd)| cwd.clone()).collect::<Vec<_>>(),
+        vec![Some(PathBuf::from(FEAT_A))],
+        "the list refreshes its own row's answer"
+    );
+    answer_each(&mut app, &asked, CLAUDE, &[(FEAT_A, CLAUDE_AND_PI)]);
+    assert!(offers_a_choice(&app, FEAT_A), "filed under the worktree");
+    assert_eq!(
+        app.core
+            .session
+            .availability
+            .home()
+            .map(|a| a.available.clone()),
+        Some(CLAUDE.to_vec()),
+        "and not as the home answer"
+    );
+}
+
+/// A4 (US1-4, FR-011): after a reconnect the rows are re-asked with no user action and offer Pi
+/// again once the answers arrive.
+#[test]
+fn availability_a_reconnect_reasks_every_row_and_restores_its_answer() {
+    let mut app = app_with_mixed_rows();
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+    let asked = availability_requests(&mut rx);
+    let dirs: &[(&str, &[AiCli])] = &[(DEMO, CLAUDE_AND_PI), (FEAT_A, CLAUDE_AND_PI)];
+    answer_each(&mut app, &asked, CLAUDE, dirs);
+
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+    let asked = availability_requests(&mut rx);
+    answer_each(&mut app, &asked, CLAUDE, dirs);
+
+    assert!(offers_a_choice(&app, DEMO));
+    assert!(offers_a_choice(&app, FEAT_A));
+}
+
+/// A5 (US1-5, FR-010): with default Pi and only this project resolving it, one press starts Pi.
+#[test]
+fn availability_the_primary_press_starts_a_default_only_the_row_provides() {
+    let mut app = app_with_mixed_rows();
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+    app.core.session.default_ai_cli = AiCli::Pi;
+    let mut asked = availability_requests(&mut rx);
+    asked.reverse();
+    answer_each(
+        &mut app,
+        &asked,
+        CLAUDE,
+        &[(DEMO, CLAUDE_AND_PI), (FEAT_A, CLAUDE_AND_PI)],
+    );
+
+    assert_eq!(
+        primary_press(&app, &SessionLocation::Default),
+        StartIntent::Start(AiCli::Pi)
+    );
+    assert_eq!(
+        primary_press(&app, &SessionLocation::Worktree("feat-a".into())),
+        StartIntent::Start(AiCli::Pi)
+    );
+}
+
+/// U26 (FR-006, C1 A4): opening a project asks for each of its rows once; opening it again asks
+/// nothing new.
+#[test]
+fn availability_opening_a_project_asks_once_per_directory() {
+    let a = tempfile::tempdir().unwrap();
+    let b = tempfile::tempdir().unwrap();
+    let mut app = base_app();
+    let scanner = micold_core::fs_scan::FakeFolderScanner::new();
+    app.core
+        .workspace
+        .open_or_activate(a.path().to_path_buf(), &scanner);
+    app.core
+        .workspace
+        .open_or_activate(b.path().to_path_buf(), &scanner);
+    let b_dir = b.path().to_str().unwrap().to_owned();
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(&b_dir, Vec::new()));
+    let _ = availability_requests(&mut rx);
+
+    let _ = update_inner(
+        &mut app,
+        Message::Project(ProjectMsg::Reopened(a.path().to_path_buf())),
+    );
+    assert_eq!(
+        availability_requests(&mut rx)
+            .into_iter()
+            .map(|(_, cwd)| cwd)
+            .collect::<Vec<_>>(),
+        vec![Some(a.path().to_path_buf())],
+        "opening A asks about A's root, once"
+    );
+
+    let _ = update_inner(
+        &mut app,
+        Message::Project(ProjectMsg::Reopened(a.path().to_path_buf())),
+    );
+    assert_eq!(
+        availability_requests(&mut rx),
+        Vec::new(),
+        "A's root is already asked, so opening it again asks nothing"
+    );
+}
+
+fn catalog_with_worktree(dir: &str) -> micold_core::protocol::messages::CatalogSnapshot {
+    let mut catalog = snapshot_with(DEMO, Vec::new());
+    let project: &mut ProjectSnapshot = &mut catalog.projects[0];
+    project.worktrees.push(WorktreeSnapshot {
+        dir_name: dir.to_string(),
+        branch: Some(format!("feat/{dir}")),
+        display_name: dir.to_string(),
+        status: micold_core::protocol::messages::WorktreeStatus::Clean,
+        path: PathBuf::from(DEMO).join(".claude/worktrees").join(dir),
+        included: false,
+        user_created: true,
+    });
+    catalog
+}
+
+/// U27 (FR-004, C1 A5): a worktree the catalog push adds is asked about exactly once.
+#[test]
+fn availability_a_new_worktree_is_asked_about_once() {
+    let mut app = app_on_demo(&[]);
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+    let _ = availability_requests(&mut rx);
+
+    feed(
+        &mut app,
+        DaemonMsg::CatalogChanged {
+            catalog: catalog_with_worktree("feat-new"),
+        },
+    );
+    assert_eq!(
+        availability_requests(&mut rx)
+            .into_iter()
+            .map(|(_, cwd)| cwd)
+            .collect::<Vec<_>>(),
+        vec![Some(PathBuf::from(DEMO).join(".claude/worktrees/feat-new"))]
+    );
+
+    feed(
+        &mut app,
+        DaemonMsg::CatalogChanged {
+            catalog: catalog_with_worktree("feat-new"),
+        },
+    );
+    assert_eq!(
+        availability_requests(&mut rx),
+        Vec::new(),
+        "the same push again changes no row, so it asks nothing"
+    );
+}
+
+/// Worktrees A (`feat-a`, whose directory provides Pi) and B (`feat-b`, which does not), answered.
+fn app_with_two_answered_worktrees() -> (
+    App,
+    iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+) {
+    use micold_core::worktree::WorktreeStatus::Valid;
+    let mut app = app_on_demo(&[("feat-a", Valid, true), ("feat-b", Valid, true)]);
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+    let asked = availability_requests(&mut rx);
+    answer_each(
+        &mut app,
+        &asked,
+        CLAUDE,
+        &[(DEMO, CLAUDE), (FEAT_A, CLAUDE_AND_PI), (FEAT_B, CLAUDE)],
+    );
+    (app, rx)
+}
+
+/// A6 (US2-1, FR-002): opening, answering and closing A's list leaves B as it was.
+#[test]
+fn availability_opening_one_rows_list_does_not_change_another_row() {
+    let (mut app, mut rx) = app_with_two_answered_worktrees();
+
+    open_start_list(&mut app, SessionLocation::Worktree("feat-a".into()));
+    let asked = availability_requests(&mut rx);
+    answer_each(&mut app, &asked, CLAUDE, &[(FEAT_A, CLAUDE_AND_PI)]);
+    let _ = update_inner(&mut app, Message::Session(SessionMsg::StartMenuDismissed));
+
+    assert!(!offers_a_choice(&app, FEAT_B), "B offers no choice");
+    assert_eq!(
+        primary_press(&app, &SessionLocation::Worktree("feat-b".into())),
+        StartIntent::Start(AiCli::ClaudeCode),
+        "and B's primary press starts Claude"
+    );
+}
+
+/// A7 (US2-2, FR-002): opening B's list leaves A offering the choice.
+#[test]
+fn availability_opening_the_other_rows_list_leaves_the_first_alone() {
+    let (mut app, mut rx) = app_with_two_answered_worktrees();
+
+    open_start_list(&mut app, SessionLocation::Worktree("feat-b".into()));
+    let asked = availability_requests(&mut rx);
+    answer_each(&mut app, &asked, CLAUDE, &[(FEAT_B, CLAUDE)]);
+
+    assert!(offers_a_choice(&app, FEAT_A), "A still offers the choice");
 }

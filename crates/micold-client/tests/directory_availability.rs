@@ -150,7 +150,11 @@ fn home_and_directory_answers_never_replace_each_other() {
 #[test]
 fn a_directory_reads_its_own_answer_and_falls_back_to_home() {
     let mut answers = AvailabilityAnswers::default();
-    assert_eq!(held(&answers, P), None, "nothing held anywhere reads as nothing");
+    assert_eq!(
+        held(&answers, P),
+        None,
+        "nothing held anywhere reads as nothing"
+    );
 
     answers.asked(1, AvailabilityKey::Home);
     answers.answered(1, answer(&[AiCli::ClaudeCode]));
@@ -245,7 +249,10 @@ fn env_include_changed_reports_only_a_real_change() {
     let mut answers = AvailabilityAnswers::default();
 
     assert!(answers.env_include_changed(&on), "unset → set is a change");
-    assert!(!answers.env_include_changed(&on), "the same settings are not");
+    assert!(
+        !answers.env_include_changed(&on),
+        "the same settings are not"
+    );
     assert!(answers.env_include_changed(&off), "switching it off is");
     assert!(
         !answers.env_include_changed(&off),

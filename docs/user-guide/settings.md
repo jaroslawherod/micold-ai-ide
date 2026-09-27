@@ -61,8 +61,9 @@ Which AI coding CLI a new session runs when you don't choose one for it.
   [the environment a session starts in](#the-environment-a-session-starts-in) adds. So a CLI you
   installed through a version manager — `pi` or `copilot` from `npm install -g` under mise or nvm,
   say — is offered as long as environment-include is on and your startup file sets that version
-  manager up. The per-session list asks about that session's own project or worktree; this field
-  asks about your home directory.
+  manager up. This field answers for your home directory, because the default applies everywhere.
+  Each sidebar row answers for its own project or worktree, so a CLI one project's script adds is
+  offered on that project's rows even when it is not listed here.
 - **A note under the field names any CLI that is missing** from there, so you know before you start a
   session rather than when it fails.
 - **Default**: Claude Code.
