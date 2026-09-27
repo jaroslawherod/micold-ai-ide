@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/a-project-local-cli-stays-unreachable-in-that-project
 - **Started**: 2026-09-27
 - **Phase**: 5-close
-- **Next step**: Phase 5 close: speckit-converge → speckit-tdd-verify → speckit-docguard-guard, then the close PR.
+- **Next step**: merge close PR, then handoff.
 
 ## Pull requests
 
@@ -32,6 +32,9 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| D14 | close | `speckit-docguard-guard`: 6 blocking issues and 1,628 warnings repo-wide — fix any here? | Only 26 are 033's: `TRC004` ×24 (`@req` test annotations), `SPR002` ×1 (a docguard Spec ID) — repo-wide conventions never adopted (1,509 and 51 across every feature), as feature 031 decided (its D65) — and `DLC002` ("43 checked tasks and no open tasks; confirm the outcome is documented"), which this close PR's spec Status and ledger do. The 6 blocking `STR001`s ask for `docs-canonical/*` scaffolding this repo does not use. Nothing changed | agent-resolved | `docguard-cli@latest guard --format json`, filtered to 033; specs/031-clickable-terminal-links/autopilot.md D65 |
+| D13 | close | `speckit-tdd-verify` verdict and remediation | `PASS_WITH_GAPS`: 38/48 behaviours PROVEN, 9 LIKELY (M1/M2 commits carry 2–3 logged cycles each), 1 N/A; 0 HIGH smells; 10/10 acceptance scenarios covered; 3/3 sampled mutants caught (no cargo-mutants installed). Remediation T041–T043, all test-strength/docs with no product behaviour, done in the close PR: one `support::hold`/`hold_home` fixture instead of five copies, one name for `/repo` in `directory_availability.rs`, U39 added to the test list for the two cycle-4 rendered tests | agent-resolved | `tdd/verification.md` |
+| D12 | close | `speckit-converge` | Converged: every FR, SC, acceptance scenario and C1–C4 entry is met in code; tasks.md unchanged by it | agent-resolved | converge run on `origin/main` 813322a6 |
 | D10 | design | Milestone cut: US2 folded into M1? M1 over 15 tasks? | US2 has no code of its own (keyed filing + keyed list ask), so its tests ride in M1. M1 (27 tasks incl. 7 outer-loop gates) is not split: the only observable half (keyed filing + keyed list ask + per-row readers, without eager asks) would ship most of P2 before P1's core — the eager ask behind US1-1/2/4/5 — against milestones.md rule 1. Pruning (FR-003 "rows that exist", FR-012) is M2's observable "rows that go drop answers". | agent-resolved | references/milestones.md rules 1–3; tasks review round 1 F11 |
 | D11 | design | Tasks + milestone review | Round 1: CHANGES (2 MAJOR: the Phase 2 API change left consumers unmigrated so nothing compiled until US1 — added T040; T007 missed `a_field_note_shares_its_fields_column.rs` and two `main_tests.rs` cases, one whose premise FR-009 reverses — 9 MINOR), all fixed. Checklist: all 16 items reviewer-confirmed. | agent-resolved | fresh-subagent review, tasks + milestone rubric |
 | D9 | design | speckit-analyze | 0 CRITICAL/HIGH; 2 MEDIUM (stale checklist item, SC-001/002 missing from plan map), 2 LOW (file count, FR order): all fixed. | agent-resolved | speckit-analyze report |
@@ -78,3 +81,4 @@ None.
 
 - Review A M3 F1: the not-installed banner is judged against the row's previous answer because the fresh ask is asynchronous; a CLI that became available since the last event gets a banner the arriving reply then contradicts. Pre-existing ordering, not changed in M3.
 - Review A M1 F5: time out an in-flight availability request that never gets a reply (no daemon path drops one today).
+- Review A M2 F3 (declined as spec Out of Scope): an env-include refresh sends one request per row at once, and the daemon, lacking single-flight in its env-include cache, may run the script N+1 times concurrently — feature 011's work, already in 029 BUG-001's follow-ups.
