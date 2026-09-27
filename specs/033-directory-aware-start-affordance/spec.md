@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-27
 
-**Status**: Draft
+**Status**: Closed 2026-09-27 — shipped in PRs #413, #417, #426, #443, #448
 
 **Input**: User description: "bug: The start affordance's chevron, and its primary press, read one
 global AI-CLI availability set rather than the answer for the row's own directory — so after a
