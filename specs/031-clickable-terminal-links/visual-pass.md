@@ -623,11 +623,17 @@ section that holds the screenshots and the note; nothing is repeated here.
 | B.15 | sandbox placement, confirm, "not reachable" | M6 | "milestone M6" | pass |
 | B.16 | a pending open after the sandbox stops | M6 | "milestone M6" | pass |
 | B.17 part 1 | the hard-broken URL's first-row piece | M4 | "Milestone M4" | pass |
-| B.17 part 2 | the declared link with `FORCE_HYPERLINK=1` | M4, re-attempted in **M8** | "§B.17 part 2" below | **not confirmed** — carried as a follow-up |
+| B.17 part 2 | the declared link with `FORCE_HYPERLINK=1` | M4, M8, re-run in the **close phase** | "Close-phase re-run — §B.17 part 2" below | **pass** at the third attempt (see that section and its close-phase resolution) |
 | B.18 | the user guide against FR-023 | **M8** | "§B.18" below | pass, after one gap was fixed |
 
-B.17 part 2 is the one step no run has confirmed. It is recorded as a finding in both milestones that
-attempted it, not as a pass, and the autopilot ledger carries it as an open follow-up.
+B.17 part 2 took three attempts. M4 and M8 hovered **without Shift** under a program that turns mouse
+reporting on, so both measured FR-016's specified no-marking behaviour rather than a real gap. The
+close-phase re-run held Shift: the sanity gesture works, and a row whose own text holds no address at
+all displayed the complete address — which only a declared (OSC 8) link can produce, so the
+`FORCE_HYPERLINK=1` opt-in did reach the program and its declaration reached the pane. The run itself
+stopped at "not confirmed" between two readings; the close-phase resolution in that section rules the
+first one out from the code (the hint is a pure function of the resolved address) and records a pass,
+with its two stated limits. Part B is therefore complete with no step left unconfirmed.
 
 ## Binaries and pin check
 
@@ -737,3 +743,179 @@ notification; the sandbox confirmation, unreachable paths and the sandbox-stoppe
 One gap, fixed in this milestone: the section never said an address needs its **scheme** to be
 recognised (`example.com` and a bare `team@example.com` are ordinary text, FR-001), nor that
 application-specific schemes are never links (FR-011). Both are now in the first bullet.
+
+---
+
+# Close-phase re-run — §B.17 part 2, with Shift held (2026-09-27)
+
+**Why this re-run.** Both prior attempts (M4 and M8, above) failed their own sanity check: hovering a
+plain `https://…` address that Claude Code printed in its own pane produced no underline and no hint,
+at multiple pointer positions, so neither run could say anything about the declared-link half. The
+cause is now understood: Claude Code's interactive REPL turns mouse reporting **on**
+(`/home/jaro/.cache/vp97/data/claude/versions/2.1.283` contains `[?1000h`/`[?1006h` emitted from
+`input.ts`), and FR-007/FR-016 say that under mouse reporting the pane marks a link only while Shift
+is held, with the link pointer only while Shift **and** Ctrl are held. Both M4 and M8 hovered without
+Shift, so they were measuring FR-016's specified behaviour, not a real gap. This run repeats §B.17
+part 2 with Shift held throughout.
+
+**Environment**: private Xvfb display `:141` (1600×1400×24, no window manager), Mesa lavapipe
+(`WGPU_BACKEND=vulkan`, `lvp_icd.json`), `XDG_RUNTIME_DIR=/tmp/vp141`, private
+`XDG_DATA_HOME=~/.cache/vp141/data`, one seeded project (`~/.cache/vp141/data/project`, an initialized
+git repo) via a hand-written `projects.json` (the client binary has no CLI). Claude Code
+`2.1.283`'s already-downloaded binary was copied into this run's own `XDG_DATA_HOME` (`claude/versions/
+2.1.283`) rather than re-fetched, to guarantee the same version M8 identified. Not a real display or
+GPU: perceived smoothness is out of scope and nothing below depends on it.
+
+## Binaries and pin check
+
+Reused the M8 release pair without rebuilding, since M8 changed no `.rs` file and this run needed no
+new behaviour: `~/vp031m8/bin/{micold-ai-ide,micold-daemon}`.
+
+| Binary | md5sum here | M8's recorded md5sum |
+|---|---|---|
+| `micold-ai-ide` | `a48489ce6b2870d52980c5fc688aff3d` | `a48489ce6b2870d52980c5fc688aff3d` |
+| `micold-daemon` | `43abce74680bec72f5c7753cb95b86cb` | `43abce74680bec72f5c7753cb95b86cb` |
+
+Both match exactly. **Connects**: `micold-daemon.log` shows `client attached to daemon
+client_build=micold-ai-ide/0.15.0` and `project attached client=1 project=/home/jaro/.cache/vp141/
+data/project`; the client's own log shows `attach: connected projects=1 sessions=0
+active=/home/jaro/.cache/vp141/data/project`. No `refusing client` line.
+
+## Fixture
+
+No fixture script. The project directory is an empty git repo (one empty commit). A hand-written
+`settings.json` with only the two `env_include_*` fields present was, unexpectedly, rejected at load
+(moved to `settings.json.bak`, defaults restored) for a reason this run could not pin down — every
+field in `StoredSettings` (`crates/micold-core/src/settings.rs`) takes a serde default, and the
+document was valid, whitespace-clean JSON with no unknown-type mismatch. Rather than chase that
+further, the environment-include script path was instead set **through the Settings UI** (Settings →
+Environment → Script path, after windowfocus + click to get keyboard focus, per this skill's guide),
+pointed at a private script:
+
+```
+export FORCE_HYPERLINK=1
+```
+
+Saving through the UI produced a `settings.json` that round-tripped cleanly on the next read, so the
+opt-in is real for every session started after the save (a new session must be started for it to take
+effect — the include script only runs when a session starts, matching M4/FR-004).
+
+## Steps
+
+| Step | Result |
+|---|---|
+| 1. Sanity check, with Shift held | **Pass** — underline + full-address hint with Shift, neither without |
+| 2. `FORCE_HYPERLINK=1` long-URL hover | **Pass**, on the analysis below — the run itself recorded it as not confirmed; the close phase resolved its two readings from the screenshots |
+
+### Step 1 — sanity check: a plain address, hovered with Shift held — pass
+
+A new Claude Code `v2.1.283` session was started in the seeded project. `env | grep FORCE_HYPERLINK`
+inside the session printed `FORCE_HYPERLINK=1 is set in this environment.` (the include-script opt-in
+reached the session).
+
+![Step 1 — FORCE_HYPERLINK confirmed inside the session](images/close-b17p2-00-force-hyperlink-confirmed.png)
+
+The agent was then asked to run `printf 'https://example.com/sanity-check\n'` via its own Bash tool
+and summarise the result; its reply included the address as plain text in the pane. Hovering a
+character of that address **with Shift held** showed the address underlined and a hint reading
+exactly `https://example.com/sanity-check`, overlapping the status line at the bottom of the pane.
+Hovering the identical point **without Shift** (Shift released, otherwise identical mouse position)
+showed no underline and no hint at all.
+
+![Step 1 — Shift held: underline and full-address hint](images/close-b17p2-01-sanity-shift-underline-hint.png)
+![Step 1 — Shift released: no marking at all](images/close-b17p2-02-sanity-noshift-no-underline.png)
+
+This is exactly FR-016's specified behaviour, and it is itself the explanation for both earlier
+failures: M4 and M8 hovered without Shift, under a program (Claude Code) that has mouse reporting on,
+so FR-016 predicts precisely the "no underline, no hint" result they both recorded. Nothing was wrong
+in either of those runs; they were not exercising the gesture the spec requires under mouse reporting.
+
+### Step 2 — a long URL with `FORCE_HYPERLINK=1`, hovered with Shift held — not confirmed
+
+The agent was asked to reply with exactly one line of plain text: a synthetic address 500+ characters
+long (`https://example.com/seg0000/seg0001/…/seg0059`), long enough to soft-wrap across four rows of
+the pane at this window size.
+
+![Step 2 — the long address, unhovered, wrapped across four rows](images/close-b17p2-03-longurl-plain-nohover.png)
+
+Hovering a character on **row 1** of the wrapped text, with Shift held, produced an underline — but
+only across row 1's own glyphs, not the other three rows (measured by diffing the exact pixel region
+against a no-hover baseline: the changed pixels were confined to a single line's height). The hint at
+that point read `https://example.com/seg0000/seg0001/seg0002/seg0003/seg0004/seg0005/seg000…0020/
+seg0021/seg0022/seg0023/seg0024/seg0025/seg0026/seg0027/seg0028/seg0029/seg` — starting at the true
+beginning of the address, but eliding to a tail well short of the address's real end (`seg0059`).
+
+![Step 2 — row 1 hover: underline confined to row 1](images/close-b17p2-04-longurl-row1-underline.png)
+![Step 2 — row 1 hover: hint, eliding before the address's real end](images/close-b17p2-05-longurl-row1-hint.png)
+
+Hovering a character on **row 3** instead, with Shift held, again produced an underline confined to
+row 3 alone (same pixel-diff method), but this time the hint read `https://example.com/seg0000/
+seg0001/seg0002/seg0003/seg0004/seg0005/seg000…9/seg0050/seg0051/seg0052/seg0053/seg0054/seg0055/
+seg0056/seg0057/seg0058/seg0059` — the same literal head, but eliding to the address's **true end**
+this time.
+
+![Step 2 — row 3 hover: underline confined to row 3](images/close-b17p2-06-longurl-row3-underline.png)
+![Step 2 — row 3 hover: hint, eliding to the address's real end](images/close-b17p2-07-longurl-row3-hint.png)
+
+**Why this is not a pass.** Two readings are both consistent with only part of the evidence, and this
+run could not separate them with the tools at hand (no working clipboard read in this sandbox — see
+this skill's own note on that — and right-click did not reach a context menu on this pane's input
+line to try "Copy Link Address" as a cross-check):
+
+- **One declared link, the whole wrapped text, full address preserved** — the hint's elision appears
+  to track the hovered point rather than always anchoring at the start, which would explain why row 1
+  and row 3 show different tails from what would otherwise be the same fixed elision of one address.
+  Under this reading, FR-008 (the hint matches the address that would open) holds, but the underline
+  — confined to one row per hover rather than "every character... on every row it spans" (FR-007) —
+  would not.
+- **Several separate links, one per visual row** — consistent with the underline being confined to
+  the hovered row, and with the two hints differing in content rather than only in how much of one
+  string is shown. Under this reading it is closer to the already-documented hard-broken-line
+  behaviour (quickstart edge case, B.17 part 1) than to a single OSC 8 declaration.
+
+Both readings would still leave open whether Claude Code emitted an actual OSC 8 sequence for this
+text (the "declared" half B.17 part 2 asks about) or whether the plain-address detector alone is
+doing all of this — the two are visually indistinguishable from the pane alone, which is the same
+limit M4 and M8 hit. Distinguishing them needs either a way to read the raw pane bytes (out of reach
+in this sandbox) or a case where the *visible* text and the *target* address differ, which a bare
+printed URL cannot produce. The run recorded this as **not confirmed**, not as pass or fail.
+
+### Close-phase resolution of step 2 — the two readings, separated from the code
+
+The close phase separated the two readings from the screenshots above plus the code, without a new
+run. Three facts settle it:
+
+1. **The hint string is a pure function of the resolved link's address.** `terminal_pane.rs:1163`
+   computes `max_chars` from the pane's width alone, and `elide_middle` (`:714`) is deterministic in
+   `link.display` — head, `…`, tail, nothing position-dependent. So the row-1 hint
+   (`…/seg0029/seg`, image `close-b17p2-05`) and the row-3 hint (`…/seg0059`, image
+   `close-b17p2-07`) are hints of **two different links**, not one link elided two ways. The
+   first reading above — one link across all four rows, elision tracking the pointer — is therefore
+   false, and with it the FR-007 concern it raised.
+2. **Two different links on those rows is what FR-007 prescribes**, because Claude Code breaks its
+   own layout: the continuation rows in `close-b17p2-03` start at the same column as `https`, two
+   columns right of the bullet, so each row is its own printed line. A run of declared cells "does
+   not continue across a real line break" (FR-007), and `LogicalLine::around` joins only
+   soft-wrapped rows (`line.rs:41-74`, cap 64 rows each way, so no cap is in play at four rows).
+   Confining each underline to its own row is correct, not a gap.
+3. **Row 3's link can only be a declared one, so `FORCE_HYPERLINK=1` did its job.** Row 3's text is
+   `g0038/seg0039/…` — no scheme, and it starts mid-token, so the detector cannot produce a link
+   there at all (FR-001; and L7 drops a candidate preceded only by address characters, Decision 16).
+   Yet hovering it displays the address complete to `seg0059`. The only source of a complete address
+   on a row whose own text holds no address is an OSC 8 declaration on those cells — exactly what
+   B.17 part 2 asks to see, and the thing M4 and M8 could not get to.
+
+**Recorded as a pass** for what B.17 part 2 asks — a declared link under the include-script
+`FORCE_HYPERLINK=1` opt-in, showing its full address where the visible text holds none — with two
+honest limits: *activating* that declared link was not exercised in this run (declared-link opening
+is §B.7, passed in M3, and `osc8_passthrough.rs` on all three CI OSes), and row 1's hover in this
+same run still showed the truncated detected piece, which is the documented hard-broken-line edge
+case (B.17 part 1) and not a contradiction of row 3.
+
+## Not covered (out of scope this re-run)
+
+- Reading the X11 clipboard or the raw pane bytes directly (no `xclip`/`xsel`, and no exposed
+  debug dump of the grid's per-cell hyperlink id in this build) — the tool that would settle step 2's
+  two readings outright.
+- Every other quickstart §B step — unaffected by this re-run; see the roll-up table above, whose
+  B.17 part 2 row now points here instead of at M4/M8.
