@@ -205,9 +205,12 @@ contract's compatibility rules and "Versioning" section.
 
 **Storage** (annotates the BUG-001 section above): the catalog's "corrupt → empty" rule is
 unchanged; what changes is that the recovery is reported (FR-012d). The launch read in
-`crates/micold-client/src/shell/startup.rs` (`restore_catalog`) is the one that meets a damaged
-file — `boot` runs it before it starts or dials the daemon, and the sandboxed daemon reads the same
-file — so the notice is raised there, beside `notify_settings_recovery` (010 BUG-025), naming the
+`crates/micold-client/src/shell/startup.rs` (`restore_catalog`) is the first reader of a file
+damaged since the daemon last loaded it — `boot` runs it before it starts or dials the daemon, and
+the sandboxed daemon reads the same file — so the notice is raised there. On a warm launch (028:
+the daemon outlives the app and never re-reads the file) the daemon's `Welcome` catalog restores
+the list afterwards, so the notice says only that the file could not be read and where it was
+kept, never that the list was reset. It sits beside `notify_settings_recovery` (010 BUG-025), naming the
 path from a new `ProjectStore::recovery_path` (default `None`; `JsonFileStore` → its
 `projects.json.bak`). The daemon's own recovery, reached only when it restarts without a launch in
 front of it, is logged at `warn` naming the `.bak`, which puts it in the diagnostics ring the

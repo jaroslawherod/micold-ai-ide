@@ -45,6 +45,23 @@ The list is stored on your own machine (no account, no network required — Mico
 fully offline). Opening a folder that is already in the list simply reactivates the existing
 entry; it never creates a duplicate.
 
+### If your project list can't be read
+
+The list lives in a file called `projects.json`, in the same data folder as your
+[settings file](settings.md#where-settings-are-stored). If that file is damaged — a typo made while
+editing it by hand, or a write cut short by another program — Micold still opens, without the
+projects it held, and tells you so when it starts:
+
+> Your saved project list could not be read. The unreadable file was kept as
+> `…/projects.json.bak`.
+
+That `.bak` file is the damaged original, untouched, and it names every project folder you had. The
+quickest way back is to open those folders again. To restore the file itself instead, fix it (it is
+plain JSON) and rename it back to `projects.json` while neither Micold nor its session service is
+running — the service keeps its own copy of the list and stops by itself
+[30 minutes after the last window closes](../daemon.md#it-stops-itself-when-nobody-has-used-it-for-30-minutes).
+A first launch, with no list saved yet, shows no message.
+
 ## Switching projects from the top bar
 
 Next to the menu button in the top bar is the **project switcher** — a button showing a folder
