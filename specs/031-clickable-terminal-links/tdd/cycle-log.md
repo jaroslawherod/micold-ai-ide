@@ -1151,3 +1151,14 @@ sorted deepest-first, so C15's order broke.
   menu the user would see
 - gate: `mise run gate` green (fmt, clippy `-D warnings` core and workspace, `cargo test --workspace`,
   `scripts/tests/*.test.sh` 15 cases / 0 failures)
+
+## Cycle 93: M7 verified (T077)
+
+- `mise run gate` green at `68460c8d`; `cargo check --target aarch64-apple-darwin -p micold-client`
+  and `cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings` both exit 0, so the
+  two arms CI checks on other hosts are checked here first
+- quickstart §B.11 by the `visual-pass` skill on a private Xvfb display, binaries pinned from
+  `68460c8d`: the menu over a link is **Open Link**, **Copy Link Address**, Copy, Paste in that order
+  with no divider; Copy Link Address round-trips the complete address through a Paste; over plain
+  text the menu is Copy and Paste alone. Recorded with three screenshots in
+  `specs/031-clickable-terminal-links/visual-pass.md`
