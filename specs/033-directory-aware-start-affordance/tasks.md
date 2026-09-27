@@ -31,7 +31,7 @@ task in the milestone that ships it.
 All production changes are in `crates/micold-client/`. `micold-core` and `micold-daemon` are read,
 not changed. Build and test through `mise run <task>` (CLAUDE.md). Shell event tests live in
 `crates/micold-client/src/main_tests.rs` (the binary `micold-ai-ide`'s `tests` module; name each new
-test with `availability` so the milestone Verify filter selects it), which already has the outbox harness
+test with `availability` so the milestone Verify filter selects it), which has an outbox harness to extend
 (`connected_with_outbox`, `availability_asked_for`).
 
 ---
@@ -66,12 +66,13 @@ through. It replaces `session::State::available_providers` and `App::cli_availab
   - A directory with nothing held reads the home answer (FR-005).
   - With nothing held at all, the result is `NothingAvailable`.
   - `offered_providers(Some(P))` lists `Pi`, and `offered_providers(None)` reads home only (FR-008).
-- [ ] T003 [P] [U16] [U17] [U18] [U19] [U20] [U21] Add `wanted_availability_dirs` tests to `crates/micold-client/tests/directory_availability.rs`:
+- [ ] T003 [U16] [U17] [U18] [U19] [U20] [U21] Add `wanted_availability_dirs` tests to `crates/micold-client/tests/directory_availability.rs`:
   - The result is the active root plus `location_dir(&SessionLocation::Worktree(dir_name))` for each visible worktree with `can_start_session()`.
   - An agent worktree hidden by the reveal control is excluded, and included once `sidebar.show_agent_worktrees` is on.
   - A `WorktreeStatus::Missing` worktree is excluded.
   - An included worktree (outside `.claude/worktrees`) is keyed by `location_dir`, not `Worktree::path` (research R3).
   - The set is empty with no active project.
+  - `location_dir` (U16): `Default` → the active root; `Worktree(d)` → `root/.claude/worktrees/d`; no active project → `None`.
 
 ### Implementation
 
@@ -82,10 +83,15 @@ through. It replaces `session::State::available_providers` and `App::cli_availab
   - `available_in(Option<&Path>)` replaces `known_available()`, and `default_ai_cli_is_available`, `offered_providers`, `start_affordance_offers_a_choice(&Path)` and `start_intent(target, &Path)` take the directory.
   - Add `app::State::location_dir(&SessionLocation) -> Option<PathBuf>` in `crates/micold-client/src/app.rs`, through `SessionLocation::cwd`.
   - Add `features::session::wanted_availability_dirs(&app::State) -> BTreeSet<PathBuf>` over `visible_worktrees()`.
+- [ ] T040 Move every existing consumer onto the new API **with today's behaviour**, so the crate builds and the US1 tests can go red for the right reason:
+  - `crates/micold-client/src/ui/sidebar.rs` and `ui/mod.rs` read the home answer (`available_in(None)` and the readers with the home key).
+  - `crates/micold-client/src/shell/daemon_sync.rs`: `ask_cli_availability` records `asked(req, AvailabilityKey::Home)` for every existing call, and the `DaemonMsg::AiCliAvailability` arm files through `answered`.
+  - Delete `App::cli_availability_asked` from `crates/micold-client/src/main.rs`, `shell/startup.rs` and the `App` literals in `src/main_tests.rs`.
+  - T013, T016 and T017 then switch these sites to per-directory keys.
 - [ ] T006 Update `crates/micold-client/tests/support/state_scan.rs`: `MUTATORS` gains `asked`, `answered` and `env_include_changed`; `READERS` gains `for_dir`, `home`, `unasked` and `available_in`; `READERS` loses `known_available` (data-model.md "Source-scan vocabulary"). Run `feature_write_isolation.rs` and `root_state_is_shared.rs` green.
-- [ ] T007 Migrate the existing tests that seed `state.session.available_providers` to seed `AvailabilityAnswers` (home, or a directory where the test is about a row): `crates/micold-client/tests/unavailable_default_says_so.rs`, `session_start_press.rs`, `provider_choice_surfaces.rs`, `missing_cli_is_reported_where_it_is_chosen.rs` and `features_session.rs`. In `cli_availability_comes_from_the_service.rs`, replace the vacuity spelling `available_providers = Some(` with the new write (`.answered(`).
+- [ ] T007 Migrate the existing tests that seed `state.session.available_providers` to seed `AvailabilityAnswers` (home, or a directory where the test is about a row): `crates/micold-client/tests/unavailable_default_says_so.rs`, `session_start_press.rs`, `provider_choice_surfaces.rs`, `missing_cli_is_reported_where_it_is_chosen.rs`, `a_field_note_shares_its_fields_column.rs` and `features_session.rs`. In `crates/micold-client/src/main_tests.rs`, migrate `connecting_asks_which_clis_the_service_can_run` to read the home answer, and rewrite `an_answer_to_an_earlier_question_does_not_replace_a_later_one`: its premise (a later directory ask discards the home answer) is reversed by FR-002/FR-009, so it becomes a home-plus-directory "both kept" case (U2/U3 own the same-directory rule). In `cli_availability_comes_from_the_service.rs`, replace the vacuity spelling `available_providers = Some(` with the new write (`.answered(`).
 
-**Checkpoint**: `mise run test-core` is unchanged, and `cargo test -p micold-client --tests` passes with T001–T003 green.
+**Checkpoint**: `mise run test-core` is unchanged, the workspace builds, and `cargo test -p micold-client` passes with T001–T003 green. Behaviour is still today's: every consumer reads home (T040).
 
 ---
 
@@ -98,16 +104,16 @@ the project opens. Settings and reconnects no longer overwrite it.
 
 ### Tests for User Story 1 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T008 [US1] [U22] [U23] [A4] In `crates/micold-client/src/main_tests.rs`, test connect (A1). With active project `/repo/demo`, one valid user worktree, one hidden agent worktree and one `Missing` worktree:
+- [ ] T008 [US1] [U22] [U23] [A4] In `crates/micold-client/src/main_tests.rs`, test connect (C1-A1). Add a helper beside `connected_with_outbox` in `main_tests.rs`, `connect_with_catalog_keeping_outbox(app, snapshot)`, which connects with the given catalog and does **not** drain what the connect sent (the existing helper hard-codes an empty `/repo/demo` catalog and drains). With active project `/repo/demo`, one valid user worktree, one hidden agent worktree and one `Missing` worktree:
   - After `Welcome`, the outbox holds exactly one `AiCliAvailabilityRequest { cwd: None }` and one for each of `/repo/demo` and `/repo/demo/.claude/worktrees/<dir>`. That is D = 2 directory requests (FR-006, FR-007, SC-004).
   - A second `Welcome` (reconnect) clears held answers and asks the same set again (FR-011, US1-4).
 - [ ] T009 [US1] [A1] [A2] [A5] [U23] In `crates/micold-client/src/main_tests.rs`, test filing:
   - Answers for the root and the worktree arrive in reverse order. Each row's `start_affordance_offers_a_choice` reflects its own answer (FR-001, FR-009).
   - An answer to a request sent before a reconnect is dropped.
-  - With `Q` answering `[ClaudeCode]`, `Q`'s rows offer no choice and the primary press yields `Start(ClaudeCode)` (A2).
-  - With default `Pi` held only in `P`'s answer, the primary press on `P`'s row yields `Start(Pi)` (A5).
-- [ ] T010 [US1] [A3] [U24] [U25] In `crates/micold-client/src/main_tests.rs`, test Settings (A2, US1-3, FR-002, FR-008). With `P`'s rows holding `[ClaudeCode, Pi]`, `Settings(Opened)` asks `cwd: None` only, and its answer `[ClaudeCode]` leaves `P`'s rows offering the choice. `StartMenuOpened` on a worktree row asks for that row's `location_dir` (U25).
-- [ ] T011 [US1] [U26] [U27] In `crates/micold-client/src/main_tests.rs`, test project open and the catalog push (A4, A5, FR-004, FR-006):
+  - With `Q` answering `[ClaudeCode]`, `Q`'s rows offer no choice and the primary press yields `Start(ClaudeCode)` (acceptance A2).
+  - With default `Pi` held only in `P`'s answer, the primary press on `P`'s row yields `Start(Pi)` (acceptance A5).
+- [ ] T010 [US1] [A3] [U24] [U25] In `crates/micold-client/src/main_tests.rs`, test Settings (C1-A2, US1-3, FR-002, FR-008). With `P`'s rows holding `[ClaudeCode, Pi]`, `Settings(Opened)` asks `cwd: None` only, and its answer `[ClaudeCode]` leaves `P`'s rows offering the choice. `StartMenuOpened` on a worktree row asks for that row's `location_dir` (U25).
+- [ ] T011 [US1] [U26] [U27] In `crates/micold-client/src/main_tests.rs`, test project open and the catalog push (C1-A4, C1-A5, FR-004, FR-006):
   - Opening a project asks once per wanted directory, and opening it again asks nothing new.
   - A `CatalogChanged` carrying one new worktree asks for exactly that directory.
 - [ ] T012 [P] [US1] [A1] [U35] [U36] In `crates/micold-client/tests/provider_choice_surfaces.rs`, test rendered surfaces (FR-008, US1-1):
@@ -117,10 +123,10 @@ the project opens. Settings and reconnects no longer overwrite it.
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] [U23] In `crates/micold-client/src/shell/daemon_sync.rs`, make `ask_cli_availability(app, AvailabilityKey)` record `asked(req, key)`, and make the `DaemonMsg::AiCliAvailability` arm call `answered(req, CliAvailability { available, source })`. Delete `App::cli_availability_asked` from `crates/micold-client/src/main.rs`, `crates/micold-client/src/shell/startup.rs` and the `App` literals in `crates/micold-client/src/main_tests.rs`.
+- [ ] T013 [US1] [U23] In `crates/micold-client/src/shell/daemon_sync.rs`, change `ask_cli_availability` to take the `AvailabilityKey` it asks for (T040 hard-wired `Home`), sending `cwd: None` for `Home` and `Some(dir)` for `Dir(dir)`, so an answer is filed under the key its request named.
 - [ ] T014 [US1] [U22] [U23] [A4] In `crates/micold-client/src/shell/daemon_sync.rs`, add `sync_cli_availability(app)` and wire `on_connected`. The sync asks `unasked(wanted_availability_dirs(&app.core))` in this milestone; the pruning `retain` lands in T026. `on_connected` does `clear()`, sets `asked_under` from `Welcome`'s env-include settings, asks `Home` (the existing call), then syncs (research R5).
-- [ ] T015 [US1] [U26] [U27] In `crates/micold-client/src/shell/daemon_sync.rs`, call `sync_cli_availability` in the `DaemonMsg::CatalogChanged` arm after `reconcile_catalog(.., true)`. In `crates/micold-client/src/shell/workspace.rs`, call it in `open_verified_project` and `on_known_project_reopened` after their `set_worktrees` (C1 A4, A5).
-- [ ] T016 [US1] [U24] [U25] In the `SessionMsg::StartMenuOpened` arm of `crates/micold-client/src/main.rs`, ask with `AvailabilityKey::Dir(location_dir(&location))` (C1 A3). Rewrite the arm's comment, which still speaks of "the availability set" and two named events. In `crates/micold-client/src/shell/persist.rs`, keep `Settings(Opened)` asking `AvailabilityKey::Home` (A2).
+- [ ] T015 [US1] [U26] [U27] In `crates/micold-client/src/shell/daemon_sync.rs`, call `sync_cli_availability` in the `DaemonMsg::CatalogChanged` arm after `reconcile_catalog(.., true)`. In `crates/micold-client/src/shell/workspace.rs`, call it in `open_verified_project` and `on_known_project_reopened` after their `set_worktrees` (C1-A4, C1-A5).
+- [ ] T016 [US1] [U24] [U25] In the `SessionMsg::StartMenuOpened` arm of `crates/micold-client/src/main.rs`, ask with `AvailabilityKey::Dir(dir)` where `dir = location_dir(&location)`; when that is `None` (no active project, so no row and no list), ask nothing (C1-A3). Rewrite the arm's comment, which still speaks of "the availability set" and two named events. In `crates/micold-client/src/shell/persist.rs`, keep `Settings(Opened)` asking `AvailabilityKey::Home` (C1-A2).
 - [ ] T017 [US1] [A1] [A2] [A5] [U35] [U36] Make each consumer read its own key:
   - `crates/micold-client/src/ui/sidebar.rs`: each worktree row and the Default row pass their `location_dir` to `start_press` and `start_affordance_offers_a_choice`. Update the doc comment on `start_press` about "the set this decision reads".
   - `crates/micold-client/src/ui/mod.rs`: the Settings view takes `availability.home()`, and `session_start_menu_items` reads the menu location's directory.
@@ -174,7 +180,7 @@ and rows that reappear are asked again. Nothing else asks, and nothing is schedu
 
 ### Tests for User Story 3 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T020 [US3] [A8] [U32] [U33] [U34] In `crates/micold-client/src/main_tests.rs`, test the env-include refresh (A7, SC-005, US3-1):
+- [ ] T020 [US3] [A8] [U32] [U33] [U34] In `crates/micold-client/src/main_tests.rs`, test the env-include refresh (C1-A7, SC-005, US3-1):
   - **This window's save**: `apply_save` switches env-include off, then its `SettingsChanged` echo arrives. The echo re-asks `Home` and every wanted directory, and held answers stay readable until replaced.
   - **Another window's save**: a `SettingsChanged` with changed env-include also re-asks.
   - A `SettingsChanged` changing only `scrollback_lines` asks nothing.
@@ -186,15 +192,15 @@ and rows that reappear are asked again. Nothing else asks, and nothing is schedu
 - [ ] T022 [US3] [A9] [A10] [U25] In `crates/micold-client/src/main_tests.rs`, test a held row's list open (US3-3). Opening the start list on a row whose answer is held still sends a request for that directory, and the new answer replaces the held one (A10). With every row answered, hover, scroll and a `view` call send no availability request (A9).
 - [ ] T023 [P] [US3] [A9] [U37] Write the tripwire `crates/micold-client/tests/availability_is_asked_only_on_named_events.rs`, modelled on `tests/refresh_is_only_on_demand.rs` (research R10, SC-003, FR-006):
   - `MARKERS` are `ask_cli_availability`, `sync_cli_availability`, `refresh_cli_availability` and `ClientMsg::AiCliAvailabilityRequest`.
-  - `ALLOWED` holds one entry per contract C1 site (A1–A7) with its reason, plus the function definitions.
+  - `ALLOWED` holds one entry per contract C1 site (C1-A1 to C1-A7, C1-A5b) with its reason, plus the function definitions.
   - The scan fails on an unlisted line or a stale entry, fails on any line under `ui/`, and skips `src/main_tests.rs` and `#[cfg(test)]` modules.
 
 ### Implementation for User Story 3
 
-- [ ] T024 [US3] [A8] [U32] [U33] [U34] In the `DaemonMsg::SettingsChanged` arm of `crates/micold-client/src/shell/daemon_sync.rs`, build `EnvIncludeSettings` from the echo. When `availability.env_include_changed(..)`, call a new `refresh_cli_availability(app)`, which asks `Home` and every wanted directory without dropping held answers (research R6, C1 A7).
+- [ ] T024 [US3] [A8] [U32] [U33] [U34] In the `DaemonMsg::SettingsChanged` arm of `crates/micold-client/src/shell/daemon_sync.rs`, build `EnvIncludeSettings` from the echo. When `availability.env_include_changed(..)`, call a new `refresh_cli_availability(app)`, which asks `Home` and every wanted directory without dropping held answers (research R6, C1-A7).
 - [ ] T025 [US3] [U29] [U31] In `crates/micold-client/src/main.rs`, add shell arms:
-  - `Message::Project(ProjectMsg::ForgetConfirmed)` runs `sync_cli_availability` after the existing handling (A6).
-  - A new `Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled)` arm applies the reducer through `app.core.update`, then syncs (A5b).
+  - `Message::Project(ProjectMsg::ForgetConfirmed)` runs `sync_cli_availability` after the existing handling (C1-A6).
+  - A new `Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled)` arm applies the reducer through `app.core.update`, then syncs (C1-A5b).
 - [ ] T026 [US3] [U28] [U29] [U30] [U31] In `crates/micold-client/src/shell/daemon_sync.rs`, make `sync_cli_availability` prune: `retain(&wanted)` before asking `unasked(&wanted)`. This makes switch, forget, `Missing` and hide drop answers (FR-003, FR-012).
 - [ ] T027 [US3] Update `docs/user-guide/settings.md` ("The environment a session starts in"): saving a change to environment-include refreshes which CLIs every sidebar row offers, with no restart.
 
@@ -209,7 +215,7 @@ and rows that reappear are asked again. Nothing else asks, and nothing is schedu
 ## Phase 6: Polish & Cross-Cutting Concerns
 
 - [ ] T028 Run quickstart.md §B through the `visual-pass` skill on a private Xvfb display. Record screenshots for steps 1, 2, 6 and 7 and a pass/fail line per step in `specs/033-directory-aware-start-affordance/evidence/quickstart-b.md`.
-- [ ] T029 Search `crates/micold-client/src/` for comments that still describe one window-wide availability set or "two named events" (`grep -rn "available_providers\|named events\|availability set" crates/micold-client/src`) and rewrite them against contract C1.
+- [ ] T029 Search `crates/micold-client/src/` for comments that still describe one window-wide availability set or "two named events" (`grep -rn "available_providers\|named events\|availability set" crates/micold-client/src`) and rewrite them against contract C1. The two historical notes naming the removed `Capabilities::available_providers()` (`shell/capabilities.rs`, `features/session.rs`) may stay, because they describe the pre-027 probe and not the window-wide set.
 
 ---
 
@@ -225,18 +231,20 @@ and rows that reappear are asked again. Nothing else asks, and nothing is schedu
 - **Polish (Phase 6)** depends on all stories.
 - **Outer-loop gates** T030–T039 close each story: a story is complete only when its acceptance
   behaviors (A1–A10) are green. They are numbered after T029 because the id sequence was set before
-  the test list; they sit at the end of their story's phase and belong to that story's milestone.
+  the test list (T040 likewise sits in Phase 2 after T005); they sit at the end of their story's phase and belong to that story's milestone.
 
 ### Within Each Phase
 
 Tests first, confirmed failing for the stated reason, then implementation (Principle I). T004
-before T005 (the readers read the new type). T006 and T007 follow T004–T005 so that the guards and
-the migrated tests compile against the new API.
+before T005 (the readers read the new type), then T040 (consumers onto the new API, today's
+behaviour). T006 and T007 follow T040 so that the guards and the migrated tests compile against the
+new API. The US1 tests (T008–T012, T019) are written after T040, when they compile and fail for the
+stated reason (a row reads home, not its own answer).
 
 ### Parallel Opportunities
 
-- T001, T002 and T003 touch disjoint test files (T001 and T003 share `directory_availability.rs`,
-  so run them in sequence; T002 is parallel with both).
+- T002 (`features_session.rs`) is parallel with T001 and T003, which share
+  `directory_availability.rs` and run in sequence.
 - T012 (`provider_choice_surfaces.rs`) is parallel with T008–T011 (`main_tests.rs`).
 - T023 (the tripwire file) is parallel with T020–T022.
 
@@ -259,14 +267,14 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M1 — Each row answers for its own directory 🎯 MVP
 
-- **Tasks**: T001–T019, T030–T036
+- **Tasks**: T001–T019, T030–T036, T040
 - **Deliverable**: On `main`, a CLI that only one project's environment-include script provides is
   offered on that project's rows (chevron shown, list includes it) and on no other project's. Opening
   Settings, reconnecting or opening another row's list no longer replaces a row's answer.
 - **Satisfies**: US1 acceptance scenarios 1–5; US2 acceptance scenarios 1–2; FR-001, FR-002,
   FR-005, FR-006, FR-007, FR-008, FR-009, FR-010, FR-011; FR-003's "at most one per directory, in
   memory" (its "only for rows that exist" pruning is M2); SC-001, SC-002, SC-004
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test directory_availability --test features_session --test provider_choice_surfaces`
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --tests` (the new `directory_availability.rs`, and the extended and migrated `features_session.rs`, `provider_choice_surfaces.rs`, `missing_cli_is_reported_where_it_is_chosen.rs` and T007 files)
   and `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide availability` (the T008–T011 and T019 cases, each named with `availability`); quickstart §B steps 1–6
 - **Depends on**: —
 
@@ -290,5 +298,5 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   quickstart §B passing end to end against a real service, and no source comment describes the
   window-wide set any more.
 - **Satisfies**: SC-001, SC-002, SC-005 (observed end to end)
-- **Verify**: read `evidence/quickstart-b.md`; `grep -rn "available_providers" crates/micold-client/src` prints nothing
+- **Verify**: read `evidence/quickstart-b.md`; `grep -rn "session.available_providers\|\.available_providers =\|cli_availability_asked" crates/micold-client/src` prints nothing
 - **Depends on**: M1, M2
