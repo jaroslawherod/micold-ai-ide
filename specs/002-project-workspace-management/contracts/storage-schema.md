@@ -82,7 +82,9 @@ JSON, UTF-8. Top-level object:
   behavior (research R8; FR-016).
 - **Unparseable / corrupt file** → degrade to an empty list rather than crashing; the app MAY
   preserve the corrupt file (e.g., rename to `projects.json.bak`) before rewriting (research R8;
-  SC-009). **This clause is scoped to the catalog file only** (bugfix BUG-001) — see "Per-project
+  SC-009). The recovery MUST be reported to the user, naming the preserved file when there is
+  one; a missing file (first run) is not a recovery and says nothing (FR-012d, bugfix BUG-007).
+  **This clause is scoped to the catalog file only** (bugfix BUG-001) — see "Per-project
   storage split" below for why per-project state (sessions, worktree names, mode) no longer shares
   this file or this blast radius.
 - **`last_active` referencing an unknown/removed path** → treated as no active project (`null`
@@ -198,3 +200,5 @@ Covered by `tests/store_roundtrip.rs` against a `tempfile` directory (never the 
       git flag and `last_active` it holds as `LoadStatus::Loaded`, and leaves no `projects.json.bak`.
 - [ ] **(BUG-006)** A per-project state file with no `schema_version` loads that project's state and
       does not mark the project unreadable.
+- [ ] **(BUG-007)** A launch whose `projects.json` cannot be parsed shows a notice that the project
+      list could not be read, naming `projects.json.bak`; a launch with no `projects.json` shows none.

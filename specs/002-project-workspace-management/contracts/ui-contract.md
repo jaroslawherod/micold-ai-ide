@@ -71,7 +71,9 @@ the single main window, consistent with feature 001's overlay pattern.
   filesystem** and reloaded on launch; the feature works fully **offline** (FR-008; Principle
   IV). On-disk format is defined in [storage-schema.md](./storage-schema.md).
 - A missing or corrupt store degrades to an **empty** known-projects list; the app remains usable
-  and shows the empty state (research R8; SC-009).
+  and shows the empty state (research R8; SC-009). A **corrupt** store is reported with a
+  non-blocking notice that the project list could not be read, naming where the unreadable file
+  was kept; a missing store (first run) is not (FR-012d, bugfix BUG-007).
 - A save failure is surfaced non-fatally; it never crashes the app.
 
 ## C8. Filesystem safety (read-only)
@@ -106,5 +108,6 @@ transitions), store roundtrip tests (`tempfile`), and the manual `quickstart.md`
 - [ ] Rename to empty/whitespace rejected; previous name kept (C6 / FR-020)
 - [ ] Two projects with same name remain distinct by path (C6 / FR-021)
 - [ ] Missing/corrupt store → empty list, app usable (C7 / SC-009)
+- [ ] Corrupt store → notice naming the kept `.bak`; missing store → no notice (C7 / FR-012d)
 - [ ] No filesystem mutation anywhere (C8)
 - [ ] All of the above verified on Linux, macOS, Windows (C9 / SC-010)

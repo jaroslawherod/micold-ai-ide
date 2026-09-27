@@ -200,3 +200,17 @@ value. No migration path is introduced. Saves still write `1`. See FR-012c and t
 contract's compatibility rules and "Versioning" section.
 
 **Bugfix**: 2026-09-27 — BUG-006 Updated from bugfix patch
+
+## Bugfix: a project list that cannot be read at launch (BUG-007, 2026-09-27)
+
+**Storage** (annotates the BUG-001 section above): the catalog's "corrupt → empty" rule is
+unchanged; what changes is that the recovery is reported (FR-012d). The launch read in
+`crates/micold-client/src/shell/startup.rs` (`restore_catalog`) is the one that meets a damaged
+file — `boot` runs it before it starts or dials the daemon, and the sandboxed daemon reads the same
+file — so the notice is raised there, beside `notify_settings_recovery` (010 BUG-025), naming the
+path from a new `ProjectStore::recovery_path` (default `None`; `JsonFileStore` → its
+`projects.json.bak`). The daemon's own recovery, reached only when it restarts without a launch in
+front of it, is logged at `warn` naming the `.bak`, which puts it in the diagnostics ring the
+client's "recent issues" request reads. No wire change and no `PROTOCOL_VERSION` bump.
+
+**Bugfix**: 2026-09-27 — BUG-007 Updated from bugfix patch

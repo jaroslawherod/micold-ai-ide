@@ -474,3 +474,36 @@ them carries `"schema_version":1`, which is why the version-less case was never 
   migration path is added; there is none to extend (depends on T070, T071; FR-012c)
 
 **Bugfix**: 2026-09-27 — BUG-006 Added Phase 12 (T070–T072). See `bugs/BUG-006.md`.
+
+## Phase 13: Bugfix BUG-007 — A Project List That Cannot Be Read at Launch
+
+**Purpose**: A `projects.json` that cannot be parsed is still recovered to an empty list, but the
+user is told, and shown where the unreadable file was kept (FR-012d; GitHub issue #433). See
+`bugs/BUG-007.md` and plan.md "Bugfix: a project list that cannot be read at launch".
+
+**No false completion.** T026 returns the recovery through `LoadOutcome`, and it does; T028/T029
+hydrate the workspace from it at startup, and they do. None asked for the status to be reported.
+
+**Tests first (Constitution Principle I).**
+
+- [ ] T073 [US2] Failing regression test first, in `crates/micold-client/src/shell/startup.rs`
+  (`a_launch_that_recovers_the_project_list_tells_the_user_where_the_old_one_went`): a truncated
+  `projects.json` behind a real `JsonFileStore`, launched through `restore_from_disk`, leaves a
+  visible notice that mentions the project list and names the `projects.json.bak` path; beside it,
+  a launch with no `projects.json` shows no notice. Confirm the first fails on `origin/main` with an
+  empty notice before T074 (FR-012d)
+- [ ] T074 Add `ProjectStore::recovery_path() -> Option<PathBuf>` (default `None`) in
+  `crates/micold-core/src/store.rs`, returning `projects.json.bak` for `JsonFileStore`; add
+  `notify_catalog_recovery` beside `notify_settings_recovery` in
+  `crates/micold-client/src/shell/persist.rs` — `Recovered` notifies, naming the kept file only when
+  it exists; `Missing`/`Loaded` say nothing — and call it from `restore_catalog` with the status its
+  `load` returned (depends on T073; FR-012d)
+- [ ] T075 Daemon: when `Catalog::load` recovers, `server::run` logs at `warn` naming the preserved
+  file (from a `Catalog::recovered_backup()` accessor, tested in
+  `crates/micold-daemon/tests/catalog_adoption.rs`), so the recovery reaches the diagnostics ring
+  the client's "recent issues" request reads (010 data-model C4; FR-012d). No protocol change
+- [ ] T076 [P] User guide: "If your project list can't be read" in
+  `docs/user-guide/project-selection.md`, quoting the notice and saying how to restore from the
+  `.bak` (Principle VII; FR-012d)
+
+**Bugfix**: 2026-09-27 — BUG-007 Added Phase 13 (T073–T076). See `bugs/BUG-007.md`.
