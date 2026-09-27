@@ -1,8 +1,8 @@
 //! The two surfaces that offer a CLI never offer one that is not installed (feature 026, T071 —
 //! FR-006).
 //!
-//! FR-006's rule is about what the user is *shown*, and both surfaces read the availability set
-//! T014a put on `State`: the Settings select takes the home answer (`availability.home()`), the
+//! FR-006's rule is about what the user is *shown*, and both surfaces read the per-directory
+//! answers on `State` (feature 033): the Settings select takes the home answer (`availability.home()`), the
 //! session start list takes `State::offered_providers(dir)`. The pure layer is covered in
 //! `features_session.rs`; what is covered here is that the drawn surfaces actually follow it —
 //! neither reaches for `AiCli::ALL`, which is the one-token change that would make both of them

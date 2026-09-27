@@ -7,8 +7,8 @@
 //! `StartIntent::OfferChoice` returned the same value for this press as for a deliberate press on
 //! the chevron. The reason was gone before anything could draw it.
 //!
-//! So the reason travels with the press, and the reducer re-checks it against the availability set
-//! **the same press refreshed** before saying anything. That ordering is what
+//! So the reason travels with the press, and the reducer re-checks it against the answer the row
+//! holds for its own directory (feature 033) before saying anything. That re-check is what
 //! [`a_default_that_turned_out_to_be_installed_says_nothing`] holds: the flag says why the user
 //! pressed, never what is true now.
 
@@ -143,9 +143,9 @@ fn the_chevron_opens_the_same_list_and_says_nothing() {
 
 #[test]
 fn a_default_that_turned_out_to_be_installed_says_nothing() {
-    // The press published the reason; the binary then re-probed `PATH` on the same message and
-    // found the CLI (research R11's second named event). The reason is stale by one event, and the
-    // reducer is what settles it — a banner naming a CLI the list is about to offer is a lie.
+    // The press published the reason, but the row's answer already lists the CLI — an event since
+    // the press's own reading (one of contract C1's) brought it in. The reason is stale by one
+    // event, and the reducer is what settles it — a banner naming a CLI the list offers is a lie.
     let mut state = state_with(AiCli::Copilot, &[AiCli::ClaudeCode, AiCli::Copilot]);
 
     open(&mut state, Some(AiCli::Copilot));

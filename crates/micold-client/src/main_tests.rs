@@ -514,18 +514,17 @@ fn a_service_restart_resumes_only_the_session_being_restored() {
 }
 
 /// BUG-002: connecting is one of the moments the client asks which AI CLIs the service can run
-/// (027 FR-023c, T144; today one of feature 033's contract C1 events), and the first one the user
-/// does not trigger by hand.
+/// (027 FR-023c, T144; today contract C1's A2), and it is one the user does not trigger by hand.
 ///
 /// It asked into a handle it had not stored yet. `ask_cli_availability` returns early when
 /// `app.daemon` is `None`, which it is on a first connect and — since `on_disconnected` clears
-/// it — on every reconnect after, so the request was never sent. The then window-wide
-/// `available_providers` set (since replaced by per-directory answers, feature 033) stayed `None`
-/// for the whole run, and `None` is read as the empty set by everything that
-/// decides what to *offer*: no override chevron on the sidebar row (026 FR-004, FR-006), and a
-/// default that is not installed started instead of offering the CLIs that are (026 FR-002).
-/// Opening Settings was the only thing that could repair it, because the other two ask sites of
-/// the time were that view and the menu the missing chevron opens.
+/// it — on every reconnect after, so the request was never sent. The single answer the client
+/// held then (feature 033 later made it one per directory) stayed `None` for the whole run, and
+/// `None` is read as the empty set by everything that decides what to *offer*: no override
+/// chevron on the sidebar row (026 FR-004, FR-006), and a default that is not installed started
+/// instead of offering the CLIs that are (026 FR-002).
+/// Opening Settings was the only thing that could repair it: in 027 the only other places that
+/// asked were that view and the menu the missing chevron opens.
 ///
 /// Two assertions, because either alone passes while wrong: the send is what broke, the
 /// chevron is why anyone noticed. Neither is visible to

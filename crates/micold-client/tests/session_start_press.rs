@@ -223,10 +223,9 @@ fn pressing_start_with_the_default_installed_still_starts_it_in_one_interaction(
 #[test]
 fn the_choice_is_offered_from_the_availability_set_the_press_can_still_refresh() {
     // Why the offer arrives as `SessionStartMenuOpened` rather than as a message of its own: that
-    // message is one of research R11's two named events, and the binary re-probes `PATH` on it
-    // before the reducer opens the list. A separate message would open the list on the set as it
-    // was at the last of those events, which for a user who has installed nothing since launch is
-    // the set from launch.
+    // message is one of feature 033's contract C1 events (A3), and the binary sends a fresh ask for
+    // this row's directory on it. A separate message would skip that ask, and the list would stay
+    // on the answer from the row's last event until some other event asked again.
     //
     // The binary's handler is not reachable from here; what is, and what keeps the two joined, is
     // that the press publishes exactly the message that handler is written against — the same one
