@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/a-project-local-cli-stays-unreachable-in-that-project
 - **Started**: 2026-09-27
 - **Phase**: 4-milestones
-- **Next step**: Phase 4 — M3 (T028–T029): visual pass, comment sweep, gate, reviews, PR.
+- **Next step**: Phase 5 close after M3 merges (wait for the M3 PR's `ci complete`, merge, then close).
 
 ## Pull requests
 
@@ -18,6 +18,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #417 | Design (clarify, plan, tasks, milestones) | merged | 84d61968 |
 | #426 | M1 | merged | 2bd447b2 |
 | #443 | M2 | merged | 7f9b23be |
+| M3PR | M3 | open | — |
 
 ## Milestones
 
@@ -25,7 +26,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|---|
 | M1 | T001–T019, T030–T036, T040 | Each row offers the CLIs its own directory provides; Settings, reconnect and another row's list never replace it | #426 | merged |
 | M2 | T020–T027, T037–T039 | Env-include changes refresh every row; rows that go drop answers, rows that come back are asked; tripwire pins the askers | #443 | merged |
-| M3 | T028–T029 | quickstart §B recorded passing end to end; no comment describes the window-wide set | — | in-progress |
+| M3 | T028–T029 | quickstart §B recorded passing end to end; no comment describes the window-wide set | M3PR | in-review |
 
 ## Decisions
 
@@ -54,6 +55,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M2 | A | F2: a change to a disabled env-include's path or timeout still refreshes | Contract C1 A7 triggers on the echoed settings differing from `asked_under`; normalising "effectively off" would redefine that. It is one user-initiated save, not a per-render ask, so SC-003 is not at stake |
 | M2 | A | F3: a refresh starts N+1 script runs at once on the daemon | Daemon-side concurrency is spec Out of Scope (research R11, the daemon's missing single-flight); the client sends one request per row, as C1 A7 specifies |
 | M2 | A | F4: sync from a generic "wanted set changed" check instead of per-event sites | Contract C1 is a closed list of named askers, pinned by the tripwire; a generic hook after every update is the design C1 chose against |
+| M3 | B | F5 (MINOR): comments say the list "opens" though `StartMenuOpened` also toggles it closed | Harmless; the message name and contract C1 A3 both call it opening |
 | M1 | B | F3 (and A F7): `location_dir(..).unwrap_or_default()` empty-path sentinel in sidebar | Unreachable: rows exist only with a project open, so `location_dir` is always Some there. Kept minimal for M1 |
 
 ### M2 review outcomes
@@ -62,10 +64,17 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - Review A: 7 findings. Fixed: F1 (= B F1), F5 (one `env_include_settings` helper), F6 (ForgetConfirmed comment), F7 (`*`-prefixed lines no longer skipped). Declined: F2, F3, F4 (table above).
 - M1 review A's deferred F1/F2/F3/F8 are covered: prune in `sync_cli_availability` (T026), the `SettingsChanged` refresh (T024), the `ForgetConfirmed` and `ShowAgentWorktreesToggled` arms (T025), each with a test (U28–U33).
 
+### M3 review outcomes
+
+- Visual pass (quickstart §B, forked Sonnet on a private Xvfb display, pinned pair from this worktree): all 8 steps PASS; `evidence/quickstart-b.md`.
+- Review A: 7 findings, all comment/record accuracy, all fixed: F1 (the StartMenuOpened doc claimed the reducer checks after the refresh; the ask is asynchronous), F2/F3 (stale R11/`PATH`-probe wording in `tests/session_start_press.rs` and `tests/unavailable_default_says_so.rs`), F4 (T029's own grep hits), F5 (startup comment: wanted set, not every row; a round trip, not one frame), F6 (main_tests wording), F7 (line width).
+- Review B round 1: CHANGES — F1 MAJOR (wrong C1 event number, A2 → A1), F2 MAJOR (worktree-row chevrons are hover-revealed, so the step 1/6/7 images show Default rows only), F3–F8 MINOR. Fixed F1, F3, F4, F6, F7, F8; F2 by stating in the record what the worktree-row claims rest on (log, `/proc`, M1 tests) rather than re-capturing; F5 declined (table above). Round 2 (sonnet): CLEAN.
+
 ## Open escalation
 
 None.
 
 ## Follow-ups not done
 
+- Review A M3 F1: the not-installed banner is judged against the row's previous answer because the fresh ask is asynchronous; a CLI that became available since the last event gets a banner the arriving reply then contradicts. Pre-existing ordering, not changed in M3.
 - Review A M1 F5: time out an in-flight availability request that never gets a reply (no daemon path drops one today).
