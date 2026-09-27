@@ -1,0 +1,12 @@
+49:2026-09-27T18:33:34.120027Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode]
+50:2026-09-27T18:33:34.120074Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode, Pi]
+51:2026-09-27T18:35:41.445708Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode, Pi]
+54:2026-09-27T18:36:18.346312Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode, Pi]
+61:2026-09-27T18:37:31.397330Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode]
+67:2026-09-27T18:38:35.464475Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode, Pi]
+68:2026-09-27T18:38:35.464525Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode, Pi]
+70:2026-09-27T18:38:43.342931Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode]
+77:2026-09-27T18:39:32.442301Z  INFO micold_daemon::server: client attached to daemon client_build=micold-ai-ide/0.15.0 client_window=2789069
+80:2026-09-27T18:39:32.614567Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode]
+81:2026-09-27T18:39:32.614562Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode, Pi]
+84:2026-09-27T18:39:32.786309Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode, Pi]

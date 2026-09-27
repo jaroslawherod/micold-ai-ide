@@ -1,0 +1,16 @@
+2026-09-27T18:46:29.333479Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode]
+2026-09-27T18:46:29.333460Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode]
+2026-09-27T18:46:29.333467Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode]
+2026-09-27T18:46:48.015575Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode]
+2026-09-27T18:46:54.462284Z  INFO micold_daemon::catalog: settings write: writer=daemon pid=2838442 base=loaded result=ok
+2026-09-27T18:46:54.462482Z  INFO micold_daemon::catalog: settings write: writer=daemon pid=2838442 base=loaded result=ok
+2026-09-27T18:46:54.462651Z  INFO micold_daemon::catalog: settings write: writer=daemon pid=2838442 base=loaded result=ok
+2026-09-27T18:46:54.462824Z  INFO micold_daemon::catalog: settings write: writer=daemon pid=2838442 base=loaded result=ok
+2026-09-27T18:46:54.589378Z  WARN micold_daemon::state: env-include resolution did not succeed outcome=NonZeroExit { code: 1, diagnostic: "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n" } cwd=/tmp/claude-1000/-home-jaro-workspaces-micold-ai-ide--claude-worktrees-fix-a-project-local-cli-stays-unreachable-in-that-project/76fde83d-9792-4337-b682-23bd70d19f8f/scratchpad/vp033/repos/P/.claude/worktrees/fix-wt2
+2026-09-27T18:46:54.589502Z  WARN micold_daemon::state: env-include resolution did not succeed outcome=NonZeroExit { code: 1, diagnostic: "bash: cannot set terminal process group (-1): Inappropriate ioctl for device\nbash: no job control in this shell\n" } cwd=/home/jaro
+2026-09-27T18:46:54.589547Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode]
+2026-09-27T18:46:54.589552Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode, Pi]
+2026-09-27T18:46:54.589645Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode]
+2026-09-27T18:46:54.589839Z DEBUG micold_daemon::server: AI CLI availability reported client=1 available=[ClaudeCode, Pi]
+2026-09-27T18:46:54.630793Z DEBUG alacritty_terminal::term: Term::resize dimensions unchanged
+--- idle check: no new lines appended during 65s idle wait (line count stayed at 151) ---
