@@ -233,4 +233,4 @@ Tasks T070–T072.
 **Bugfix**: 2026-09-27 — BUG-007 FR-012d added: a `projects.json` that cannot be read at launch is
 still recovered to an empty list, but the user is told, and shown where the unreadable file was
 kept. New edge case "Project list that cannot be read at launch". Storage-schema and UI contracts
-amended. Tasks T073–T076 (GitHub issue #433).
+amended. Tasks T073–T078 (GitHub issue #433).

@@ -493,18 +493,30 @@ hydrate the workspace from it at startup, and they do. None asked for the status
   not claim the list was reset — on a warm launch the daemon's catalog restores it); beside it,
   a launch with no `projects.json` shows no notice. Confirm the first fails on `origin/main` with an
   empty notice before T074 (FR-012d)
-- [X] T074 Add `ProjectStore::recovery_path() -> Option<PathBuf>` (default `None`) in
-  `crates/micold-core/src/store.rs`, returning `projects.json.bak` for `JsonFileStore`; add
-  `notify_catalog_recovery` beside `notify_settings_recovery` in
-  `crates/micold-client/src/shell/persist.rs` — `Recovered` notifies, naming the kept file only when
-  it exists; `Missing`/`Loaded` say nothing — and call it from `restore_catalog` with the status its
-  `load` returned (depends on T073; FR-012d)
+- [X] T074 Add `notify_catalog_recovery(status, preserved, core)` beside `notify_settings_recovery`
+  in `crates/micold-client/src/shell/persist.rs` — `Recovered` notifies at the error level, naming
+  the copy the load made when there is one; `Missing`/`Loaded` say nothing — and call it from
+  `restore_catalog` with the status and `preserved` its `load` returned (depends on T073, T077;
+  FR-012d)
 - [X] T075 Daemon: when `Catalog::load` recovers, `server::run` logs at `warn` naming the preserved
-  file (from a `Catalog::recovered_backup()` accessor, tested in
+  file (from a `Catalog::recovered_backup()` accessor fed by `LoadOutcome::preserved`, tested in
   `crates/micold-daemon/tests/catalog_adoption.rs`), so the recovery reaches the diagnostics ring
   the client's "recent issues" request reads (010 data-model C4; FR-012d). No protocol change
 - [X] T076 [P] User guide: "If your project list can't be read" in
   `docs/user-guide/project-selection.md`, quoting the notice and saying how to restore from the
   `.bak` (Principle VII; FR-012d)
 
-**Bugfix**: 2026-09-27 — BUG-007 Added Phase 13 (T073–T076). See `bugs/BUG-007.md`.
+- [X] T077 [P] Store (review A of M1), failing tests first in
+  `crates/micold-core/tests/store_roundtrip.rs`: `LoadOutcome::preserved` reports the copy the load
+  made (never a pre-existing `.bak`); a second recovery keeps the first copy (`projects.json.bak`,
+  then `.bak.2`, …); a file that is not valid text is moved aside too. Implement in
+  `crates/micold-core/src/store.rs` (FR-012d, FR-008)
+- [X] T078 Daemon writes back (review A of M1), failing test first in
+  `crates/micold-daemon/tests/catalog_adoption.rs`: a daemon holding projects whose `projects.json`
+  has gone writes it back on connect (`Catalog::restore_missing_file`, via `ProjectStore::is_missing`,
+  called before `Welcome` in `crates/micold-daemon/src/server.rs`); an empty catalog writes nothing.
+  Closes the warm-launch loss: the launch moved the file aside, the daemon's list reached the screen
+  but not the disk, and an idle stop left the next launch empty (FR-008, SC-003)
+
+**Bugfix**: 2026-09-27 — BUG-007 Added Phase 13 (T073–T078; T077–T078 from review A of M1). See
+`bugs/BUG-007.md`.

@@ -152,10 +152,16 @@ pub async fn run() -> io::Result<()> {
     // without one in front of it — a restart while the app stays open, or a kept-running sandbox
     // coming back after a reboot.
     if catalog.load_status() == micold_core::store::LoadStatus::Recovered {
-        tracing::warn!(
-            kept_as = ?catalog.recovered_backup(),
-            "the saved project list could not be read; starting with an empty one"
-        );
+        match catalog.recovered_backup() {
+            Some(kept) => tracing::warn!(
+                kept_as = %kept.display(),
+                "the saved project list could not be read; starting with an empty one"
+            ),
+            None => tracing::warn!(
+                "the saved project list could not be read and could not be moved aside; \
+                 starting with an empty one"
+            ),
+        }
     } else {
         tracing::info!(load_status = ?catalog.load_status(), "catalog adopted");
     }
@@ -490,6 +496,9 @@ where
     }
 
     // --- Welcome (sent synchronously, so it is unambiguously the first frame the client sees). ---
+    // A launch that met a damaged `projects.json` moved it aside before dialling; the list this
+    // daemon still holds goes back on disk before the window is told about it (002 BUG-007).
+    state.restore_missing_catalog_file();
     let (catalog, settings) = state.welcome_payload();
     framed
         .send(Frame::Control(DaemonMsg::Welcome {

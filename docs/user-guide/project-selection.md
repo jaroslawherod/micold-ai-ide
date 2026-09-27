@@ -55,11 +55,16 @@ projects it held, and tells you so when it starts:
 > Your saved project list could not be read. The unreadable file was kept as
 > `…/projects.json.bak`.
 
-That `.bak` file is the damaged original, untouched, and it names every project folder you had. The
-quickest way back is to open those folders again. To restore the file itself instead, fix it (it is
-plain JSON) and rename it back to `projects.json` while neither Micold nor its session service is
-running — the service keeps its own copy of the list and stops by itself
-[30 minutes after the last window closes](../daemon.md#it-stops-itself-when-nobody-has-used-it-for-30-minutes).
+That `.bak` file is the damaged original, untouched. An earlier copy is never overwritten: if a
+`projects.json.bak` is already there, the new one is called `projects.json.bak.2`, and so on — the
+message always names the one it just made.
+
+If the session service was still running from before, your projects come straight back from its
+own copy of the list, and it writes that list out again, so there is nothing to restore. Otherwise
+the `.bak` names every project folder you had, and the quickest way back is to open those folders
+again. To restore the file itself instead, fix it (it is plain JSON) and rename it back to
+`projects.json` while neither Micold nor its session service is running — the service stops by
+itself [30 minutes after the last window closes](../daemon.md#it-stops-itself-when-nobody-has-used-it-for-30-minutes).
 A first launch, with no list saved yet, shows no message.
 
 ## Switching projects from the top bar

@@ -157,24 +157,23 @@ pub fn notify_settings_recovery(
 ///
 /// The catalog's twin of [`notify_settings_recovery`], and silent until now for the same reason:
 /// `restore_catalog` kept only the workspace out of `load`, so a damaged `projects.json` was moved
-/// to `.bak` and the launch looked exactly like a first run.
+/// aside and the launch looked exactly like a first run.
 ///
 /// The wording says only what is true on every launch. On a cold one the list starts empty; on a
 /// warm one the daemon still holds the catalog it loaded before the file was damaged, and its
-/// `Welcome` puts the projects back a moment later. Either way the file could not be read and was
-/// kept — "your list was reset" would be false for the second.
-pub fn notify_catalog_recovery(
-    store: &dyn micold_core::store::ProjectStore,
-    status: LoadStatus,
-    core: &mut State,
-) {
+/// `Welcome` puts the projects back a moment later (and the daemon writes them back to disk). Either
+/// way the file could not be read and was kept — "your list was reset" would be false for the
+/// second.
+///
+/// `preserved` is the copy **this** load made, never a `.bak` that happens to be on disk: an older
+/// recovery's copy is not the file that just failed. At the error level, unlike the settings
+/// notice: it stays up long enough to read a path, and a list of projects the user relies on
+/// having gone is the kind of thing the level exists for (as 002 BUG-004's boot notice is).
+pub fn notify_catalog_recovery(status: LoadStatus, preserved: Option<&Path>, core: &mut State) {
     // `Missing` is a first run and `Loaded` the ordinary case: neither recovered anything.
     if status != LoadStatus::Recovered {
         return;
     }
-    // An unreadable file that could not be renamed has no `.bak`; naming one would send the user
-    // looking for a file that is not there.
-    let preserved = store.recovery_path().filter(|path| path.exists());
     let message = match preserved {
         Some(path) => format!(
             "Your saved project list could not be read. The unreadable file was kept as {}.",
@@ -182,7 +181,7 @@ pub fn notify_catalog_recovery(
         ),
         None => "Your saved project list could not be read.".to_string(),
     };
-    core.notify_info(message);
+    core.notify_error(message);
 }
 
 pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core: &mut State) {
@@ -979,37 +978,56 @@ mod settings_recovery_tests {
 #[cfg(test)]
 mod catalog_recovery_tests {
     use super::*;
-    use micold_core::store::FakeProjectStore;
 
-    /// 002 BUG-007: a catalog that was unreadable but could not be moved aside has no `.bak`, so
-    /// the notice still says the list could not be read and names no file the user cannot find.
+    fn visible(core: &State) -> Option<String> {
+        core.notifications
+            .queue
+            .visible()
+            .map(|n| n.message.clone())
+    }
+
+    /// 002 BUG-007: the notice names the copy the load made.
     #[test]
-    fn a_recovery_with_no_preserved_file_is_reported_without_a_path() {
+    fn a_recovered_project_list_names_the_copy_it_was_moved_to() {
         let mut core = State::default();
 
         notify_catalog_recovery(
-            &FakeProjectStore::recovered(),
             LoadStatus::Recovered,
+            Some(Path::new("/data/projects.json.bak.2")),
             &mut core,
         );
 
-        let notice = core
-            .notifications
-            .queue
-            .visible()
-            .expect("a recovered project list must be reported")
-            .message
-            .clone();
-        assert_eq!(notice, "Your saved project list could not be read.");
+        assert_eq!(
+            visible(&core).as_deref(),
+            Some(
+                "Your saved project list could not be read. The unreadable file was kept as \
+                 /data/projects.json.bak.2."
+            )
+        );
     }
 
-    /// A clean read of the catalog says nothing.
+    /// A recovery whose rename failed made no copy, so the notice names no file.
     #[test]
-    fn a_loaded_project_list_is_not_reported() {
+    fn a_recovery_with_no_copy_is_reported_without_a_path() {
         let mut core = State::default();
 
-        notify_catalog_recovery(&FakeProjectStore::new(), LoadStatus::Loaded, &mut core);
+        notify_catalog_recovery(LoadStatus::Recovered, None, &mut core);
 
-        assert!(core.notifications.queue.visible().is_none());
+        assert_eq!(
+            visible(&core).as_deref(),
+            Some("Your saved project list could not be read.")
+        );
+    }
+
+    /// A clean read and a first run say nothing.
+    #[test]
+    fn a_loaded_or_missing_project_list_is_not_reported() {
+        for status in [LoadStatus::Loaded, LoadStatus::Missing] {
+            let mut core = State::default();
+
+            notify_catalog_recovery(status, Some(Path::new("/stale.bak")), &mut core);
+
+            assert!(visible(&core).is_none(), "{status:?} was reported");
+        }
     }
 }

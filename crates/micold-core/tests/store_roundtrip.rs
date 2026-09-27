@@ -117,6 +117,83 @@ fn corrupt_file_is_preserved_as_backup() {
     assert!(path.with_extension("json.bak").exists());
 }
 
+// --- 002 BUG-007: the recovery says where the unreadable file went (FR-012d) ---
+
+/// The load reports the copy it made, so the launch can name it.
+#[test]
+fn a_recovered_catalog_reports_where_it_was_kept() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("projects.json");
+    std::fs::write(&path, "{ \"projects\": [ ").unwrap();
+
+    let out = JsonFileStore::at(path.clone()).load();
+
+    assert_eq!(out.status, LoadStatus::Recovered);
+    assert_eq!(out.preserved, Some(path.with_extension("json.bak")));
+    assert_eq!(
+        std::fs::read_to_string(path.with_extension("json.bak")).unwrap(),
+        "{ \"projects\": [ "
+    );
+}
+
+/// A second recovery never lands on the first one's copy: that copy is the list the first notice
+/// told the user to restore from.
+#[test]
+fn a_second_recovery_keeps_the_first_copy() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("projects.json");
+    let first = path.with_extension("json.bak");
+    std::fs::write(&first, "the twenty projects the first notice pointed at").unwrap();
+    std::fs::write(&path, "damaged again").unwrap();
+
+    let out = JsonFileStore::at(path.clone()).load();
+
+    let second = dir.path().join("projects.json.bak.2");
+    assert_eq!(out.preserved, Some(second.clone()));
+    assert_eq!(
+        std::fs::read_to_string(&first).unwrap(),
+        "the twenty projects the first notice pointed at",
+        "the second recovery overwrote the first copy"
+    );
+    assert_eq!(std::fs::read_to_string(&second).unwrap(), "damaged again");
+}
+
+/// A file that cannot even be read as text is moved aside like a parse failure. Left in place,
+/// the next save would write the empty catalog over the only copy of the list — and a `.bak` left
+/// by an earlier recovery must not be reported as this file's copy.
+#[test]
+fn a_catalog_that_is_not_text_is_moved_aside_too() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("projects.json");
+    std::fs::write(path.with_extension("json.bak"), "an older recovery").unwrap();
+    std::fs::write(&path, [0x7b, 0xff, 0xfe, 0x7d]).unwrap();
+
+    let out = JsonFileStore::at(path.clone()).load();
+
+    assert_eq!(out.status, LoadStatus::Recovered);
+    let kept = dir.path().join("projects.json.bak.2");
+    assert_eq!(out.preserved, Some(kept.clone()));
+    assert_eq!(std::fs::read(&kept).unwrap(), vec![0x7b, 0xff, 0xfe, 0x7d]);
+    assert!(
+        !path.exists(),
+        "the unreadable file was left where a save would overwrite it"
+    );
+}
+
+/// A clean load and a first run moved nothing.
+#[test]
+fn a_loaded_or_missing_catalog_reports_no_copy() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("projects.json");
+    let store = JsonFileStore::at(path.clone());
+    assert_eq!(store.load().preserved, None);
+    assert!(store.is_missing());
+
+    store.save(&Workspace::empty()).unwrap();
+    assert_eq!(store.load().preserved, None);
+    assert!(!store.is_missing());
+}
+
 // --- Feature 008 US3: per-worktree display-name override persistence ---
 
 #[test]
