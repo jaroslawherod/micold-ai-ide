@@ -433,7 +433,7 @@ SC-011). See plan.md "Bugfix: a known-projects list longer than the window".
   and cap the panel at the room below the app bar in
   `crates/micold-client/src/ui/material/menu.rs`; regenerate the layout snapshot if it moves
   (depends on T066; after T067, same fixture).
-- [ ] T069 Visual pass (repo `visual-pass` skill): 20 known projects in a short window — the body
+- [X] T069 Visual pass (repo `visual-pass` skill): 20 known projects in a short window — the body
   list and the switcher panel each show the themed scrollbar, scroll by wheel to the last row, and
   a short catalog shows no scrollbar. Record it in `evidence/BUG-005-visual-pass.md` (depends on
   T067, T068).
