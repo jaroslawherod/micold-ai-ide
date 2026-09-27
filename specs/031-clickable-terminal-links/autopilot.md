@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
-- **Phase**: 5-close
-- **Next step**: the close PR is open; the orchestrator waits for CI and merges, then the handoff
+- **Phase**: done
+- **Next step**: none; the run is complete and every PR is merged
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #408 | M6 Sandboxed file links, translated and confirmed | merged | 188fe02c |
 | #411 | M7 Link context menu | merged | fd883b8e |
 | #414 | M8 SC-005 measured and quickstart Part B complete | merged | ac72d25f |
-| #421 | Close: the three close skills, §B.17 part 2 confirmed, spec Closed | open | |
+| #421 | Close: the three close skills, §B.17 part 2 confirmed, spec Closed | merged | 3ff91c10 |
 
 ## Milestones
 

@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-14
 
-**Status**: Closed 2026-09-27 — shipped in PRs #336, #341, #356, #361, #385, #393, #402, #408, #411, #414
+**Status**: Closed 2026-09-27 — shipped in PRs #336, #341, #356, #361, #385, #393, #402, #408, #411, #414, #421
 
 Closed with one known deviation, recorded rather than fixed. SC-005's 10% sentence does not say
 whether a link is hovered during the stream, and the two readings differ: with nothing hovered the
