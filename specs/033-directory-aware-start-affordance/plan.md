@@ -56,9 +56,9 @@ project sends one request per distinct startable directory (SC-004).
 **Constraints**: no timer, no `Subscription`, no polling (SC-003). No protocol or daemon change
 (spec Assumptions). Principle II: answers keyed by directory never overwrite each other.
 
-**Scale/Scope**: about six client source files touched (`features/session.rs`,
-`shell/daemon_sync.rs`, `shell/workspace.rs`, `shell/persist.rs`, `main.rs`, `ui/sidebar.rs`,
-`ui/mod.rs`). One new state test file, one new tripwire test, updates to existing availability tests
+**Scale/Scope**: nine client source files touched (`features/session.rs`, `app.rs`,
+`shell/daemon_sync.rs`, `shell/workspace.rs`, `shell/persist.rs`, `shell/startup.rs`, `main.rs`,
+`ui/sidebar.rs`, `ui/mod.rs`). One new state test file, one new tripwire test, updates to existing availability tests
 and guards, and two user-guide pages.
 
 ## Constitution Check
@@ -113,6 +113,8 @@ deviation, so Complexity Tracking is empty.
 | FR-010 primary press never substitutes | `start_intent(target, dir)`, same branches as today | `session_start_press.rs`, `unavailable_default_says_so.rs` |
 | FR-011 reconnect discards and re-asks | `on_connected` → `clear` + home + sync (R5) | `main_tests.rs` |
 | FR-012 closing drops answers | sync on switch/forget → `retain` | `main_tests.rs` |
+| SC-001 the project's CLI reachable in ≤ 2 presses, and nowhere else | FR-001 readers + eager sync (C1 A1, A4) | `main_tests.rs` (A1, A2, A5); §B 1–2 |
+| SC-002 rows keep their own answer after reconnect, Settings, another row's list | C2 filing by key; C1 A1 re-ask | `main_tests.rs` (A3, A4, A6, A7); §B 3, 4, 6 |
 | SC-003 zero timers, zero checks per redraw | tripwire (R10) + `idle_subscriptions.rs` | structural |
 | SC-004 ≤ D resolutions | one request per distinct directory (R11) | `main_tests.rs` (count of requests) |
 | SC-005 env-include change reflected | `SettingsChanged` diff (R6) | `main_tests.rs`; §B 7 |
