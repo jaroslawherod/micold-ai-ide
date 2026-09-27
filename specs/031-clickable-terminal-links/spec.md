@@ -6,10 +6,12 @@
 
 **Status**: Closed 2026-09-27 — shipped in PRs #336, #341, #356, #361, #385, #393, #402, #408, #411, #414
 
-Closed with one known deviation, recorded rather than fixed: SC-005's frame-time comparison holds as
-worded (streaming addresses with nothing hovered is within 10% of plain text — `p95 0.13 ms` against
-`0.12 ms`), but the stricter pairing the quickstart measured, with a link *hovered* throughout the
-stream, is 25% apart (`p95 0.15 ms` against `0.12 ms`). The whole difference is the hint label's one
+Closed with one known deviation, recorded rather than fixed. SC-005's 10% sentence does not say
+whether a link is hovered during the stream, and the two readings differ: with nothing hovered the
+comparison is inside the bound (`p95 0.13 ms` against plain text's `0.12 ms`), while the stricter
+pairing the quickstart measured, with a link *hovered* throughout the stream, is 25% apart
+(`p95 0.15 ms` against `0.12 ms`). Both figures are recorded; the criterion is read as met on the
+first and deviating on the second. The whole difference is the hint label's one
 `fill_text` per character while a link is marked — 0.03 ms against a 16.7 ms frame budget — and it is
 carried as a follow-up, not as unbuilt behaviour. See quickstart.md "The pass" and the autopilot
 ledger's Decisions 59 and 62.
