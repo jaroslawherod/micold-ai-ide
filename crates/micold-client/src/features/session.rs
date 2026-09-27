@@ -1479,8 +1479,8 @@ pub enum Msg {
         provider: AiCli,
     },
     /// Open the "start a session on…" list for a location (feature 026, FR-004). The binary
-    /// refreshes the availability set first — this is one of the two named events research R11
-    /// means by "when the choice is offered".
+    /// first re-asks for that location's directory's answer — one of the named events of feature
+    /// 033's contract C1, and what research R11 means by "when the choice is offered".
     StartMenuOpened {
         /// Where a session started from this list would run.
         location: SessionLocation,
@@ -1488,8 +1488,8 @@ pub enum Msg {
         /// rather than because the user asked for it (feature 026 BUG-001, FR-002).
         ///
         /// It rides on *this* message rather than one of its own for the reason
-        /// `tests/session_start_press.rs` records: the binary re-probes `PATH` on this message, so
-        /// a separate one would open the list on a staler set. It says why the press happened,
+        /// `tests/session_start_press.rs` records: the binary re-asks for this row's answer on this
+        /// message, so a separate one would open the list on a staler answer. It says why the press happened,
         /// which is knowledge only the press has; whether it is still true is settled by the
         /// reducer, after that refresh.
         unavailable_default: Option<AiCli>,

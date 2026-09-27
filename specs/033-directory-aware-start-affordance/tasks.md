@@ -215,7 +215,7 @@ and rows that reappear are asked again. Nothing else asks, and nothing is schedu
 ## Phase 6: Polish & Cross-Cutting Concerns
 
 - [ ] T028 Run quickstart.md §B through the `visual-pass` skill on a private Xvfb display. Record screenshots for steps 1, 2, 6 and 7 and a pass/fail line per step in `specs/033-directory-aware-start-affordance/evidence/quickstart-b.md`.
-- [ ] T029 Search `crates/micold-client/src/` for comments that still describe one window-wide availability set or "two named events" (`grep -rn "available_providers\|named events\|availability set" crates/micold-client/src`) and rewrite them against contract C1. The two historical notes naming the removed `Capabilities::available_providers()` (`shell/capabilities.rs`, `features/session.rs`) may stay, because they describe the pre-027 probe and not the window-wide set.
+- [X] T029 Search `crates/micold-client/src/` for comments that still describe one window-wide availability set or "two named events" (`grep -rn "available_providers\|named events\|availability set" crates/micold-client/src`) and rewrite them against contract C1. The two historical notes naming the removed `Capabilities::available_providers()` (`shell/capabilities.rs`, `features/session.rs`) may stay, because they describe the pre-027 probe and not the window-wide set.
 
 ---
 
