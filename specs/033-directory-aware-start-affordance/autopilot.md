@@ -7,15 +7,15 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: fix/a-project-local-cli-stays-unreachable-in-that-project
 - **Started**: 2026-09-27
-- **Phase**: 1-spec
-- **Next step**: wait for PR 1 (#413, spec) to go green and merge it, then Phase 2 (clarify) on the three
-  open markers FR-001, FR-006, FR-007.
+- **Phase**: 2-clarify
+- **Next step**: Phase 2 round 1 — FR-007 agent-resolved (D3); FR-001 and FR-006 escalated to the
+  user. Record their answers, then run clarify rounds until none is critical.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #413 | Spec | open | |
+| #413 | Spec | merged | 2e28015f |
 
 ## Milestones
 
@@ -26,6 +26,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| D3 | clarify | FR-007: worktree answered for its own directory or its project root? | Its own directory; Default rows for the root. | agent-resolved | 029 FR-003b; constitution III; `crates/micold-daemon/src/state.rs` `env_include_vars_for` keys the cache by spawn cwd. |
 | D2 | spec | Spec review outcome | Round 1: CHANGES (2 MAJOR: an edge case contradicting FR-010; FR-004 pre-answering FR-006's open question — 4 MINOR), all fixed. Round 2 (sonnet): CLEAN. | agent-resolved | fresh-subagent reviews, spec rubric |
 | D1 | bug | Does the report reproduce, and is it a 029 patch (Phase 0) or a new feature (Phase 1)? | Reproduces at code level on `main` 23a0e0ee. **Phase 1**: making the affordance directory-aware adds a third directory-aware placement that 029 FR-003b deliberately did not name, so it is behaviour 029 never intended (autopilot Phase 0 step 5). 029 is Closed and BUG-001's ledger is `done`. | agent-resolved | Trace: one window-wide `session.available_providers` (`crates/micold-client/src/features/session.rs:184`) is overwritten on every `DaemonMsg::AiCliAvailability` (`shell/daemon_sync.rs:785`); asked with `cwd: None` (home, `server.rs:664`) on connect (`daemon_sync.rs:964`) and Settings open (`shell/persist.rs:196`), and with the row's cwd only on `StartMenuOpened` (`main.rs:666–678`). The chevron (`start_affordance_offers_a_choice`, `session.rs:1847`, used at `ui/sidebar.rs:622,713`) and the primary press (`start_intent`, `session.rs:1857`, via `sidebar.rs` `start_press`) take no location. With home=`[claude]` and a project script adding `pi`, the set has length 1, no chevron is drawn, and the only directory-aware ask sits behind that chevron. A state-level test in the style of `crates/micold-client/tests/features_session.rs:484` shows it: neither method can yield a per-row answer. Declined finding: `specs/029-pi-cli-provider/bugs/BUG-001.autopilot.md` *Declined review findings*, M1/A `main.rs:667`. R11 is `specs/026-multi-provider-sessions/research.md` §R11. |
 
@@ -36,7 +37,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 ## Open escalation
 
-None.
+Clarify round 1: FR-001 (directory-aware at all?) and FR-006 (when a row's first answer is asked for) — sent to the user.
 
 ## Follow-ups not done
 
