@@ -596,3 +596,28 @@ The outer-loop acceptance tasks T082–T086 and the helper tasks T087–T088 wer
 - **Satisfies**: SC-005; FR-023 (complete); Principle VI
 - **Verify**: quickstart §A.3 figures; `visual-pass.md`; green CI on all three OSes
 - **Depends on**: M4, M6, M7
+
+## Phase 8: TDD remediation (close)
+
+From `tdd/verification.md` (verdict `PASS_WITH_GAPS`). Neither finding blocks the feature; both are
+process/documentation cleanups the close PR can carry.
+
+- [x] T089 Finding 2 (LOW, `tdd/test-list.md:120,123,124,125,126`): resolve the duplicate ids — rename
+  one of the two behaviors currently sharing `U161` and one of the two sharing `U162` to the next free
+  id (`U164`, `U165`), updating the row and every cross-reference in `tasks.md` and `cycle-log.md`
+  that names the renamed id. Verify: `grep -cE "^\| U(161|162) " tdd/test-list.md` prints `1` for each
+  id afterward, and `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide shell::links` /
+  `scripts/build-lock.sh cargo test -p micold-daemon --test session_identity_env` still pass unchanged.
+- [x] T090 Finding 1 (MED, `cycle-log.md:853-859,876-880,897-900,915-917,933-936`): record in
+  `cycle-log.md`'s M6 section (or a short addendum) the practice that would have prevented the loss —
+  committing each cycle's red/green pair before the next cycle starts, rather than batching a
+  milestone's cycles in working memory across a context compaction — so a future milestone with this
+  shape does not repeat the loss. No code or test change; this is a process note for
+  `.specify/extensions/tdd/templates/tdd-loop-playbook.md` or the ledger, whichever the next author
+  reading this finds first. Verify: the note exists and names cycles 76–80 and commit `e1f65c7d` as the
+  incident it addresses.
+
+Both were done in the close PR: `U164`/`U165` now carry the two M7 review behaviours in
+`tdd/test-list.md`, with `cycle-log.md` Cycle 94 and ledger Decisions 56–57 following them, and the
+M6 red-phase loss and the commit-per-cycle practice that prevents it are recorded as a note above
+Cycle 76 in `cycle-log.md`.

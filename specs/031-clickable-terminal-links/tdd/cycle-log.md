@@ -844,6 +844,17 @@ autopilot.md.
 - refactor: none. Documentation, tasks.md, data-model.md and the ledger were corrected where review
   found them describing `app::State`/`main.rs` instead of `features::session::State`/`shell/startup.rs`
 
+> **M6 incident, and the practice that prevents it** (close-phase note, T090). Cycles 76–80 below
+> lost their original assertion-level red text when this session's context was compacted before the
+> milestone's cycles were committed; each red printed here was re-derived from a deliberate mutant
+> against the finished code, and every one of those five cycles says so in its own entry (Decision
+> 45). Nothing is reported as captured that was not captured, but a mutant-derived red is weaker
+> proof than the first failing run — the TDD audit downgrades about 21 of this feature's 184
+> behaviours from PROVEN to LIKELY for exactly this reason. The practice that would have prevented
+> it: **commit each cycle's red/green pair before starting the next cycle**, so the red text lives
+> in git rather than in working memory, instead of batching a milestone's cycles and writing the log
+> at the end. The loss is commit `e1f65c7d`; the affected entries are Cycles 76–80.
+
 ## Cycle 76: `pathmap::reverse` — a container path back to a host path (T055, T062)
 
 - test: `crates/micold-core/src/sandbox/pathmap.rs::tests::{the_most_specific_of_nested_shared_locations_maps_the_path,
@@ -1170,7 +1181,7 @@ sorted deepest-first, so C15's order broke.
   the view, so the menu offered **Open Link** for a link the pane never underlined and that a
   Ctrl+click at the same point cannot open. Test:
   `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_right_press_over_the_scrollbar_strip_carries_no_link`
-  (U161). Red:
+  (U164). Red:
   `left: [Some(ResolvedLink { link: Link { address: "https://example.com/docs/page.html", origin: Detected, cells: [CellSpan { row: 0, cols: 26..60 }] }, … })]`
   / `right: [None]`. Green: the press reads the position through the same
   `strip`/`SCROLLBAR_WIDTH` filter the hover does
@@ -1178,7 +1189,7 @@ sorted deepest-first, so C15's order broke.
   raw press point to `cdk::overlay::Anchor::Point`, whose doc leaves clamping to the caller. With the
   two link items the panel is 208dp rather than 112dp, so a right-click in the lower part of the pane
   put **Copy** and **Paste** outside it. Test:
-  `terminal_pane.rs::tests::links::the_menu_anchor_keeps_the_panel_inside_the_pane` (U162). Red:
+  `terminal_pane.rs::tests::links::the_menu_anchor_keeps_the_panel_inside_the_pane` (U165). Red:
   `left: [(84, 103)]` / `right: [(84, 0)]`. Green: the press clamps its point with
   `features::project::clamp_menu_anchor` — the rule the other four menus already use — against the
   pane's own box, which is the box the overlay is mounted in. The panel's item count comes from
