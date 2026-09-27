@@ -151,6 +151,18 @@ impl Capabilities {
         self
     }
 
+    /// The same capabilities, minus the project catalog.
+    ///
+    /// The companion to [`Self::without_settings`], for the same reason and the same configuration
+    /// [`Self::projects`] already documents. #368 dropped the settings store from the test `App` but
+    /// left this one, so every test still held a store over the developer's own `projects.json`;
+    /// nothing wrote through it, but "nothing does today" is not a property a suite keeps (029 T069).
+    #[cfg(test)]
+    pub(crate) fn without_projects(mut self) -> Self {
+        self.projects = None;
+        self
+    }
+
     /// The same capabilities, with `opener` in place of the operating system's (feature 031).
     ///
     /// `base_app()` hands every test a no-op opener through this, so no test can open a browser,

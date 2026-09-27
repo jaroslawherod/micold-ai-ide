@@ -98,20 +98,33 @@ One invocation, both binaries, copy inside the lock — then run the copies. Thr
 ### 3. A private X server
 
 ```bash
-Xvfb :77 -screen 0 1600x1400x24 -nolisten tcp &
+vp_n=77                                     # pick a free one; 77 is only the default
+[ -e "/tmp/.X11-unix/X$vp_n" ] && echo "display :$vp_n is taken, pick another" >&2
+Xvfb ":$vp_n" -screen 0 1600x1400x24 -nolisten tcp &
 ```
 
 1600×1400 is deliberate: tall enough that a section and the list it floats fit in one frame, so a
 comparison is one screenshot rather than two you have to hold in your head.
 
+**Take a number nobody else is on**, and keep using that one number: step 4 derives this run's
+runtime and data directories from it, and step 9 recognises its own processes by them. Another
+session on the same display shows you its window and lets its cleanup stop your processes.
+
 ### 4. Launch — **with lavapipe, and with a data directory of your own**
 
 ```bash
-data=<your scratchpad>/data      # anywhere only you write
-mkdir -p /tmp/vp77 "$data"
-env -u WAYLAND_DISPLAY DISPLAY=:77 \
-    XDG_RUNTIME_DIR=/tmp/vp77 \
-    XDG_DATA_HOME="$data" \
+# The display number you took in step 3 -- the one thing you choose, and the one thing that makes
+# these paths yours. Repeat these four lines verbatim in every later call: a Bash call is a new
+# shell, so the variables do not survive, and the cleanup step has to derive the same runtime dir.
+vp_n=77
+vp_run=/tmp/vp$vp_n                          # short, private: see sun_path below
+vp_data=$HOME/.cache/vp$vp_n/data            # anywhere only you write, spelled out in full
+case "$vp_run:$vp_data" in /*:/*) ;; *) echo "both paths must be absolute" >&2; exit 1;; esac
+mkdir -p "$vp_run" "$vp_data" && chmod 700 "$vp_run" "$vp_data"
+
+env -u WAYLAND_DISPLAY DISPLAY=":$vp_n" \
+    XDG_RUNTIME_DIR="$vp_run" \
+    XDG_DATA_HOME="$vp_data" \
     WGPU_BACKEND=vulkan \
     VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
     setsid nohup <binary> > run.log 2>&1 &
@@ -126,8 +139,22 @@ the daemon you just launched resolve their data directory to the developer's own
 leaves the fixture values it typed in the user's real settings file, where they surface later as a
 bug report about a setting nobody chose. Seed the project you want opened into *your* data home's
 `projects.json`, never the real one — the client binary has no command line to open a project with.
-`XDG_RUNTIME_DIR` is also the "is this process mine?" predicate the cleanup step below depends on,
-so a run without it cannot be cleaned up.
+
+**Both paths must be absolute, and neither may keep a placeholder.** That is what the `case` line
+checks, and it is not ceremony. `directories` discards an `XDG_DATA_HOME` that is empty or relative
+and falls back to `$HOME/.local/share` *without saying so*, so a mistake here does not fail — it
+quietly writes the real directory, which is the one outcome this whole section exists to prevent.
+Writing the paths out rather than leaving a `<your scratchpad>` placeholder is the point: a
+placeholder in angle brackets is not an assignment to bash at all, it is an empty assignment plus two
+redirections, and it leaves `XDG_DATA_HOME` set to the empty string — which is the silent fallback.
+
+**Both paths must also be yours alone, which is why they carry the display number.** Two passes can
+be in flight on this machine at once — this has happened — and paths shared between them collide
+twice over: the cleanup step below identifies the processes it may stop by their `XDG_RUNTIME_DIR`,
+so one session kills the other's client and daemon mid-run, and both resolve the same
+`$XDG_RUNTIME_DIR/micold/daemon.sock`, so the second client attaches to the first session's daemon —
+a different build than the one it just pinned — instead of spawning its own. Take a display number
+nobody else is on in step 3 and everything downstream is private; `chmod 700` keeps other users out.
 
 **`WGPU_BACKEND=gl` fails**, with `wgpu error: Validation Error / In Surface::configure / Invalid
 surface`. Xvfb has no usable GLX. `lvp_icd.json` is Mesa's lavapipe, a software Vulkan rasteriser,
@@ -215,17 +242,22 @@ line, so `pgrep -f micold-ai-ide` also finds `micold-daemon` when the daemon's *
 Match the executable name and confirm the instance is yours by its environment:
 
 ```bash
+vp_n=77                      # the same display number as in step 4
+vp_run=/tmp/vp$vp_n
 for n in micold-ai-ide micold-daemon; do
   for p in $(pgrep -x "$n"); do
     rt=$(tr '\0' '\n' < /proc/$p/environ 2>/dev/null | grep '^XDG_RUNTIME_DIR=' | cut -d= -f2)
-    [ "$rt" = "/tmp/vp77" ] && kill "$p"
+    [ "$rt" = "$vp_run" ] && kill "$p"
   done
 done
 ```
 
-Give the run its own `XDG_RUNTIME_DIR` (and `XDG_DATA_HOME`) precisely so this test exists — it is
-both the isolation and the "is this mine?" predicate. If `/proc/<pid>/environ` is unreadable, the
-process is not yours: leave it.
+Step 4 gives the run its own `XDG_RUNTIME_DIR` (and `XDG_DATA_HOME`) precisely so this test exists —
+it is both the isolation and the "is this mine?" predicate, which is why the runtime dir has to be
+derived the same way in both places and has to carry your own display number rather than a constant
+every session shares. If `/proc/<pid>/environ` is unreadable, the process is not yours: leave it. A
+process whose runtime dir is the developer's real one is never yours either — the user's own app runs
+that way.
 
 **Keep that runtime dir short.** `$XDG_RUNTIME_DIR/micold/daemon.sock` must fit in `sun_path`
 (~108 bytes), and the session scratchpad path alone is longer than that — the daemon fails with
