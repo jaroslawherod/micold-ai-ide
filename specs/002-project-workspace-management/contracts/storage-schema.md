@@ -43,11 +43,11 @@ JSON, UTF-8. Top-level object:
 
 | Field | Type | Rules |
 |-------|------|-------|
-| `schema_version` | integer | Current version is `1`. Present on every write. Used for forward-compatible migration. |
+| `schema_version` | integer | Current version is `1`. Present on every write. ~~Used for forward-compatible migration.~~ Not required on read: absent → `0`, the version no build writes. No reader branches on it — see "Versioning" *(BUG-006; its absence used to make the document unreadable)*. |
 | `last_active` | string \| null | Absolute canonical path of the last active project, or `null` if none. If non-null it **MUST** equal one `projects[].path` (FR-010, FR-013). |
 | `projects` | array | The known-projects list. **At most one element per `path`** (FR-012). Order is display order; not otherwise significant. |
-| `projects[].path` | string | Absolute, canonical filesystem path. **Identity** of the project (FR-012, FR-021). |
-| `projects[].display_name` | string | Non-empty, non-whitespace (FR-020). Defaults to the folder name (FR-004). Not required unique (FR-021). |
+| `projects[].path` | string | Absolute, canonical filesystem path. **Identity** of the project (FR-012, FR-021). **Required on read** (FR-012c). |
+| `projects[].display_name` | string | Non-empty, non-whitespace (FR-020). Defaults to the folder name (FR-004) when a project is created — not on read. Not required unique (FR-021). **Required on read** (FR-012c). |
 | `projects[].is_git_repo` | bool | Git status captured at inspection time (FR-007). May be stale relative to disk. |
 
 - **`availability` is NOT persisted.** It is recomputed from the filesystem at load/display time
@@ -59,6 +59,25 @@ JSON, UTF-8. Top-level object:
 - **Unknown fields** encountered on read MUST be ignored (forward compatibility).
 - **Missing optional fields** on read take documented defaults (e.g., absent `is_git_repo` →
   `false`; absent `last_active` → `null`).
+- **Only identity is required.** Every field of the catalog and of a per-project state file,
+  `schema_version` included, takes its default when the document omits it — except the fields that
+  identify a record: `projects[].path`, `projects[].display_name`, and a session's `id` in a state
+  file. Those have no meaningful default, so omitting one is a genuine failure to read and takes the
+  same path as a present-but-unreadable field below. Any other absent field is never a reason a
+  document cannot be read (FR-012c). *(Amended by BUG-006: `schema_version` was the
+  one required field of both documents, so a `projects.json` without it was moved to
+  `projects.json.bak` and loaded empty, and a state file without it was unreadable on every launch.
+  Hand-seeded `projects.json` fixtures are routine here — the client binary has no command line.)*
+- A **present** field can still make a document unreadable, and that is deliberate: a value of the
+  wrong JSON type, or a string naming a variant this build does not know — a session `mode` other
+  than `AiCli`/`Regular`, or a session `provider` naming a CLI added by a later release — fails the
+  whole read and takes the corrupt-file path below (catalog) or FR-012a's per-project isolation
+  (state file). `provider` in particular has no catch-all on purpose: reading an unknown CLI as a
+  known one would start the wrong agent in the user's worktree. The two halves are not symmetric: an
+  absent field is a question the defaults answer, a present-but-unreadable one is not.
+- One consequence of the first rule, stated so it is not discovered: absence is silent. A key
+  misspelled by hand is an unknown key, and unknown keys are ignored, so the field it was meant to set
+  takes its default and nothing is reported.
 - **Missing file** → treat as an empty list (`projects: []`, `last_active: null`); first-run
   behavior (research R8; FR-016).
 - **Unparseable / corrupt file** → degrade to an empty list rather than crashing; the app MAY
@@ -72,6 +91,22 @@ JSON, UTF-8. Top-level object:
   `projects.json` (research R8).
 - **`schema_version` greater than the app understands** → the app MUST NOT crash; it reads what
   it can (ignoring unknown fields) and, on next write, writes its own known `schema_version`.
+
+## Versioning (BUG-006, 2026-09-27)
+
+`schema_version` was intended to gate future migrations. No migration gate has ever been written:
+every change to either document since v1 has been an additive, defaulted field precisely so that
+none was needed, and BUG-001's one migration (embedded `sessions`/`worktree_display_names` moving to
+a per-project file) is keyed on the state file being *missing*, not on a version. The field is
+therefore documentation on disk: writers record the current version (`1`, shared by both
+documents) and **no reader branches on the value**.
+
+Because nothing consumes it, it is not required on read — a field nothing reads must not be one a
+document can be rejected for omitting. Absent, it reads as `0`. `0` means **the document named no
+version**. A reader MUST NOT take it as a claim that the current build wrote the document, and a
+migration gate, should one ever be written, MUST NOT take it as a version older than v1: a document
+without the number is most often a current one written by hand, and the obvious gate
+(`schema_version < CURRENT`) would run every migration over it.
 
 ## Bugfix: per-project storage split (BUG-001, 2026-07-21)
 
@@ -159,3 +194,7 @@ Covered by `tests/store_roundtrip.rs` against a `tempfile` directory (never the 
       unaffected.
 - [ ] **(BUG-001)** A pre-split `projects.json` with embedded `sessions`/`worktree_display_names`
       on a project entry migrates that state into the new per-project state file on next save.
+- [ ] **(BUG-006)** A `projects.json` with no `schema_version` loads every project, display name,
+      git flag and `last_active` it holds as `LoadStatus::Loaded`, and leaves no `projects.json.bak`.
+- [ ] **(BUG-006)** A per-project state file with no `schema_version` loads that project's state and
+      does not mark the project unreadable.

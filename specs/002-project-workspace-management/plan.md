@@ -185,3 +185,18 @@ layout-snapshot fixture is regenerated for the new scrollable node. A visual pas
 themed scrollbar.
 
 **Bugfix**: 2026-09-27 — BUG-005 Updated from bugfix patch
+
+## Bugfix: a stored document without its version number (BUG-006, 2026-09-27)
+
+**Storage** (annotates the BUG-001 section above): "corrupt" means a document that is not a
+catalog or a project state document, never one that merely omits a field other than a record's
+identity (`projects[].path`, `display_name`, a session's `id` — these stay required). `schema_version` was the
+one field of `StoredCatalog` and of `StoredProjectState` in `crates/micold-core/src/store.rs` with
+no serde default, so a complete, well-formed document without it was classed as corrupt: the
+catalog went to `projects.json.bak` and loaded empty, and a project state file was marked
+unreadable on every launch (029 FR-011). Both fields now default to `0`, the version no build
+writes, exactly as 003 BUG-003 did for `settings_version`, because no reader branches on the
+value. No migration path is introduced. Saves still write `1`. See FR-012c and the storage-schema
+contract's compatibility rules and "Versioning" section.
+
+**Bugfix**: 2026-09-27 — BUG-006 Updated from bugfix patch
