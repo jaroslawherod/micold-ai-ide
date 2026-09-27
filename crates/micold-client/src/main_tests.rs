@@ -3198,13 +3198,22 @@ fn connect_with_catalog_keeping_outbox(
     app: &mut App,
     catalog: micold_core::protocol::messages::CatalogSnapshot,
 ) -> iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg> {
+    connect_with_settings_keeping_outbox(app, catalog, quiet_settings())
+}
+
+/// [`connect_with_catalog_keeping_outbox`] with the service's settings given.
+fn connect_with_settings_keeping_outbox(
+    app: &mut App,
+    catalog: micold_core::protocol::messages::CatalogSnapshot,
+    settings: micold_core::protocol::messages::DaemonSettings,
+) -> iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg> {
     let (tx, rx) = iced::futures::channel::mpsc::unbounded();
     let _ = update_inner(
         app,
         Message::Connection(ConnectionMsg::Connected {
             outbox: micold_client::daemon::Outbox::new(tx),
             catalog,
-            settings: quiet_settings(),
+            settings,
         }),
     );
     rx
@@ -3575,13 +3584,21 @@ fn availability_opening_a_project_asks_once_per_directory() {
 }
 
 fn catalog_with_worktree(dir: &str) -> micold_core::protocol::messages::CatalogSnapshot {
+    catalog_with_worktree_in(dir, micold_core::protocol::messages::WorktreeStatus::Clean)
+}
+
+/// `/repo/demo` with one user-created worktree `dir` in `status`.
+fn catalog_with_worktree_in(
+    dir: &str,
+    status: micold_core::protocol::messages::WorktreeStatus,
+) -> micold_core::protocol::messages::CatalogSnapshot {
     let mut catalog = snapshot_with(DEMO, Vec::new());
     let project: &mut ProjectSnapshot = &mut catalog.projects[0];
     project.worktrees.push(WorktreeSnapshot {
         dir_name: dir.to_string(),
         branch: Some(format!("feat/{dir}")),
         display_name: dir.to_string(),
-        status: micold_core::protocol::messages::WorktreeStatus::Clean,
+        status,
         path: PathBuf::from(DEMO).join(".claude/worktrees").join(dir),
         included: false,
         user_created: true,
@@ -3669,4 +3686,310 @@ fn availability_opening_the_other_rows_list_leaves_the_first_alone() {
     answer_each(&mut app, &asked, CLAUDE, &[(FEAT_B, CLAUDE)]);
 
     assert!(offers_a_choice(&app, FEAT_A), "A still offers the choice");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Feature 033 M2: the answer follows the events that change it (US3)
+// ---------------------------------------------------------------------------------------------
+
+use micold_core::protocol::messages::DaemonSettings;
+
+/// The service's settings with environment-include switched `enabled`. The script path is blank,
+/// which runs nothing either way (`resolve_env_include`), so no test here spawns a shell.
+fn settings_with_env_include(enabled: bool) -> DaemonSettings {
+    DaemonSettings {
+        env_include_enabled: enabled,
+        env_include_script_path: "   ".into(),
+        ..quiet_settings()
+    }
+}
+
+/// `/repo/demo`'s rows (the root and `feat-a`) connected under `settings`, with home answering
+/// `[claude]` and both rows `[claude, pi]` — the project whose script provides Pi.
+fn app_offering_pi_under(
+    settings: DaemonSettings,
+) -> (
+    App,
+    iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+) {
+    let mut app = app_with_mixed_rows();
+    let mut rx =
+        connect_with_settings_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()), settings);
+    let asked = availability_requests(&mut rx);
+    answer_each(
+        &mut app,
+        &asked,
+        CLAUDE,
+        &[(DEMO, CLAUDE_AND_PI), (FEAT_A, CLAUDE_AND_PI)],
+    );
+    assert!(offers_a_choice(&app, DEMO), "fixture check: P offers Pi");
+    (app, rx)
+}
+
+/// This window's Settings save of `settings`' environment-include fields, then the service's
+/// echo of it — the order a real save arrives in.
+fn save_env_include_and_echo(app: &mut App, settings: DaemonSettings) {
+    app.core.settings.settings_draft = Some(SettingsDraft {
+        terminal: TerminalDraft {
+            scrollback_lines: settings.scrollback_lines.to_string(),
+        },
+        environment: EnvironmentDraft {
+            enabled: settings.env_include_enabled,
+            script_path: settings.env_include_script_path.clone(),
+            timeout_secs: settings.env_include_timeout_secs.to_string(),
+            default_ai_cli: settings.default_ai_cli,
+            pi_activity_component: settings.pi_activity_component,
+        },
+        ..SettingsDraft::default()
+    });
+    let _ = update_inner(app, Message::Settings(SettingsMsg::Saved));
+    feed(app, DaemonMsg::SettingsChanged { settings });
+}
+
+fn cwds(asked: &[(u64, Option<PathBuf>)]) -> Vec<Option<PathBuf>> {
+    asked.iter().map(|(_, cwd)| cwd.clone()).collect()
+}
+
+/// Home and every row on screen, in the order a refresh asks them.
+fn every_key() -> Vec<Option<PathBuf>> {
+    vec![None, Some(PathBuf::from(DEMO)), Some(PathBuf::from(FEAT_A))]
+}
+
+/// A8 (US3-1, FR-004, SC-005): saving env-include off in this window re-asks every row, and the
+/// project's rows stop offering Pi once the answers arrive — no restart, no list opened.
+#[test]
+fn availability_saving_env_include_refreshes_every_row() {
+    let (mut app, mut rx) = app_offering_pi_under(settings_with_env_include(true));
+
+    save_env_include_and_echo(&mut app, settings_with_env_include(false));
+    let asked = availability_requests(&mut rx);
+    answer_each(&mut app, &asked, CLAUDE, &[(DEMO, CLAUDE), (FEAT_A, CLAUDE)]);
+
+    assert!(
+        !offers_a_choice(&app, DEMO),
+        "with the script off, P's Default row no longer offers Pi"
+    );
+    assert!(
+        !offers_a_choice(&app, FEAT_A),
+        "and neither does its worktree row"
+    );
+}
+
+/// U32 (FR-004, SC-005, R6): the echo of this window's own save re-asks home and every row, even
+/// though the save already overwrote the window's copy of the settings — and the held answers stay
+/// readable until the new ones replace them.
+#[test]
+fn availability_this_windows_env_include_save_refreshes_every_row() {
+    let (mut app, mut rx) = app_offering_pi_under(settings_with_env_include(true));
+
+    save_env_include_and_echo(&mut app, settings_with_env_include(false));
+
+    assert_eq!(
+        cwds(&availability_requests(&mut rx)),
+        every_key(),
+        "home and each row are asked again, once each"
+    );
+    assert!(
+        offers_a_choice(&app, DEMO),
+        "until its new answer lands, a row keeps offering what it was last told"
+    );
+}
+
+/// U33 (FR-004, 029 FR-011): another window's env-include change reaches this one only as the
+/// service's `SettingsChanged`, and re-asks the same set.
+#[test]
+fn availability_another_windows_env_include_change_refreshes() {
+    let (mut app, mut rx) = app_offering_pi_under(settings_with_env_include(false));
+
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: settings_with_env_include(true),
+        },
+    );
+
+    assert_eq!(cwds(&availability_requests(&mut rx)), every_key());
+}
+
+/// U34 (FR-004, "only these events"): a settings change that leaves env-include alone changes no
+/// directory's `PATH`, so it asks nothing.
+#[test]
+fn availability_an_unrelated_settings_change_asks_nothing() {
+    let (mut app, mut rx) = app_offering_pi_under(settings_with_env_include(true));
+
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                scrollback_lines: 42_000,
+                ..settings_with_env_include(true)
+            },
+        },
+    );
+
+    assert_eq!(availability_requests(&mut rx), Vec::new());
+}
+
+/// U28 (FR-012, FR-003): switching to another project drops the previous project's answers, and
+/// switching back asks for them again.
+#[test]
+fn availability_switching_projects_drops_and_reasks() {
+    let p = tempfile::tempdir().unwrap();
+    let q = tempfile::tempdir().unwrap();
+    let mut app = base_app();
+    let scanner = micold_core::fs_scan::FakeFolderScanner::new();
+    app.core
+        .workspace
+        .open_or_activate(q.path().to_path_buf(), &scanner);
+    app.core
+        .workspace
+        .open_or_activate(p.path().to_path_buf(), &scanner);
+    let p_dir = p.path().to_str().unwrap().to_owned();
+    let q_dir = q.path().to_str().unwrap().to_owned();
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(&p_dir, Vec::new()));
+    let asked = availability_requests(&mut rx);
+    answer_each(&mut app, &asked, CLAUDE, &[(&p_dir, CLAUDE_AND_PI)]);
+
+    let _ = update_inner(
+        &mut app,
+        Message::Project(ProjectMsg::Reopened(q.path().to_path_buf())),
+    );
+    let asked = availability_requests(&mut rx);
+    answer_each(&mut app, &asked, CLAUDE, &[(&q_dir, CLAUDE)]);
+    assert!(
+        !offers_a_choice(&app, &p_dir),
+        "P has no row on screen any more, so its answer is not kept (FR-012)"
+    );
+
+    let _ = update_inner(
+        &mut app,
+        Message::Project(ProjectMsg::Reopened(p.path().to_path_buf())),
+    );
+    assert_eq!(
+        cwds(&availability_requests(&mut rx)),
+        vec![Some(p.path().to_path_buf())],
+        "back on P, its root is asked again"
+    );
+}
+
+/// U29 (FR-012, C1 A6): forgetting a project drops its answers.
+#[test]
+fn availability_forgetting_a_project_drops_its_answers() {
+    let (mut app, _rx) = app_offering_pi_under(quiet_settings());
+
+    app.core.project.forget_target = Some(PathBuf::from(DEMO));
+    let _ = update_inner(&mut app, Message::Project(ProjectMsg::ForgetConfirmed));
+
+    assert!(
+        !offers_a_choice(&app, DEMO),
+        "the forgotten project's root answer is dropped"
+    );
+    assert!(
+        !offers_a_choice(&app, FEAT_A),
+        "and so is its worktree's"
+    );
+}
+
+/// U30 (FR-004, deleted then recreated): a worktree whose directory goes missing drops its answer,
+/// and one that comes back is asked about again.
+#[test]
+fn availability_a_deleted_then_recreated_worktree_is_asked_again() {
+    use micold_core::protocol::messages::WorktreeStatus::{Clean, Missing};
+    let mut app = app_on_demo(&[]);
+    let mut rx = connect_with_catalog_keeping_outbox(&mut app, snapshot_with(DEMO, Vec::new()));
+    let _ = availability_requests(&mut rx);
+    feed(
+        &mut app,
+        DaemonMsg::CatalogChanged {
+            catalog: catalog_with_worktree_in("feat-a", Clean),
+        },
+    );
+    let asked = availability_requests(&mut rx);
+    answer_each(&mut app, &asked, CLAUDE, &[(FEAT_A, CLAUDE_AND_PI)]);
+    assert!(offers_a_choice(&app, FEAT_A), "fixture check: feat-a offers Pi");
+
+    feed(
+        &mut app,
+        DaemonMsg::CatalogChanged {
+            catalog: catalog_with_worktree_in("feat-a", Missing),
+        },
+    );
+    assert!(
+        !offers_a_choice(&app, FEAT_A),
+        "a worktree whose directory is gone keeps no answer"
+    );
+
+    feed(
+        &mut app,
+        DaemonMsg::CatalogChanged {
+            catalog: catalog_with_worktree_in("feat-a", Clean),
+        },
+    );
+    assert_eq!(
+        cwds(&availability_requests(&mut rx)),
+        vec![Some(PathBuf::from(FEAT_A))],
+        "recreated, it is asked about again"
+    );
+}
+
+/// U31 (FR-003, C1 A5b): revealing agent worktrees asks about them, and hiding them drops their
+/// answers.
+#[test]
+fn availability_revealing_agent_worktrees_asks_hiding_drops() {
+    const AGENT: &str = "/repo/demo/.claude/worktrees/agent-1f";
+    let (mut app, mut rx) = app_offering_pi_under(quiet_settings());
+
+    let _ = update_inner(
+        &mut app,
+        Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled),
+    );
+    let asked = availability_requests(&mut rx);
+    assert_eq!(
+        cwds(&asked),
+        vec![Some(PathBuf::from(AGENT))],
+        "the revealed agent worktree is asked about, once"
+    );
+    answer_each(&mut app, &asked, CLAUDE, &[(AGENT, CLAUDE_AND_PI)]);
+
+    let _ = update_inner(
+        &mut app,
+        Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled),
+    );
+    assert!(
+        !offers_a_choice(&app, AGENT),
+        "hidden again, its answer is dropped"
+    );
+}
+
+/// A9 (US3-2, FR-006, SC-003): with every row answered, hovering, scrolling and drawing ask
+/// nothing. (That no *other* source line asks is `tests/availability_is_asked_only_on_named_events.rs`.)
+#[test]
+fn availability_nothing_is_asked_while_nothing_changes() {
+    let (mut app, mut rx) = app_offering_pi_under(quiet_settings());
+
+    let _ = update_inner(
+        &mut app,
+        Message::Worktree(WorktreeMsg::Hovered("feat-a".into())),
+    );
+    let _ = update_inner(&mut app, Message::Sidebar(SidebarMsg::Scrolled(120)));
+    let _ = view(&app);
+
+    assert_eq!(availability_requests(&mut rx), Vec::new());
+}
+
+/// A10 (US3-3, FR-004): a row whose answer is held is still re-asked when its list opens, and a
+/// CLI installed since shows up there.
+#[test]
+fn availability_opening_a_rows_list_refreshes_its_answer() {
+    let (mut app, mut rx) = app_with_two_answered_worktrees();
+    assert!(!offers_a_choice(&app, FEAT_B), "fixture check: B offers no choice");
+
+    open_start_list(&mut app, SessionLocation::Worktree("feat-b".into()));
+    let asked = availability_requests(&mut rx);
+    answer_each(&mut app, &asked, CLAUDE, &[(FEAT_B, CLAUDE_AND_PI)]);
+
+    assert!(
+        offers_a_choice(&app, FEAT_B),
+        "Pi, installed since B was answered, is offered on B's row"
+    );
 }
