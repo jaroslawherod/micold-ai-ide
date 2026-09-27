@@ -584,3 +584,126 @@ with no link here`, printed with no OSC 8 link and no bare-address match) opened
 - Reading the X11 clipboard directly (no `xclip`/`xsel` in this sandbox); verified instead by
   pasting into the terminal itself, which round-trips through the same clipboard the menu item
   writes to.
+
+---
+
+# Milestone M8 (quickstart §A.3, §B.8, §B.17 part 2, §B.18 — and the whole §B roll-up)
+
+**Date**: 2026-09-27
+**Environment**: private Xvfb displays (`:91` for §A.3, `:97` for §B.8/§B.17), 1600×1400×24, no window
+manager, Mesa lavapipe (`WGPU_BACKEND=vulkan`, `lvp_icd.json`), private `XDG_RUNTIME_DIR`
+(`/tmp/vp91`, `/tmp/vp97`) and `XDG_DATA_HOME` (`~/.cache/vp91/data`, `~/.cache/vp97/data`), one
+seeded project via a hand-written `projects.json` (the client binary has no CLI), a fake `xdg-open`
+first on `PATH` logging its argv. Not a real display or GPU.
+
+**Scope**: this milestone's own rows. Every other §B row was run in the milestone that shipped its
+behaviour; the roll-up table below names which.
+
+## Binaries and pin check
+
+| Pin dir | Built from | Build output |
+|---|---|---|
+| `~/vp031m8/bin/` | this branch at `cada20a5`, clean tree, one `cargo build --release -p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon`, which compiled **micold-core, micold-daemon and micold-client**, copied inside the build lock | `md5` `a48489ce6b2870d52980c5fc688aff3d` (client) and `43abce74680bec72f5c7753cb95b86cb` (daemon), matching `target-shared/release/` |
+
+This is a **release** pair, because §A.3 records a release figure and a debug figure would not be
+comparable with one. Release strips type names, so M3's `strings | grep LinkOrigin` check reads 0 here
+and means nothing; the pin was checked on strings the build keeps instead: the client holds
+`not reachable from this machine` and `Copy Link Address` (1 each), the daemon holds
+`TERMINAL_EMULATOR` (M4's). The pair drove every run below with no `refusing client` line.
+
+## §A.3 — the SC-005 frame-time comparison — **finding**
+
+The seven figures, the procedure and the analysis are recorded in
+[quickstart.md § The pass](./quickstart.md#the-pass--2026-09-27). In short: hovering a link while
+addresses stream is `p95 0.15 ms`, hovering the same cell while `--plain` text streams is
+`p95 0.12 ms` — 25% apart, over §A.3's 10% bound, reproduced identically in three pairs. The control
+run (addresses streaming, pointer **off** the pane) is `p95 0.13 ms`, within 10% of plain, which is
+exactly what research R2 claims; the gap is the underline and the hint being drawn, not per-line
+scanning growing with the output.
+
+Honesty notes for §A.3:
+
+- **The pointer really was on a link.** A screenshot taken during each run's warm-up, while output
+  was streaming, shows the address under the resting pointer underlined — exactly the address, not
+  `see` and not `for details.`
+- **The plain token really is recognised as nothing.** Hovering the identical cell with `--plain`
+  output shows no underline at all. That is the only evidence for it and it was not skipped.
+- **The stream ran for the whole counted window.** The loop appended a timestamp per pass; its last
+  timestamp is after the probe's exit in every run (e.g. `+877 s` against an exit at `+869 s`).
+- **Counting began after the setup.** Streaming started ~20 s in; at the fastest frame rate ever
+  observed on this display (740 fps, measured on an empty window) that is at most ~14,800 frames,
+  inside the 18,000-frame warm-up (39,000 for the first pair). Every counted frame was under
+  streaming with the pointer resting.
+- **What else was running.** No `cargo` or `rustc` build during any run. Each was launched only once
+  the load average was below 5; it reached 13–17 by each run's end, dominated by the measured client
+  itself (~700% CPU), and equally on both sides. The machine also carries a dozen unrelated
+  `claude` processes throughout. An earlier pair of runs was **discarded** because a second agent was
+  driving a second client on this machine at the same time and the load average went 3 → 48; those
+  figures are not reported anywhere.
+
+![§A.3 the address under the resting pointer, underlined, while output streams](images/m8-a3-underline-with-addresses.png)
+![§A.3 the same cell with `--plain` output: no underline](images/m8-a3-plain-no-underline.png)
+
+## §B.8 — Ctrl+click `mailto:team@example.com` — pass
+
+Private display `:97`, own `XDG_RUNTIME_DIR`/`XDG_DATA_HOME`, a fresh seeded project and a fake
+`xdg-open` on `PATH` logging its argv (the same technique M3/M5 used). Ran
+`scripts/links-fixture.sh` in a Regular Terminal instance and hovered the `mailto:team@example.com`
+line: the whole address underlined, exactly as B.1–B.7 showed for web addresses. Ctrl+click appended
+exactly one line to the opener log:
+
+```
+xdg-open mailto:team@example.com
+```
+
+The complete address, no surrounding punctuation, nothing appended — FR-010's mail-client argument.
+A real mail client cannot exist on Xvfb; this is exactly the strength of evidence §B.3 passed on in
+M3 (a fake `xdg-open` receiving the right, single argument), applied to `mailto:` instead of `https:`.
+
+![§B.8 the address underlined on hover](images/m8-b8-mailto-underline-hover.png)
+
+## §B.17 part 2, re-attempted — the declared link with `FORCE_HYPERLINK=1` — still not confirmed
+
+M4 could not observe this (Claude Code v2.1.280 showed no declared run, and that run showed no hover
+feedback at all, so the two cannot be told apart — Decision 31). This machine now has Claude Code
+**v2.1.283**, whose bundled `supportsHyperlink` does honour `FORCE_HYPERLINK`
+(`if (FORCE_HYPERLINK) return !(parseInt(...) === 0)`), so the re-attempt was worth making.
+
+`export FORCE_HYPERLINK=1` was put in the session environment-include script and a new session
+started so `claude` would inherit it; `env | grep FORCE_HYPERLINK` in-session confirmed
+`FORCE_HYPERLINK=1` reached the process.
+
+![§B.17 part 2 FORCE_HYPERLINK reaches the session](images/m8-b17p2-force-hyperlink-confirmed.png)
+
+The brief's required sanity check came first, and it failed the same way M4's run did: hovering a
+plain `https://example.com/sanity-check` address that Claude Code v2.1.283 itself printed in its own
+pane produced **no underline and no hint**, checked at eight pointer positions along the line. Since
+the detector alone should mark a plain address regardless of anything OSC 8 or `FORCE_HYPERLINK`
+related, a negative result here means nothing downstream of it can be trusted, so the declared-link
+half was not attempted — proceeding would have proven nothing either way, per the same reasoning M4
+recorded.
+
+![§B.17 part 2 no hover feedback on a plain address, sanity check](images/m8-b17p2-sanity-no-hover-feedback.png)
+
+**Recorded as still not confirmed, not as pass or fail.** Two independent runs, on two Claude Code
+versions eight releases apart, both show no hover feedback at all for AI-CLI pane content in this
+kind of session — while B.17 part 1 (M4) *did* get hover feedback from an AI CLI's plain address with
+the same client binaries. That split point is itself the finding worth keeping: whatever differs
+between an ordinary AI-CLI hover (part 1, working) and this sanity check (failing, twice) is more
+specific than "Claude Code doesn't declare links" and deserves its own investigation outside this
+milestone's scope. Carried forward as a follow-up below rather than closed.
+
+## §B.18 — the user guide's "Links" subsection against FR-023 — pass
+
+Read `docs/user-guide/worktrees-and-sessions.md` → "Interacting with the terminal" → "Links" against
+FR-023's list. Present and correct: hover/underline/hint; the gesture per platform (Ctrl on Linux and
+Windows, Cmd on macOS) and the hand pointer; Shift under mouse reporting; **Open Link** and **Copy
+Link Address**; declared links and that the declared address wins; the `FORCE_HYPERLINK` include-script
+opt-in and that micold never advertises hyperlink support; `file://` documents opened and runnable
+files revealed and never run; a file on another machine not being a link; the missing-file
+notification; the sandbox confirmation, unreachable paths and the sandbox-stopped case; and the
+"no application is set up to open it" failure.
+
+One gap, fixed in this milestone: the section never said an address needs its **scheme** to be
+recognised (`example.com` and a bare `team@example.com` are ordinary text, FR-001), nor that
+application-specific schemes are never links (FR-011). Both are now in the first bullet.

@@ -124,4 +124,56 @@ difference in behaviour, record it under **Recording** and do not tick it.
 Screenshots go to `specs/031-clickable-terminal-links/images/`, and the step table goes to
 `visual-pass.md`, with one row per B step: pass/fail, screenshot, and a note.
 
-## The pass — *(date, filled when run)*
+## The pass — 2026-09-27
+
+**§A.3, SC-005.** Release build (`mise run build`, then the client and the daemon copied out of
+`target-shared/release` inside the build lock to `~/vp031m8/bin`; `md5` a48489ce…/43abce74…). Private
+Xvfb display `:91`, 1600×1400×24, Mesa lavapipe — a **software rasteriser, not a GPU**. That is not a
+caveat for this figure: the probe times the CPU cost of *composing* a frame, and layout, draw and GPU
+work all happen after the measured span.
+
+`MICOLD_FRAME_PROBE=3000:18000`, with **no** `MICOLD_FRAME_PROBE_SCENE` — feature 018's reference
+scene is a different measurement and would refuse this run. `scripts/stream-links.sh` was looped in a
+Regular Terminal instance; the pointer was parked on the address column *before* the stream started
+and not touched again.
+
+| # | What was streaming | Where the pointer rested | Frame probe |
+|---|---|---|---|
+| 1 | addresses | on a link | `3000 frames — mean 0.10 ms, p95 0.15 ms, max 0.38 ms` |
+| 2 | addresses | on a link | `3000 frames — mean 0.10 ms, p95 0.15 ms, max 0.31 ms` |
+| 3 | addresses | on a link | `3000 frames — mean 0.10 ms, p95 0.15 ms, max 0.43 ms` |
+| 4 | `--plain` | the same cell | `3000 frames — mean 0.08 ms, p95 0.12 ms, max 0.38 ms` |
+| 5 | `--plain` | the same cell | `3000 frames — mean 0.08 ms, p95 0.12 ms, max 0.35 ms` |
+| 6 | `--plain` | the same cell | `3000 frames — mean 0.09 ms, p95 0.12 ms, max 0.59 ms` |
+| 7 | addresses | **off the pane** | `3000 frames — mean 0.09 ms, p95 0.13 ms, max 0.65 ms` |
+
+Row 1 is also reproduced at a longer warm-up (`3000:39000`): `mean 0.10 ms, p95 0.15 ms, max 0.38 ms`,
+against `mean 0.08 ms, p95 0.12 ms, max 0.99 ms` for `--plain`.
+
+**The two figures §A.3 asks for are 0.15 ms and 0.12 ms: 25% apart, over the 10% bound.** It is not
+noise — every one of the three pairs gave the same two numbers. Rows 1–6 were taken alternately, each
+after the machine settled below load 5, with no `cargo` or `rustc` running; the load reached 13–17 by
+each run's end, dominated by the client itself at ~700% CPU, and that was true of both sides.
+
+**What the gap is, and what it is not.** Row 7 is the control research R2 predicts: *"with the
+pointer away from the pane, streaming costs nothing extra"*. Streaming 10,000 address-bearing lines
+with nothing hovered costs 0.13 ms against plain text's 0.12 ms — **within** 10%. So the per-frame
+cost does not grow because the output holds addresses, which is the decision R2 records. The whole
+gap appears only when a link is actually **marked**: rows 1–3 pay for the underline over the hovered
+cells and for the hint label, which `terminal_pane.rs` draws as one `fill_text` per character (~40
+characters of address, each with its own `String` and advanced shaping) on every frame the marking is
+on screen. That is the behaviour FR-007/FR-008 ask for and that SC-005's own wording is about —
+*"hover marking appears or clears in the next rendered frame"* — so §A.3's two-run comparison charges
+the cost of drawing the marking to "recognising addresses". Row 7 is what actually tests R2.
+
+In absolute terms the whole composed frame is 0.15 ms at p95 against a 16.7 ms budget at 60 Hz, and
+the difference under test is 0.03 ms. Recorded as a finding against §A.3's threshold and as a
+follow-up on the hint's per-character text primitives; R2's decision stands on row 7.
+
+This also settles the two efficiency findings deferred to this milestone (M5 review A finding 9,
+M6 review A finding 5): `ui::terminal::link_context` is rebuilt in `ui::view` on **every** frame
+whether or not a link is under the pointer, so its clones are inside all seven figures alike,
+including the 0.12 ms floor. A whole frame costs 0.15 ms; caching those few short strings could only
+ever move part of 1% of a frame budget. Both are closed rather than carried.
+
+**§B** is recorded in [visual-pass.md](./visual-pass.md), one row per step.
