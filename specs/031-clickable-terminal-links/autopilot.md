@@ -22,6 +22,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #393 | M4 Session terminal identity and the FORCE_HYPERLINK opt-in | merged | 59132a50 |
 | #402 | M5 File links on the host: open, reveal runnables, not-found | merged | 5b5db19c |
 | #408 | M6 Sandboxed file links, translated and confirmed | merged | 188fe02c |
+| #411 | M7 Link context menu | open | — |
 
 ## Milestones
 
@@ -33,7 +34,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M4 | T035, T036, T038–T041 | Session terminal identity and the FORCE_HYPERLINK opt-in | #393 | merged |
 | M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | #402 | merged |
 | M6 | T085, T055–T067, T069, T068 | Sandboxed file links, translated and confirmed | #408 | merged |
-| M7 | T086, T070–T077 | Link context menu | #PR | green locally, PR open |
+| M7 | T086, T070–T077 | Link context menu | #411 | green locally, PR open |
 | M8 | T078–T081 | Close: SC-005 measurement, full visual walkthrough | — | pending |
 
 ## Decisions
