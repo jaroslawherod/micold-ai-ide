@@ -8,11 +8,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M8 step 2, part-done. T078 (stream fixture) and B.18 (guide gap) are committed. Still to do:
-  T079's two frame-probe figures + §B.8 + §B.17 part 2 (a subagent was mid-run on Xvfb `:91` with the
-  pinned release pair in `~/vp031m8/bin`, md5 `a48489ce…`/`43abce74…`; its report never arrived, so
-  nothing of it is recorded), then record them in quickstart §A.3 "The pass" and a Milestone M8
-  section of visual-pass.md, then `mise run gate`, reviews A and B, tick T078–T081, PR.
+- **Next step**: M8 step 4, review A and review B (round 1), on `origin/main...HEAD` — implementation,
+  measurement and visual pass are done and recorded; `mise run gate` is green at this tree.
 
 ## Pull requests
 
@@ -39,7 +36,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | #402 | merged |
 | M6 | T085, T055–T067, T069, T068 | Sandboxed file links, translated and confirmed | #408 | merged |
 | M7 | T086, T070–T077 | Link context menu | #411 | merged |
-| M8 | T078–T081 | Close: SC-005 measurement, full visual walkthrough | — | in progress (T078 + B.18 committed; T079/B.8/B.17p2 unrun) |
+| M8 | T078–T080 (T081 confirmed by orchestrator's step 6) | Close: SC-005 measurement, full visual walkthrough | — | in progress: implemented, gate green, awaiting reviews and PR |
 
 ## Decisions
 
@@ -107,6 +104,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | 56 | 4-milestones | M7 review A F1 (MEDIUM): the right press resolved the link without the scrollbar-strip filter the hover applies, so over the strip — where a press pages the view — the menu offered **Open Link** for a link the pane never underlined | The press now reads its position through the same `strip`/`SCROLLBAR_WIDTH` filter (U161), so the menu offers a link exactly when the pane marks one, which is what its own comment claims | agent-resolved | tdd/cycle-log.md Cycle 94; U159, FR-016 |
 | 57 | 4-milestones | M7 review A F2 (MEDIUM): the terminal menu was the one cursor-anchored menu handing its raw press point to `cdk::overlay::Anchor::Point`, whose doc leaves clamping to the caller; the two link items take the panel from 112dp to 208dp, so a right-click low in the pane put **Copy** and **Paste** outside it | The press clamps its point with `features::project::clamp_menu_anchor` — the rule the app's other four menus already use — against the pane's own box, which is the box the overlay is mounted in. The item count comes from `features::session::terminal_menu_item_count`, pinned to the list `ui::terminal::context_menu_items` renders by `the_menu_item_count_matches_the_list`, so the panel cannot be measured as two items and rendered as four (U162) | agent-resolved | tdd/cycle-log.md Cycle 94; `cdk/overlay.rs` `Anchor::Point`; FR-029d |
 | 58 | 4-milestones | M7 review A F3 (LOW): the `COMPONENT_LOCAL` justification for `session.menu_link` held runs of literal spaces where `\`-continuations were meant | Rewritten with the continuations; the text is unasserted, so this is only what a reader of the allowlist sees | agent-resolved | `tests/root_state_is_shared.rs` |
+| 59 | 4-milestones | T079's SC-005 measurement: `p95` with an address hovered while addresses stream is 25% above the same hover with `--plain` streaming, over §A.3's 10% bound, reproduced in three matched pairs | Not a build blocker (§A.3 measures for trend, feature 018 precedent) but a real finding, not noise. A fourth run with the pointer off the pane (addresses streaming, nothing hovered) reproduces R2's own claim: `p95` is within 10% of `--plain`. So the cost is not per-line detection of addresses in the output — it is drawing the underline and the hint label once a link is marked, one `fill_text` call per hint character. In absolute terms the gap is 0.03 ms against a 16.7 ms frame budget. Recorded in quickstart.md "The pass" and visual-pass.md §A.3; closes Decisions/follow-ups on M5 review A finding 9 and M6 review A finding 5 below rather than caching `link_context` — caching would not touch the actual cost | agent-resolved | quickstart.md "§A.3, SC-005"; `crates/micold-client/src/ui/material/terminal_pane.rs` hint-drawing loop (`frame.fill_text` per character) |
 
 ## Declined review findings
 
@@ -118,12 +116,12 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M1 | B | F5 (MINOR): contract §3 rows `http://localhost:5173/`, `mailto:team@example.com,`, `file:///home/u/My%20Doc.pdf`, `team@example.com`, `src/main.rs:42`, `data:text/html,x` have no `detect` unit test of their own | Each is a line of the SC-002 corpus (`tests/fixtures/link_corpus.txt`, section "Contract link-recognition §3") checked cell by cell through `link_at`, which calls `detect`; a second table test would pass on arrival and duplicate it |
 | M5 | A | Finding 4 (MEDIUM): `container_host_names` assumes the container's hostname is the id's 12-character prefix, which podman does not default to | The sandbox's own `--hostname` is M6's business (C11, T055–T067): in M5 every sandboxed file link is `Unreachable` whatever the host matches, so no M5 behaviour changes. Kept as a follow-up below |
 | M5 | A | Finding 8 (LOW): a `file://` path keeps a `?query` or `#fragment`, so such a link reports "the file doesn't exist on this machine" | The spec's C4–C10 do not strip either, and RFC 8089 gives a `file` URL no query component; inventing a rule here would resolve a path the hint did not show. Kept as a follow-up to spec, not to patch inside M5 |
-| M5 | A | Finding 9 (LOW, efficiency): `ui::terminal::link_context` is rebuilt every frame and clones up to four `String`s | SC-005 is measured over the hover path in M8 (T078); four small clones per frame are far below the pane's own per-frame work, and caching it adds a second source of truth for the sandbox state. Kept as a follow-up |
+| M5 | A | Finding 9 (LOW, efficiency): `ui::terminal::link_context` is rebuilt every frame and clones up to four `String`s | Closed by T079's SC-005 measurement (Decision 59): the same clones sit inside every one of the seven measured figures, including the 0.12 ms `--plain` floor, so they cannot be the source of the 0.03 ms gap that measurement did find. Caching them would not change the actual cost and would add a second source of truth for the sandbox state |
 | M5 | B | Finding 5 (MINOR): the real-file leg of SC-007 sampled only some of FR-013's extensions | Fixed rather than declined: `every_runnable_kind` now creates one real file per entry of FR-013's list for this platform, plus every macOS bundle extension as a directory |
 | M5 | B | Finding 6 (MINOR): FR-013's lists are transcribed twice in one file, so one careless edit changes both | Accepted as is: the test copy is the spec's list and the production copy is the code's, and a single file is what a reviewer can compare. A generator or an `include_str!` of spec.md would couple the crate to the spec's prose |
 
 | M6 | B | Finding 7 (LOW): `PendingLinkOpen.session` is taken from `state.session.active` rather than from the pane the link was activated in | The pane draws the active session and nothing else — `ui::terminal::pane` is built from `state` with one session shown — so the active session *is* the pane the pointer was over. Carrying an id on `LinkActivated` would add a second source for the same fact. Revisit if the window ever shows two panes at once |
-| M6 | A | Finding 5 (LOW, efficiency): `link_context` now clones the shared locations and denied paths once per frame | The same finding as M5 review A finding 9, already a follow-up: SC-005 is measured over the hover path in M8 (T078), and caching the context adds a second source of truth for the sandbox state. The vectors are a handful of short strings |
+| M6 | A | Finding 5 (LOW, efficiency): `link_context` now clones the shared locations and denied paths once per frame | Closed with M5 review A finding 9 above by T079's SC-005 measurement (Decision 59): the same vectors sit inside every measured figure alike |
 
 | M7 | B | F4 (LOW): the wrapped Copy Link Address fixture ends in a space, so no trailing-punctuation trimming is proven on the copy path | The copy is `ResolvedLink.link.address`, and what that string excludes is M1's business: FR-005's trimming is checked cell by cell over the SC-002 corpus and in `detect`'s own tests. A second fixture here would assert `detect`'s rule through two more layers |
 | M7 | B | F5 (LOW): Cycle 87 said "five" `TerminalContextMenuOpened` call sites carry `link: None` | Fixed rather than declined: the entry now says four, and names the fifth — the pane's own press — as the one that carries the resolved link |
@@ -134,10 +132,15 @@ None. (M2's block on the Windows install smoke was resolved by #358; see Decisio
 
 ## Follow-ups not done
 
-- Quickstart §B.17's second half is unconfirmed: no AI CLI on this machine was seen to declare an OSC 8 link with `FORCE_HYPERLINK=1` (Claude Code 2.1.280), and that visual-pass run surfaced no hover feedback at all. Re-run it when a CLI is known to declare links (M4, minor).
+- Quickstart §B.17's second half is still not confirmed, re-attempted twice now. M4 (Claude Code
+  2.1.280) and M8 (Claude Code 2.1.283, `FORCE_HYPERLINK=1` confirmed present in-session) both show
+  **no hover feedback at all** for an AI-CLI pane's own plain address — the sanity check the M8
+  attempt required before touching the declared-link half, so that half was never reached in either
+  run. B.17 part 1 (M4) *did* get hover feedback from an AI CLI's output with the same client
+  binaries, so the gap is not "AI CLIs never show hover feedback" — it is something specific to this
+  kind of session that both attempts hit identically, on two Claude Code versions eight releases
+  apart, ruling out a version-specific cause. Worth a code-level look (M4/M8, minor).
 - Scrollback lines fetched by `apply_scrollback` do not bump the grid `seq`, so a resting pointer over just-fetched lines refreshes its hover only on the next pointer move or modifier change (M3, minor).
 - A translated host path is not symlink-resolved, so a sandboxed agent can leave `<project>/readme.txt` pointing at `~/.ssh/id_rsa`: the confirmation names the link's own path while the host opener follows the link. `reverse` consults no filesystem by design (SC-006 wants the hint and the opened path to be one string). Decide in the spec whether the confirmation should name the resolved target (M6 review B finding 10, low).
 - A `file://` path keeps a `?query` or `#fragment` and then reports as missing. Decide in the spec whether either is stripped (M5 review A finding 8, low).
-- `ui::terminal::link_context` is rebuilt on every frame; cache it on the session state if T078's SC-005 measurement shows it (M5 review A finding 9, low).
-- T081 ("CI green on all three OSes for the final tree") can only be ticked after M8's PR goes green,
-  which is the orchestrator's step 6 — it is not tickable by the milestone unit.
+- SC-005's frame-time comparison is 25% apart (over its 10% bound) once a link is actually marked under the pointer: drawing the hint label costs one `fill_text` call per character (~40 per frame while a link is hovered). Absolute cost is 0.03 ms against a 16.7 ms frame budget, so not urgent, but a batched or cached hint glyph run would remove it outright (T079, Decision 59, low).
