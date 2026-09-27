@@ -44,7 +44,16 @@ Reproduced at code level on `main` at `23a0e0ee` (details in the ledger, D1):
 
 ## Clarifications
 
-_None yet. Phase 2 triages the three open markers: FR-001, FR-006, FR-007._
+### Session 2026-09-27
+
+- Q: Is a worktree row answered for its own directory or for its project's root? → A: Its own
+  directory. A worktree session is spawned in the worktree (constitution Principle III), 029
+  FR-003b decides availability against the environment a session started in that directory would
+  receive, and the session service's environment-include cache is keyed by the spawn directory, so
+  FR-006's "the resolution a session spawn in that directory uses" is the worktree's own. Rows of
+  the project root ("Default") are answered for the root. _(agent-resolved:
+  specs/029-pi-cli-provider/spec.md#FR-003b; .specify/memory/constitution.md#III;
+  crates/micold-daemon/src/state.rs#env_include_vars_for)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -191,10 +200,9 @@ application idle and confirm it schedules no timers or wakeups for this feature.
   as the project opens (one environment-include resolution per directory, up front); (b) lazily, the
   first time a row is pointed at, focused or pressed, keeping the home answer until then; (c) only
   for the selected row and the row the user interacts with?]
-- **FR-007**: Worktree rows MUST be answered for their own directory, not their project's root.
-  [NEEDS CLARIFICATION: Is a worktree answered for its own directory (correct when an
-  environment-include script or version pin differs per worktree, one resolution per worktree), or
-  for its project's root directory (one resolution per project, wrong when worktrees differ)?]
+- **FR-007**: Worktree rows MUST be answered for their own directory, not their project's root;
+  rows of the project root ("Default") are answered for the root. One resolution per distinct
+  directory, shared with the session spawns there (see Clarifications).
 - **FR-008**: The Settings default and its "not installed" sentence MUST keep answering for the home
   directory (029 FR-003b); the per-session override list and the missing-CLI list MUST keep
   answering for their own directory, and MUST update that directory's held answer rather than the
