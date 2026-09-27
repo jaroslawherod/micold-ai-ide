@@ -8,7 +8,11 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M8 step 2: implement T078–T081 (SC-005 measurement, full visual walkthrough)
+- **Next step**: M8 step 2, part-done. T078 (stream fixture) and B.18 (guide gap) are committed. Still to do:
+  T079's two frame-probe figures + §B.8 + §B.17 part 2 (a subagent was mid-run on Xvfb `:91` with the
+  pinned release pair in `~/vp031m8/bin`, md5 `a48489ce…`/`43abce74…`; its report never arrived, so
+  nothing of it is recorded), then record them in quickstart §A.3 "The pass" and a Milestone M8
+  section of visual-pass.md, then `mise run gate`, reviews A and B, tick T078–T081, PR.
 
 ## Pull requests
 
@@ -35,7 +39,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | #402 | merged |
 | M6 | T085, T055–T067, T069, T068 | Sandboxed file links, translated and confirmed | #408 | merged |
 | M7 | T086, T070–T077 | Link context menu | #411 | merged |
-| M8 | T078–T081 | Close: SC-005 measurement, full visual walkthrough | — | in progress |
+| M8 | T078–T081 | Close: SC-005 measurement, full visual walkthrough | — | in progress (T078 + B.18 committed; T079/B.8/B.17p2 unrun) |
 
 ## Decisions
 
@@ -135,3 +139,5 @@ None. (M2's block on the Windows install smoke was resolved by #358; see Decisio
 - A translated host path is not symlink-resolved, so a sandboxed agent can leave `<project>/readme.txt` pointing at `~/.ssh/id_rsa`: the confirmation names the link's own path while the host opener follows the link. `reverse` consults no filesystem by design (SC-006 wants the hint and the opened path to be one string). Decide in the spec whether the confirmation should name the resolved target (M6 review B finding 10, low).
 - A `file://` path keeps a `?query` or `#fragment` and then reports as missing. Decide in the spec whether either is stripped (M5 review A finding 8, low).
 - `ui::terminal::link_context` is rebuilt on every frame; cache it on the session state if T078's SC-005 measurement shows it (M5 review A finding 9, low).
+- T081 ("CI green on all three OSes for the final tree") can only be ticked after M8's PR goes green,
+  which is the orchestrator's step 6 — it is not tickable by the milestone unit.
