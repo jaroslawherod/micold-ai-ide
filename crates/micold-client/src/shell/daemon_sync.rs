@@ -460,6 +460,17 @@ pub fn refresh_cli_availability(app: &mut App) {
     }
 }
 
+/// The environment-include settings in force, as the availability store compares them (feature
+/// 033, research R6). One mapping for both the baseline `on_connected` records and the comparison
+/// the `SettingsChanged` arm makes, so a new field cannot reach one and not the other.
+fn env_include_settings(app: &App) -> EnvIncludeSettings {
+    EnvIncludeSettings {
+        enabled: app.env_include_enabled,
+        script_path: app.env_include_script_path.clone(),
+        timeout_secs: app.env_include_timeout_secs,
+    }
+}
+
 /// What the service's answer describes, from what this client knows about the service it started.
 ///
 /// Two facts, one place. The service reports only the *set*; the client is what knows whether it
@@ -560,11 +571,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // holds, so a change to it re-asks every answer. Compared against what the answers were
             // asked under, not against `app`'s fields — this window's own save overwrote those
             // before its echo arrived, so they would never differ here (research R6).
-            let echoed = EnvIncludeSettings {
-                enabled: app.env_include_enabled,
-                script_path: app.env_include_script_path.clone(),
-                timeout_secs: app.env_include_timeout_secs,
-            };
+            let echoed = env_include_settings(app);
             if app.core.session.availability.env_include_changed(&echoed) {
                 refresh_cli_availability(app);
             }
@@ -1028,11 +1035,7 @@ pub fn on_connected(
         .core
         .session
         .availability
-        .env_include_changed(&EnvIncludeSettings {
-            enabled: app.env_include_enabled,
-            script_path: app.env_include_script_path.clone(),
-            timeout_secs: app.env_include_timeout_secs,
-        });
+        .env_include_changed(&env_include_settings(app));
     ask_cli_availability(app, AvailabilityKey::Home);
     sync_cli_availability(app);
     if let (Some(project), Some(daemon)) = (project, app.daemon.clone()) {

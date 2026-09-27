@@ -27,9 +27,10 @@
 //!
 //! # Scope
 //!
-//! `crates/micold-client/src/`, minus test code: `src/main_tests.rs`, and everything from a
-//! file's first `#[cfg(test)]` on (this crate keeps its inline test modules at the bottom). Tests
-//! drive the askers; they are not askers.
+//! `crates/micold-client/src/` minus `src/main_tests.rs`, whose tests drive the askers rather than
+//! being askers. Inline `#[cfg(test)]` code is scanned like the rest: several files put a
+//! test-gated item above production code, so skipping "from the first `#[cfg(test)]` on" would
+//! hide production code (M2 review), and no inline test names a marker today.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -42,7 +43,9 @@ const MARKERS: &[&str] = &[
     "ask_cli_availability",
     "sync_cli_availability",
     "refresh_cli_availability",
-    "ClientMsg::AiCliAvailabilityRequest",
+    // Bare, not `ClientMsg::`-qualified: a glob import would otherwise slip past. The reply is
+    // `AiCliAvailability`, which this does not match.
+    "AiCliAvailabilityRequest",
 ];
 
 /// The lines that may name a marker.
@@ -137,7 +140,7 @@ fn repo_root() -> PathBuf {
         .expect("canonicalize repository root")
 }
 
-/// Every non-test `.rs` file under `crates/micold-client/src/`.
+/// Every `.rs` file except `main_tests.rs` under `crates/micold-client/src/`.
 fn client_sources(root: &Path) -> Vec<PathBuf> {
     fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
         let Ok(entries) = fs::read_dir(dir) else {
@@ -161,9 +164,11 @@ fn client_sources(root: &Path) -> Vec<PathBuf> {
 }
 
 /// A line that names a marker in code rather than in prose.
+///
+/// Only `//` comments are skipped. This crate writes no `/* */` blocks, and skipping lines that
+/// start with `*` would also skip code that starts with a dereference.
 fn names_a_marker(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    if trimmed.starts_with("//") || trimmed.starts_with('*') {
+    if line.trim_start().starts_with("//") {
         return false;
     }
     MARKERS.iter().any(|m| line.contains(m))
@@ -182,11 +187,7 @@ fn call_sites() -> Vec<(String, String)> {
             .unwrap_or(&source)
             .to_string_lossy()
             .replace('\\', "/");
-        for line in text
-            .lines()
-            .take_while(|l| l.trim() != "#[cfg(test)]")
-            .filter(|l| names_a_marker(l))
-        {
+        for line in text.lines().filter(|l| names_a_marker(l)) {
             found.push((rel.clone(), line.trim().to_string()));
         }
     }
