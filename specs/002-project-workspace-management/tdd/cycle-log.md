@@ -1,0 +1,46 @@
+# Cycle Log: BUG-005 — a known-projects list longer than the window
+
+Append only. Newest last. Every entry's `red` block is the evidence that the test existed and
+failed before the implementation.
+
+## Baseline
+
+- Not run in-session before the first cycle. Stand-in: `origin/main` at `23a0e0ee` (green main CI)
+  plus the specs-only commit `29260dc3`. The post-change gate below is the first full run.
+
+## Cycle 1 — A1, A2, A3 (T065, T066 → T067, T068), grouped
+
+- tests: `crates/micold-client/tests/known_projects_overflow.rs` (new):
+  `the_body_list_scrolls_to_its_last_project_and_its_actions_under_a_fixed_header` (A1),
+  `the_switcher_panel_stays_in_the_window_and_scrolls_to_add_project` (A2),
+  `a_switcher_panel_that_fits_keeps_the_height_it_always_had` (A3, guard). New apparatus in
+  `tests/support/layout.rs`: `painted_text_scrolled` (turns the wheel over a point, then paints) and
+  `Overflow::on_screen` (the paint origin with the draw call's transformation applied).
+- red: `scripts/build-lock.sh cargo test -p micold-client --test known_projects_overflow`, run with
+  `ui/shell.rs` and `ui/material/menu.rs` at `origin/main` → 1 passed, 2 failed:
+  - A1: `after scrolling the known-projects list to its end, the last project "proj-19" must be painted inside the window` — painted rows `proj-00`…`proj-03` only.
+  - A2: `after scrolling the switcher panel to its end, "proj-19" must be painted inside the window (FR-011a, 008 FR-009)` — painted switcher rows `proj-00`…`proj-14` (y 87…758.5) only.
+  - A3 passed on arrival (guard: a panel that fits was already 208dp). Deliberate mutant: the
+    switcher's `Scrollable` at `height(Length::Fill)` → `must stay exactly 208dp tall … not 735.0dp`;
+    restored.
+- green: `shell.rs` — the rows go into `material::Scrollable` (`width`/`height` `Fill`) under a
+  fixed "Known projects" title, the body and list columns `height(Fill)`; `menu.rs` —
+  `MenuOverlay` wraps `item_column` in `material::Scrollable` (`height(Shrink)`), so the panel is
+  bounded by the room its anchor leaves. `known_projects_overflow`: 3 passed.
+  `layout_snapshot.txt` regenerated (T067/T068): only new scrollable nodes (paths one level deeper
+  under each `MenuOverlay` panel) and the body/list columns now filling the body's height; no row or
+  item moved (compared with paths stripped).
+- suite: `mise run gate` → GATE_EXIT=0; 3559 passed, 0 failed, 8 ignored (337 binaries).
+- refactor: none needed.
+- notes:
+  - Grouped: one red build and one green build for the three rows, because every build waits on
+    the shared `target-shared` lock (the 032 precedent).
+  - Test fixes before the final red, both apparatus, neither loosening an assertion: (1) the paint
+    origin a scrollable reports is its *layout* position (the scroll is a draw-time translation), so
+    the first green attempt read `proj-14` at y 1471 — `on_screen` applies the transformation; on
+    `origin/main` nothing is translated, so the red above is unchanged by it. (2) the closed ⋮
+    overflow menu is laid out at the same edge and width as the switcher; `panel_box` now takes the
+    later-stacked of the two.
+  - A2's "panel bottom inside the window" assertion also holds on `origin/main` (the panel's node is
+    clamped to its container; the rows overflowed inside it); the scroll assertion is the one that
+    discriminates.

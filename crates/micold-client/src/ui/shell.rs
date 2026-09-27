@@ -77,7 +77,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
         .into(),
     };
 
-    let mut body = column![].spacing(spacing::LG);
+    let mut body = column![].spacing(spacing::LG).height(Length::Fill);
 
     // The background-restart return notice (feature 008, FR-011 / SC-007) used to be drawn
     // here. It never appeared: this function is the *else* branch of
@@ -90,8 +90,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
     // and unavailable folders, blocking their reopen (FR-022, FR-023).
     if !state.workspace.projects.is_empty() {
         let active = state.workspace.active.clone();
-        let mut list =
-            column![Text::new("Known projects", TypeRole::Section, r)].spacing(spacing::SM);
+        let mut rows = column![].spacing(spacing::SM);
 
         for project in &state.workspace.projects {
             let is_active = active.as_ref() == Some(&project.path);
@@ -160,12 +159,24 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             let entry = cdk::reflow::Reflow::new(lead, actions)
                 .spacing(spacing::SM)
                 .lead_min(ROW_LEAD_MIN);
-            list = list.push(
+            rows = rows.push(
                 material::Surface::new(entry, SurfaceKind::ListItem, r)
                     .padding(spacing::MD)
                     .width(Length::Fill),
             );
         }
+        // The rows scroll in whatever height the header leaves them; the header and the section
+        // title stay put (FR-011a, BUG-005). They were a bare `column` in a `Fill` container, so a
+        // catalog taller than the window was laid out past its bottom edge, clipped, and out of
+        // reach — four rows of twenty at the default window.
+        let list = column![
+            Text::new("Known projects", TypeRole::Section, r),
+            material::Scrollable::new(rows, r)
+                .width(Length::Fill)
+                .height(Length::Fill),
+        ]
+        .spacing(spacing::SM)
+        .height(Length::Fill);
         body = body.push(list);
     }
 

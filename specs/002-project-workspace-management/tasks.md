@@ -415,21 +415,21 @@ and the launch restore".
 body's known-projects list and the top-bar switcher panel scroll instead of clipping (FR-011a,
 SC-011). See plan.md "Bugfix: a known-projects list longer than the window".
 
-- [ ] T065 [P] Failing regression test (BUG-005, body list) in
+- [X] T065 [P] Failing regression test (BUG-005, body list) in
   `crates/micold-client/tests/known_projects_overflow.rs`: 20 known projects, no project active,
   `ui::view` painted at 1280×800 with `support::layout`. Asserts the list sits in a scrollable, that
   scrolling it to the end paints the last project's name and its Open/Rename/Forget inside the
   window, and that the "No project open" header is painted at the same place before and after the
   scroll. Must fail on `origin/main` because rows 5–20 are never painted.
-- [ ] T066 [P] Failing regression test (BUG-005, switcher panel) in the same file: the same catalog
+- [X] T066 [P] Failing regression test (BUG-005, switcher panel) in the same file: the same catalog
   with `switcher_open: true`. Asserts the panel's bottom edge is inside the window and that
   scrolling it to the end paints the last project and "Add project…" inside the window; with three
   projects the panel's height is unchanged (still `menu_panel_size`'s estimate, no scrollbar). Must
   fail on `origin/main` because rows 16–20 and "Add project…" are never painted.
-- [ ] T067 Put the known-projects list in `material::Scrollable` with `height(Length::Fill)` in
+- [X] T067 Put the known-projects list in `material::Scrollable` with `height(Length::Fill)` in
   `crates/micold-client/src/ui/shell.rs`, the header outside it; regenerate
   `crates/micold-client/tests/fixtures/layout_snapshot.txt` for the new node (depends on T065).
-- [ ] T068 Wrap `MenuOverlay`'s item column in `material::Scrollable` (`height(Length::Shrink)`)
+- [X] T068 Wrap `MenuOverlay`'s item column in `material::Scrollable` (`height(Length::Shrink)`)
   and cap the panel at the room below the app bar in
   `crates/micold-client/src/ui/material/menu.rs`; regenerate the layout snapshot if it moves
   (depends on T066; after T067, same fixture).

@@ -339,14 +339,16 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
 
         // Fade the panel box itself (scrim of its own surface colour). Where it lands is the
         // overlay's business; how wide and how padded it is, is this module's.
+        // The items scroll inside the panel once they outgrow the room the anchor leaves them, and
+        // the panel stops at the window's bottom edge (002 FR-011a, BUG-005). `Shrink`, so a panel
+        // that fits is exactly as tall as before and `menu_panel_size` stays exact for the menus
+        // it estimates — the select's list is the precedent (`picker.rs`). Without it a long
+        // project catalog ran the switcher off the bottom of the window, "Add project…" with it.
+        let items = super::Scrollable::new(item_column(items, r), r)
+            .width(Length::Fill)
+            .height(Length::Shrink);
         let panel = super::fade(
-            menu_panel(
-                item_column(items, r),
-                Length::Fixed(PANEL_WIDTH),
-                r,
-                true,
-                panel_padding(),
-            ),
+            menu_panel(items, Length::Fixed(PANEL_WIDTH), r, true, panel_padding()),
             open,
             FADE,
             super::SurfaceKind::Menu.tone(r),
