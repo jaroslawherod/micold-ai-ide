@@ -204,6 +204,11 @@ fn record_onboarding_done(path: &std::path::Path) -> std::io::Result<()> {
 /// The name's own metadata (`symlink_metadata`, which does not follow) is checked before the open,
 /// so a link or a FIFO is never opened, and again after it: on Unix the opened file must be the one
 /// the name still holds. A name swapped for a link between the two fails that comparison.
+///
+/// A hard link is not refused, and need not be: a session can only hard-link a file it can already
+/// reach, so reading it through the link shows the sandbox nothing it could not read. Off Unix
+/// there is no inode to compare and only the two type checks apply; the sandbox runs on a Unix
+/// kernel there too (WSL2 or a VM), and its home is not a Windows symlink the host would follow.
 fn read_unless_linked(path: &std::path::Path) -> std::io::Result<Option<String>> {
     use std::io::Read;
 
