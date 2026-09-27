@@ -1076,8 +1076,9 @@ sorted deepest-first, so C15's order broke.
 - green: `LinkMenuItem`, `link_menu_items` (both items for `Some`, none for `None`), the `link` field
   on `TerminalContextMenuOpened`, `session.menu_link`, and `context_menu_opened` recording it ->
   `cargo test -p micold-client --test features_session_links` 17 passed; 0 failed
-- refactor: none; the five existing `TerminalContextMenuOpened` call sites in `src/` and `tests/`
-  carry `link: None` (T073)
+- refactor: none; the four existing `TerminalContextMenuOpened` call sites that are not the pane's
+  own (`main.rs`, `popover_displacement.rs`, `terminal_focus.rs` twice) carry `link: None`; the
+  fifth, the pane's right press, carries the resolved link from Cycle 89 (T073)
 
 ## Cycle 88: U87, U88, U89 — the two items act, and the close clears (T070, T073)
 
@@ -1127,3 +1128,26 @@ sorted deepest-first, so C15's order broke.
   `a_right_press_over_plain_text_offers_no_link_items` `left: ["Open Link", "Copy Link Address",
   "Copy", "Paste"]` / `right: ["Copy", "Paste"]`; restored and re-run green
 - refactor: none
+
+## Cycle 92: the M7 review round — B F1, B F2, and the component-local guard
+
+- gate fix: `tests/root_state_is_shared.rs::component_local_paths_are_pinned_or_moved` (feature 028
+  FR-007a) refused `state.session.menu_link` as component-local state that is neither moved nor
+  pinned. Red: `1 path(s) are component-local and neither moved nor pinned … state.session.menu_link`.
+  Green: the path is named in `COMPONENT_LOCAL` with the assertion that pins it to the application —
+  `choosing_open_link_opens_the_captured_link_and_closes_the_menu`, which reads the link back a
+  message after the press captured it, the same shape as `session.start_press`
+- review B F1 (MEDIUM): every M7 test of **Open Link** used a URL, so a shortcut from the captured
+  target to `Outcome::OpenLink` would have passed the milestone and opened a sandboxed file the
+  gesture asks about first. Test:
+  `crates/micold-client/tests/features_session_links.rs::open_link_on_a_sandboxed_path_asks_first_like_the_gesture_does`,
+  a guard, green on arrival. Its red is the mutant that answers a `HostPath` from the target
+  directly: `scripts/build-lock.sh cargo test -p micold-client --test features_session_links open_link_on_a_sandboxed_path`
+  -> `left: [OpenLink(Path { path: "/home/u/proj/notes.md", address: "file:///work/proj/notes.md" })]`
+  / `right: []`; restored with `git checkout` and re-run green
+- review B F2 (LOW): `menu_labels()` read the view's item list without asking whether a menu was
+  open, so dropping the anchor from `context_menu_opened` left A20 and A22 green. It now answers
+  `Vec::new()` while `terminal_context_menu` is `None`, which makes both acceptance tests read the
+  menu the user would see
+- gate: `mise run gate` green (fmt, clippy `-D warnings` core and workspace, `cargo test --workspace`,
+  `scripts/tests/*.test.sh` 15 cases / 0 failures)
