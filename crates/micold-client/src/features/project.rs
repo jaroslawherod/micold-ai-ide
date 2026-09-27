@@ -77,6 +77,10 @@ pub struct State {
     pub rename_draft: Option<RenameDraft>,
     /// The folder-browser state; its presence *is* the project-selector dialog being shown (T037).
     pub selector: Option<Selector>,
+    /// The body's known-projects list offset last reported, in whole pixels (BUG-005). Held so a
+    /// report that did not move the list — its first frame, a window resize — is told apart from a
+    /// scroll, and closes nothing. Transient — not persisted.
+    pub list_scroll_offset: u32,
 }
 
 /// An open project right-click context menu (feature 015): which project it acts on, and where
@@ -420,6 +424,18 @@ pub fn menu_toggled(
 }
 
 /// The project context menu was dismissed.
+/// The body's known-projects list reported its offset (002 FR-011a, BUG-005).
+///
+/// A scrollable reports whenever its viewport changes, not only when it scrolls — on its first
+/// frame, and on every window resize. Only a moved offset is the ground moving under a popover
+/// (017 FR-009), so only that closes one.
+pub fn list_scrolled(state: &mut crate::app::State, offset: u32) {
+    if offset != state.project.list_scroll_offset {
+        state.project.list_scroll_offset = offset;
+        state.dismiss_on_scroll_beneath();
+    }
+}
+
 pub fn menu_dismissed(state: &mut crate::app::State) {
     state.project.menu_open = None;
 }
@@ -538,10 +554,10 @@ pub enum Msg {
     /// Toggle the top-bar project switcher panel (feature 008, FR-004). Mutually exclusive
     /// with the overflow menu.
     SwitcherToggled,
-    /// The body's known-projects list scrolled (002 FR-011a, BUG-005). The ground moved under
-    /// whatever floats over it, so the transient popovers close — as they do when the sidebar
-    /// scrolls (017 FR-009).
-    ListScrolled,
+    /// The body's known-projects list reported its offset, in whole pixels (002 FR-011a, BUG-005).
+    /// When the offset moved, the ground moved under whatever floats over it, so the transient
+    /// popovers close — as they do when the sidebar scrolls (017 FR-009).
+    ListScrolled(u32),
 }
 
 /// The pure half of this feature's reducer surface: shape A (contract M2).
@@ -567,7 +583,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::RenameConfirmed => rename_confirmed(state),
         Msg::RenameCancelled => rename_cancelled(state),
         Msg::MenuDismissed => menu_dismissed(state),
-        Msg::ListScrolled => state.dismiss_on_scroll_beneath(),
+        Msg::ListScrolled(offset) => list_scrolled(state, offset),
         Msg::ForgetRequested(path) => forget_requested(state, path),
         Msg::ForgetCancelled => forget_cancelled(state),
         // Performed by the binary at the I/O boundary: the home directory and a folder scan, a

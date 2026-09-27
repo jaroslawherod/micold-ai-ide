@@ -380,6 +380,8 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
             }),
             selector: Some(Selector::open_at(PathBuf::from("/tmp"))),
             forget_target: Some(PathBuf::from("/p")),
+            // Not a surface: the known-projects list's last offset (BUG-005).
+            list_scroll_offset: 0,
         },
         worktree_form: worktree_form::State {
             form: Some(Default::default()),

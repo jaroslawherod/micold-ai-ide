@@ -73,3 +73,22 @@ failed before the implementation.
 - notes: `ContextArea` used to borrow its child's tag and state; it now has its own, which the
   window point needs. The same fix reaches the sidebar's rows and the terminal tab strip, which sit
   in scrollables too.
+
+## Cycle 3 — review round 2: a report is not a scroll (A8)
+
+- Finding (round-2 review, MAJOR): iced 0.14's scrollable publishes `on_scroll` whenever its
+  viewport changes — its first frame, every window resize — not only when the offset moves, so
+  Cycle 2's `ListScrolled` would close the switcher on a resize with the list overflowing.
+- test: `known_projects_overflow.rs` `a_report_from_the_body_list_that_did_not_move_it_keeps_the_switcher_open` (A8).
+- red: `scripts/build-lock.sh cargo test -p micold-client --test known_projects_overflow`, with
+  `ListScrolled(u32)` stubbed as a no-op arm (the variant had to carry the offset for the test to
+  name it) → 5 passed, 2 failed: A8 `a report at a new offset is a scroll, and closes the switcher`;
+  A5 `the switcher must close when the list beneath it scrolls (017 FR-009)`. Under Cycle 2's
+  always-dismiss arm A8's first assertion is the one that fails instead (the resize half); that
+  arm was not re-run, so this is argued from the code, not observed.
+- green: `project::State::list_scroll_offset`; `list_scrolled` dismisses only when the reported
+  offset differs from it; the body list reports through `Scrollable::on_scroll_offset`. 7 passed.
+  `root_state_is_shared.rs` pins the new path in `COMPONENT_LOCAL` (A8 is the assertion);
+  `surface_registration_cost.rs`'s exhaustive `project::State` literal names the field.
+- suite: `mise run gate` → GATE_EXIT=0; 3563 passed, 0 failed, 8 ignored (337 binaries).
+- refactor: none needed.

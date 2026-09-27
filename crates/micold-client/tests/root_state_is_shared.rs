@@ -123,6 +123,12 @@ const COMPONENT_LOCAL: &[(&str, &str)] = &[
          and where it was opened from is application state (018 FR-029d)",
     ),
     (
+        "project.list_scroll_offset",
+        "tests/known_projects_overflow.rs::a_report_from_the_body_list_that_did_not_move_it_keeps_\
+         the_switcher_open — the offset last seen is compared with the next report on \
+         `app::State`, so a resize that moves nothing closes no popover (002 BUG-005)",
+    ),
+    (
         "session.menu_link",
         "tests/features_session_links.rs::choosing_open_link_opens_the_captured_link_and_closes_\
          the_menu — the link is captured on the right press and acted on when an item is chosen, \

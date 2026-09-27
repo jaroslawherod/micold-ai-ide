@@ -313,3 +313,30 @@ fn scrolling_the_switcher_closes_a_rows_context_menu_and_keeps_the_switcher() {
         "scrolling the switcher must not close the switcher"
     );
 }
+
+/// A scrollable also reports its viewport when nothing scrolled — on its first frame, and whenever
+/// its bounds change, as a window resize changes them. Only a moved offset is the ground moving, so
+/// a report at the offset already seen closes nothing (017 FR-009; round-2 review of BUG-005).
+#[test]
+fn a_report_from_the_body_list_that_did_not_move_it_keeps_the_switcher_open() {
+    let mut state = state(MANY, true);
+    // The list at rest reports offset 0; after a resize it reports the offset it already had.
+    state.update(Message::Project(ProjectMsg::ListScrolled(0)));
+    assert!(
+        state.project.switcher_open,
+        "the list reporting it is still at the top must not close the switcher"
+    );
+    state.project.switcher_open = false;
+    state.update(Message::Project(ProjectMsg::ListScrolled(240)));
+    state.project.switcher_open = true;
+    state.update(Message::Project(ProjectMsg::ListScrolled(240)));
+    assert!(
+        state.project.switcher_open,
+        "a second report at the same offset (a resize) must not close the switcher"
+    );
+    state.update(Message::Project(ProjectMsg::ListScrolled(320)));
+    assert!(
+        !state.project.switcher_open,
+        "a report at a new offset is a scroll, and closes the switcher"
+    );
+}
