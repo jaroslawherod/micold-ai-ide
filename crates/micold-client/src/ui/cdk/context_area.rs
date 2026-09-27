@@ -30,6 +30,14 @@
 //! bounds, because that is what a menu anchor needs — `overlay::Anchor::Point` positions in the same
 //! space. Deriving it from the layout instead would anchor every menu at its tab's corner, which is
 //! not where the user clicked.
+//!
+//! **Not the cursor this widget is handed, though, when it sits in a scrolled viewport.** A
+//! scrollable gives its content the cursor in *content* coordinates — the window point plus the
+//! offset — so inside one the handed cursor is the scrolled distance away from the click. The
+//! pointer's own events are never translated, so the area remembers the window point the last
+//! `CursorMoved` carried and reports that (002 BUG-005: a right-click on a scrolled switcher row
+//! opened its menu at the window's bottom edge). The handed cursor still decides *whether* the
+//! press is over this area — in content coordinates, which is what its bounds are in.
 
 use iced::advanced::widget::{tree, Operation, Tree, Widget};
 use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell};
@@ -86,6 +94,14 @@ impl<'a, M: 'a> ContextArea<'a, M> {
 }
 
 impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<Pointer>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(Pointer::default())
+    }
+
     fn children(&self) -> Vec<Tree> {
         vec![Tree::new(&self.content)]
     }
@@ -156,7 +172,13 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
             viewport,
         );
 
-        let over = cursor.position_over(layout.bounds());
+        let pointer = tree.state.downcast_mut::<Pointer>();
+        if let Event::Mouse(mouse::Event::CursorMoved { position }) = event {
+            pointer.window = Some(*position);
+        }
+        let over = cursor
+            .position_over(layout.bounds())
+            .map(|handed| pointer.window.unwrap_or(handed));
         if let Some(build) = &self.on_primary_press {
             if let Some(point) = reported_press(event, mouse::Button::Left, over) {
                 // Not captured: the child's own `on_press` is what this press is for, and it has
@@ -224,14 +246,15 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
             translation,
         )
     }
+}
 
-    fn tag(&self) -> tree::Tag {
-        self.content.as_widget().tag()
-    }
-
-    fn state(&self) -> tree::State {
-        self.content.as_widget().state()
-    }
+/// What the area remembers between events: where the pointer last was, in window pixels.
+///
+/// `None` until the first `CursorMoved`, and then the handed cursor is used as before — outside a
+/// scrolled viewport the two agree anyway.
+#[derive(Debug, Default)]
+struct Pointer {
+    window: Option<iced::Point>,
 }
 
 /// The whole decision this widget makes: which events become a report, and at what point.

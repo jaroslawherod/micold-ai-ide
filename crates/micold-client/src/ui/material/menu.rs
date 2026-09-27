@@ -291,6 +291,7 @@ pub struct MenuOverlay<'a, M> {
     roles: Roles,
     open: bool,
     anchor: Option<iced::Point>,
+    on_scroll: Option<M>,
     lifetime: std::marker::PhantomData<&'a ()>,
 }
 
@@ -304,6 +305,7 @@ impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
             roles,
             open: true,
             anchor: None,
+            on_scroll: None,
             lifetime: std::marker::PhantomData,
         }
     }
@@ -324,6 +326,16 @@ impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
         self.anchor = Some(point);
         self
     }
+
+    /// The message published when a panel too long for the window scrolls its items.
+    ///
+    /// For whatever hangs off one of those items — a row's context menu is anchored beside the row,
+    /// and once the row has scrolled away the menu points at a different one (017 FR-009). Not the
+    /// panel's own dismissal: scrolling a menu is using it, not leaving it.
+    pub fn on_scroll(mut self, message: M) -> Self {
+        self.on_scroll = Some(message);
+        self
+    }
 }
 
 impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
@@ -334,6 +346,7 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
             roles: r,
             open,
             anchor,
+            on_scroll,
             ..
         } = m;
 
@@ -344,9 +357,12 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
         // that fits is exactly as tall as before and `menu_panel_size` stays exact for the menus
         // it estimates — the select's list is the precedent (`picker.rs`). Without it a long
         // project catalog ran the switcher off the bottom of the window, "Add project…" with it.
-        let items = super::Scrollable::new(item_column(items, r), r)
+        let mut items = super::Scrollable::new(item_column(items, r), r)
             .width(Length::Fill)
             .height(Length::Shrink);
+        if let Some(message) = on_scroll {
+            items = items.on_scroll(message);
+        }
         let panel = super::fade(
             menu_panel(items, Length::Fixed(PANEL_WIDTH), r, true, panel_padding()),
             open,

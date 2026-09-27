@@ -44,3 +44,32 @@ failed before the implementation.
   - A2's "panel bottom inside the window" assertion also holds on `origin/main` (the panel's node is
     clamped to its container; the rows overflowed inside it); the scroll assertion is the one that
     discriminates.
+
+## Cycle 2 — review findings (A4–A7), grouped
+
+- Behaviours added after review A (code-review, high) and review B: A4 right-click point in a
+  scrolled switcher, A5 the body list's scroll closes popovers, A6 the switcher's scroll closes a
+  row's context menu and keeps the switcher, A7 the switcher panel stops `spacing::SM` short of the
+  window's bottom edge (a tightening of A2's bound).
+- tests: `known_projects_overflow.rs` `a_right_click_on_a_scrolled_switcher_row_reports_where_it_landed` (A4),
+  `scrolling_the_body_list_closes_the_switcher_floating_over_it` (A5),
+  `scrolling_the_switcher_closes_a_rows_context_menu_and_keeps_the_switcher` (A6),
+  `the_switcher_panel_stays_in_the_window_and_scrolls_to_add_project` (A7, bound tightened). New
+  apparatus: `support::layout::messages_after` (dispatches wheel/move/press inputs, returns what was
+  published).
+- red: `scripts/build-lock.sh cargo test -p micold-client --test known_projects_overflow` at `db34b725` + tests → 2 passed, 4 failed:
+  - A4: `published: [Project(MenuToggled("/fixture/proj-19", (1080, 1003)))]` / `left: [(1080, 1003)]` — the press point in scrolled content coordinates, 1003 in an 800px window.
+  - A5: `turning the wheel over the known-projects list must report the scroll`
+  - A6: `a row's context menu must close when the switcher scrolls its row away (017 FR-009)`
+  - A7: `the switcher panel's bottom edge is at 800.0; it must stop 8dp short of the window's 800`
+- green: `cdk::ContextArea` keeps its own tree state — the window point the last `CursorMoved`
+  carried — and reports that for a press over it (the handed cursor is in content coordinates
+  inside a scrollable); `ProjectMsg::ListScrolled` → `dismiss_on_scroll_beneath`, published by the
+  body list's `Scrollable::on_scroll`; `MenuOverlay::on_scroll(M)`, which the switcher sets to
+  `ProjectMsg::MenuDismissed`; `Anchor::TopEnd` pads the bottom by `end`. 6 passed.
+- suite: `mise run gate` → GATE_EXIT=0; 3562 passed, 0 failed, 8 ignored (337 binaries). One clippy
+  fix on the way (`let _ =` on a unit `update`).
+- refactor: none needed.
+- notes: `ContextArea` used to borrow its child's tag and state; it now has its own, which the
+  window point needs. The same fix reaches the sidebar's rows and the terminal tab strip, which sit
+  in scrollables too.

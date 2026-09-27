@@ -16,7 +16,7 @@ mod support;
 use iced::{Element, Point};
 use micold_client::app::{Message, State};
 use micold_client::features::connection::ConnectionStatus;
-use micold_client::features::project;
+use micold_client::features::project::{self, Msg as ProjectMsg};
 use micold_client::features::sandbox::Sandbox;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::tokens::{anatomy, density};
@@ -164,17 +164,19 @@ fn the_switcher_panel_stays_in_the_window_and_scrolls_to_add_project() {
 
     // The panel's own box: the outermost node exactly its width at its trailing-edge position.
     // Outermost, because the rows' column inside a scrolling panel is as tall as all the rows.
+    //
+    // The bound alone held on `origin/main` too — the panel's node was clamped to its container and
+    // the rows overflowed *inside* it — so the scroll below is what tells the fix apart. The inset
+    // is the fix's own: a panel that meets the window's edge loses its rounded corners and its
+    // shadow there, so it stops as far short of the bottom edge as it hangs from the trailing one.
     let panel = panel_box(&state)
         .map(|r| r.y + r.height)
-        .unwrap_or(f32::NEG_INFINITY);
+        .expect("the open switcher panel is laid out by the trailing edge");
     assert!(
-        panel.is_finite(),
-        "the open switcher panel must be laid out at {PANEL_WIDTH}dp by the trailing edge"
-    );
-    assert!(
-        panel <= lay::WINDOW.height + 0.5,
-        "the switcher panel's bottom edge is at {panel:.1}, past the window's {} — the rows below \
-         it are cut off (FR-011a)",
+        panel <= lay::WINDOW.height - PANEL_END_INSET + 0.5,
+        "the switcher panel's bottom edge is at {panel:.1}; it must stop {PANEL_END_INSET}dp short \
+         of the window's {} so the rows below are never cut off and the panel keeps its corners \
+         (FR-011a)",
         lay::WINDOW.height
     );
 
@@ -208,5 +210,106 @@ fn a_switcher_panel_that_fits_keeps_the_height_it_always_had() {
         (tallest - estimate).abs() < 0.5,
         "a switcher panel that fits must stay exactly {estimate}dp tall — `menu_panel_size`'s \
          estimate, which context-menu clamping relies on — not {tallest:.1}dp (FR-011a)"
+    );
+}
+
+/// A right-click on a switcher row reports where it landed **in the window**, however far the
+/// panel is scrolled (feature 015's contract: the Forget menu opens at the click point).
+///
+/// A scrollable hands its content the cursor in *content* coordinates — shifted by the offset — so
+/// a row that reads its press point from the cursor it was given reports a point the scrolled
+/// distance below the click, and the menu opened at the window's bottom edge instead of at the row.
+#[test]
+fn a_right_click_on_a_scrolled_switcher_row_reports_where_it_landed() {
+    let state = state(MANY, true);
+    let last = last_name(&state);
+    let wheel_at = Point::new(panel_left() + PANEL_WIDTH / 2.0, lay::WINDOW.height - 100.0);
+    let scrolled = lay::painted_text_scrolled(view(&state), &mut lay::renderer(), wheel_at);
+    let row = scrolled
+        .iter()
+        .find(|t| t.content == last && t.on_screen.x >= panel_left() - 0.5 && on_screen(t))
+        .expect("the last project is on screen once the switcher is scrolled to its end");
+    let click = Point::new(row.on_screen.x + 4.0, row.on_screen.y + 4.0);
+
+    let published = lay::messages_after(
+        view(&state),
+        &lay::renderer(),
+        &[
+            lay::Input::Wheel(wheel_at),
+            lay::Input::Move(click),
+            lay::Input::Press(click, iced::mouse::Button::Right),
+        ],
+    );
+    let anchors: Vec<(u16, u16)> = published
+        .iter()
+        .filter_map(|m| match m {
+            Message::Project(ProjectMsg::MenuToggled(path, point)) if path.ends_with(&last) => {
+                Some(*point)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        anchors,
+        vec![(click.x as u16, click.y as u16)],
+        "a right-click on {last:?} in the scrolled switcher must open its menu at the click point, \
+         in window pixels — not the point in the scrolled content (feature 015, FR-011a); \
+         published: {published:?}"
+    );
+}
+
+/// Scrolling the body's list is the ground moving under whatever floats over it, so it closes the
+/// transient popovers — as scrolling the sidebar does (feature 017 FR-009). The switcher is one.
+#[test]
+fn scrolling_the_body_list_closes_the_switcher_floating_over_it() {
+    let mut state = state(MANY, true);
+    // Over the body's rows, clear of the switcher panel at the trailing edge.
+    let wheel_at = Point::new(lay::WINDOW.width / 4.0, lay::WINDOW.height - 100.0);
+    let published = lay::messages_after(
+        view(&state),
+        &lay::renderer(),
+        &[lay::Input::Wheel(wheel_at)],
+    );
+    assert!(
+        !published.is_empty(),
+        "turning the wheel over the known-projects list must report the scroll"
+    );
+    for message in published {
+        state.update(message);
+    }
+    assert!(
+        !state.project.switcher_open,
+        "the switcher must close when the list beneath it scrolls (017 FR-009)"
+    );
+}
+
+/// Scrolling the switcher moves its rows out from under a row's context menu, so that menu closes —
+/// and the switcher itself, which is what is being scrolled, stays open.
+#[test]
+fn scrolling_the_switcher_closes_a_rows_context_menu_and_keeps_the_switcher() {
+    let mut state = state(MANY, true);
+    let first = state.workspace.projects[0].path.clone();
+    state.update(Message::Project(ProjectMsg::MenuToggled(first, (100, 100))));
+    assert!(
+        state.project.menu_open.is_some(),
+        "the fixture opened the row's menu"
+    );
+
+    let wheel_at = Point::new(panel_left() + PANEL_WIDTH / 2.0, lay::WINDOW.height - 100.0);
+    let published = lay::messages_after(
+        view(&state),
+        &lay::renderer(),
+        &[lay::Input::Wheel(wheel_at)],
+    );
+    for message in published {
+        state.update(message);
+    }
+    assert!(
+        state.project.menu_open.is_none(),
+        "a row's context menu must close when the switcher scrolls its row away (017 FR-009)"
+    );
+    assert!(
+        state.project.switcher_open,
+        "scrolling the switcher must not close the switcher"
     );
 }

@@ -31,7 +31,9 @@ one project is active at a time; opening another replaces the current one.
 Micold remembers every project you open in a **known-projects list** that is saved locally
 and survives restarts — so you don't have to browse the filesystem again. The list appears
 in the main window under **Known projects**. Each entry shows the project's name; the
-currently active project is marked with a ● dot.
+currently active project is marked with a ● dot. When you have more projects than fit in the
+window, the list scrolls — with the mouse wheel, the trackpad or its scrollbar — while the header
+above it stays in place.
 
 To reopen a project, click **Open** next to it. It becomes your active working space
 immediately, without opening the folder browser. Micold also remembers which project was
@@ -56,7 +58,9 @@ listing your known projects. Each row shows:
 - an **unavailable** badge for folders that are missing on disk (these cannot be selected).
 
 Click any available project to switch to it in a single step. The last row, **Add project…**,
-opens the folder browser so you can add a project that isn't in the list yet. The switcher
+opens the folder browser so you can add a project that isn't in the list yet. A long list
+scrolls inside the panel, which always stays within the window, so **Add project…** is always
+at its end. The switcher
 complements the **Known projects** list in the main window and the folder browser — all three
 still work.
 

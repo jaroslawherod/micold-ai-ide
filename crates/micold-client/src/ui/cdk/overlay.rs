@@ -30,6 +30,10 @@ pub enum Anchor {
     Point(Point),
     /// Pinned to the top-right of the window, inset by `top` and `end` pixels. Trigger-attached
     /// popovers that hang below the app bar.
+    ///
+    /// A panel with more to show than the room below `top` is given that room less `end` again at
+    /// the bottom, so it stops as far short of the window's bottom edge as of its trailing one —
+    /// rather than running into the edge and losing its corners there (002 BUG-005).
     TopEnd { top: f32, end: f32 },
     /// Centred in the window, horizontally and vertically. Dialogs.
     Center,
@@ -201,7 +205,7 @@ impl<'a, M: Clone + 'a> Surface<'a, M> {
                     top,
                     right: end,
                     left: 0.0,
-                    bottom: 0.0,
+                    bottom: end,
                 }),
             Anchor::BottomStart { bottom, start } => placed
                 .align_x(iced::alignment::Horizontal::Left)

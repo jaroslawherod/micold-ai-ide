@@ -25,3 +25,9 @@ T067, A2 is T066 → T068, A3 is the "a panel that fits" half of T066.
 | A1 | With 20 known projects the body list scrolls to the last project's name and its Open/Rename/Forget, and the "No project open" header stays where it was | FR-011a, SC-011, US2 | example | DONE | known_projects_overflow.rs `the_body_list_scrolls_to_its_last_project_and_its_actions_under_a_fixed_header` |
 | A2 | With 20 known projects the open switcher panel ends inside the window and scrolls to the last project and "Add project…" | FR-011a, SC-011, 008 FR-009 | example | DONE | known_projects_overflow.rs `the_switcher_panel_stays_in_the_window_and_scrolls_to_add_project` |
 | A3 | A switcher panel that fits (3 projects) keeps exactly `menu_panel_size`'s height | FR-011a ("a list that fits is shown as before") | guard | DONE | known_projects_overflow.rs `a_switcher_panel_that_fits_keeps_the_height_it_always_had` |
+| A4 | A right-click on a row of the scrolled switcher reports the click point in window pixels | feature 015 (menu at the click point), FR-011a | example | DONE | known_projects_overflow.rs `a_right_click_on_a_scrolled_switcher_row_reports_where_it_landed` |
+| A5 | Scrolling the body list closes the transient popovers floating over it | 017 FR-009, FR-011a | example | DONE | known_projects_overflow.rs `scrolling_the_body_list_closes_the_switcher_floating_over_it` |
+| A6 | Scrolling the switcher closes a row's context menu and keeps the switcher open | 017 FR-009, FR-011a | example | DONE | known_projects_overflow.rs `scrolling_the_switcher_closes_a_rows_context_menu_and_keeps_the_switcher` |
+| A7 | The switcher panel stops `spacing::SM` short of the window's bottom edge | FR-011a | example | DONE | known_projects_overflow.rs `the_switcher_panel_stays_in_the_window_and_scrolls_to_add_project` |
+
+A4–A7 were added mid-loop from the milestone's code review (see `cycle-log.md` Cycle 2).
