@@ -46,7 +46,6 @@ const PROJECT: &str = "/fixture/providers";
 /// the environment-include toggle and its two fields.
 const SETTINGS_SELECT: &[usize] = &[0, 0, 1, 0, 1, 0, 0, 1];
 
-
 fn with_project() -> State {
     let mut workspace = support::workspace_with(vec![(PROJECT, vec![])]);
     workspace.active = workspace.projects.first().map(|p| p.path.clone());
