@@ -30,5 +30,6 @@ T067, A2 is T066 → T068, A3 is the "a panel that fits" half of T066.
 | A6 | Scrolling the switcher closes a row's context menu and keeps the switcher open | 017 FR-009, FR-011a | example | DONE | known_projects_overflow.rs `scrolling_the_switcher_closes_a_rows_context_menu_and_keeps_the_switcher` |
 | A7 | The switcher panel stops `spacing::SM` short of the window's bottom edge | FR-011a | example | DONE | known_projects_overflow.rs `the_switcher_panel_stays_in_the_window_and_scrolls_to_add_project` |
 | A8 | A report from the body list that did not move it (first frame, resize) closes nothing; a moved offset does | 017 FR-009, FR-011a | example | DONE | known_projects_overflow.rs `a_report_from_the_body_list_that_did_not_move_it_keeps_the_switcher_open` |
+| A9 | A list that remounts at the top (after a session) does not close a switcher opened meanwhile | 017 FR-009, FR-011a | example | DONE | known_projects_overflow.rs `a_list_that_comes_back_at_the_top_does_not_close_the_switcher` |
 
-A4–A8 were added mid-loop from the milestone's code review (see `cycle-log.md` Cycles 2 and 3).
+A4–A9 were added mid-loop from the milestone's code review (see `cycle-log.md` Cycles 2–4).

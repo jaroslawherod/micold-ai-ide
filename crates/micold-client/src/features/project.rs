@@ -429,9 +429,17 @@ pub fn menu_toggled(
 /// A scrollable reports whenever its viewport changes, not only when it scrolls — on its first
 /// frame, and on every window resize. Only a moved offset is the ground moving under a popover
 /// (017 FR-009), so only that closes one.
+///
+/// **A report of the top is taken as a baseline, never as a scroll.** The list is unmounted while a
+/// session's terminal fills the main area and comes back with a fresh viewport at offset 0, while
+/// the offset last seen is still where the old list was left; nothing here can tell that first
+/// report from a scroll that ended at the top. Reading it as a baseline costs one case — a single
+/// wheel step that lands exactly on the top leaves a popover open — where reading it as a scroll
+/// closed a switcher the user had just opened, with nothing having moved.
 pub fn list_scrolled(state: &mut crate::app::State, offset: u32) {
-    if offset != state.project.list_scroll_offset {
-        state.project.list_scroll_offset = offset;
+    let moved = offset != state.project.list_scroll_offset;
+    state.project.list_scroll_offset = offset;
+    if moved && offset != 0 {
         state.dismiss_on_scroll_beneath();
     }
 }
