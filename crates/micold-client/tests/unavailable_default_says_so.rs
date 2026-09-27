@@ -14,24 +14,38 @@
 
 use micold_client::app::{drain, interpret, State};
 use micold_client::features::session::{
-    start_menu_toggled, AvailabilitySource, CliAvailability, PressTarget, StartIntent,
+    start_menu_toggled, AvailabilityKey, AvailabilitySource, CliAvailability, PressTarget,
+    StartIntent,
 };
 use micold_core::notify::Level;
 use micold_core::session::{AiCli, SessionLocation};
+use std::path::Path;
+
+/// A row with no answer of its own, so it reads the home answer (feature 033, FR-005).
+const ROW: &str = "/repo";
 
 /// The daemon says this when a start fails on a missing CLI (`micold-daemon/src/state.rs`, T088).
 /// The application now says it one step earlier, when it can tell *before* launching anything —
 /// deliberately in the same words, since it is the same fact about the same CLI.
 const SENTENCE: &str =
     "GitHub Copilot isn't installed. Install it, or start this session on another AI CLI.";
+/// File `answer` as the home directory's, the way a reply to a `cwd: None` request lands (feature
+/// 033). Every row reads it while its own directory has no answer (FR-005).
+fn hold_home(state: &mut State, answer: CliAvailability) {
+    state.session.availability.asked(0, AvailabilityKey::Home);
+    state.session.availability.answered(0, answer);
+}
 
 fn state_with(default_ai_cli: AiCli, available: &[AiCli]) -> State {
     let mut state = State::default();
     state.session.default_ai_cli = default_ai_cli;
-    state.session.available_providers = Some(CliAvailability {
-        available: available.to_vec(),
-        source: AvailabilitySource::ThisComputer,
-    });
+    hold_home(
+        &mut state,
+        CliAvailability {
+            available: available.to_vec(),
+            source: AvailabilitySource::ThisComputer,
+        },
+    );
     state
 }
 
@@ -48,7 +62,9 @@ fn the_press_carries_the_reason_the_list_is_opening() {
     let state = state_with(AiCli::Copilot, &[AiCli::ClaudeCode]);
 
     assert_eq!(
-        state.session.start_intent(PressTarget::Primary),
+        state
+            .session
+            .start_intent(PressTarget::Primary, Path::new(ROW)),
         StartIntent::OfferChoice {
             providers: vec![AiCli::ClaudeCode],
             unavailable_default: Some(AiCli::Copilot),
@@ -56,7 +72,9 @@ fn the_press_carries_the_reason_the_list_is_opening() {
         "the primary half opened a list the user did not ask for, and has to be able to say why"
     );
     assert_eq!(
-        state.session.start_intent(PressTarget::Secondary),
+        state
+            .session
+            .start_intent(PressTarget::Secondary, Path::new(ROW)),
         StartIntent::OfferChoice {
             providers: vec![AiCli::ClaudeCode],
             unavailable_default: None,
@@ -179,5 +197,36 @@ fn an_unavailable_pi_default_is_named_as_pi_coding_agent() {
             .split(|c: char| !c.is_alphanumeric())
             .any(|word| word == AiCli::Pi.provider().command()),
         "a sentence, not a shell error: {message}"
+    );
+}
+
+/// Feature 033 (FR-008, U36): the notice judges the default by the list's own directory. A default
+/// the row's directory provides is not missing there, whatever the home directory says.
+#[test]
+fn a_default_the_lists_directory_provides_is_not_reported_missing() {
+    let mut state = state_with(AiCli::Pi, &[AiCli::ClaudeCode]);
+    state.workspace.active = Some(ROW.into());
+    state
+        .session
+        .availability
+        .asked(1, AvailabilityKey::Dir(ROW.into()));
+    state.session.availability.answered(
+        1,
+        CliAvailability {
+            available: vec![AiCli::ClaudeCode, AiCli::Pi],
+            source: AvailabilitySource::ThisComputer,
+        },
+    );
+
+    open(&mut state, Some(AiCli::Pi));
+
+    assert_eq!(
+        state
+            .notifications
+            .queue
+            .visible()
+            .map(|n| n.message.clone()),
+        None,
+        "Pi is installed where a session from this list would run, so nothing is missing"
     );
 }

@@ -54,3 +54,58 @@ failed before the implementation.
   16 passed again
 - refactor: none needed
 - commit: the commit that adds this entry
+
+## Cycle 2: U11–U15 — the readers take the row's directory (with T040's migration)
+
+- test: `crates/micold-client/tests/features_session.rs` (extended): `the_chevron_follows_the_rows_own_answer`,
+  `the_primary_press_reads_the_rows_answer`, `a_default_missing_in_the_row_opens_its_list_marked`,
+  `an_empty_answer_is_an_answer_not_a_fallback`, `settings_reads_home_only`
+- stub: T040's stage — every reader takes a directory and reads the home answer (today's
+  behaviour); every consumer and the T007 tests migrated onto the new API
+- red: `scripts/build-lock.sh cargo test -p micold-client --tests --no-fail-fast`
+  -> `features_session`: `28 passed; 5 failed`, e.g. `the_primary_press_reads_the_rows_answer`:
+  `left: OfferChoice { providers: [ClaudeCode], unavailable_default: Some(Pi) } right: Start(Pi)`;
+  `an_empty_answer_is_an_answer_not_a_fallback`: `left: Start(ClaudeCode) right: NothingAvailable`.
+  The same run failed `cli_availability_comes_from_the_service::no_client_source_probes_this_process_for_a_cli`
+  on the reader's data-model name `available_in(`, which is the forbidden spelling of
+  `micold_core::provider`'s PATH probe; the reader was renamed `known_clis` (not a test change).
+- green: `session::State::known_clis` reads `for_dir(d)` for `Some(d)` and `home()` for `None`
+  -> `features_session` 33 passed
+- refactor: none
+- commit: squashed with cycle 3 (a WIP commit made on resume, `420e9def`, already carried the green
+  reader body; folded in so no `wip` commit reaches main)
+
+## Cycle 3: A1–A7, U22–U27, U35–U36 — rows are asked for, and read, their own directory
+
+- tests: `crates/micold-client/src/main_tests.rs` (new, each named `availability_*`), plus
+  `provider_choice_surfaces.rs::{the_settings_select_lists_the_home_answer, the_start_list_lists_its_rows_answer}`
+  and `unavailable_default_says_so.rs::a_default_the_lists_directory_provides_is_not_reported_missing`
+  (placed beside `start_menu_toggled`'s other notice tests rather than in
+  `missing_cli_is_reported_where_it_is_chosen.rs`, which covers the Settings sentence);
+  `an_answer_to_an_earlier_question_does_not_replace_a_later_one` rewritten per T007 (FR-002/FR-009
+  reverse its premise)
+- red: `scripts/build-lock.sh cargo test -p micold-client --tests --no-fail-fast`
+  -> `micold-ai-ide`: `212 passed; 13 failed`, e.g.
+  `availability_connect_asks_home_and_each_row_directory_once`: `left: [None] right: [None,
+  Some("/repo/demo"), Some("/repo/demo/.claude/worktrees/feat-a")]`;
+  `availability_a_start_list_asks_for_its_own_directory`: `and not as the home answer / left:
+  Some([ClaudeCode, Pi])`; `availability_the_primary_press_starts_a_default_only_the_row_provides`:
+  `left: OfferChoice {..} right: Start(Pi)`; `availability_opening_a_project_asks_once_per_directory`:
+  `left: [] right: [Some("/tmp/.tmp…")]`; `availability_a_new_worktree_is_asked_about_once`:
+  `left: []`; `availability_opening_one_rows_list_does_not_change_another_row`: `B offers no choice`.
+  `unavailable_default_says_so`: `left: Some("Pi Coding Agent isn't installed. …") right: None`.
+  Passed on the stub: `availability_settings_asks_for_home_only` (U24 — Settings already asked
+  `cwd: None` only; it pins that the new keyed ask kept it), `the_settings_select_lists_the_home_answer` (U35).
+- test fix before green: U35/U36 matched the menu string `"Pi"`, but menus paint
+  `display_name()` ("Pi Coding Agent"), so U35 was vacuous and U36's red was not the behaviour's.
+  Both now compare with `AiCli::Pi.provider().display_name()`.
+- green: T013 `ask_cli_availability(app, AvailabilityKey)` records the key it asks; T014
+  `sync_cli_availability` + `on_connected` clear → record env-include → ask Home → sync; T015 sync
+  after `CatalogChanged`'s `reconcile_catalog(.., true)`, `open_verified_project` and
+  `on_known_project_reopened`; T016 `StartMenuOpened` asks `Dir(location_dir)`, Settings asks
+  `Home`; T017 the start list and the missing-default notice read the list's directory (sidebar rows
+  already pass `location_dir` since T040). -> all client targets green, 0 failed
+- mutant check (U35, U36): Settings fed `for_dir(project root)` and the start list fed
+  `offered_providers(None)` -> both FAILED; restored, 6 passed
+- refactor: none needed
+- commit: the commit that adds this entry

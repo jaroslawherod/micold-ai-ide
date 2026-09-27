@@ -42,7 +42,7 @@ fn on_host(available: &[AiCli]) -> CliAvailability {
 
 #[test]
 fn an_unanswered_service_says_nothing() {
-    // The reason `available_providers` is an `Option` at all. Before feature 027 the client probed
+    // The reason an answer is an `Option` at all. Before feature 027 the client probed
     // its own `PATH` and so always had an answer; now there is a round trip, and the state between
     // asking and hearing back is real. Saying "GitHub Copilot isn't in your image" during it would
     // be a guess — and a guess that names a specific CLI reads exactly like a finding.

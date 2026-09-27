@@ -102,7 +102,7 @@ fn the_shell_asks_the_service_and_records_the_answer() {
     for expected in [
         "ClientMsg::AiCliAvailabilityRequest",
         "DaemonMsg::AiCliAvailability",
-        "available_providers = Some(",
+        ".answered(",
     ] {
         assert!(
             shell.contains(expected),

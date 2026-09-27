@@ -575,6 +575,14 @@ decided when the session is created.
 - **If only one CLI is installed, the chevron is not there at all.** There is nothing to choose
   between, so the affordance is the plain button it always was.
 - Only CLIs you actually have installed are ever offered.
+- **Each row offers what its own project or worktree provides.** A row is answered for the
+  directory a session started from it would run in, including what
+  [the environment a session starts in](./settings.md#the-environment-a-session-starts-in) adds
+  there. So if one project's environment-include script puts `pi` on the `PATH` and another's does
+  not, the chevron is on the first project's rows and not on the second's. Opening Settings,
+  reconnecting to the session service, or opening another row's list never changes what a row
+  offers. Until a row's own answer arrives — for a moment after a project opens — it offers what
+  your home directory has.
 - **Installed means installed where sessions run.** With the session service directly on this
   computer, that is your `PATH`. With it [in a container](./sandboxed-daemon.md), it is the
   container's image, and what is on your own `PATH` makes no difference. The image this app

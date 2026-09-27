@@ -51,7 +51,9 @@ use micold_client::app::Message;
 // Moved to the library (see `micold_client::catalog_sync` for why): the fold has to be reachable
 // from `tests/`, and a binary-crate function is not.
 use micold_client::catalog_sync::{attach_log_line, reconcile_catalog, wire_to_worktree_status};
-use micold_client::features::session::{AvailabilitySource, CliAvailability};
+use micold_client::features::session::{
+    AvailabilityKey, AvailabilitySource, CliAvailability, EnvIncludeSettings,
+};
 use micold_client::features::worktree_form::{
     BranchSource, Msg as FormMsg, ResolutionState, WorktreeForm, WorktreeFormStatus,
 };
@@ -405,18 +407,35 @@ pub fn on_takeover_requested(app: &mut App) -> Task<Message> {
 /// A no-op while disconnected, deliberately: there is nobody who could answer, and the field stays
 /// `None` — "not said yet" — rather than being cleared to an empty set that reads as "none exist".
 ///
-/// `cwd` is the directory the choice is made for — a project root or a worktree — or `None` where
-/// none is in play (Settings, a reconnect), which the service answers for the home directory. The
-/// answer follows the environment a session there is spawned with (feature 029, BUG-001, FR-003b):
-/// the environment-include script can put a CLI on one directory's `PATH` and not another's.
-pub fn ask_cli_availability(app: &mut App, cwd: Option<std::path::PathBuf>) {
+/// `key` is what the answer will be filed under (feature 033, contract C2): a row's directory —
+/// a project root or a worktree — sent as `cwd`, or the home directory, sent as no `cwd`. The
+/// answer follows the environment a session there is spawned with (029 FR-003b): the
+/// environment-include script can put a CLI on one directory's `PATH` and not another's. The
+/// request is recorded before it is sent, so its reply can only land under the key it named.
+pub fn ask_cli_availability(app: &mut App, key: AvailabilityKey) {
     let Some(d) = app.daemon.clone() else {
         return;
     };
     let req = app.next_req;
     app.next_req += 1;
-    app.cli_availability_asked = req;
+    let cwd = match &key {
+        AvailabilityKey::Home => None,
+        AvailabilityKey::Dir(dir) => Some(dir.clone()),
+    };
+    app.core.session.availability.asked(req, key);
     d.send(ClientMsg::AiCliAvailabilityRequest { req, cwd });
+}
+
+/// Ask about every sidebar row whose directory has no answer held and no request in flight
+/// (feature 033, contract C1 "sync", FR-006).
+///
+/// Idempotent: on an event that changed no row it sends nothing, so it can follow every event that
+/// might have (connect, project open, a catalog push) without counting what changed.
+pub fn sync_cli_availability(app: &mut App) {
+    let wanted = micold_client::features::session::wanted_availability_dirs(&app.core);
+    for dir in app.core.session.availability.unasked(&wanted) {
+        ask_cli_availability(app, AvailabilityKey::Dir(dir));
+    }
 }
 
 /// What the service's answer describes, from what this client knows about the service it started.
@@ -487,6 +506,9 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
     match event {
         DaemonMsg::CatalogChanged { catalog } => {
             reconcile_catalog(&mut app.core, &catalog, true);
+            // The worktree list may have gained a row (created, discovered, included, or valid
+            // again): ask about it (feature 033, contract C1 A5).
+            sync_cli_availability(app);
             // Sessions can appear after connect — created in another window, or resumed —
             // so seed here too (T111). Absent-only, so this never disturbs a counter this
             // client is already driving.
@@ -781,10 +803,12 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // An answer to a request older than the latest is about another directory (029 BUG-001):
         // they are resolved off the service's loop, so a slow first resolution can land after a
         // cached one asked later.
-        DaemonMsg::AiCliAvailability { req, .. } if req < app.cli_availability_asked => {}
-        DaemonMsg::AiCliAvailability { available, .. } => {
+        DaemonMsg::AiCliAvailability { req, available } => {
             let source = availability_source(app);
-            app.core.session.available_providers = Some(CliAvailability { available, source });
+            app.core
+                .session
+                .availability
+                .answered(req, CliAvailability { available, source });
         }
         // Diagnostics replies (Phase 10, FR-046): surface as notices.
         DaemonMsg::LogLocation { path, sink, .. } => {
@@ -957,11 +981,23 @@ pub fn on_connected(
     app.reported_scheme = None;
     report_color_scheme(app);
     // Ask the authority whose settings were just adopted above which CLIs it can actually run
-    // (feature 027, FR-023c). Here rather than only on the named events elsewhere — Settings
-    // opening and the override menu opening — because a reconnect is the one moment the answer
-    // can have changed without the user doing anything: a restarted sandbox may be a *different*
-    // image, and the set the previous connection reported describes a container that is gone.
-    ask_cli_availability(app, None);
+    // (feature 027, FR-023c), for the home directory and then for every row on screen (feature
+    // 033, contract C1 A1). A reconnect is the one moment every answer can have changed without
+    // the user doing anything — a restarted sandbox may be a *different* image — so everything the
+    // previous connection was told is forgotten first (FR-011), and replies to its requests are
+    // dropped when they arrive.
+    app.core.session.availability.clear();
+    let _ = app
+        .core
+        .session
+        .availability
+        .env_include_changed(&EnvIncludeSettings {
+            enabled: app.env_include_enabled,
+            script_path: app.env_include_script_path.clone(),
+            timeout_secs: app.env_include_timeout_secs,
+        });
+    ask_cli_availability(app, AvailabilityKey::Home);
+    sync_cli_availability(app);
     if let (Some(project), Some(daemon)) = (project, app.daemon.clone()) {
         daemon.send(ClientMsg::Attach {
             project: project.clone(),

@@ -2,8 +2,8 @@
 //! FR-006).
 //!
 //! FR-006's rule is about what the user is *shown*, and both surfaces read the availability set
-//! T014a put on `State`: the Settings select takes `state.session.available_providers` directly, the
-//! session start list takes `State::offered_providers()`. The pure layer is covered in
+//! T014a put on `State`: the Settings select takes the home answer (`availability.home()`), the
+//! session start list takes `State::offered_providers(dir)`. The pure layer is covered in
 //! `features_session.rs`; what is covered here is that the drawn surfaces actually follow it —
 //! neither reaches for `AiCli::ALL`, which is the one-token change that would make both of them
 //! wrong while every pure test stayed green.
@@ -27,7 +27,9 @@ mod support;
 
 use micold_client::app::State;
 use micold_client::features::connection::ConnectionStatus;
-use micold_client::features::session::{AvailabilitySource, CliAvailability, StartMenu};
+use micold_client::features::session::{
+    AvailabilityKey, AvailabilitySource, CliAvailability, StartMenu,
+};
 use micold_client::features::settings::{
     missing_cli_notice, EnvironmentDraft, SettingsDraft, SettingsSection,
 };
@@ -43,6 +45,13 @@ const PROJECT: &str = "/fixture/providers";
 /// content area rather than an overlay: the section's controls column has the select first, above
 /// the environment-include toggle and its two fields.
 const SETTINGS_SELECT: &[usize] = &[0, 0, 1, 0, 1, 0, 0, 1];
+
+/// File `answer` as the home directory's, the way a reply to a `cwd: None` request lands (feature
+/// 033). Every row reads it while its own directory has no answer (FR-005).
+fn hold_home(state: &mut State, answer: CliAvailability) {
+    state.session.availability.asked(0, AvailabilityKey::Home);
+    state.session.availability.answered(0, answer);
+}
 
 fn with_project() -> State {
     let mut workspace = support::workspace_with(vec![(PROJECT, vec![])]);
@@ -89,10 +98,13 @@ fn painted(state: &State, press_at: Option<&[usize]>) -> Vec<String> {
 /// the list as the only thing that can name one.
 fn settings_state(available: &[AiCli]) -> State {
     let mut state = with_project();
-    state.session.available_providers = Some(CliAvailability {
-        available: available.to_vec(),
-        source: AvailabilitySource::ThisComputer,
-    });
+    hold_home(
+        &mut state,
+        CliAvailability {
+            available: available.to_vec(),
+            source: AvailabilitySource::ThisComputer,
+        },
+    );
     state.settings.settings_draft = Some(SettingsDraft {
         // Feature 027 turned Settings into a sectioned full-surface view, and the Default AI
         // CLI select lives in Environment — the section has to be the shown one, or the
@@ -109,10 +121,13 @@ fn settings_state(available: &[AiCli]) -> State {
 
 fn start_menu_state(available: &[AiCli]) -> State {
     let mut state = with_project();
-    state.session.available_providers = Some(CliAvailability {
-        available: available.to_vec(),
-        source: AvailabilitySource::ThisComputer,
-    });
+    hold_home(
+        &mut state,
+        CliAvailability {
+            available: available.to_vec(),
+            source: AvailabilitySource::ThisComputer,
+        },
+    );
     state.session.start_menu = Some(StartMenu {
         location: SessionLocation::Default,
         anchor: (400, 300),
@@ -133,7 +148,7 @@ fn the_settings_select_lists_only_the_installed_clis() {
     // the whole surface mentioning it is that sentence. Comparing against `missing_cli_notice`
     // itself, rather than allowing anything long enough to look like prose, keeps a stray second
     // mention (an option row, a helper line, a tooltip) failing.
-    let notice = missing_cli_notice(state.session.available_providers.as_ref())
+    let notice = missing_cli_notice(state.session.availability.home())
         .expect("with one CLI uninstalled the surface owes the user a sentence about it");
     let stray: Vec<&String> = only_claude
         .iter()
@@ -186,8 +201,8 @@ fn the_session_start_list_offers_only_the_installed_clis() {
 /// The two surfaces cannot disagree about what exists (FR-006).
 ///
 /// Not a restatement of the two tests above: they each pin one surface against `AiCli::ALL`, and
-/// this pins them against *each other* — one reads `state.session.available_providers` and the other
-/// `State::offered_providers()`, so "both are filtered" and "both are filtered the same way" are
+/// this pins them against *each other* — one reads `state.session.availability.home()` and the other
+/// `State::offered_providers(dir)`, so "both are filtered" and "both are filtered the same way" are
 /// different claims.
 #[test]
 fn the_settings_select_and_the_start_list_name_the_same_clis() {
@@ -244,5 +259,61 @@ fn pi_is_offered_by_its_display_name_on_both_surfaces() {
     assert!(
         !without.iter().any(|s| s == display),
         "…and the start list does not offer Pi when `pi` is not installed — painted: {without:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Feature 033 (FR-008, FR-001): Settings reads home, a row's list reads its row's directory
+// ---------------------------------------------------------------------------------------------
+
+/// File `available` as the project root's own answer — what its environment-include script puts
+/// on `PATH` there.
+fn hold_project_root(state: &mut State, available: &[AiCli]) {
+    state
+        .session
+        .availability
+        .asked(1, AvailabilityKey::Dir(PROJECT.into()));
+    state.session.availability.answered(
+        1,
+        CliAvailability {
+            available: available.to_vec(),
+            source: AvailabilitySource::ThisComputer,
+        },
+    );
+}
+
+/// U35: the default applies everywhere, so Settings offers what the home directory has — not what
+/// one project's script adds.
+#[test]
+fn the_settings_select_lists_the_home_answer() {
+    let mut state = settings_state(&[AiCli::ClaudeCode]);
+    hold_project_root(&mut state, &[AiCli::ClaudeCode, AiCli::Pi]);
+
+    let painted = painted(&state, Some(SETTINGS_SELECT));
+    assert!(
+        painted.iter().any(|s| s == "Claude Code"),
+        "fixture check: the select is open — painted: {painted:?}"
+    );
+    assert!(
+        !painted
+            .iter()
+            .any(|s| s == AiCli::Pi.provider().display_name()),
+        "the project root's answer must not reach the Settings select — painted: {painted:?}"
+    );
+}
+
+/// U36 (US1-1): the start list on the project's Default row offers what a session there would
+/// find, Pi included, although home lacks it.
+#[test]
+fn the_start_list_lists_its_rows_answer() {
+    let mut state = start_menu_state(&[AiCli::ClaudeCode]);
+    hold_project_root(&mut state, &[AiCli::ClaudeCode, AiCli::Pi]);
+
+    let painted = painted(&state, None);
+    assert!(
+        painted
+            .iter()
+            .any(|s| s == AiCli::Pi.provider().display_name()),
+        "the list opened on this row offers the CLI its directory provides — painted: {painted:?}"
     );
 }

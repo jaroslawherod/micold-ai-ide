@@ -475,16 +475,29 @@ fn the_connect_path_re_resolves_the_foreground_after_folding_the_catalog() {
 // the implementation tasks because Principle I's GUI exception covers *drawing* and does not cover
 // *branching* — `ui/sidebar.rs` only dispatches what these functions decide.
 
-use micold_client::features::session::{PressTarget, StartIntent};
+use micold_client::features::session::{AvailabilityKey, PressTarget, StartIntent};
 
-/// A state with a chosen default and a chosen availability set.
+/// A row whose directory has no answer of its own, so it reads the home answer (feature 033,
+/// FR-005). The cases below predate per-directory answers and hold for any one answer.
+const ROW: &str = "/repo";
+
+/// File `available` under `key`, the way a reply to the request that named it lands.
+fn hold(state: &mut State, key: AvailabilityKey, available: &[AiCli]) {
+    state.session.availability.asked(0, key);
+    state.session.availability.answered(
+        0,
+        CliAvailability {
+            available: available.to_vec(),
+            source: AvailabilitySource::ThisComputer,
+        },
+    );
+}
+
+/// A state with a chosen default and a chosen home answer.
 fn state_with(default_ai_cli: AiCli, available: &[AiCli]) -> State {
     let mut state = State::default();
     state.session.default_ai_cli = default_ai_cli;
-    state.session.available_providers = Some(CliAvailability {
-        available: available.to_vec(),
-        source: AvailabilitySource::ThisComputer,
-    });
+    hold(&mut state, AvailabilityKey::Home, available);
     state
 }
 
@@ -543,7 +556,9 @@ fn the_primary_half_starts_the_default_in_one_press() {
     // SC-001: the one-interaction start survives the affordance gaining a second half.
     let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode, AiCli::Copilot]);
     assert_eq!(
-        state.session.start_intent(PressTarget::Primary),
+        state
+            .session
+            .start_intent(PressTarget::Primary, Path::new(ROW)),
         StartIntent::Start(AiCli::ClaudeCode)
     );
 }
@@ -552,7 +567,9 @@ fn the_primary_half_starts_the_default_in_one_press() {
 fn the_secondary_half_offers_the_installed_clis_and_starts_nothing() {
     let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode, AiCli::Copilot]);
     assert_eq!(
-        state.session.start_intent(PressTarget::Secondary),
+        state
+            .session
+            .start_intent(PressTarget::Secondary, Path::new(ROW)),
         StartIntent::OfferChoice {
             providers: vec![AiCli::ClaudeCode, AiCli::Copilot],
             unavailable_default: None,
@@ -567,9 +584,13 @@ fn a_single_installed_cli_has_no_secondary_half_at_all() {
     // experience than the plain button it replaced, so the half is absent rather than disabled.
     let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode]);
 
-    assert!(!state.session.start_affordance_offers_a_choice());
+    assert!(!state
+        .session
+        .start_affordance_offers_a_choice(Path::new(ROW)));
     assert_eq!(
-        state.session.start_intent(PressTarget::Primary),
+        state
+            .session
+            .start_intent(PressTarget::Primary, Path::new(ROW)),
         StartIntent::Start(AiCli::ClaudeCode),
         "and the primary half is unchanged — the single-CLI user is unaffected by this feature"
     );
@@ -587,9 +608,13 @@ fn an_unavailable_default_offers_the_choice_rather_than_starting_or_substituting
     // `tests/unavailable_default_says_so.rs` follows it from here to the sentence (BUG-001).
     let state = state_with(AiCli::Copilot, &[AiCli::ClaudeCode]);
 
-    assert!(!state.session.default_ai_cli_is_available());
+    assert!(!state
+        .session
+        .default_ai_cli_is_available(Some(Path::new(ROW))));
     assert_eq!(
-        state.session.start_intent(PressTarget::Primary),
+        state
+            .session
+            .start_intent(PressTarget::Primary, Path::new(ROW)),
         StartIntent::OfferChoice {
             providers: vec![AiCli::ClaudeCode],
             unavailable_default: Some(AiCli::Copilot),
@@ -607,11 +632,13 @@ fn no_installed_cli_means_nothing_to_offer() {
     let state = state_with(AiCli::ClaudeCode, &[]);
     for target in [PressTarget::Primary, PressTarget::Secondary] {
         assert_eq!(
-            state.session.start_intent(target),
+            state.session.start_intent(target, Path::new(ROW)),
             StartIntent::NothingAvailable
         );
     }
-    assert!(!state.session.start_affordance_offers_a_choice());
+    assert!(!state
+        .session
+        .start_affordance_offers_a_choice(Path::new(ROW)));
 }
 
 #[test]
@@ -619,6 +646,156 @@ fn only_installed_clis_are_ever_offered() {
     // FR-006 for the menus — the Settings select and the override list read this one function, so
     // an unavailable CLI cannot appear in one and not the other.
     let state = state_with(AiCli::ClaudeCode, &[AiCli::ClaudeCode]);
-    assert_eq!(state.session.offered_providers(), vec![AiCli::ClaudeCode]);
-    assert!(!state.session.offered_providers().contains(&AiCli::Copilot));
+    assert_eq!(
+        state.session.offered_providers(Some(Path::new(ROW))),
+        vec![AiCli::ClaudeCode]
+    );
+    assert!(!state
+        .session
+        .offered_providers(Some(Path::new(ROW)))
+        .contains(&AiCli::Copilot));
+}
+
+// ---------------------------------------------------------------------------------------
+// Each row reads its own directory's answer (feature 033, T002 — FR-001, FR-005, FR-008, FR-010)
+// ---------------------------------------------------------------------------------------
+//
+// Home answers `[claude]`; project `P`'s environment-include script adds Pi there, and `Q` has no
+// such script. One state holds all three, as a window does.
+
+const P: &str = "/p";
+const Q: &str = "/q";
+
+/// A state holding `home` for the home directory, plus one answer per `(directory, answer)`.
+fn state_holding(default_ai_cli: AiCli, home: &[AiCli], dirs: &[(&str, &[AiCli])]) -> State {
+    let mut state = State::default();
+    state.session.default_ai_cli = default_ai_cli;
+    hold(&mut state, AvailabilityKey::Home, home);
+    for (dir, available) in dirs {
+        hold(
+            &mut state,
+            AvailabilityKey::Dir(PathBuf::from(dir)),
+            available,
+        );
+    }
+    state
+}
+
+/// U11 (FR-001, 026 FR-006): the chevron is a question about the row, not about home.
+#[test]
+fn the_chevron_follows_the_rows_own_answer() {
+    let state = state_holding(
+        AiCli::ClaudeCode,
+        &[AiCli::ClaudeCode],
+        &[
+            (P, &[AiCli::ClaudeCode, AiCli::Pi]),
+            (Q, &[AiCli::ClaudeCode]),
+        ],
+    );
+    assert!(
+        state.session.start_affordance_offers_a_choice(Path::new(P)),
+        "P's script provides a second CLI there, so P's rows offer the choice (US1-1)"
+    );
+    assert!(
+        !state.session.start_affordance_offers_a_choice(Path::new(Q)),
+        "Q has one CLI, so its rows keep the plain button (US1-2)"
+    );
+
+    let two_at_home = state_holding(
+        AiCli::ClaudeCode,
+        &[AiCli::ClaudeCode, AiCli::Pi],
+        &[(Q, &[AiCli::ClaudeCode])],
+    );
+    assert!(
+        !two_at_home
+            .session
+            .start_affordance_offers_a_choice(Path::new(Q)),
+        "whatever home holds: Q's own answer has one CLI"
+    );
+}
+
+/// U12 (FR-001, FR-010, US1-5).
+#[test]
+fn the_primary_press_reads_the_rows_answer() {
+    let state = state_holding(
+        AiCli::Pi,
+        &[AiCli::ClaudeCode],
+        &[(P, &[AiCli::ClaudeCode, AiCli::Pi])],
+    );
+    assert_eq!(
+        state
+            .session
+            .start_intent(PressTarget::Primary, Path::new(P)),
+        StartIntent::Start(AiCli::Pi),
+        "the default is installed where this row's session would run, so one press starts it"
+    );
+}
+
+/// U13 (FR-010): never a substitute — the row's list opens, marked.
+#[test]
+fn a_default_missing_in_the_row_opens_its_list_marked() {
+    let state = state_holding(
+        AiCli::Pi,
+        &[AiCli::ClaudeCode, AiCli::Pi],
+        &[(Q, &[AiCli::ClaudeCode])],
+    );
+    assert_eq!(
+        state
+            .session
+            .start_intent(PressTarget::Primary, Path::new(Q)),
+        StartIntent::OfferChoice {
+            providers: vec![AiCli::ClaudeCode],
+            unavailable_default: Some(AiCli::Pi),
+        },
+        "Pi is at home but not in Q, so Q's press offers Q's CLIs and says Pi is missing"
+    );
+}
+
+/// U14 (FR-005, 027 FR-023b): an empty answer is a real answer.
+#[test]
+fn an_empty_answer_is_an_answer_not_a_fallback() {
+    let state = state_holding(AiCli::ClaudeCode, &[AiCli::ClaudeCode], &[(P, &[])]);
+    assert_eq!(
+        state
+            .session
+            .start_intent(PressTarget::Primary, Path::new(P)),
+        StartIntent::NothingAvailable,
+        "P answered that nothing is installed there; home's CLI is not P's"
+    );
+    assert_eq!(
+        State::default()
+            .session
+            .start_intent(PressTarget::Primary, Path::new(P)),
+        StartIntent::NothingAvailable,
+        "and with nothing held anywhere there is nothing to offer"
+    );
+}
+
+/// U15 (FR-008): Settings chooses the default for everywhere, so it reads home only.
+#[test]
+fn settings_reads_home_only() {
+    let state = state_holding(
+        AiCli::ClaudeCode,
+        &[AiCli::ClaudeCode],
+        &[(P, &[AiCli::ClaudeCode, AiCli::Pi])],
+    );
+    assert_eq!(
+        state.session.offered_providers(None),
+        vec![AiCli::ClaudeCode],
+        "a directory's answer must not leak into the Settings select"
+    );
+    assert!(
+        state
+            .session
+            .offered_providers(Some(Path::new(P)))
+            .contains(&AiCli::Pi),
+        "while P's start list offers what P provides"
+    );
+    assert_eq!(
+        state
+            .session
+            .offered_providers(Some(Path::new("/unanswered"))),
+        vec![AiCli::ClaudeCode],
+        "a directory with nothing held reads the home answer (FR-005)"
+    );
 }

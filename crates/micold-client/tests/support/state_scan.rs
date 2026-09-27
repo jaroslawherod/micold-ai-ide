@@ -41,10 +41,15 @@ use std::path::{Path, PathBuf};
 pub const MUTATORS: &[&str] = &[
     "advance",
     "append",
+    // `AvailabilityAnswers::asked` / `answered` / `env_include_changed` record a request, file its
+    // answer, and record the settings the answers describe (feature 033).
+    "answered",
+    "asked",
     "clear",
     "dismiss",
     "drain",
     "entry",
+    "env_include_changed",
     "extend",
     "get_mut",
     "get_or_insert",
@@ -83,16 +88,20 @@ pub const READERS: &[&str] = &[
     "filter",
     "find",
     "first",
+    // `AvailabilityAnswers::for_dir` / `home` / `unasked` read answers and requests already held.
+    "for_dir",
     "get",
+    "home",
     "is_empty",
     "is_none",
     "is_some_and",
     "is_some",
     "iter",
     "keys",
-    // `session.known_available` takes `&self` and hands back a slice of the availability set it
-    // already holds — a read of two fields, not a write to either.
-    "known_available",
+    // `session.known_clis` hands back a slice of an answer the store already holds (feature 033).
+    // Not `available_in`, which data-model.md named it: that spelling is `micold_core::provider`'s
+    // PATH probe, which `cli_availability_comes_from_the_service.rs` forbids the client to call.
+    "known_clis",
     "last",
     "len",
     "map",
@@ -102,6 +111,7 @@ pub const READERS: &[&str] = &[
     "position",
     "to_string",
     "to_vec",
+    "unasked",
     "unwrap_or",
     "unwrap_or_default",
     "values",

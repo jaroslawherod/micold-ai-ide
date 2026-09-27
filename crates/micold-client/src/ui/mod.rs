@@ -291,7 +291,7 @@ pub fn view<'a>(
                 draft,
                 env_include_outcome,
                 state.settings.placement_in_force,
-                state.session.available_providers.as_ref(),
+                state.session.availability.home(),
                 state.window.focused_field,
                 state.settings.settings_rail_collapsed,
                 scheme,
@@ -794,16 +794,16 @@ pub(crate) fn strip_tab_menu_labels(
 /// The AI CLIs a session can be started on, for one location (feature 026, T033).
 ///
 /// Named by `display_name()` — through `Display`, which is a menu's register — and **only** the
-/// available ones: an uninstalled CLI is never offered (FR-006). The list is
-/// `State::offered_providers`, the same function the Settings select reads, so the two surfaces
-/// cannot disagree about what exists.
+/// ones available where a session at `location` would run: an uninstalled CLI is never offered
+/// (FR-006), and the answer is this row's directory's (feature 033, FR-001, FR-008). The list is
+/// `State::offered_providers`, the same function the Settings select reads for home.
 fn session_start_menu_items(
     state: &State,
     location: &micold_core::session::SessionLocation,
 ) -> Vec<material::MenuItem<Message>> {
     state
         .session
-        .offered_providers()
+        .offered_providers(state.location_dir(location).as_deref())
         .into_iter()
         .map(|provider| {
             material::MenuItem::labeled(
