@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: fix/a-project-local-cli-stays-unreachable-in-that-project
 - **Started**: 2026-09-27
-- **Phase**: 5-close
-- **Next step**: merge close PR (#449), then handoff.
+- **Phase**: done
+- **Next step**: none. The close PR #449 merges on green; this ledger is set to done in that PR so `main` records the run as finished.
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #426 | M1 | merged | 2bd447b2 |
 | #443 | M2 | merged | 7f9b23be |
 | #448 | M3 | merged | 813322a6 |
-| #449 | Close | open | — |
+| #449 | Close | merged on green (SHA in the PR) | — |
 
 ## Milestones
 
