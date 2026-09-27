@@ -166,7 +166,7 @@ struct Inner {
     /// first resolve runs: later askers for the directory wait on that one run, and an invalidation
     /// removes the cell whether filled or not, so a resolve in progress fills only a cell nobody
     /// will be served from again (FR-021, BUG-005; see `DaemonState::env_include_vars_for`).
-    env_include_cache: HashMap<PathBuf, Arc<std::sync::OnceLock<Vec<(String, String)>>>>,
+    env_include_cache: HashMap<PathBuf, EnvIncludeCell>,
     /// One mutual-exclusion gate per project for mutating worktree work (BUG-009, T120). Worktree
     /// creates run as spawned tasks now — they must not park the connection loop that dispatched
     /// them (FR-026a) — so the serialization the old inline `.await` provided as a side effect is
@@ -191,6 +191,10 @@ struct Inner {
     /// client's window, not the session.
     sizes: HashMap<SessionId, (u16, u16)>,
 }
+
+/// One directory's entry in `Inner::env_include_cache`: empty while its first resolve runs, then
+/// the resolved variables merged with `TERM` (FR-021, BUG-005).
+type EnvIncludeCell = Arc<std::sync::OnceLock<Vec<(String, String)>>>;
 
 /// One live process of a session: its PTY and its framer. The [`PtySession`] is behind an `Arc` so
 /// a caller can clone it and write to the PTY *after* dropping the state lock — PTY writes must never
