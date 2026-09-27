@@ -618,7 +618,8 @@ the test fails on `origin/main` for both contracts.
 - [X] T084 [BUG-009] Failing regression test `crates/micold-core/tests/settings_contract_examples.rs`:
   every ```` ```json ````/```` ```jsonc ```` block holding `"settings_version"` in the 003, 006 and 027 settings
   contracts, with `//` comments stripped, loads through `JsonFileSettingsStore` as
-  `LoadStatus::Loaded`, and its `theme` serializes back to the same string. Declare those three
+  `LoadStatus::Loaded`, and saved again it keeps every value the example sets (so neither an
+  ignored key nor a clamped value passes). Declare those three
   contracts `-micold-docs` in `.gitattributes`, since the test reads them.
 - [X] T085 [BUG-009] Correct the examples to `"theme": "follow_system"` in
   `contracts/settings-schema.md` and in

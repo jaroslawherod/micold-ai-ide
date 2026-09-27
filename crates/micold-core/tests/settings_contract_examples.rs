@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
 use micold_core::store::LoadStatus;
 use micold_core::theme::ThemePreference;
+use serde_json::Value;
 
 /// The contracts that show an on-disk `settings.json`. Named rather than globbed, for the same
 /// reason the `.gitattributes` carve-outs are: each one is a file this test makes a test input.
@@ -31,29 +32,46 @@ fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// The body of every ```` ```json ```` or ```` ```jsonc ```` fence that holds a settings document,
-/// recognised by its `settings_version` key.
+/// The body of every JSON fence (```` ```json ````, ```` ```jsonc ````, with or without an info
+/// string) that holds a settings document, recognised by its `settings_version` key. A fence left
+/// open at the end of the file is returned too, so the load reports it rather than the scan
+/// dropping it.
 fn settings_examples(markdown: &str) -> Vec<String> {
     let mut examples = Vec::new();
     let mut current: Option<String> = None;
     for line in markdown.lines() {
-        let fence = line.trim_start();
+        let fence = line.trim().to_ascii_lowercase();
         match current.as_mut() {
-            None if fence == "```json" || fence == "```jsonc" => current = Some(String::new()),
+            None if fence.starts_with("```json") => current = Some(String::new()),
             None => {}
-            Some(_) if fence.starts_with("```") => {
-                let body = current.take().unwrap();
-                if body.contains("\"settings_version\"") {
-                    examples.push(body);
-                }
-            }
+            Some(_) if fence.starts_with("```") => examples.extend(current.take()),
             Some(body) => {
                 body.push_str(strip_line_comment(line));
                 body.push('\n');
             }
         }
     }
+    examples.extend(current);
+    examples.retain(|body| body.contains("\"settings_version\""));
     examples
+}
+
+/// Where `example` and `stored` disagree: every value the example sets must be stored as written.
+/// Objects are compared key by key, so a field the example leaves out may take any default.
+fn differences(path: &str, example: &Value, stored: &Value, out: &mut Vec<String>) {
+    match (example, stored) {
+        (Value::Object(example), Value::Object(stored)) => {
+            for (key, value) in example {
+                let at = format!("{path}.{key}");
+                match stored.get(key) {
+                    Some(kept) => differences(&at, value, kept, out),
+                    None => out.push(format!("{at} is not a field the app keeps")),
+                }
+            }
+        }
+        _ if example != stored => out.push(format!("{path} is {example} but is kept as {stored}")),
+        _ => {}
+    }
 }
 
 /// `line` without a trailing `// …` comment. A `//` inside a string literal is kept.
@@ -79,7 +97,7 @@ fn strip_line_comment(line: &str) -> &str {
 }
 
 #[test]
-fn every_settings_contract_example_loads_without_recovery() {
+fn every_settings_contract_example_loads_as_written() {
     let mut failures = Vec::new();
     for contract in CONTRACTS {
         let path = repo_root().join(contract);
@@ -92,22 +110,29 @@ fn every_settings_contract_example_loads_without_recovery() {
         );
 
         for example in examples {
+            let written: Value = match serde_json::from_str(&example) {
+                Ok(written) => written,
+                Err(e) => {
+                    failures.push(format!(
+                        "{contract}: the example is not JSON: {e}\n{example}"
+                    ));
+                    continue;
+                }
+            };
+
             let dir = tempfile::tempdir().unwrap();
             let file = dir.path().join("settings.json");
             fs::write(&file, &example).unwrap();
             let outcome = JsonFileSettingsStore::at(file.clone()).load();
 
-            // The store reports only that it recovered, so name the theme's own parse error when
-            // there is one: it is the field this test exists for.
-            let written: serde_json::Value = serde_json::from_str(&example)
-                .unwrap_or_else(|e| panic!("{contract}: the example is not JSON: {e}\n{example}"));
-            let theme = written.get("theme");
-            let theme_error = theme
-                .and_then(|t| serde_json::from_value::<ThemePreference>(t.clone()).err())
-                .map(|e| format!(" (theme: {e})"))
-                .unwrap_or_default();
-
             if outcome.status != LoadStatus::Loaded {
+                // The store reports only that it recovered, so name the theme's own parse error
+                // when there is one: it is the field this bug was about.
+                let theme_error = written
+                    .get("theme")
+                    .and_then(|t| serde_json::from_value::<ThemePreference>(t.clone()).err())
+                    .map(|e| format!(" (theme: {e})"))
+                    .unwrap_or_default();
                 failures.push(format!(
                     "{contract}: the example loads as {:?}{theme_error}, moved to .bak: {}, so a \
                      file written from it loses every setting:\n{example}",
@@ -117,14 +142,28 @@ fn every_settings_contract_example_loads_without_recovery() {
                 continue;
             }
 
-            // The theme the example names is the theme that loads, spelled the same way back.
-            if let Some(theme) = theme {
-                let loaded = serde_json::to_value(outcome.settings.theme).unwrap();
-                if &loaded != theme {
-                    failures.push(format!(
-                        "{contract}: the example's theme {theme} loads as {loaded}"
-                    ));
-                }
+            // Loaded is not enough: an unknown key is ignored and an out-of-range value clamped,
+            // both silently. Save what loaded and require every value the example sets back as
+            // written. The save goes to a fresh file, because a save over the example would carry
+            // its unknown keys forward (rule S-5) and hide a misspelled one. The version is the one
+            // field that legitimately moves on save.
+            let saved = dir.path().join("saved.json");
+            if let Err(e) = JsonFileSettingsStore::at(saved.clone()).save(&outcome.settings) {
+                failures.push(format!("{contract}: the loaded example does not save: {e}"));
+                continue;
+            }
+            let stored: Value = serde_json::from_str(&fs::read_to_string(&saved).unwrap()).unwrap();
+            let mut example_fields = written;
+            if let Value::Object(fields) = &mut example_fields {
+                fields.remove("settings_version");
+            }
+            let mut diffs = Vec::new();
+            differences("", &example_fields, &stored, &mut diffs);
+            if !diffs.is_empty() {
+                failures.push(format!(
+                    "{contract}: the example loads, but not as written:\n  {}",
+                    diffs.join("\n  ")
+                ));
             }
         }
     }
