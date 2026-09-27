@@ -516,6 +516,47 @@ mod tests {
         );
     }
 
+    /// 002 BUG-007 (FR-012d): a `projects.json` that cannot be parsed is moved aside and the list
+    /// starts empty. The launch says so, and names where the old list went, so the user can get
+    /// it back — the same treatment a recovered `settings.json` gets.
+    #[test]
+    fn a_launch_that_recovers_the_project_list_tells_the_user_where_the_old_one_went() {
+        let dir = tempfile::tempdir().unwrap();
+        let catalog = dir.path().join("projects.json");
+        std::fs::write(&catalog, "{ \"projects\": [ { \"path\": \"/a\", ").unwrap();
+        let store = micold_core::store::JsonFileStore::at(catalog.clone());
+        let mut core = State::default();
+
+        restore_from_disk(&mut core, None, Some(&store), &FakeFolderScanner::new());
+
+        let backup = catalog.with_extension("json.bak");
+        assert!(backup.exists(), "precondition: the store kept the file");
+        assert!(core.workspace.projects.is_empty(), "precondition: recovered");
+        let notice = core
+            .notifications
+            .queue
+            .visible()
+            .map(|n| n.message.clone())
+            .unwrap_or_default();
+        assert!(
+            notice.contains("project list") && notice.contains(&backup.display().to_string()),
+            "a project list that had to be recovered was reset without a word, or the notice did \
+             not name the kept file: {notice:?}"
+        );
+    }
+
+    /// …while a first run, with no `projects.json` at all, recovered nothing and says nothing.
+    #[test]
+    fn a_first_launch_with_no_project_list_says_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = micold_core::store::JsonFileStore::at(dir.path().join("projects.json"));
+        let mut core = State::default();
+
+        restore_from_disk(&mut core, None, Some(&store), &FakeFolderScanner::new());
+
+        assert!(core.notifications.queue.visible().is_none());
+    }
+
     /// A store that answers the way `JsonFileSettingsStore` answers a corrupt `settings.json`: the
     /// first load renames the unreadable file aside and reports the recovery, and every load after
     /// it finds nothing and reads as a first run.
