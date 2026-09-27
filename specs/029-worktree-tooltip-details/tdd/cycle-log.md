@@ -78,3 +78,27 @@ on `origin/main` 23a0e0ee is `success`; this branch's HEAD 4afd673d adds only sp
   Restored; 2 passed.
 - **Notes**: B1–B5 go into one commit. The loop was not committed between cycles, since B4's red was
   written before B1–B3's green was committed; the evidence above is per cycle.
+
+## Review round 1 — refactors and fixes on green
+
+Not new behaviours; each change was re-run green, and the gate was re-proved against a mutant.
+
+- **`mise run gate` failure** (`idle_requests_no_frames`): the first cut called `shell.request_redraw()`
+  directly, which the rendering layer reserves to `cdk::motion::Progress`. The panel's open/close now
+  drives a zero-duration `Progress`, which asks for exactly the one frame that paints the change.
+- **Review A**: the flip decision now tests the panel's *visible* surface (inside its 5px transparent
+  margin), not its padded box, so a panel that visibly fits is not flipped; `cdk::tooltip::Position`
+  is its own four-sided enum (no caller used the stack's follow-the-cursor variant, which has no side
+  to flip to); the gate reuses `context_menu_anchor::with_worktrees` instead of a copy of its
+  fixture, measures the visible surface, fails if one hover opens two panels, requires the hover
+  point to be inside the list's clip, and gives B3 a 3-row list instead of the full search.
+- **Mutant re-check of the refactored gate**: `place()` forced to return the asked-for side:
+
+  ```
+  in a 640×480 window, the last worktree row's tooltip covers the row it describes: row 4,419 244×60 (y 419–479), tooltip 26,403 200×72 (y 403–475). …
+  in a 1280×800 window, the last worktree row's tooltip covers the row it describes: row 4,739 244×60 (y 739–799), tooltip 26,723 200×72 (y 723–795). …
+  test result: FAILED. 1 passed; 2 failed; …
+  ```
+
+  Restored; `layout_snapshot` 42 passed, `placement_tests` 2 passed, `idle_requests_no_frames` 8,
+  `one_overlay_implementation` 8, `cdk_no_appearance` 3 passed.

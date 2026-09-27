@@ -225,8 +225,9 @@ pub const TOOLTIP_MAX_WIDTH: f32 = 320.0;
 /// Wrap any element with a hover tooltip describing the action it triggers (Principle VIII
 /// builder-API rule: construct with the required content + label + roles, then optionally
 /// `.position(...)`, then `.into()`). Theme-aware surface styling; shown below the element by
-/// default, and on the opposite side of it when the asked-for side has no room — it never covers
-/// the element it describes (029 BUG-001, FR-013).
+/// default, and on the opposite side of it when the asked-for side has no room, so it does not
+/// cover the element it describes (029 BUG-001, FR-013). Only a panel too large for either side
+/// is slid onto it, from the side with more room.
 ///
 /// The label may be multi-line: it is bounded at [`TOOLTIP_MAX_WIDTH`] and wraps on glyphs where a
 /// word boundary is unavailable, so a long path breaks rather than widening the panel.

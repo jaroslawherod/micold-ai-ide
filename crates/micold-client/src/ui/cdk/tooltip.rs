@@ -2,7 +2,7 @@
 //!
 //! A hover label floated beside its trigger. Where it floats is the whole of this module: the panel
 //! opens on the side it was asked for and, when that side has no room for it, on the other side of
-//! the trigger — never over the trigger itself.
+//! the trigger rather than over it.
 //!
 //! The rendering stack's own tooltip placed the panel on the asked-for side and then, to keep it
 //! inside the window, slid it back by the shortfall. For a trigger at the window's bottom edge that
@@ -17,14 +17,30 @@
 //! This is one of the modules in `cdk/` besides `overlay` that floats its own content, and
 //! `tests/one_overlay_implementation.rs` holds it to saying why.
 
+use std::time::Duration;
+
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
 use iced::{window, Element, Event, Length, Padding, Point, Rectangle, Size, Vector};
 
-/// Which side of its trigger a tooltip asks for. The rendering stack's own type, so the material
-/// layer's public `TooltipPosition` keeps meaning what it always meant.
-pub use iced::widget::tooltip::Position;
+use super::motion::Progress;
+
+/// Which side of its trigger a tooltip asks for.
+///
+/// Its own type rather than the rendering stack's, which also offers "follow the cursor": a panel
+/// that follows the cursor has no side to flip to, and nothing in this application asks for one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Position {
+    /// Above the trigger.
+    Top,
+    /// Below the trigger — the default.
+    Bottom,
+    /// To the left of the trigger.
+    Left,
+    /// To the right of the trigger.
+    Right,
+}
 
 /// The space kept between the panel and the window's edge, and around the panel's content — the
 /// figure the rendering stack's tooltip uses, kept so that nothing that already fits moves.
@@ -60,14 +76,25 @@ impl<'a, M, Theme, Renderer> Tooltip<'a, M, Theme, Renderer> {
     }
 }
 
-/// Whether the panel is showing, and where the pointer was when it last moved over the trigger.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-enum State {
-    #[default]
-    Idle,
-    Open {
-        cursor: Point,
-    },
+/// Whether the panel is showing.
+///
+/// `shown` exists only to ask for the frame that paints an open or a close. The rendering layer
+/// asks for frames through `Progress` alone (`tests/idle_requests_no_frames.rs`), so the change is
+/// a transition that takes no time: it asks for one frame, arrives on it, and asks for nothing
+/// more.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct State {
+    open: bool,
+    shown: Progress,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            open: false,
+            shown: Progress::new(0.0),
+        }
+    }
 }
 
 impl<M, Theme, Renderer> Widget<M, Theme, Renderer> for Tooltip<'_, M, Theme, Renderer>
@@ -123,27 +150,13 @@ where
     ) {
         if let Event::Mouse(_) | Event::Window(window::Event::RedrawRequested(_)) = event {
             let state = tree.state.downcast_mut::<State>();
-            match (*state, cursor.position_over(layout.bounds())) {
-                (State::Idle, Some(at)) => {
-                    *state = State::Open { cursor: at };
-                    shell.invalidate_layout();
-                    shell.request_redraw();
-                }
-                (State::Open { cursor: last }, Some(at))
-                    if self.position == Position::FollowCursor && last != at =>
-                {
-                    *state = State::Open { cursor: at };
-                    shell.request_redraw();
-                }
-                (State::Open { .. }, None) => {
-                    *state = State::Idle;
-                    shell.invalidate_layout();
-                    if !matches!(event, Event::Window(window::Event::RedrawRequested(_))) {
-                        shell.request_redraw();
-                    }
-                }
-                (State::Open { .. }, Some(_)) | (State::Idle, None) => {}
+            let over = cursor.is_over(layout.bounds());
+            if over != state.open {
+                state.open = over;
+                shell.invalidate_layout();
             }
+            let target = if state.open { 1.0 } else { 0.0 };
+            state.shown.on_frame(event, target, Duration::ZERO, shell);
         }
 
         self.content.as_widget_mut().update(
@@ -223,7 +236,7 @@ where
         viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, M, Theme, Renderer>> {
-        let state = *tree.state.downcast_ref::<State>();
+        let open = tree.state.downcast_ref::<State>().open;
         let mut children = tree.children.iter_mut();
 
         let content = self.content.as_widget_mut().overlay(
@@ -234,24 +247,20 @@ where
             translation,
         );
 
-        let panel = match state {
-            State::Open { cursor } => {
-                let bounds = layout.bounds();
-                Some(overlay::Element::new(Box::new(Panel {
-                    tooltip: &mut self.tooltip,
-                    tree: children.next().expect("the panel's tree"),
-                    trigger: Rectangle {
-                        x: bounds.x + translation.x,
-                        y: bounds.y + translation.y,
-                        ..bounds
-                    },
-                    cursor: cursor + translation,
-                    position: self.position,
-                    gap: self.gap,
-                })))
-            }
-            State::Idle => None,
-        };
+        let panel = open.then(|| {
+            let bounds = layout.bounds();
+            overlay::Element::new(Box::new(Panel {
+                tooltip: &mut self.tooltip,
+                tree: children.next().expect("the panel's tree"),
+                trigger: Rectangle {
+                    x: bounds.x + translation.x,
+                    y: bounds.y + translation.y,
+                    ..bounds
+                },
+                position: self.position,
+                gap: self.gap,
+            }))
+        });
 
         if content.is_none() && panel.is_none() {
             return None;
@@ -266,7 +275,6 @@ struct Panel<'a, 'b, M, Theme, Renderer> {
     tree: &'b mut Tree,
     /// The trigger's on-screen rectangle; everything is placed from it.
     trigger: Rectangle,
-    cursor: Point,
     position: Position,
     gap: f32,
 }
@@ -288,7 +296,6 @@ where
             content.size(),
             bounds,
             self.gap,
-            self.cursor,
         );
 
         layout::Node::with_children(
@@ -331,18 +338,14 @@ fn place(
     content: Size,
     window: Size,
     gap: f32,
-    cursor: Point,
 ) -> Rectangle {
-    let asked = inside(beside(position, trigger, content, gap, cursor), window);
-    let Some(other) = opposite(position) else {
-        return asked;
-    };
-    if !overlaps(asked, trigger) {
+    let asked = inside(beside(position, trigger, content, gap), window);
+    if !covers(asked, trigger) {
         return asked;
     }
-    let flipped = inside(beside(other, trigger, content, gap, cursor), window);
-    if !overlaps(flipped, trigger) || room(other, trigger, window) > room(position, trigger, window)
-    {
+    let other = opposite(position);
+    let flipped = inside(beside(other, trigger, content, gap), window);
+    if !covers(flipped, trigger) || room(other, trigger, window) > room(position, trigger, window) {
         flipped
     } else {
         asked
@@ -356,24 +359,22 @@ fn room(side: Position, trigger: Rectangle, window: Size) -> f32 {
         Position::Bottom => window.height - (trigger.y + trigger.height),
         Position::Left => trigger.x,
         Position::Right => window.width - (trigger.x + trigger.width),
-        Position::FollowCursor => 0.0,
     }
 }
 
-/// The other side of the trigger. A panel that follows the cursor has none.
-fn opposite(position: Position) -> Option<Position> {
+/// The other side of the trigger.
+fn opposite(position: Position) -> Position {
     match position {
-        Position::Top => Some(Position::Bottom),
-        Position::Bottom => Some(Position::Top),
-        Position::Left => Some(Position::Right),
-        Position::Right => Some(Position::Left),
-        Position::FollowCursor => None,
+        Position::Top => Position::Bottom,
+        Position::Bottom => Position::Top,
+        Position::Left => Position::Right,
+        Position::Right => Position::Left,
     }
 }
 
 /// The panel on `side` of the trigger, before the window has any say: centred along the trigger,
 /// `gap` away from it, padded by [`EDGE_PADDING`] all round.
-fn beside(side: Position, trigger: Rectangle, content: Size, gap: f32, cursor: Point) -> Rectangle {
+fn beside(side: Position, trigger: Rectangle, content: Size, gap: f32) -> Rectangle {
     let size = Size::new(
         content.width + EDGE_PADDING * 2.0,
         content.height + EDGE_PADDING * 2.0,
@@ -385,10 +386,6 @@ fn beside(side: Position, trigger: Rectangle, content: Size, gap: f32, cursor: P
         Position::Bottom => Point::new(centred_x, trigger.y + trigger.height + gap),
         Position::Left => Point::new(trigger.x - gap - size.width, centred_y),
         Position::Right => Point::new(trigger.x + trigger.width + gap, centred_y),
-        Position::FollowCursor => Point::new(
-            cursor.x - EDGE_PADDING,
-            cursor.y - content.height - EDGE_PADDING,
-        ),
     };
     Rectangle::new(origin, size)
 }
@@ -400,10 +397,16 @@ fn inside(mut panel: Rectangle, window: Size) -> Rectangle {
     panel
 }
 
-/// Whether two rectangles share any area — touching edges do not count.
-fn overlaps(a: Rectangle, b: Rectangle) -> bool {
-    let x = (a.x + a.width).min(b.x + b.width) - a.x.max(b.x);
-    let y = (a.y + a.height).min(b.y + b.height) - a.y.max(b.y);
+/// Whether the visible part of `panel` — inside its [`EDGE_PADDING`], which is drawn as nothing —
+/// shares any area with `trigger`. Touching edges do not count.
+fn covers(panel: Rectangle, trigger: Rectangle) -> bool {
+    let (left, top) = (panel.x + EDGE_PADDING, panel.y + EDGE_PADDING);
+    let (right, bottom) = (
+        panel.x + panel.width - EDGE_PADDING,
+        panel.y + panel.height - EDGE_PADDING,
+    );
+    let x = right.min(trigger.x + trigger.width) - left.max(trigger.x);
+    let y = bottom.min(trigger.y + trigger.height) - top.max(trigger.y);
     x > 0.0 && y > 0.0
 }
 
@@ -435,7 +438,7 @@ mod placement_tests {
         let trigger = Rectangle::new(Point::new(100.0, 70.0), Size::new(100.0, 60.0));
         let content = Size::new(80.0, 80.0);
 
-        let panel = place(Position::Top, trigger, content, window, GAP, Point::ORIGIN);
+        let panel = place(Position::Top, trigger, content, window, GAP);
 
         assert_eq!(
             panel.y, 0.0,
@@ -454,14 +457,7 @@ mod placement_tests {
         let trigger = Rectangle::new(Point::new(340.0, 100.0), Size::new(60.0, 40.0));
         let content = Size::new(120.0, 30.0);
 
-        let panel = place(
-            Position::Right,
-            trigger,
-            content,
-            window,
-            GAP,
-            Point::ORIGIN,
-        );
+        let panel = place(Position::Right, trigger, content, window, GAP);
 
         assert!(
             panel.x + panel.width <= trigger.x,

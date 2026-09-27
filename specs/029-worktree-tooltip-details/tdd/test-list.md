@@ -5,9 +5,9 @@ milestone M1 only** (T031–T036), so the `tdd.run` loop that `speckit-implement
 `before_implement` hook drives has the list it requires. The behaviours are the ones T031 and T032
 specify, traced to FR-013 and SC-006 (and SC-005 for staying inside the window).
 
-All three are geometry-gate cases in
+B1–B3 are geometry-gate cases in
 `crates/micold-client/tests/gates/tooltip_clears_its_row.rs`, compiled into the `layout_snapshot`
-binary. The flip itself is layout glue inside `ui/cdk/tooltip.rs`, covered by these cases and by
+binary; B4–B5 are unit tests of `place()` in `ui/cdk/tooltip.rs`. The flip itself is layout glue inside `ui/cdk/tooltip.rs`, covered by these cases and by
 `quickstart.md` §B7 under the visual-pass skill (plan.md § Bugfix BUG-001, *Test layer*).
 
 | ID | Behaviour | Traces to | Task | State | Test |
