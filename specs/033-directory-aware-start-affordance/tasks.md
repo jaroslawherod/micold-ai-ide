@@ -300,3 +300,30 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Satisfies**: SC-001, SC-002, SC-005 (observed end to end)
 - **Verify**: read `evidence/quickstart-b.md`; `grep -rn "session.available_providers\|\.available_providers =\|cli_availability_asked" crates/micold-client/src` prints nothing
 - **Depends on**: M1, M2
+
+## Phase 7: TDD remediation
+
+From `specs/033-directory-aware-start-affordance/tdd/verification.md` (verdict `PASS_WITH_GAPS`; the
+feature is shippable as-is — none of these findings are blocking). All three are
+**test-strength/docs only, adding no product behaviour.**
+
+- [ ] T041 [P] Finding #1 (LOW, test-strength only): collapse the near-verbatim `AvailabilityAnswers`
+  home-answer fixture (`asked(0, AvailabilityKey::Home)` / `answered(0, ..)`) duplicated across
+  `crates/micold-client/tests/features_session.rs:485-494`, `provider_choice_surfaces.rs:51-54`,
+  `session_start_press.rs:38-41`, `unavailable_default_says_so.rs:35-38`,
+  `a_field_note_shares_its_fields_column.rs:41-44` into one `support::hold_home(state, ..)` helper in
+  `crates/micold-client/tests/support/mod.rs`. Proof: `scripts/build-lock.sh cargo test -p micold-client
+  --test features_session --test provider_choice_surfaces --test session_start_press --test
+  unavailable_default_says_so --test a_field_note_shares_its_fields_column` stays green with fewer
+  duplicated lines and one call site per test.
+- [ ] T042 [P] Finding #2 (LOW, test-strength only): `crates/micold-client/tests/directory_availability.rs:20-21`
+  defines both `PROJECT` and `P` for the same literal `"/repo"`; keep one name and update its uses.
+  Proof: `scripts/build-lock.sh cargo test -p micold-client --test directory_availability` stays green
+  (16 passed) and `grep -c 'const P:' crates/micold-client/tests/directory_availability.rs` is 0 or 1,
+  not 2.
+- [ ] T043 Finding #3 (INFO, docs only): add the two cycle-4 rendered tests
+  (`session_start_press.rs::the_default_row_draws_its_chevron_from_its_own_directorys_answer`,
+  `..._starts_a_default_its_own_directory_provides`) to
+  `specs/033-directory-aware-start-affordance/tdd/test-list.md` with a behavior id (they exercise
+  FR-007/US1-1 rendering and currently trace to nothing on the list). Proof: the list's row count
+  grows by one entry and each new id names both tests.
