@@ -3763,7 +3763,12 @@ fn availability_saving_env_include_refreshes_every_row() {
 
     save_env_include_and_echo(&mut app, settings_with_env_include(false));
     let asked = availability_requests(&mut rx);
-    answer_each(&mut app, &asked, CLAUDE, &[(DEMO, CLAUDE), (FEAT_A, CLAUDE)]);
+    answer_each(
+        &mut app,
+        &asked,
+        CLAUDE,
+        &[(DEMO, CLAUDE), (FEAT_A, CLAUDE)],
+    );
 
     assert!(
         !offers_a_choice(&app, DEMO),
@@ -3884,10 +3889,7 @@ fn availability_forgetting_a_project_drops_its_answers() {
         !offers_a_choice(&app, DEMO),
         "the forgotten project's root answer is dropped"
     );
-    assert!(
-        !offers_a_choice(&app, FEAT_A),
-        "and so is its worktree's"
-    );
+    assert!(!offers_a_choice(&app, FEAT_A), "and so is its worktree's");
 }
 
 /// U30 (FR-004, deleted then recreated): a worktree whose directory goes missing drops its answer,
@@ -3906,7 +3908,10 @@ fn availability_a_deleted_then_recreated_worktree_is_asked_again() {
     );
     let asked = availability_requests(&mut rx);
     answer_each(&mut app, &asked, CLAUDE, &[(FEAT_A, CLAUDE_AND_PI)]);
-    assert!(offers_a_choice(&app, FEAT_A), "fixture check: feat-a offers Pi");
+    assert!(
+        offers_a_choice(&app, FEAT_A),
+        "fixture check: feat-a offers Pi"
+    );
 
     feed(
         &mut app,
@@ -3982,7 +3987,10 @@ fn availability_nothing_is_asked_while_nothing_changes() {
 #[test]
 fn availability_opening_a_rows_list_refreshes_its_answer() {
     let (mut app, mut rx) = app_with_two_answered_worktrees();
-    assert!(!offers_a_choice(&app, FEAT_B), "fixture check: B offers no choice");
+    assert!(
+        !offers_a_choice(&app, FEAT_B),
+        "fixture check: B offers no choice"
+    );
 
     open_start_list(&mut app, SessionLocation::Worktree("feat-b".into()));
     let asked = availability_requests(&mut rx);

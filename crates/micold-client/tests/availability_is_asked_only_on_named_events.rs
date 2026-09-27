@@ -194,10 +194,7 @@ fn call_sites() -> Vec<(String, String)> {
 }
 
 fn count(found: &[(String, String)], file: &str, line: &str) -> usize {
-    found
-        .iter()
-        .filter(|(f, l)| f == file && l == line)
-        .count()
+    found.iter().filter(|(f, l)| f == file && l == line).count()
 }
 
 #[test]
@@ -229,7 +226,8 @@ fn each_allowed_line_appears_exactly_as_often_as_its_entry_says() {
         .iter()
         .filter_map(|(file, line, expected, _)| {
             let seen = count(&found, file, line);
-            (seen != *expected).then(|| format!("  {file}: {line} — expected {expected}, found {seen}"))
+            (seen != *expected)
+                .then(|| format!("  {file}: {line} — expected {expected}, found {seen}"))
         })
         .collect();
 
