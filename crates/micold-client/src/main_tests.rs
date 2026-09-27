@@ -83,6 +83,7 @@ fn update_inner_applies_window_focus_changed() {
     let mut app = App {
         caps: Capabilities::real()
             .without_settings()
+            .without_projects()
             .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener)),
         core: State::default(),
         reported_scheme: None,
@@ -137,6 +138,7 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
     let mut app = App {
         caps: Capabilities::real()
             .without_settings()
+            .without_projects()
             .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener)),
         core: State::default(),
         reported_scheme: None,
@@ -676,6 +678,7 @@ pub(crate) fn base_app() -> App {
     App {
         caps: Capabilities::real()
             .without_settings()
+            .without_projects()
             .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener)),
         core: State::default(),
         reported_scheme: None,
@@ -1686,6 +1689,14 @@ fn the_test_app_cannot_reach_the_real_settings_file() {
         "`base_app()` hands tests the real settings store; a save test would write the \
          developer's own settings.json (#368)"
     );
+    // 029 T069: #368 dropped only the settings store, so the same `App` still carried a store over
+    // the developer's own `projects.json`. Nothing wrote through it, which is why it went unnoticed
+    // for as long as the settings one did — the file the reporter lost was the one a test did write.
+    assert!(
+        base_app().caps.projects().is_none(),
+        "`base_app()` hands tests the real project catalog; a test that saves a project would \
+         write the developer's own projects.json (029 T069)"
+    );
 }
 
 /// T100 (BUG-003 follow-up, FR-012a/FR-012b): saving Settings while connected to a daemon must
@@ -2027,6 +2038,7 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
     let mut app = App {
         caps: Capabilities::real()
             .without_settings()
+            .without_projects()
             .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener)),
         core: State::default(),
         reported_scheme: None,
