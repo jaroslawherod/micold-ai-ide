@@ -21,6 +21,7 @@ use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::session::SelectKind;
+use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::worktree_form::Msg as FormMsg;
 use micold_client::grid::GridCache;
@@ -628,8 +629,20 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Project(ProjectMsg::RenameConfirmed) => {
             shell::daemon_sync::on_rename_confirmed(app)
         }
+        // Feature 033, contract C1 A6: a forgotten project's rows are gone, so the sync after it
+        // drops their answers (FR-012). It asks nothing new unless another project became active.
         Message::Project(ProjectMsg::ForgetConfirmed) => {
-            shell::daemon_sync::on_project_forget_confirmed(app)
+            let task = shell::daemon_sync::on_project_forget_confirmed(app);
+            shell::daemon_sync::sync_cli_availability(app);
+            task
+        }
+        // Feature 033, contract C1 A5b: revealing agent worktrees puts rows on screen that have no
+        // answer yet, and hiding them takes rows away. The reducer flips the filter; the sync asks
+        // about the revealed rows or drops the hidden ones' answers.
+        Message::Sidebar(msg @ SidebarMsg::ShowAgentWorktreesToggled) => {
+            app.core.update(Message::Sidebar(msg));
+            shell::daemon_sync::sync_cli_availability(app);
+            Task::none()
         }
         Message::Worktree(WorktreeMsg::RenameConfirmed) => {
             shell::daemon_sync::on_worktree_rename_confirmed(app)

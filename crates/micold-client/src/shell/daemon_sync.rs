@@ -426,14 +426,36 @@ pub fn ask_cli_availability(app: &mut App, key: AvailabilityKey) {
     d.send(ClientMsg::AiCliAvailabilityRequest { req, cwd });
 }
 
-/// Ask about every sidebar row whose directory has no answer held and no request in flight
-/// (feature 033, contract C1 "sync", FR-006).
+/// Keep answers only for the sidebar rows on screen, and ask about every row whose directory has
+/// no answer held and no request in flight (feature 033, contract C1 "sync", FR-003, FR-006,
+/// FR-012).
+///
+/// The prune comes first: a row that went — its project switched away from or forgotten, its
+/// worktree gone missing, its agent worktree hidden again — drops its answer and any request still
+/// out for it, so a late reply cannot file one. A row that comes back is then unasked, and asked.
 ///
 /// Idempotent: on an event that changed no row it sends nothing, so it can follow every event that
 /// might have (connect, project open, a catalog push) without counting what changed.
 pub fn sync_cli_availability(app: &mut App) {
     let wanted = micold_client::features::session::wanted_availability_dirs(&app.core);
+    app.core.session.availability.retain(&wanted);
     for dir in app.core.session.availability.unasked(&wanted) {
+        ask_cli_availability(app, AvailabilityKey::Dir(dir));
+    }
+}
+
+/// Ask home and every sidebar row again, whether or not an answer is held (feature 033, contract
+/// C1 A7, research R6).
+///
+/// For an environment-include change: the script is what puts a project-local CLI on a directory's
+/// `PATH`, so every answer may now be wrong. Held answers are **kept** until their replacements
+/// land — a row goes on offering what it was last told rather than flickering to the home answer
+/// while the service re-runs the script — and the per-key `latest` request is what makes the new
+/// answer, not a late old one, the one that sticks (FR-009).
+pub fn refresh_cli_availability(app: &mut App) {
+    ask_cli_availability(app, AvailabilityKey::Home);
+    let wanted = micold_client::features::session::wanted_availability_dirs(&app.core);
+    for dir in wanted {
         ask_cli_availability(app, AvailabilityKey::Dir(dir));
     }
 }
@@ -534,6 +556,18 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             app.env_include_cache.clear();
             let cwd = default_resolution_cwd(&app.core);
             refresh_env_include(app, &cwd);
+            // Feature 033, contract C1 A7: the script decides which CLIs each directory's `PATH`
+            // holds, so a change to it re-asks every answer. Compared against what the answers were
+            // asked under, not against `app`'s fields — this window's own save overwrote those
+            // before its echo arrived, so they would never differ here (research R6).
+            let echoed = EnvIncludeSettings {
+                enabled: app.env_include_enabled,
+                script_path: app.env_include_script_path.clone(),
+                timeout_secs: app.env_include_timeout_secs,
+            };
+            if app.core.session.availability.env_include_changed(&echoed) {
+                refresh_cli_availability(app);
+            }
         }
         // Fetched scrollback: resolve + insert into the session's grid cache (FR-016/017).
         DaemonMsg::ScrollbackResponse {
@@ -989,7 +1023,7 @@ pub fn on_connected(
     // dropped when they arrive.
     app.core.session.availability.clear();
     // Recorded, not compared: the store was just cleared, so there is nothing a change could
-    // invalidate. This only sets the baseline M2's settings refresh compares against.
+    // invalidate. This only sets the baseline a later `SettingsChanged` compares against (C1 A7).
     let _ = app
         .core
         .session
