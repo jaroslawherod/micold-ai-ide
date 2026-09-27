@@ -245,7 +245,9 @@ mid-resolve (FR-007a, and the `WorktreeDelete` invalidation) and lets concurrent
 run the script (FR-020). Fix: each directory's entry is either *ready* or *in progress* (a shared
 slot the resolving caller fills and other askers wait on, off the state lock, bounded by the
 resolver's own timeout), and the cache carries a generation that `invalidate_env_include_all`
-bumps; an invalidation also removes in-progress entries, and a resolver inserts only if its own
+bumps (in the same critical section that persists new settings); reading the settings, probing
+the cache and claiming an in-progress entry happen in one critical section; a drop guard on the
+resolver releases its waiters if the resolve unwinds; an invalidation also removes in-progress entries, and a resolver inserts only if its own
 entry is still the one in the map. Askers already waiting get the result; nobody after the refresh
 does (FR-021). See `bugs/BUG-005.md`.
 
