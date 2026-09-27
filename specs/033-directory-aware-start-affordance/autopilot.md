@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/a-project-local-cli-stays-unreachable-in-that-project
 - **Started**: 2026-09-27
 - **Phase**: 4-milestones
-- **Next step**: Phase 4 — M1 implement, gate, review, PR.
+- **Next step**: Phase 4 — wait for #426's `ci complete`, merge, then M2.
 
 ## Pull requests
 
@@ -16,12 +16,13 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|
 | #413 | Spec | merged | 2e28015f |
 | #417 | Design (clarify, plan, tasks, milestones) | merged | 84d61968 |
+| #426 | M1 | open | — |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T019, T030–T036, T040 | Each row offers the CLIs its own directory provides; Settings, reconnect and another row's list never replace it | — | in-progress |
+| M1 | T001–T019, T030–T036, T040 | Each row offers the CLIs its own directory provides; Settings, reconnect and another row's list never replace it | #426 | in-review |
 | M2 | T020–T027, T037–T039 | Env-include changes refresh every row; rows that go drop answers, rows that come back are asked; tripwire pins the askers | — | planned |
 | M3 | T028–T029 | quickstart §B recorded passing end to end; no comment describes the window-wide set | — | planned |
 
