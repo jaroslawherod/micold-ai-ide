@@ -629,8 +629,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Project(ProjectMsg::RenameConfirmed) => {
             shell::daemon_sync::on_rename_confirmed(app)
         }
-        // Feature 033, contract C1 A6: a forgotten project's rows are gone, so the sync after it
-        // drops their answers (FR-012). It asks nothing new unless another project became active.
+        // Feature 033, contract C1 A6: forgetting the active project clears it, so its rows are gone
+        // and the sync after it drops their answers (FR-012). Forgetting another project changes no
+        // row, and the sync sends nothing. Forgetting never activates a project, so it never asks.
         Message::Project(ProjectMsg::ForgetConfirmed) => {
             let task = shell::daemon_sync::on_project_forget_confirmed(app);
             shell::daemon_sync::sync_cli_availability(app);
