@@ -404,8 +404,8 @@ pub fn on_takeover_requested(app: &mut App) -> Task<Message> {
 /// and echoed — the daemon's replies are matched by it in tests, and a request-shaped message with
 /// no id would be the odd one out on this protocol.
 ///
-/// A no-op while disconnected, deliberately: there is nobody who could answer, and the field stays
-/// `None` — "not said yet" — rather than being cleared to an empty set that reads as "none exist".
+/// A no-op while disconnected, deliberately: there is nobody who could answer, and the key stays
+/// unanswered — "not said yet" — rather than being filed as an empty set that reads as "none exist".
 ///
 /// `key` is what the answer will be filed under (feature 033, contract C2): a row's directory —
 /// a project root or a worktree — sent as `cwd`, or the home directory, sent as no `cwd`. The
@@ -800,9 +800,10 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
         // sentence FR-023b asks for is composed in the settings view from this and from what the
         // client knows about the service it started, and there is nothing to say at the moment the
         // answer arrives — the user is not necessarily looking at a picker.
-        // An answer to a request older than the latest is about another directory (029 BUG-001):
-        // they are resolved off the service's loop, so a slow first resolution can land after a
-        // cached one asked later.
+        // Filed under the directory its request named (feature 033, contract C2). A reply that
+        // is not the newest for its directory, or that belongs to a request from before a
+        // reconnect, is dropped: replies are resolved off the service's loop, so a slow first
+        // resolution can land after a cached one asked later (029 BUG-001).
         DaemonMsg::AiCliAvailability { req, available } => {
             let source = availability_source(app);
             app.core
@@ -987,6 +988,8 @@ pub fn on_connected(
     // previous connection was told is forgotten first (FR-011), and replies to its requests are
     // dropped when they arrive.
     app.core.session.availability.clear();
+    // Recorded, not compared: the store was just cleared, so there is nothing a change could
+    // invalidate. This only sets the baseline M2's settings refresh compares against.
     let _ = app
         .core
         .session
