@@ -96,6 +96,9 @@ confirm each tooltip states its condition alongside the location.
   tooltip's shape does not change with window width.
 - **A name longer than the tooltip can reasonably be**: the tooltip stays readable and bounded — it
   does not stretch past the window or cover the sidebar it describes.
+- **A row at the bottom edge of the window** (the last row of a list long enough to fill the
+  sidebar): there is no room below it for the tooltip. The tooltip opens above the row instead, so
+  it never covers the row it describes (FR-013). *(Added by BUG-001.)*
 - **No bound branch** (orphan or detached worktree): the branch line is omitted entirely.
 - **Folder name equals the displayed name**: the tooltip does not print the same string twice.
 - **A worktree outside the project root**: the location shown is the absolute path, as it is today —
@@ -132,6 +135,16 @@ confirm each tooltip states its condition alongside the location.
   not change it.
 - **FR-012**: The tooltip's content MUST be derived without reading the disk while the user hovers, so
   hovering a row never blocks or lags the list.
+- **FR-013**: The tooltip MUST NOT cover the worktree row it describes. It opens below the row, as it
+  always has; when the window has no room below the row for the whole tooltip, it opens above the
+  row instead; if neither side holds the whole tooltip, it takes the side with more room. Keeping
+  it inside the window (FR-009, SC-005) never moves it onto the row while one side has room. The
+  rule belongs to the shared tooltip, so every tooltip in the app keeps clear of what it describes
+  the same way.
+
+  **Bugfix**: 2026-09-27 — BUG-001 added this requirement; on the last row of a full list the
+  rendering stack pulled the below-the-row tooltip back inside the window by sliding it up over the
+  row, hiding the row's name and its actions. See `bugs/BUG-001.md`.
 
 ### Key Entities
 
@@ -156,6 +169,10 @@ confirm each tooltip states its condition alongside the location.
   this app — is also available as words on hover, so nothing about a row is colour-only.
 - **SC-005**: The tooltip never extends beyond the application window, at the narrowest window size
   the app supports, for a name of at least 120 characters.
+- **SC-006**: For every worktree row — including the last row of a full list at the bottom edge of
+  the window, at the smallest window size the app supports — the tooltip and the row it describes
+  share no pixels, whenever one side of the row has room for the whole tooltip. *(Added by
+  BUG-001.)*
 
 ## Assumptions
 
@@ -163,8 +180,10 @@ confirm each tooltip states its condition alongside the location.
   name, bound branch, location, health status, and outside-this-app inclusion. Session counts,
   timestamps, and git ahead/behind state are **not** included — the first is already visible when the
   row is expanded, and the last two are not held anywhere the list can read cheaply.
-- The tooltip stays a single hover surface on the worktree row, in the same position it uses today;
-  no popover, no click target, no second tooltip on the name itself.
+- The tooltip stays a single hover surface on the worktree row, ~~in the same position it uses
+  today~~ below the row, or above it when there is no room below (FR-013, BUG-001: "the same
+  position" does not exist for the last row of a full list); no popover, no click target, no second
+  tooltip on the name itself.
 - Facts are rendered as short labelled lines (e.g. `Branch: …`) rather than a single run-on string,
   which is what makes FR-008 checkable.
 - The location wording keeps its existing behaviour (project-relative under the app's worktree root,
@@ -173,3 +192,10 @@ confirm each tooltip states its condition alongside the location.
   feature adds a way to read the whole name, it does not stop the row shortening it.
 - Everything the tooltip shows is already held in the app's in-memory worktree list, so no new data
   source, git call, or filesystem read is needed.
+
+---
+
+**Bugfix**: 2026-09-27 — BUG-001 Added FR-013 (the tooltip never covers the row it describes: below
+the row, above it when there is no room below), an Edge Case for the row at the window's bottom
+edge, and SC-006; amended the position Assumption. No other requirement changed. See
+`bugs/BUG-001.md`.

@@ -153,3 +153,55 @@ sits entirely inside that split — nothing new is introduced to hold it.
 ## Complexity Tracking
 
 > No Constitution Check violations. Table intentionally empty.
+
+## Bugfix BUG-001 — the tooltip must not cover the row it describes
+
+- **Where the rule lives: the shared `Tooltip`, not the sidebar.** The sidebar cannot know where its
+  last row lands in the window; the tooltip's overlay can, because the rendering stack lays it out
+  against the window with the trigger's on-screen bounds in hand. So the fix is in the shared
+  `Tooltip` (`crates/micold-client/src/ui/material/mod.rs`, built on a new `ui/cdk/tooltip.rs`, see
+  *Mechanism* below), and every tooltip in the app gains it (Principle VIII). `tree_view.rs:552-553` keeps calling `Tooltip::new` with no position.
+- **The rule (FR-013).** Place the panel on the requested side (`Bottom` by default). If that
+  placement, once kept inside the window, would intersect the trigger's bounds, place it on the
+  opposite side instead (`Bottom` ↔ `Top`, `Left` ↔ `Right`). If neither side holds the whole
+  panel, take the side with more room; only then may the window clamp overlap the trigger. Keeping
+  it inside the window still applies to the result (FR-009, SC-005).
+- **How much room there is.** At the smallest supported window (640×480) a worktree row is ≈64px
+  tall, so the larger side has at least ≈208px. FR-009 bounds the panel's width, not its height: a
+  four-line tooltip is ≈75px, but SC-005's worst case (a 120-character name, a long branch, an
+  absolute path, and the status and outside-this-app lines, all wrapping by glyph at 320px) can
+  reach ≈12–13 lines and come close to 208px. SC-006 is therefore stated for a tooltip that fits on
+  one side of the row; the fallback above covers the rest.
+- **Scope: every tooltip.** The rule lives in the shared component, so every tooltip in the app
+  gains it, including the ones that already ask for `Left` or `Top` (`ui/terminal.rs`), the sidebar
+  header icons and `split_action`. For a tooltip that never meets its trigger, which is all of
+  them today except a row at the window's bottom edge, nothing changes.
+- **Mechanism: a cdk tooltip with its own overlay.** `iced_widget::tooltip` 0.14 clamps and never
+  flips (`tooltip.rs` overlay `layout`, lines 528–546); its `position` is private and set only at
+  construction, and `iced_core::overlay::Element` offers no way to move a node from outside
+  (`new`, `as_overlay`, `as_overlay_mut`, `map`). So the flip needs an `Overlay` implementation of
+  its own, which means `overlay::Element::new(..)`. `tests/one_overlay_implementation.rs` rejects
+  that anywhere outside `ui/cdk/` (`no_module_outside_the_cdk_implements_its_own_overlay`), so it
+  goes in a new `ui/cdk/tooltip.rs`, and the same diff adds an argued `CDK_OVERLAY_IMPLEMENTORS`
+  entry (the same reason `cdk/picker.rs` gives: it anchors to its trigger's own on-screen bounds,
+  inside content-sized dialogs too). If `ui/material/mod.rs` then stops calling the stack's
+  `tooltip(`, its `SANCTIONED` entry goes stale and that test says so; strike it in the same diff.
+  The Material `Tooltip` keeps its public API and builds on the cdk one.
+  *Rejected: `.position(Right)` at the row's call site.* The sidebar can be 600px wide
+  (`SIDEBAR_MAX_WIDTH`) in a 640px window (`MIN_WINDOW_SIZE`), where a 320px panel to the right is
+  clamped back over the row: the same bug, moved sideways.
+- **Test layer.** The regression test is a geometry gate beside `gates/context_menu_anchor.rs`: it
+  builds a state with enough worktrees that the last row sits within a row's height of the bottom of
+  the harness window **without scrolling** (a row below the fold cannot be hovered), dispatches a
+  real `CursorMoved` over that row into a retained tree (the tooltip opens at once; its delay is
+  zero), and reads the tooltip's overlay record against that row's bounds. The harness lays out
+  against a fixed `WINDOW` (1280×800, `tests/support/layout.rs:58`); the 640×480 case needs the
+  gate's helper to take a window size. On `origin/main` the
+  two intersect. A second case pins the unchanged behaviour: a row with room below still gets its
+  tooltip below it. The flip itself is layout glue inside the component, covered by those gates and
+  by `quickstart.md` §B7 under the visual-pass skill.
+- **Constitution**: I — both gate cases are written and seen to fail (the first) before the
+  component changes. VII — the user guide's tooltip paragraph says where the tooltip opens. VIII —
+  the change is in the shared component. No other principle affected.
+
+**Bugfix**: 2026-09-27 — BUG-001 Updated from bugfix patch.
