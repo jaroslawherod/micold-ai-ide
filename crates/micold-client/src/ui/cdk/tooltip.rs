@@ -454,7 +454,14 @@ mod placement_tests {
         let trigger = Rectangle::new(Point::new(340.0, 100.0), Size::new(60.0, 40.0));
         let content = Size::new(120.0, 30.0);
 
-        let panel = place(Position::Right, trigger, content, window, GAP, Point::ORIGIN);
+        let panel = place(
+            Position::Right,
+            trigger,
+            content,
+            window,
+            GAP,
+            Point::ORIGIN,
+        );
 
         assert!(
             panel.x + panel.width <= trigger.x,
