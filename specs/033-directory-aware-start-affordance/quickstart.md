@@ -21,8 +21,8 @@ real session service, and is run by the `visual-pass` skill on a private Xvfb di
   EOF
   ```
 
-- Two git repositories: `P`, with an empty `.pi-here` at its root and one worktree `P-wt` created
-  in the app (whose directory also gets `.pi-here`), and `Q`, with no marker file. The home
+- Two git repositories: `P`, with an empty, untracked `.pi-here` at its root and one worktree `P-wt`
+  created in the app, into whose directory `.pi-here` is copied by hand before `P` is opened, and `Q`, with no marker file. The home
   directory has `claude` on `PATH` and no `pi`.
 
 ## A. Automated (in `mise run gate`)
@@ -56,8 +56,8 @@ Settings → **Source a script before each session**: on, script `<SCRATCH>/incl
    show the chevron again with no user action.
 5. **US1-5.** Set the default AI CLI to Pi. In `P`, press the primary half: a Pi session starts
    directly, with no list. In `Q`, the same press opens the list with Pi marked not installed.
-6. **US2-1.** In `P`, create a second worktree `P-wt2` and delete its `.pi-here`, then use the
-   sidebar's refresh. `P-wt2`'s row has no chevron. Open `P-wt`'s list and close it: `P-wt2` still
+6. **US2-1.** `.pi-here` is untracked, so a new worktree has none. In `P`, create a second
+   worktree `P-wt2` in the app and do not add a marker to it. `P-wt2`'s row has no chevron. Open `P-wt`'s list and close it: `P-wt2` still
    has none, and its primary press (default back to Claude Code) starts `claude`.
 7. **US3-1, SC-005.** Turn **Source a script before each session** off and save. `P`'s rows lose
    the chevron. Turn it back on and save: they regain it.
