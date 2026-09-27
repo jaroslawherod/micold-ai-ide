@@ -615,12 +615,12 @@ Added Phase 15 (T081–T083).
 repeated it as `"System"`. Documentation only on the fix side; the code is correct. Test-first:
 the test fails on `origin/main` for both contracts.
 
-- [ ] T084 [BUG-009] Failing regression test `crates/micold-core/tests/settings_contract_examples.rs`:
+- [X] T084 [BUG-009] Failing regression test `crates/micold-core/tests/settings_contract_examples.rs`:
   every ```` ```json ````/```` ```jsonc ```` block holding `"settings_version"` in the 003, 006 and 027 settings
   contracts, with `//` comments stripped, loads through `JsonFileSettingsStore` as
   `LoadStatus::Loaded`, and its `theme` serializes back to the same string. Declare those three
   contracts `-micold-docs` in `.gitattributes`, since the test reads them.
-- [ ] T085 [BUG-009] Correct the examples to `"theme": "follow_system"` in
+- [X] T085 [BUG-009] Correct the examples to `"theme": "follow_system"` in
   `contracts/settings-schema.md` and in
   `specs/027-sandboxed-daemon-runtime/contracts/sandbox-settings-schema.md`. Make T084 pass.
 
