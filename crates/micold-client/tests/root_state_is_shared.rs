@@ -124,7 +124,9 @@ const COMPONENT_LOCAL: &[(&str, &str)] = &[
     ),
     (
         "session.menu_link",
-        "tests/features_session_links.rs::choosing_open_link_opens_the_captured_link_and_closes_the_menu          — the link is captured on the right press and acted on when an item is chosen, a message          later, so it outlives the menu widget that offered it (feature 031, FR-017)",
+        "tests/features_session_links.rs::choosing_open_link_opens_the_captured_link_and_closes_\
+         the_menu — the link is captured on the right press and acted on when an item is chosen, \
+         a message later, so it outlives the menu widget that offered it (feature 031, FR-017)",
     ),
     (
         "session.menu_open",

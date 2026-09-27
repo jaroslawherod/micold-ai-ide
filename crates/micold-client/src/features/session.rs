@@ -1144,6 +1144,16 @@ pub fn link_menu_items(link: Option<&micold_core::link::ResolvedLink>) -> Vec<Li
     }
 }
 
+/// How many items the terminal's right-click menu shows over `link`: its link items, then Copy and
+/// Paste (U162).
+///
+/// The pane needs the count at the press, to clamp the anchor before the view exists, and the view
+/// builds the list itself from [`link_menu_items`]. `the_menu_item_count_matches_the_list` pins the
+/// two to each other, so this stays a count of that list rather than a second answer about it.
+pub fn terminal_menu_item_count(link: Option<&micold_core::link::ResolvedLink>) -> usize {
+    link_menu_items(link).len() + 2
+}
+
 /// The terminal's right-click menu was dismissed, and the link it captured goes with it (U89).
 pub fn context_menu_closed(state: &mut crate::app::State) {
     state.session.terminal_context_menu = None;

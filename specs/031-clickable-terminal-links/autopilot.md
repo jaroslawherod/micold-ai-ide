@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 4-milestones
-- **Next step**: M7 step 2: implement T086, T070–T077 (link context menu)
+- **Next step**: M7 step 6: wait for `ci complete`, then rebase-merge
 
 ## Pull requests
 
@@ -33,7 +33,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M4 | T035, T036, T038–T041 | Session terminal identity and the FORCE_HYPERLINK opt-in | #393 | merged |
 | M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | #402 | merged |
 | M6 | T085, T055–T067, T069, T068 | Sandboxed file links, translated and confirmed | #408 | merged |
-| M7 | T086, T070–T077 | Link context menu | — | in progress |
+| M7 | T086, T070–T077 | Link context menu | #PR | green locally, PR open |
 | M8 | T078–T081 | Close: SC-005 measurement, full visual walkthrough | — | pending |
 
 ## Decisions
@@ -95,6 +95,14 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | 51 | 4-milestones | PR #408's Windows CI job failed on M6's `shared_locations` fixture: the credential's container path came out as `/home/u\.claude\.credentials.json` and so lost its place in C15's order | A fixture fault, not a production one: it asked `build_for` for a Linux host while running on Windows, where the identity mapping echoes a host path that `PathBuf::join` spelled with `\`. Production always passes its own platform, and the Windows mapping builds the container path as a string (feature 027 T115). The exact-list assertion moved to a Windows-host fixture whose inputs are all literals — identical on every platform — and the identity-mapping list is now `#[cfg(unix)]` | agent-resolved | tdd/cycle-log.md Cycle 85; `sandbox/mod.rs::tests::shared_locations_on_a_windows_host_are_posix_and_most_specific_first` |
 
+| 52 | 4-milestones | M7 review B F1 (MEDIUM): every M7 test of **Open Link** used a URL, so a shortcut from the captured target to `Outcome::OpenLink` would have passed the milestone — and opened a sandboxed file the gesture asks about first | `context_menu_open_link` is `link_activated` itself, and a guard test now says so: `open_link_on_a_sandboxed_path_asks_first_like_the_gesture_does`, whose red is the mutant that answers a `HostPath` from the target directly | agent-resolved | tdd/cycle-log.md Cycle 92; FR-020 "Open Link otherwise follows the same rules as the link gesture"; Decision 38 |
+| 53 | 4-milestones | M7 review B F2 (LOW): the acceptance tests read the view's item list without asking whether a menu was open, so dropping the anchor from `context_menu_opened` left A20 and A22 green | `menu_labels()` answers nothing while `terminal_context_menu` is `None`, so both tests read the menu the user would see | agent-resolved | tdd/cycle-log.md Cycle 92 |
+| 54 | 4-milestones | M7 review B F3 (LOW): under mouse reporting without Shift the right press opens the menu but offers no link items, and FR-020 states no such exemption | Kept, and recorded here rather than changed: the pane marks no link in that state either (`marked_link`, FR-016), so the menu offers exactly what the pane shows is followable. Offering **Open Link** for a link the pane does not mark would be the inconsistency | agent-resolved | `terminal_pane.rs` right-press arm reads `marked_link(…, mouse_mode, shift)`, the same helper the underline and the release read |
+| 55 | 4-milestones | `state.session.menu_link` tripped feature 028's FR-007a component-local guard | Named in `COMPONENT_LOCAL` with its pinning assertion, as `session.start_press` is: the link is captured on the press and read back a message later, so it outlives the menu widget | agent-resolved | `tests/root_state_is_shared.rs` |
+| 56 | 4-milestones | M7 review A F1 (MEDIUM): the right press resolved the link without the scrollbar-strip filter the hover applies, so over the strip — where a press pages the view — the menu offered **Open Link** for a link the pane never underlined | The press now reads its position through the same `strip`/`SCROLLBAR_WIDTH` filter (U161), so the menu offers a link exactly when the pane marks one, which is what its own comment claims | agent-resolved | tdd/cycle-log.md Cycle 94; U159, FR-016 |
+| 57 | 4-milestones | M7 review A F2 (MEDIUM): the terminal menu was the one cursor-anchored menu handing its raw press point to `cdk::overlay::Anchor::Point`, whose doc leaves clamping to the caller; the two link items take the panel from 112dp to 208dp, so a right-click low in the pane put **Copy** and **Paste** outside it | The press clamps its point with `features::project::clamp_menu_anchor` — the rule the app's other four menus already use — against the pane's own box, which is the box the overlay is mounted in. The item count comes from `features::session::terminal_menu_item_count`, pinned to the list `ui::terminal::context_menu_items` renders by `the_menu_item_count_matches_the_list`, so the panel cannot be measured as two items and rendered as four (U162) | agent-resolved | tdd/cycle-log.md Cycle 94; `cdk/overlay.rs` `Anchor::Point`; FR-029d |
+| 58 | 4-milestones | M7 review A F3 (LOW): the `COMPONENT_LOCAL` justification for `session.menu_link` held runs of literal spaces where `\`-continuations were meant | Rewritten with the continuations; the text is unasserted, so this is only what a reader of the allowlist sees | agent-resolved | `tests/root_state_is_shared.rs` |
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
@@ -111,6 +119,9 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | M6 | B | Finding 7 (LOW): `PendingLinkOpen.session` is taken from `state.session.active` rather than from the pane the link was activated in | The pane draws the active session and nothing else — `ui::terminal::pane` is built from `state` with one session shown — so the active session *is* the pane the pointer was over. Carrying an id on `LinkActivated` would add a second source for the same fact. Revisit if the window ever shows two panes at once |
 | M6 | A | Finding 5 (LOW, efficiency): `link_context` now clones the shared locations and denied paths once per frame | The same finding as M5 review A finding 9, already a follow-up: SC-005 is measured over the hover path in M8 (T078), and caching the context adds a second source of truth for the sandbox state. The vectors are a handful of short strings |
+
+| M7 | B | F4 (LOW): the wrapped Copy Link Address fixture ends in a space, so no trailing-punctuation trimming is proven on the copy path | The copy is `ResolvedLink.link.address`, and what that string excludes is M1's business: FR-005's trimming is checked cell by cell over the SC-002 corpus and in `detect`'s own tests. A second fixture here would assert `detect`'s rule through two more layers |
+| M7 | B | F5 (LOW): Cycle 87 said "five" `TerminalContextMenuOpened` call sites carry `link: None` | Fixed rather than declined: the entry now says four, and names the fifth — the pane's own press — as the one that carries the resolved link |
 
 ## Open escalation
 
