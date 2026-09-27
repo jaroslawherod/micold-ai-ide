@@ -1486,6 +1486,49 @@ said, and FR-004a never said what the share covered. See `bugs/BUG-006.md`.
 
 ---
 
+## Phase 27: Bugfix BUG-007 — a shared sign-in still ran claude's first-run setup (GitHub #403)
+
+**Goal**: With the AI CLI sign-in shared, the first interactive `claude` in a fresh sandbox home
+starts signed in. It no longer walks through the theme picker and "Select login method", which a
+user could follow into replacing the host's token (FR-004f, US2 scenario 11).
+
+### Tests for BUG-007 (MANDATORY — Constitution Principle I) ⚠️
+
+- [X] T216 [BUG-007] [U45] *(test)* `crates/micold-core/tests/sandbox_credentials.rs`. A mount set with
+      the sign-in shared names `<sandbox-home>/.claude.json` as its onboarding record; one without
+      it names none. `onboarding_done` writes `{"hasCompletedOnboarding":true}` for no file, adds
+      the key to an object and keeps its other keys, returns nothing for a file where it is already
+      `true`, and nothing for text that is not a JSON object. Red against today's code.
+- [X] T217 [BUG-007] [U46] *(test)* `crates/micold-client/src/shell/sandbox.rs` (`mod tests`). A
+      bring-up with the sign-in shared leaves `hasCompletedOnboarding: true` in the sandbox home's
+      `.claude.json` before the runtime runs, keeping a key already there; a bring-up without the
+      share writes no such file. A host `~/.claude.json` is byte-identical after the bring-up.
+      Red against today's `start`.
+
+### Implementation for BUG-007
+
+- [X] T218 [BUG-007] [U45] [U46] `crates/micold-core/src/sandbox/mod.rs` (`MountSet::onboarding_record`,
+      `onboarding_done`) and `crates/micold-client/src/shell/sandbox.rs` (`start`). Record the
+      finished setup in the sandbox's own home when the sign-in share mounts a token. Write through
+      a temporary file and a rename; log a failure and carry on. Never touch the host's
+      `~/.claude.json` (FR-004f).
+- [X] T219 [BUG-007] `docs/user-guide/sandboxed-daemon.md`, "Credentials". With the sign-in shared, a
+      sandboxed Claude Code starts signed in, and the application marks its first-run setup done in
+      the sandbox's own home to get there. After the share is turned off, sign in with `/login`.
+
+**Order**: T216 and T217 first (different crates, parallel), then T218, then T219. Then
+`mise run gate`.
+
+**Verify**: `mise run test-core` and `cargo test -p micold-client shell::sandbox` pass U45 and U46.
+The claim they rest on — that `hasCompletedOnboarding` alone gates the setup — is the reproduction
+in `bugs/BUG-007.md` (`claude` 2.1.283, a private `HOME` with and without the key).
+
+**Bugfix**: 2026-09-27 — BUG-007. **Requirements added**: FR-004f and US2 scenario 11 — see
+`spec.md`. `plan.md` gained the increment. **No task reopened**: T211 and T213 built and checked
+what FR-004e says, and T215 reported this as outside BUG-006. See `bugs/BUG-007.md`.
+
+---
+
 ## Parallel Opportunities
 
 **Phase 1**: T002, T003, T005, T006 in parallel after T001.

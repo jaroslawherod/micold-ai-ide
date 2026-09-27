@@ -373,6 +373,41 @@ pub const STATE_CONTAINER_DIR: &str = "/var/lib/micold-ai-ide";
 /// can look at from the host. It is *not* the user's home — see [`HomeMount`].
 pub const SANDBOX_HOME_DIR: &str = "sandbox-home";
 
+/// The file in the sandbox's home where `claude` records that its first-run setup is done
+/// (FR-004f, BUG-007).
+const ONBOARDING_RECORD: &str = ".claude.json";
+
+/// The key in [`ONBOARDING_RECORD`] that `claude` reads to decide whether to run its setup.
+const ONBOARDING_KEY: &str = "hasCompletedOnboarding";
+
+/// What to write to the sandbox home's `.claude.json` so `claude` treats its first-run setup as
+/// done, given what the file holds now (`None` when there is no file). `None` means write nothing
+/// (FR-004f, BUG-007).
+///
+/// `claude` decides whether to run its setup from this key, not from its token, and the setup asks
+/// for a login method even when a valid shared token is mounted. Following it there replaces the
+/// host's token through the writable share (FR-004e).
+///
+/// This is another tool's file, so the merge is the narrowest one that does the job: one key is
+/// added and every other key kept. Nothing is written when the key is already `true`, so the file
+/// of a `claude` that is running is not rewritten under it, and nothing is written when the text is
+/// not a JSON object: replacing it would lose whatever it was, and `claude` is the one to repair
+/// its own file.
+pub fn onboarding_done(existing: Option<&str>) -> Option<String> {
+    let mut record = match existing {
+        None => serde_json::Map::new(),
+        Some(text) => match serde_json::from_str::<serde_json::Value>(text) {
+            Ok(serde_json::Value::Object(map)) => map,
+            _ => return None,
+        },
+    };
+    if record.get(ONBOARDING_KEY) == Some(&serde_json::Value::Bool(true)) {
+        return None;
+    }
+    record.insert(ONBOARDING_KEY.to_string(), serde_json::Value::Bool(true));
+    serde_json::to_string_pretty(&serde_json::Value::Object(record)).ok()
+}
+
 /// The daemon's state directory, bind-mounted from the host.
 ///
 /// # Why not a runtime-managed named volume
@@ -672,6 +707,21 @@ impl MountSet {
             }
         }
         files
+    }
+
+    /// Where the bring-up records that the AI CLI's first-run setup is done — the sandbox home's
+    /// own `.claude.json` — or `None` when it must not (FR-004f, BUG-007).
+    ///
+    /// Only when this set really mounts a sign-in token. Without one, the CLI's setup is how the
+    /// user signs in, and skipping it would leave them to find `/login` on their own. A token the
+    /// host does not have never reaches the set (`HostFacts::gather` drops it), so a ticked share
+    /// with nothing behind it records nothing either. Never the host's own `.claude.json`: this is
+    /// always a path under [`HomeMount::host`].
+    pub fn onboarding_record(&self) -> Option<PathBuf> {
+        self.credentials
+            .iter()
+            .any(|c| c.share == CredentialShare::AiCliAuth)
+            .then(|| self.home.host.join(ONBOARDING_RECORD))
     }
 
     /// The locations this sandbox shares with the host, most specific container path first

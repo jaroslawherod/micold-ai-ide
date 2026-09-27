@@ -135,6 +135,12 @@ A few limits of the sign-in share:
   API key.
 - **Copilot and Pi are not covered.** They sign in inside the sandbox, and that sign-in is kept in
   the sandbox's home.
+- **Claude Code starts signed in.** With the share on, the application marks Claude Code's
+  first-run setup as done in the sandbox's own home (`hasCompletedOnboarding` in its
+  `.claude.json`; your own `~/.claude.json` is not touched), so the first sandboxed session opens
+  signed in, rather than offering a new sign-in that would replace your computer's token. If you
+  later turn the share off, a session starts signed out without that
+  setup: sign in with `/login`.
 - **Sign-ins can collide.** If Claude Code on your computer and a sandboxed session refresh the
   token at the same moment, one of them may be asked to sign in again. Nothing else is lost.
 

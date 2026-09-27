@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use micold_core::sandbox::{
-    CredentialLayout, CredentialShare, MountSet, SandboxProfile, SecretMount,
+    onboarding_done, CredentialLayout, CredentialShare, MountSet, SandboxProfile, SecretMount,
 };
 
 fn layout() -> CredentialLayout {
@@ -262,6 +262,109 @@ fn a_shared_sign_in_names_its_file_in_the_sandbox_home_to_create() {
         vec![mounts.home.host.join(".claude").join(".credentials.json")],
         "the sign-in's target must exist, user-owned, before the runtime mounts onto it"
     );
+}
+
+/// BUG-007 (FR-004f): with the sign-in shared, the sandbox home's `.claude.json` is where the
+/// finished first-run setup is recorded. `claude` reads that file, not the token, to decide whether
+/// to run its setup — and the setup asks for a login method over a perfectly good shared token.
+#[test]
+fn a_shared_sign_in_names_the_sandbox_homes_onboarding_record() {
+    let profile = SandboxProfile {
+        credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
+        ..SandboxProfile::default()
+    };
+    let mounts = build(&profile);
+    assert_eq!(
+        mounts.onboarding_record(),
+        Some(mounts.home.host.join(".claude.json"))
+    );
+}
+
+/// Without a shared token, `claude`'s own setup is how the user signs in, so nothing is recorded.
+/// Every other share is held to this too: none of them is a sign-in.
+#[test]
+fn without_a_shared_sign_in_no_onboarding_record_is_named() {
+    for share in [
+        CredentialShare::GitConfig,
+        CredentialShare::SshAgent,
+        CredentialShare::GitCredentials,
+    ] {
+        let profile = SandboxProfile {
+            credentials: BTreeSet::from([share]),
+            ..SandboxProfile::default()
+        };
+        assert_eq!(build(&profile).onboarding_record(), None, "{share:?}");
+    }
+    assert_eq!(build(&SandboxProfile::default()).onboarding_record(), None);
+}
+
+/// A token the host does not have is dropped before the mount set is built, and then there is no
+/// sign-in to skip the setup for.
+#[test]
+fn a_sign_in_share_with_no_token_names_no_onboarding_record() {
+    let mut layout = layout();
+    layout.ai_cli_auth = None;
+    let profile = SandboxProfile {
+        credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
+        ..SandboxProfile::default()
+    };
+    let mounts = MountSet::build(
+        &[],
+        &profile,
+        &layout,
+        PathBuf::from("/home/u/.local/share/micold-ai-ide"),
+        Path::new("/home/u"),
+        secret(),
+    );
+    assert_eq!(mounts.onboarding_record(), None);
+}
+
+fn parsed(text: &str) -> serde_json::Value {
+    serde_json::from_str(text).expect("the merge writes JSON")
+}
+
+/// No file yet: the record is written holding the one key.
+#[test]
+fn the_onboarding_merge_writes_the_key_when_there_is_no_file() {
+    let written = onboarding_done(None).expect("an absent file is written");
+    assert_eq!(
+        parsed(&written),
+        serde_json::json!({ "hasCompletedOnboarding": true })
+    );
+}
+
+/// A file `claude` already wrote keeps everything in it; only the key is added. This is the file
+/// a sandbox that already asked once leaves behind.
+#[test]
+fn the_onboarding_merge_keeps_every_other_key() {
+    let existing = r#"{"firstStartVersion":"2.1.283","projects":{"/p":{"hasTrustDialogAccepted":true}},"hasCompletedOnboarding":false}"#;
+    let written = onboarding_done(Some(existing)).expect("a missing `true` is written");
+    assert_eq!(
+        parsed(&written),
+        serde_json::json!({
+            "firstStartVersion": "2.1.283",
+            "projects": { "/p": { "hasTrustDialogAccepted": true } },
+            "hasCompletedOnboarding": true
+        })
+    );
+}
+
+/// Already recorded: nothing to write, so a running `claude`'s file is not rewritten under it.
+#[test]
+fn the_onboarding_merge_leaves_a_recorded_file_alone() {
+    assert_eq!(
+        onboarding_done(Some(r#"{"hasCompletedOnboarding":true,"x":1}"#)),
+        None
+    );
+}
+
+/// Text that is not a JSON object is `claude`'s to deal with. Replacing it would lose whatever it
+/// was; the application writes into another tool's file only by adding one key to it.
+#[test]
+fn the_onboarding_merge_never_replaces_a_file_it_cannot_read_as_an_object() {
+    for text in ["", "not json", "[1,2]", "true", "{\"truncated\":"] {
+        assert_eq!(onboarding_done(Some(text)), None, "{text:?}");
+    }
 }
 
 /// FR-004e (T208): no credential mount names a *directory* under the sandbox home.

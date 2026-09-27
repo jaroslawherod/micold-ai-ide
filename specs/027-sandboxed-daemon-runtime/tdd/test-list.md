@@ -99,6 +99,16 @@ runs as T213 in the sandbox suite, outside this loop (same arrangement as T181 a
 | U38 | With the sign-in shared, the sharing caution says a session can use and replace the sign-in token    | FR-004e, FR-004b | example         | DONE | `ui::settings::daemon::tests::a_shared_sign_in_says_a_session_can_replace_the_token` |
 | U39 | Boot hands the prune the placement it starts under, so a sandboxed launch keeps such a session  | FR-009a         | example          | DONE    | `shell::startup::tests::a_sandboxed_launch_keeps_a_session_the_host_has_no_record_of` (added after U36) |
 
+## BUG-007 — a shared sign-in starts signed in (`tasks.md` Phase 27)
+
+Added 2026-09-27. Traces are FR-004f and US2 scenario 11. The acceptance claim — that the key alone
+skips `claude`'s setup — is shown by the reproduction in `bugs/BUG-007.md`, not by a test here.
+
+| id  | behavior                                                                                             | traces          | kind             | state   | test |
+| --- | ---------------------------------------------------------------------------------------------------- | --------------- | ---------------- | ------- | ---- |
+| U45 | With the sign-in shared, the mount set names the sandbox home's `.claude.json`, and the merge adds only `hasCompletedOnboarding` | FR-004f | example | DONE | `sandbox_credentials::a_shared_sign_in_names_the_sandbox_homes_onboarding_record`, `the_onboarding_merge_*` |
+| U46 | A bring-up with the sign-in shared records the finished setup before the runtime runs; without it, nothing | FR-004f | example | DONE | `shell::sandbox::tests::a_bring_up_sharing_the_sign_in_*`, `a_bring_up_without_the_sign_in_leaves_the_setup_to_claude` |
+
 ## Invariants and edge cases still to place
 
 - none

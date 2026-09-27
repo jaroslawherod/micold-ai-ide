@@ -802,3 +802,33 @@ task text and has no cycle. The client cycles close on the binary's own target
   directory there — and the same mutant then failed: `sandbox_credentials.rs:292` "AiCliAuth is mounted
   over .claude, the directory a sandboxed session writes its transcript in". Restored with `git checkout`
 - state: BASELINE. Landed in `c365bf63` with U42's tests and corrected in `2c54364e`
+
+## BUG-007 — a shared sign-in starts signed in (GitHub #403)
+
+### U45 — the mount set names the sandbox home's `.claude.json`, and the merge adds one key
+
+- test: `sandbox_credentials::a_shared_sign_in_names_the_sandbox_homes_onboarding_record`,
+  `without_a_shared_sign_in_no_onboarding_record_is_named`,
+  `a_sign_in_share_with_no_token_names_no_onboarding_record`, and the four `the_onboarding_merge_*`
+- red (`scripts/build-lock.sh cargo test -p micold-core --test sandbox_credentials` -> `16 passed; 3 failed`,
+  against `onboarding_record` and `onboarding_done` stubbed to `None`): `sandbox_credentials.rs:277`
+  `left: None` `right: Some("/home/u/.local/share/micold-ai-ide/sandbox-home/.claude.json")`; the merge
+  tests panicked on the missing write. The "leave alone" and "no record" tests passed against the stub,
+  which is what they hold the fix to
+- green: `MountSet::onboarding_record` (only with an `AiCliAuth` mount) and `sandbox::onboarding_done`
+  (one key added, a `true` or a non-object left alone). `sandbox_credentials` 19 passed, 0 failed
+
+### U46 — a bring-up with the sign-in shared records the finished setup; without it, nothing
+
+- test: `shell::sandbox::tests::a_bring_up_sharing_the_sign_in_records_the_finished_setup`,
+  `a_bring_up_sharing_the_sign_in_keeps_what_claude_recorded`,
+  `a_bring_up_sharing_the_sign_in_never_touches_the_hosts_claude_json`,
+  `a_bring_up_without_the_sign_in_leaves_the_setup_to_claude`
+- red (`scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide a_bring_up` -> `13 passed; 3 failed`,
+  with the bring-up's write disabled, which is `origin/main`'s behaviour): `sandbox.rs:1299`
+  "/tmp/.tmpF4gdcz/sandbox-home/.claude.json was not written: No such file or directory";
+  `sandbox.rs:1321` `left: {"firstStartVersion", "numStartups"}` without `hasCompletedOnboarding`
+- green: `start` calls `record_onboarding_done` after creating the credential targets, through a
+  temporary file and a rename, logging a failure rather than refusing the sandbox. Client
+  `shell::sandbox` 18 passed, 0 failed
+- the claim under both, that the key alone skips `claude`'s setup: `bugs/BUG-007.md#reproduction`

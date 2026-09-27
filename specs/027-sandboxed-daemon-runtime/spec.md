@@ -247,6 +247,10 @@ reboot the host with session survival opted out and opted in and confirm each be
     any offered AI CLI holds a conversation and the application is then restarted, **Then** the CLI
     warned of nothing it could not write, the session is still listed, and it resumes that
     conversation (FR-004e, FR-009a). *(Added 2026-09-18 — BUG-006.)*
+11. **Given** sandboxed mode is on with the AI CLI sign-in shared, and the host's `claude` is signed
+    in, **When** the first interactive `claude` session starts in a sandbox home that has never run
+    one, **Then** it starts signed in, without walking through claude's first-run onboarding or
+    asking for a login method (FR-004f). *(Added 2026-09-27 — BUG-007.)*
 
 ---
 
@@ -487,6 +491,16 @@ without the user having chosen that for the occasion.
   FR-005 forbids a session to write. A credential share that lands under the sandbox's home
   (FR-004d) MUST leave every other path in that home writable. The share's FR-004b statement MUST
   say that a session can use and replace the sign-in token. *(Added 2026-09-18 — BUG-006.)*
+- **FR-004f**: When the AI CLI sign-in share mounts a token, the sandbox's own home (FR-004d) MUST
+  record that the CLI's first-run setup is done, so the CLI starts signed in rather than offering to
+  sign in again over the shared token — which would replace the host's token (FR-004e). For
+  `claude` that record is `hasCompletedOnboarding: true` in `~/.claude.json`. The application MUST
+  add only that one key, MUST keep every other key the file holds, MUST leave a file it cannot read
+  as a JSON object untouched, and MUST NOT write to the host's own copy of the file. Without a
+  mounted token nothing is recorded, because the CLI's own setup is then how the user signs in. A
+  record left by an earlier share stays when the share is turned off, since the sandbox's home
+  persists (FR-011); the CLI then starts signed out and the user signs in with its own `/login`.
+  Removing the key again is out of scope. *(Added 2026-09-27 — BUG-007.)*
 
 - **FR-005**: The sandbox MUST NOT be granted access to the container runtime's own control
   interface, nor any capability that lets a session escape the sandbox or act on the host.
@@ -707,6 +721,11 @@ FR-036's "recover to a defined state" past reporting; FR-036b covers the half th
 bring-up read as a failure. **SC-004c** and US6's ninth acceptance scenario are added alongside
 them: the first says where SC-004's progress has to be measured, the second is the flow this bug
 is. See `bugs/BUG-005.md`.
+
+**Bugfix**: 2026-09-27 — BUG-007 (GitHub #403). FR-004f and US2 scenario 11 added. FR-004e said
+what the sign-in share mounts but not what the user gets from it: a sandboxed `claude` found a valid
+token but no record in the sandbox home's `~/.claude.json` that its first-run setup had run, so it
+ran it, login step included. See `bugs/BUG-007.md`.
 
 **Bugfix**: 2026-09-18 — BUG-006. FR-004e and FR-009a added, together with SC-012a, US2 scenario 10,
 two edge cases and the 2026-09-18 clarifications. FR-004a named an "AI CLI's own authentication"
