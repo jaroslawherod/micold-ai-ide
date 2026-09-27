@@ -152,6 +152,39 @@ pub fn notify_settings_recovery(
     core.notify_info(message);
 }
 
+/// Tell the user their project list could not be read, and where the file went (002 BUG-007,
+/// FR-012d).
+///
+/// The catalog's twin of [`notify_settings_recovery`], and silent until now for the same reason:
+/// `restore_catalog` kept only the workspace out of `load`, so a damaged `projects.json` was moved
+/// to `.bak` and the launch looked exactly like a first run.
+///
+/// The wording says only what is true on every launch. On a cold one the list starts empty; on a
+/// warm one the daemon still holds the catalog it loaded before the file was damaged, and its
+/// `Welcome` puts the projects back a moment later. Either way the file could not be read and was
+/// kept — "your list was reset" would be false for the second.
+pub fn notify_catalog_recovery(
+    store: &dyn micold_core::store::ProjectStore,
+    status: LoadStatus,
+    core: &mut State,
+) {
+    // `Missing` is a first run and `Loaded` the ordinary case: neither recovered anything.
+    if status != LoadStatus::Recovered {
+        return;
+    }
+    // An unreadable file that could not be renamed has no `.bak`; naming one would send the user
+    // looking for a file that is not there.
+    let preserved = store.recovery_path().filter(|path| path.exists());
+    let message = match preserved {
+        Some(path) => format!(
+            "Your saved project list could not be read. The unreadable file was kept as {}.",
+            path.display()
+        ),
+        None => "Your saved project list could not be read.".to_string(),
+    };
+    core.notify_info(message);
+}
+
 pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core: &mut State) {
     if let Some(store) = store {
         // Preserve the persisted scrollback limit (feature 006) and environment-include settings
@@ -940,5 +973,43 @@ mod settings_recovery_tests {
             notice.message.contains("settings.json.bak"),
             "the notice does not name the preserved file: {notice:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod catalog_recovery_tests {
+    use super::*;
+    use micold_core::store::FakeProjectStore;
+
+    /// 002 BUG-007: a catalog that was unreadable but could not be moved aside has no `.bak`, so
+    /// the notice still says the list could not be read and names no file the user cannot find.
+    #[test]
+    fn a_recovery_with_no_preserved_file_is_reported_without_a_path() {
+        let mut core = State::default();
+
+        notify_catalog_recovery(
+            &FakeProjectStore::recovered(),
+            LoadStatus::Recovered,
+            &mut core,
+        );
+
+        let notice = core
+            .notifications
+            .queue
+            .visible()
+            .expect("a recovered project list must be reported")
+            .message
+            .clone();
+        assert_eq!(notice, "Your saved project list could not be read.");
+    }
+
+    /// A clean read of the catalog says nothing.
+    #[test]
+    fn a_loaded_project_list_is_not_reported() {
+        let mut core = State::default();
+
+        notify_catalog_recovery(&FakeProjectStore::new(), LoadStatus::Loaded, &mut core);
+
+        assert!(core.notifications.queue.visible().is_none());
     }
 }

@@ -77,6 +77,14 @@ pub trait ProjectStore {
     fn remove_project_state(&self, _project_path: &Path) -> io::Result<()> {
         Ok(())
     }
+
+    /// Where a catalog [`LoadStatus::Recovered`] by `load` was preserved, if this store keeps one
+    /// (002 BUG-007, FR-012d) — so the notice can name the file the user's projects are still in.
+    /// A path, not a promise: an unreadable file that could not be renamed has no copy there, so a
+    /// caller checks it exists. The default is `None`, like `SettingsStore::recovery_path`.
+    fn recovery_path(&self) -> Option<PathBuf> {
+        None
+    }
 }
 
 /// The on-disk shape of the catalog. Unknown fields are ignored on read (serde default),
@@ -644,6 +652,10 @@ impl ProjectStore for JsonFileStore {
     /// Delegate to the inherent method (fully-qualified so it never re-enters this trait method).
     fn remove_project_state(&self, project_path: &Path) -> io::Result<()> {
         JsonFileStore::remove_project_state(self, project_path)
+    }
+
+    fn recovery_path(&self) -> Option<PathBuf> {
+        Some(self.backup_path())
     }
 
     fn load(&self) -> LoadOutcome {

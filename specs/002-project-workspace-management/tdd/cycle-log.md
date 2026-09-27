@@ -142,3 +142,30 @@ regression tests, identified by their task ids (renumbered from T065–T067 when
 - commit: see the BUG-006 fix commit
 - notes: T070 and T071 were both written and observed red before T072; one production change turned
   both green, so the two cycles share a green step.
+
+## BUG-007 — a project list that cannot be read at launch
+
+Behaviors from `bugs/BUG-007.md` (FR-012d); no test-list entries predate this bug.
+
+## Cycle 7: BUG-007 T073 — a launch that recovers `projects.json` tells the user where it went
+
+- test: `crates/micold-client/src/shell/startup.rs::tests::a_launch_that_recovers_the_project_list_tells_the_user_where_the_old_one_went`
+  (with `a_first_launch_with_no_project_list_says_nothing` beside it, green throughout)
+- red (commit 086487c7, code = origin/main 2bd447b2):
+  `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide -- project_list`
+  -> `panicked at crates/micold-client/src/shell/startup.rs:541:9: a project list that had to be
+  recovered was reset without a word, or the notice did not name the kept file: ""` (1 passed,
+  1 failed); reproduced independently by the bug-rubric reviewer
+- green: T074 (`ProjectStore::recovery_path`, `notify_catalog_recovery` called from
+  `restore_catalog`); `mise run gate` green
+- refactor: none
+- notes: the "does not say reset" assertion was added after review round 1 (warm launch: the
+  daemon's catalog restores the list), together with the wording it pins.
+
+## Cycle 8: BUG-007 T075 — the daemon can name the catalog it recovered
+
+- test: `crates/micold-daemon/tests/catalog_adoption.rs::a_corrupt_catalog_is_preserved_and_recovered_to_empty`
+  and `a_missing_catalog_is_a_clean_first_run` (extended with `recovered_backup()` assertions)
+- red: did not compile before `Catalog::recovered_backup` existed (written with the extension)
+- green: `Catalog::recovered_backup`; `server::run` logs a recovery at `warn` with it
+- refactor: none
