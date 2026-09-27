@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
 - **Phase**: 5-close
-- **Next step**: Phase 5 close: speckit-converge, speckit-tdd-verify, speckit-docguard-guard, then the close PR
+- **Next step**: the close PR is open; the orchestrator waits for CI and merges, then the handoff
 
 ## Pull requests
 
@@ -109,6 +109,11 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | 61 | 4-milestones | T081 asks for CI green on all three OSes for the final tree, but M8's PR changed no Rust so the matrix jobs were skipped on #414 and on main at ac72d25f | Ticked on the last full-matrix green, main 23a0e0ee (build + test success on ubuntu-latest, macos-latest and windows-latest, plus fmt + clippy, windows-11-arm package + smoke and the real-runtime sandbox); `git diff --name-only 23a0e0ee ac72d25f` lists no `.rs`, `Cargo.toml` or `Cargo.lock`, only docs, spec files and the M8 fixture script | agent-resolved | gh run 36312734746 / the run on 23a0e0ee; git diff 23a0e0ee..ac72d25f |
 
+| 62 | 5-close | SC-005 came in 25% apart, over §A.3's 10% bound (Decision 59): does the spec close with that as a known deviation, or is it unbuilt behaviour and so a new milestone? | **Known deviation, recorded in the spec's Status.** SC-005's own wording is about streaming address-bearing output: with nothing hovered that comparison is `p95 0.13 ms` against `--plain`'s `0.12 ms`, inside the 10% bound (quickstart row 7), so the criterion as written is met. The 25% figure is the stricter pairing §A.3 chose, with a link hovered for the whole stream, and every bit of the 0.03 ms gap is the hint label's per-character `fill_text` — behaviour FR-007/FR-008 require, drawn as specified, against a 16.7 ms budget. Nothing is unbuilt, so no new milestone; the batched glyph run stays a follow-up | agent-resolved | spec.md Status; quickstart.md "The pass" rows 1–7; Decision 59 |
+| 63 | 5-close | Quickstart §B.17 part 2 was not-confirmed on Claude Code 2.1.280 and 2.1.283 — the plain-address sanity check drew no underline at eight positions. Accepted external-tool limitation, or a gap in this feature? | **Neither: both runs measured FR-016's own rule.** Claude Code's interactive REPL turns mouse reporting on (its 2.1.283 binary emits `[?1000h`/`[?1006h` from `input.ts`), and under mouse reporting the pane marks a link only while Shift is held. A close-phase re-run with Shift held made the sanity check pass outright, and then showed a row whose own text holds no address at all (`g0038/seg0039/…`, no scheme, starting mid-token) displaying the address complete — which only a declared OSC 8 link can produce. So `FORCE_HYPERLINK=1` reached the program, its declaration reached the pane, and **B.17 part 2 is a pass**; Part B now has no unconfirmed step. The follow-up is closed | agent-resolved | visual-pass.md "Close-phase re-run — §B.17 part 2" and its close-phase resolution; images `close-b17p2-01/02` (Shift vs no Shift) and `close-b17p2-06/07` |
+| 64 | 5-close | `speckit-converge`: does the code satisfy spec, plan and tasks? | **Converged** — all 88 tasks ticked, and a cold-context sweep found direct code evidence for every FR-001–FR-023 and SC-001–SC-007 with no `missing`, `partial` or `contradicts` gap, so nothing was appended to tasks.md (converge's own append contract leaves it byte-for-byte unchanged when there is nothing to append). Three `unrequested` widenings were surfaced and are accepted below rather than removed | agent-resolved | converge sweep over `link/*`, `pathmap.rs`, `shell/links.rs`, `terminal_pane.rs`, `features/session.rs`, daemon env stripping |
+| 65 | 5-close | `speckit-docguard-guard`: 6 blocking issues and 1,622 warnings repo-wide — fix them in this PR? | No, none is this feature's. The 6 blocking `STR001`s ask for CDD scaffolding this repo does not use (`docs-canonical/ARCHITECTURE.md`, `DATA-MODEL.md`, `SECURITY.md`, `TEST-SPEC.md`, `ENVIRONMENT.md`, `DRIFT-LOG.md`); `TRC004` (1,504 repo-wide, 37 of them 031's) asks for `@req` test annotations that no feature in this repo uses; `SPR002` (51 specs) asks for a docguard Spec ID. Adopting any of the three is a repo-wide convention change, out of this flow. `SPK010` names feature 008's tasks.md, which this flow must not touch. The one 031-specific finding, `DLC002` ("88 checked tasks and no open tasks; confirm the outcome is documented"), is exactly what this PR does | agent-resolved | `docguard-cli@latest guard --format json`, filtered to 031 and the user guide |
+
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
@@ -129,20 +134,22 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M7 | B | F4 (LOW): the wrapped Copy Link Address fixture ends in a space, so no trailing-punctuation trimming is proven on the copy path | The copy is `ResolvedLink.link.address`, and what that string excludes is M1's business: FR-005's trimming is checked cell by cell over the SC-002 corpus and in `detect`'s own tests. A second fixture here would assert `detect`'s rule through two more layers |
 | M7 | B | F5 (LOW): Cycle 87 said "five" `TerminalContextMenuOpened` call sites carry `link: None` | Fixed rather than declined: the entry now says four, and names the fifth — the pane's own press — as the one that carries the resolved link |
 
+| close | converge | `unrequested`: `TRAILING_PUNCTUATION` also trims `*`, which FR-005's list does not name | Kept. `*` is markdown emphasis around an address (`*https://x.y*`), the same family as the Edge Cases' `[text](…)` and `<…>` forms, and trimming it only ever makes a link shorter — it can never open something the spec would not |
+| close | converge | `unrequested`: `host_names_from` also matches this machine's first DNS label, which FR-012 does not spell out | Kept. A host reporting `box.lan` answers to `box`; both spellings *are* "this machine's own hostname", which is what FR-012 permits, and the comparison still touches no network |
+| close | converge | `unrequested`: `container_host_names` also accepts the container's name, not just its id prefix | Already decided and evidenced in Decision 40 (podman defaults the hostname to the name, docker to the id prefix); unchanged here |
+| close | docguard | `TRC004` ×37 for 031 (`@req` test annotations), `SPR002` (a docguard Spec ID), `STR001` ×6 (`docs-canonical/*`, `DRIFT-LOG.md`) | Repo-wide conventions this project has never adopted — 1,504 `TRC004`s and 51 `SPR002`s across every feature. Adopting one is a repo decision, not this feature's close (Decision 65) |
+
 ## Open escalation
 
 None. (M2's block on the Windows install smoke was resolved by #358; see Decisions 20 and git history of this file.)
 
 ## Follow-ups not done
 
-- Quickstart §B.17's second half is still not confirmed, re-attempted twice now. M4 (Claude Code
-  2.1.280) and M8 (Claude Code 2.1.283, `FORCE_HYPERLINK=1` confirmed present in-session) both show
-  **no hover feedback at all** for an AI-CLI pane's own plain address — the sanity check the M8
-  attempt required before touching the declared-link half, so that half was never reached in either
-  run. B.17 part 1 (M4) *did* get hover feedback from an AI CLI's output with the same client
-  binaries, so the gap is not "AI CLIs never show hover feedback" — it is something specific to this
-  kind of session that both attempts hit identically, on two Claude Code versions eight releases
-  apart, ruling out a version-specific cause. Worth a code-level look (M4/M8, minor).
+- ~~Quickstart §B.17's second half is not confirmed~~ — **closed in the close phase** (Decision 63):
+  both earlier runs hovered without Shift under a program that has mouse reporting on, which is
+  FR-016's specified no-marking case. With Shift held the sanity check passes and the declared link
+  shows its full address. The only thing not exercised is *activating* that declared link, which
+  §B.7 (M3) and `osc8_passthrough.rs` on three OSes cover.
 - Scrollback lines fetched by `apply_scrollback` do not bump the grid `seq`, so a resting pointer over just-fetched lines refreshes its hover only on the next pointer move or modifier change (M3, minor).
 - A translated host path is not symlink-resolved, so a sandboxed agent can leave `<project>/readme.txt` pointing at `~/.ssh/id_rsa`: the confirmation names the link's own path while the host opener follows the link. `reverse` consults no filesystem by design (SC-006 wants the hint and the opened path to be one string). Decide in the spec whether the confirmation should name the resolved target (M6 review B finding 10, low).
 - A `file://` path keeps a `?query` or `#fragment` and then reports as missing. Decide in the spec whether either is stripped (M5 review A finding 8, low).
