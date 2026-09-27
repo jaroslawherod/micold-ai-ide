@@ -54,6 +54,17 @@ Reproduced at code level on `main` at `23a0e0ee` (details in the ledger, D1):
   the project root ("Default") are answered for the root. _(agent-resolved:
   specs/029-pi-cli-provider/spec.md#FR-003b; .specify/memory/constitution.md#III;
   crates/micold-daemon/src/state.rs#env_include_vars_for)_
+- Q: Should the start affordance become directory-aware at all, or keep one window-wide answer and
+  always draw the chevron, or stay as 029 shipped it? → A: Directory-aware: each row reads the held
+  answer for its own directory (FR-001 as specified). _(decided by user)_
+- Q: When is a row's first answer asked for — eagerly on project open, lazily on hover/focus/press,
+  or for the selected row only? → A: Eagerly: as soon as a row's directory appears (a project is
+  opened, including one restored at launch, or a worktree is added or discovered), its answer is
+  asked for once per distinct directory. _(decided by user)_
+- Q: What happens to held answers when a project is closed? → A: They are dropped with the
+  project's rows; reopening asks again as a first ask. Follows from FR-003 (in memory, at most one
+  per directory, only for rows that exist). _(agent-resolved:
+  specs/033-directory-aware-start-affordance/spec.md#FR-003)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -69,7 +80,7 @@ that provides it, and nothing on screen says why.
 
 **Independent Test**: Configure a home environment with one AI CLI and a project whose
 environment-include script adds a second. Open the project and, without opening Settings or the
-list first, bring a project row to the point where its own answer is asked for (FR-006) and check
+list first, wait for the project's rows to receive their own answers (asked eagerly, FR-006), and check
 that it offers the choice and that starting the second CLI works;
 open a second project without the script and check that its rows offer no choice.
 
@@ -171,11 +182,7 @@ application idle and confirm it schedules no timers or wakeups for this feature.
 - **FR-001**: The start affordance on each sidebar row MUST decide both whether to show the choice
   of CLI and what the primary press does from the availability answer **for that row's directory**
   — the directory a session started from that row would run in (029 FR-003b's rule, extended to the
-  affordance). [NEEDS CLARIFICATION: Should the affordance become directory-aware at all, or is a
-  cheaper product answer preferred — (a) a per-directory answer as specified here; (b) keep the one
-  window-wide answer but always draw the chevron whenever any CLI is known, so the list (already
-  directory-aware) is always one press away; (c) leave the behaviour as 029 shipped it and document
-  the Settings workaround?]
+  affordance).
 - **FR-002**: An answer for one directory MUST NOT replace or be read as the answer for another. In
   particular, the home-directory answer asked for on connecting and on opening Settings MUST NOT
   replace any row's own answer.
@@ -185,8 +192,8 @@ application idle and confirm it schedules no timers or wakeups for this feature.
   is now asked about ahead of the press, on the FR-004 events. The "never persisted" half is kept
   unchanged.
 - **FR-004**: A row's answer MUST be refreshed on, and only on, these events: the row's first ask
-  (when that happens is FR-006's question; a row's directory *appears* when a project is opened or a
-  worktree is added or discovered, never by scrolling into view); (re)connecting to the session
+  (eager, FR-006: when the row's directory *appears* — a project is opened, including one restored
+  at launch, or a worktree is added or discovered — never by scrolling into view); (re)connecting to the session
   service; a saved change to the environment-include settings; the row's directory being deleted or
   recreated; and the user opening that row's start list. No other event and no timer triggers a refresh.
 - **FR-005**: Until a row's own answer is known, its affordance MUST behave as it does today, from
@@ -195,11 +202,9 @@ application idle and confirm it schedules no timers or wakeups for this feature.
 - **FR-006**: Drawing, scrolling or resizing the sidebar MUST NOT cause any availability check or
   environment resolution; the cost of a redraw MUST NOT grow with the number of rows beyond reading
   held answers. Rows for the same directory MUST share one answer and one resolution, and the
-  resolution MUST be the one a session spawn in that directory uses (029 FR-003b, SC-006a).
-  [NEEDS CLARIFICATION: When is a row's first answer asked for — (a) eagerly for every row as soon
-  as the project opens (one environment-include resolution per directory, up front); (b) lazily, the
-  first time a row is pointed at, focused or pressed, keeping the home answer until then; (c) only
-  for the selected row and the row the user interacts with?]
+  resolution MUST be the one a session spawn in that directory uses (029 FR-003b, SC-006a). A
+  row's first answer MUST be asked for eagerly, as soon as its directory appears (FR-004), without
+  waiting for the row to be pointed at, focused or pressed — once per distinct directory.
 - **FR-007**: Worktree rows MUST be answered for their own directory, not their project's root;
   rows of the project root ("Default") are answered for the root. One resolution per distinct
   directory, shared with the session spawns there (see Clarifications).
@@ -213,6 +218,8 @@ application idle and confirm it schedules no timers or wakeups for this feature.
 - **FR-010**: The primary press MUST never start a CLI other than the stored default or the one the
   user chose; when the row's answer lacks the default, the press MUST open the row's list with the
   default marked unavailable (026 FR-002), exactly as today.
+- **FR-012**: Closing a project MUST drop the held answers for its rows' directories; reopening
+  it is a first ask (FR-004).
 - **FR-011**: On reconnecting to the session service, every held answer MUST be discarded and the
   answers re-asked for the rows that had one, by the same rule as a first ask (FR-006), since the service may now describe a different place.
 
