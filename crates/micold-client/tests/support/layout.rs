@@ -846,6 +846,14 @@ pub struct Overflow {
     /// the text is aligned within it. A test that presses a control it found by its glyph presses
     /// here (feature 026, T085).
     pub origin: iced::Point,
+    /// [`Self::origin`] with the draw call's transformation applied — where the text actually lands
+    /// on screen.
+    ///
+    /// The two differ inside a scrolled viewport: a scrollable draws its content at its layout
+    /// position under a translation by the offset, so `origin` stays where the row was laid out
+    /// however far the list has been scrolled. A test asking whether a row was *scrolled into view*
+    /// reads this one (002 BUG-005).
+    pub on_screen: iced::Point,
 }
 
 impl Overflow {
@@ -924,6 +932,64 @@ pub fn painted_text_settled<'a, M: 'a>(
     painted(element, renderer, true, Before::Settled)
 }
 
+/// As [`painted_text_settled`], but first turning the mouse wheel a long way down with the cursor
+/// at `at` — far enough to reach the end of any list the window can hold.
+///
+/// For a list longer than its space: what it paints at rest says only that the rows at the top are
+/// there. Whether the rest can be *reached* is a question about what the wheel does, so the wheel is
+/// turned the way a person would turn it, over the list, and the result is drawn (002 BUG-005).
+pub fn painted_text_scrolled<'a, M: 'a>(
+    element: Element<'a, M>,
+    renderer: &mut iced::Renderer,
+    at: iced::Point,
+) -> Vec<Overflow> {
+    painted(element, renderer, true, Before::Scrolled(at))
+}
+
+/// Settle, turn the wheel down by `LINES` with the cursor at `at`, then settle again.
+fn scroll_and_settle<'a, M: 'a>(
+    element: &mut Element<'a, M>,
+    tree: &mut Tree,
+    node: &mut layout::Node,
+    renderer: &iced::Renderer,
+    limits: &layout::Limits,
+    at: iced::Point,
+) {
+    use iced::advanced::{clipboard, mouse, Shell};
+
+    /// Lines of wheel travel: more than any list here is long, so the offset ends clamped at the
+    /// end of the content rather than somewhere in the middle of it.
+    const LINES: f32 = 10_000.0;
+
+    let origin = std::time::Instant::now();
+    settle(element, tree, node, renderer, origin, 0..SETTLE_FRAMES);
+
+    let mut messages: Vec<M> = Vec::new();
+    let mut shell = Shell::new(&mut messages);
+    element.as_widget_mut().update(
+        tree,
+        &iced::Event::Mouse(mouse::Event::WheelScrolled {
+            delta: mouse::ScrollDelta::Lines { x: 0.0, y: -LINES },
+        }),
+        Layout::new(node),
+        mouse::Cursor::Available(at),
+        renderer,
+        &mut clipboard::Null,
+        &mut shell,
+        &Rectangle::with_size(WINDOW),
+    );
+    *node = element.as_widget_mut().layout(tree, renderer, limits);
+    settle(
+        element,
+        tree,
+        node,
+        renderer,
+        origin,
+        SETTLE_FRAMES..SETTLE_FRAMES * 2,
+    );
+    *node = element.as_widget_mut().layout(tree, renderer, limits);
+}
+
 /// What a paint pass does to the element before drawing it.
 #[derive(Clone, Copy)]
 enum Before<'p> {
@@ -934,6 +1000,9 @@ enum Before<'p> {
     Settled,
     /// Settle, press the node at this path, then settle again — [`press_and_settle`].
     Pressed(&'p [usize]),
+    /// Settle, turn the wheel down with the cursor at this point, settle again —
+    /// [`scroll_and_settle`].
+    Scrolled(iced::Point),
 }
 
 fn painted<'a, M: 'a>(
@@ -971,6 +1040,9 @@ fn painted<'a, M: 'a>(
             &limits,
             path,
         ),
+        Before::Scrolled(at) => {
+            scroll_and_settle(&mut element, &mut tree, &mut node, &*renderer, &limits, at)
+        }
     }
 
     renderer.reset(viewport);
@@ -1111,6 +1183,7 @@ fn painted<'a, M: 'a>(
                     paragraph,
                     position,
                     clip_bounds,
+                    transformation,
                     ..
                 } = text
                 {
@@ -1143,6 +1216,7 @@ fn painted<'a, M: 'a>(
                         found.push(Overflow {
                             content,
                             origin: *position,
+                            on_screen: *position * *transformation,
                             natural_width: paragraph.min_bounds.width,
                             allowed_width: allowed,
                             node_path,
