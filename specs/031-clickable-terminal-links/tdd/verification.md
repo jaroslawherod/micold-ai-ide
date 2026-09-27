@@ -72,6 +72,14 @@ filter's reach, skipped, or excluded.
 | 2 | LOW | `tdd/test-list.md` reuses two ids for four different behaviors: `U161` is used both for "a right press over the scrollbar strip carries no link" (line 123) and "a hover past the grid's edge re-resolves" (line 125); `U162` is used both for "the menu anchor is clamped" (line 124) and "a non-UTF-8 identity variable is dropped" (line 126). Harmless today (each row's `test` column still points at the right function and all four exist and pass), but it makes any future id-based cross-reference (a task, a bug report, a mutation-survivor mapping) ambiguous between two unrelated behaviors | `specs/031-clickable-terminal-links/tdd/test-list.md:120,123,124,125,126,126` |
 | 3 | LOW | `crates/micold-daemon/tests/osc8_passthrough.rs` polls the framer every 50 ms up to a 20 s deadline waiting for the child's output — a bounded poll-on-condition, not a smell by the rubric's definition (it is not a fixed sleep substituting for a real wait), but it is the slowest single test touched by this feature and worth naming so a future flake investigation starts here first | `crates/micold-daemon/tests/osc8_passthrough.rs:44-71` |
 
+**What the close PR did with them** (T089, T090, tasks.md "Phase 8"): finding 2 is fixed — M7's two
+review behaviours are now `U164`/`U165` in `test-list.md`, with `cycle-log.md` Cycle 94 and ledger
+Decisions 56–57 following them, so the id table above reads `U1–U165` with no id on two rows.
+Finding 1 is recorded rather than repaired: the five lost reds cannot be re-derived after the fact,
+so those behaviours stay `LIKELY`, and the practice that prevents a repeat — commit each cycle's
+red/green pair before the next cycle starts — is now a note above Cycle 76, where the next reader of
+those entries meets it. Finding 3 is a note, not a defect, and is left as written.
+
 No `HIGH` smell (tautological assertion, doubled subject, vacuous assertion, assertion-free test,
 re-implemented expectation, or any other catalogue item) was found in the acceptance tests
 (`crates/micold-client/src/shell/links.rs::acceptance`), the unit tests spot-read in `link/detect.rs`,
