@@ -322,3 +322,50 @@ fn the_list_the_chevron_opens_hangs_from_the_press() {
          split can open this list and neither position is something the view holds."
     );
 }
+
+/// A project whose own directory provides a CLI the home directory does not (feature 033, U28/A1):
+/// home answers `[ClaudeCode]`, the project root answers `[ClaudeCode, Pi]`, and the default is Pi.
+fn with_project_local_pi() -> State {
+    let mut state = with_project(AiCli::Pi, &[AiCli::ClaudeCode]);
+    state
+        .session
+        .availability
+        .asked(1, AvailabilityKey::Dir(std::path::PathBuf::from(PROJECT)));
+    state.session.availability.answered(
+        1,
+        CliAvailability {
+            available: vec![AiCli::ClaudeCode, AiCli::Pi],
+            source: AvailabilitySource::ThisComputer,
+        },
+    );
+    state
+}
+
+#[test]
+fn the_default_row_draws_its_chevron_from_its_own_directorys_answer() {
+    // Home alone offers one CLI, so a row that read home would draw no chevron. The row reads its
+    // own directory, which offers two (feature 033, FR-001).
+    let state = with_project_local_pi();
+
+    only_glyph(&state, Icon::SelectChevron);
+}
+
+#[test]
+fn the_default_row_starts_a_default_its_own_directory_provides() {
+    // Pi is missing from home but present in the project: the press starts it rather than
+    // reporting it missing (feature 033, FR-001, FR-008).
+    let state = with_project_local_pi();
+
+    let published = press_start(&state);
+
+    assert!(
+        published.iter().any(|m| matches!(
+            m,
+            Message::Session(SessionMsg::StartRequested {
+                location: SessionLocation::Default,
+                provider: AiCli::Pi,
+            })
+        )),
+        "the row's own directory provides Pi, so one press starts it. Published: {published:?}"
+    );
+}
