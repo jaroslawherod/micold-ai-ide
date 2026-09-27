@@ -130,7 +130,11 @@ fn restore_catalog(
     core.workspace = loaded.workspace;
     // 002 BUG-007: the status is read here or nowhere. This read runs before anything starts the
     // daemon, so it is the one that meets a damaged file and moves it aside (FR-012d).
-    crate::shell::persist::notify_catalog_recovery(store, loaded.status, core);
+    crate::shell::persist::notify_catalog_recovery(
+        loaded.status,
+        loaded.preserved.as_deref(),
+        core,
+    );
     core.workspace.refresh_availability(scanner);
     // FR-023 binds the restore as much as a click: a last-active project whose folder has gone
     // since the last run is not opened. It stays known, marked unavailable, and the user is told
@@ -520,25 +524,24 @@ mod tests {
         );
     }
 
-    /// 002 BUG-007 (FR-012d): a `projects.json` that cannot be parsed is moved aside and the list
+    /// 002 BUG-007 (FR-012d): a `projects.json` that cannot be read is moved aside and the list
     /// starts empty. The launch says so, and names where the old list went, so the user can get
     /// it back — the same treatment a recovered `settings.json` gets.
+    ///
+    /// Through the fake store: the shell names the real one only in `Capabilities::real` (FR-018,
+    /// `tests/no_concrete_implementations.rs`). That the real store reports the copy it made is
+    /// `micold-core`'s `store_roundtrip.rs`.
     #[test]
     fn a_launch_that_recovers_the_project_list_tells_the_user_where_the_old_one_went() {
-        let dir = tempfile::tempdir().unwrap();
-        let catalog = dir.path().join("projects.json");
-        std::fs::write(&catalog, "{ \"projects\": [ { \"path\": \"/a\", ").unwrap();
-        let store = micold_core::store::JsonFileStore::at(catalog.clone());
         let mut core = State::default();
 
-        restore_from_disk(&mut core, None, Some(&store), &FakeFolderScanner::new());
-
-        let backup = catalog.with_extension("json.bak");
-        assert!(backup.exists(), "precondition: the store kept the file");
-        assert!(
-            core.workspace.projects.is_empty(),
-            "precondition: recovered"
+        restore_catalog(
+            &mut core,
+            &FakeProjectStore::recovered_into("/data/projects.json.bak"),
+            &FakeFolderScanner::new(),
+            PlacementKind::HostProcess,
         );
+
         let notice = core
             .notifications
             .queue
@@ -546,7 +549,7 @@ mod tests {
             .map(|n| n.message.clone())
             .unwrap_or_default();
         assert!(
-            notice.contains("project list") && notice.contains(&backup.display().to_string()),
+            notice.contains("project list") && notice.contains("/data/projects.json.bak"),
             "a project list that had to be recovered was reset without a word, or the notice did \
              not name the kept file: {notice:?}"
         );
@@ -560,11 +563,14 @@ mod tests {
     /// …while a first run, with no `projects.json` at all, recovered nothing and says nothing.
     #[test]
     fn a_first_launch_with_no_project_list_says_nothing() {
-        let dir = tempfile::tempdir().unwrap();
-        let store = micold_core::store::JsonFileStore::at(dir.path().join("projects.json"));
         let mut core = State::default();
 
-        restore_from_disk(&mut core, None, Some(&store), &FakeFolderScanner::new());
+        restore_catalog(
+            &mut core,
+            &FakeProjectStore::new(),
+            &FakeFolderScanner::new(),
+            PlacementKind::HostProcess,
+        );
 
         assert!(core.notifications.queue.visible().is_none());
     }

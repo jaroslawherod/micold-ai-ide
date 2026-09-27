@@ -151,7 +151,10 @@ Behaviors from `bugs/BUG-007.md` (FR-012d); no test-list entries predate this bu
 
 - test: `crates/micold-client/src/shell/startup.rs::tests::a_launch_that_recovers_the_project_list_tells_the_user_where_the_old_one_went`
   (with `a_first_launch_with_no_project_list_says_nothing` beside it, green throughout)
-- red (commit 086487c7, code = origin/main 2bd447b2):
+- red (commit 086487c7, code = origin/main 2bd447b2; first written against a real `JsonFileStore`,
+  since moved to `FakeProjectStore::recovered_into` because the shell may name the real store only
+  in `Capabilities::real` — `tests/no_concrete_implementations.rs`; `restore_catalog` on
+  origin/main discards the status either way):
   `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide -- project_list`
   -> `panicked at crates/micold-client/src/shell/startup.rs:541:9: a project list that had to be
   recovered was reset without a word, or the notice did not name the kept file: ""` (1 passed,
@@ -169,3 +172,26 @@ Behaviors from `bugs/BUG-007.md` (FR-012d); no test-list entries predate this bu
 - red: did not compile before `Catalog::recovered_backup` existed (written with the extension)
 - green: `Catalog::recovered_backup`; `server::run` logs a recovery at `warn` with it
 - refactor: none
+
+## Cycle 9: BUG-007 T077 — the store reports its own copy and never overwrites an earlier one
+
+- tests: `crates/micold-core/tests/store_roundtrip.rs::{a_recovered_catalog_reports_where_it_was_kept,
+  a_second_recovery_keeps_the_first_copy, a_catalog_that_is_not_text_is_moved_aside_too,
+  a_loaded_or_missing_catalog_reports_no_copy}`
+- red: written with `LoadOutcome::preserved`/`ProjectStore::is_missing`, which did not exist (compile
+  red); against origin/main's behaviour the second test's first copy is overwritten and the third's
+  file is left in place (the rename was never attempted for a read error)
+- green: `JsonFileStore::preserve_unreadable`, `LoadOutcome::preserved`, the read-error branch
+  preserving too
+- notes: from review A of M1; the `persist.rs` `catalog_recovery_tests` (names the copy / no copy /
+  silent for Loaded and Missing) were written with T074's reworked signature, green on arrival.
+
+## Cycle 10: BUG-007 T078 — a running daemon writes back a catalog file that went missing
+
+- tests: `crates/micold-daemon/tests/catalog_adoption.rs::{a_running_daemon_writes_back_a_catalog_file_that_went_missing,
+  an_empty_catalog_writes_back_nothing}`
+- red: compile red (no `Catalog::restore_missing_file`); on origin/main nothing rewrites the file
+  until a mutation
+- green: `Catalog::restore_missing_file`, called via `DaemonState::restore_missing_catalog_file`
+  before `Welcome`
+

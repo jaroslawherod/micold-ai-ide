@@ -47,6 +47,12 @@ pub struct LoadOutcome {
     pub workspace: Workspace,
     /// What happened during the load.
     pub status: LoadStatus,
+    /// Where **this** load moved an unreadable catalog, when it moved one (002 BUG-007, FR-012d).
+    ///
+    /// Set only by the rename that just succeeded, never inferred from a `.bak` being on disk: an
+    /// older recovery's copy is not the file this load could not read, and naming it would send the
+    /// user to the wrong list. `None` for `Loaded`/`Missing`, and for a recovery whose rename failed.
+    pub preserved: Option<PathBuf>,
 }
 
 /// The disposition of a [`ProjectStore::load`].
@@ -78,12 +84,12 @@ pub trait ProjectStore {
         Ok(())
     }
 
-    /// Where a catalog [`LoadStatus::Recovered`] by `load` was preserved, if this store keeps one
-    /// (002 BUG-007, FR-012d) — so the notice can name the file the user's projects are still in.
-    /// A path, not a promise: an unreadable file that could not be renamed has no copy there, so a
-    /// caller checks it exists. The default is `None`, like `SettingsStore::recovery_path`.
-    fn recovery_path(&self) -> Option<PathBuf> {
-        None
+    /// Whether the catalog file is absent right now (002 BUG-007). The daemon asks this when a
+    /// client connects: a launch that met a damaged file has just moved it aside, and a daemon
+    /// that is already running holds the list in memory and would otherwise not write it back
+    /// until something changed. The default — for stores with no file — is `false`.
+    fn is_missing(&self) -> bool {
+        false
     }
 }
 
@@ -616,6 +622,26 @@ impl JsonFileStore {
         backup_path_for(&self.path)
     }
 
+    /// Move an unreadable catalog aside and say where it went (002 BUG-007).
+    ///
+    /// Never over an earlier copy: a second recovery that renamed onto `projects.json.bak` would
+    /// destroy the list the first recovery's notice told the user to restore from. So the first
+    /// free name of `projects.json.bak`, `projects.json.bak.2`, … is used. `None` when the rename
+    /// failed (or, absurdly, every name is taken) — the caller then has no copy to name.
+    fn preserve_unreadable(&self) -> Option<PathBuf> {
+        const MAX_COPIES: u32 = 100;
+        let first = self.backup_path();
+        let target = std::iter::once(first.clone())
+            .chain((2..=MAX_COPIES).map(|n| {
+                let mut name = first.as_os_str().to_os_string();
+                name.push(format!(".{n}"));
+                PathBuf::from(name)
+            }))
+            .find(|candidate| std::fs::symlink_metadata(candidate).is_err())?;
+        std::fs::rename(&self.path, &target).ok()?;
+        Some(target)
+    }
+
     /// Directory holding every project's own state file (bugfix BUG-001): a `projects/`
     /// subdirectory next to the catalog file.
     fn project_state_dir(&self) -> PathBuf {
@@ -654,17 +680,18 @@ impl ProjectStore for JsonFileStore {
         JsonFileStore::remove_project_state(self, project_path)
     }
 
-    fn recovery_path(&self) -> Option<PathBuf> {
-        Some(self.backup_path())
+    fn is_missing(&self) -> bool {
+        matches!(std::fs::symlink_metadata(&self.path), Err(err) if err.kind() == io::ErrorKind::NotFound)
     }
 
     fn load(&self) -> LoadOutcome {
+        let mut preserved = None;
         let (status, stored) = match std::fs::read_to_string(&self.path) {
             Ok(contents) => match serde_json::from_str::<StoredCatalog>(&contents) {
                 Ok(stored) => (LoadStatus::Loaded, stored),
                 Err(_) => {
                     // Corrupt: preserve the bad file (best-effort) and recover to empty.
-                    let _ = std::fs::rename(&self.path, self.backup_path());
+                    preserved = self.preserve_unreadable();
                     (
                         LoadStatus::Recovered,
                         StoredCatalog {
@@ -683,15 +710,21 @@ impl ProjectStore for JsonFileStore {
                     projects: Vec::new(),
                 },
             ),
-            // Unreadable for any other reason: recover rather than crash (Principle IV).
-            Err(_) => (
-                LoadStatus::Recovered,
-                StoredCatalog {
-                    schema_version: SCHEMA_VERSION,
-                    last_active: None,
-                    projects: Vec::new(),
-                },
-            ),
+            // Unreadable for any other reason — bytes that are not UTF-8, a file this user may not
+            // read: recover rather than crash (Principle IV), and move it aside exactly as a parse
+            // failure is (002 BUG-007). Left in place, the next save would write the empty
+            // catalog over the only copy of the list.
+            Err(_) => {
+                preserved = self.preserve_unreadable();
+                (
+                    LoadStatus::Recovered,
+                    StoredCatalog {
+                        schema_version: SCHEMA_VERSION,
+                        last_active: None,
+                        projects: Vec::new(),
+                    },
+                )
+            }
         };
 
         // Legacy fallback: whatever `sessions`/`worktree_display_names` a pre-split catalog
@@ -790,7 +823,11 @@ impl ProjectStore for JsonFileStore {
             }
         }
 
-        LoadOutcome { workspace, status }
+        LoadOutcome {
+            workspace,
+            status,
+            preserved,
+        }
     }
 
     fn save(&self, workspace: &Workspace) -> io::Result<()> {
@@ -874,6 +911,8 @@ pub struct FakeProjectStore {
 struct FakeStoreState {
     workspace: Workspace,
     status: Option<LoadStatus>,
+    /// The copy a recovered load reports, from [`FakeProjectStore::recovered_into`].
+    preserved: Option<PathBuf>,
     /// Every catalog handed to `save`, in call order.
     saves: Vec<Workspace>,
     /// Every path handed to `remove_project_state`, in call order.
@@ -906,6 +945,13 @@ impl FakeProjectStore {
         fake
     }
 
+    /// As [`Self::recovered`], with the unreadable file reported as moved to `preserved`.
+    pub fn recovered_into(preserved: impl Into<PathBuf>) -> Self {
+        let fake = Self::recovered();
+        fake.inner.lock().expect("fake lock").preserved = Some(preserved.into());
+        fake
+    }
+
     /// Make the next [`ProjectStore::save`] fail.
     pub fn failing_save(self, kind: io::ErrorKind) -> Self {
         self.inner.lock().expect("fake lock").fail_next_save = Some(kind);
@@ -929,6 +975,7 @@ impl ProjectStore for FakeProjectStore {
         LoadOutcome {
             workspace: state.workspace.clone(),
             status: state.status.unwrap_or(LoadStatus::Missing),
+            preserved: state.preserved.clone(),
         }
     }
 

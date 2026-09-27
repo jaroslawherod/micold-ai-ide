@@ -181,7 +181,7 @@ fn a_corrupt_catalog_is_preserved_and_recovered_to_empty() {
     // 002 BUG-007: and the daemon can say where, for the warning its diagnostics carry.
     assert_eq!(
         catalog.recovered_backup(),
-        Some(projects_path.with_extension("json.bak"))
+        Some(projects_path.with_extension("json.bak").as_path())
     );
 }
 
@@ -199,6 +199,53 @@ fn a_missing_catalog_is_a_clean_first_run() {
         None,
         "a first run recovered nothing"
     );
+}
+
+/// 002 BUG-007: a warm launch moves a damaged `projects.json` aside before it dials a daemon
+/// that is still running. That daemon holds the list in memory; on the connection it writes it
+/// back, or an idle stop later would leave the next launch with nothing.
+#[test]
+fn a_running_daemon_writes_back_a_catalog_file_that_went_missing() {
+    let dir = tempfile::tempdir().unwrap();
+    let projects_path = dir.path().join("projects.json");
+    let store = JsonFileStore::at(projects_path.clone());
+    let mut ws = Workspace::empty();
+    ws.projects.push(Project::new(
+        PathBuf::from("/repo/alpha"),
+        true,
+        Availability::Available,
+    ));
+    store.save(&ws).unwrap();
+    let catalog = Catalog::load(
+        Box::new(JsonFileStore::at(projects_path.clone())),
+        Box::new(JsonFileSettingsStore::at(dir.path().join("settings.json"))),
+    );
+    assert!(
+        !catalog.restore_missing_file().unwrap(),
+        "present: nothing to do"
+    );
+
+    // The launch's read moved the (by now damaged) file aside.
+    std::fs::rename(&projects_path, projects_path.with_extension("json.bak")).unwrap();
+
+    assert!(catalog.restore_missing_file().unwrap());
+    let reread = JsonFileStore::at(projects_path).load();
+    assert_eq!(reread.status, LoadStatus::Loaded);
+    assert_eq!(reread.workspace.projects.len(), 1);
+}
+
+/// …and a first run, holding nothing, writes nothing.
+#[test]
+fn an_empty_catalog_writes_back_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let projects_path = dir.path().join("projects.json");
+    let catalog = Catalog::load(
+        Box::new(JsonFileStore::at(projects_path.clone())),
+        Box::new(JsonFileSettingsStore::at(dir.path().join("settings.json"))),
+    );
+
+    assert!(!catalog.restore_missing_file().unwrap());
+    assert!(!projects_path.exists());
 }
 
 #[test]

@@ -68,6 +68,8 @@ pub struct Catalog {
     project_store: Option<Box<dyn ProjectStore + Send + Sync>>,
     settings_store: Option<Box<dyn SettingsStore + Send + Sync>>,
     load_status: LoadStatus,
+    /// Where the load moved an unreadable catalog, when it did (002 BUG-007).
+    recovered_backup: Option<PathBuf>,
 }
 
 impl Catalog {
@@ -84,6 +86,7 @@ impl Catalog {
             project_store: Some(project_store),
             settings_store: Some(settings_store),
             load_status: loaded.status,
+            recovered_backup: loaded.preserved,
         }
     }
 
@@ -107,6 +110,7 @@ impl Catalog {
             project_store: None,
             settings_store: None,
             load_status: LoadStatus::Missing,
+            recovered_backup: None,
         }
     }
 
@@ -116,17 +120,30 @@ impl Catalog {
         self.load_status
     }
 
-    /// Where the catalog this daemon recovered was preserved, when it recovered one and the copy
-    /// is there (002 BUG-007, C4). `None` for a clean or first-run load, and for an unreadable file
-    /// that could not be moved aside.
-    pub fn recovered_backup(&self) -> Option<PathBuf> {
-        if self.load_status != LoadStatus::Recovered {
-            return None;
+    /// Where this daemon's load moved an unreadable catalog (002 BUG-007, C4). `None` for a clean
+    /// or first-run load, and for a recovery whose rename failed.
+    pub fn recovered_backup(&self) -> Option<&Path> {
+        self.recovered_backup.as_deref()
+    }
+
+    /// Write the catalog back if its file has gone while this daemon holds projects (002 BUG-007).
+    ///
+    /// The launch read runs before the client dials, and a damaged `projects.json` is moved aside
+    /// there. A daemon that was already running (028: it outlives the app) never re-reads the file
+    /// and only writes on a change, so without this the list it still holds would reach the screen
+    /// through `Welcome` and never reach the disk — and an idle stop later would leave the next
+    /// launch with nothing. Asked on each connection; a no-op unless the file is missing and there
+    /// is something to write, so a first run writes nothing it did not have to. Returns whether it
+    /// wrote.
+    pub fn restore_missing_file(&self) -> io::Result<bool> {
+        let Some(store) = &self.project_store else {
+            return Ok(false);
+        };
+        if self.workspace.projects.is_empty() || !store.is_missing() {
+            return Ok(false);
         }
-        self.project_store
-            .as_ref()?
-            .recovery_path()
-            .filter(|path| path.exists())
+        store.save(&self.workspace)?;
+        Ok(true)
     }
 
     /// The current settings projected to the wire (FR-012a, FR-012b).

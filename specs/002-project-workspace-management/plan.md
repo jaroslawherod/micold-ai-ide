@@ -216,4 +216,12 @@ path from a new `ProjectStore::recovery_path` (default `None`; `JsonFileStore` �
 front of it, is logged at `warn` naming the `.bak`, which puts it in the diagnostics ring the
 client's "recent issues" request reads. No wire change and no `PROTOCOL_VERSION` bump.
 
+Review A of M1 added three things. `LoadOutcome::preserved` is the copy **this** load made (the
+notice never names an older recovery's `.bak`); the rename never lands on an existing copy
+(`projects.json.bak`, `.bak.2`, …); and a file that is not valid text is moved aside too, instead of
+being left for the next save to overwrite. And on a warm launch the daemon's list reaches the
+screen but not the disk — it writes only on a change — so on each connection, before `Welcome`, a
+daemon holding projects whose `projects.json` has gone writes it back
+(`Catalog::restore_missing_file`, `ProjectStore::is_missing`).
+
 **Bugfix**: 2026-09-27 — BUG-007 Updated from bugfix patch
