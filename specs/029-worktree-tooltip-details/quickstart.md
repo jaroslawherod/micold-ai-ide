@@ -153,3 +153,38 @@ nothing here says anything about how the fade looks or how it paces on the user'
 above is about a static frame. The tooltip also ran in the dark scheme in the application and the
 light scheme in the showcase, which is how both appear above; neither scheme was compared against a
 real display's colour.
+
+---
+
+## The pass — 2026-09-27 (BUG-001, §B7)
+
+**Where**: not a real display. A private `Xvfb :149` at 1600×1400×24, rendered by Mesa's lavapipe
+(`WGPU_BACKEND=vulkan`, `VK_ICD_FILENAMES=…/lvp_icd.json`), driven with `xdotool` — the repo's
+`visual-pass` skill. The real client (`micold-ai-ide`) and its daemon ran from binaries already
+built at HEAD `da034898`, pinned to a task-private directory and launched with their own
+`XDG_RUNTIME_DIR`/`XDG_DATA_HOME`/`XDG_CONFIG_HOME`; the daemon log was checked for `client attached
+to daemon` before anything on screen was read as evidence.
+
+**Fixture**: a throwaway repo (`vp-fixture-repo`) with 26 worktrees under `.claude/worktrees/`, one
+per conventional-commit type plus a few extra batches, enough to overflow a 720 px-tall sidebar.
+They were made with plain `git worktree add` (via `scripts/reference-scene.sh`'s worktree list), so
+the application initially showed "No worktrees yet." — feature 029 only lists a worktree under
+`.claude/worktrees/` when it holds a provenance record of having created it. `micold-demo-provenance`
+(built at `target-shared/debug/micold-demo-provenance`) wrote that record — `created_worktrees` in
+the project's own state file, `<XDG_DATA_HOME>/micold-ai-ide/projects/<project_id>.json` — for all 26
+directories, exactly the fixture the application would have produced had it created them itself.
+
+| Step | Result | Observed |
+|---|---|---|
+| 1 — 1280×720, scrolled to end, hover last row (`Mid 925 seventh batch`) | **pass** | Tooltip panel sat at y≈565–635; the last row (icon, name, `test` chip, action icons) sat at y≈645–700, fully inside the 720 px-tall window, with no overlap. |
+| 2 — 1280×720, scrolled to top, hover first row (`Mid 918 debian packaging`) | **pass** | Row sat at y≈164–245; the tooltip opened below it at y≈256–329, the ordinary placement. |
+| 3 — 640×480, scrolled to end, hover last row (`Mid 925 seventh batch`) | **pass** | Tooltip panel sat at y≈338–395; the last row sat at y≈405–460, fully inside the 480 px-tall window, with no overlap — same placement as step 1 at the narrowest size. |
+
+**Screenshots** (`evidence/`):
+
+- Step 1 — [`bug-001-b7-last-row-1280.png`](evidence/bug-001-b7-last-row-1280.png)
+- Step 2 — [`bug-001-b7-top-row.png`](evidence/bug-001-b7-top-row.png)
+- Step 3 — [`bug-001-b7-last-row-640.png`](evidence/bug-001-b7-last-row-640.png)
+
+**Not covered, and not claimed**: the tooltip's appearance over time (show/dismiss transition) and
+real-GPU colour/frame pacing — same limits as the rest of this pass, recorded above.

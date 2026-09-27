@@ -102,3 +102,24 @@ Not new behaviours; each change was re-run green, and the gate was re-proved aga
 
   Restored; `layout_snapshot` 42 passed, `placement_tests` 2 passed, `idle_requests_no_frames` 8,
   `one_overlay_implementation` 8, `cdk_no_appearance` 3 passed.
+
+## Review round 1 (continued) — the scrolled list, and the stale-binary visual pass
+
+- **Gate case added**: `the_last_row_of_a_scrolled_list_keeps_its_tooltip_off_itself` scrolls a
+  25-worktree sidebar to its end (a `snap_to` operation on the list's scrollable) before hovering the
+  last row, at 1280×800, 1280×720 and 640×480. It passed on its first run, because the fix already
+  reads the trigger's bounds plus the scrollable's translation. Results on green: row y 732–792 /
+  panel y 651–723 (1280×800), row y 652–712 / panel y 571–643 (1280×720), row y 412–472 / panel
+  y 331–403 (640×480).
+- **Why it was added**: the first §B7 visual pass reported the scrolled last row still covered. The
+  pinned binaries for that pass had no `cdk::tooltip` symbols (`strings … | grep -c cdk7tooltip` → 0),
+  so they were built before the fix. Rebuilt from da034898 (47 symbols), the second pass shows the
+  panel above the row at 1280×720 and 640×480. The stale pass's write-up was discarded, not recorded.
+- **Deliberate-mutant check of the scrolled case** (`place()` always keeps the asked-for side):
+
+  ```
+  in a 1280×800 window, with the list scrolled to its end, the last worktree row's tooltip covers the row it describes: row 4,732 244×60 (y 732–792), tooltip 26,723 200×72 (y 723–795) (FR-013, SC-006, BUG-001)
+  test result: FAILED. 0 passed; 1 failed; …
+  ```
+
+  Restored. `mise run gate` then exited 0 on da034898.
