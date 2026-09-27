@@ -393,6 +393,9 @@ const ONBOARDING_KEY: &str = "hasCompletedOnboarding";
 /// of a `claude` that is running is not rewritten under it, and nothing is written when the text is
 /// not a JSON object: replacing it would lose whatever it was, and `claude` is the one to repair
 /// its own file.
+///
+/// The object is written back re-serialised, so key order and whitespace are not kept; every key
+/// and value is, which is all `claude` reads.
 pub fn onboarding_done(existing: Option<&str>) -> Option<String> {
     let mut record = match existing {
         None => serde_json::Map::new(),
