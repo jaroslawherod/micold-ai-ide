@@ -959,6 +959,9 @@ Web and mail addresses in a terminal are links, and so is text a program marked 
   it is underlined, exactly the address and not the punctuation around it. The full address it
   opens shows in a small label at the bottom-left of the terminal, or at the top-left while the
   pointer is near the bottom. An address the terminal wrapped onto the next row is one link.
+  An address needs its scheme to be recognised: `https://example.com` is a link, a bare
+  `example.com` or `team@example.com` is ordinary text. Addresses that would hand the click to
+  another application — `vscode://`, `slack://`, `javascript:`, `data:` — are never links either.
 - **Open** it with **Ctrl+click** on Linux and Windows, or **Cmd+click** on macOS. The pointer
   turns into a hand while you hold Ctrl (Cmd) over a link, to show a click will open it. A web
   address opens in your default browser, a `mailto:` address in your default mail client.
