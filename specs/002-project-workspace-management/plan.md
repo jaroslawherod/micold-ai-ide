@@ -211,8 +211,7 @@ the sandboxed daemon reads the same file — so the notice is raised there. On a
 the daemon outlives the app and never re-reads the file) the daemon's `Welcome` catalog restores
 the list afterwards, so the notice says only that the file could not be read and where it was
 kept, never that the list was reset. It sits beside `notify_settings_recovery` (010 BUG-025), naming the
-path from a new `ProjectStore::recovery_path` (default `None`; `JsonFileStore` → its
-`projects.json.bak`). The daemon's own recovery, reached only when it restarts without a launch in
+copy the load reports (`LoadOutcome::preserved`, below). The daemon's own recovery, reached only when it restarts without a launch in
 front of it, is logged at `warn` naming the `.bak`, which puts it in the diagnostics ring the
 client's "recent issues" request reads. No wire change and no `PROTOCOL_VERSION` bump.
 
@@ -220,8 +219,9 @@ Review A of M1 added three things. `LoadOutcome::preserved` is the copy **this**
 notice never names an older recovery's `.bak`); the rename never lands on an existing copy
 (`projects.json.bak`, `.bak.2`, …); and a file that is not valid text is moved aside too, instead of
 being left for the next save to overwrite. And on a warm launch the daemon's list reaches the
-screen but not the disk — it writes only on a change — so on each connection, before `Welcome`, a
-daemon holding projects whose `projects.json` has gone writes it back
+screen but not the disk — it writes only on a change — so on each connection (before the
+handshake, so a refused client of another build still triggers it) and at its stop, a daemon
+holding projects whose `projects.json` has gone writes it back
 (`Catalog::restore_missing_file`, `ProjectStore::is_missing`).
 
 **Bugfix**: 2026-09-27 — BUG-007 Updated from bugfix patch

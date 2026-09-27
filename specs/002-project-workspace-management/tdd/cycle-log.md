@@ -159,7 +159,8 @@ Behaviors from `bugs/BUG-007.md` (FR-012d); no test-list entries predate this bu
   -> `panicked at crates/micold-client/src/shell/startup.rs:541:9: a project list that had to be
   recovered was reset without a word, or the notice did not name the kept file: ""` (1 passed,
   1 failed); reproduced independently by the bug-rubric reviewer
-- green: T074 (`ProjectStore::recovery_path`, `notify_catalog_recovery` called from
+- green: T074 (`LoadOutcome::preserved` — first built as a `ProjectStore::recovery_path`, dropped
+  after review A — and `notify_catalog_recovery` called from
   `restore_catalog`); `mise run gate` green
 - refactor: none
 - notes: the "does not say reset" assertion was added after review round 1 (warm launch: the
@@ -195,3 +196,8 @@ Behaviors from `bugs/BUG-007.md` (FR-012d); no test-list entries predate this bu
 - green: `Catalog::restore_missing_file`, called via `DaemonState::restore_missing_catalog_file`
   before `Welcome`
 
+- round 2 (review A r2): `a_connection_that_never_handshakes_still_writes_back_a_missing_catalog`
+  — red with the write-back temporarily put back at `Welcome`
+  (`panicked at crates/micold-daemon/tests/catalog_adoption.rs:620:5`, 1 failed: a connection that
+  hangs up before `Hello` returns first), green with it at the start of `serve_connection`
+  (`catalog_adoption`: 15 passed); `unwind` calls it too

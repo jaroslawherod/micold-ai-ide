@@ -513,8 +513,9 @@ hydrate the workspace from it at startup, and they do. None asked for the status
   `crates/micold-core/src/store.rs` (FR-012d, FR-008)
 - [X] T078 Daemon writes back (review A of M1), failing test first in
   `crates/micold-daemon/tests/catalog_adoption.rs`: a daemon holding projects whose `projects.json`
-  has gone writes it back on connect (`Catalog::restore_missing_file`, via `ProjectStore::is_missing`,
-  called before `Welcome` in `crates/micold-daemon/src/server.rs`); an empty catalog writes nothing.
+  has gone writes it back (`Catalog::restore_missing_file`, via `ProjectStore::is_missing`, called at
+  the start of every connection, before the handshake, and in `unwind` at the stop, in
+  `crates/micold-daemon/src/server.rs`); an empty catalog writes nothing.
   Closes the warm-launch loss: the launch moved the file aside, the daemon's list reached the screen
   but not the disk, and an idle stop left the next launch empty (FR-008, SC-003)
 
