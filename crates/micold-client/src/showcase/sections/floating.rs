@@ -243,6 +243,26 @@ pub fn tooltip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
                 roles,
             ),
             posed(
+                "above",
+                material::Tooltip::new(
+                    material::IconButton::new(Icon::Settings, roles).on_press(Message::NoOp),
+                    "Settings",
+                    roles,
+                )
+                .position(material::TooltipPosition::Top),
+                roles,
+            ),
+            posed(
+                "to the right",
+                material::Tooltip::new(
+                    material::IconButton::new(Icon::Menu, roles).on_press(Message::NoOp),
+                    "More actions",
+                    roles,
+                )
+                .position(material::TooltipPosition::Right),
+                roles,
+            ),
+            posed(
                 "multi-line, wrapped at the ceiling",
                 material::Tooltip::new(
                     material::IconButton::new(Icon::ProjectRoot, roles).on_press(Message::NoOp),
