@@ -17,7 +17,7 @@ real session service, and is run by the `visual-pass` skill on a private Xvfb di
   chmod +x <SCRATCH>/only-in-p/bin/pi
   cat > <SCRATCH>/include.sh <<'EOF'
   # Puts `pi` on PATH only inside a directory that carries the marker file.
-  [ -f "$PWD/.pi-here" ] && export PATH="<SCRATCH>/only-in-p/bin:$PATH"
+  if [ -f "$PWD/.pi-here" ]; then export PATH="<SCRATCH>/only-in-p/bin:$PATH"; fi
   EOF
   ```
 
@@ -54,7 +54,9 @@ Settings → **Source a script before each session**: on, script `<SCRATCH>/incl
 4. **US1-4, FR-011.** Stop the session service this run started, by its PID. Never use `pkill -f`,
    which can hit the user's own instance. Let the client reconnect. After the reconnect, `P`'s rows
    show the chevron again with no user action.
-5. **US1-5.** Set the default AI CLI to Pi. In `P`, press the primary half: a Pi session starts
+5. **US1-5.** Set the default AI CLI to Pi. Settings offers only what home has (step 3), so set
+   `default_ai_cli` to `Pi` in the service's `settings.json` and restart the pair, or pick it
+   while home briefly has a `pi` on `PATH`. In `P`, press the primary half: a Pi session starts
    directly, with no list. In `Q`, the same press opens the list with Pi marked not installed.
 6. **US2-1.** `.pi-here` is untracked, so a new worktree has none. In `P`, create a second
    worktree `P-wt2` in the app and do not add a marker to it. `P-wt2`'s row has no chevron. Open `P-wt`'s list and close it: `P-wt2` still

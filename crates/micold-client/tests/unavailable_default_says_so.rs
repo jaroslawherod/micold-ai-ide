@@ -8,7 +8,8 @@
 //! the chevron. The reason was gone before anything could draw it.
 //!
 //! So the reason travels with the press, and the reducer re-checks it against the answer the row
-//! holds for its own directory (feature 033) before saying anything. That re-check is what
+//! holds for its own directory (feature 033; home's while its own is pending, FR-005) before
+//! saying anything. That re-check is what
 //! [`a_default_that_turned_out_to_be_installed_says_nothing`] holds: the flag says why the user
 //! pressed, never what is true now.
 

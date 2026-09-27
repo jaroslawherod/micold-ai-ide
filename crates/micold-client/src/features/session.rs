@@ -1491,9 +1491,10 @@ pub enum Msg {
         /// `tests/session_start_press.rs` records: this message is the contract C1 event on which
         /// the binary sends a fresh ask for this row's answer (feature 033, A3). It says why the
         /// press happened, which is knowledge only the press has; whether it is still true is
-        /// settled by the reducer against the answer this row holds when the message lands. The
-        /// ask is asynchronous, so that answer is the one from the row's previous event, and the
-        /// fresh reply updates the open list when it arrives.
+        /// settled by the reducer against the answer this row holds when the message lands (home's
+        /// while its own is pending, FR-005). The ask is asynchronous, so that answer is the one
+        /// from the row's previous event, and the fresh reply updates the open list when it
+        /// arrives.
         unavailable_default: Option<AiCli>,
     },
     /// Where a press on the start affordance landed, in window pixels (018 BUG-008, FR-029d).
