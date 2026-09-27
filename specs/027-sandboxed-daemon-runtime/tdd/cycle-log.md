@@ -832,3 +832,16 @@ task text and has no cycle. The client cycles close on the binary's own target
   temporary file and a rename, logging a failure rather than refusing the sandbox. Client
   `shell::sandbox` 18 passed, 0 failed
 - the claim under both, that the key alone skips `claude`'s setup: `bugs/BUG-007.md#reproduction`
+
+### U47 — the bring-up follows no link the sandbox can plant in its home (review A)
+
+- test: `shell::sandbox::tests::a_bring_up_does_not_follow_a_planted_link_to_a_host_file` and
+  `a_bring_up_does_not_write_through_a_planted_staging_link` (Unix)
+- red (`scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide a_bring_up_does_not` -> `0 passed; 2 failed`,
+  against the first `record_onboarding_done` with its staging name fixed): `sandbox.rs:1398` "the planted
+  link was replaced by a copy of what it pointed at"; `sandbox.rs:1428` the host file now held
+  `{"hasCompletedOnboarding": true}` instead of `ssh-ed25519 AAAA user`
+- green: `read_unless_linked` checks the name with `symlink_metadata` before and after the open and, on
+  Unix, compares device and inode with what was opened; a link or non-file is left alone. The staging
+  file has a fixed name, a leftover is unlinked, and it is opened `create_new`. Client `shell::sandbox`
+  20 passed, 0 failed

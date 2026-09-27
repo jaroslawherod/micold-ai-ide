@@ -108,6 +108,7 @@ skips `claude`'s setup — is shown by the reproduction in `bugs/BUG-007.md`, no
 | --- | ---------------------------------------------------------------------------------------------------- | --------------- | ---------------- | ------- | ---- |
 | U45 | With the sign-in shared, the mount set names the sandbox home's `.claude.json`, and the merge adds only `hasCompletedOnboarding` | FR-004f | example | DONE | `sandbox_credentials::a_shared_sign_in_names_the_sandbox_homes_onboarding_record`, `the_onboarding_merge_*` |
 | U46 | A bring-up with the sign-in shared records the finished setup before the runtime runs; without it, nothing | FR-004f | example | DONE | `shell::sandbox::tests::a_bring_up_sharing_the_sign_in_*`, `a_bring_up_without_the_sign_in_leaves_the_setup_to_claude` |
+| U47 | The bring-up reads, stages and replaces the sandbox home's `.claude.json` without following a link planted there | FR-004f, FR-005 | example | DONE | `shell::sandbox::tests::a_bring_up_does_not_*` (review A) |
 
 ## Invariants and edge cases still to place
 

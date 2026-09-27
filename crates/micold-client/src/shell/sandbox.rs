@@ -140,37 +140,100 @@ fn ensure_writable_file(path: &std::path::Path) -> std::io::Result<()> {
 
 /// Add `hasCompletedOnboarding: true` to the sandbox home's `.claude.json` (FR-004f, BUG-007).
 ///
-/// The merge is `onboarding_done`'s: one key added, every other one kept, and a file that already
-/// has it, or that is not a JSON object, left exactly as it is. Written to a temporary file beside
-/// it and renamed into place, so a `claude` reading it never sees half a file.
+/// The merge is `onboarding_done`'s: the key added, every other key kept, and a file that already
+/// has it, or that is not a JSON object, left as it is. Written to a staging file beside it and
+/// renamed into place, so a `claude` reading it never sees half a file.
+///
+/// **Everything here is in a directory the sandbox can write**, and this runs on the host. So no
+/// path in it is followed as a link. A `.claude.json` that is a link — or that was swapped for one
+/// between opening and checking it — is left alone rather than read, because reading it would
+/// copy whatever host file it names into the sandbox. The staging file is created only if nothing,
+/// link included, is at its path, because opening a planted link for writing would overwrite the
+/// host file it names. A leftover from a bring-up that died mid-write is unlinked first; unlinking
+/// removes a link itself, never its target.
+///
+/// A `claude` already running in an adopted container can rewrite the file between the read and the
+/// rename, and one side's change is then lost. That is tolerated rather than locked against:
+/// `claude` takes no lock to honour, the window opens only while the key is still missing, and the
+/// worst outcome is one more setup prompt or one lost counter, never a torn file.
 fn record_onboarding_done(path: &std::path::Path) -> std::io::Result<()> {
-    let existing = match std::fs::read_to_string(path) {
-        Ok(text) => Some(text),
+    let existing = match read_unless_linked(path) {
+        Ok(Some(text)) => Some(text),
+        // A link or something other than a file: not this application's to read or replace.
+        Ok(None) => return Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(e),
     };
     let Some(text) = micold_core::sandbox::onboarding_done(existing.as_deref()) else {
         return Ok(());
     };
-    let tmp = path.with_extension(format!("json.micold-{}", std::process::id()));
+    let tmp = onboarding_staging_path(path);
+    match std::fs::remove_file(&tmp) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e),
+    }
     let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
+    // `create_new` is O_CREAT|O_EXCL, which fails on anything at the path — a link included —
+    // rather than following it.
+    options.write(true).create_new(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
         // `claude` keeps this file private too; it records per-project trust and account details.
         options.mode(0o600);
     }
-    let written = options.open(&tmp).and_then(|mut f| {
+    let mut file = options.open(&tmp)?;
+    let written = {
         use std::io::Write;
-        f.write_all(text.as_bytes())?;
-        f.sync_all()
-    });
+        file.write_all(text.as_bytes())
+            .and_then(|()| file.sync_all())
+    };
+    drop(file);
+    // `rename` replaces the directory entry at `path`, so a link there is replaced, not followed.
     written
         .and_then(|()| std::fs::rename(&tmp, path))
         .inspect_err(|_| {
             let _ = std::fs::remove_file(&tmp);
         })
+}
+
+/// Read `path` if it is a regular file and not a link to one. `Ok(None)` for a link or anything
+/// that is not a regular file, which the caller then leaves alone.
+///
+/// The name's own metadata (`symlink_metadata`, which does not follow) is checked before the open,
+/// so a link or a FIFO is never opened, and again after it: on Unix the opened file must be the one
+/// the name still holds. A name swapped for a link between the two fails that comparison.
+fn read_unless_linked(path: &std::path::Path) -> std::io::Result<Option<String>> {
+    use std::io::Read;
+
+    if !std::fs::symlink_metadata(path)?.file_type().is_file() {
+        return Ok(None);
+    }
+    let mut file = std::fs::File::open(path)?;
+    let named = std::fs::symlink_metadata(path)?;
+    if !named.file_type().is_file() {
+        return Ok(None);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let opened = file.metadata()?;
+        if (opened.dev(), opened.ino()) != (named.dev(), named.ino()) {
+            return Ok(None);
+        }
+    }
+    let mut text = String::new();
+    file.read_to_string(&mut text)?;
+    Ok(Some(text))
+}
+
+/// Where [`record_onboarding_done`] stages the new file before renaming it into place.
+///
+/// A fixed name rather than one per call, so a bring-up that died mid-write leaves one file for the
+/// next to clear, not one per process.
+fn onboarding_staging_path(record: &std::path::Path) -> PathBuf {
+    record.with_extension("json.micold-staging")
 }
 
 /// A bring-up that failed while preparing the host side, before the runtime ran.
@@ -1364,6 +1427,69 @@ mod tests {
         let state_dir = tempfile::tempdir().expect("tempdir");
         bring_up_sharing(state_dir.path(), std::collections::BTreeSet::new());
         assert!(!sandbox_claude_json(state_dir.path()).exists());
+    }
+
+    /// Review A: the sandbox home is writable from inside the sandbox, so its `.claude.json` can be a
+    /// link a session planted to a host file. The bring-up runs on the host, and following that link
+    /// would copy the host file — registry logins, other tokens — into the sandbox's home.
+    #[cfg(unix)]
+    #[test]
+    fn a_bring_up_does_not_follow_a_planted_link_to_a_host_file() {
+        use micold_core::sandbox::CredentialShare;
+
+        let host = tempfile::tempdir().expect("tempdir");
+        let secret = host.path().join("config.json");
+        let secret_text = r#"{"auths":{"registry":{"auth":"c2VjcmV0"}}}"#;
+        std::fs::write(&secret, secret_text).unwrap();
+
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        let record = sandbox_claude_json(state_dir.path());
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&secret, &record).unwrap();
+
+        bring_up_sharing(
+            state_dir.path(),
+            std::collections::BTreeSet::from([CredentialShare::AiCliAuth]),
+        );
+
+        assert_eq!(std::fs::read_to_string(&secret).unwrap(), secret_text);
+        assert!(
+            std::fs::symlink_metadata(&record)
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "the planted link was replaced by a copy of what it pointed at"
+        );
+    }
+
+    /// Review A: nor does it follow a link planted where it stages the new file. Opening that path
+    /// for writing would truncate and overwrite whatever host file the link names.
+    #[cfg(unix)]
+    #[test]
+    fn a_bring_up_does_not_write_through_a_planted_staging_link() {
+        use micold_core::sandbox::CredentialShare;
+
+        let host = tempfile::tempdir().expect("tempdir");
+        let victim = host.path().join("authorized_keys");
+        std::fs::write(&victim, "ssh-ed25519 AAAA user\n").unwrap();
+
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        let record = sandbox_claude_json(state_dir.path());
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&victim, onboarding_staging_path(&record)).unwrap();
+
+        bring_up_sharing(
+            state_dir.path(),
+            std::collections::BTreeSet::from([CredentialShare::AiCliAuth]),
+        );
+
+        assert_eq!(
+            std::fs::read_to_string(&victim).unwrap(),
+            "ssh-ed25519 AAAA user\n"
+        );
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&record).unwrap()).expect("JSON");
+        assert_eq!(json, serde_json::json!({ "hasCompletedOnboarding": true }));
     }
 
     #[test]

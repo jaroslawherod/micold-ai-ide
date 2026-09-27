@@ -1512,6 +1512,8 @@ user could follow into replacing the host's token (FR-004f, US2 scenario 11).
       finished setup in the sandbox's own home when the sign-in share mounts a token. Write through
       a temporary file and a rename; log a failure and carry on. Never touch the host's
       `~/.claude.json` (FR-004f).
+      *Review A*: the sandbox can write its home, so the bring-up follows no link there — a planted
+      `.claude.json` or staging link is left alone or refused (U47).
 - [X] T219 [BUG-007] `docs/user-guide/sandboxed-daemon.md`, "Credentials". With the sign-in shared, a
       sandboxed Claude Code starts signed in, and the application marks its first-run setup done in
       the sandbox's own home to get there. After the share is turned off, sign in with `/login`.
