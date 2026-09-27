@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: feat/links-in-terminal-should-be-clickable
 - **Started**: 2026-09-14
-- **Phase**: 4-milestones
-- **Next step**: M8 step 6: wait for `ci complete`, then rebase-merge.
+- **Phase**: 5-close
+- **Next step**: Phase 5 close: speckit-converge, speckit-tdd-verify, speckit-docguard-guard, then the close PR
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #402 | M5 File links on the host: open, reveal runnables, not-found | merged | 5b5db19c |
 | #408 | M6 Sandboxed file links, translated and confirmed | merged | 188fe02c |
 | #411 | M7 Link context menu | merged | fd883b8e |
-| #414 | M8 SC-005 measured and quickstart Part B complete | open, awaiting CI | — |
+| #414 | M8 SC-005 measured and quickstart Part B complete | merged | ac72d25f |
 
 ## Milestones
 
@@ -36,7 +36,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M5 | T084, T087, T042–T048, T088, T049–T054 | File links on the host: open, reveal runnables, not-found | #402 | merged |
 | M6 | T085, T055–T067, T069, T068 | Sandboxed file links, translated and confirmed | #408 | merged |
 | M7 | T086, T070–T077 | Link context menu | #411 | merged |
-| M8 | T078–T080 (T081 confirmed by orchestrator's step 6) | Close: SC-005 measurement, full visual walkthrough | #414 | in review: gate green, both round-1 reviews CLEAN, PR open |
+| M8 | T078–T081 | Close: SC-005 measurement, full visual walkthrough | #414 | merged |
 
 ## Decisions
 
@@ -106,6 +106,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | 58 | 4-milestones | M7 review A F3 (LOW): the `COMPONENT_LOCAL` justification for `session.menu_link` held runs of literal spaces where `\`-continuations were meant | Rewritten with the continuations; the text is unasserted, so this is only what a reader of the allowlist sees | agent-resolved | `tests/root_state_is_shared.rs` |
 | 59 | 4-milestones | T079's SC-005 measurement: `p95` with an address hovered while addresses stream is 25% above the same hover with `--plain` streaming, over §A.3's 10% bound, reproduced in three matched pairs | Not a build blocker (§A.3 measures for trend, feature 018 precedent) but a real finding, not noise. A fourth run with the pointer off the pane (addresses streaming, nothing hovered) reproduces R2's own claim: `p95` is within 10% of `--plain`. So the cost is not per-line detection of addresses in the output — it is drawing the underline and the hint label once a link is marked, one `fill_text` call per hint character. In absolute terms the gap is 0.03 ms against a 16.7 ms frame budget. Recorded in quickstart.md "The pass" and visual-pass.md §A.3; closes Decisions/follow-ups on M5 review A finding 9 and M6 review A finding 5 below rather than caching `link_context` — caching would not touch the actual cost | agent-resolved | quickstart.md "§A.3, SC-005"; `crates/micold-client/src/ui/material/terminal_pane.rs` hint-drawing loop (`frame.fill_text` per character) |
 | 60 | 4-milestones | M8 review round 1: review A (`code-review`, high, `origin/main...HEAD`) returned no findings; review B (fresh subagent, conformance) returned one MINOR — visual-pass.md's M8 scope note promised a §B roll-up table that was not written | The roll-up table was added: all eighteen §B steps with the milestone and section that ran each, and the result. It states plainly that B.17 part 2 is the one step no run has confirmed. No second round was needed; both reviews independently re-verified the guide's scheme claim against `detect.rs`, `stream-links.sh`'s equal-length property by running it, and that `link_context` is rebuilt every frame regardless of hover, which is what closes Decision 59's two follow-ups | agent-resolved | visual-pass.md "§B roll-up"; `crates/micold-core/src/link/detect.rs`; `crates/micold-client/src/ui/mod.rs:305` |
+
+| 61 | 4-milestones | T081 asks for CI green on all three OSes for the final tree, but M8's PR changed no Rust so the matrix jobs were skipped on #414 and on main at ac72d25f | Ticked on the last full-matrix green, main 23a0e0ee (build + test success on ubuntu-latest, macos-latest and windows-latest, plus fmt + clippy, windows-11-arm package + smoke and the real-runtime sandbox); `git diff --name-only 23a0e0ee ac72d25f` lists no `.rs`, `Cargo.toml` or `Cargo.lock`, only docs, spec files and the M8 fixture script | agent-resolved | gh run 36312734746 / the run on 23a0e0ee; git diff 23a0e0ee..ac72d25f |
 
 ## Declined review findings
 
