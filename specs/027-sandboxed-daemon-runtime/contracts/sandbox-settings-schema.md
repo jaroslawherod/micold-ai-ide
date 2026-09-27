@@ -19,7 +19,7 @@ One field on the root document:
 ```jsonc
 {
   "settings_version": 4,
-  "theme": "System",
+  "theme": "follow_system",
   "scrollback_lines": 10000,
   "env_include_enabled": true,
   "env_include_script_path": "/home/u/.bashrc",
@@ -47,6 +47,10 @@ One field on the root document:
   }
 }
 ```
+
+*(Corrected by 006 BUG-009: `theme` showed `"System"`, which does not parse. The values are the 003
+contract's snake_case ones. `crates/micold-core/tests/settings_contract_examples.rs` now loads this
+example.)*
 
 Nested rather than flattened with a `sandbox_` prefix because the existing flat fields grew one
 feature at a time and the root is already six keys wide; the sectioned Settings view (FR-026) makes

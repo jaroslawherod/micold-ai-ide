@@ -20,10 +20,15 @@ On-disk (`StoredSettings`):
 ```jsonc
 {
   "settings_version": 2,              // bumped from 1 (documentation only)
-  "theme": "FollowSystem",
+  "theme": "follow_system",
   "scrollback_lines": 10000           // NEW
 }
 ```
+
+`theme` takes the values the 003 contract lists, in snake_case. *(Corrected by BUG-009: this example
+showed `"FollowSystem"`, the Rust variant name, which does not parse. A file copied from it was moved
+to `settings.json.bak` and replaced by the defaults. `crates/micold-core/tests/settings_contract_examples.rs`
+now loads this example.)*
 
 ## Rules
 
