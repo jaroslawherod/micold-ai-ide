@@ -451,7 +451,7 @@ the `env_include.rs` builders (plan, Target Platform).
 - [X] T078 [P] Write `specs/031-clickable-terminal-links/scripts/stream-links.sh`. It prints 10,000 lines, each holding an address, with one in ten 1,000 characters long; `--plain` replaces the addresses with words.
 - [X] T079 Run the SC-005 measurement from quickstart §A.3 on a release build (`mise run build`), and record both frame-probe p95 figures under "The pass" in `specs/031-clickable-terminal-links/quickstart.md`. A result more than 10% apart is a finding against research R2.
 - [X] T080 Run quickstart §B.18 through the `visual-pass` skill. Read the complete "Links" subsection against FR-023's list, fix any gap in `docs/user-guide/worktrees-and-sessions.md`, and complete `specs/031-clickable-terminal-links/visual-pass.md` with every §B row.
-- [ ] T081 Confirm CI is green on Linux, macOS and Windows for the final tree (Principle VI), including `osc8_passthrough` on Windows or its recorded ignore
+- [x] T081 Confirm CI is green on Linux, macOS and Windows for the final tree (Principle VI), including `osc8_passthrough` on Windows or its recorded ignore
 
 ---
 
