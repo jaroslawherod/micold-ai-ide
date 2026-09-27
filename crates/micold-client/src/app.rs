@@ -199,6 +199,22 @@ pub fn scroll_offset_px(reported: f32) -> u32 {
 }
 
 impl State {
+    /// The directory a session started at `location` would run in, in the active project — `None`
+    /// with no project open (feature 033, FR-007).
+    ///
+    /// Through [`micold_core::session::SessionLocation::cwd`], the rule the spawn itself uses, so a
+    /// row is answered for exactly the directory its session would get. The only place the client
+    /// applies it for availability: the asks and the readers both key through here.
+    pub fn location_dir(
+        &self,
+        location: &micold_core::session::SessionLocation,
+    ) -> Option<std::path::PathBuf> {
+        self.workspace
+            .active
+            .as_deref()
+            .map(|root| location.cwd(root))
+    }
+
     /// The color scheme to render, resolved from the user's preference and the OS scheme
     /// (FR-005, FR-007, FR-018). See [`micold_core::theme::resolve`].
     pub fn color_scheme(&self) -> ColorScheme {

@@ -49,7 +49,7 @@ through. It replaces `session::State::available_providers` and `App::cli_availab
 
 ### Tests (write first, confirm they fail)
 
-- [ ] T001 [P] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] Write `crates/micold-client/tests/directory_availability.rs`, pinning `AvailabilityAnswers` (data-model.md) as a pure type:
+- [X] T001 [P] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] [U9] [U10] Write `crates/micold-client/tests/directory_availability.rs`, pinning `AvailabilityAnswers` (data-model.md) as a pure type:
   - `asked(req, key)` then `answered(req, ..)` files the answer under `key` and returns `true`.
   - A late answer to an older `req` for the **same** directory is dropped once a newer `req` was asked (FR-009).
   - Answers for two **different** directories are both kept, in either arrival order (FR-009).
@@ -66,7 +66,7 @@ through. It replaces `session::State::available_providers` and `App::cli_availab
   - A directory with nothing held reads the home answer (FR-005).
   - With nothing held at all, the result is `NothingAvailable`.
   - `offered_providers(Some(P))` lists `Pi`, and `offered_providers(None)` reads home only (FR-008).
-- [ ] T003 [U16] [U17] [U18] [U19] [U20] [U21] Add `wanted_availability_dirs` tests to `crates/micold-client/tests/directory_availability.rs`:
+- [X] T003 [U16] [U17] [U18] [U19] [U20] [U21] Add `wanted_availability_dirs` tests to `crates/micold-client/tests/directory_availability.rs`:
   - The result is the active root plus `location_dir(&SessionLocation::Worktree(dir_name))` for each visible worktree with `can_start_session()`.
   - An agent worktree hidden by the reveal control is excluded, and included once `sidebar.show_agent_worktrees` is on.
   - A `WorktreeStatus::Missing` worktree is excluded.
