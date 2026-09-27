@@ -293,3 +293,31 @@ added to the list and written as tests before any change.
   U25–U28 (Review B round 2, F2).
 - commit: the `fix(006)` commit that carries this entry.
 
+
+# Cycle Log: BUG-009 — every settings contract's example loads as written
+
+Append only. One behaviour, one test, no test-list entry of its own: the test is the whole of T084.
+
+## Baseline
+
+- commit: `origin/main` `23a0e0ee`
+
+## Red: T084
+
+- `crates/micold-core/tests/settings_contract_examples.rs` (new), committed alone as `test(006): …`
+  - red: `scripts/build-lock.sh cargo test -p micold-core --test settings_contract_examples`
+    -> 006's example `loads as Recovered (theme: unknown variant `FollowSystem`, expected one of
+    `follow_system`, `light`, `dark`), moved to .bak: true`; 027's the same with `System`; 003's
+    loads. 0 passed; 1 failed.
+
+## Green: T085
+
+- change: both examples store `"theme": "follow_system"`. No code changed.
+- green: the same command -> 1 passed; `documentation_is_not_read` -> 3 passed (the three contracts
+  are `-micold-docs`).
+- refactor (review A round 1): "loads" became "loads as written". The loaded settings are saved to a
+  fresh file, and every value the example sets must come back unchanged, so an ignored misspelled key
+  or a clamped value fails too. A fence with an info string is scanned, and a non-JSON example is
+  reported rather than stopping the loop. Mutants checked by hand: `"scrollback_line"` in 006 ->
+  `.scrollback_line is not a field the app keeps`; `"pids": 1` in 027 ->
+  `.daemon.sandbox.budget.pids is 1 but is kept as 64`.

@@ -76,6 +76,14 @@ expect specs/028-client-managed-daemon/tasks.md    set
 expect specs/028-macos-package/quickstart.md       unset
 expect specs/028-macos-package/spec.md             set
 
+# The same shape, 006 BUG-009: `crates/micold-core/tests/settings_contract_examples.rs` loads the
+# `settings.json` example in each settings contract through the real store. Only the contracts that
+# show one; a sibling contract stays documentation.
+expect specs/003-material-design-layout/contracts/settings-schema.md         unset
+expect specs/006-real-terminal-emulator/contracts/settings-schema.md         unset
+expect specs/027-sandboxed-daemon-runtime/contracts/sandbox-settings-schema.md unset
+expect specs/027-sandboxed-daemon-runtime/contracts/container-runtime.md       set
+
 # The same shape again, outside `docs/` and `specs/`:
 # `crates/micold-core/tests/tests_never_write_the_real_data_directory.rs` holds the visual-pass
 # skill's launch recipe to isolating the data directory, so dropping a variable from it must run the
