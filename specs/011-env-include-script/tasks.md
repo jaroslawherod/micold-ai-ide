@@ -528,11 +528,16 @@ two first asks for one directory while the script is blocked: it runs once.
   subprocess and no wait under the state lock. Makes T037 and T038 pass; U7 in
   `crates/micold-daemon/tests/ai_cli_availability.rs` stays green. Cross-feature: completes what
   feature 010's T098 built (see the note there). Depends on T037, T038.
+  *As built*: one `Arc<OnceLock<…>>` cell per directory is the in-progress slot, and its identity
+  the generation; `set_env_include` clears the map inside its settings critical section, and
+  `invalidate_env_include_all` was removed (no caller left). See plan.md's *As built (M1)* note.
 - [X] T040 [BUG-005] Docs (Principle VII): update the doc comments on `env_include_vars_for`,
   `spawn_path_for`, `invalidate_env_include` and `invalidate_env_include_all` to state the
   in-progress sharing and that an invalidation wins over a resolve in progress; add one sentence to
   `docs/user-guide/settings.md`'s environment-include section that a saved change applies to the
   next session even while one in the same project is still starting. Depends on T039.
+  *As built*: `invalidate_env_include_all` no longer exists (T039); `set_env_include`'s doc carries
+  what its comment would have said.
 
 **Checkpoint**: T037 and T038 pass; `mise run gate` green.
 
