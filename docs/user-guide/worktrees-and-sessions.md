@@ -228,7 +228,9 @@ is unnecessary overhead this avoids.
   location — the project root itself. For a **worktree** the tooltip leads with the worktree's
   **full name**, then gives its location relative to the project. The sidebar is narrow, so a long
   name is shortened with an ellipsis in the row itself; hovering is how you read the whole of it,
-  and how you confirm exactly where a session is about to run before you start it.
+  and how you confirm exactly where a session is about to run before you start it. The tooltip
+  opens **below** the entry, or **above** it for an entry at the bottom of the window, so it never
+  hides the entry you are pointing at or the actions on it.
 - A worktree's tooltip also names the two things its row label cannot show, each on its own line:
   the **branch** it is bound to, and — when it differs from the displayed name — the **folder** on
   disk. Both are absent from the row because the displayed name is derived by stripping the type

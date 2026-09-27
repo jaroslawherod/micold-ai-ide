@@ -114,6 +114,13 @@ mod refresh_busy_holds_the_header;
 #[path = "gates/context_menu_anchor.rs"]
 mod context_menu_anchor;
 
+// --- The tooltip-clears-its-row gate (029 BUG-001) ----------------------------------------------
+
+// Beside `context_menu_anchor`, whose fixture it reuses: the same long worktree list and the same
+// row paths, read this time against the tooltip a hover opens rather than the menu a press opens.
+#[path = "gates/tooltip_clears_its_row.rs"]
+mod tooltip_clears_its_row;
+
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
 /// The gate itself (FR-003).
