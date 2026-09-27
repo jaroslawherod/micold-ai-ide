@@ -44,8 +44,63 @@ const FIRST_WORKTREE_ROW: usize = 1;
 /// it; this only bounds the search.
 const MOST_WORKTREES: usize = 60;
 
+/// A list longer than any window here, as in the report (25 worktrees), so it scrolls.
+const OVERFLOWING_LIST: usize = 25;
+
 /// A list short enough that its first row has the rest of the window below it.
 const SHORT_LIST: usize = 3;
+
+/// Snaps (or, with `snap` off, only reads) every scrollable whose content holds `target`, and
+/// records the translation the last of them reports.
+struct SnapToEnd {
+    target: iced::Rectangle,
+    snap: bool,
+    translation: Option<iced::Vector>,
+}
+
+impl SnapToEnd {
+    fn new(target: iced::Rectangle, snap: bool) -> Self {
+        Self {
+            target,
+            snap,
+            translation: None,
+        }
+    }
+}
+
+impl iced::advanced::widget::Operation for SnapToEnd {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn iced::advanced::widget::Operation)) {
+        operate(self);
+    }
+
+    fn scrollable(
+        &mut self,
+        _id: Option<&iced::advanced::widget::Id>,
+        _bounds: iced::Rectangle,
+        content_bounds: iced::Rectangle,
+        translation: iced::Vector,
+        state: &mut dyn iced::advanced::widget::operation::Scrollable,
+    ) {
+        if content_bounds.contains(self.target.center()) {
+            if self.snap {
+                state.snap_to(iced::widget::scrollable::RelativeOffset {
+                    x: None,
+                    y: Some(1.0),
+                });
+            }
+            self.translation = Some(translation);
+        }
+    }
+}
+
+/// Whether the list is scrolled before the hover.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Scroll {
+    /// Left where it starts, at the top.
+    None,
+    /// Scrolled to its end, as the report's steps do.
+    ToEnd,
+}
 
 /// What one hover produced: the row that was hovered, and the tooltip panel it opened.
 struct Hovered {
@@ -58,7 +113,7 @@ struct Hovered {
 ///
 /// Its own harness rather than `support::layout::resolve`, because that one lays out against the
 /// fixed `WINDOW` and this gate's worst case is the smallest window there is.
-fn hover_row(state: &State, index: usize, size: Size) -> Hovered {
+fn hover_row(state: &State, index: usize, size: Size, scroll: Scroll) -> Hovered {
     use iced::advanced::widget::Tree;
     use iced::advanced::{clipboard, layout, mouse, Layout, Shell};
     use iced::Rectangle;
@@ -94,9 +149,11 @@ fn hover_row(state: &State, index: usize, size: Size) -> Hovered {
     }
 
     let path = sidebar_row(index);
-    let row = lay::walk(Layout::new(&node), lay::Layer::Base)
-        .into_iter()
+    let records = lay::walk(Layout::new(&node), lay::Layer::Base);
+    let mut row = records
+        .iter()
         .find(|r| r.path == path)
+        .cloned()
         .unwrap_or_else(|| {
             panic!(
                 "no sidebar row at {} — the sidebar changed shape, so re-point `sidebar_row` \
@@ -109,6 +166,38 @@ fn hover_row(state: &State, index: usize, size: Size) -> Hovered {
         "the row at {} has no area, so a hover lands on nothing",
         lay::path_token(&path)
     );
+
+    if scroll == Scroll::ToEnd {
+        // Snap the scrollable holding the row to its end — the app's own `snap_to`, not a wheel
+        // event whose travel would be this file's guess — then read back how far it moved. Layout
+        // records do not move with the scroll (a scrollable offsets what it draws, not where its
+        // content is laid out), so the row is placed where it now appears on screen.
+        let target = iced::Rectangle::new(
+            iced::Point::new(row.x, row.y),
+            Size::new(row.width, row.height),
+        );
+        let mut snap = SnapToEnd::new(target, true);
+        element
+            .as_widget_mut()
+            .operate(&mut tree, Layout::new(&node), &renderer, &mut snap);
+        let mut read = SnapToEnd::new(target, false);
+        element
+            .as_widget_mut()
+            .operate(&mut tree, Layout::new(&node), &renderer, &mut read);
+        let moved = read.translation.unwrap_or_else(|| {
+            panic!(
+                "no scrollable holds the row at {}, so the list cannot be scrolled",
+                lay::path_token(&path)
+            )
+        });
+        assert!(
+            moved.y > row.height,
+            "snapping the list to its end moved it {:.0}px, so it does not overflow the window \
+             and this case is the unscrolled one again",
+            moved.y
+        );
+        row.y -= moved.y;
+    }
 
     let before = overlay_records(&mut element, &mut tree, &node, &renderer, size);
 
@@ -311,7 +400,7 @@ fn describe(r: &LayoutRecord) -> String {
 /// itself, and the tooltip stays inside the window.
 fn assert_last_row_keeps_its_tooltip_off_itself(size: Size) {
     let (state, last) = fullest_unscrolled_list(size);
-    let hovered = hover_row(&state, last, size);
+    let hovered = hover_row(&state, last, size, Scroll::None);
     let row = &hovered.row;
 
     assert!(
@@ -373,7 +462,7 @@ fn a_row_with_room_below_gets_its_tooltip_below_it() {
     // Any list with rows below the first will do; a short one keeps its first row far from every
     // edge.
     let state = with_worktrees(Vec::new(), SHORT_LIST, lay::WINDOW);
-    let hovered = hover_row(&state, FIRST_WORKTREE_ROW, lay::WINDOW);
+    let hovered = hover_row(&state, FIRST_WORKTREE_ROW, lay::WINDOW, Scroll::None);
     let row = &hovered.row;
     let panel = hovered.panel.unwrap_or_else(|| {
         panic!(
@@ -389,4 +478,31 @@ fn a_row_with_room_below_gets_its_tooltip_below_it() {
         describe(row),
         describe(&panel)
     );
+}
+
+/// The report's own steps: a list longer than the window, scrolled to its end, and its last row
+/// hovered (BUG-001 Reproduction, quickstart §B7). The row is then drawn somewhere other than
+/// where it is laid out, which the unscrolled cases above never exercise.
+#[test]
+fn the_last_row_of_a_scrolled_list_keeps_its_tooltip_off_itself() {
+    for size in [lay::WINDOW, Size::new(1280.0, 720.0), SMALLEST_WINDOW] {
+        let state = with_worktrees(Vec::new(), OVERFLOWING_LIST, size);
+        let hovered = hover_row(&state, OVERFLOWING_LIST, size, Scroll::ToEnd);
+        let row = &hovered.row;
+        let panel = hovered.panel.unwrap_or_else(|| {
+            panic!(
+                "hovering the last row of a list scrolled to its end, at {}, opened no tooltip",
+                describe(row)
+            )
+        });
+        assert!(
+            !intersects(&panel, row),
+            "in a {:.0}×{:.0} window, with the list scrolled to its end, the last worktree row's \
+             tooltip covers the row it describes: row {}, tooltip {} (FR-013, SC-006, BUG-001)",
+            size.width,
+            size.height,
+            describe(row),
+            describe(&panel)
+        );
+    }
 }

@@ -683,15 +683,11 @@ an unavailable row",
     Entry {
         module: "material/mod.rs",
         component: "Tooltip",
-        // Not `variants`: `Bottom`/`Left` are the rendering stack's `tooltip::Position`, not a library
-        // enum. Posed states instead.
-        variants: &[],
+        // `TooltipPosition` is `cdk::tooltip::Position`, a library enum since 029 BUG-001, so each
+        // side is posed as a variant.
+        variants: &["Bottom", "Left", "Top", "Right"],
         density: &[],
-        posed: &[
-            "below (the default)",
-            "to the left",
-            "multi-line, wrapped at the ceiling",
-        ],
+        posed: &["multi-line, wrapped at the ceiling"],
         live: &["hover and wait"],
         interactive: true,
         section: Section::Components,
@@ -855,6 +851,15 @@ pub const EXEMPTIONS: &[Exemption] = &[
                  menu there (`012` BUG-005, FR-010b). It names no colour, size or spacing and adds \
                  no pixel to what it wraps. What a secondary press *produces* is the `ContextMenu` \
                  the floating section poses, on both of its anchors.",
+    },
+    Exemption {
+        module: "cdk/tooltip.rs",
+        component: "Tooltip",
+        reason: "a behaviour-layer wrapper, for the same reason as `Picker`: it decides which side \
+                 of its trigger a hover label floats on — the other side when the asked-for one has \
+                 no room (029 BUG-001) — and names no colour, size or spacing. Its panel arrives \
+                 already drawn; what it looks like is `material/mod.rs`'s `Tooltip`, which the \
+                 gallery poses on each of its four sides.",
     },
     Exemption {
         module: "cdk/keyboard_elsewhere.rs",
