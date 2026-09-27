@@ -8,13 +8,14 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/a-project-local-cli-stays-unreachable-in-that-project
 - **Started**: 2026-09-27
 - **Phase**: 3-design
-- **Next step**: Phase 3 — tasks + milestone review, checklist closure, PR 2.
+- **Next step**: Phase 3 — PR 2 CI green, then merge; then Phase 4 M1.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #413 | Spec | merged | 2e28015f |
+| PENDING | Design (clarify, plan, tasks, milestones) | open | — |
 
 ## Milestones
 

@@ -5,7 +5,7 @@ profile: .specify/memory/tdd-profile.md
 spec_criteria: 10 # US1 1–5, US2 1–2, US3 1–3
 planned_at: 7cca563c
 updated_at: 7cca563c
-suite_baseline: SUITE_BASELINE_PLACEHOLDER
+suite_baseline: pending # measured by the first M1 cycle on its own base; see cycle-log.md
 ---
 
 # Test List: The start affordance answers for its own directory
