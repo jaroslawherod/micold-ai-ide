@@ -80,6 +80,17 @@ specs/**      micold-docs
 # prose. Must stay after `specs/**`, which sets the attribute.
 /specs/028-macos-package/quickstart.md -micold-docs
 
+# Read by a test, so test inputs rather than documentation: the settings contracts show the
+# `settings.json` a user or a later feature copies, and
+# `crates/micold-core/tests/settings_contract_examples.rs` loads each example through the real store.
+# 006's and 027's once named the theme by its Rust variant, and a file copied from either was moved
+# to `.bak` and replaced by the defaults (006 BUG-009). If these stayed documentation, editing an
+# example would skip the whole pipeline -- so the one edit the gate exists to catch would be the one
+# edit it never sees. Must stay after `specs/**`, which sets the attribute.
+/specs/003-material-design-layout/contracts/settings-schema.md -micold-docs
+/specs/006-real-terminal-emulator/contracts/settings-schema.md -micold-docs
+/specs/027-sandboxed-daemon-runtime/contracts/sandbox-settings-schema.md -micold-docs
+
 # Read by a test, so a test input rather than documentation: this page states the macOS version
 # floor, and `crates/micold-core/tests/macos_minimum_version.rs` holds it equal to the
 # `LSMinimumSystemVersion` the operating system enforces. If it stayed documentation, moving the
