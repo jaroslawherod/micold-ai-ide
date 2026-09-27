@@ -7,8 +7,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: fix/a-project-local-cli-stays-unreachable-in-that-project
 - **Started**: 2026-09-27
-- **Phase**: 4-milestones
-- **Next step**: Phase 5 close after M3 merges (wait for the M3 PR's `ci complete`, merge, then close).
+- **Phase**: 5-close
+- **Next step**: Phase 5 close: speckit-converge → speckit-tdd-verify → speckit-docguard-guard, then the close PR.
 
 ## Pull requests
 
@@ -18,7 +18,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #417 | Design (clarify, plan, tasks, milestones) | merged | 84d61968 |
 | #426 | M1 | merged | 2bd447b2 |
 | #443 | M2 | merged | 7f9b23be |
-| #448 | M3 | open | — |
+| #448 | M3 | merged | 813322a6 |
 
 ## Milestones
 
@@ -26,7 +26,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|---|
 | M1 | T001–T019, T030–T036, T040 | Each row offers the CLIs its own directory provides; Settings, reconnect and another row's list never replace it | #426 | merged |
 | M2 | T020–T027, T037–T039 | Env-include changes refresh every row; rows that go drop answers, rows that come back are asked; tripwire pins the askers | #443 | merged |
-| M3 | T028–T029 | quickstart §B recorded passing end to end; no comment describes the window-wide set | #448 | in-review |
+| M3 | T028–T029 | quickstart §B recorded passing end to end; no comment describes the window-wide set | #448 | merged |
 
 ## Decisions
 
