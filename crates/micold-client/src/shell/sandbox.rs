@@ -1351,7 +1351,10 @@ mod tests {
             &std::fs::read_to_string(sandbox_claude_json(state_dir.path())).unwrap(),
         )
         .unwrap();
-        assert_eq!(sandbox, serde_json::json!({ "hasCompletedOnboarding": true }));
+        assert_eq!(
+            sandbox,
+            serde_json::json!({ "hasCompletedOnboarding": true })
+        );
     }
 
     /// Without the share there is no sign-in to skip the setup for: `claude`'s own setup is how the
