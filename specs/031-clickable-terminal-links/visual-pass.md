@@ -599,6 +599,36 @@ first on `PATH` logging its argv. Not a real display or GPU.
 **Scope**: this milestone's own rows. Every other §B row was run in the milestone that shipped its
 behaviour; the roll-up table below names which.
 
+## §B roll-up — every step, and the milestone that ran it
+
+Part B is complete: all eighteen steps have a record in this file. Each row below points at the
+section that holds the screenshots and the note; nothing is repeated here.
+
+| # | Step | Ran in | Section heading | Result |
+|---|---|---|---|---|
+| B.1 | hover the first address, light theme | M3 | "milestone M3" | pass |
+| B.2 | dark theme, over a selection and the cursor | M3 | "milestone M3" | pass |
+| B.3 | Ctrl+click opens the browser | M3 | "milestone M3" | pass (Linux; macOS and Windows by CI) |
+| B.4 | drag, double-click, triple-click select only | M3 | "milestone M3" | pass |
+| B.5 | the Wikipedia line's trailing parenthesis | M3 | "milestone M3" | pass |
+| B.6 | a wrapped address, both rows | M3 | "milestone M3" | pass |
+| B.7 | two declared links on one line | M3 | "milestone M3" | pass |
+| B.8 | Ctrl+click `mailto:` opens the mail client | **M8** | "§B.8" below | pass |
+| B.9 | Ctrl+click a file, then a folder | M5 | "Milestone M5" | pass |
+| B.10 | Ctrl+click `run.sh` reveals, does not run | M5 | "Milestone M5" | pass |
+| B.11 | Copy Link Address, and plain text's menu | M7 | "milestone M7" | pass |
+| B.12 | `vim` with `mouse=a`, then Shift+Ctrl+click | M3 | "milestone M3" | pass |
+| B.13 | a missing file notifies "doesn't exist" | M5 | "Milestone M5" | pass |
+| B.14 | `FORCE_HYPERLINK` only via the include script | M4 | "Milestone M4" | pass |
+| B.15 | sandbox placement, confirm, "not reachable" | M6 | "milestone M6" | pass |
+| B.16 | a pending open after the sandbox stops | M6 | "milestone M6" | pass |
+| B.17 part 1 | the hard-broken URL's first-row piece | M4 | "Milestone M4" | pass |
+| B.17 part 2 | the declared link with `FORCE_HYPERLINK=1` | M4, re-attempted in **M8** | "§B.17 part 2" below | **not confirmed** — carried as a follow-up |
+| B.18 | the user guide against FR-023 | **M8** | "§B.18" below | pass, after one gap was fixed |
+
+B.17 part 2 is the one step no run has confirmed. It is recorded as a finding in both milestones that
+attempted it, not as a pass, and the autopilot ledger carries it as an open follow-up.
+
 ## Binaries and pin check
 
 | Pin dir | Built from | Build output |
