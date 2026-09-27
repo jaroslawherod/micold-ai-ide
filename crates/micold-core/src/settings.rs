@@ -327,8 +327,13 @@ struct StoredSettings {
     /// replaced by `Settings::default()` with nothing said.
     ///
     /// `0` rather than [`SETTINGS_VERSION`] because it is the honest answer: the document named no
-    /// version, and saying so is better than recording a claim that this build wrote it. Should a
-    /// migration gate ever read this field, `0` is a value it will not mistake for a real schema.
+    /// version, and saying so is better than recording a claim that this build wrote it.
+    ///
+    /// The one hazard in that choice belongs to whoever writes the first migration gate, so it is
+    /// written down here rather than left to be found: `0` means *unknown*, not *older than v1*.
+    /// The obvious gate, `if settings_version < SETTINGS_VERSION { migrate }`, would run every
+    /// migration ever written over a hand-written document that is already in the current shape.
+    /// A gate must treat `0` as "no version stated" and leave the document alone.
     #[serde(default)]
     settings_version: u32,
     #[serde(default)]

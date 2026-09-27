@@ -181,13 +181,15 @@ system" and confirm it returns to matching the OS.
   reporting no preference; the application MUST retain the last-known system theme and MUST NOT
   change the displayed theme until a subsequent detection attempt succeeds. Only a sustained
   inability to detect a preference invokes the FR-018 fallback. *(Added 2026-07-21 — BUG-001.)*
-- **FR-022**: The application MUST read a stored settings document for the settings it holds even
-  when the document omits fields, including its own schema version; a field the application does not
-  read MUST NOT be a field whose absence makes the document unreadable. Only a document that is not
-  a settings document at all is recovered from, and recovery MUST NOT be reached by a document whose
-  stored values are present and valid. *(Added 2026-09-27 — BUG-003: `settings_version` was the one
-  required field, so a hand-written settings file omitting it was moved to `settings.json.bak` and
-  every setting in it silently replaced by defaults.)*
+- **FR-022**: No field of the stored settings document may be required. The application MUST read
+  such a document for the settings it holds even when it omits fields, its own schema version
+  included, and the **absence** of a field MUST NOT make the document unreadable — least of all the
+  absence of a field the application never reads. This says nothing about a field that is *present*
+  and cannot be understood: a value of the wrong type or naming a variant this build does not know
+  is a genuine failure to read the document, and declining to load it stays the right answer.
+  *(Added 2026-09-27 — BUG-003: `settings_version` was the one required field, so a hand-written
+  settings file omitting it was moved to `settings.json.bak` and every setting in it silently
+  replaced by defaults.)*
 
 ### Key Entities *(include if feature involves data)*
 
