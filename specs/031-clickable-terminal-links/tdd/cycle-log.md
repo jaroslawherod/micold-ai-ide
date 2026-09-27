@@ -1050,3 +1050,80 @@ sorted deepest-first, so C15's order broke.
   Unix host's set is what the platform actually builds
 - verified: `cargo test -p micold-core --lib sandbox::tests` 10 passed,
   `cargo clippy --target x86_64-pc-windows-msvc --all-targets -D warnings` clean, `mise run gate` green
+
+## Cycle 86: the outer loop for M7 opens — A20, A21, A22 (T086)
+
+- tests: `crates/micold-client/src/shell/links.rs::acceptance::{a_right_press_over_a_link_offers_open_link_and_copy_link_address_first, copy_link_address_copies_the_declared_and_the_whole_wrapped_address, a_right_press_over_plain_text_offers_no_link_items}`,
+  driving a real right press through the pane and reading the menu the view builds
+  (`ui::terminal::context_menu_items`) and a recording clipboard (`tests::run_recording`, which
+  keeps the `Action::Clipboard` a message-only harness dropped)
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide shell::links::acceptance`
+  -> 21 passed; 2 failed. A20 `left: ["Copy", "Paste"]` /
+  `right: ["Open Link", "Copy Link Address", "Copy", "Paste"]`; A21
+  `the menu offers "Copy Link Address"; it offers ["Copy", "Paste"]`
+- A22 passed on arrival, as tdd/test-list.md records: the menu has no link items before T073. Its
+  mutant (`link_menu_items(None)` returns both items) is checked in Cycle 91, which closes the loop
+- the minimal declaration the red needed: `ui::terminal::context_menu_items`, returning today's two
+  items, so the tests could name the list before it had link items in it
+- the outer red stays red until Cycle 91 closes it; Cycles 87–90 are its units
+
+## Cycle 87: U143, U85, U86 — the menu's link items and the link it captured (T070, T073)
+
+- tests: `crates/micold-client/tests/features_session_links.rs::{the_menus_link_items_are_open_link_then_copy_link_address_or_none, opening_the_menu_over_a_link_captures_it_and_offers_its_items}`
+- red: `scripts/build-lock.sh cargo test -p micold-client --test features_session_links` -> 15 passed;
+  2 failed. U143 `left: []` / `right: [OpenLink, CopyLinkAddress]`; U85 `left: None` /
+  `right: Some(ResolvedLink { … address: "https://example.com/docs?q=a%20b#top" … })`
+- green: `LinkMenuItem`, `link_menu_items` (both items for `Some`, none for `None`), the `link` field
+  on `TerminalContextMenuOpened`, `session.menu_link`, and `context_menu_opened` recording it ->
+  `cargo test -p micold-client --test features_session_links` 17 passed; 0 failed
+- refactor: none; the five existing `TerminalContextMenuOpened` call sites in `src/` and `tests/`
+  carry `link: None` (T073)
+
+## Cycle 88: U87, U88, U89 — the two items act, and the close clears (T070, T073)
+
+- tests: `crates/micold-client/tests/features_session_links.rs::{choosing_open_link_opens_the_captured_link_and_closes_the_menu, choosing_copy_link_address_asks_for_the_captured_address_verbatim, closing_the_menu_clears_the_captured_link}`
+- red: `scripts/build-lock.sh cargo test -p micold-client --test features_session_links` -> 17 passed;
+  3 failed. U87 `left: []` / `right: [OpenLink(Url("https://example.com/docs?q=a%20b#top"))]`; U88
+  `left: []` / `right: [ClipboardWrite("https://example.com/docs?q=a%20b#top")]`; U89
+  `left: Some(ResolvedLink { … })` / `right: None`
+- green: `ContextMenuOpenLink` runs `link_activated` on the captured link and
+  `ContextMenuCopyLinkAddress` emits `ClipboardWrite(link.link.address)`, both through
+  `chosen_menu_link`, which takes the link and closes the menu; `context_menu_closed` clears it ->
+  20 passed; 0 failed
+- refactor: the take-and-close is `chosen_menu_link`, so M3 and M4 state the rule once, and Open Link
+  is `link_activated` itself rather than a second copy of it — a sandboxed path still asks first
+
+## Cycle 89: U117 — the right press carries the link it landed on (T072, T074)
+
+- test: `crates/micold-client/src/ui/material/terminal_pane.rs::tests::links::a_right_press_carries_the_link_it_landed_on`
+- red: `scripts/build-lock.sh cargo test -p micold-client --lib ui::material::terminal_pane::tests::links::a_right_press`
+  -> 0 passed; 1 failed. `left: [None]` /
+  `right: [Some(ResolvedLink { … address: "https://example.com/docs/page.html", cols: 4..38 … })]`
+- green: the right-press arm resolves the cell under the press with `resolve_hover` and
+  `marked_link`, exactly as the release does (Shift included, so the menu offers a link precisely
+  when the pane marks one) -> `cargo test -p micold-client --lib ui::material::terminal_pane`
+  88 passed; 0 failed
+- refactor: none
+
+## Cycle 90: U99, U100 — both items are performed, not dropped (T071, T075 route)
+
+- test: `crates/micold-client/src/shell/links.rs::tests::the_menu_items_reach_the_opener_and_the_clipboard_through_update_inner`
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide shell::links::tests::the_menu_items`
+  -> 0 passed; 1 failed. `U99: the clipboard write is performed rather than dropped` `left: []` /
+  `right: ["https://example.com/docs?q=%20x#frag"]`
+- green: `main.rs` routes both messages to `shell::links::on_link_message`, ahead of
+  `Message::Session`, which is the only route that performs `ClipboardWrite` and `OpenLink` ->
+  `cargo test -p micold-client --bin micold-ai-ide shell::links` 28 passed; the 2 still-red are the
+  outer A20/A21
+- refactor: one arm for the two messages, since they differ only in what the reducer returns
+
+## Cycle 91: the outer loop closes — A20, A21, A22 (T075 view)
+
+- green: `ui::terminal::context_menu_items` maps `link_menu_items(menu_link)` to its labels and
+  messages ahead of Copy and Paste, and the view renders that one list ->
+  `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide shell::links`
+  30 passed; 0 failed
+- A22's mutant, as tdd/test-list.md asks: `link_menu_items(None)` returning both items ->
+  `a_right_press_over_plain_text_offers_no_link_items` `left: ["Open Link", "Copy Link Address",
+  "Copy", "Paste"]` / `right: ["Copy", "Paste"]`; restored and re-run green
+- refactor: none

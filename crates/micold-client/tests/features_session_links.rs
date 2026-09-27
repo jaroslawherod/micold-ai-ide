@@ -431,3 +431,153 @@ fn confirming_with_nothing_pending_opens_nothing() {
     assert!(link_open_confirmed(&mut state, true).is_empty());
     assert!(notifications(&mut state).is_empty());
 }
+
+/// U143 (T070): the link items a menu offers, in the order it shows them.
+#[test]
+fn the_menus_link_items_are_open_link_then_copy_link_address_or_none() {
+    use micold_client::features::session::{link_menu_items, LinkMenuItem};
+    assert_eq!(
+        link_menu_items(Some(&web_link(ADDRESS))),
+        vec![LinkMenuItem::OpenLink, LinkMenuItem::CopyLinkAddress],
+        "Open Link first, then Copy Link Address (contract link-opening §6 M1)"
+    );
+    assert_eq!(
+        link_menu_items(None),
+        Vec::new(),
+        "a menu opened over plain text offers neither (M2)"
+    );
+}
+
+/// U85, U86 (T070, T14): the menu remembers the link it was opened over, and only then offers its
+/// items.
+#[test]
+fn opening_the_menu_over_a_link_captures_it_and_offers_its_items() {
+    use micold_client::features::session::{link_menu_items, LinkMenuItem};
+    let link = web_link(ADDRESS);
+    let mut state = State::default();
+    let outcomes = micold_client::features::session::update(
+        &mut state,
+        SessionMsg::TerminalContextMenuOpened {
+            x: 10,
+            y: 20,
+            link: Some(link.clone()),
+        },
+    );
+    assert_eq!(outcomes, Vec::new(), "opening a menu asks for nothing");
+    assert_eq!(
+        state.session.menu_link.as_ref(),
+        Some(&link),
+        "the menu acts on the link resolved at the press, not on a later hover (FR-017)"
+    );
+    assert_eq!(
+        state.session.terminal_context_menu,
+        Some((10, 20)),
+        "and it opens where the press landed"
+    );
+    assert_eq!(
+        link_menu_items(state.session.menu_link.as_ref()),
+        vec![LinkMenuItem::OpenLink, LinkMenuItem::CopyLinkAddress],
+        "U85: a menu opened with a link lists both items"
+    );
+
+    let mut plain = State::default();
+    micold_client::features::session::update(
+        &mut plain,
+        SessionMsg::TerminalContextMenuOpened {
+            x: 1,
+            y: 2,
+            link: None,
+        },
+    );
+    assert_eq!(
+        plain.session.menu_link, None,
+        "nothing was under the pointer to act on"
+    );
+    assert_eq!(
+        link_menu_items(plain.session.menu_link.as_ref()),
+        Vec::new(),
+        "U86: today's items only"
+    );
+}
+
+/// Open the terminal menu over `link`, as a right press on it does.
+fn menu_opened_over(link: Option<ResolvedLink>) -> State {
+    let mut state = State::default();
+    micold_client::features::session::update(
+        &mut state,
+        SessionMsg::TerminalContextMenuOpened { x: 1, y: 2, link },
+    );
+    state
+}
+
+/// U87 (T070, T15): **Open Link** acts on the link the menu captured, and the menu closes.
+#[test]
+fn choosing_open_link_opens_the_captured_link_and_closes_the_menu() {
+    let mut state = menu_opened_over(Some(web_link(ADDRESS)));
+    let outcomes =
+        micold_client::features::session::update(&mut state, SessionMsg::ContextMenuOpenLink);
+    assert_eq!(
+        outcomes,
+        vec![Outcome::OpenLink(OpenRequest::Url(ADDRESS.to_string()))],
+        "the same request an activation of that link makes (contract link-opening §6 M3)"
+    );
+    assert_eq!(
+        state.session.terminal_context_menu, None,
+        "the menu an item was chosen from is gone"
+    );
+    assert_eq!(
+        state.session.menu_link, None,
+        "and the link it acted on with it"
+    );
+
+    let mut plain = menu_opened_over(None);
+    assert_eq!(
+        micold_client::features::session::update(&mut plain, SessionMsg::ContextMenuOpenLink),
+        Vec::new(),
+        "a menu that captured no link opens nothing"
+    );
+}
+
+/// U88 (T070, T16): **Copy Link Address** asks for the captured link's address.
+#[test]
+fn choosing_copy_link_address_asks_for_the_captured_address_verbatim() {
+    let mut state = menu_opened_over(Some(web_link(ADDRESS)));
+    let outcomes = micold_client::features::session::update(
+        &mut state,
+        SessionMsg::ContextMenuCopyLinkAddress,
+    );
+    assert_eq!(
+        outcomes,
+        vec![Outcome::ClipboardWrite(ADDRESS.to_string())],
+        "the address as the program printed or declared it, complete (contract §6 M4, FR-021)"
+    );
+    assert_eq!(
+        state.session.terminal_context_menu, None,
+        "the menu an item was chosen from is gone"
+    );
+    assert_eq!(
+        state.session.menu_link, None,
+        "and the link it acted on with it"
+    );
+
+    let mut plain = menu_opened_over(None);
+    assert_eq!(
+        micold_client::features::session::update(
+            &mut plain,
+            SessionMsg::ContextMenuCopyLinkAddress
+        ),
+        Vec::new(),
+        "a menu that captured no link copies nothing"
+    );
+}
+
+/// U89 (T070, T17): a menu that closed acts on nothing afterwards.
+#[test]
+fn closing_the_menu_clears_the_captured_link() {
+    let mut state = menu_opened_over(Some(web_link(ADDRESS)));
+    micold_client::features::session::update(&mut state, SessionMsg::TerminalContextMenuClosed);
+    assert_eq!(
+        state.session.menu_link, None,
+        "the link belongs to the menu that captured it (FR-017)"
+    );
+}

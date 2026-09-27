@@ -1630,9 +1630,20 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 } else {
                     let x = (pos.x - bounds.x).max(0.0) as u16;
                     let y = (pos.y - bounds.y).max(0.0) as u16;
+                    // The link under the press, resolved now rather than taken from the hover: the
+                    // menu's items act on what the user right-clicked, and the pointer may have
+                    // arrived here without a move the hover saw (U117, FR-017). Read exactly as the
+                    // release reads it, Shift included, so the menu offers a link precisely when
+                    // the pane marks one.
+                    let link = cursor.position_over(content).and_then(|position| {
+                        let cell = grid_at(position, content, metrics);
+                        let now = resolve_hover(self.grid, &self.hover_key(cell));
+                        marked_link(Some(&now), self.mouse_mode(), state.modifiers.shift()).cloned()
+                    });
                     shell.publish(Message::Session(SessionMsg::TerminalContextMenuOpened {
                         x,
                         y,
+                        link,
                     }));
                 }
                 shell.capture_event();
@@ -4527,6 +4538,43 @@ mod tests {
             let rows = GridRows::new(&grid, 3);
             assert_eq!(rows.text(0).map(str::trim_end), Some("history"));
             assert_eq!(rows.text(3).map(str::trim_end), Some("screen"));
+        }
+
+        // --- The right press and the context menu (feature 031, M7) ---
+
+        fn right_press() -> Event {
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
+        }
+
+        /// The link each `TerminalContextMenuOpened` carries.
+        fn menu_links(published: &[Message]) -> Vec<Option<ResolvedLink>> {
+            published
+                .iter()
+                .filter_map(|m| match m {
+                    Message::Session(SessionMsg::TerminalContextMenuOpened { link, .. }) => {
+                        Some(link.clone())
+                    }
+                    _ => None,
+                })
+                .collect()
+        }
+
+        /// U117: the menu is opened over the link the press landed on, and over plain text over none.
+        #[test]
+        fn a_right_press_carries_the_link_it_landed_on() {
+            let mut pane = Pane::new(screen(&[row(SENTENCE)]));
+            assert_eq!(
+                menu_links(&pane.send(at(10, 0), right_press())),
+                vec![Some(a_link())],
+                "the menu acts on the link under the press, resolved at the press (FR-017, FR-020)"
+            );
+
+            let mut plain = Pane::new(screen(&[row(SENTENCE)]));
+            assert_eq!(
+                menu_links(&plain.send(at(1, 0), right_press())),
+                vec![None],
+                "over plain text the menu is opened over nothing"
+            );
         }
 
         // --- M3 review fixes ---
