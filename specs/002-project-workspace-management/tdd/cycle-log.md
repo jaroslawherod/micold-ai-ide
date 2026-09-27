@@ -92,3 +92,17 @@ failed before the implementation.
   `surface_registration_cost.rs`'s exhaustive `project::State` literal names the field.
 - suite: `mise run gate` → GATE_EXIT=0; 3563 passed, 0 failed, 8 ignored (337 binaries).
 - refactor: none needed.
+
+## Cycle 4 — review round 3: a list that comes back at the top (A9)
+
+- Finding (round-3 review, MAJOR): the list unmounts while a session's terminal fills the main
+  area and remounts at offset 0 while `list_scroll_offset` still holds the old offset, so its
+  first report read as a scroll and closed a switcher opened in the meantime.
+- test: `known_projects_overflow.rs` `a_list_that_comes_back_at_the_top_does_not_close_the_switcher` (A9).
+- red: `scripts/build-lock.sh cargo test -p micold-client --test known_projects_overflow a_list_that_comes_back`
+  at `681daed7` + test → `a freshly mounted list reporting the top must not close the switcher opened meanwhile`.
+- green: `list_scrolled` records every report and dismisses only for a moved offset that is not
+  the top — a report of 0 is a baseline. Trade-off documented on the function: one wheel step that
+  lands exactly on the top leaves a popover open.
+- suite: `mise run gate` → GATE_EXIT=0; 3564 passed, 0 failed, 8 ignored (337 binaries).
+- refactor: none needed.

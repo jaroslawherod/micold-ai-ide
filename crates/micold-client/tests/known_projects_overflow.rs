@@ -340,3 +340,25 @@ fn a_report_from_the_body_list_that_did_not_move_it_keeps_the_switcher_open() {
         "a report at a new offset is a scroll, and closes the switcher"
     );
 }
+
+/// The list is unmounted while a session's terminal fills the main area and comes back with a fresh
+/// viewport at the top, whose first report is offset 0 — while the offset last seen is still where
+/// the old list was left. That report is the new list arriving, not a scroll, and a switcher opened
+/// in the meantime stays open (round-3 review of BUG-005).
+#[test]
+fn a_list_that_comes_back_at_the_top_does_not_close_the_switcher() {
+    let mut state = state(MANY, false);
+    state.update(Message::Project(ProjectMsg::ListScrolled(240)));
+    // A session starts (the list goes), the switcher is opened, the session ends (the list returns).
+    state.project.switcher_open = true;
+    state.update(Message::Project(ProjectMsg::ListScrolled(0)));
+    assert!(
+        state.project.switcher_open,
+        "a freshly mounted list reporting the top must not close the switcher opened meanwhile"
+    );
+    state.update(Message::Project(ProjectMsg::ListScrolled(80)));
+    assert!(
+        !state.project.switcher_open,
+        "and a scroll from there is still a scroll"
+    );
+}
