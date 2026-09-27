@@ -63,6 +63,10 @@ figure from feature 018's §7, which states no tooltip row.
   `snap_within_viewport` (default `true` in `iced_widget::tooltip`) keeps the tooltip *inside* the
   window, but a tooltip wider than the window would be snapped and still clipped. Snapping bounds
   the position; only `max_width` bounds the size.
+  **Bugfix**: 2026-09-27 — BUG-001: snapping keeps the panel inside the window by *sliding* it,
+  never by flipping it to the other side of its trigger, so on a row at the window's bottom edge it
+  slides the panel up over that row. Snapping is a bound on position, not a placement rule; FR-013
+  and plan.md § Bugfix BUG-001 add the rule.
 
 ---
 

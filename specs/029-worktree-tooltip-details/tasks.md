@@ -185,3 +185,47 @@ to produce, which is exactly the failure mode Principle I names — codifying be
 specifying it. Write the assertion about the *absent* line first (T005, T014, T015, T021): those are
 the ones an implementation gets wrong by emitting a blank line, and the ones a post-hoc test would
 never think to make.
+
+---
+
+## Bugfix BUG-001 — the tooltip covered the last row of a full list
+
+On the last row of a worktree list that reaches the bottom of the window, the row's tooltip was
+slid up over the row by the rendering stack's keep-inside-the-window clamp, hiding the row's name
+and actions. The fix makes the shared `Tooltip` open on the other side of its trigger when the
+requested side would land on it (FR-013, SC-006). See `bugs/BUG-001.md` and plan.md § Bugfix
+BUG-001.
+
+**No task reopened.** No completed task promised a placement relative to the row, so none is
+falsely ticked (BUG-001 § tasks.md).
+
+- [ ] T031 Write the regression gate `crates/micold-client/tests/gates/tooltip_clears_its_row.rs`
+  (registered as a `#[path = "gates/…"] mod` in `crates/micold-client/tests/layout_snapshot.rs`,
+  beside `context_menu_anchor`): build a state with enough worktrees that the **last** worktree row
+  sits within a row's height of the bottom of the harness window without scrolling, dispatch a real
+  `CursorMoved` over that row into a retained tree, and assert the tooltip's overlay record does not intersect that row's bounds. Run it on the unfixed
+  tree and record that it fails because the two rectangles intersect (FR-013, SC-006)
+- [ ] T032 In the same file, add the case that pins unchanged behaviour: a row with room below
+  it gets its tooltip below it, clear of it; and the last-row case repeated in a 640×480 window
+  (`MIN_WINDOW_SIZE`, private to `shell/startup.rs`: restate it as a literal in the test or make it
+  `pub`). The harness lays out against a fixed `WINDOW` (`tests/support/layout.rs:58`), so give the
+  gate's hover helper a window-size parameter (FR-013, SC-006)
+- [ ] T033 Add `crates/micold-client/src/ui/cdk/tooltip.rs`, a tooltip whose own overlay places
+  the panel on the requested side and flips it to the opposite side when that placement, kept
+  inside the window, would intersect the trigger (the side with more room when neither fits), and
+  build the shared `Tooltip` in `crates/micold-client/src/ui/material/mod.rs` on it with its public
+  API unchanged (plan.md § Bugfix BUG-001); T031 and T032 go green. In the same diff, add the argued
+  `CDK_OVERLAY_IMPLEMENTORS` entry to `crates/micold-client/tests/one_overlay_implementation.rs` and
+  strike the `SANCTIONED` `ui/material/mod.rs` `tooltip` entry if it goes stale
+- [ ] T034 [P] Say where the tooltip opens in `docs/user-guide/worktrees-and-sessions.md`'s sidebar
+  tooltip paragraph (≈line 227): below the entry, or above it for an entry at the bottom of the
+  window, so it never hides the entry being pointed at (Principle VII)
+- [ ] T035 Run `mise run gate` (fmt, clippy, the full workspace tests, the script tests)
+- [ ] T036 Run `quickstart.md` §B7 with the `visual-pass` skill on a private display and append the
+  result, with a screenshot of the last row and its tooltip above it, to `quickstart.md` and
+  `evidence/`
+
+**Order**: T031 → T032 → T033 → T034 → T035 → T036. T031 must be seen failing before T033 starts
+(Principle I).
+
+**Bugfix**: 2026-09-27 — BUG-001 Added T031–T036. No task reopened. See `bugs/BUG-001.md`.

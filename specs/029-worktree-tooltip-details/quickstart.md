@@ -100,6 +100,15 @@ Hover the **Default** entry, a session row, and a header action icon.
 row tooltip; action-icon tooltips are unchanged single lines. The rows themselves still ellipsize —
 this feature added a way to read a name, not a way to stop shortening it (§5.4).
 
+### B7 — The last row keeps its tooltip off itself (FR-013, SC-006, BUG-001)
+
+Open a project with enough worktrees that the list reaches the bottom of the window, scroll it to its
+end, and hover the last row. Then shrink the window to its smallest size and hover the last row
+again.
+
+**Expect**: in both, the tooltip opens **above** the row and the row's icon, name, chips and action
+icons stay fully visible. Hover a row near the top: its tooltip still opens below it.
+
 ---
 
 ## Recording the pass
