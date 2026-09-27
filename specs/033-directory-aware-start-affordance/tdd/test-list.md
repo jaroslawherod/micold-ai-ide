@@ -29,9 +29,9 @@ named with `availability` so the milestone Verify filter selects it.
 | A5  | With default `Pi` and only `P` resolving it, the primary press on `P`'s row yields `Start(Pi)` with no list | US1-5, FR-010 | example | DONE | `main_tests.rs::availability_the_primary_press_starts_a_default_only_the_row_provides` |
 | A6  | Worktree A answers `[claude, pi]` and B `[claude]`. After A's list is opened, answered and closed, B offers no choice and its primary press yields `Start(ClaudeCode)` | US2-1, FR-002 | example | DONE | `main_tests.rs::availability_opening_one_rows_list_does_not_change_another_row` |
 | A7  | Same worktrees: opening B's list leaves A offering the choice | US2-2, FR-002 | example | DONE | `main_tests.rs::availability_opening_the_other_rows_list_leaves_the_first_alone` |
-| A8  | With `P` offering Pi through the script, saving env-include off in this window re-asks every row, and `P`'s rows stop offering Pi once the answers arrive | US3-1, FR-004, SC-005 | example | TODO | `availability_saving_env_include_refreshes_every_row` |
-| A9  | With every row answered, unrelated messages (hover, scroll, a redraw's `view`) send no availability request, and no source site outside contract C1 asks | US3-2, FR-006, SC-003 | example | TODO | `availability_nothing_is_asked_while_nothing_changes` + U37 |
-| A10 | A row whose answer is held is re-asked when its start list opens, and a newly installed CLI in the new answer is offered there | US3-3, FR-004 | example | TODO | `availability_opening_a_rows_list_refreshes_its_answer` |
+| A8  | With `P` offering Pi through the script, saving env-include off in this window re-asks every row, and `P`'s rows stop offering Pi once the answers arrive | US3-1, FR-004, SC-005 | example | DONE | `main_tests.rs::availability_saving_env_include_refreshes_every_row` |
+| A9  | With every row answered, unrelated messages (hover, scroll, a redraw's `view`) send no availability request, and no source site outside contract C1 asks | US3-2, FR-006, SC-003 | example | DONE | `main_tests.rs::availability_nothing_is_asked_while_nothing_changes` + U37 |
+| A10 | A row whose answer is held is re-asked when its start list opens, and a newly installed CLI in the new answer is offered there | US3-3, FR-004 | example | DONE | `main_tests.rs::availability_opening_a_rows_list_refreshes_its_answer` |
 
 ## Inner loop: unit behaviors
 
@@ -89,13 +89,13 @@ Tests: `crates/micold-client/src/main_tests.rs`, each named with `availability`.
 | U25 | `StartMenuOpened` asks for the row's `location_dir`, also when that directory's answer is held | FR-004, C1 A3 | example | DONE | `main_tests.rs::availability_a_start_list_asks_for_its_own_directory` |
 | U26 | Opening a project asks once per new wanted directory, and opening it again asks nothing | FR-006, C1 A4 | example | DONE | `main_tests.rs::availability_opening_a_project_asks_once_per_directory` |
 | U27 | A `CatalogChanged` adding one worktree asks for exactly that directory | FR-004, C1 A5 | example | DONE | `main_tests.rs::availability_a_new_worktree_is_asked_about_once` |
-| U28 | Switching to another project drops the previous project's answers, and switching back asks again | FR-012, FR-003 | example | TODO | `availability_switching_projects_drops_and_reasks` |
-| U29 | `ForgetConfirmed` drops the forgotten project's answers | FR-012, C1 A6 | example | TODO | `availability_forgetting_a_project_drops_its_answers` |
-| U30 | A `CatalogChanged` turning a worktree `Missing` drops its answer, and one making it valid again asks for it | FR-004 (deleted/recreated) | example | TODO | `availability_a_deleted_then_recreated_worktree_is_asked_again` |
-| U31 | `ShowAgentWorktreesToggled` on asks for the revealed agent worktrees, and off drops them | FR-003, C1 A5b | example | TODO | `availability_revealing_agent_worktrees_asks_hiding_drops` |
-| U32 | This window's save changing env-include, then its `SettingsChanged` echo, re-asks home and every wanted directory, and held answers stay readable until replaced | FR-004, SC-005, R6 | example | TODO | `availability_this_windows_env_include_save_refreshes_every_row` |
-| U33 | Another window's `SettingsChanged` with changed env-include re-asks the same set | FR-004, 029 FR-011 | example | TODO | `availability_another_windows_env_include_change_refreshes` |
-| U34 | A `SettingsChanged` changing only `scrollback_lines` asks nothing | FR-004 ("only these events") | example | TODO | `availability_an_unrelated_settings_change_asks_nothing` |
+| U28 | Switching to another project drops the previous project's answers, and switching back asks again | FR-012, FR-003 | example | DONE | `main_tests.rs::availability_switching_projects_drops_and_reasks` |
+| U29 | `ForgetConfirmed` drops the forgotten project's answers | FR-012, C1 A6 | example | DONE | `main_tests.rs::availability_forgetting_a_project_drops_its_answers` |
+| U30 | A `CatalogChanged` turning a worktree `Missing` drops its answer, and one making it valid again asks for it | FR-004 (deleted/recreated) | example | DONE | `main_tests.rs::availability_a_deleted_then_recreated_worktree_is_asked_again` |
+| U31 | `ShowAgentWorktreesToggled` on asks for the revealed agent worktrees, and off drops them | FR-003, C1 A5b | example | DONE | `main_tests.rs::availability_revealing_agent_worktrees_asks_hiding_drops` |
+| U32 | This window's save changing env-include, then its `SettingsChanged` echo, re-asks home and every wanted directory, and held answers stay readable until replaced | FR-004, SC-005, R6 | example | DONE | `main_tests.rs::availability_this_windows_env_include_save_refreshes_every_row` |
+| U33 | Another window's `SettingsChanged` with changed env-include re-asks the same set | FR-004, 029 FR-011 | example | DONE | `main_tests.rs::availability_another_windows_env_include_change_refreshes` |
+| U34 | A `SettingsChanged` changing only `scrollback_lines` asks nothing | FR-004 ("only these events") | example | DONE | `main_tests.rs::availability_an_unrelated_settings_change_asks_nothing` |
 
 ### `crates/micold-client/src/ui/mod.rs`, `ui/sidebar.rs` (rendered surfaces)
 
@@ -111,7 +111,7 @@ Tests: `crates/micold-client/tests/provider_choice_surfaces.rs`,
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U37 | Every non-test line under `src/` naming `ask_cli_availability`, `sync_cli_availability`, `refresh_cli_availability` or `ClientMsg::AiCliAvailabilityRequest` is a C1 site on the allowlist. None is under `ui/`, and a stale entry fails | SC-003, FR-006, FR-004 | example | TODO | `availability_is_asked_only_on_named_events.rs` (new) |
+| U37 | Every non-test line under `src/` naming `ask_cli_availability`, `sync_cli_availability`, `refresh_cli_availability` or `ClientMsg::AiCliAvailabilityRequest` is a C1 site on the allowlist. None is under `ui/`, and a stale entry fails | SC-003, FR-006, FR-004 | example | DONE | `availability_is_asked_only_on_named_events.rs` (3 tests) |
 | U38 | The idle application runs no subscription or timer | SC-003 | example | DONE | `crates/micold-client/tests/idle_subscriptions.rs` (existing; re-run, not rewritten) |
 
 ## Invariants and edge cases still to place

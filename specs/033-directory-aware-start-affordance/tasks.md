@@ -180,33 +180,33 @@ and rows that reappear are asked again. Nothing else asks, and nothing is schedu
 
 ### Tests for User Story 3 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T020 [US3] [A8] [U32] [U33] [U34] In `crates/micold-client/src/main_tests.rs`, test the env-include refresh (C1-A7, SC-005, US3-1):
+- [X] T020 [US3] [A8] [U32] [U33] [U34] In `crates/micold-client/src/main_tests.rs`, test the env-include refresh (C1-A7, SC-005, US3-1):
   - **This window's save**: `apply_save` switches env-include off, then its `SettingsChanged` echo arrives. The echo re-asks `Home` and every wanted directory, and held answers stay readable until replaced.
   - **Another window's save**: a `SettingsChanged` with changed env-include also re-asks.
   - A `SettingsChanged` changing only `scrollback_lines` asks nothing.
-- [ ] T021 [US3] [U28] [U29] [U30] [U31] In `crates/micold-client/src/main_tests.rs`, test row lifecycle (FR-003, FR-004, FR-012):
+- [X] T021 [US3] [U28] [U29] [U30] [U31] In `crates/micold-client/src/main_tests.rs`, test row lifecycle (FR-003, FR-004, FR-012):
   - Switching the active project from `P` to `Q` drops `P`'s answers, and switching back asks again.
   - `ForgetConfirmed` drops the forgotten project's answers.
   - A `CatalogChanged` turning a worktree `Missing` drops its answer. One turning it valid again asks for it (deleted/recreated).
   - `ShowAgentWorktreesToggled` on asks for the revealed agent worktrees, and toggling it off drops them.
-- [ ] T022 [US3] [A9] [A10] [U25] In `crates/micold-client/src/main_tests.rs`, test a held row's list open (US3-3). Opening the start list on a row whose answer is held still sends a request for that directory, and the new answer replaces the held one (A10). With every row answered, hover, scroll and a `view` call send no availability request (A9).
-- [ ] T023 [P] [US3] [A9] [U37] Write the tripwire `crates/micold-client/tests/availability_is_asked_only_on_named_events.rs`, modelled on `tests/refresh_is_only_on_demand.rs` (research R10, SC-003, FR-006):
+- [X] T022 [US3] [A9] [A10] [U25] In `crates/micold-client/src/main_tests.rs`, test a held row's list open (US3-3). Opening the start list on a row whose answer is held still sends a request for that directory, and the new answer replaces the held one (A10). With every row answered, hover, scroll and a `view` call send no availability request (A9).
+- [X] T023 [P] [US3] [A9] [U37] Write the tripwire `crates/micold-client/tests/availability_is_asked_only_on_named_events.rs`, modelled on `tests/refresh_is_only_on_demand.rs` (research R10, SC-003, FR-006):
   - `MARKERS` are `ask_cli_availability`, `sync_cli_availability`, `refresh_cli_availability` and `ClientMsg::AiCliAvailabilityRequest`.
   - `ALLOWED` holds one entry per contract C1 site (C1-A1 to C1-A7, C1-A5b) with its reason, plus the function definitions.
   - The scan fails on an unlisted line or a stale entry, fails on any line under `ui/`, and skips `src/main_tests.rs` and `#[cfg(test)]` modules.
 
 ### Implementation for User Story 3
 
-- [ ] T024 [US3] [A8] [U32] [U33] [U34] In the `DaemonMsg::SettingsChanged` arm of `crates/micold-client/src/shell/daemon_sync.rs`, build `EnvIncludeSettings` from the echo. When `availability.env_include_changed(..)`, call a new `refresh_cli_availability(app)`, which asks `Home` and every wanted directory without dropping held answers (research R6, C1-A7).
-- [ ] T025 [US3] [U29] [U31] In `crates/micold-client/src/main.rs`, add shell arms:
+- [X] T024 [US3] [A8] [U32] [U33] [U34] In the `DaemonMsg::SettingsChanged` arm of `crates/micold-client/src/shell/daemon_sync.rs`, build `EnvIncludeSettings` from the echo. When `availability.env_include_changed(..)`, call a new `refresh_cli_availability(app)`, which asks `Home` and every wanted directory without dropping held answers (research R6, C1-A7).
+- [X] T025 [US3] [U29] [U31] In `crates/micold-client/src/main.rs`, add shell arms:
   - `Message::Project(ProjectMsg::ForgetConfirmed)` runs `sync_cli_availability` after the existing handling (C1-A6).
   - A new `Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled)` arm applies the reducer through `app.core.update`, then syncs (C1-A5b).
-- [ ] T026 [US3] [U28] [U29] [U30] [U31] In `crates/micold-client/src/shell/daemon_sync.rs`, make `sync_cli_availability` prune: `retain(&wanted)` before asking `unasked(&wanted)`. This makes switch, forget, `Missing` and hide drop answers (FR-003, FR-012).
-- [ ] T027 [US3] Update `docs/user-guide/settings.md` ("The environment a session starts in"): saving a change to environment-include refreshes which CLIs every sidebar row offers, with no restart.
+- [X] T026 [US3] [U28] [U29] [U30] [U31] In `crates/micold-client/src/shell/daemon_sync.rs`, make `sync_cli_availability` prune: `retain(&wanted)` before asking `unasked(&wanted)`. This makes switch, forget, `Missing` and hide drop answers (FR-003, FR-012).
+- [X] T027 [US3] Update `docs/user-guide/settings.md` ("The environment a session starts in"): saving a change to environment-include refreshes which CLIs every sidebar row offers, with no restart.
 
-- [ ] T037 [US3] [A8] Outer loop green: A8 (US3-1) passes in `crates/micold-client/src/main_tests.rs`
-- [ ] T038 [US3] [A9] Outer loop green: A9 (US3-2) passes in `crates/micold-client/src/main_tests.rs` and `crates/micold-client/tests/availability_is_asked_only_on_named_events.rs`
-- [ ] T039 [US3] [A10] Outer loop green: A10 (US3-3) passes in `crates/micold-client/src/main_tests.rs`
+- [X] T037 [US3] [A8] Outer loop green: A8 (US3-1) passes in `crates/micold-client/src/main_tests.rs`
+- [X] T038 [US3] [A9] Outer loop green: A9 (US3-2) passes in `crates/micold-client/src/main_tests.rs` and `crates/micold-client/tests/availability_is_asked_only_on_named_events.rs`
+- [X] T039 [US3] [A10] Outer loop green: A10 (US3-3) passes in `crates/micold-client/src/main_tests.rs`
 
 **Checkpoint**: all three stories hold. The tripwire is green with exactly the C1 sites.
 
