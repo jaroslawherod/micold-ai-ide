@@ -229,11 +229,12 @@ fn boot() -> (App, Task<Message>) {
     // FR-003).
     core.session.default_ai_cli = loaded.settings.default_ai_cli;
     core.session.pi_activity_component = loaded.settings.pi_activity_component;
-    // The availability set is *not* filled here any more (feature 027, FR-023c). It used to be,
-    // from this process's own `PATH` — which is the host's, and under the sandboxed placement the
-    // sessions are not on the host. It stays `None` ("nobody has said yet") until the first
-    // `DaemonMsg::AiCliAvailability`, which `on_connected` asks for as soon as there is a service
-    // to ask. One frame of an empty picker is the honest cost of not guessing.
+    // No availability answer is filled here (feature 027, FR-023c). One used to be, from this
+    // process's own `PATH` — which is the host's, and under the sandboxed placement the sessions
+    // are not on the host. Every directory's answer stays unknown ("nobody has said yet") until its
+    // `DaemonMsg::AiCliAvailability` arrives; `on_connected` asks for home and for each row's
+    // directory as soon as there is a service to ask (feature 033, contract C1). One frame of an
+    // empty picker is the honest cost of not guessing.
     let sandbox_state = micold_client::features::sandbox::Sandbox::for_placement(placement);
     // What the note under the select reports, and what a later save compares against to decide
     // whether it is moving the service at all (BUG-003, FR-032a/FR-035b). Seeded from the same
