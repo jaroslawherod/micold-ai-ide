@@ -31,7 +31,7 @@ const PATIENCE: Duration = Duration::from_secs(30);
 /// The files a gated script reads and writes, and the directory a `new` run puts on `PATH`.
 struct Gated {
     script: PathBuf,
-    /// One line per run of the script, written as the run starts.
+    /// One line per run of the script, written once the run has read the marker.
     runs: PathBuf,
     /// Read by each run once it has started: `new` makes the run put `bin` in front of `PATH`.
     marker: PathBuf,
@@ -40,7 +40,7 @@ struct Gated {
     _bin: tempfile::TempDir,
 }
 
-/// An include script that logs its run, reads the marker, waits for the gate, and then — when the
+/// An include script that reads the marker, logs its run, waits for the gate, and then — when the
 /// marker said `new` — puts a directory holding `pi` in front of `PATH`. Which environment a later
 /// ask was served is then visible in its answer.
 fn gated_script(dir: &Path) -> Gated {
@@ -48,13 +48,17 @@ fn gated_script(dir: &Path) -> Gated {
     let marker = dir.join("marker");
     let gate = dir.join("gate");
     let bin = tempfile::tempdir().unwrap();
-    std::fs::write(bin.path().join(AiCli::Pi.provider().command()), b"#!/bin/sh\n").unwrap();
+    std::fs::write(
+        bin.path().join(AiCli::Pi.provider().command()),
+        b"#!/bin/sh\n",
+    )
+    .unwrap();
     let (name, body) = if cfg!(windows) {
         (
             "env-include.ps1",
             format!(
-                "Add-Content -Path '{runs}' -Value run\r\n\
-                 $v = (Get-Content -Path '{marker}' -Raw).Trim()\r\n\
+                "$v = (Get-Content -Path '{marker}' -Raw).Trim()\r\n\
+                 Add-Content -Path '{runs}' -Value run\r\n\
                  while (-not (Test-Path '{gate}')) {{ Start-Sleep -Milliseconds 20 }}\r\n\
                  if ($v -eq 'new') {{ $env:PATH = '{bin};' + $env:PATH }}\r\n",
                 runs = runs.display(),
@@ -67,8 +71,8 @@ fn gated_script(dir: &Path) -> Gated {
         (
             "env-include.sh",
             format!(
-                "echo run >> '{runs}'\n\
-                 v=$(cat '{marker}')\n\
+                "v=$(cat '{marker}')\n\
+                 echo run >> '{runs}'\n\
                  while [ ! -e '{gate}' ]; do sleep 0.02; done\n\
                  if [ \"$v\" = new ]; then export PATH=\"{bin}:$PATH\"; fi\n",
                 runs = runs.display(),
@@ -124,10 +128,7 @@ fn wait_for_runs(log: &Path, n: usize) {
 }
 
 /// Asks for `cwd` on a thread of its own, so the test can act while the resolve is in progress.
-fn ask_on_a_thread(
-    state: &Arc<DaemonState>,
-    cwd: &Path,
-) -> std::thread::JoinHandle<Vec<AiCli>> {
+fn ask_on_a_thread(state: &Arc<DaemonState>, cwd: &Path) -> std::thread::JoinHandle<Vec<AiCli>> {
     let (state, cwd) = (Arc::clone(state), cwd.to_path_buf());
     std::thread::spawn(move || state.ai_clis_available_in(&cwd))
 }

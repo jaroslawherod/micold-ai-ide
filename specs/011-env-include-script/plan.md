@@ -251,6 +251,14 @@ resolver releases its waiters if the resolve unwinds; an invalidation also remov
 entry is still the one in the map. Askers already waiting get the result; nobody after the refresh
 does (FR-021). See `bugs/BUG-005.md`.
 
+*As built (M1)*: each entry is an `Arc<OnceLock<…>>` cell, taken (created empty on a miss) in the
+same critical section that reads the settings. The cell *is* the in-progress slot and its identity
+the generation: an invalidation removes the cell from the map, filled or not, so a resolve in
+progress fills a cell only its own waiters still hold. `set_env_include` clears the map in the
+critical section that persists the settings (`invalidate_env_include_all` is gone, so nothing can
+clear it after the fact). `OnceLock` leaves the cell empty if its initializer unwinds, and the next
+waiter runs the script itself — the drop guard the fix calls for, from the standard library.
+
 **Bugfix**: 2026-07-21 — BUG-001 Updated from bugfix patch.
 
 **Bugfix**: 2026-07-23 — BUG-002 Updated from bugfix patch.
