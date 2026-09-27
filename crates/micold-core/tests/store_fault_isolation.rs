@@ -430,3 +430,45 @@ fn saving_never_overwrites_an_unreadable_projects_state_file() {
         "and the readable projects are still saved as usual"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// 002 BUG-006: a project state file without its version number (FR-012c). Nothing reads
+// `schema_version`, so its absence must not mark the project unreadable — under 029 FR-011 that
+// file would then be left untouched and the loss would recur on every launch.
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn a_project_state_file_without_a_version_number_loads_its_records() {
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/a", "a", true));
+    store.save(&ws).unwrap();
+
+    let state = r#"{"worktree_display_names":{"feat-x":"Feature X"},
+                    "created_worktrees":["feat-x","feat-y"],
+                    "provenance_migrated":true}"#;
+    std::fs::write(store.project_state_path(Path::new("/a")), state).unwrap();
+
+    let out = store.load();
+
+    assert!(
+        !out.workspace.unreadable_projects.contains(Path::new("/a")),
+        "a state file with no version number is read, not classed as unreadable"
+    );
+    assert_eq!(
+        out.workspace
+            .worktree_names
+            .get(Path::new("/a"))
+            .and_then(|names| names.get("feat-x"))
+            .map(String::as_str),
+        Some("Feature X")
+    );
+    assert!(out.workspace.is_user_created(Path::new("/a"), "feat-x"));
+    assert!(out.workspace.is_user_created(Path::new("/a"), "feat-y"));
+    assert!(
+        out.workspace.provenance_migrated.contains(Path::new("/a")),
+        "the backfill is recorded as done, so it does not run again"
+    );
+}

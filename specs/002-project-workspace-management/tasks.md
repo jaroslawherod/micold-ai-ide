@@ -454,18 +454,18 @@ them carries `"schema_version":1`, which is why the version-less case was never 
 
 **Tests first (Constitution Principle I).**
 
-- [ ] T070 [P] [US2] Failing test first, in `crates/micold-core/tests/store_roundtrip.rs`: a
+- [X] T070 [P] [US2] Failing test first, in `crates/micold-core/tests/store_roundtrip.rs`: a
   `projects.json` holding two projects (distinct display names, git flags) and a `last_active`, and
   no `schema_version`, loads both projects with those values and that `last_active`, reports
   `LoadStatus::Loaded`, and leaves no `projects.json.bak` beside it. Confirm it fails on
   `origin/main` at `LoadStatus::Recovered` before T072 (FR-012c, FR-008, SC-003)
-- [ ] T071 [P] [US2] Failing test first, in `crates/micold-core/tests/store_fault_isolation.rs`: beside a
+- [X] T071 [P] [US2] Failing test first, in `crates/micold-core/tests/store_fault_isolation.rs`: beside a
   catalog that carries its version, a project state file (at `JsonFileStore::project_state_path`)
   holding worktree display names, `created_worktrees` and `provenance_migrated: true`, and no
   `schema_version`, loads every one of them for that project, and the project is **not** in
   `Workspace::unreadable_projects`. Confirm it fails on `origin/main` with the project marked
   unreadable before T072 (FR-012c, FR-012a)
-- [ ] T072 Give `StoredCatalog::schema_version` and `StoredProjectState::schema_version` in
+- [X] T072 Give `StoredCatalog::schema_version` and `StoredProjectState::schema_version` in
   `crates/micold-core/src/store.rs` `#[serde(default)]`, defaulting to `0` — the version no build
   writes — and record beside each why `0` rather than `SCHEMA_VERSION` (nothing reads the field, so
   the honest default says the document named no version) together with the warning for the author of

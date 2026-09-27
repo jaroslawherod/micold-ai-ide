@@ -802,3 +802,38 @@ fn saving_unchanged_provenance_is_byte_identical() {
     let zeta = first.find("zeta").expect("zeta present");
     assert!(alpha < zeta, "records are written in sorted order");
 }
+
+// --- 002 BUG-006: a stored document without its version number (FR-012c) ---
+
+/// A `projects.json` that omits `schema_version` is a readable catalog, not a corrupt one: nothing
+/// reads the number, so its absence must not cost the user their project list (FR-012c, FR-008).
+#[test]
+fn a_catalog_without_a_version_number_loads_its_projects() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("projects.json");
+    let json = r#"{"last_active":"/b/two",
+                   "projects":[{"path":"/a/one","display_name":"One","is_git_repo":true},
+                               {"path":"/b/two","display_name":"Second","is_git_repo":false}]}"#;
+    std::fs::write(&path, json).unwrap();
+    let store = JsonFileStore::at(path.clone());
+
+    let out = store.load();
+
+    assert_eq!(
+        out.status,
+        LoadStatus::Loaded,
+        "a catalog with no version number is read, not recovered as corrupt"
+    );
+    assert_eq!(out.workspace.projects.len(), 2);
+    assert_eq!(out.workspace.projects[0].path, PathBuf::from("/a/one"));
+    assert_eq!(out.workspace.projects[0].display_name, "One");
+    assert!(out.workspace.projects[0].is_git_repo);
+    assert_eq!(out.workspace.projects[1].path, PathBuf::from("/b/two"));
+    assert_eq!(out.workspace.projects[1].display_name, "Second");
+    assert!(!out.workspace.projects[1].is_git_repo);
+    assert_eq!(out.workspace.active, Some(PathBuf::from("/b/two")));
+    assert!(
+        !path.with_extension("json.bak").exists(),
+        "nothing is moved aside: the file was never corrupt"
+    );
+}

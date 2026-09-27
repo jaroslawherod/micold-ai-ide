@@ -106,3 +106,39 @@ failed before the implementation.
   lands exactly on the top leaves a popover open.
 - suite: `mise run gate` → GATE_EXIT=0; 3564 passed, 0 failed, 8 ignored (337 binaries).
 - refactor: none needed.
+
+## BUG-006 — a stored document without its version number
+
+Feature 002 predates the TDD extension's test list for this bug; the two behaviors below are BUG-006's
+regression tests, identified by their task ids (renumbered from T065–T067 when BUG-005 took those ids).
+
+### Baseline (BUG-006)
+
+- suite: not re-run before the cycles; the branch is `origin/main` (`23a0e0ee`, CI green) plus
+  docs-only commit `ba1ad84e`. The two red runs below each fail only the new test (`30 filtered out`,
+  `10 filtered out`), and the post-fix core suite is green.
+- recorded: cycle 0, 2026-09-27, before any Phase 12 change
+
+## Cycle 5: BUG-006 T070 — a `projects.json` without `schema_version` loads its projects
+
+- test: `crates/micold-core/tests/store_roundtrip.rs::a_catalog_without_a_version_number_loads_its_projects`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test store_roundtrip a_catalog_without_a_version_number_loads_its_projects -- --exact`
+  -> `panicked at crates/micold-core/tests/store_roundtrip.rs:822:5: assertion `left == right`
+  failed: a catalog with no version number is read, not recovered as corrupt / left: Recovered /
+  right: Loaded` (1 failed)
+- green: T072 (`#[serde(default)]` on `StoredCatalog::schema_version`)
+- refactor: none
+- commit: see the BUG-006 fix commit
+
+## Cycle 6: BUG-006 T071 — a project state file without `schema_version` loads its records
+
+- test: `crates/micold-core/tests/store_fault_isolation.rs::a_project_state_file_without_a_version_number_loads_its_records`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test store_fault_isolation a_project_state_file_without_a_version_number_loads_its_records -- --exact`
+  -> `panicked at crates/micold-core/tests/store_fault_isolation.rs:456:5: a state file with no
+  version number is read, not classed as unreadable` (1 failed)
+- green: T072 (`#[serde(default)]` on `StoredProjectState::schema_version`); `mise run test-core`
+  -> 1249 passed, 0 failed
+- refactor: none
+- commit: see the BUG-006 fix commit
+- notes: T070 and T071 were both written and observed red before T072; one production change turned
+  both green, so the two cycles share a green step.
