@@ -314,10 +314,22 @@ pub trait SettingsStore {
     }
 }
 
-/// The on-disk shape. Unknown fields are ignored on read and a missing `theme` takes its
-/// serde default (FollowSystem) — both give forward compatibility (settings-schema contract).
+/// The on-disk shape. Unknown fields are ignored on read and **every** field takes its serde
+/// default when the document omits it — both give forward compatibility (settings-schema contract).
 #[derive(Debug, Serialize, Deserialize)]
 struct StoredSettings {
+    /// Missing → `0`, the version number no build has ever written (003 BUG-003).
+    ///
+    /// This field is the one thing in the document nothing reads: no migration and no gate
+    /// consumes it, and `into_settings` drops it. Without a default it was nonetheless the one
+    /// field a document had to carry, so a settings file written by hand — the one case where the
+    /// number cannot be guessed — was rejected as corrupt, moved to `settings.json.bak`, and
+    /// replaced by `Settings::default()` with nothing said.
+    ///
+    /// `0` rather than [`SETTINGS_VERSION`] because it is the honest answer: the document named no
+    /// version, and saying so is better than recording a claim that this build wrote it. Should a
+    /// migration gate ever read this field, `0` is a value it will not mistake for a real schema.
+    #[serde(default)]
     settings_version: u32,
     #[serde(default)]
     theme: ThemePreference,

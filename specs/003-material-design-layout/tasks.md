@@ -19,6 +19,8 @@ description: "Task list for Material Design Layout & Theming"
 
 **Bugfix**: 2026-09-13 — BUG-002 Updated from bugfix patch: added T036–T039 (Phase 7) for known-projects rows that move their actions beneath an elided name in a narrow window. No task reopened: T015 and T033 ran and found the defect.
 
+**Bugfix**: 2026-09-27 — BUG-003 Updated from bugfix patch: added T040–T041 (Phase 8) for a stored settings document that omits its schema version. No task reopened: the roundtrip tests T023–T029 left behind cover a missing file, a corrupt file and later features' missing fields, and all of them pass — the untested case is a document missing only `settings_version`.
+
 **Organization**: Tasks grouped by user story for independent implementation and testing.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -205,6 +207,41 @@ why nothing caught this, so the test paints the shell at narrow widths itself.
   > 560 and 760 px wide. Before: the long name wraps to seven lines at 560 and is gone at 400, where
   > Forget is an empty pill. After: the actions sit beneath a whole or elided name and every label
   > is painted. `evidence/T039-resize-small-rerun.md`, `evidence/BUG-002-reflow-before-after.png`.
+
+---
+
+## Phase 8: Bugfix — BUG-003
+
+Appended by `/speckit-bugfix-patch`. `settings_version` was the only field of the stored settings
+document with no serde default, so a document that omitted it — the one field nothing in the
+application reads, and the one a person writing the file by hand cannot guess — failed to
+deserialize, was moved to `settings.json.bak`, and was replaced by `Settings::default()` with
+nothing said. See `bugs/BUG-003.md`.
+
+**No false completion.** T023–T029 built the store and its roundtrip tests, and those tests hold: a
+missing file, an unparseable file, and every later feature's missing field all behave as specified.
+The case none of them covers is a document missing only the version number, which is why it survived
+four schema versions.
+
+**Tests first (Constitution Principle I).**
+
+- [X] T040 [US3] Failing test first, in `crates/micold-core/tests/settings_roundtrip.rs`: a document
+  holding a non-default value for every field the build knows and no `settings_version` loads all of
+  them, reports `LoadStatus::Loaded`, and leaves no `settings.json.bak`. Confirm it fails before T041
+  (FR-022, FR-009)
+- [X] T041 [US3] Give `StoredSettings::settings_version` in `crates/micold-core/src/settings.rs`
+  `#[serde(default)]`, defaulting to `0` — the version no build writes — and record beside it why
+  `0` rather than `SETTINGS_VERSION`: nothing reads the field, so the honest default is the one that
+  says the document named no version rather than claiming this build wrote it. No migration path is
+  added; there is none to extend (FR-022)
+
+  > **Red, 2026-09-27**: `settings_roundtrip` 20 passed, 1 failed — the new test at
+  > `LoadStatus::Recovered` where `Loaded` was expected, which is the document being rejected and
+  > moved aside.
+  >
+  > **Pass, 2026-09-27**, after T041: `settings_roundtrip` 21 passed, 0 failed. The version number
+  > this build writes is unchanged, and `saved_settings_file_records_the_current_version` still
+  > asserts `4` on a file this build writes.
 
 ---
 

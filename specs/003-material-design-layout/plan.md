@@ -44,6 +44,12 @@ as `projects.json`, written through a `SettingsStore` that reuses the existing a
 write + missing/corrupt-recovers-to-default pattern from `store.rs`. Local-first, offline,
 no new backend.
 
+*(BUG-003, 2026-09-27: "corrupt" is only a document that is not a settings document. Every field of
+the stored shape, `settings_version` included, defaults when absent, so the recovery path is never
+reached by a document whose values are present and valid. The version number defaults to `0`, a
+version no build writes, because nothing reads the field — see FR-022 and the settings-schema
+contract.)*
+
 **Testing**: `cargo test --no-default-features --all-targets` — pure unit tests for theme
 resolution (the FollowSystem/Light/Dark × system truth table), token invariants (every
 `on_*` role meets AA 4.5:1 contrast against its surface in both schemes — SC-005), and a
