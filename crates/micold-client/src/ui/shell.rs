@@ -174,7 +174,7 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
             material::Scrollable::new(rows, r)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .on_scroll(Message::Project(ProjectMsg::ListScrolled)),
+                .on_scroll_offset(|offset| Message::Project(ProjectMsg::ListScrolled(offset))),
         ]
         .spacing(spacing::SM)
         .height(Length::Fill);
