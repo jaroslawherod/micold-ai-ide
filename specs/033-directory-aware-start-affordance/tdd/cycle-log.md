@@ -109,3 +109,15 @@ failed before the implementation.
   `offered_providers(None)` -> both FAILED; restored, 6 passed
 - refactor: none needed
 - commit: the commit that adds this entry
+
+## Cycle 4: review B F1 — the sidebar row reads its own directory, rendered
+
+- tests: `session_start_press.rs::{the_default_row_draws_its_chevron_from_its_own_directorys_answer,
+  the_default_row_starts_a_default_its_own_directory_provides}` — home `[ClaudeCode]`, the project
+  root `[ClaudeCode, Pi]`, default Pi
+- red (mutant, since the wiring already existed from T040): `sidebar.rs` `start_press` fed an empty
+  path and the Default row's chevron fed `None`, both falling back to home ->
+  `test result: FAILED. 5 passed; 2 failed` (both new tests)
+- green: sidebar restored -> `test result: ok. 7 passed; 0 failed`
+- refactor: none
+- commit: the commit that adds this entry

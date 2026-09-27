@@ -45,6 +45,11 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | F1/F2/F3/F8: pruning of gone rows, env-include change refresh, reveal/forget askers missing | M2 scope by design (T024–T026, D10); M1 asks on C1 A1–A5 only |
+| M1 | A | F4: a row with no answer yet reads home's answer | FR-005 specifies the home fallback while a row's own answer is pending; 026 FR-010's launch check is the backstop |
+| M1 | A | F5: a lost reply leaves a directory "in flight" forever | The daemon always replies to `AiCliAvailabilityRequest`; a reconnect clears the store (FR-011). Listed as a follow-up |
+| M1 | A | F9 (MINOR) | Low impact, no behaviour at stake; not changed in M1 |
+| M1 | B | F3 (and A F7): `location_dir(..).unwrap_or_default()` empty-path sentinel in sidebar | Unreachable: rows exist only with a project open, so `location_dir` is always Some there. Kept minimal for M1 |
 
 ## Open escalation
 
@@ -52,4 +57,4 @@ None.
 
 ## Follow-ups not done
 
-None yet.
+- Review A M1 F5: time out an in-flight availability request that never gets a reply (no daemon path drops one today).
