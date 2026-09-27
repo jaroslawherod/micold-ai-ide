@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/a-project-local-cli-stays-unreachable-in-that-project
 - **Started**: 2026-09-27
 - **Phase**: 4-milestones
-- **Next step**: Phase 4 — M2: implement T020–T027, T037–T039, gate, reviews, open PR.
+- **Next step**: Phase 4 — wait for the M2 PR's `ci complete`, merge, then M3.
 
 ## Pull requests
 
@@ -50,7 +50,16 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M1 | A | F4: a row with no answer yet reads home's answer | FR-005 specifies the home fallback while a row's own answer is pending; 026 FR-010's launch check is the backstop |
 | M1 | A | F5: a lost reply leaves a directory "in flight" forever | The daemon always replies to `AiCliAvailabilityRequest`; a reconnect clears the store (FR-011). Listed as a follow-up |
 | M1 | A | F9 (MINOR) | Low impact, no behaviour at stake; not changed in M1 |
+| M2 | A | F2: a change to a disabled env-include's path or timeout still refreshes | Contract C1 A7 triggers on the echoed settings differing from `asked_under`; normalising "effectively off" would redefine that. It is one user-initiated save, not a per-render ask, so SC-003 is not at stake |
+| M2 | A | F3: a refresh starts N+1 script runs at once on the daemon | Daemon-side concurrency is spec Out of Scope (research R11, the daemon's missing single-flight); the client sends one request per row, as C1 A7 specifies |
+| M2 | A | F4: sync from a generic "wanted set changed" check instead of per-event sites | Contract C1 is a closed list of named askers, pinned by the tripwire; a generic hook after every update is the design C1 chose against |
 | M1 | B | F3 (and A F7): `location_dir(..).unwrap_or_default()` empty-path sentinel in sidebar | Unreachable: rows exist only with a project open, so `location_dir` is always Some there. Kept minimal for M1 |
+
+### M2 review outcomes
+
+- Review B round 1: CHANGES — F1 MAJOR (tripwire stopped at a file's first `#[cfg(test)]`, hiding production code in `ui/mod.rs`, `ui/material/mod.rs` and three shell files), F2 MINOR (bare request marker), F3 MINOR (A9/A10 red only via mutants; logged). F1, F2 fixed; F3 accepted as logged.
+- Review A: 7 findings. Fixed: F1 (= B F1), F5 (one `env_include_settings` helper), F6 (ForgetConfirmed comment), F7 (`*`-prefixed lines no longer skipped). Declined: F2, F3, F4 (table above).
+- M1 review A's deferred F1/F2/F3/F8 are covered: prune in `sync_cli_availability` (T026), the `SettingsChanged` refresh (T024), the `ForgetConfirmed` and `ShowAgentWorktreesToggled` arms (T025), each with a test (U28–U33).
 
 ## Open escalation
 
