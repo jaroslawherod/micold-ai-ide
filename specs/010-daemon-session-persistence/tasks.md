@@ -683,6 +683,12 @@ produces for the same script.
   (computed before `repo` moves into the delete's `spawn_blocking` closure) once the git delete
   actually succeeds — mirroring BUG-002 (011)'s equivalent fix for the exact same "path gets reused
   by the same branch name" hazard.
+  **Cross-feature note (2026-09-27, BUG-005 in feature 011)**: the cache described above re-locks
+  and inserts unconditionally, with no record of a resolve in progress, so a `SettingsSet` or
+  `WorktreeDelete` invalidation that lands mid-resolve is overwritten by the stale result, and
+  concurrent first asks for one directory each run the script. Not reopened — the requirement
+  here is right and feature 010 is Closed; the fix is feature 011's T037–T040 (FR-021). See
+  `specs/011-env-include-script/bugs/BUG-005.md`.
 - [X] T099 [P] [BUG-003] User-guide doc: note in `docs/daemon.md` that daemon-spawned sessions
   (including crash respawns and regular-terminal instances) resolve `env_include` identically to a
   client-initiated launch, per-directory (Principle VII). Depends on T098 (describes its finished

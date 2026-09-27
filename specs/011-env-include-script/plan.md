@@ -237,6 +237,20 @@ one application-wide instance to one keyed per resolution directory, resolved la
 session-launch time instead of solely at `boot()` (FR-007/FR-020). See `bugs/BUG-002.md` and
 `research.md` R5.
 
+**Design correction (BUG-005)**: The daemon's port of the per-directory cache (feature 010's
+T098, `DaemonState::env_include_vars_for`) correctly drops the state lock while resolving — a
+resolve spawns a subprocess and may wait out the whole timeout — but then re-locks and inserts
+unconditionally, with no record that a resolution is in progress. That loses a refresh that lands
+mid-resolve (FR-007a, and the `WorktreeDelete` invalidation) and lets concurrent first asks each
+run the script (FR-020). Fix: each directory's entry is either *ready* or *in progress* (a shared
+slot the resolving caller fills and other askers wait on, off the state lock, bounded by the
+resolver's own timeout), and the cache carries a generation that `invalidate_env_include_all`
+bumps; an invalidation also removes in-progress entries, and a resolver inserts only if its own
+entry is still the one in the map. Askers already waiting get the result; nobody after the refresh
+does (FR-021). See `bugs/BUG-005.md`.
+
 **Bugfix**: 2026-07-21 — BUG-001 Updated from bugfix patch.
 
 **Bugfix**: 2026-07-23 — BUG-002 Updated from bugfix patch.
+
+**Bugfix**: 2026-09-27 — BUG-005 Updated from bugfix patch.

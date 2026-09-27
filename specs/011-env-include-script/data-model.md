@@ -86,7 +86,7 @@ struct EnvIncludeSnapshot {
   entry is resolved lazily the first time a session launches against a not-yet-cached directory
   (BUG-002); an entry is replaced wholesale (not mutated field-by-field) by
   `refresh_env_include(app)`'s two refresh triggers (R5), scoped to the affected directory/
-  directories; all entries are dropped when the app exits.
+  directories; all entries are dropped when the app exits. **(BUG-005)**: in the daemon (feature 010 T098) an entry may also be *in progress* — a resolution running for that directory, whose result concurrent requests share instead of each sourcing the script; a refresh (Settings save, or deletion of the entry's worktree) discards in-progress entries as well as ready ones, and a resolution whose entry was discarded caches nothing (FR-021).
 - **Relationship to spawn call sites**: `launch_spec()` (`src/main.rs`, for `claude`) and
   `ensure_attached_process`'s `TerminalMode::Regular` branch (for the shell) both build their
   `env: Vec<(String, String)>` as `snapshot.vars.iter().cloned().chain(once(("TERM".into(),

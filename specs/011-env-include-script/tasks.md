@@ -480,6 +480,65 @@ data-model.md's `EnvIncludeSnapshot` cardinality superseded. See `bugs/BUG-002.m
 
 ---
 
+## Phase 9: Bugfix BUG-005 — the daemon's cache loses an invalidation that races a resolve, and runs the script once per concurrent first ask
+
+**Goal**: A Settings save or a worktree deletion that lands while a directory's environment is
+being resolved takes effect for every spawn and AI-CLI availability answer that comes after it;
+concurrent first asks for one directory share one run of the script (FR-021, FR-007, FR-016,
+FR-020).
+
+**Independent Test**: With a script that blocks until released, start a resolve for a directory,
+save Settings while it is blocked, release it, and ask again: the script runs a second time. Start
+two first asks for one directory while the script is blocked: it runs once.
+
+### Tests for BUG-005 (MANDATORY — Constitution Principle I) ⚠️
+
+> Written FIRST; confirmed to FAIL on `origin/main` for the reported reason before T039.
+
+- [ ] T037 [BUG-005] Regression test, new file
+  `crates/micold-daemon/tests/env_include_cache_coherence.rs`: an invalidation that races a resolve
+  wins. A gated include script (logs each run to a file, then waits for a gate file; a PowerShell
+  body beside the bash one, as `ai_cli_availability.rs`'s `include_script` does) and a
+  `DaemonState` with environment-include on. Case 1 (`SettingsSet`): ask
+  `ai_clis_available_in(dir)` on a thread, wait until the run log shows the script started, call
+  `set_env_include(..)`, open the gate, join, ask again — assert the script ran twice. Case 2
+  (`WorktreeDelete`): the same with `invalidate_env_include(dir)` in place of the save. Both fail on
+  `origin/main` with one run (the stale insert served the later ask) — reproduction in
+  `bugs/BUG-005.md`. FR-021(a).
+- [ ] T038 [BUG-005] Regression test, same file: concurrent first asks for one directory run the
+  script once. Start one ask, wait until the script has started, start a second ask for the same
+  directory, make sure it has reached the cache before opening the gate (prefer an observable
+  signal over a fixed sleep; if a sleep remains, name the reason in the test), open the gate, join
+  both — assert one run and that both callers got the same environment. Fails on `origin/main`
+  with two runs. FR-021(b), FR-020.
+
+### Implementation for BUG-005
+
+- [ ] T039 [BUG-005] Make `DaemonState::env_include_vars_for`'s cache
+  (`crates/micold-daemon/src/state.rs`) coherent under overlap: an entry per directory is either
+  *ready* or *in progress* (a shared slot the resolving caller fills and other askers wait on, off
+  the state lock, bounded by the resolver's timeout); `invalidate_env_include_all` bumps a cache
+  generation and clears in-progress entries too, `invalidate_env_include(path)` removes that path's
+  entry in either state; a resolver inserts its result only if its own entry is still the one in
+  the map, and otherwise hands it to its waiters and caches nothing. Keep the module invariant: no
+  subprocess and no wait under the state lock. Makes T037 and T038 pass; U7 in
+  `crates/micold-daemon/tests/ai_cli_availability.rs` stays green. Cross-feature: completes what
+  feature 010's T098 built (see the note there). Depends on T037, T038.
+- [ ] T040 [P] [BUG-005] Docs (Principle VII): update the doc comments on `env_include_vars_for`,
+  `spawn_path_for`, `invalidate_env_include` and `invalidate_env_include_all` to state the
+  in-progress sharing and that an invalidation wins over a resolve in progress; add one sentence to
+  `docs/user-guide/settings.md`'s environment-include section that a saved change applies to the
+  next session even while one in the same project is still starting. Depends on T039.
+
+**Checkpoint**: T037 and T038 pass; `mise run gate` green.
+
+**Bugfix**: 2026-09-27 — BUG-005 Added Phase 9 (T037–T040). FR-021 and an Edge Case added to
+spec.md; plan.md gained a design correction; data-model.md's lifecycle annotated; feature 010's
+T098 gained a cross-feature note. No task in this file is reopened: T034/T035 built the pre-010
+client cache, which no longer exists. See `bugs/BUG-005.md`.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -584,7 +643,12 @@ With multiple developers:
   cache lookup) and US2/US3's T020/T024 refresh triggers (T035) — unlike Phase 7, this one does
   reshape the `main.rs` wiring introduced by US1/US2/US3, since the single-snapshot model those
   tasks wired against is exactly what BUG-002 supersedes.
+- Phase 9 (BUG-005) depends on no earlier phase of this file: it changes the daemon's cache
+  (`crates/micold-daemon/src/state.rs`, feature 010's T098), which replaced the `main.rs` cache
+  Phase 8 built. Within it, T037 → T038 → T039 → T040.
 
 **Bugfix**: 2026-07-21 — BUG-001 Updated from bugfix patch.
 
 **Bugfix**: 2026-07-23 — BUG-002 Updated from bugfix patch.
+
+**Bugfix**: 2026-09-27 — BUG-005 Updated from bugfix patch.
