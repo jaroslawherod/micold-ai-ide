@@ -126,7 +126,11 @@ fn restore_catalog(
     scanner: &dyn micold_core::fs_scan::FolderScanner,
     placement: PlacementKind,
 ) {
-    core.workspace = store.load().workspace;
+    let loaded = store.load();
+    core.workspace = loaded.workspace;
+    // 002 BUG-007: the status is read here or nowhere. This read runs before anything starts the
+    // daemon, so it is the one that meets a damaged file and moves it aside (FR-012d).
+    crate::shell::persist::notify_catalog_recovery(store, loaded.status, core);
     core.workspace.refresh_availability(scanner);
     // FR-023 binds the restore as much as a click: a last-active project whose folder has gone
     // since the last run is not opened. It stays known, marked unavailable, and the user is told
@@ -531,7 +535,10 @@ mod tests {
 
         let backup = catalog.with_extension("json.bak");
         assert!(backup.exists(), "precondition: the store kept the file");
-        assert!(core.workspace.projects.is_empty(), "precondition: recovered");
+        assert!(
+            core.workspace.projects.is_empty(),
+            "precondition: recovered"
+        );
         let notice = core
             .notifications
             .queue
@@ -542,6 +549,11 @@ mod tests {
             notice.contains("project list") && notice.contains(&backup.display().to_string()),
             "a project list that had to be recovered was reset without a word, or the notice did \
              not name the kept file: {notice:?}"
+        );
+        assert!(
+            !notice.contains("reset"),
+            "on a warm launch the daemon's catalog restores the list, so the notice must not say \
+             it was reset: {notice:?}"
         );
     }
 

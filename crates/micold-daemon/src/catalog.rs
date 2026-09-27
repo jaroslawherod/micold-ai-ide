@@ -116,6 +116,19 @@ impl Catalog {
         self.load_status
     }
 
+    /// Where the catalog this daemon recovered was preserved, when it recovered one and the copy
+    /// is there (002 BUG-007, C4). `None` for a clean or first-run load, and for an unreadable file
+    /// that could not be moved aside.
+    pub fn recovered_backup(&self) -> Option<PathBuf> {
+        if self.load_status != LoadStatus::Recovered {
+            return None;
+        }
+        self.project_store
+            .as_ref()?
+            .recovery_path()
+            .filter(|path| path.exists())
+    }
+
     /// The current settings projected to the wire (FR-012a, FR-012b).
     pub fn settings_wire(&self) -> DaemonSettings {
         DaemonSettings {

@@ -145,8 +145,20 @@ pub async fn run() -> io::Result<()> {
     );
 
     let catalog = Catalog::load_default();
-    // A recovered (corrupt) catalog is surfaced, not swallowed (data-model C4).
-    tracing::info!(load_status = ?catalog.load_status(), "catalog adopted");
+    // A recovered (corrupt) catalog is surfaced, not swallowed (data-model C4). At `warn`, because
+    // that is the floor of the diagnostics ring a client's "recent issues" request reads: at `info`
+    // the only record of a reset project list was a line nobody is shown (002 BUG-007). A launch
+    // normally meets the damaged file first and tells the user itself; this is the daemon starting
+    // without one in front of it — a restart while the app stays open, or a kept-running sandbox
+    // coming back after a reboot.
+    if catalog.load_status() == micold_core::store::LoadStatus::Recovered {
+        tracing::warn!(
+            kept_as = ?catalog.recovered_backup(),
+            "the saved project list could not be read; starting with an empty one"
+        );
+    } else {
+        tracing::info!(load_status = ?catalog.load_status(), "catalog adopted");
+    }
     let state = Arc::new(DaemonState::new(catalog));
     // Hand the diagnostics handle to the shared state so the `LogLocation`/`RecentErrors`/
     // `SetLogLevel` RPCs can serve it (FR-043–046).

@@ -178,6 +178,11 @@ fn a_corrupt_catalog_is_preserved_and_recovered_to_empty() {
         projects_path.with_extension("json.bak").exists(),
         "the corrupt file must be preserved, not discarded"
     );
+    // 002 BUG-007: and the daemon can say where, for the warning its diagnostics carry.
+    assert_eq!(
+        catalog.recovered_backup(),
+        Some(projects_path.with_extension("json.bak"))
+    );
 }
 
 #[test]
@@ -189,6 +194,11 @@ fn a_missing_catalog_is_a_clean_first_run() {
     );
     assert_eq!(catalog.load_status(), LoadStatus::Missing);
     assert!(catalog.snapshot().projects.is_empty());
+    assert_eq!(
+        catalog.recovered_backup(),
+        None,
+        "a first run recovered nothing"
+    );
 }
 
 #[test]
