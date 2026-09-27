@@ -201,13 +201,14 @@ pub fn theme(scheme: micold_core::theme::ColorScheme) -> iced::Theme {
     style::theme(scheme)
 }
 
-use iced::widget::{container, tooltip};
+use crate::ui::cdk::tooltip;
+use iced::widget::container;
 use iced::Element;
 use micold_core::tokens::{spacing, Roles};
 
 /// Re-exported so call sites can pick a `Tooltip::position(...)` without reaching into `iced`
 /// directly.
-pub use iced::widget::tooltip::Position as TooltipPosition;
+pub use crate::ui::cdk::tooltip::Position as TooltipPosition;
 
 /// The widest a tooltip panel may grow before its label wraps (feature 029, FR-009).
 ///
@@ -224,7 +225,8 @@ pub const TOOLTIP_MAX_WIDTH: f32 = 320.0;
 /// Wrap any element with a hover tooltip describing the action it triggers (Principle VIII
 /// builder-API rule: construct with the required content + label + roles, then optionally
 /// `.position(...)`, then `.into()`). Theme-aware surface styling; shown below the element by
-/// default.
+/// default, and on the opposite side of it when the asked-for side has no room — it never covers
+/// the element it describes (029 BUG-001, FR-013).
 ///
 /// The label may be multi-line: it is bounded at [`TOOLTIP_MAX_WIDTH`] and wraps on glyphs where a
 /// word boundary is unavailable, so a long path breaks rather than widening the panel.
@@ -270,7 +272,12 @@ impl<'a, M: 'a> From<Tooltip<'a, M>> for Element<'a, M> {
         .max_width(TOOLTIP_MAX_WIDTH)
         .padding(spacing::XS)
         .style(style::surface(t.roles));
-        tooltip(t.content, tip, t.position).gap(spacing::XS).into()
+        // Built on `cdk::tooltip` rather than the stack's own: that one slides a panel with no
+        // room on its side back over the trigger, and this one opens it on the other side
+        // (029 BUG-001, FR-013).
+        tooltip::Tooltip::new(t.content, tip, t.position)
+            .gap(spacing::XS)
+            .into()
     }
 }
 

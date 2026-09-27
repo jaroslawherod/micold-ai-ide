@@ -7,12 +7,12 @@
 //! - **Hand-rolled implementations: zero.** Four surfaces — the modal, the overflow menu, the
 //!   context menu and the project-switcher popover — each carried their own positioning, backdrop
 //!   and dismissal code. All four now sit on `cdk::overlay`. That is the five-to-one story.
-//! - **Delegations to the rendering stack's own overlay system: one.** A `tooltip` implements
-//!   `Widget::overlay()` itself, so the stack positions it from the trigger's on-screen bounds. It
-//!   was never a hand-rolled implementation to remove, and it needs to work inside a content-sized
-//!   dialog, where a window-level surface has nothing to anchor against. There were two: the select
-//!   wrapped a `pick_list` for exactly that reason until feature 022 gave the application a
-//!   floating mechanism of its own, at which point the sanction went with the widget.
+//! - **Delegations to the rendering stack's own overlay system: none left.** There were two. The
+//!   select wrapped a `pick_list` until feature 022 gave the application a floating mechanism of
+//!   its own (`cdk::picker`), and the tooltip delegated to the stack's `tooltip` until 029 BUG-001
+//!   needed it to choose the side with room (`cdk::tooltip`). Both float from their trigger's own
+//!   on-screen bounds, which is why they are widget-attached rather than window-level, and both
+//!   are on the cdk's own closed list below.
 //!
 //! So the honest shape is: one primitive for window-level surfaces, plus a **closed list** of
 //! widget-attached delegations. This file closes the list.
@@ -47,13 +47,10 @@ const SANCTIONED: &[(&str, &str, &str)] = &[
     // staleness check below is *for*: the select is now built on `cdk::picker`, which anchors to the
     // trigger's own bounds for the same reason the sanction gave — so the exception has nothing left
     // to except, and leaving it listed would read as precedent for the next delegation.
-    (
-        "ui/material/mod.rs",
-        "tooltip",
-        "a tooltip follows its trigger and has no backdrop, dismissal or stacking order to own; \
-         routing it through the window-level primitive would give it three concerns it does not \
-         have",
-    ),
+    //
+    // `ui/material/mod.rs` / `tooltip` followed it in 029 BUG-001: the stack's tooltip slides a
+    // panel with no room on its side back over its own trigger and cannot be told otherwise, so the
+    // tooltip is now `cdk::tooltip`, listed in CDK_OVERLAY_IMPLEMENTORS below with its reason.
 ];
 
 /// Hand-written `Widget::overlay()` implementations **inside** the cdk, as `(file, why)`.
@@ -66,14 +63,26 @@ const SANCTIONED: &[(&str, &str, &str)] = &[
 ///
 /// Empty is the correct state. An entry means: this surface genuinely cannot be a
 /// `cdk::overlay::Surface`, and here is why.
-const CDK_OVERLAY_IMPLEMENTORS: &[(&str, &str)] = &[(
+const CDK_OVERLAY_IMPLEMENTORS: &[(&str, &str)] = &[
+    (
     "ui/cdk/picker.rs",
     "the result list must anchor to the search field's own on-screen bounds inside a content-sized \
      dialog, where a window-level surface has nothing to anchor against — the same constraint that \
      sanctioned `select.rs`'s `pick_list` until this replaced it, and the one that defeated the \
      hand-rolled dropdown before that. The stack's own menu cannot serve either: it draws every row as a single flat \
      `Text`, and these rows must emphasise the characters that matched (feature 021, FR-009)",
-)];
+    ),
+    (
+        "ui/cdk/tooltip.rs",
+        "a tooltip follows its trigger's own on-screen bounds — including inside content-sized \
+         dialogs and scrolled lists, where a window-level surface has nothing to anchor against — \
+         and has no backdrop, dismissal or stacking order for `cdk::overlay` to own. It replaces \
+         the rendering stack's tooltip, which was SANCTIONED for the same reasons until 029 \
+         BUG-001: that one slides a panel with no room on its side back over the trigger it \
+         describes, and its side cannot be changed once it is built, so choosing the side that \
+         has room needs an overlay of its own (FR-013)",
+    ),
+];
 
 /// Every `.rs` file under `src/ui/`, recursively, as `(path relative to src/, source)`.
 fn ui_sources() -> Vec<(String, String)> {

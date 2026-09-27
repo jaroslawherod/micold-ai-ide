@@ -61,7 +61,7 @@ const RECORDED_SCHEME: ColorScheme = ColorScheme::Light;
 const TOLERANCE: f32 = 0.5;
 
 /// A fixed project path, invented — never the developer's own (FR-007).
-const PROJECT: &str = "/fixture/project";
+pub(crate) const PROJECT: &str = "/fixture/project";
 
 /// Invented projects for the switcher's list. The first is [`PROJECT`], so the active project and
 /// the sidebar are the same in every state here.
@@ -72,7 +72,7 @@ const PROJECTS: [&str; 2] = [PROJECT, "/fixture/other-project"];
 /// invisible at the top of the list and obvious at the bottom, so the fixture has to have a bottom.
 const WORKTREE_COUNT: usize = 8;
 
-fn worktree(dir_name: &str, branch: &str) -> Worktree {
+pub(crate) fn worktree(dir_name: &str, branch: &str) -> Worktree {
     Worktree {
         dir_name: dir_name.to_string(),
         path: PathBuf::from(PROJECT)
@@ -104,7 +104,7 @@ fn with_projects(count: usize) -> State {
 /// it (029 FR-004), so a fixture that fills `worktree.worktrees` and stops renders a sidebar with
 /// no rows — and this gate presses rows. These stand for ordinary worktrees made through the app,
 /// so they carry the records ordinary worktrees have.
-fn record_every_worktree(mut state: State) -> State {
+pub(crate) fn record_every_worktree(mut state: State) -> State {
     let Some(project) = state.workspace.active_project().map(|p| p.path.clone()) else {
         return state;
     };
@@ -420,7 +420,7 @@ fn expected_origin(point: (f32, f32), panel: &LayoutRecord) -> ((f32, f32), bool
 /// **Row 0 is the "Default" project-root row** (`sidebar_entries`' first entry), which carries no
 /// context menu — the worktrees start at 1. Getting this wrong reports "the press reached no
 /// handler" rather than a wrong anchor, which is why those are two different failures here.
-fn sidebar_row(index: usize) -> Vec<usize> {
+pub(crate) fn sidebar_row(index: usize) -> Vec<usize> {
     vec![0, 0, 1, 0, 0, 0, 2, 0, 0, index]
 }
 

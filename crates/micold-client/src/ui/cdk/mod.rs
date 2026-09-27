@@ -20,3 +20,4 @@ pub mod overlay;
 pub mod picker;
 pub mod reflow;
 pub mod ripple;
+pub mod tooltip;
