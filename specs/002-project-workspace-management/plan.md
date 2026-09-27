@@ -154,3 +154,34 @@ application runs (008 BUG-003), and a scan must not drop the project being worke
 **Bugfix**: 2026-09-13 — BUG-003 Updated from bugfix patch
 
 **Bugfix**: 2026-09-13 — BUG-004 Updated from bugfix patch
+
+## Bugfix: a known-projects list longer than the window (BUG-005, 2026-09-27)
+
+**Scale (revises nothing, finally acted on)**: Technical Context sizes the catalog at tens to a few
+hundred projects, and no design decision followed from it. Both surfaces that list the catalog are
+bare `column`s: the shell body's list (`ui/shell.rs`) inside a `Fill` container, and the switcher's
+rows (`material/menu.rs`, `item_column`) inside `MenuOverlay`'s panel with no height cap. Content
+past the edge is laid out and clipped, and nothing scrolls (FR-011a).
+
+**Body list**: the "No project open" / active-project header stays a fixed child of the body; the
+known-projects list goes into the shared `material::Scrollable` with `height(Length::Fill)`, so it
+takes the height left under the header and scrolls within it — the component the selector's folder
+listing (`project_selector.rs:75`), the sidebar and the settings page already use (Principle VIII).
+
+**Switcher panel**: `MenuOverlay` wraps its item column in `material::Scrollable` with
+`height(Length::Shrink)` and caps the panel at the room below its anchor — for the toolbar-anchored
+panel (`Anchor::TopEnd`), the app bar's bottom edge to the window's bottom edge; a cursor-anchored
+menu (`.anchor(point)`) keeps `menu_panel_size`'s clamping and gets no tighter bound — the select's list precedent (`material/picker.rs:231`). A panel that fits
+keeps its current height, so `menu_panel_size` (the context-menu clamping estimate) stays exact for
+the menus it serves. The change is made once in the shared panel (018 FR-029c), so the overflow
+menu and the sidebar menus inherit it; `ContextMenu` is out of scope (its item counts are fixed and
+small).
+
+**Tests**: a headless paint test at the canonical 1280×800 with 20 known projects (the
+`support::layout` apparatus `known_projects_reflow.rs` uses): before the fix the rows past the
+fourth (body) and fifteenth (switcher) are never painted and no scrollable exists; after it,
+scrolling to the end paints the last row's actions and "Add project…" inside the window. The
+layout-snapshot fixture is regenerated for the new scrollable node. A visual pass checks the
+themed scrollbar.
+
+**Bugfix**: 2026-09-27 — BUG-005 Updated from bugfix patch

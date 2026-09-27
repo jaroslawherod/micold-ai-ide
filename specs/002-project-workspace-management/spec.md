@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-13
 
-**Status**: Closed (implemented and shipped; every task in [tasks.md](./tasks.md) is done. The manual quickstart walkthrough ran 2026-08-21 on Linux — [evidence](./evidence/T047-manual-walkthrough.md): steps 1–4 and 6–11 pass, plus the persistence and corruption spot checks, and the run closes the silent-refusal defect the 2026-07-20 alignment note left open. Step 5 is stale text superseded by FR-003's amendment, not a failure; step 12 is partial. macOS/Windows parity (FR-024, SC-010) is unrun. The three defects that run found are fixed (2026-09-13, Phase 10): [BUG-002](./bugs/BUG-002.md) (a symlinked project path misclassified every worktree — identity is now the resolved path, FR-012 amended), [BUG-003](./bugs/BUG-003.md) (reopening a known project now records it as last active — FR-010/FR-011), [BUG-004](./bugs/BUG-004.md) (boot no longer opens a last-active project whose folder is gone, and says so — FR-023).)
+**Status**: Closed (implemented and shipped; every task in [tasks.md](./tasks.md) is done. The manual quickstart walkthrough ran 2026-08-21 on Linux — [evidence](./evidence/T047-manual-walkthrough.md): steps 1–4 and 6–11 pass, plus the persistence and corruption spot checks, and the run closes the silent-refusal defect the 2026-07-20 alignment note left open. Step 5 is stale text superseded by FR-003's amendment, not a failure; step 12 is partial. macOS/Windows parity (FR-024, SC-010) is unrun. The three defects that run found are fixed (2026-09-13, Phase 10): [BUG-002](./bugs/BUG-002.md) (a symlinked project path misclassified every worktree — identity is now the resolved path, FR-012 amended), [BUG-003](./bugs/BUG-003.md) (reopening a known project now records it as last active — FR-010/FR-011), [BUG-004](./bugs/BUG-004.md) (boot no longer opens a last-active project whose folder is gone, and says so — FR-023). Reopened for one defect 2026-09-27: [BUG-005](./bugs/BUG-005.md) — the known-projects list and the switcher panel do not scroll when longer than the window (FR-011a); its fix is Phase 11, T065–T069, open.)
 
 **Input**: User description: "Project selection and workspace management. Micold AI IDE lets a user choose a project to work on and set that project as the current working space. Opening a project, known projects (local-first), active working space, renaming a project, notable situations to handle, scope boundaries, and cross-platform parity."
 
@@ -88,6 +88,7 @@ The user renames a project. Renaming changes only the display name stored by the
 - **Re-opening the same folder**: Choosing a folder that is already known activates the existing entry and never creates a duplicate (identity is the ~~filesystem path~~ resolved filesystem path — see FR-012).
 - **Folder reached through a symlink** (bugfix BUG-002): Choosing a symlink to a repository identifies the project by the resolved folder, which is how git records the repository and every worktree in it. Its worktrees MUST classify exactly as they would had the real folder been chosen, and choosing either spelling of a folder that is already known MUST activate that entry, not add a second.
 - **Last-active folder gone at launch** (bugfix BUG-004): If the project recorded as last active is unavailable when the application starts, the application MUST NOT open into it (FR-023): it starts with no active working space, keeps the project in the list marked unavailable, and tells the user which project could not be reopened and why.
+- **More known projects than fit** (bugfix BUG-005): The plan sizes the catalog at tens to a few hundred projects, and at the default window only about four rows fit under the empty-state header. The list and the switcher panel MUST scroll rather than clip (FR-011a); no project is reachable only by resizing the window.
 - **Whitespace-only or empty rename**: Rejected; the existing display name is preserved.
 - **First-ever launch**: With no known projects, the shell shows the empty state inviting the user to open a project.
 - **Storage fault scoped to one project** (bugfix BUG-001): A corrupt or unwritable per-project state file MUST degrade only that project's session/worktree-name state to empty, exactly as a corrupt catalog degrades to an empty catalog today. It MUST NOT wipe the known-projects catalog or any other project's persisted state.
@@ -115,6 +116,7 @@ The user renames a project. Renaming changes only the display name stored by the
 - **FR-009**: Each known-project record MUST include the folder's filesystem path, its display name, and its git-repository status.
 - **FR-010**: The persisted list MUST record which project was last active. *(Clarified by bugfix BUG-003: "last active" means last activated by any route — opening a folder through the selector **and** reopening a known project from the list or the switcher. Only an activation that succeeds is recorded, so an unavailable project is never recorded as last active.)*
 - **FR-011**: On launch, the system MUST let the user reopen a known project directly from the list without browsing the filesystem.
+- **FR-011a**: Every known project MUST stay reachable from the list however many there are (bugfix BUG-005). When the list is longer than the space the window gives it, the list MUST scroll — by mouse wheel or trackpad and by a visible scrollbar — so that every row, and every action on it (reopen, rename, forget), can be brought on screen; the header above the list stays in place while the list scrolls. The same holds for the top-bar project switcher's panel ([feature 008](../008-background-project-switching/spec.md) FR-005, FR-009), which lists the same known projects: the panel MUST stay within the window and scroll, so every project and the trailing add-a-project entry can be reached. A list that fits is shown as before, with no scrollbar and no change in size.
 - **FR-012**: Opening a folder that is already a known project MUST activate the existing entry and MUST NOT create a duplicate; project identity is the ~~filesystem path~~ **resolved** filesystem path — symlinks followed — so that opening a symlink to a known project activates that project instead of creating a second one (bugfix BUG-002).
 - **FR-012a**: A storage fault (corruption, a failed or interrupted write, an unreadable file) affecting one project's persisted state MUST NOT cause the loss of any other project's persisted state, nor of the known-projects catalog itself (bugfix BUG-001). Persisted per-project state (sessions, worktree display-name overrides, and any other per-project data introduced by later features) MUST be isolated such that a fault is scoped to at most one project.
 - **FR-012b**: A failed attempt to persist the catalog or a project's state (e.g. a write or rename error) MUST NOT crash the application, but MUST be surfaced to the user in some visible, non-blocking way (e.g. a status message) rather than being silently discarded (bugfix BUG-001). Silently swallowing the failure is insufficient: the user must be able to tell that their most recent change may not have survived a restart.
@@ -163,6 +165,7 @@ The user renames a project. Renaming changes only the display name stored by the
 - **SC-008**: 100% of attempts to rename a project to an empty or whitespace-only name are rejected with the previous name preserved.
 - **SC-009**: When a known project's folder is missing, the application remains usable with zero crashes and the project is clearly marked unavailable.
 - **SC-010**: Every acceptance scenario in this specification passes identically on Linux, macOS, and Windows.
+- **SC-011**: With more known projects than fit in the window (e.g. 20 at the default size), 100% of them — and, in the switcher, the add-a-project entry — can be brought on screen and acted on by scrolling alone (bugfix BUG-005).
 
 ## Assumptions
 
@@ -211,3 +214,9 @@ T059–T061.
 
 **Bugfix**: 2026-09-13 — BUG-004 FR-023 clarified to cover the launch-time restore of the
 last-active project; new edge case "Last-active folder gone at launch". Tasks T062–T064.
+
+**Bugfix**: 2026-09-27 — BUG-005 FR-011a added: the known-projects list, and the top-bar switcher
+panel that lists the same projects (feature 008 FR-005/FR-009), scroll when they are longer than
+the window gives them, so every project stays reachable. New edge case "More known projects than
+fit" and SC-011. The switcher's requirement lives here, with a cross-reference note in 008's spec
+(the precedent 018 BUG-007 set when it amended 008 FR-004). Tasks T065–T069.
