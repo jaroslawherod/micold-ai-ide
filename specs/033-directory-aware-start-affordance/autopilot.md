@@ -73,6 +73,10 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - Review A: 7 findings, all comment/record accuracy, all fixed: F1 (the StartMenuOpened doc claimed the reducer checks after the refresh; the ask is asynchronous), F2/F3 (stale R11/`PATH`-probe wording in `tests/session_start_press.rs` and `tests/unavailable_default_says_so.rs`), F4 (T029's own grep hits), F5 (startup comment: wanted set, not every row; a round trip, not one frame), F6 (main_tests wording), F7 (line width).
 - Review B round 1: CHANGES — F1 MAJOR (wrong C1 event number, A2 → A1), F2 MAJOR (worktree-row chevrons are hover-revealed, so the step 1/6/7 images show Default rows only), F3–F8 MINOR. Fixed F1, F3, F4, F6, F7, F8; F2 by stating in the record what the worktree-row claims rest on (log, `/proc`, M1 tests) rather than re-capturing; F5 declined (table above). Round 2 (sonnet): CLEAN.
 
+### Close review outcomes
+
+- Round 1 (fresh subagent): CLEAN. F1 MINOR (test-list `updated_at` stale) fixed; F2 MINOR (`features_session.rs` now includes all of `support` for one helper) accepted — `support/mod.rs` is `#![allow(dead_code)]` and other suites include it the same way.
+
 ## Open escalation
 
 None.
