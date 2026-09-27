@@ -836,4 +836,11 @@ fn a_catalog_without_a_version_number_loads_its_projects() {
         !path.with_extension("json.bak").exists(),
         "nothing is moved aside: the file was never corrupt"
     );
+
+    // The next save writes the version the build knows, not the `0` the absent number read as.
+    store.save(&out.workspace).unwrap();
+    let written: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(written["schema_version"], 1);
+    assert_eq!(store.load().workspace.projects.len(), 2);
 }

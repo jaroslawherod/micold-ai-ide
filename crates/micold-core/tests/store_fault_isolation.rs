@@ -471,4 +471,28 @@ fn a_project_state_file_without_a_version_number_loads_its_records() {
         out.workspace.provenance_migrated.contains(Path::new("/a")),
         "the backfill is recorded as done, so it does not run again"
     );
+
+    // The file is rewritten on the next save — carrying the version and every record — so the
+    // loss cannot recur on the following launch.
+    store.save(&out.workspace).unwrap();
+    let state_path = store.project_state_path(Path::new("/a"));
+    let written: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&state_path).unwrap()).unwrap();
+    assert_eq!(written["schema_version"], 1);
+    let again = store.load();
+    assert!(again.workspace.unreadable_projects.is_empty());
+    assert!(again.workspace.is_user_created(Path::new("/a"), "feat-y"));
+    assert!(again
+        .workspace
+        .provenance_migrated
+        .contains(Path::new("/a")));
+    assert_eq!(
+        again
+            .workspace
+            .worktree_names
+            .get(Path::new("/a"))
+            .and_then(|names| names.get("feat-x"))
+            .map(String::as_str),
+        Some("Feature X")
+    );
 }
