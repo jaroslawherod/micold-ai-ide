@@ -13,6 +13,9 @@
 //! [`a_default_that_turned_out_to_be_installed_says_nothing`] holds: the flag says why the user
 //! pressed, never what is true now.
 
+#[path = "support/mod.rs"]
+mod support;
+
 use micold_client::app::{drain, interpret, State};
 use micold_client::features::session::{
     start_menu_toggled, AvailabilityKey, AvailabilitySource, CliAvailability, PressTarget,
@@ -30,17 +33,11 @@ const ROW: &str = "/repo";
 /// deliberately in the same words, since it is the same fact about the same CLI.
 const SENTENCE: &str =
     "GitHub Copilot isn't installed. Install it, or start this session on another AI CLI.";
-/// File `answer` as the home directory's, the way a reply to a `cwd: None` request lands (feature
-/// 033). Every row reads it while its own directory has no answer (FR-005).
-fn hold_home(state: &mut State, answer: CliAvailability) {
-    state.session.availability.asked(0, AvailabilityKey::Home);
-    state.session.availability.answered(0, answer);
-}
 
 fn state_with(default_ai_cli: AiCli, available: &[AiCli]) -> State {
     let mut state = State::default();
     state.session.default_ai_cli = default_ai_cli;
-    hold_home(
+    support::hold_home(
         &mut state,
         CliAvailability {
             available: available.to_vec(),

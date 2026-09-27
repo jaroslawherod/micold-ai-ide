@@ -22,7 +22,7 @@ mod support;
 
 use micold_client::app::State;
 use micold_client::features::connection::ConnectionStatus;
-use micold_client::features::session::{AvailabilityKey, AvailabilitySource, CliAvailability};
+use micold_client::features::session::{AvailabilitySource, CliAvailability};
 use micold_client::features::settings::{SettingsDraft, SettingsSection};
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::session::AiCli;
@@ -36,16 +36,10 @@ const CLI_SUPPORTING: &str = "Used for new sessions unless you choose otherwise"
 
 /// The supporting line under Image reference, in the Session service section.
 const IMAGE_SUPPORTING: &str = "A digest or an exact tag; a moving tag cannot be reported in a bug";
-/// File `answer` as the home directory's, the way a reply to a `cwd: None` request lands (feature
-/// 033). Every row reads it while its own directory has no answer (FR-005).
-fn hold_home(state: &mut State, answer: CliAvailability) {
-    state.session.availability.asked(0, AvailabilityKey::Home);
-    state.session.availability.answered(0, answer);
-}
 
 fn settings_showing(section: SettingsSection, source: AvailabilitySource) -> State {
     let mut state = State::default();
-    hold_home(
+    support::hold_home(
         &mut state,
         CliAvailability {
             // Claude Code present, Copilot and Pi missing — so there is a notice to look at, and the

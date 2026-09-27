@@ -46,12 +46,6 @@ const PROJECT: &str = "/fixture/providers";
 /// the environment-include toggle and its two fields.
 const SETTINGS_SELECT: &[usize] = &[0, 0, 1, 0, 1, 0, 0, 1];
 
-/// File `answer` as the home directory's, the way a reply to a `cwd: None` request lands (feature
-/// 033). Every row reads it while its own directory has no answer (FR-005).
-fn hold_home(state: &mut State, answer: CliAvailability) {
-    state.session.availability.asked(0, AvailabilityKey::Home);
-    state.session.availability.answered(0, answer);
-}
 
 fn with_project() -> State {
     let mut workspace = support::workspace_with(vec![(PROJECT, vec![])]);
@@ -98,7 +92,7 @@ fn painted(state: &State, press_at: Option<&[usize]>) -> Vec<String> {
 /// the list as the only thing that can name one.
 fn settings_state(available: &[AiCli]) -> State {
     let mut state = with_project();
-    hold_home(
+    support::hold_home(
         &mut state,
         CliAvailability {
             available: available.to_vec(),
@@ -121,7 +115,7 @@ fn settings_state(available: &[AiCli]) -> State {
 
 fn start_menu_state(available: &[AiCli]) -> State {
     let mut state = with_project();
-    hold_home(
+    support::hold_home(
         &mut state,
         CliAvailability {
             available: available.to_vec(),

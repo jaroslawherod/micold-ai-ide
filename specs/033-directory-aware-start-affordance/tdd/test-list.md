@@ -100,12 +100,13 @@ Tests: `crates/micold-client/src/main_tests.rs`, each named with `availability`.
 ### `crates/micold-client/src/ui/mod.rs`, `ui/sidebar.rs` (rendered surfaces)
 
 Tests: `crates/micold-client/tests/provider_choice_surfaces.rs`,
-`missing_cli_is_reported_where_it_is_chosen.rs` (extended).
+`missing_cli_is_reported_where_it_is_chosen.rs` (extended), `session_start_press.rs` (U39).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
 | U35 | The rendered Settings default select lists the home answer, not a held directory answer | FR-008 | example | DONE | `provider_choice_surfaces.rs::the_settings_select_lists_the_home_answer` |
 | U36 | The rendered start list for `P`'s row lists `P`'s answer (Pi included) while home lacks Pi, and the missing-default notice judges by the list's directory | FR-001, FR-008 | example | DONE | `provider_choice_surfaces.rs::the_start_list_lists_its_rows_answer` |
+| U39 | The rendered Default row, with home `[claude]` and its root `[claude, pi]` and default Pi, draws its chevron and its primary press starts Pi — both read the row's own directory, not home (added in M1 review B, cycle 4; red by mutant, since the wiring came with T040) | FR-001, FR-007, US1-1, US1-5 | example | DONE | `session_start_press.rs::the_default_row_draws_its_chevron_from_its_own_directorys_answer` + `session_start_press.rs::the_default_row_starts_a_default_its_own_directory_provides` |
 
 ### Structural (`crates/micold-client/tests/`)
 
