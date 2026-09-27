@@ -80,11 +80,28 @@ pub trait ProjectStore {
 }
 
 /// The on-disk shape of the catalog. Unknown fields are ignored on read (serde default),
-/// and missing optional fields take their defaults — both give forward compatibility
-/// (storage-schema contract). `availability` is intentionally **not** persisted; it is
-/// recomputed from the filesystem on load (FR-022).
+/// and every field a document omits takes its default, `schema_version` included — only a
+/// project's identity (`path`, `display_name`) is required (FR-012c). Both give forward
+/// compatibility (storage-schema contract). `availability` is intentionally **not** persisted; it
+/// is recomputed from the filesystem on load (FR-022).
 #[derive(Debug, Serialize, Deserialize)]
 struct StoredCatalog {
+    /// Missing → `0`, the version number no build has ever written (002 BUG-006, FR-012c).
+    ///
+    /// Nothing reads this field: no migration and no gate consumes it, and `into_workspace`
+    /// drops it. Without a default it was nonetheless the one field a catalog had to carry, so a
+    /// `projects.json` that omitted it was classed as corrupt, moved to `projects.json.bak`, and
+    /// replaced by an empty project list with nothing said.
+    ///
+    /// `0` rather than [`SCHEMA_VERSION`] because it is the honest answer: the document named no
+    /// version, and saying so is better than recording a claim that this build wrote it. Saves
+    /// still write [`SCHEMA_VERSION`].
+    ///
+    /// The hazard in that choice belongs to whoever writes the first migration gate: `0` means
+    /// *unknown*, not *older than v1*. The obvious gate, `if schema_version < SCHEMA_VERSION
+    /// { migrate }`, would run every migration ever written over a document already in the
+    /// current shape. A gate must treat `0` as "no version stated" and leave the document alone.
+    #[serde(default)]
     schema_version: u32,
     #[serde(default)]
     last_active: Option<PathBuf>,
@@ -382,10 +399,16 @@ impl StoredCatalog {
 
 /// The on-disk shape of one project's own state (bugfix BUG-001): sessions and worktree
 /// display-name overrides, addressed by [`project_id`] rather than nested under the catalog.
-/// Same forward-compatibility rules as the catalog (unknown fields ignored, missing optional
-/// fields default).
+/// Same forward-compatibility rules as the catalog (unknown fields ignored, every omitted field
+/// defaults, `schema_version` included — FR-012c).
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct StoredProjectState {
+    /// Missing → `0` (002 BUG-006, FR-012c), for the reasons [`StoredCatalog::schema_version`]
+    /// records, with the same warning for a future migration gate: `0` means *unknown*, not
+    /// *older than v1*. Here the cost of requiring it was worse than a reset: the project was
+    /// marked unreadable (029 FR-011), its file was never rewritten, and so the loss recurred on
+    /// every launch. Saves still write [`SCHEMA_VERSION`].
+    #[serde(default)]
     schema_version: u32,
     #[serde(default)]
     sessions: Vec<StoredSession>,
