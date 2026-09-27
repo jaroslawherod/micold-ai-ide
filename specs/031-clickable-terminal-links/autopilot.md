@@ -24,6 +24,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | #408 | M6 Sandboxed file links, translated and confirmed | merged | 188fe02c |
 | #411 | M7 Link context menu | merged | fd883b8e |
 | #414 | M8 SC-005 measured and quickstart Part B complete | merged | ac72d25f |
+| #421 | Close: the three close skills, §B.17 part 2 confirmed, spec Closed | open | |
 
 ## Milestones
 
