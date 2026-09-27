@@ -61,7 +61,7 @@ const RECORDED_SCHEME: ColorScheme = ColorScheme::Light;
 const TOLERANCE: f32 = 0.5;
 
 /// A fixed project path, invented — never the developer's own (FR-007).
-pub(crate) const PROJECT: &str = "/fixture/project";
+const PROJECT: &str = "/fixture/project";
 
 /// Invented projects for the switcher's list. The first is [`PROJECT`], so the active project and
 /// the sidebar are the same in every state here.
@@ -72,7 +72,7 @@ const PROJECTS: [&str; 2] = [PROJECT, "/fixture/other-project"];
 /// invisible at the top of the list and obvious at the bottom, so the fixture has to have a bottom.
 const WORKTREE_COUNT: usize = 8;
 
-pub(crate) fn worktree(dir_name: &str, branch: &str) -> Worktree {
+fn worktree(dir_name: &str, branch: &str) -> Worktree {
     Worktree {
         dir_name: dir_name.to_string(),
         path: PathBuf::from(PROJECT)
@@ -104,7 +104,7 @@ fn with_projects(count: usize) -> State {
 /// it (029 FR-004), so a fixture that fills `worktree.worktrees` and stops renders a sidebar with
 /// no rows — and this gate presses rows. These stand for ordinary worktrees made through the app,
 /// so they carry the records ordinary worktrees have.
-pub(crate) fn record_every_worktree(mut state: State) -> State {
+fn record_every_worktree(mut state: State) -> State {
     let Some(project) = state.workspace.active_project().map(|p| p.path.clone()) else {
         return state;
     };
@@ -122,6 +122,14 @@ pub(crate) fn record_every_worktree(mut state: State) -> State {
 
 /// A project open, with a long worktree list and whatever sessions the caller wants in it.
 fn with_project(sessions: Vec<Session>) -> State {
+    with_worktrees(sessions, WORKTREE_COUNT, lay::WINDOW)
+}
+
+/// As [`with_project`], with `count` worktrees in a window of `size`.
+///
+/// Shared with `tooltip_clears_its_row` (029 BUG-001), which needs the same sidebar at a row count
+/// and a window size of its own.
+pub(crate) fn with_worktrees(sessions: Vec<Session>, count: usize, size: iced::Size) -> State {
     let mut workspace = crate::support::workspace_with(vec![(PROJECT, sessions)]);
     workspace.active = workspace.projects.first().map(|p| p.path.clone());
 
@@ -132,12 +140,12 @@ fn with_project(sessions: Vec<Session>) -> State {
         },
 
         window: window::State {
-            window_size: (lay::WINDOW.width as u16, lay::WINDOW.height as u16),
+            window_size: (size.width as u16, size.height as u16),
             ..Default::default()
         },
         workspace,
         worktree: micold_client::features::worktree::State {
-            worktrees: (0..WORKTREE_COUNT)
+            worktrees: (0..count)
                 .map(|i| worktree(&format!("feat-{i:02}"), &format!("feat/{i:02}")))
                 .collect(),
             ..Default::default()

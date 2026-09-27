@@ -23,17 +23,15 @@
 //! Beside `context_menu_anchor`, whose fixture it reuses — the same long worktree list, the same
 //! records, the same row paths — rather than restating it.
 
-use crate::context_menu_anchor::{record_every_worktree, sidebar_row, worktree, PROJECT};
+use crate::context_menu_anchor::{sidebar_row, with_worktrees};
 use crate::support::layout::{self as lay, LayoutRecord};
 use iced::Size;
 use micold_client::app::State;
 use micold_client::features::connection::ConnectionStatus;
-use micold_client::features::sidebar;
-use micold_client::features::window;
-use micold_core::theme::ThemePreference;
 
-/// The smallest window the application allows (`shell/startup.rs`'s `MIN_WINDOW_SIZE`, private to
-/// that module). The worst case for this bug: the least room on every side of every row.
+/// The smallest window the application allows: `shell/startup.rs`'s `MIN_WINDOW_SIZE`, restated
+/// because it lives in the binary crate, which no test can reach. The worst case for this bug: the
+/// least room on every side of every row.
 const SMALLEST_WINDOW: Size = Size::new(640.0, 480.0);
 
 /// Half a pixel, matching every geometry gate beside this one.
@@ -46,32 +44,8 @@ const FIRST_WORKTREE_ROW: usize = 1;
 /// it; this only bounds the search.
 const MOST_WORKTREES: usize = 60;
 
-/// A project open with `count` worktrees, laid out for a window of `size`.
-fn with_worktrees(count: usize, size: Size) -> State {
-    let mut workspace = crate::support::workspace_with(vec![(PROJECT, Vec::new())]);
-    workspace.active = workspace.projects.first().map(|p| p.path.clone());
-
-    let mut state = State {
-        sidebar: sidebar::State {
-            width: 260,
-            ..Default::default()
-        },
-        window: window::State {
-            window_size: (size.width as u16, size.height as u16),
-            ..Default::default()
-        },
-        workspace,
-        worktree: micold_client::features::worktree::State {
-            worktrees: (0..count)
-                .map(|i| worktree(&format!("feat-{i:02}"), &format!("feat/{i:02}")))
-                .collect(),
-            ..Default::default()
-        },
-        ..State::default()
-    };
-    state.settings.theme_pref = ThemePreference::Light;
-    record_every_worktree(state)
-}
+/// A list short enough that its first row has the rest of the window below it.
+const SHORT_LIST: usize = 3;
 
 /// What one hover produced: the row that was hovered, and the tooltip panel it opened.
 struct Hovered {
@@ -190,26 +164,44 @@ fn overlay_records<'a, M: 'a>(
         .unwrap_or_default()
 }
 
-/// The tooltip panel: the outermost overlay node the hover added.
+/// The tooltip's visible surface: the one panel the hover added, less its transparent margin.
 ///
 /// Overlays nest — every container that has more than one child with an overlay groups them, and a
-/// group is laid out at the size of the whole window — so "outermost" means the shallowest new node
-/// that is **not** window-sized. A hover that added nothing returns `None`, which the tests below
-/// report as its own failure: a row without a tooltip is a different defect from one covered by it.
+/// group is laid out at the size of the whole window — so a panel is a new overlay node that is
+/// **not** window-sized, and the panel the hover opened is the shallowest of them. Its first child
+/// is the styled surface a person sees; the panel around it is margin drawn as nothing.
+///
+/// A hover that added nothing returns `None`, which the tests below report as its own failure: a
+/// row without a tooltip is a different defect from one covered by it. A hover that opened two
+/// panels — the pointer on a chip or an action with a tooltip of its own — fails here, because
+/// which of them to measure would be a guess.
 fn panel_that_opened(
     before: &[LayoutRecord],
     after: &[LayoutRecord],
     size: Size,
 ) -> Option<LayoutRecord> {
-    after
+    let added: Vec<&LayoutRecord> = after
         .iter()
         .filter(|r| {
             !((r.width - size.width).abs() < TOLERANCE
                 && (r.height - size.height).abs() < TOLERANCE)
         })
         .filter(|r| !before.contains(r))
-        .min_by_key(|r| r.path.len())
-        .cloned()
+        .collect();
+    let depth = added.iter().map(|r| r.path.len()).min()?;
+    let panels: Vec<&&LayoutRecord> = added.iter().filter(|r| r.path.len() == depth).collect();
+    assert_eq!(
+        panels.len(),
+        1,
+        "one hover opened {} tooltip panels, so which of them is the row's is a guess — the \
+         pointer is on something inside the row with a tooltip of its own",
+        panels.len()
+    );
+    let panel = panels[0];
+    let mut surface = panel.path.clone();
+    surface.push(0);
+    let visible = after.iter().find(|r| r.path == surface).unwrap_or(panel);
+    Some(visible.clone())
 }
 
 fn view(state: &State) -> iced::Element<'_, micold_client::app::Message> {
@@ -225,8 +217,8 @@ fn view(state: &State) -> iced::Element<'_, micold_client::app::Message> {
     )
 }
 
-/// The base record of sidebar row `index`, without hovering anything.
-fn row_record(state: &State, index: usize, size: Size) -> Option<LayoutRecord> {
+/// Every base record of `state` laid out in a window of `size`, without hovering anything.
+fn base_records(state: &State, size: Size) -> Vec<LayoutRecord> {
     use iced::advanced::widget::Tree;
     use iced::advanced::{layout, Layout};
 
@@ -238,40 +230,58 @@ fn row_record(state: &State, index: usize, size: Size) -> Option<LayoutRecord> {
         &renderer,
         &layout::Limits::new(Size::ZERO, size),
     );
-    let path = sidebar_row(index);
     lay::walk(Layout::new(&node), lay::Layer::Base)
-        .into_iter()
-        .find(|r| r.path == path)
 }
 
-/// The longest worktree list whose last row is still fully inside a window of `size`, unscrolled,
-/// and that list's state.
+/// Where `path`'s content stops being visible: the nearest bottom edge among it and its ancestors.
 ///
-/// Searched rather than stated: the row pitch is the sidebar's business, and a count that is right
+/// A scrollable's own record is its viewport while its content column runs on below it, so this is
+/// the scrollable's bottom for a row inside one — or the bottom of whatever clips it, should the
+/// sidebar grow a footer under the list.
+fn visible_bottom(records: &[LayoutRecord], path: &[usize]) -> f32 {
+    (0..path.len())
+        .filter_map(|depth| records.iter().find(|r| r.path == path[..depth]))
+        .map(|r| r.y + r.height)
+        .fold(f32::INFINITY, f32::min)
+}
+
+/// The longest worktree list whose last row still sits inside a window of `size`, unscrolled, with
+/// its centre — where the hover lands — on screen, and that list's state.
+///
+/// The centre rather than the whole row: once a list overflows, its scrollable stops a few pixels
+/// short of the window's bottom edge, and the row that reaches the bottom edge is the one BUG-001
+/// is about. A row whose centre is clipped would take no hover at all, and the gate would report a
+/// missing tooltip rather than a misplaced one.
+///
+/// Measured rather than stated: the row pitch is the sidebar's business, and a count that is right
 /// today puts the last row below the fold — where it cannot be hovered at all — the day a row grows
-/// a pixel. The search asks the layout instead.
+/// a pixel. Each count is laid out on its own, because a list that overflows is laid out
+/// differently from one that fits.
 fn fullest_unscrolled_list(size: Size) -> (State, usize) {
     let mut fullest = None;
+    // Row 0 is the Default row, so the last worktree row of a list of `count` is row `count`.
     for count in 1..=MOST_WORKTREES {
-        let state = with_worktrees(count, size);
-        // Row 0 is the Default row, so the last worktree row is row `count`.
-        let Some(last) = row_record(&state, count, size) else {
-            break;
-        };
-        if last.y + last.height > size.height + TOLERANCE {
+        let state = with_worktrees(Vec::new(), count, size);
+        let records = base_records(&state, size);
+        let path = sidebar_row(count);
+        let visible = records.iter().find(|r| r.path == path).is_some_and(|r| {
+            r.y + r.height <= size.height + TOLERANCE
+                && r.y + r.height / 2.0 < visible_bottom(&records, &path)
+        });
+        if !visible {
             break;
         }
         fullest = Some((state, count));
     }
     let (state, count) = fullest.unwrap_or_else(|| {
         panic!(
-            "not even one worktree row fits a {}×{} window",
+            "not even one worktree row can be hovered in a {}×{} window",
             size.width, size.height
         )
     });
     assert!(
         count < MOST_WORKTREES,
-        "{MOST_WORKTREES} worktree rows all fit a {}×{} window, so the search never reached the \
+        "{MOST_WORKTREES} worktree rows all fit a {}×{} window, so the list never reaches the \
          bottom of it and the last row is not where this gate needs it",
         size.width,
         size.height
@@ -360,7 +370,9 @@ fn the_last_row_keeps_its_tooltip_off_itself_in_the_smallest_window() {
 /// Unchanged behaviour: a row with room below it gets its tooltip below it, clear of it (T032).
 #[test]
 fn a_row_with_room_below_gets_its_tooltip_below_it() {
-    let (state, _) = fullest_unscrolled_list(lay::WINDOW);
+    // Any list with rows below the first will do; a short one keeps its first row far from every
+    // edge.
+    let state = with_worktrees(Vec::new(), SHORT_LIST, lay::WINDOW);
     let hovered = hover_row(&state, FIRST_WORKTREE_ROW, lay::WINDOW);
     let row = &hovered.row;
     let panel = hovered.panel.unwrap_or_else(|| {
