@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: fix/a-project-local-cli-stays-unreachable-in-that-project
 - **Started**: 2026-09-27
 - **Phase**: 3-design
-- **Next step**: Phase 3 — plan (speckit-plan), milestones and checklists; clarifications merge with PR 2.
+- **Next step**: Phase 3 — plan review round 1, then tasks, milestones, analyze, checklists; PR 2.
 
 ## Pull requests
 
@@ -25,6 +25,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| D7 | design | Reuse the existing per-directory request or add a protocol message? | Reuse `AiCliAvailabilityRequest { req, cwd }` unchanged; the client maps `req → directory` (reply does not echo cwd). No PROTOCOL_VERSION/schema change. | agent-resolved | research.md R1 |
 | D6 | clarify | Round 2 scan: any critical ambiguity left? | None. Closing a project drops its held answers (FR-012, agent-resolved from FR-003). | agent-resolved | spec.md FR-003 |
 | D5 | clarify | FR-006: when is a row's first answer asked for? | Eagerly, as soon as its directory appears (project open incl. restore, worktree added/discovered), once per distinct directory. | user | AskUserQuestion 2026-09-27 |
 | D4 | clarify | FR-001: make the affordance directory-aware at all? | Yes, per-directory answers. | user | AskUserQuestion 2026-09-27 |
