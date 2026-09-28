@@ -129,16 +129,14 @@ fn sharing_summary(draft: &SettingsDraft) -> Option<String> {
     let summary = format!("Shared with the container: {}.", labels.join(", "));
     // FR-004e: every share is read-only but the sign-in, which the CLI rewrites on each refresh.
     // Said here because it is the one share that grants more than reading.
-    Some(
-        if shared.contains(&CredentialShare::AiCliAuth) {
-            format!(
-                "{summary} A session can use the AI CLI sign-in and replace its token, which the \
+    Some(if shared.contains(&CredentialShare::AiCliAuth) {
+        format!(
+            "{summary} A session can use the AI CLI sign-in and replace its token, which the \
                  CLI does each time it refreshes it."
-            )
-        } else {
-            summary
-        },
-    )
+        )
+    } else {
+        summary
+    })
 }
 
 /// What the user is told at the moment they choose to cut the sandbox off (FR-018).
@@ -602,7 +600,10 @@ mod tests {
         let draft = draft_sharing(&[CredentialShare::AiCliAuth], Some(LOOKED_FOR));
 
         let notice = unshared_sign_in_notice(&draft).expect("no notice under the share");
-        assert!(notice.contains(LOOKED_FOR), "the path is not named: {notice}");
+        assert!(
+            notice.contains(LOOKED_FOR),
+            "the path is not named: {notice}"
+        );
         assert!(
             !notice.to_lowercase().contains("restart"),
             "a restart adopts the same container and shares nothing new: {notice}"
@@ -623,11 +624,21 @@ mod tests {
             "the sign-in is listed as shared: {summary}"
         );
         assert!(!summary.contains("replace"), "{summary}");
-        assert!(summary.contains(CredentialShare::GitConfig.label()), "{summary}");
+        assert!(
+            summary.contains(CredentialShare::GitConfig.label()),
+            "{summary}"
+        );
 
         let alone = draft_sharing(&[CredentialShare::AiCliAuth], Some(LOOKED_FOR));
-        assert_eq!(sharing_summary(&alone), None, "an empty list of what is shared");
-        assert!(alone.shares_credentials(), "the rail's mark follows the opt-in");
+        assert_eq!(
+            sharing_summary(&alone),
+            None,
+            "an empty list of what is shared"
+        );
+        assert!(
+            alone.shares_credentials(),
+            "the rail's mark follows the opt-in"
+        );
     }
 
     /// Without a report, nothing changes; with the share off, a report is not shown.
@@ -636,7 +647,10 @@ mod tests {
         let reported_nothing = draft_sharing(&[CredentialShare::AiCliAuth], None);
         assert_eq!(unshared_sign_in_notice(&reported_nothing), None);
         let summary = sharing_summary(&reported_nothing).expect("the sign-in is shared");
-        assert!(summary.contains(CredentialShare::AiCliAuth.label()), "{summary}");
+        assert!(
+            summary.contains(CredentialShare::AiCliAuth.label()),
+            "{summary}"
+        );
 
         let share_off = draft_sharing(&[CredentialShare::GitConfig], Some(LOOKED_FOR));
         assert_eq!(unshared_sign_in_notice(&share_off), None);

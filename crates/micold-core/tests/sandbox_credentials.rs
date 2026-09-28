@@ -337,7 +337,12 @@ fn destinations_without_credentials(mounts: &MountSet) -> Vec<String> {
         .shared_locations(None)
         .into_iter()
         .map(|l| l.container)
-        .filter(|c| !mounts.credentials.iter().any(|m| m.container.to_string_lossy() == *c))
+        .filter(|c| {
+            !mounts
+                .credentials
+                .iter()
+                .any(|m| m.container.to_string_lossy() == *c)
+        })
         .collect()
 }
 
@@ -361,7 +366,10 @@ fn an_unshared_sign_in_is_not_reported_when_the_share_is_off() {
 fn a_created_container_reports_the_sign_in_its_mount_set_lacks() {
     let profile = sharing_the_sign_in();
     let with_token = build(&profile);
-    assert_eq!(with_token.unshared_sign_in(&profile, None, &sign_in_path()), None);
+    assert_eq!(
+        with_token.unshared_sign_in(&profile, None, &sign_in_path()),
+        None
+    );
 
     let mut no_token = layout();
     no_token.ai_cli_auth = None;
@@ -394,7 +402,11 @@ fn an_adopted_container_reports_the_sign_in_it_was_created_without() {
         "an adopted container without the token mount was reported as sharing it"
     );
 
-    let with: Vec<String> = mounts.shared_locations(None).into_iter().map(|l| l.container).collect();
+    let with: Vec<String> = mounts
+        .shared_locations(None)
+        .into_iter()
+        .map(|l| l.container)
+        .collect();
     assert_eq!(
         mounts.unshared_sign_in(&profile, Some(&with), &sign_in_path()),
         None,
