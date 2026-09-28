@@ -503,16 +503,17 @@ control it is about.
   already exists (`lifecycle::adopt` compares only image and fingerprint), and that container keeps
   the mounts it was created with. So "is the token file there now?" is the wrong question: a user
   who signs in on the host after the report would see it vanish while the adopted container still
-  has no token. A pure core decision, `sandbox::unshared_sign_in(profile, mounts, mounted,
-  looked_for)`, answers the right one. With the share off, nothing. For a container this bring-up
+  has no token. A pure core decision, `MountSet::unshared_sign_in(mounted, looked_for)`, answers
+  the right one, whether or not the profile shares the sign-in: a share ticked and saved while the
+  container runs does not recreate it, so that container lacks the token too. The page shows the
+  answer only while the share is ticked. For a container this bring-up
   created (`Started.mounted` is `None`), the path when the mount set holds no `AiCliAuth` mount,
-  which is when `drop_absent_sign_in` dropped it. For an adopted one (`Some(destinations)`), the
+  which is when `drop_absent_sign_in` dropped it or the share was off. For an adopted one (`Some(destinations)`), the
   path when the sign-in's container destination (`pathmap::map_for`, as `MountSet::build` maps it)
   is not among the destinations that container really mounts. Same test as `shared_locations` uses
   for C16c.
-- **The bring-up knows the path it looks for.** `HostFacts` keeps the conventional sign-in path
-  whether or not the file is there, next to the layout `drop_absent_sign_in` filtered.
-  `CredentialLayout::conventional` stays pure. The `eprintln!` in `drop_absent_sign_in`, which ran
+- **The bring-up knows the path it looks for.** `start` names it from `HostFacts::home` through
+  `CredentialLayout::conventional`, which names it whether or not the file is there and stays pure. The `eprintln!` in `drop_absent_sign_in`, which ran
   whether or not the share was on, moves to `start` and runs only when there is something to
   report.
 - **It travels with the container.** `start` puts the answer in the `SandboxLocations` it returns.
@@ -525,9 +526,10 @@ control it is about.
   the page opens; a page left open while the sandbox starts or stops is not refreshed. That
   precedent is accepted (FR-004g).
 - **The page says it.** A caution directly under the *AI CLI sign-in* checkbox names the path and
-  says what works: sign in inside a session with `/login`, or put the token at that path, which is
-  shared the next time the sandbox's container is created. It does not offer "Restart the sandbox",
-  because a restart adopts the same container. The sharing summary leaves the sign-in out of
+  says what works: sign in inside a session with `/login`, or put the token at that path and set
+  *Where sessions run* to *On this computer* and back, which removes the container and creates a new
+  one. It does not offer "Restart the sandbox", because a restart adopts the same container. The
+  Keychain is named on macOS only. The sharing summary leaves the sign-in out of
   "Shared with the container" and drops the "can replace its token" sentence. With no other share
   on, it has nothing to list and is not drawn. `SettingsDraft::shares_credentials` keeps answering
   whether an opt-in is on, so the rail's badge still marks the section (FR-004c). The summary asks

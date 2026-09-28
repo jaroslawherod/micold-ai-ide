@@ -92,15 +92,22 @@ fn unshared_sign_in(draft: &SettingsDraft) -> Option<&str> {
 ///
 /// It names the path, because "not shared" alone sends the user looking for why. It offers the two
 /// ways that work and not a restart: a restart adopts the same container, which keeps the mounts
-/// it was created with.
+/// it was created with. Moving the service to this computer removes the container, so moving it
+/// back creates one with the token (`apply_placement`, `shell::sandbox::stop`).
+///
+/// The Keychain is named on macOS only, where it is the usual reason (FR-004g).
 pub fn unshared_sign_in_notice(draft: &SettingsDraft) -> Option<String> {
+    let keychain = if cfg!(target_os = "macos") {
+        " On macOS, Claude Code keeps the token in the Keychain rather than in that file."
+    } else {
+        ""
+    };
     unshared_sign_in(draft).map(|path| {
         format!(
-            "The sign-in is not shared: the running sandbox has no token from {path}. Its \
-             container was created while that file was missing or while this share was off, and \
-             on macOS Claude Code keeps the token in the Keychain rather than in that file. Sign \
-             in inside a session with /login, or put the token there; it is shared the next time \
-             the sandbox's container is created."
+            "The sign-in is not shared: the running sandbox's container has no token from {path}.\
+             {keychain} Sign in inside a session with /login. Or put the token there, then set \
+             \u{2018}Where sessions run\u{2019} to On this computer and back, which creates the \
+             container again with it."
         )
     })
 }
@@ -607,6 +614,15 @@ mod tests {
         assert!(
             !notice.to_lowercase().contains("restart"),
             "a restart adopts the same container and shares nothing new: {notice}"
+        );
+        assert!(
+            notice.contains("On this computer"),
+            "the one in-app way to a new container is not named: {notice}"
+        );
+        assert_eq!(
+            notice.contains("Keychain"),
+            cfg!(target_os = "macos"),
+            "the Keychain is named where it is not the reason: {notice}"
         );
     }
 

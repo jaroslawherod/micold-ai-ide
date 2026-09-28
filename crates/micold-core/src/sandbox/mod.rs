@@ -770,30 +770,31 @@ impl MountSet {
         locations
     }
 
-    /// The sign-in the user shared that the *running* container does not mount, as the host path it
-    /// is shared from (FR-004g, BUG-008). `None` when there is nothing to report.
+    /// The AI CLI sign-in the *running* container does not mount, as the host path it is shared
+    /// from (FR-004g, BUG-008). `None` when that container mounts it.
+    ///
+    /// Asked whether or not the share is on in the profile this container was built from: the share
+    /// can be ticked and saved while the container runs, and a save does not recreate it. The page
+    /// shows the answer only while the share is ticked, so the answer here is only about mounts.
     ///
     /// `looked_for` is the conventional token path, named whether or not the file is there
     /// ([`CredentialLayout::conventional`] stays pure; the bring-up asks the filesystem). `mounted`
     /// has the meaning it has in [`Self::shared_locations`]: `None` for a container created from this
     /// very set, `Some` for one this bring-up adopted, which keeps the mounts it was created with.
-    /// So the answer is about the container that ended up running, not about whether the file is
-    /// there now. A token put on the host after the container was created is not in it.
+    /// A token put on the host after the container was created is not in it.
+    ///
+    /// For an adopted container the destination is mapped as [`Self::build`] maps every credential
+    /// (`pathmap::map_for` on the host path), so it is the path the mount would have had.
     pub fn unshared_sign_in(
         &self,
-        profile: &SandboxProfile,
         mounted: Option<&[String]>,
         looked_for: &Path,
     ) -> Option<PathBuf> {
-        if !profile.credentials.contains(&CredentialShare::AiCliAuth) {
-            return None;
-        }
         let mounts_it = match mounted {
             None => self
                 .credentials
                 .iter()
                 .any(|c| c.share == CredentialShare::AiCliAuth),
-            // Mapped as `build` maps it, so the destination compared is the one it would have had.
             Some(mounted) => {
                 let destination = pathmap::map_for(looked_for, cfg!(windows));
                 mounted
