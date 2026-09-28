@@ -1565,10 +1565,10 @@ build: `unshared_sign_in` returning `None`, and the new fields in place and unre
 ### Implementation for BUG-008
 
 - [X] T224 [BUG-008] [U48] [U49] `crates/micold-core/src/sandbox/mod.rs` (`unshared_sign_in`),
-      `crates/micold-client/src/shell/sandbox.rs` (`HostFacts`, `drop_absent_sign_in`, `start`) and
-      `crates/micold-client/src/features/sandbox.rs` (`SandboxLocations`). Keep the path looked for
-      on `HostFacts`, decide from the container that ended up running, and return the answer with
-      the locations. Log only when there is something to report. `CredentialLayout::conventional`
+      `crates/micold-client/src/shell/sandbox.rs` (`drop_absent_sign_in`, `start`) and
+      `crates/micold-client/src/features/sandbox.rs` (`SandboxLocations`). Name the path looked for
+      from `HostFacts::home`, decide from the container that ended up running, share ticked or not
+      (review A), and return the answer with the locations. Log only when there is something to report. `CredentialLayout::conventional`
       stays pure.
 - [X] T225 [BUG-008] [U50] [U51] `crates/micold-client/src/features/settings.rs` (`DaemonDraft`),
       `crates/micold-client/src/shell/persist.rs` (the settings-open handler) and
