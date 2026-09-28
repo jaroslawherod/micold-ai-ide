@@ -257,6 +257,13 @@ pub fn on_settings_opened(app: &mut App) -> Task<Message> {
     // to decide which limits are editable (FR-015), so it is carried across here rather than
     // guessed at inside the view.
     draft.daemon.capabilities = app.sandbox.capabilities.clone();
+    // Likewise the sign-in the running sandbox's container does not mount (FR-004g, BUG-008).
+    // Through `locations()`, which answers only for the container that is running, so a stopped or
+    // replaced sandbox's report is never shown.
+    draft.daemon.unshared_sign_in = app
+        .sandbox
+        .locations()
+        .and_then(|l| l.unshared_sign_in.clone());
     app.core.settings.settings_draft = Some(draft);
     Task::none()
 }

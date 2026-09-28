@@ -319,6 +319,89 @@ fn a_sign_in_share_with_no_token_names_no_onboarding_record() {
     assert_eq!(mounts.onboarding_record(), None);
 }
 
+/// Where `conventional` names the sign-in under `/home/u`, whether or not it is there.
+fn sign_in_path() -> PathBuf {
+    PathBuf::from("/home/u/.claude/.credentials.json")
+}
+
+fn sharing_the_sign_in() -> SandboxProfile {
+    SandboxProfile {
+        credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
+        ..SandboxProfile::default()
+    }
+}
+
+/// The destinations an adopted container reports, from this set, minus any credential mount.
+fn destinations_without_credentials(mounts: &MountSet) -> Vec<String> {
+    mounts
+        .shared_locations(None)
+        .into_iter()
+        .map(|l| l.container)
+        .filter(|c| !mounts.credentials.iter().any(|m| m.container.to_string_lossy() == *c))
+        .collect()
+}
+
+/// FR-004g (BUG-008): with the share off there is nothing to report, whatever is or is not mounted.
+#[test]
+fn an_unshared_sign_in_is_not_reported_when_the_share_is_off() {
+    let mounts = build(&SandboxProfile::default());
+    assert_eq!(
+        mounts.unshared_sign_in(&SandboxProfile::default(), None, &sign_in_path()),
+        None
+    );
+    assert_eq!(
+        mounts.unshared_sign_in(&SandboxProfile::default(), Some(&[]), &sign_in_path()),
+        None
+    );
+}
+
+/// A container created from a set that mounts the sign-in has it; one created from a set the
+/// bring-up had to drop it from (no token file on the host) does not, and says where it looked.
+#[test]
+fn a_created_container_reports_the_sign_in_its_mount_set_lacks() {
+    let profile = sharing_the_sign_in();
+    let with_token = build(&profile);
+    assert_eq!(with_token.unshared_sign_in(&profile, None, &sign_in_path()), None);
+
+    let mut no_token = layout();
+    no_token.ai_cli_auth = None;
+    let without = MountSet::build(
+        &[PathBuf::from("/home/u/projects/micold")],
+        &profile,
+        &no_token,
+        PathBuf::from("/home/u/.local/share/micold-ai-ide"),
+        Path::new("/home/u"),
+        secret(),
+    );
+    assert_eq!(
+        without.unshared_sign_in(&profile, None, &sign_in_path()),
+        Some(sign_in_path()),
+        "a created container with no sign-in mount went unreported"
+    );
+}
+
+/// An adopted container keeps the mounts it was created with. This bring-up found the token and
+/// would have mounted it, but the container that is running was made without it, so the sign-in is
+/// still not shared — the case a host-file check gets wrong (review round 1, F1).
+#[test]
+fn an_adopted_container_reports_the_sign_in_it_was_created_without() {
+    let profile = sharing_the_sign_in();
+    let mounts = build(&profile);
+    let without = destinations_without_credentials(&mounts);
+    assert_eq!(
+        mounts.unshared_sign_in(&profile, Some(&without), &sign_in_path()),
+        Some(sign_in_path()),
+        "an adopted container without the token mount was reported as sharing it"
+    );
+
+    let with: Vec<String> = mounts.shared_locations(None).into_iter().map(|l| l.container).collect();
+    assert_eq!(
+        mounts.unshared_sign_in(&profile, Some(&with), &sign_in_path()),
+        None,
+        "an adopted container that mounts the token was reported as lacking it"
+    );
+}
+
 fn parsed(text: &str) -> serde_json::Value {
     serde_json::from_str(text).expect("the merge writes JSON")
 }

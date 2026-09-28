@@ -1531,6 +1531,71 @@ what FR-004e says, and T215 reported this as outside BUG-006. See `bugs/BUG-007.
 
 ---
 
+## Phase 28: Bugfix BUG-008 — an absent sign-in token was dropped without telling the user (GitHub #405)
+
+**Goal**: With the AI CLI sign-in share on and no token file on the host, the settings view says,
+beside the share, that the running sandbox found nothing to mount and names the path it looked for.
+It no longer calls the sign-in shared (FR-004g, US1 scenario 8).
+
+### Tests for BUG-008 (MANDATORY — Constitution Principle I) ⚠️
+
+Each test is written against a stub that compiles, so it fails on its assertion rather than on the
+build: `unshared_sign_in` returning `None`, and the new fields in place and unread.
+
+- [X] T220 [BUG-008] [U48] *(test)* `crates/micold-core/tests/sandbox_credentials.rs`. The decision
+      `sandbox::unshared_sign_in`. With the share off: nothing, whatever is mounted. For a container
+      created from this mount set: nothing when the set mounts the sign-in, the path when it does
+      not. For an adopted container: nothing when its destinations include the sign-in's, the path
+      when they do not, even though this bring-up's mount set holds the sign-in.
+- [X] T221 [BUG-008] [U49] *(test)* `crates/micold-client/src/shell/sandbox.rs` (`mod tests`). The
+      regression test. A bring-up sharing the sign-in, on a host with no token file, returns the path
+      in `Ready.locations`. With the token present, or with the share off, it returns none. Red on
+      `origin/main`, where the bring-up drops the share and returns what a bring-up without it
+      returns (`bugs/BUG-008.md#reproduction`).
+- [X] T222 [BUG-008] [U50] *(test)* `crates/micold-client/src/ui/settings/daemon.rs` (`mod tests`).
+      With the sign-in shared and reported unshared, the notice under the share names the path and
+      does not offer a restart. The sharing summary neither lists the sign-in nor says a session can
+      replace its token. With the sign-in the only share, there is no summary, and
+      `shares_credentials` still answers `true`. With no report, there is no notice and the summary
+      is as before. With the share off, a report is not shown.
+- [X] T223 [BUG-008] [U51] *(test)* `crates/micold-client/src/main_tests.rs`. Opening Settings while
+      a sandbox that reported an unshared sign-in is running seeds the draft with the path. Once that
+      sandbox has stopped, the draft carries none.
+
+### Implementation for BUG-008
+
+- [X] T224 [BUG-008] [U48] [U49] `crates/micold-core/src/sandbox/mod.rs` (`unshared_sign_in`),
+      `crates/micold-client/src/shell/sandbox.rs` (`HostFacts`, `drop_absent_sign_in`, `start`) and
+      `crates/micold-client/src/features/sandbox.rs` (`SandboxLocations`). Keep the path looked for
+      on `HostFacts`, decide from the container that ended up running, and return the answer with
+      the locations. Log only when there is something to report. `CredentialLayout::conventional`
+      stays pure.
+- [X] T225 [BUG-008] [U50] [U51] `crates/micold-client/src/features/settings.rs` (`DaemonDraft`),
+      `crates/micold-client/src/shell/persist.rs` (the settings-open handler) and
+      `crates/micold-client/src/ui/settings/daemon.rs`. Seed the draft from `Sandbox::locations`.
+      Draw the notice as a caution under the share, and correct the summary.
+- [X] T226 [BUG-008] `docs/user-guide/sandboxed-daemon.md`, "Credentials". The Keychain bullet says
+      that Settings → Session service names the path under the share when the running sandbox has no
+      token, and that a token put there later is shared once the container is created again.
+- [ ] T227 [BUG-008] Visual pass of Settings → Session service with the sign-in shared and reported
+      unshared: the caution sits under its checkbox and reads as belonging to it, and the summary
+      does not name the sign-in. Record it in `specs/027-sandboxed-daemon-runtime/evidence/`.
+
+**Order**: T220–T223 first (disjoint files, parallel), then T224, then T225, then T226 and T227.
+Then `mise run gate`.
+
+**Verify**: `mise run test-core` passes U48. `scripts/build-lock.sh cargo test -p micold-client
+--bin micold-ai-ide unshared_sign_in` passes U49 and U51, and `scripts/build-lock.sh cargo test -p
+micold-client --bin micold-ai-ide ui::settings::daemon` passes U50. The visual pass (T227) shows
+the caution under the share.
+
+**Bugfix**: 2026-09-28 — BUG-008. **Requirements added**: FR-004g and US1 scenario 8 — see
+`spec.md`. `plan.md` gained the increment. **No task reopened**: T211 and T214 did what they say,
+and the missing report was recorded as a BUG-006 follow-up rather than claimed. See
+`bugs/BUG-008.md`.
+
+---
+
 ## Parallel Opportunities
 
 **Phase 1**: T002, T003, T005, T006 in parallel after T001.

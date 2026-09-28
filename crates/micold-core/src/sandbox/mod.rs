@@ -770,6 +770,40 @@ impl MountSet {
         locations
     }
 
+    /// The sign-in the user shared that the *running* container does not mount, as the host path it
+    /// is shared from (FR-004g, BUG-008). `None` when there is nothing to report.
+    ///
+    /// `looked_for` is the conventional token path, named whether or not the file is there
+    /// ([`CredentialLayout::conventional`] stays pure; the bring-up asks the filesystem). `mounted`
+    /// has the meaning it has in [`Self::shared_locations`]: `None` for a container created from this
+    /// very set, `Some` for one this bring-up adopted, which keeps the mounts it was created with.
+    /// So the answer is about the container that ended up running, not about whether the file is
+    /// there now. A token put on the host after the container was created is not in it.
+    pub fn unshared_sign_in(
+        &self,
+        profile: &SandboxProfile,
+        mounted: Option<&[String]>,
+        looked_for: &Path,
+    ) -> Option<PathBuf> {
+        if !profile.credentials.contains(&CredentialShare::AiCliAuth) {
+            return None;
+        }
+        let mounts_it = match mounted {
+            None => self
+                .credentials
+                .iter()
+                .any(|c| c.share == CredentialShare::AiCliAuth),
+            // Mapped as `build` maps it, so the destination compared is the one it would have had.
+            Some(mounted) => {
+                let destination = pathmap::map_for(looked_for, cfg!(windows));
+                mounted
+                    .iter()
+                    .any(|m| Path::new(m) == destination.as_path())
+            }
+        };
+        (!mounts_it).then(|| looked_for.to_path_buf())
+    }
+
     /// Host paths a sandboxed link must never resolve to, whatever location it came through
     /// (feature 031, FR-018a; C16b).
     ///

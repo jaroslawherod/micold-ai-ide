@@ -77,31 +77,68 @@ const IMAGE_SOURCES: &[Named<ImageSourceKind>] = &[
     Named(ImageSourceKind::LocalBuild, "Build from this checkout"),
 ];
 
+/// The path of the shared sign-in the running sandbox has no token from, while the draft still
+/// shares it (FR-004g, BUG-008). A report about a share the user has just unticked is not shown.
+fn unshared_sign_in(draft: &SettingsDraft) -> Option<&str> {
+    draft
+        .shared_credentials()
+        .contains(&CredentialShare::AiCliAuth)
+        .then_some(draft.daemon.unshared_sign_in.as_deref())
+        .flatten()
+}
+
+/// What to say under the *AI CLI sign-in* share when the running sandbox has no token from it
+/// (FR-004g, BUG-008), or `None`.
+///
+/// It names the path, because "not shared" alone sends the user looking for why. It offers the two
+/// ways that work and not a restart: a restart adopts the same container, which keeps the mounts
+/// it was created with.
+pub fn unshared_sign_in_notice(draft: &SettingsDraft) -> Option<String> {
+    unshared_sign_in(draft).map(|path| {
+        format!(
+            "Nothing is shared: the running sandbox has no sign-in token from {path}. Its \
+             container was created while that file was missing or while this share was off, and \
+             on macOS Claude Code keeps the token in the Keychain rather than in that file. Sign \
+             in inside a session with /login, or put the token there; it is shared the next time \
+             the sandbox's container is created."
+        )
+    })
+}
+
 /// What the user has shared, named one by one (FR-004c, rule N-2).
 ///
 /// "3 credentials shared" is the summary this deliberately is not. A count tells a user that
 /// something is shared without telling them *what*, which is the one thing they need to decide
 /// whether they meant it; and the set is ordered, so the sentence is stable between renders.
-fn sharing_summary(draft: &SettingsDraft) -> String {
-    let shared: Vec<&str> = draft
+///
+/// A sign-in the running sandbox has no token from is left out (FR-004g), and with nothing else
+/// shared there is no summary at all rather than an empty list. The rail's mark does not follow
+/// this: it answers whether an opt-in is on ([`SettingsDraft::shares_credentials`], FR-004c).
+fn sharing_summary(draft: &SettingsDraft) -> Option<String> {
+    let sign_in_unshared = unshared_sign_in(draft).is_some();
+    let shared: Vec<CredentialShare> = draft
         .shared_credentials()
         .iter()
-        .map(|c| c.label())
+        .copied()
+        .filter(|c| !(sign_in_unshared && *c == CredentialShare::AiCliAuth))
         .collect();
-    let summary = format!("Shared with the container: {}.", shared.join(", "));
+    if shared.is_empty() {
+        return None;
+    }
+    let labels: Vec<&str> = shared.iter().map(|c| c.label()).collect();
+    let summary = format!("Shared with the container: {}.", labels.join(", "));
     // FR-004e: every share is read-only but the sign-in, which the CLI rewrites on each refresh.
     // Said here because it is the one share that grants more than reading.
-    if draft
-        .shared_credentials()
-        .contains(&CredentialShare::AiCliAuth)
-    {
-        format!(
-            "{summary} A session can use the AI CLI sign-in and replace its token, which the CLI \
-             does each time it refreshes it."
-        )
-    } else {
-        summary
-    }
+    Some(
+        if shared.contains(&CredentialShare::AiCliAuth) {
+            format!(
+                "{summary} A session can use the AI CLI sign-in and replace its token, which the \
+                 CLI does each time it refreshes it."
+            )
+        } else {
+            summary
+        },
+    )
 }
 
 /// What the user is told at the moment they choose to cut the sandbox off (FR-018).
@@ -377,10 +414,17 @@ pub fn view<'a>(
                 })
                 .into(),
         );
+        // FR-004g: directly under the share it is about, so it cannot be read as belonging to the
+        // next one.
+        if share == CredentialShare::AiCliAuth {
+            if let Some(notice) = unshared_sign_in_notice(draft) {
+                controls.push(caution(notice, roles));
+            }
+        }
     }
 
-    if draft.shares_credentials() {
-        controls.push(caution(sharing_summary(draft), roles));
+    if let Some(summary) = sharing_summary(draft) {
+        controls.push(caution(summary, roles));
     }
 
     let network = Select::new(
@@ -532,10 +576,69 @@ mod tests {
             std::collections::BTreeSet::from([CredentialShare::AiCliAuth]);
         let draft = SettingsDraft::from_settings(&settings);
 
-        let summary = sharing_summary(&draft);
+        let summary = sharing_summary(&draft).expect("the sign-in is shared");
         assert!(
             summary.contains("replace"),
             "the sign-in share is writable and the caution does not say so: {summary}"
         );
+    }
+
+    /// A draft sharing `shares`, with the running sandbox reporting the sign-in unshared or not.
+    fn draft_sharing(shares: &[CredentialShare], unshared: Option<&str>) -> SettingsDraft {
+        let mut settings = micold_core::settings::Settings::default();
+        settings.daemon.sandbox.credentials = shares.iter().copied().collect();
+        let mut draft = SettingsDraft::from_settings(&settings);
+        draft.daemon.unshared_sign_in = unshared.map(str::to_string);
+        draft
+    }
+
+    const LOOKED_FOR: &str = "/Users/u/.claude/.credentials.json";
+
+    /// FR-004g (BUG-008): the share says, where it is ticked, that the running sandbox has no token
+    /// from it, and names the path. It does not offer a restart, which would adopt the same
+    /// container.
+    #[test]
+    fn an_unshared_sign_in_is_named_under_its_share() {
+        let draft = draft_sharing(&[CredentialShare::AiCliAuth], Some(LOOKED_FOR));
+
+        let notice = unshared_sign_in_notice(&draft).expect("no notice under the share");
+        assert!(notice.contains(LOOKED_FOR), "the path is not named: {notice}");
+        assert!(
+            !notice.to_lowercase().contains("restart"),
+            "a restart adopts the same container and shares nothing new: {notice}"
+        );
+    }
+
+    /// …and the summary stops calling it shared. Alone, there is nothing shared to state, while the
+    /// rail's mark still answers FR-004c's question: an opt-in is on.
+    #[test]
+    fn an_unshared_sign_in_is_not_called_shared() {
+        let both = draft_sharing(
+            &[CredentialShare::GitConfig, CredentialShare::AiCliAuth],
+            Some(LOOKED_FOR),
+        );
+        let summary = sharing_summary(&both).expect("git configuration is still shared");
+        assert!(
+            !summary.contains(CredentialShare::AiCliAuth.label()),
+            "the sign-in is listed as shared: {summary}"
+        );
+        assert!(!summary.contains("replace"), "{summary}");
+        assert!(summary.contains(CredentialShare::GitConfig.label()), "{summary}");
+
+        let alone = draft_sharing(&[CredentialShare::AiCliAuth], Some(LOOKED_FOR));
+        assert_eq!(sharing_summary(&alone), None, "an empty list of what is shared");
+        assert!(alone.shares_credentials(), "the rail's mark follows the opt-in");
+    }
+
+    /// Without a report, nothing changes; with the share off, a report is not shown.
+    #[test]
+    fn a_sign_in_with_no_report_or_no_share_gets_no_notice() {
+        let reported_nothing = draft_sharing(&[CredentialShare::AiCliAuth], None);
+        assert_eq!(unshared_sign_in_notice(&reported_nothing), None);
+        let summary = sharing_summary(&reported_nothing).expect("the sign-in is shared");
+        assert!(summary.contains(CredentialShare::AiCliAuth.label()), "{summary}");
+
+        let share_off = draft_sharing(&[CredentialShare::GitConfig], Some(LOOKED_FOR));
+        assert_eq!(unshared_sign_in_notice(&share_off), None);
     }
 }

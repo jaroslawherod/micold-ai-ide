@@ -260,6 +260,11 @@ pub struct SandboxLocations {
     pub shared: Vec<micold_core::link::SharedLocation>,
     /// Host paths no translation may produce.
     pub denied: Vec<String>,
+    /// The sign-in the user shared that this container does not mount, as the host path it is shared
+    /// from (FR-004g, BUG-008). For the settings page, which says so beside the share; it plays no
+    /// part in link translation. Here rather than beside `capabilities` because it is a fact about
+    /// *this* container, and [`Sandbox::locations`] already answers only for the one that is running.
+    pub unshared_sign_in: Option<String>,
 }
 
 /// Refused dials a just-started service may take before it is overdue: one reconnect
@@ -548,6 +553,7 @@ mod tests {
                 host: "/home/u/proj".into(),
             }],
             denied: vec!["/home/u/.local/share/micold-ai-ide/sandbox.token".into()],
+            unshared_sign_in: None,
         }
     }
 

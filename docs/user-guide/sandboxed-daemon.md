@@ -130,9 +130,13 @@ sandbox's home and comes back if you move the service into the container again.
 A few limits of the sign-in share:
 
 - **macOS keeps the token in the Keychain**, not in a file, so there is nothing to share. The
-  share stays on and mounts nothing; sign in inside a session instead. The same is true anywhere
-  the token file is missing, such as before your first sign-in or when you authenticate with an
-  API key.
+  share stays on and mounts nothing; sign in inside a session instead, with `/login`. The same is
+  true anywhere the token file is missing, such as before your first sign-in or when you
+  authenticate with an API key. When the running sandbox has no token from the share,
+  **Settings → Session service** says so under *AI CLI sign-in*, names the path it shares the token
+  from, and stops listing the sign-in as shared. A token you put at that path later is shared the
+  next time the sandbox's container is created; the running container keeps the mounts it was
+  created with.
 - **Copilot and Pi are not covered.** They sign in inside the sandbox, and that sign-in is kept in
   the sandbox's home.
 - **Claude Code starts signed in.** With the share on, the application marks Claude Code's
