@@ -96,7 +96,7 @@ fn unshared_sign_in(draft: &SettingsDraft) -> Option<&str> {
 pub fn unshared_sign_in_notice(draft: &SettingsDraft) -> Option<String> {
     unshared_sign_in(draft).map(|path| {
         format!(
-            "Nothing is shared: the running sandbox has no sign-in token from {path}. Its \
+            "The sign-in is not shared: the running sandbox has no token from {path}. Its \
              container was created while that file was missing or while this share was off, and \
              on macOS Claude Code keeps the token in the Keychain rather than in that file. Sign \
              in inside a session with /login, or put the token there; it is shared the next time \
