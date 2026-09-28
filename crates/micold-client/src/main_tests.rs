@@ -4033,7 +4033,8 @@ fn opening_settings_seeds_the_unshared_sign_in_from_the_running_sandbox_only() {
     );
 
     app.core.settings.settings_draft = None;
-    app.sandbox.observe(micold_core::sandbox::lifecycle::SandboxState::Disabled);
+    app.sandbox
+        .observe(micold_core::sandbox::lifecycle::SandboxState::Disabled);
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
     assert_eq!(
         app.core
