@@ -22,3 +22,7 @@ The client ran with host placement and a private data home.
 **Found on the way.** The notice opened "Nothing is shared:", which read as false next to a Git
 configuration share. It now opens "The sign-in is not shared:". The capture above predates that
 one-phrase change.
+
+**After code review A.** The notice's remedy now names the in-app way to a new container (set
+*Where sessions run* to *On this computer* and back), and it names the Keychain on macOS only. The
+capture predates this change; the four checks concern placement and the summary, not the wording.
