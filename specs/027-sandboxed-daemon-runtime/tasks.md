@@ -1577,9 +1577,10 @@ build: `unshared_sign_in` returning `None`, and the new fields in place and unre
 - [X] T226 [BUG-008] `docs/user-guide/sandboxed-daemon.md`, "Credentials". The Keychain bullet says
       that Settings → Session service names the path under the share when the running sandbox has no
       token, and that a token put there later is shared once the container is created again.
-- [ ] T227 [BUG-008] Visual pass of Settings → Session service with the sign-in shared and reported
+- [X] T227 [BUG-008] Visual pass of Settings → Session service with the sign-in shared and reported
       unshared: the caution sits under its checkbox and reads as belonging to it, and the summary
       does not name the sign-in. Record it in `specs/027-sandboxed-daemon-runtime/evidence/`.
+      *Passed* 2026-09-28: `evidence/bug-008-unshared-sign-in.md`, four checks on Xvfb.
 
 **Order**: T220–T223 first (disjoint files, parallel), then T224, then T225, then T226 and T227.
 Then `mise run gate`.
