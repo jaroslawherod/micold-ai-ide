@@ -1587,7 +1587,7 @@ Then `mise run gate`.
 
 **Verify**: `mise run test-core` passes U48. `scripts/build-lock.sh cargo test -p micold-client
 --bin micold-ai-ide unshared_sign_in` passes U49 and U51, and `scripts/build-lock.sh cargo test -p
-micold-client --bin micold-ai-ide ui::settings::daemon` passes U50. The visual pass (T227) shows
+micold-client --lib ui::settings::daemon` passes U50. The visual pass (T227) shows
 the caution under the share.
 
 **Bugfix**: 2026-09-28 — BUG-008. **Requirements added**: FR-004g and US1 scenario 8 — see

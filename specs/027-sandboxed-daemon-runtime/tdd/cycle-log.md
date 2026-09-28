@@ -892,3 +892,19 @@ compiling stub, so red is an assertion failure, not a build failure.
 - red (`... --bin micold-ai-ide opening_settings_seeds_the_unshared` -> `0 passed; 1 failed`):
   `main_tests.rs:4025` `left: None` `right: Some("/Users/u/.claude/.credentials.json")`
 - green: the settings-open handler reads it through `Sandbox::locations`. 1 passed
+
+### Review A — a share ticked after the container was made (U48, U49 revised)
+
+- finding: the report was gated on the bring-up profile, so a share ticked and saved while the
+  container runs (a save does not recreate it) was called shared though nothing was mounted
+- test: `sandbox_credentials::a_container_created_with_the_share_off_reports_the_sign_in_unshared`
+  (replaces `an_unshared_sign_in_is_not_reported_when_the_share_is_off`);
+  `shell::sandbox::tests::a_bring_up_reports_the_sign_in_its_container_lacks_whatever_the_token`
+  (replaces `..._with_the_token_or_without_the_share`)
+- red: `sandbox_credentials.rs:355` `left: None` `right: Some("/home/u/.claude/.credentials.json")`;
+  `sandbox.rs:1612` `left: None` `right: Some("/tmp/.tmpVfTN44/.claude/.credentials.json")`
+- green: `MountSet::unshared_sign_in(mounted, looked_for)` answers about mounts only; the page keeps
+  gating on the ticked share; the log line keeps gating on the profile. The path is named from
+  `facts.home` (the `HostFacts.sign_in` field is gone). `sandbox_credentials` 22, client
+  `shell::sandbox` 22, `ui::settings::daemon` 6 passed. The notice now names the in-app way to a
+  new container and the Keychain on macOS only (asserted in `an_unshared_sign_in_is_named_under_its_share`)

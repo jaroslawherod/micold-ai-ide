@@ -43,9 +43,6 @@ pub struct HostFacts {
     /// The host user's home, passed into the container as `HOME` — see `SandboxSpec::home`.
     pub home: PathBuf,
     pub layout: CredentialLayout,
-    /// Where the AI CLI's sign-in token is shared from, named whether or not the file is there — the
-    /// path the settings page gives when the running sandbox has none (FR-004g, BUG-008).
-    pub sign_in: Option<PathBuf>,
 }
 
 impl HostFacts {
@@ -60,26 +57,16 @@ impl HostFacts {
             .unwrap_or_default();
         let ssh_auth_sock = std::env::var_os("SSH_AUTH_SOCK").map(PathBuf::from);
         let (uid, gid) = micold_core::sandbox::host_identity();
-        Self::for_home(uid, gid, state_dir, home, ssh_auth_sock.as_deref())
-    }
-
-    /// [`Self::gather`] for a given identity, home and agent socket: everything but the lookups.
-    fn for_home(
-        uid: u32,
-        gid: u32,
-        state_dir: PathBuf,
-        home: PathBuf,
-        ssh_auth_sock: Option<&std::path::Path>,
-    ) -> Self {
-        let conventional = CredentialLayout::conventional(&home, ssh_auth_sock);
         Self {
             uid,
             gid,
             state_dir,
-            sign_in: conventional.ai_cli_auth.clone(),
             // Probed here, at the boundary that is allowed to read the host, rather than in
             // `conventional` — which stays pure and names the path whether or not it is there.
-            layout: drop_absent_sign_in(conventional),
+            layout: drop_absent_sign_in(CredentialLayout::conventional(
+                &home,
+                ssh_auth_sock.as_deref(),
+            )),
             home,
         }
     }
@@ -383,14 +370,18 @@ pub fn start<R: CommandRunner>(
     )?;
     // Asked of the container that ended up running, not of the host file: an adopted container
     // keeps the mounts it was created with (FR-004g, BUG-008).
-    let unshared_sign_in = facts.sign_in.as_deref().and_then(|looked_for| {
-        mounts.unshared_sign_in(profile, started.mounted.as_deref(), looked_for)
-    });
-    if let Some(path) = &unshared_sign_in {
+    // The path is named from the home rather than from `facts.layout`, which has already dropped a
+    // token this host does not have.
+    let unshared_sign_in = CredentialLayout::conventional(&facts.home, None)
+        .ai_cli_auth
+        .and_then(|looked_for| mounts.unshared_sign_in(started.mounted.as_deref(), &looked_for));
+    let shared = profile
+        .credentials
+        .contains(&micold_core::sandbox::CredentialShare::AiCliAuth);
+    if let Some(path) = unshared_sign_in.as_ref().filter(|_| shared) {
         eprintln!(
             "sandbox: the AI CLI sign-in is shared, but the running sandbox has no token from {}. \
-             Sign in inside a session, or put the token there; it is shared the next time the \
-             sandbox's container is created.",
+             Sign in inside a session, or put the token there and recreate the container.",
             path.display()
         );
     }
@@ -1011,30 +1002,7 @@ mod tests {
 
     impl CancelledDuring {
         fn new(cancel_on: &'static str) -> Self {
-            use micold_core::sandbox::exec::{CommandOutput, RecordingRunner};
-            let fixture = |name: &str| {
-                std::fs::read_to_string(
-                    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                        .join("../micold-core/tests/fixtures/runtime")
-                        .join(name),
-                )
-                .expect("runtime fixture")
-            };
-            // Probe (version, info), the image already present, no sandbox yet, the network,
-            // create's own probe, create, start.
-            let runtime = RecordingRunner::new();
-            runtime.push_ok(fixture("docker_version.json"));
-            runtime.push_ok(fixture("docker_info.json"));
-            runtime.push_ok(fixture("docker_inspect_image.json"));
-            runtime.push(Ok(CommandOutput::err(
-                1,
-                "Error: No such container: micold-sandbox",
-            )));
-            runtime.push_ok("micold-sandbox-net");
-            runtime.push_ok(fixture("docker_version.json"));
-            runtime.push_ok(fixture("docker_info.json"));
-            runtime.push_ok("9f2b1c4d7e8a");
-            runtime.push_ok("");
+            let runtime = a_runtime_that_creates_the_sandbox();
             Self {
                 runtime: std::sync::Arc::new(runtime),
                 cancel_on,
@@ -1122,7 +1090,6 @@ mod tests {
             gid: 1000,
             state_dir: state_dir.to_path_buf(),
             layout: CredentialLayout::conventional(&home, None),
-            sign_in: None,
             home,
         };
         let profile = SandboxProfile {
@@ -1301,7 +1268,6 @@ mod tests {
             gid: 1000,
             state_dir: state_dir.path().to_path_buf(),
             layout: CredentialLayout::conventional(&home, None),
-            sign_in: None,
             home,
         };
         let profile = SandboxProfile {
@@ -1349,7 +1315,6 @@ mod tests {
             gid: 1000,
             state_dir: state_dir.to_path_buf(),
             layout: CredentialLayout::conventional(&home, None),
-            sign_in: None,
             home,
         };
         let profile = SandboxProfile {
@@ -1525,7 +1490,9 @@ mod tests {
         assert_eq!(control_port(), DEFAULT_SANDBOX_PORT);
     }
 
-    /// A runtime scripted as far as a created and started sandbox, with no container there before.
+    /// A runtime scripted as far as a created and started sandbox, with no container there before:
+    /// probe (version, info), the image already present, no sandbox yet, the network, create's own
+    /// probe, create, start.
     fn a_runtime_that_creates_the_sandbox() -> micold_core::sandbox::exec::RecordingRunner {
         use micold_core::sandbox::exec::{CommandOutput, RecordingRunner};
         let fixture = |name: &str| {
@@ -1556,13 +1523,14 @@ mod tests {
     fn unshared_sign_in_after_a_bring_up(home: &std::path::Path, shared: bool) -> Option<String> {
         use micold_core::sandbox::CredentialShare;
         let state_dir = tempfile::tempdir().expect("tempdir");
-        let facts = HostFacts::for_home(
-            1000,
-            1000,
-            state_dir.path().to_path_buf(),
-            home.to_path_buf(),
-            None,
-        );
+        // As `gather` builds them, for this home.
+        let facts = HostFacts {
+            uid: 1000,
+            gid: 1000,
+            state_dir: state_dir.path().to_path_buf(),
+            layout: drop_absent_sign_in(CredentialLayout::conventional(home, None)),
+            home: home.to_path_buf(),
+        };
         let profile = SandboxProfile {
             credentials: if shared {
                 std::collections::BTreeSet::from([CredentialShare::AiCliAuth])
@@ -1598,15 +1566,21 @@ mod tests {
         );
     }
 
-    /// …and nothing is reported when the token is there, or when the share is off.
+    /// …nothing is reported when the token is there and shared. With the share off the container
+    /// has no sign-in either, which is reported too: ticking the share later does not recreate the
+    /// container, and the page shows the report only once the share is ticked (review A).
     #[test]
-    fn a_bring_up_reports_no_unshared_sign_in_with_the_token_or_without_the_share() {
+    fn a_bring_up_reports_the_sign_in_its_container_lacks_whatever_the_token() {
         let home = tempfile::tempdir().expect("tempdir");
-        assert_eq!(unshared_sign_in_after_a_bring_up(home.path(), false), None);
-
+        let looked_for = home.path().join(".claude").join(".credentials.json");
         std::fs::create_dir_all(home.path().join(".claude")).expect("the CLI's directory");
-        std::fs::write(home.path().join(".claude").join(".credentials.json"), "{}")
-            .expect("the token");
+        std::fs::write(&looked_for, "{}").expect("the token");
+
         assert_eq!(unshared_sign_in_after_a_bring_up(home.path(), true), None);
+        assert_eq!(
+            unshared_sign_in_after_a_bring_up(home.path(), false),
+            Some(looked_for.to_string_lossy().into_owned()),
+            "a container made without the share was not reported as lacking the sign-in"
+        );
     }
 }

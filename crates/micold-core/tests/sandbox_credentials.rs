@@ -346,17 +346,19 @@ fn destinations_without_credentials(mounts: &MountSet) -> Vec<String> {
         .collect()
 }
 
-/// FR-004g (BUG-008): with the share off there is nothing to report, whatever is or is not mounted.
+/// FR-004g (BUG-008): a container created with the share off does not mount the sign-in either, and
+/// says so. The share can be ticked and saved while that container runs, and a save does not
+/// recreate it (review A); the page shows the report only while the draft shares the sign-in.
 #[test]
-fn an_unshared_sign_in_is_not_reported_when_the_share_is_off() {
+fn a_container_created_with_the_share_off_reports_the_sign_in_unshared() {
     let mounts = build(&SandboxProfile::default());
     assert_eq!(
-        mounts.unshared_sign_in(&SandboxProfile::default(), None, &sign_in_path()),
-        None
+        mounts.unshared_sign_in(None, &sign_in_path()),
+        Some(sign_in_path())
     );
     assert_eq!(
-        mounts.unshared_sign_in(&SandboxProfile::default(), Some(&[]), &sign_in_path()),
-        None
+        mounts.unshared_sign_in(Some(&[]), &sign_in_path()),
+        Some(sign_in_path())
     );
 }
 
@@ -366,10 +368,7 @@ fn an_unshared_sign_in_is_not_reported_when_the_share_is_off() {
 fn a_created_container_reports_the_sign_in_its_mount_set_lacks() {
     let profile = sharing_the_sign_in();
     let with_token = build(&profile);
-    assert_eq!(
-        with_token.unshared_sign_in(&profile, None, &sign_in_path()),
-        None
-    );
+    assert_eq!(with_token.unshared_sign_in(None, &sign_in_path()), None);
 
     let mut no_token = layout();
     no_token.ai_cli_auth = None;
@@ -382,7 +381,7 @@ fn a_created_container_reports_the_sign_in_its_mount_set_lacks() {
         secret(),
     );
     assert_eq!(
-        without.unshared_sign_in(&profile, None, &sign_in_path()),
+        without.unshared_sign_in(None, &sign_in_path()),
         Some(sign_in_path()),
         "a created container with no sign-in mount went unreported"
     );
@@ -397,7 +396,7 @@ fn an_adopted_container_reports_the_sign_in_it_was_created_without() {
     let mounts = build(&profile);
     let without = destinations_without_credentials(&mounts);
     assert_eq!(
-        mounts.unshared_sign_in(&profile, Some(&without), &sign_in_path()),
+        mounts.unshared_sign_in(Some(&without), &sign_in_path()),
         Some(sign_in_path()),
         "an adopted container without the token mount was reported as sharing it"
     );
@@ -408,7 +407,7 @@ fn an_adopted_container_reports_the_sign_in_it_was_created_without() {
         .map(|l| l.container)
         .collect();
     assert_eq!(
-        mounts.unshared_sign_in(&profile, Some(&with), &sign_in_path()),
+        mounts.unshared_sign_in(Some(&with), &sign_in_path()),
         None,
         "an adopted container that mounts the token was reported as lacking it"
     );
