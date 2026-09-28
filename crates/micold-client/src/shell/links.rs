@@ -916,6 +916,7 @@ mod acceptance {
                         })
                         .collect(),
                     denied: Vec::new(),
+                    unshared_sign_in: None,
                 },
             ));
             self

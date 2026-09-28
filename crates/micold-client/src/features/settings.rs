@@ -327,6 +327,12 @@ pub struct DaemonDraft {
     ///
     /// [`reconcile`]: micold_core::sandbox::runtime::reconcile
     pub capabilities: Option<RuntimeCapabilities>,
+    /// The host path of a shared sign-in that the running sandbox's container does not mount, when
+    /// the bring-up reported one (FR-004g, BUG-008).
+    ///
+    /// Not persisted and not a setting, for the same reason as [`Self::capabilities`]: it is a fact
+    /// about the sandbox that is running, seeded from its state when the page opens.
+    pub unshared_sign_in: Option<String>,
 }
 
 /// A rejected save: what was wrong, where the control is, and what to say.
@@ -698,6 +704,7 @@ impl SettingsDraft {
                 // Seeded by the shell from the sandbox's state, which is where the probe's answer
                 // lands — `Settings` has never heard of it and must not learn.
                 capabilities: None,
+                unshared_sign_in: None,
             },
             error: None,
         }

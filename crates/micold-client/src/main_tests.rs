@@ -4002,3 +4002,46 @@ fn availability_opening_a_rows_list_refreshes_its_answer() {
         "Pi, installed since B was answered, is offered on B's row"
     );
 }
+
+/// FR-004g (BUG-008): opening Settings carries the running sandbox's unshared sign-in into the
+/// form, the way it carries the runtime's capabilities, and carries nothing once that sandbox has
+/// stopped. `Sandbox::locations` answers only for the container that is running.
+#[test]
+fn opening_settings_seeds_the_unshared_sign_in_from_the_running_sandbox_only() {
+    const LOOKED_FOR: &str = "/Users/u/.claude/.credentials.json";
+    let mut app = app_with_a_failed_sandbox();
+    let _ = update_inner(
+        &mut app,
+        Message::Sandbox(SandboxMsg::Started(Box::new((
+            a_started_sandbox(),
+            micold_client::features::sandbox::SandboxLocations {
+                unshared_sign_in: Some(LOOKED_FOR.to_string()),
+                ..Default::default()
+            },
+        )))),
+    );
+
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    assert_eq!(
+        app.core
+            .settings
+            .settings_draft
+            .as_ref()
+            .and_then(|d| d.daemon.unshared_sign_in.as_deref()),
+        Some(LOOKED_FOR),
+        "the page was not told the running sandbox has no sign-in"
+    );
+
+    app.core.settings.settings_draft = None;
+    app.sandbox.observe(micold_core::sandbox::lifecycle::SandboxState::Disabled);
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    assert_eq!(
+        app.core
+            .settings
+            .settings_draft
+            .as_ref()
+            .and_then(|d| d.daemon.unshared_sign_in.as_deref()),
+        None,
+        "a stopped sandbox's report outlived it"
+    );
+}

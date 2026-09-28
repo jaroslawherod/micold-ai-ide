@@ -845,3 +845,50 @@ task text and has no cycle. The client cycles close on the binary's own target
   Unix, compares device and inode with what was opened; a link or non-file is left alone. The staging
   file has a fixed name, a leftover is unlinked, and it is opened `create_new`. Client `shell::sandbox`
   20 passed, 0 failed
+
+## BUG-008 — an absent sign-in is reported beside the share (GitHub #405)
+
+Reproduction on `origin/main` (`3b1330b8`): a throw-away probe ran `start` with and without the
+sign-in share on a host with no token file; progress and outcome were identical and the assertion
+that they differ failed (`bugs/BUG-008.md#reproduction`). Each test below was written against a
+compiling stub, so red is an assertion failure, not a build failure.
+
+### U48 — the decision answers for the running container
+
+- test: `sandbox_credentials::an_unshared_sign_in_is_not_reported_when_the_share_is_off`,
+  `a_created_container_reports_the_sign_in_its_mount_set_lacks`,
+  `an_adopted_container_reports_the_sign_in_it_was_created_without`
+- red (`scripts/build-lock.sh cargo test -p micold-core --test sandbox_credentials` -> `20 passed; 2 failed`,
+  `MountSet::unshared_sign_in` stubbed to `None`): `sandbox_credentials.rs:376` and `:391`
+  `left: None` `right: Some("/home/u/.claude/.credentials.json")`
+- green: share off, nothing; `mounted: None`, the path when the set holds no `AiCliAuth` mount;
+  `Some(destinations)`, the path when the sign-in's mapped destination is not among them.
+  `sandbox_credentials` 22 passed
+
+### U49 — the bring-up returns the path (the regression)
+
+- test: `shell::sandbox::tests::a_bring_up_reports_an_unshared_sign_in_when_the_host_has_no_token`,
+  `a_bring_up_reports_no_unshared_sign_in_with_the_token_or_without_the_share`
+- red (`scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide unshared_sign_in` -> `1 passed; 1 failed`,
+  `HostFacts.sign_in` and `SandboxLocations.unshared_sign_in` in place and set to `None`, which is
+  what `origin/main` tells the view): `sandbox.rs:1588` `left: None`
+  `right: Some("/tmp/.tmpNfLqiR/.claude/.credentials.json")`
+- green: `HostFacts::for_home` keeps the conventional path; `start` asks `unshared_sign_in` of the
+  container it ended up with and logs only when there is a report. Client `shell::sandbox` 22 passed
+
+### U50 — the page names the path under the share and stops calling it shared
+
+- test: `ui::settings::daemon::tests::an_unshared_sign_in_is_named_under_its_share`,
+  `an_unshared_sign_in_is_not_called_shared`, `a_sign_in_with_no_report_or_no_share_gets_no_notice`
+- red (`scripts/build-lock.sh cargo test -p micold-client --lib ui::settings::daemon` -> `4 passed; 2 failed`,
+  the notice stubbed to `None` and the summary unchanged): `daemon.rs:569` "no notice under the
+  share"; `daemon.rs:586` the sign-in listed as shared
+- green: `unshared_sign_in_notice` names the path and the two ways that work; `sharing_summary`
+  leaves the sign-in out and is `None` when nothing is left. 6 passed
+
+### U51 — opening Settings seeds the draft from the running sandbox only
+
+- test: `tests::opening_settings_seeds_the_unshared_sign_in_from_the_running_sandbox_only` (binary)
+- red (`... --bin micold-ai-ide opening_settings_seeds_the_unshared` -> `0 passed; 1 failed`):
+  `main_tests.rs:4025` `left: None` `right: Some("/Users/u/.claude/.credentials.json")`
+- green: the settings-open handler reads it through `Sandbox::locations`. 1 passed

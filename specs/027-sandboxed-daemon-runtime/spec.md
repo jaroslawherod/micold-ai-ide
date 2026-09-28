@@ -199,6 +199,10 @@ project directory succeed.
 7. **Given** the user has explicitly opted into sharing the host's authentication agent, **When** a
    session pushes to a remote, **Then** it succeeds, and the settings view shows that the sandbox is
    partially shared.
+8. **Given** the AI CLI sign-in share is on and the host has no token file for it, **When** the
+   sandbox has started and the user opens the settings view, **Then** the view says, beside the
+   ticked share, that the running sandbox has no sign-in token to use and names the path it is
+   shared from, and does not describe the sign-in as shared (FR-004g). *(Added 2026-09-28 — BUG-008.)*
 
 ---
 
@@ -439,6 +443,7 @@ without the user having chosen that for the occasion.
 - The AI CLI sign-in is shared, but the host keeps that CLI's token outside any file, for example
   in the macOS Keychain. The share then has nothing to mount. This is the absent-item case above,
   and it is reported as one. *(Added 2026-09-18 — BUG-006.)*
+  FR-004g says where: in the settings view, beside the share. *(Added 2026-09-28 — BUG-008.)*
 - The AI CLI sign-in share covers `claude` only. Copilot and Pi keep their state in the sandbox's
   own home and sign in there. A per-CLI sign-in share is a follow-on, not part of this feature.
   *(Added 2026-09-18 — BUG-006.)*
@@ -501,6 +506,23 @@ without the user having chosen that for the occasion.
   record left by an earlier share stays when the share is turned off, since the sandbox's home
   persists (FR-011); the CLI then starts signed out and the user signs in with its own `/login`.
   Removing the key again is out of scope. *(Added 2026-09-27 — BUG-007.)*
+- **FR-004g**: When the AI CLI sign-in share is on and the container of the sandbox that is running
+  does not mount the sign-in token — because the host had no token file when that container was
+  created, or because the container was created without the share — the settings view MUST say so
+  beside the share and name the host path the application shares the token from. For as long as it
+  says so, the view's statement of what is shared (FR-004b) MUST NOT list the sign-in or say that a
+  session can use or replace its token; with no other share on, it makes no statement of what is
+  shared at all. FR-004c's at-a-glance mark still shows, because the opt-in is still on, which is
+  what FR-004c asks about. The answer is about the container that is running, not about whether the
+  file exists now: a container the application adopts keeps the mounts it was created with, so a
+  token that appears on the host later is not in it until a new container is created. Whether the
+  token is present is decided when the sandbox is brought up, not by the credential layout, which
+  names the path whether or not anything is there. The report is not a failure of the sandbox, and it
+  is not repeated as a notification on each start: the token is kept outside any file on every macOS
+  host, so a notice on each launch would be one the user learns to ignore. The report is read when
+  the settings view opens, like the runtime's capabilities (FR-015), so a view left open while the
+  sandbox starts or stops shows it the next time it is opened. The other credential opt-ins are out
+  of scope here. *(Added 2026-09-28 — BUG-008.)*
 
 - **FR-005**: The sandbox MUST NOT be granted access to the container runtime's own control
   interface, nor any capability that lets a session escape the sandbox or act on the host.
@@ -721,6 +743,11 @@ FR-036's "recover to a defined state" past reporting; FR-036b covers the half th
 bring-up read as a failure. **SC-004c** and US6's ninth acceptance scenario are added alongside
 them: the first says where SC-004's progress has to be measured, the second is the flow this bug
 is. See `bugs/BUG-005.md`.
+
+**Bugfix**: 2026-09-28 — BUG-008 (GitHub #405). FR-004g and US1 scenario 8 added; the Keychain edge
+case points at FR-004g. That edge case said an absent sign-in token "is reported" and no requirement
+said where, so the bring-up dropped the share and wrote one line to stderr. The settings view went on
+showing the share ticked and the sign-in shared. See `bugs/BUG-008.md`.
 
 **Bugfix**: 2026-09-27 — BUG-007 (GitHub #403). FR-004f and US2 scenario 11 added. FR-004e said
 what the sign-in share mounts but not what the user gets from it: a sandboxed `claude` found a valid

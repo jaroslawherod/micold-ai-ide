@@ -110,6 +110,17 @@ skips `claude`'s setup — is shown by the reproduction in `bugs/BUG-007.md`, no
 | U46 | A bring-up with the sign-in shared records the finished setup before the runtime runs; without it, nothing | FR-004f | example | DONE | `shell::sandbox::tests::a_bring_up_sharing_the_sign_in_*`, `a_bring_up_without_the_sign_in_leaves_the_setup_to_claude` |
 | U47 | The bring-up reads, stages and replaces the sandbox home's `.claude.json` without following a link planted there | FR-004f, FR-005 | example | DONE | `shell::sandbox::tests::a_bring_up_does_not_*` (review A) |
 
+## BUG-008 — an absent sign-in is reported beside the share (`tasks.md` Phase 28)
+
+Added 2026-09-28. Traces are FR-004g and US1 scenario 8.
+
+| id  | behavior                                                                                             | traces          | kind             | state   | test |
+| --- | ---------------------------------------------------------------------------------------------------- | --------------- | ---------------- | ------- | ---- |
+| U48 | The unshared-sign-in decision answers for the running container: share off, none; created without the mount, the path; adopted without the destination, the path even with the token now present | FR-004g | example | DONE | `sandbox_credentials::an_unshared_sign_in_is_not_reported_when_the_share_is_off`, `a_created_container_reports_the_sign_in_its_mount_set_lacks`, `an_adopted_container_reports_the_sign_in_it_was_created_without` |
+| U49 | A bring-up sharing the sign-in on a host with no token file returns the path; with the token, or the share off, none | FR-004g | example | DONE | `shell::sandbox::tests::a_bring_up_reports_an_unshared_sign_in_when_the_host_has_no_token`, `a_bring_up_reports_no_unshared_sign_in_with_the_token_or_without_the_share` |
+| U50 | The settings page names the path under the share, and the summary stops calling the sign-in shared (none at all when it is the only share) while the badge's answer is unchanged | FR-004g, FR-004b, FR-004c | example | DONE | `ui::settings::daemon::tests::an_unshared_sign_in_is_*`, `a_sign_in_with_no_report_or_no_share_gets_no_notice` (lib) |
+| U51 | Opening Settings seeds the draft from the running sandbox's report, and from no stopped one | FR-004g | example | DONE | `tests::opening_settings_seeds_the_unshared_sign_in_from_the_running_sandbox_only` (binary) |
+
 ## Invariants and edge cases still to place
 
 - none

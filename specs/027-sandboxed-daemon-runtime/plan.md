@@ -490,6 +490,55 @@ the writable share.
 
 **Bugfix**: 2026-09-27 — BUG-007. Section added; nothing above it changed. See `bugs/BUG-007.md`.
 
+### An absent sign-in is reported where the share is chosen (FR-004g)
+
+`HostFacts::gather` already drops a sign-in token this host does not have (`drop_absent_sign_in`),
+because a runtime would otherwise create the missing bind source as a root-owned directory in the
+user's home. What it did not do is tell anyone but stderr. The fact now travels the way the
+runtime's capabilities already do (FR-015): from the bring-up, with the container it ended up with,
+into the sandbox's state, into the settings draft when the page opens, and onto the page beside the
+control it is about.
+
+- **The question is about the container that is running.** Most bring-ups adopt a container that
+  already exists (`lifecycle::adopt` compares only image and fingerprint), and that container keeps
+  the mounts it was created with. So "is the token file there now?" is the wrong question: a user
+  who signs in on the host after the report would see it vanish while the adopted container still
+  has no token. A pure core decision, `sandbox::unshared_sign_in(profile, mounts, mounted,
+  looked_for)`, answers the right one. With the share off, nothing. For a container this bring-up
+  created (`Started.mounted` is `None`), the path when the mount set holds no `AiCliAuth` mount,
+  which is when `drop_absent_sign_in` dropped it. For an adopted one (`Some(destinations)`), the
+  path when the sign-in's container destination (`pathmap::map_for`, as `MountSet::build` maps it)
+  is not among the destinations that container really mounts. Same test as `shared_locations` uses
+  for C16c.
+- **The bring-up knows the path it looks for.** `HostFacts` keeps the conventional sign-in path
+  whether or not the file is there, next to the layout `drop_absent_sign_in` filtered.
+  `CredentialLayout::conventional` stays pure. The `eprintln!` in `drop_absent_sign_in`, which ran
+  whether or not the share was on, moves to `start` and runs only when there is something to
+  report.
+- **It travels with the container.** `start` puts the answer in the `SandboxLocations` it returns.
+  `SandboxLocations` is already "what the container this bring-up ended up with shares with this
+  machine", and `Sandbox::locations` already answers only for the running container it was read
+  from. So a stopped, failed or replaced sandbox reports nothing, and no transition has to remember
+  to clear it. The field plays no part in link translation, and its doc says so.
+- **The draft is seeded from it**, in the settings-open handler beside `capabilities`. It is a fact
+  about the running sandbox, not a setting, and is never saved. Like `capabilities`, it is read when
+  the page opens; a page left open while the sandbox starts or stops is not refreshed. That
+  precedent is accepted (FR-004g).
+- **The page says it.** A caution directly under the *AI CLI sign-in* checkbox names the path and
+  says what works: sign in inside a session with `/login`, or put the token at that path, which is
+  shared the next time the sandbox's container is created. It does not offer "Restart the sandbox",
+  because a restart adopts the same container. The sharing summary leaves the sign-in out of
+  "Shared with the container" and drops the "can replace its token" sentence. With no other share
+  on, it has nothing to list and is not drawn. `SettingsDraft::shares_credentials` keeps answering
+  whether an opt-in is on, so the rail's badge still marks the section (FR-004c). The summary asks
+  its own question: what the running sandbox shares.
+- **Not the progress line, the banner or a notification.** The progress line is gone from `Running`
+  onwards (SC-017). The banner is for a sandbox that is not doing its job, and each banner carries
+  the action that ends it (FR-035b). A notification would repeat on every start on every macOS
+  host. See `bugs/BUG-008.md#recommended-fix`.
+
+**Bugfix**: 2026-09-28 — BUG-008. Section added; nothing above it changed. See `bugs/BUG-008.md`.
+
 ## Complexity Tracking
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
