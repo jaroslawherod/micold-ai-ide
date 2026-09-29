@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 3-design
-- **Next step**: Design unit: plan, tasks, milestones, checklists, PR 2
+- **Next step**: Waiting for the user on the Principle II escalation below; then finish the tasks/milestone review, the gate and PR 2
 
 ## Pull requests
 
@@ -20,6 +20,13 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
+| M1 | T001–T022, T078–T082, T100 | Bound sessions (Claude, Copilot) with the read tools | — | planned |
+| M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 16) | — | planned |
+| M3 | T029–T042, T072–T073, T084–T088, T102 | create_worktree / create_session with first prompt, audit line | — | planned |
+| M4 | T043–T048, T089 | start_session / stop_session / rename_worktree | — | planned |
+| M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 17) | — | planned |
+| M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 18) | — | planned |
+| M7 | T074–T077 | Read latency, sandbox placement, final real-CLI pass, user guide | — | planned |
 
 ## Decisions
 
@@ -40,7 +47,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | D13 | plan | rmcp SDK or hand-rolled server? | Hand-rolled stateless Streamable HTTP on the hook receiver's HTTP code | agent-resolved | research.md#R5 |
 | D14 | plan | FR-017 waited for a first "awaiting input" that a fresh session never reports | Deliver on a per-CLI ready-for-input signal (Claude SessionStart hook, Pi component event, Copilot output settled); bound counts from the request; spec reworded | agent-resolved | crates/micold-daemon/src/activity.rs; research.md#R12 |
 | D15 | plan | "Gracefully" stop, and stop/interrupt have no sidebar action | Stop ends processes, marks Idle, broadcasts, stays resumable; Assumption covers protocol operations | agent-resolved | crates/micold-daemon/src/server.rs SessionStop arm; research.md#R9 |
-| D16 | plan | Does Auto-default cross-session read/type conflict with Principle II? | No: explicit, user-gated, scoped, audited I/O over the target's own input stream is not a leak; recorded in plan.md Complexity Tracking | agent-resolved (plan review round 1) | .specify/memory/constitution.md#II |
+| D16 | plan | Does Auto-default cross-session read/type conflict with Principle II? | Superseded: plan review round 1 said no conflict; speckit-analyze (C1 CRITICAL) and a tie-break review said CONFLICT. Open escalation below | pending user | .specify/memory/constitution.md#II |
 
 ## Declined review findings
 
@@ -51,7 +58,16 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 ## Open escalation
 
-None.
+- **Category 2, constitution conflict (Design, M6).** FR-016's default `Auto` lets one session's
+  agent read another session's scrollback and type into it with no per-request user act. Principle II
+  says sessions are "fully isolated" and "no session may leak state ... into another session". The
+  plan's "recorded interpretation" is neither removal nor justification (Governance/Compliance).
+  Options: (1, recommended) record a justified violation in plan.md Complexity Tracking, row II
+  "justified violation", keeping the FR-010/016/018 guards and `mcp_cross_session.rs` tests; ships as
+  the user specified, no amendment. (2) MINOR amendment 1.6.1 → 1.7.0 adding a narrow, named Principle
+  II exception (more durable; 1.3.0/1.5.0 precedent). (3) Make FR-016 default `Off` (overrides D6
+  "default auto"; `Confirm each send` alone does not remove the conflict, reads stay ungated).
+  Evidence: plan review round 1 (no conflict), speckit-analyze C1 CRITICAL, tie-break review CONFLICT.
 
 ## Follow-ups not done
 

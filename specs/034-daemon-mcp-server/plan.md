@@ -54,15 +54,17 @@ quickstart §B for the real CLIs and the visual pass.
 **Project Type**: desktop application (three-crate Rust workspace: client, core, daemon).
 
 **Performance Goals**: read-only tools answer in < 1 s for 50 worktrees + 50 sessions (SC-004) —
-they read the in-memory catalog snapshot and worktree cache, no git subprocess. Agent-made changes
+they read the in-memory catalog snapshot and worktree cache, no git subprocess, except
+`list_branches`, which runs git off the state lock as the dialog's branch list does and is measured
+by the same test. Agent-made changes
 reach every window in < 2 s (SC-003) via the existing `broadcast_catalog`.
 
 **Constraints**: loopback only; no user/project config writes; no body or input text in any log;
 no new HTTP framework; no `match` on the concrete CLI outside `provider.rs` (feature 026 rule,
 `crates/micold-client/tests/no_concrete_implementations.rs`).
 
-**Scale/Scope**: 15 tools, 1 listener, 2 settings, 3 protocol bumps (M1 and M4 add a settings field
-each; M3 adds the 3 confirmation messages), 1 new dialog, 1 new `DaemonState::stop_session`.
+**Scale/Scope**: 15 tools, 1 listener, 2 settings, 3 protocol bumps (M2 and M6 add a settings field
+each; M5 adds the 3 confirmation messages), 1 new dialog, 1 new `DaemonState::stop_session`.
 
 ## Constitution Check
 
@@ -241,7 +243,8 @@ docs/user-guide/{agent-tools.md (NEW), settings.md, sandboxed-daemon.md}, docs/S
 
 ## Complexity Tracking
 
-No constitution violations to justify.
+No principle is violated, so there is nothing to justify here; the entry below records how Principle
+II was read for this feature.
 
 **Recorded interpretation (Principle II)**: explicit, user-gated cross-session I/O —
 `read_session_output` and `send_session_input`, each an addressed request, scoped to the caller's

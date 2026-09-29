@@ -29,7 +29,7 @@ awaiting_input|ended, worktree: <ref>, is_caller: bool}`.
 |---|---|---|---|
 | `whoami` | — | `{session, project:{name,path}, worktree, ai_cli}` | — |
 | `list_worktrees` | `{include_hidden?: bool=false}` | `{worktrees:[WorktreeRow]}` — `default` first, then the sidebar's set; hidden (feature 014/029 assistant-owned) rows only with `include_hidden` | — |
-| `list_branches` | — | `{branches:[{name, kind: local|remote, checked_out_in: <ref>|null}]}` | — |
+| `list_branches` | — | `{branches:[{name, kind: local|remote, checked_out_in: <ref>|null, unavailable_reason: string|null}]}` — the reason is the dialog pre-flight's `BranchSituation` wording (`null` when a new worktree can use it) | — |
 | `list_sessions` | `{worktree?: ref}` | `{sessions:[SessionRow]}` | unknown `worktree` → not_found |
 | `get_session` | `{session}` | `SessionRow + {failure_reason?}` | — |
 | `read_session_output` | `{session, lines?: int=200}` | `{lines:[string], truncated: bool}` | self → invalid_input (FR-015); `lines<1` → invalid_input; `>2000` clamped (FR-012); FR-016 Off → refused_by_policy |
@@ -39,19 +39,21 @@ awaiting_input|ended, worktree: <ref>, is_caller: bool}`.
 | `create_session` | `{worktree, ai_cli?: claude_code|copilot|pi, prompt?: string}` | `{session, lifecycle, prompt_delivered: bool|null}` | CLI availability checked **before** the record is created: not installed → service_error naming it, no record (US2 s5); `null` when no prompt was given |
 | `start_session` | `{session}` | `{lifecycle}` | already Starting/Running/Restarting → success, unchanged (FR-012a) |
 | `stop_session` | `{session}` | `{lifecycle}` | self → refused_by_policy (FR-015); Idle → success, unchanged; other session → **confirm**; effect: processes end, record `idle`, catalog broadcast |
-| `interrupt_session` | `{session}` | `{}` | self → invalid_input (FR-015); not running → conflict; other session → **confirm** |
+| `interrupt_session` | `{session}` | `{}` | self → invalid_input (FR-015); not running → conflict (FR-012a); other session → **confirm** |
 | `send_session_input` | `{session, text}` | `{}` | self → invalid_input; empty → invalid_input (FR-012a); FR-016: Auto → proceed, Confirm each send → **confirm**, Off → refused_by_policy |
 | `delete_session` | `{session}` | `{}` | self → refused_by_policy (FR-015); then **confirm** |
 
 Order of checks: scope (not_found) → input validation (invalid_input) → policy (refused_by_policy)
-→ state conflicts (conflict) → confirmation → effect. So a refused request never shows a prompt.
+→ state conflicts (conflict) and no-ops → confirmation → effect. So a refused, conflicting or no-op
+request never shows a prompt (FR-014).
 
 **confirm** = the FR-014 flow ([protocol-delta.md](./protocol-delta.md) §2): allowed → proceed;
 declined → `refused_by_policy` "declined by the user"; 60 s or no window → `needs_confirmation`;
 target or caller gone → `not_found`.
 
 `create_session` with `prompt`: returns once the prompt is written when the session first reports
-ready for input (research R12), or with `prompt_delivered: false` 60 s after the request or on a
+ready for input (research R12; "output settled" = the primary terminal produced output and then
+none for 1.5 s), or with `prompt_delivered: false` 60 s after the request or on a
 failed start (FR-017).
 
 If the agent's HTTP connection closes while a request waits for confirmation, the request is

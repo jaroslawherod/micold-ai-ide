@@ -353,7 +353,7 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
 - **FR-012a**: `send_session_input` with empty text MUST be refused as invalid input.
   `start_session` on a session that is already `Starting`, `Running` or `Restarting` MUST succeed
   without changing it and report its current lifecycle; `stop_session` on an `Idle` session
-  likewise.
+  likewise. `interrupt_session` on a session that is not running MUST fail as a conflict.
 - **FR-013**: Every failed operation MUST return a reason category (not found, invalid input,
   conflict, refused by policy, needs confirmation, service error) and a human-readable message; it
   MUST leave nothing half-done.
@@ -363,7 +363,8 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
   calling session, the operation and its target. Nothing changes until the user confirms. The
   prompt appears in every connected window; the first answer applies and withdraws it from the
   others. The request is refused by policy ("declined by the user") if the user declines, and fails
-  with "needs confirmation" if no answer arrives within 60 seconds or no window is attached.
+  with "needs confirmation" if no answer arrives within 60 seconds or no window is attached. A
+  request that is refused, conflicts, or would change nothing is answered without a prompt.
 - **FR-015**: An agent MUST NOT stop, delete, or delete the hosting worktree of its own calling
   session through the tool server; such a request MUST be refused by policy. `send_session_input`,
   `read_session_output` and `interrupt_session` targeting the calling session itself MUST be refused
@@ -411,7 +412,7 @@ for the project root.
 | `list_sessions` | List the project's sessions, Regular-terminal sessions included | optional worktree ref filter | per session: ref, label, AI CLI (or "regular terminal"), lifecycle, activity, hosting worktree ref, is-caller flag | read-only |
 | `get_session` | One session's current state | session ref | as one `list_sessions` row, plus failure reason if `Failed` | read-only |
 | `read_session_output` | Recent terminal text of another session (FR-012, FR-016) | session ref, line count | plain-text lines, whether output was truncated | read-only; gated by FR-016 |
-| `create_worktree` | Create a worktree as the create-worktree dialog does | branch name, optional worktree name, mode (new branch / existing local branch / track remote branch) | worktree ref, branch, path | mutating; refused from a Default session (FR-015a) |
+| `create_worktree` | Create a worktree as the create-worktree dialog does | branch name, optional worktree name, mode (new branch / existing local branch / track remote branch), remote (for track remote branch) | worktree ref, branch, path | mutating; refused from a Default session (FR-015a) |
 | `rename_worktree` | Change a worktree's display name | worktree ref, new display name | updated worktree row | mutating; refused from a Default session (FR-015a) |
 | `delete_worktree` | Remove a worktree | worktree ref, stop live sessions (default no), delete branch (default yes) | confirmation of what was removed | destructive (FR-014); refused for the caller's own worktree (FR-015) and from a Default session (FR-015a) |
 | `create_session` | Create and start a session in a worktree or Default | worktree ref, optional AI CLI (default: Settings default), optional initial prompt | session ref, lifecycle, whether the prompt was delivered (FR-017) | mutating |
@@ -443,10 +444,13 @@ including or excluding worktrees the app did not create. These stay user-only in
 
 ### Measurable Outcomes
 
-- **SC-001**: In 100% of sessions started with a supported AI CLI and the setting on, the agent can
+- **SC-001**: In 100% of sessions started with a supported AI CLI and the setting on, and no
+  user-configured server of the same name (FR-003), the agent can
   invoke `whoami` on its first turn, with zero configuration steps by the user.
-- **SC-002**: After starting 20 bound sessions, the user's own CLI configuration files and every
-  project's configuration files are byte-identical to before.
+- **SC-002**: After starting 20 bound sessions, the service has created, modified or deleted none of
+  the user's own CLI configuration files or any project's configuration files: with a stand-in CLI
+  that writes nothing, they are byte-identical to before (the real CLIs' own writes, such as Claude
+  Code's state in `~/.claude.json`, are theirs, not the binding's).
 - **SC-003**: A worktree or session created, renamed or deleted by an agent appears in, or
   disappears from, every connected window within 2 seconds, with no manual refresh.
 - **SC-004**: Read-only operations answer within 1 second for a project with 50 worktrees and 50
