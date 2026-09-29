@@ -278,3 +278,11 @@ failed before the implementation.
   on the full branch: `scripts/build-lock.sh cargo check --workspace --target aarch64-apple-darwin`
   exit 0 (after `mise run gate` passed at 939ef459). Review B also ran `cargo check -p micold-core
   --all-targets` for `aarch64-apple-darwin` and `x86_64-pc-windows-msvc`: both clean.
+
+## Review round 2 (sonnet): three MINOR fixes, no new behavior
+
+- `run_bounded` reaps the child (`child.wait()`) after the kill on the failed-`try_wait` path.
+- `PATH` entries are unquoted on Windows only; on Unix `"` is a file-name character. The Windows
+  and Unix cases in `relative_path_entries_are_dropped_and_quotes_removed` still hold.
+- research.md R3 and R8, data-model.md and contracts/github-issue-source.md §3 now describe the
+  relative-entry rule, the "Resource not accessible" `NoAccess` text and the `GH_DEBUG` removal.

@@ -78,7 +78,7 @@ are held (`ISSUE_LOAD_CAP = 1_000`), and stops at the first error.
 IssueLoadError
 ├── ToolMissing          // gh not found (R3)
 ├── NotSignedIn          // exit 4, 401 (R8)
-├── NoAccess             // 404/403/SAML (R8)
+├── NoAccess             // 404/403/SAML/"Resource not accessible" (R8)
 ├── Offline              // network errors (R8)
 ├── RateLimited          // rate limit (R8)
 ├── TimedOut             // 10 s, killed (R6)

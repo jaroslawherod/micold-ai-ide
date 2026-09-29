@@ -90,7 +90,9 @@ defaults change between `gh` releases, and which caps `--limit` differently acro
 
 ## R3 — Finding `gh` when the app is launched from the desktop (Principle VI)
 
-**Decision.** The executable is resolved to an absolute path before spawning, by walking, in order:
+**Decision.** The executable is resolved to an absolute path before spawning, by walking, in order
+(a `PATH` entry is unquoted on Windows, and a relative entry is never a candidate, since `gh` runs
+in the user's home):
 
 1. the `PATH` the user's **environment-include** snapshot contributes for the project root, when it
    contributes one (feature 011: the client sources `~/.bashrc` / the PowerShell profile per
@@ -285,7 +287,7 @@ stderr, stdout)`:
 |---|---|
 | executable not found by R3, or spawn `NotFound` | `ToolMissing` |
 | exit 4, or stderr mentions `gh auth login` / "not logged in" / HTTP 401 / "Bad credentials" | `NotSignedIn` |
-| GraphQL `NOT_FOUND` / "Could not resolve to a Repository", HTTP 404, HTTP 403 without "rate limit", SAML "Resource protected by organization SAML enforcement" | `NoAccess` |
+| GraphQL `NOT_FOUND` / "Could not resolve to a Repository", HTTP 404, HTTP 403 without "rate limit", SAML "Resource protected by organization SAML enforcement", "Resource not accessible by …" (a token without Issues access) | `NoAccess` |
 | "API rate limit exceeded", "secondary rate limit", GraphQL `RATE_LIMITED`, HTTP 429 | `RateLimited` |
 | "error connecting to", "dial tcp", "no such host", "could not resolve host", "connection refused", "network is unreachable", "TLS handshake timeout", "i/o timeout" | `Offline` |
 | `run_bounded` had to kill it | `TimedOut` |

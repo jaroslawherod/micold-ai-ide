@@ -199,7 +199,11 @@ pub fn run_bounded(mut cmd: Command, timeout: Duration) -> RunOutcome {
 
     let timed_out = match waited {
         Ok(timed_out) => timed_out,
-        Err(err) => return RunOutcome::SpawnFailed(err.to_string()),
+        Err(err) => {
+            // Reap it: the group is dead, so this returns at once, and no zombie is left behind.
+            let _ = child.wait();
+            return RunOutcome::SpawnFailed(err.to_string());
+        }
     };
     if timed_out {
         RunOutcome::TimedOut { stderr }
