@@ -11,13 +11,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-09-29
 - **Phase**: 3-design
-- **Next step**: PR 2 (design) CI and merge; then Phase 4, milestone M1.
+- **Next step**: PR 2 (#462) CI and merge; then Phase 4, milestone M1.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #457 | Spec (also carries the BUG-006 record) | merged | 118f3ce0 |
+| #462 | Design: clarified spec, plan, research, contracts, tasks with M1–M4 | open | — |
 
 ## Milestones
 
