@@ -93,13 +93,13 @@ Tests: `crates/micold-core/tests/github_locate.rs` (new), all against a fake `ex
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U17 | Each `HostOs` has its separator (`:`/`;`) and executable name (`gh`/`gh.exe`) regardless of host | FR-026, R3 | example | TODO | `github_locate.rs::separator_and_exe_come_from_host_os` |
-| U18 | Env-include `PATH` before process `PATH` before well-known dirs; duplicates keep first position; empty components dropped | FR-026, R3 | example | TODO | `github_locate.rs::candidate_order` |
-| U19 | `MacOs` with the Dock `PATH` finds `gh` only in `/opt/homebrew/bin` | FR-026, Edge "desktop launch" | example | TODO | `github_locate.rs::macos_dock_launch_finds_homebrew_gh` |
-| U20 | `Windows` finds `gh.exe` only under `%LOCALAPPDATA%\Microsoft\WinGet\Links` | FR-026 | example | TODO | `github_locate.rs::windows_finds_winget_gh` |
-| U21 | `Linux` well-known table (e.g. `~/.local/bin`, `/home/linuxbrew/.linuxbrew/bin`, `/snap/bin`) is searched | FR-026 | example | TODO | `github_locate.rs::linux_well_known_dirs` |
-| U22 | A `Path` (not `PATH`) key in the env-include snapshot is honoured | FR-026, R3 | example | TODO | `github_locate.rs::path_key_is_matched_ignoring_case` |
-| U23 | Nothing found → `None` | Edge "tooling not installed" | example | TODO | `github_locate.rs::none_when_absent` |
+| U17 | Each `HostOs` has its separator (`:`/`;`) and executable name (`gh`/`gh.exe`) regardless of host | FR-026, R3 | example | DONE | `github_locate.rs::separator_and_exe_come_from_host_os` |
+| U18 | Env-include `PATH` before process `PATH` before well-known dirs; duplicates keep first position; empty components dropped | FR-026, R3 | example | DONE | `github_locate.rs::candidate_order` |
+| U19 | `MacOs` with the Dock `PATH` finds `gh` only in `/opt/homebrew/bin` | FR-026, Edge "desktop launch" | example | DONE | `github_locate.rs::macos_dock_launch_finds_homebrew_gh` |
+| U20 | `Windows` finds `gh.exe` only under `%LOCALAPPDATA%\Microsoft\WinGet\Links` | FR-026 | example | DONE | `github_locate.rs::windows_finds_winget_gh` |
+| U21 | `Linux` well-known table (e.g. `~/.local/bin`, `/home/linuxbrew/.linuxbrew/bin`, `/snap/bin`) is searched | FR-026 | example | DONE | `github_locate.rs::linux_well_known_dirs` |
+| U22 | A `Path` (not `PATH`) key in the env-include snapshot is honoured | FR-026, R3 | example | DONE | `github_locate.rs::path_key_is_matched_ignoring_case` |
+| U23 | Nothing found → `None` | Edge "tooling not installed" | example | DONE | `github_locate.rs::none_when_absent` |
 
 ### `crates/micold-core/src/github.rs`: issues, paging, parsing, arguments
 
