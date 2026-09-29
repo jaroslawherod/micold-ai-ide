@@ -120,3 +120,24 @@ failed before the implementation.
   U20, U21) FAILED. Restored, 7 passed again.
 - refactor: none needed
 - commit: the commit that adds this entry
+
+## Cycle 5: U24–U27 — one page of open issues, and what is sent for it
+
+- test: `crates/micold-core/tests/github_parse.rs` (new), 4 tests; fixtures
+  `tests/fixtures/gh/list_page.json`, `list_page_last.json`, `list_not_found.json` (captured from
+  `gh` 2.54.0: a repository that does not exist), `list_rate_limited.json`
+- stub: `Issue` (accessors; `row_text` empty), `IssuePage`, `IssueLoadError`, `LIST_QUERY`,
+  `parse_list_page` returning `Err(Other(""))`, `list_args` returning `[]`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test github_parse`
+  -> `test result: FAILED. 0 passed; 4 failed`. Decisive lines: `a_list_page_parses`: `a
+  well-formed page: Other("")`; `graphql_errors_are_classified`: `an unresolvable repository is one
+  the sign-in cannot see / left: Other("") / right: NoAccess`; `list_args_send_only_the_repository`:
+  `left: [] / right: ["api", "graphql", "--hostname", "github.com", "-f", "query=…", "-f",
+  "owner=o", "-f", "name=r"]`; `row_text_shows_labels_only_when_present`: `called
+  Result::unwrap() on an Err value: Other("")`.
+- green: `parse_list_page` over `serde_json::Value` (first `errors[]` entry: `NOT_FOUND` ->
+  `NoAccess`, `RATE_LIMITED` -> `RateLimited`, other -> `Other(message)`; `hasNextPage: false` ->
+  no cursor; labels capped at 20), `Issue::new` deriving `row_text`, `list_args` with `-f` for
+  every variable. -> `4 passed; 0 failed`; `mise run test-core` passed, 0 failed
+- refactor: none needed
+- commit: the commit that adds this entry
