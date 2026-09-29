@@ -80,12 +80,12 @@ Tests: `crates/micold-core/tests/github_remote.rs` (new).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U11 | Every accepted github.com URL form of R5 (https/http/scp/ssh/git, `.git`, trailing `/`, `ssh.github.com:443`, `GITHUB.COM`) yields `owner/name` | FR-002, R5 | example | TODO | `github_remote.rs::accepted_url_forms` |
-| U12 | Userinfo (`user@`, `x-access-token:T@`) is discarded; the token never appears in the value or `Display` | FR-022, SC-006 | example | TODO | `github_remote.rs::userinfo_is_discarded` |
-| U13 | `www.github.com`, `github.example.com`, GitLab, Bitbucket, local paths, `gh:o/r` are rejected | FR-002 | example | TODO | `github_remote.rs::non_github_urls_are_rejected` |
-| U14 | `origin` on GitHub wins over an earlier GitHub remote | Edge "several remotes" | example | TODO | `github_remote.rs::origin_wins_when_on_github` |
-| U15 | origin on GitLab + upstream on GitHub picks upstream; two GitHub remotes without origin picks the first | Edge "several remotes" | example | TODO | `github_remote.rs::first_github_remote_otherwise` |
-| U16 | No remote, or none on github.com → `NoGithubRemote` | FR-002 | example | TODO | `github_remote.rs::no_github_remote` |
+| U11 | Every accepted github.com URL form of R5 (https/http/scp/ssh/git, `.git`, trailing `/`, `ssh.github.com:443`, `GITHUB.COM`) yields `owner/name` | FR-002, R5 | example | DONE | `github_remote.rs::accepted_url_forms` |
+| U12 | Userinfo (`user@`, `x-access-token:T@`) is discarded; the token never appears in the value or `Display` | FR-022, SC-006 | example | DONE | `github_remote.rs::userinfo_is_discarded` |
+| U13 | `www.github.com`, `github.example.com`, GitLab, Bitbucket, local paths, `gh:o/r` are rejected | FR-002 | example | DONE | `github_remote.rs::non_github_urls_are_rejected` |
+| U14 | `origin` on GitHub wins over an earlier GitHub remote | Edge "several remotes" | example | DONE | `github_remote.rs::origin_wins_when_on_github` |
+| U15 | origin on GitLab + upstream on GitHub picks upstream; two GitHub remotes without origin picks the first | Edge "several remotes" | example | DONE | `github_remote.rs::first_github_remote_otherwise` |
+| U16 | No remote, or none on github.com → `NoGithubRemote` | FR-002 | example | DONE | `github_remote.rs::no_github_remote` |
 
 ### `crates/micold-core/src/github.rs`: `HostOs`, `locate_gh`
 

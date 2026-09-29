@@ -70,3 +70,26 @@ failed before the implementation.
 - notes: U97 appended to the list — T011 names `FakeGit::with_remote`, which no listed behaviour
   covered
 - commit: the commit that adds this entry
+
+## Cycle 3: U11–U16 — the GitHub repository behind a remote
+
+- test: `crates/micold-core/tests/github_remote.rs` (new), 6 tests
+- stub: new `github.rs` (`pub mod github;`) with `GithubRepo::from_remote_url` returning `None` and
+  `choose_remote` returning `NoGithubRemote`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test github_remote`
+  -> `test result: FAILED. 2 passed; 4 failed`. Decisive lines: `accepted_url_forms`:
+  `` `https://github.com/o/r` is a github.com remote naming o/r / left: None / right: Some("o/r") ``;
+  `userinfo_is_discarded`: `left: None / right: Some("o/r")`; `origin_wins_when_on_github`: `origin
+  on GitHub is chosen over an earlier GitHub remote, got NoGithubRemote`;
+  `first_github_remote_otherwise`: `origin not on GitHub: the GitHub remote is chosen`.
+  Passed on the stub: U13 `non_github_urls_are_rejected`, U16 `no_github_remote` (both assert a
+  rejection).
+- green: `from_remote_url` splits scheme URLs (`http(s)`, `git`, `ssh`) into authority and path,
+  drops userinfo and a numeric port, and reads the scp form `[user@]host:path`; the host must be
+  `github.com` (or `ssh.github.com` over SSH), the path exactly `owner/name` after `.git` and `/`
+  are stripped. `choose_remote` takes `origin` when it parses, else the first remote that does.
+  -> `6 passed; 0 failed`; `mise run test-core` 1281 passed, 0 failed
+- mutant check: host check removed -> U13, U15 and U16 FAILED; `choose_remote` falling back to a
+  made-up GitHub remote instead of `NoGithubRemote` -> U16 FAILED. Restored, 6 passed again.
+- refactor: none needed
+- commit: the commit that adds this entry
