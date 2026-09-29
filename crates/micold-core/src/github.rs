@@ -6,6 +6,7 @@
 //! `specs/034-github-issue-worktree/contracts/github-issue-source.md` and `remote-list-rpc.md`.
 
 use std::fmt;
+use std::path::{Path, PathBuf};
 
 use crate::git::GitRemote;
 
@@ -122,4 +123,156 @@ pub fn choose_remote(remotes: &[GitRemote]) -> RemoteChoice {
         .find_map(on_github)
         .or_else(|| remotes.iter().find_map(on_github))
         .unwrap_or(RemoteChoice::NoGithubRemote)
+}
+
+/// The OS whose conventions [`locate_gh`] follows. Passed in rather than read from the host, so
+/// every OS's table, separator and file name is tested on every CI host (research R3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostOs {
+    /// Linux and other Unix desktops.
+    Linux,
+    /// macOS.
+    MacOs,
+    /// Windows.
+    Windows,
+}
+
+impl HostOs {
+    /// The OS this build runs on — the one `cfg` in the lookup.
+    pub fn current() -> HostOs {
+        if cfg!(windows) {
+            HostOs::Windows
+        } else if cfg!(target_os = "macos") {
+            HostOs::MacOs
+        } else {
+            HostOs::Linux
+        }
+    }
+
+    /// The GitHub CLI's file name on this OS.
+    pub fn exe_name(self) -> &'static str {
+        match self {
+            HostOs::Windows => "gh.exe",
+            HostOs::Linux | HostOs::MacOs => "gh",
+        }
+    }
+
+    /// The separator between `PATH` entries on this OS.
+    pub fn path_separator(self) -> char {
+        match self {
+            HostOs::Windows => ';',
+            HostOs::Linux | HostOs::MacOs => ':',
+        }
+    }
+
+    /// Where `gh`'s installers put it, for a launch whose `PATH` does not say (research R3).
+    fn well_known_dirs(
+        self,
+        home: Option<&Path>,
+        env: &dyn Fn(&str) -> Option<String>,
+    ) -> Vec<PathBuf> {
+        let under_home = |parts: &[&str]| {
+            home.map(|h| {
+                parts
+                    .iter()
+                    .fold(h.to_path_buf(), |dir, part| dir.join(part))
+            })
+        };
+        match self {
+            HostOs::MacOs => [
+                Some(PathBuf::from("/opt/homebrew/bin")),
+                Some(PathBuf::from("/usr/local/bin")),
+                Some(PathBuf::from("/opt/local/bin")),
+                under_home(&[".local", "bin"]),
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
+            HostOs::Linux => [
+                Some(PathBuf::from("/usr/local/bin")),
+                Some(PathBuf::from("/usr/bin")),
+                Some(PathBuf::from("/snap/bin")),
+                Some(PathBuf::from("/home/linuxbrew/.linuxbrew/bin")),
+                under_home(&[".linuxbrew", "bin"]),
+                under_home(&[".local", "bin"]),
+                under_home(&["bin"]),
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
+            // Built as text with `\`, not with `Path::join`, so the Windows table is the same
+            // strings on every host.
+            HostOs::Windows => [
+                ("ProgramFiles", r"\GitHub CLI"),
+                ("ProgramFiles(x86)", r"\GitHub CLI"),
+                ("LOCALAPPDATA", r"\Microsoft\WinGet\Links"),
+                ("USERPROFILE", r"\scoop\shims"),
+                ("ProgramData", r"\chocolatey\bin"),
+            ]
+            .into_iter()
+            .filter_map(|(var, tail)| {
+                env(var)
+                    .filter(|base| !base.is_empty())
+                    .map(|base| PathBuf::from(format!("{}{tail}", base.trim_end_matches('\\'))))
+            })
+            .collect(),
+        }
+    }
+}
+
+/// Everything [`locate_gh`] reads, injected so the walk is a pure function (research R3).
+pub struct LocateInputs<'a> {
+    /// Whose conventions to follow.
+    pub os: HostOs,
+    /// The `PATH` the environment-include snapshot contributes, if any ([`env_include_path`]).
+    pub env_include_path: Option<&'a str>,
+    /// This process's own `PATH`.
+    pub process_path: &'a str,
+    /// The user's home directory.
+    pub home: Option<&'a Path>,
+    /// Reads an environment variable (`ProgramFiles`, `LOCALAPPDATA`, …).
+    pub env: &'a dyn Fn(&str) -> Option<String>,
+    /// Whether a file exists: `Path::is_file` in production, a fake set in tests.
+    pub exists: &'a dyn Fn(&Path) -> bool,
+}
+
+/// The `PATH` an environment-include snapshot contributes, its key matched ignoring case
+/// (Windows spells it `Path`).
+pub fn env_include_path(vars: &[(String, String)]) -> Option<&str> {
+    vars.iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case("PATH"))
+        .map(|(_, value)| value.as_str())
+}
+
+/// The directories searched for `gh`, in order, each once (contracts/github-issue-source.md §1).
+///
+/// Env-include `PATH`, then process `PATH`, then the OS's well-known directories. Split on
+/// [`HostOs::path_separator`], never the host's `split_paths`; duplicates keep their first position
+/// and empty components are dropped.
+pub fn candidate_dirs(inputs: &LocateInputs) -> Vec<PathBuf> {
+    let separator = inputs.os.path_separator();
+    let from_paths = [inputs.env_include_path, Some(inputs.process_path)]
+        .into_iter()
+        .flatten()
+        .flat_map(|path| path.split(separator))
+        .filter(|entry| !entry.is_empty())
+        .map(PathBuf::from);
+    let well_known = inputs.os.well_known_dirs(inputs.home, inputs.env);
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    for dir in from_paths.chain(well_known) {
+        if !dirs.contains(&dir) {
+            dirs.push(dir);
+        }
+    }
+    dirs
+}
+
+/// The first candidate directory holding `gh`, as an absolute path to spawn.
+///
+/// The file name is [`HostOs::exe_name`], never the host's `PATHEXT`.
+pub fn locate_gh(inputs: &LocateInputs) -> Option<PathBuf> {
+    candidate_dirs(inputs)
+        .into_iter()
+        .map(|dir| dir.join(inputs.os.exe_name()))
+        .find(|candidate| (inputs.exists)(candidate))
 }

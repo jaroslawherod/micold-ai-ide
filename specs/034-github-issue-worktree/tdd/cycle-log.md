@@ -93,3 +93,30 @@ failed before the implementation.
   made-up GitHub remote instead of `NoGithubRemote` -> U16 FAILED. Restored, 6 passed again.
 - refactor: none needed
 - commit: the commit that adds this entry
+
+## Cycle 4: U17–U23 — finding `gh` as a desktop-launched app
+
+- test: `crates/micold-core/tests/github_locate.rs` (new), 7 tests, all against a fake `exists`
+- stub: `HostOs` (`exe_name` `""`, `path_separator` `'\0'`), `LocateInputs`, `env_include_path`,
+  `candidate_dirs` and `locate_gh` returning nothing
+- red: `scripts/build-lock.sh cargo test -p micold-core --test github_locate`
+  -> `test result: FAILED. 1 passed; 6 failed`. Decisive lines:
+  `separator_and_exe_come_from_host_os`: `left: ('\0', "") / right: (':', "gh")`;
+  `macos_dock_launch_finds_homebrew_gh`: `a Dock launch cannot see Homebrew on its PATH, so the
+  well-known table finds it / left: None / right: Some("/opt/homebrew/bin/gh")`;
+  `windows_finds_winget_gh`: `left: None`; `linux_well_known_dirs`: `/usr/local/bin is searched on
+  Linux: []`; `path_key_is_matched_ignoring_case`: `Windows spells the key Path / left: None`.
+  `candidate_order` first failed with `range end index 3 out of range for slice of length 0` — a
+  slicing panic, not an assertion, so the test was changed to compare the first three candidates
+  as a `Vec` (a test fix before any implementation) and re-run:
+  `env-include PATH first, then process PATH; … / left: [] / right: ["/from/profile", "/shared",
+  "/from/process"]`. Passed on the stub: U23 `none_when_absent`.
+- green: `HostOs` separator/exe name/`current()` (the one `cfg!`), the per-OS well-known table of
+  research R3 (Windows entries built as `\`-joined text from their variables, skipped when unset),
+  `env_include_path` matching `PATH` ignoring ASCII case, `candidate_dirs` (env-include, process,
+  well-known; deduplicated, empties dropped), `locate_gh` probing `dir/exe_name`.
+  -> `7 passed; 0 failed`; `mise run test-core` 1288 passed, 0 failed
+- mutant check: `locate_gh` accepting the first candidate whatever `exists` says -> U23 (and U19,
+  U20, U21) FAILED. Restored, 7 passed again.
+- refactor: none needed
+- commit: the commit that adds this entry
