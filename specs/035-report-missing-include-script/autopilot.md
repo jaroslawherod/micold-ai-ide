@@ -10,14 +10,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature (from bug BUG-006)
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-09-29
-- **Phase**: 1-spec
-- **Next step**: the orchestrator waits for PR 1's `ci complete` and merges it; then Phase 2 (clarify FR-004, FR-007, FR-008).
+- **Phase**: 2-clarify, round 1
+- **Next step**: the orchestrator asks the round-1 escalation (Open escalation), then continues the clarify unit with the answers; round 2 follows.
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #457 | Spec (also carries the BUG-006 record) | open | |
+| #457 | Spec (also carries the BUG-006 record) | merged | 118f3ce0 |
 
 ## Milestones
 
@@ -31,6 +31,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D1 | 1-spec | Does the spec settle the issue's three open points (BUG-006 ledger D3–D5)? | No. Each is an open `[NEEDS CLARIFICATION]` marker in spec.md for Phase 2: FR-004 (D3, when Settings checks the path and whether save is blocked), FR-007 (D4, reporting beyond Settings), FR-008 (D5, recovery). | agent-resolved | orchestrator instruction; SKILL.md Phase 1 |
 | D2 | 1-spec | Spec review round 1 | CHANGES: 5 MAJOR, 5 MINOR, all verified against the code and fixed. `~` is taken literally as resolution does (`env_include.rs:421`, no expansion); relative paths get their own "relative, not checked" indication, because resolution's directory depends on the active session (`shell/env_include.rs` `default_resolution_cwd`); "readable file" defined as a regular readable file, with both notes shown for a directory while on; FR-014 added for "file exists now but the cached attempt failed" (no re-source on show); FR-008 re-posed so "report only" is a valid answer; FR-006/SC-004 given a 2 s bound and a hung-check edge case. | agent-resolved | reviewer subagent round 1 |
 | D3 | 1-spec | Spec review round 2 (sonnet) | CLEAN. Four MINORs, all applied: which state a fast check error gets; relative path with the feature on shows both notes; "readable" as the OS reports it for the current user; rewrapped a long line. | agent-resolved | reviewer subagent round 2 |
+| D4 | 2-clarify r1 | May Save be refused while the draft path is missing (FR-004)? | No: FR-006 forbids blocking the other settings, and one Save writes the whole form. Recorded in spec Clarifications. | agent-resolved | spec.md#FR-006; `crates/micold-client/src/shell/persist.rs` `on_settings_saved` |
+| D5 | 2-clarify r1 | Is the draft path checked as the user types (FR-004)? | No: 011's contract gives the path field no validation while typing. FR-004's marker narrowed to: notify on save, or report only at next open. | agent-resolved | `specs/011-env-include-script/contracts/settings-ui.md` (New `Message` variants) |
+| D6 | 2-clarify r1 | `speckit-clarify` scan beyond the three markers | No further critical ambiguities; the remaining open items are FR-004 (narrowed), FR-007, FR-008, all product decisions. | agent-resolved | clarify run, round 1 |
 
 ## Declined review findings
 
@@ -39,7 +42,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Open escalation
 
-None.
+Clarify round 1, category 1 (product decision), three questions:
+- FR-004 (BUG-006 D3): on Save with a missing path, notify (Recommended) or show the indication only at the next open?
+- FR-007 (BUG-006 D4): report a failed resolution only in Settings (Recommended), in the missing-default-CLI notice as well, or once per run at launch?
+- FR-008 (BUG-006 D5): report only (Recommended), offer the platform default, offer to clear the path, or offer to turn the feature off?
 
 ## Follow-ups not done
 

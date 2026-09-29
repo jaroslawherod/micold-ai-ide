@@ -23,6 +23,19 @@ made, and 011's `contracts/settings-ui.md` (layout step 4) says nothing is shown
 the behaviour 011 never intended: an opinion about the stored path while the feature is off, and
 a consistent report of it in both states. It does not change how 011 sources the script.
 
+## Clarifications
+
+### Session 2026-09-29
+
+- Q: May Save be refused while the draft script path names a missing file? → A: No. The
+  indication is non-blocking and must not prevent saving the other settings (FR-006), and one Save
+  validates and writes the whole form together, so refusing the path refuses everything.
+  _(agent-resolved: specs/035-report-missing-include-script/spec.md#FR-006;
+  crates/micold-client/src/shell/persist.rs#on_settings_saved)_
+- Q: Is the draft script path checked while the user is typing it? → A: No. The path field has no
+  validation while typing; any draft check happens on Save.
+  _(agent-resolved: specs/011-env-include-script/contracts/settings-ui.md#New `Message` variants)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See that the stored script path does not exist while the feature is off (Priority: P1)
@@ -167,12 +180,13 @@ indication is gone.
 - **FR-003**: While the feature is off, checking the path MUST NOT execute or source the script,
   and MUST NOT change what sessions receive: no script is sourced, exactly as in feature 011.
 - **FR-004**: FR-001 and FR-009 already settle that the *stored* path is checked whenever
-  Settings is shown and after every save. For a path the user is editing in Settings, before it
-  is saved, the application MUST [NEEDS CLARIFICATION: check the draft path, when, and with what
-  effect on saving? Options: do not check the draft (the saved path is reported after save);
-  check as the user types; check on save and save a missing path with a warning; check on save
-  and refuse to save a missing path until it is fixed or blank. This is what remains of issue
-  #435's first open point ("validate when shown or saved") and BUG-006 ledger D3.]
+  Settings is shown and after every save. The draft path is not checked while the user types, and
+  saving is never refused because the path is missing (Clarifications). On Save, the application
+  MUST [NEEDS CLARIFICATION: Save closes Settings (`persist.rs` `apply_save`), so the post-save
+  indication is only seen when Settings is next opened. Options: check the saved path and, if it
+  is missing, save anyway and post a notification naming the path; or do not check at save and
+  let the indication appear the next time Settings is opened. Issue #435's first open point,
+  BUG-006 ledger D3.]
 - **FR-005**: With the feature on, the existing failure indication for a missing script (feature
   011, FR-013) MUST remain. Its wording MUST agree with FR-002, so the path is reported as the
   same problem in both states and the indication does not disappear when the feature is switched
