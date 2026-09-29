@@ -121,11 +121,11 @@ Tests: `crates/micold-core/tests/github_classify.rs` (new), `tests/fixtures/gh/*
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U31 | Exit 4 / "gh auth login" / HTTP 401 → `NotSignedIn` | FR-007, FR-022 | example | TODO | `github_classify.rs::not_signed_in` |
-| U32 | 404, 403, SAML → `NoAccess` | FR-007 | example | TODO | `github_classify.rs::no_access` |
-| U33 | DNS/connection failures → `Offline`; rate-limit text → `RateLimited`; `TimedOut` outcome → `TimedOut` | FR-007, SC-004 | example | TODO | `github_classify.rs::offline_rate_limited_timed_out` |
-| U34 | Unknown stderr → `Other(first non-empty line)` | FR-007 | example | TODO | `github_classify.rs::unknown_text_is_other` |
-| U35 | `message(repo)` returns the §5 text per variant, `ToolMissing` included, naming `owner/name` for `NoAccess` | FR-007, Edge "tooling not installed" | example | TODO | `github_classify.rs::messages_name_cause_and_remedy` |
+| U31 | Exit 4 / "gh auth login" / HTTP 401 → `NotSignedIn` | FR-007, FR-022 | example | DONE | `github_classify.rs::not_signed_in` |
+| U32 | 404, 403, SAML → `NoAccess` | FR-007 | example | DONE | `github_classify.rs::no_access` |
+| U33 | DNS/connection failures → `Offline`; rate-limit text → `RateLimited`; `TimedOut` outcome → `TimedOut` | FR-007, SC-004 | example | DONE | `github_classify.rs::offline_rate_limited_timed_out` |
+| U34 | Unknown stderr → `Other(first non-empty line)` | FR-007 | example | DONE | `github_classify.rs::unknown_text_is_other` |
+| U35 | `message(repo)` returns the §5 text per variant, `ToolMissing` included, naming `owner/name` for `NoAccess` | FR-007, Edge "tooling not installed" | example | DONE | `github_classify.rs::messages_name_cause_and_remedy` |
 
 ### `crates/micold-core/src/naming.rs`: `name_from_title`
 

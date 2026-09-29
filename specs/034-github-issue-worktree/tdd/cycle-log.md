@@ -158,3 +158,23 @@ failed before the implementation.
   -> `3 passed; 0 failed`; `mise run test-core` passed, 0 failed
 - refactor: none needed
 - commit: the commit that adds this entry
+
+## Cycle 7: U31–U35 — classifying gh's failures and wording them
+
+- test: `crates/micold-core/tests/github_classify.rs` (new), 5 tests over the stderr fixtures in
+  `tests/fixtures/gh/` (five captured from gh 2.54.0, the rest from gh's documented texts)
+- stub: `classify` returning `Other("")`, `IssueLoadError::message` returning `""`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test github_classify`
+  -> `test result: FAILED. 0 passed; 5 failed`. Decisive lines: `not_signed_in`: `left: Other("")
+  / right: NotSignedIn`; `no_access`: `left: Other("") / right: NoAccess`;
+  `offline_rate_limited_timed_out`: `left: Other("") / right: Offline`; `unknown_text_is_other`:
+  `left: Other("") / right: Other("something unexpected happened")`;
+  `messages_name_cause_and_remedy`: `ToolMissing / left: "" / right: "Couldn't read issues: the
+  GitHub CLI (`gh`) isn't installed. …"`.
+- green: `classify` per R8 (timeout, spawn failure, exit 4 / auth text, rate limit before the
+  403 access texts, offline texts, else the first non-empty stderr line or the exit status);
+  `message` returns the §5 texts. -> `5 passed; 0 failed`; `mise run test-core` 1300 passed,
+  0 failed
+- refactor: none needed
+- notes: every test was red on the stub, so no deliberate-mutant check was needed
+- commit: the commit that adds this entry

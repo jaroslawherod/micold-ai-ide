@@ -1,0 +1,1 @@
+Post "https://api.github.com/graphql": dial tcp: lookup api.github.com: no such host
