@@ -14,7 +14,7 @@
 ## Requirement Completeness
 
 - [x] No [NEEDS CLARIFICATION] markers remain
-- [x] Requirements are testable and unambiguous (FR-004, FR-007, FR-008 wait on their markers)
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
@@ -24,16 +24,16 @@
 
 ## Feature Readiness
 
-- [x] All functional requirements have clear acceptance criteria (FR-004, FR-007, FR-008 wait on their markers)
+- [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature meets measurable outcomes defined in Success Criteria
 - [x] No implementation details leak into specification
 
 ## Notes
 
-- Three `[NEEDS CLARIFICATION]` markers stay open on purpose, one for each open point in issue
-  #435: FR-004 (when the draft path is checked, and whether save is blocked), FR-007 (reporting
-  beyond Settings) and FR-008 (recovery). The autopilot flow settles them in Phase 2
-  (`speckit-clarify`). Until then, User Story 3 and FR-004/FR-007/FR-008 are not fully testable.
-- The spec names the settings file's field names and one daemon source file only in **Input** and
-  **Out of Scope**, to cite the bug report. No requirement depends on them.
+- The three `[NEEDS CLARIFICATION]` markers (FR-004, FR-007, FR-008) were settled in Phase 2
+  (spec Clarifications, session 2026-09-29), and none remain. User Story 3 and FR-004, FR-007 and
+  FR-008 are now testable as written.
+- The spec names the settings file's field names and source files only in **Input**, the
+  Clarifications' provenance citations, **Assumptions** and **Out of Scope**, to cite the bug report
+  and the evidence for each answer. No requirement depends on them.
