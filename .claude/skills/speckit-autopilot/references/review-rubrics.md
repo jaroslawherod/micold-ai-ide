@@ -14,7 +14,9 @@ Prompt parts, in order:
    file."
 2. **Read.** Artifact paths and `.specify/memory/constitution.md`. For code, instead of spec.md and
    tasks.md, the milestone brief (`scripts/autopilot/brief.py milestone <feature-dir> M<K>`: block,
-   tasks, requirements, stories), `git diff --stat origin/main...HEAD`, then the diff file by file.
+   tasks, requirements, stories, and the other milestones' task ranges for the scope check); for a
+   bug, the BUG record and `brief.py items tasks.md <fix task IDs>`. Then
+   `git diff --stat origin/main...HEAD`, and the diff file by file.
    Tell it to pull more with `brief.py section|items` rather than reading an artifact whole.
 3. **Rubric.** The matching section below, verbatim.
 4. **Output contract:**
