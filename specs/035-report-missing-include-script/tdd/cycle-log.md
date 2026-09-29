@@ -86,3 +86,21 @@ existed and failed before the implementation.
   `#[cfg(test)] with_script_path_probe`; `base_app()` hands every test
   `FakeScriptPathProbe::answering(File)` -> 14 passed, 11 passed
 - refactor: none needed
+
+## Cycle 5: U24–U28, U37 the reducer holds check results (contract S1–S4, S8)
+
+- test: `crates/micold-client/tests/features_settings.rs`, module `script_path_check`, six tests (new)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test features_settings script_path_check`
+  against `Msg` variants and state fields whose reducer arms did nothing -> 2 passed, 4 failed:
+  - U24 `starting_a_check_raises_the_sequence_...`: `each start takes a new number left: 4 right: 5`
+  - U25 `a_save_marks_its_check_as_one_to_report_...`: `left: None right: Some(0)`
+  - U26 `the_current_checks_answer_is_shown`: `left: Idle right: Done(CheckedScriptPath { .. NotFound { tilde: false } })`
+  - U27 `a_blank_paths_answer_leaves_nothing_to_show`: `left: Done(..) right: Idle`
+  - U28 and U37 assert an absence and passed on the stub. Deliberate mutants, together: drop the
+    `seq` guard in `script_path_checked` and clear `settings_draft` there -> U28 `check 1 was
+    superseded by 2: ...` and U37 `a check reports on the path and changes nothing else ...`
+    (4 passed, 2 failed), then restored.
+- green: `script_path_check_started` / `script_path_checked` in
+  `crates/micold-client/src/features/settings.rs` -> 21 passed (the whole file)
+- refactor: none needed
+- notes: `script_check_save_seq` is set by S1 as U25 asks; nothing reads it until M2's S5–S7.

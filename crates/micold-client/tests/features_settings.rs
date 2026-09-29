@@ -344,3 +344,160 @@ fn turning_the_pi_activity_switch_off_is_a_choice_not_a_fault() {
         .into_settings();
     assert!(!saved.pi_activity_component);
 }
+
+// --- Spec 035: the script path check, in the reducer (contracts/settings-indication.md §1) -------
+
+mod script_path_check {
+    use micold_client::app::State;
+    use micold_client::features::settings::{update, CheckOrigin, Msg, ScriptCheck, SettingsDraft};
+    use micold_core::script_path_check::{CheckedScriptPath, ScriptPathState};
+
+    const MISSING: &str = "/tmp/does-not-exist.sh";
+
+    fn checked(state: ScriptPathState) -> CheckedScriptPath {
+        CheckedScriptPath {
+            path: MISSING.to_string(),
+            enabled: false,
+            state,
+        }
+    }
+
+    fn start(state: &mut State, origin: CheckOrigin) -> u64 {
+        update(state, Msg::ScriptPathCheckStarted { origin });
+        state.settings.script_check_seq
+    }
+
+    fn land(state: &mut State, seq: u64, origin: CheckOrigin, result: Option<CheckedScriptPath>) {
+        update(
+            state,
+            Msg::ScriptPathChecked {
+                seq,
+                origin,
+                result,
+            },
+        );
+    }
+
+    #[test]
+    fn starting_a_check_raises_the_sequence_and_keeps_the_previous_answer_showing() {
+        let mut state = State::default();
+        let previous = checked(ScriptPathState::NotFound { tilde: false });
+        state.settings.script_check = ScriptCheck::Done(previous.clone());
+        state.settings.script_check_seq = 4;
+
+        update(
+            &mut state,
+            Msg::ScriptPathCheckStarted {
+                origin: CheckOrigin::Opened,
+            },
+        );
+
+        assert_eq!(
+            state.settings.script_check_seq, 5,
+            "each start takes a new number"
+        );
+        assert_eq!(
+            state.settings.script_check,
+            ScriptCheck::Pending {
+                seq: 5,
+                last: Some(previous)
+            },
+            "a re-check must not blank the notice while it runs"
+        );
+    }
+
+    #[test]
+    fn a_save_marks_its_check_as_one_to_report_and_an_open_does_not() {
+        let mut state = State::default();
+
+        let opened = start(&mut state, CheckOrigin::Opened);
+        assert_eq!(
+            state.settings.script_check_save_seq, None,
+            "opening Settings never asks for a report (FR-007), check {opened}"
+        );
+
+        let saved = start(&mut state, CheckOrigin::Saved);
+        assert_eq!(
+            state.settings.script_check_save_seq,
+            Some(saved),
+            "a save's check is the one whose result may be reported (FR-004)"
+        );
+    }
+
+    #[test]
+    fn the_current_checks_answer_is_shown() {
+        let mut state = State::default();
+        let seq = start(&mut state, CheckOrigin::Opened);
+        let answer = checked(ScriptPathState::NotFound { tilde: false });
+
+        land(&mut state, seq, CheckOrigin::Opened, Some(answer.clone()));
+
+        assert_eq!(state.settings.script_check, ScriptCheck::Done(answer));
+    }
+
+    #[test]
+    fn a_blank_paths_answer_leaves_nothing_to_show() {
+        let mut state = State::default();
+        state.settings.script_check =
+            ScriptCheck::Done(checked(ScriptPathState::NotFound { tilde: false }));
+        let seq = start(&mut state, CheckOrigin::Opened);
+
+        land(&mut state, seq, CheckOrigin::Opened, None);
+
+        assert_eq!(
+            state.settings.script_check,
+            ScriptCheck::Idle,
+            "a blank path has no check, so the old answer must go (FR-011)"
+        );
+    }
+
+    #[test]
+    fn an_older_checks_answer_is_dropped() {
+        let mut state = State::default();
+        let older = start(&mut state, CheckOrigin::Opened);
+        let newer = start(&mut state, CheckOrigin::Opened);
+        let before = state.settings.script_check.clone();
+
+        land(
+            &mut state,
+            older,
+            CheckOrigin::Opened,
+            Some(checked(ScriptPathState::NotFound { tilde: false })),
+        );
+
+        assert_eq!(
+            state.settings.script_check, before,
+            "check {older} was superseded by {newer}: a slow answer about an older path must not \
+             overwrite the newer one"
+        );
+    }
+
+    #[test]
+    fn neither_check_message_touches_the_draft_or_a_setting() {
+        let mut state = State::default();
+        let mut draft = SettingsDraft::default();
+        draft.environment.enabled = true;
+        draft.environment.script_path = MISSING.to_string();
+        draft.environment.timeout_secs = "5".to_string();
+        state.settings.settings_draft = Some(draft);
+        let before = state.clone();
+
+        let seq = start(&mut state, CheckOrigin::Saved);
+        land(
+            &mut state,
+            seq,
+            CheckOrigin::Saved,
+            Some(checked(ScriptPathState::NotFound { tilde: false })),
+        );
+
+        let mut after = state.clone();
+        after.settings.script_check = before.settings.script_check.clone();
+        after.settings.script_check_seq = before.settings.script_check_seq;
+        after.settings.script_check_save_seq = before.settings.script_check_save_seq;
+        assert_eq!(
+            after, before,
+            "a check reports on the path and changes nothing else: no recovery, no rewrite \
+             (FR-008, FR-010)"
+        );
+    }
+}
