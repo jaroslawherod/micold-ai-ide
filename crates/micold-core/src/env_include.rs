@@ -11,20 +11,15 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::OsString;
-use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::{Duration, Instant};
 
-#[cfg(windows)]
-use crate::win_job::JobHandle;
+use crate::process::{run_bounded, RunOutcome};
 
 /// The hardcoded terminal-emulation pair every launch always carries (`main.rs`, pre-existing).
 const TERM_KEY: &str = "TERM";
 const TERM_VALUE: &str = "xterm-256color";
-
-/// How long to poll a spawned child's exit status before considering it hung (research R2).
-const POLL_INTERVAL: Duration = Duration::from_millis(20);
 
 /// The result of the most recent attempt to resolve the include script (data-model.md).
 /// An enum (not a `bool` + `Option<String>`) so "failed but has no category" or "succeeded but
@@ -138,23 +133,6 @@ fn remove_inherited_terminal_identity(
     }
 }
 
-/// How a bounded subprocess run concluded — kept distinct from `EnvIncludeOutcome` so `resolve()`
-/// decides the public category from an unambiguous fact (did it exit, or did we have to kill it)
-/// rather than inferring "was this a timeout?" from elapsed time, which would be racy right at
-/// the timeout boundary.
-enum RunOutcome {
-    /// The process exited on its own within `timeout`.
-    Exited {
-        code: i32,
-        stdout: Vec<u8>,
-        stderr: String,
-    },
-    /// The process was still running at `timeout` and was killed.
-    TimedOut { stderr: String },
-    /// The process could not even be spawned (e.g. the interpreter binary is missing).
-    SpawnFailed(String),
-}
-
 /// Reported when the budget ran out before a baseline environment could be established (BUG-003).
 ///
 /// A distinct message rather than an empty diagnostic, because the two timeouts mean different
@@ -163,101 +141,6 @@ enum RunOutcome {
 const BASELINE_UNAVAILABLE: &str =
     "the timeout expired while establishing the baseline environment, before the script was \
      sourced — raise the env-include timeout";
-
-/// Kill every process in `pid`'s process group (Unix only — `cmd` is spawned with
-/// `process_group(0)` below, so the group id equals the child's own pid) via a direct `kill(2)`
-/// syscall. Deliberately NOT implemented by spawning the `kill(1)` *binary* as a subprocess —
-/// that proved unreliable in sandboxed environments during development (the spawned `kill`
-/// process reported success without the target group actually dying), whereas the direct syscall
-/// from this same process is unambiguous.
-#[cfg(unix)]
-fn kill_process_group(pid: u32) {
-    // Safety: `kill(2)` with a negative pid signals the process group; passing an invalid/already-
-    // reaped group id is a documented, safe no-op (returns -1/ESRCH) rather than undefined
-    // behavior.
-    unsafe {
-        libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
-    }
-}
-
-/// Run `cmd`, waiting up to `timeout` for it to exit (research R2: `spawn()` + `try_wait()`
-/// poll, not the blocking `.output()`). On Unix, `cmd` is spawned in its own process group so
-/// that on timeout — or even after a natural exit — the ENTIRE group (not just the top-level
-/// process) is killed before reading its piped stdout/stderr: a sourced rc file MAY background a
-/// process (an agent daemon, a version-manager helper); if such a grandchild inherits the pipe
-/// and outlives its parent, reading to EOF would otherwise block forever (this exact deadlock was
-/// observed with a `sleep`-under-`source`-under-command-substitution during development).
-fn run_bounded(mut cmd: Command, timeout: Duration) -> RunOutcome {
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
-    }
-    let mut child = match cmd.spawn() {
-        Ok(child) => child,
-        Err(err) => return RunOutcome::SpawnFailed(err.to_string()),
-    };
-    // Only the Unix kill needs the pid; binding it unconditionally warns on Windows, and this
-    // crate is built with warnings denied.
-    #[cfg(unix)]
-    let pid = child.id();
-    // Windows' counterpart to the process group above, assigned as soon as the child exists.
-    #[cfg(windows)]
-    let job = JobHandle::capture(&child);
-
-    let start = Instant::now();
-    let timed_out = loop {
-        match child.try_wait() {
-            Ok(Some(_)) => break false,
-            Ok(None) => {
-                if start.elapsed() >= timeout {
-                    break true;
-                }
-                std::thread::sleep(POLL_INTERVAL);
-            }
-            Err(err) => return RunOutcome::SpawnFailed(err.to_string()),
-        }
-    };
-
-    // Kill the whole group unconditionally (whether it exited on its own or timed out) so no
-    // orphaned grandchild can keep the pipes open — see the doc comment above.
-    #[cfg(unix)]
-    kill_process_group(pid);
-    #[cfg(windows)]
-    {
-        // The job first — it takes the whole tree, including anything holding the pipes read
-        // below. `child.kill()` after it, for the case where the job could not be created at all.
-        if let Some(job) = &job {
-            job.terminate();
-        }
-        let _ = child.kill();
-    }
-    #[cfg(not(any(unix, windows)))]
-    let _ = child.kill();
-
-    let mut stdout = Vec::new();
-    let mut stderr = String::new();
-    if let Some(mut out) = child.stdout.take() {
-        let _ = out.read_to_end(&mut stdout);
-    }
-    if let Some(mut err) = child.stderr.take() {
-        let _ = err.read_to_string(&mut stderr);
-    }
-
-    if timed_out {
-        RunOutcome::TimedOut { stderr }
-    } else {
-        match child.wait() {
-            Ok(status) => RunOutcome::Exited {
-                code: status.code().unwrap_or(-1),
-                stdout,
-                stderr,
-            },
-            Err(err) => RunOutcome::SpawnFailed(err.to_string()),
-        }
-    }
-}
 
 #[cfg(not(windows))]
 fn baseline_env(cwd: &Path, budget: Duration) -> Option<HashMap<String, String>> {

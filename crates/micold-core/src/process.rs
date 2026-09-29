@@ -1,4 +1,5 @@
-//! Background process hygiene on Windows (feature 030, FR-005, FR-009, FR-024).
+//! Background process hygiene (feature 030, FR-005, FR-009, FR-024) and the bounded runner
+//! (feature 011, promoted here by feature 034, research R6).
 //!
 //! - [`no_window`]: a GUI-subsystem app that spawns a console program (`git`, `powershell`, `docker`)
 //!   gets a console window flashed up for every call unless the spawn says otherwise.
@@ -7,8 +8,17 @@
 //!   lifetime. The daemon does not: nobody can close a windowless process, so setup stops it itself.
 //!
 //! Both are no-ops off Windows, so call sites stay free of `cfg`.
+//!
+//! - [`run_bounded`]: run a child under a hard time limit and kill its whole process tree when it
+//!   ends — the environment-include shell (feature 011) and the GitHub CLI (feature 034) both need
+//!   exactly this, and the kill is a cross-platform subtlety that was debugged once (011 BUG-003).
 
-use std::process::Command;
+use std::io::Read;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
+
+#[cfg(windows)]
+use crate::win_job::JobHandle;
 
 /// `CREATE_NO_WINDOW` process creation flag: the child gets no console window.
 #[cfg(windows)]
@@ -71,6 +81,129 @@ impl Drop for RunningMarker {
         // name disappears with its last handle.
         unsafe {
             windows_sys::Win32::Foundation::CloseHandle(self.mutex);
+        }
+    }
+}
+
+/// How long to poll a spawned child's exit status before considering it hung (feature 011,
+/// research R2).
+const POLL_INTERVAL: Duration = Duration::from_millis(20);
+
+/// How a bounded subprocess run concluded — kept distinct from a caller's own outcome (such as
+/// `env_include::EnvIncludeOutcome`) so the caller decides its public category from an unambiguous
+/// fact (did it exit, or did we have to kill it) rather than inferring "was this a timeout?" from
+/// elapsed time, which would be racy right at the timeout boundary.
+#[derive(Debug)]
+pub enum RunOutcome {
+    /// The process exited on its own within `timeout`.
+    Exited {
+        /// The exit status, or -1 when there is none (killed by a signal).
+        code: i32,
+        /// Everything the process wrote to stdout.
+        stdout: Vec<u8>,
+        /// Everything the process wrote to stderr, lossily decoded.
+        stderr: String,
+    },
+    /// The process was still running at `timeout` and was killed.
+    TimedOut {
+        /// What it had written to stderr by then.
+        stderr: String,
+    },
+    /// The process could not even be spawned (e.g. the interpreter binary is missing).
+    SpawnFailed(String),
+}
+
+/// Kill every process in `pid`'s process group (Unix only — `cmd` is spawned with
+/// `process_group(0)` below, so the group id equals the child's own pid) via a direct `kill(2)`
+/// syscall. Deliberately NOT implemented by spawning the `kill(1)` *binary* as a subprocess —
+/// that proved unreliable in sandboxed environments during development (the spawned `kill`
+/// process reported success without the target group actually dying), whereas the direct syscall
+/// from this same process is unambiguous.
+#[cfg(unix)]
+pub fn kill_process_group(pid: u32) {
+    // Safety: `kill(2)` with a negative pid signals the process group; passing an invalid/already-
+    // reaped group id is a documented, safe no-op (returns -1/ESRCH) rather than undefined
+    // behavior.
+    unsafe {
+        libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
+    }
+}
+
+/// Run `cmd`, waiting up to `timeout` for it to exit (research R2: `spawn()` + `try_wait()`
+/// poll, not the blocking `.output()`). On Unix, `cmd` is spawned in its own process group so
+/// that on timeout — or even after a natural exit — the ENTIRE group (not just the top-level
+/// process) is killed before reading its piped stdout/stderr: a sourced rc file MAY background a
+/// process (an agent daemon, a version-manager helper); if such a grandchild inherits the pipe
+/// and outlives its parent, reading to EOF would otherwise block forever (this exact deadlock was
+/// observed with a `sleep`-under-`source`-under-command-substitution during development).
+pub fn run_bounded(mut cmd: Command, timeout: Duration) -> RunOutcome {
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    let mut child = match cmd.spawn() {
+        Ok(child) => child,
+        Err(err) => return RunOutcome::SpawnFailed(err.to_string()),
+    };
+    // Only the Unix kill needs the pid; binding it unconditionally warns on Windows, and this
+    // crate is built with warnings denied.
+    #[cfg(unix)]
+    let pid = child.id();
+    // Windows' counterpart to the process group above, assigned as soon as the child exists.
+    #[cfg(windows)]
+    let job = JobHandle::capture(&child);
+
+    let start = Instant::now();
+    let timed_out = loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break false,
+            Ok(None) => {
+                if start.elapsed() >= timeout {
+                    break true;
+                }
+                std::thread::sleep(POLL_INTERVAL);
+            }
+            Err(err) => return RunOutcome::SpawnFailed(err.to_string()),
+        }
+    };
+
+    // Kill the whole group unconditionally (whether it exited on its own or timed out) so no
+    // orphaned grandchild can keep the pipes open — see the doc comment above.
+    #[cfg(unix)]
+    kill_process_group(pid);
+    #[cfg(windows)]
+    {
+        // The job first — it takes the whole tree, including anything holding the pipes read
+        // below. `child.kill()` after it, for the case where the job could not be created at all.
+        if let Some(job) = &job {
+            job.terminate();
+        }
+        let _ = child.kill();
+    }
+    #[cfg(not(any(unix, windows)))]
+    let _ = child.kill();
+
+    let mut stdout = Vec::new();
+    let mut stderr = String::new();
+    if let Some(mut out) = child.stdout.take() {
+        let _ = out.read_to_end(&mut stdout);
+    }
+    if let Some(mut err) = child.stderr.take() {
+        let _ = err.read_to_string(&mut stderr);
+    }
+
+    if timed_out {
+        RunOutcome::TimedOut { stderr }
+    } else {
+        match child.wait() {
+            Ok(status) => RunOutcome::Exited {
+                code: status.code().unwrap_or(-1),
+                stdout,
+                stderr,
+            },
+            Err(err) => RunOutcome::SpawnFailed(err.to_string()),
         }
     }
 }
