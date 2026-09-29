@@ -22,6 +22,14 @@ sends you there.
 - **PRs.** Open them per [references/pr-and-merge.md](references/pr-and-merge.md) §2–4. Record the PR
   number in the ledger at once.
 - **Batch tool calls.** Independent reads and probes go in one message.
+- **Read only what you need.** Everything you read is re-read on each later call of the unit.
+  - Spec artifacts: `scripts/autopilot/brief.py section <file> <heading>` or `items <file> <ID>…`,
+    not the whole file.
+  - Code: `grep -n` for the lines, then `Read` with `offset`/`limit`.
+  - A saved tool result (`…/tool-results/…`), a gate log or an agent `.output` file: `grep` it;
+    never `Read` it whole.
+  - Diffs: `git diff --stat` first, then one file at a time.
+  - `gh`: `--json <fields> -q <filter>` for just the fields you need.
 - `systematic-debugging` is the superpowers skill. If that plugin is enabled instead of the personal
   copy, invoke `superpowers:systematic-debugging`.
 

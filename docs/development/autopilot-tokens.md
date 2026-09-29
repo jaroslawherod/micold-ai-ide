@@ -42,3 +42,28 @@ What it says:
   every dispatch a description that names its unit.
 
 Re-run the same command after each optimization and compare against this table.
+
+## Where tool output goes
+
+Measured over the same runs' 435 transcripts (main sessions and subagents): 16.8M tokens of tool
+output, counted as characters / 4. Once in context, each result is re-read on every later call of
+that session, so an early large read costs many times its size.
+
+| Source | Share | Note |
+|---|---:|---|
+| `Read` | 41% | Rust sources 40% of it; spec artifacts read whole 70–95% of the time |
+| `sed -n`, `cat`, `head` | 20% | File reads that bypass `Read` |
+| `grep` | 12% | |
+| `git diff`, `git show` | 6% | |
+| Gate, CI and `gh` output | under 2% | Already detached to logs |
+
+Within `Read`: spec.md 8%, tasks.md 7%, saved tool results and agent `.output` files 8% (94% read
+whole), plan.md, research.md, the TDD files, and the constitution most of the rest.
+
+What changed in response:
+
+- `scripts/autopilot/brief.py milestone <feature-dir> M<K>` gives a milestone unit and its review B
+  only the milestone's block, tasks, requirements and stories: about 13k characters instead of 99k
+  for spec 031's spec.md and tasks.md.
+- `unit.md` rules: read artifacts by section (`brief.py section|items`), code by `grep -n` then
+  `Read` with `offset`/`limit`, and `grep` saved tool results and logs instead of reading them.
