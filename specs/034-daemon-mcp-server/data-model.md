@@ -39,6 +39,12 @@ enum ToolServerSupport {
 }
 ```
 
+A second provider method, `input_readiness() -> InputReadiness { HookSessionStart,
+ExtensionEvent(&'static str), OutputSettled }`, says how a fresh session shows it is ready for its
+first prompt (FR-017, research R12): Claude `HookSessionStart`, Pi `ExtensionEvent("session_start")`
+(falling back to `OutputSettled` when the component is declined), Copilot `OutputSettled`. The live
+session carries a `ready: bool` set by that signal; it never touches the activity FSM.
+
 `BindingPlan { args: Vec<OsString>, config_file: PathBuf }` is what the spawn path appends, built
 from `ToolServerSupport`, the endpoint URL and the credential. `BindingOutcome = Bound(BindingPlan)
 | Skipped(SkipReason)` where `SkipReason ∈ { Disabled, Unsupported(reason), NameTaken(path),
@@ -64,7 +70,7 @@ session's UUID string.
 | `deadline` | `Instant` | created + 60 s |
 | `answer` | `oneshot::Sender<ConfirmOutcome>` | taken by the first resolver |
 
-`ConfirmOutcome = Allowed | Declined | TimedOut | NoWindow | TargetGone`.
+`ConfirmOutcome = Allowed | Declined | TimedOut | NoWindow | TargetGone | Abandoned`.
 
 State transitions (one-way; the first transition wins, later ones are no-ops):
 
@@ -73,7 +79,8 @@ created ──(no client connected)──▶ NoWindow        → "needs confirma
 created ──broadcast──▶ pending ──answer allow──▶ Allowed    → perform the operation
                               ├─answer deny───▶ Declined   → "refused by policy"
                               ├─60 s──────────▶ TimedOut   → "needs confirmation"
-                              └─target/caller deleted, caller stopped ─▶ TargetGone → "not found"
+                              ├─target/caller deleted, caller stopped ─▶ TargetGone → "not found"
+                              └─agent's HTTP connection closed ─▶ Abandoned  → nothing performed, no reply
 every exit from pending broadcasts ConfirmationWithdrawn{id}
 ```
 

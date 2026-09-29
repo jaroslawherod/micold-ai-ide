@@ -4,7 +4,9 @@
 `PROTOCOL_VERSION = 15` (`crates/micold-core/src/protocol/version.rs`)
 
 Each milestone that changes the wire bumps `PROTOCOL_VERSION` once and documents the bump in
-`version.rs`'s changelog comment, as every earlier feature did. If another feature takes a number
+`version.rs`'s changelog comment, as every earlier feature did, and updates the pin in
+`crates/micold-core/tests/schema_hash.rs`. M1 and M4 add settings fields; all three new messages land
+in M3. If another feature takes a number
 first, this feature takes the next one.
 
 ## §1 M1 — the binding toggle (15 → 16)

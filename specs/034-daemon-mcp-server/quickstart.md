@@ -38,10 +38,13 @@ worktrees `a`, `b`, and `claude` and `copilot` signed in. Record each step's res
 5. `ps -o args= -p <claude pid>` shows `--mcp-config <data_dir>/mcp/<uuid>.json` and no
    `--strict-mcp-config`; `ls -l` on that file shows `-rw-------`.
 6. `curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:<port>/mcp -d '{}'` → `401`.
+7. (after M3) Ask the agent to delete a throwaway worktree; answer **Allow** after ~55 s. **Expect**
+   the tool result arrives (the per-server `timeout` lifted the first-byte timer, R1).
 
 ### B2 — Copilot binding (M1; closes R3's probe)
 
-Start a Copilot session; ask it to call `whoami`. **Expect** the same as B1 step 3. If Copilot
+Start a Copilot session; ask it to call `whoami`. **Expect** the same as B1 step 3. Record the
+server-entry shape that worked. After M3, repeat B1 step 7 from Copilot. If Copilot
 rejects the server entry, record the error, switch Copilot to `Unsupported` in `provider.rs` with the
 observed reason, and update the user guide's bound-CLI list (FR-005).
 
@@ -50,7 +53,9 @@ observed reason, and update the user guide's bound-CLI list (FR-005).
 From the session in `b`: "Create a worktree on a new branch feat-x and start a Claude Code session in
 it with the prompt 'print the branch name'." **Expect**: row `feat-x` appears in every open window
 within 2 s (SC-003) without a refresh, a session under it receives the prompt, and the tool result
-reports `prompt_delivered: true`. From a **Default** session, the same request is refused by policy.
+reports `prompt_delivered: true`. Repeat with `ai_cli` set to `copilot` and to `pi` (readiness
+signals of R12: output settled; component `session_start`). From a **Default** session, the
+`create_worktree` request is refused by policy.
 
 ### B4 — Confirmation dialog (M3; visual pass)
 
