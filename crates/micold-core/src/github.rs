@@ -666,3 +666,60 @@ pub fn classify(outcome: &crate::process::RunOutcome) -> IssueLoadError {
 
 /// `gh`'s documented exit status for "authentication required".
 const GH_EXIT_AUTH: i32 = 4;
+
+/// The production [`IssueSource`]: the user's own `gh`, run non-interactively
+/// (contracts/github-issue-source.md §3, research R6).
+#[derive(Debug, Clone)]
+pub struct GhCli {
+    gh: PathBuf,
+    timeout: std::time::Duration,
+}
+
+impl GhCli {
+    /// A source running the `gh` at `gh` (from [`locate_gh`]).
+    pub fn new(gh: PathBuf) -> Self {
+        Self {
+            gh,
+            timeout: GH_TIMEOUT,
+        }
+    }
+
+    /// The same source with a different bound on each `gh` run. Tests only; production keeps
+    /// the default.
+    pub fn with_timeout(self, timeout: std::time::Duration) -> Self {
+        Self { timeout, ..self }
+    }
+}
+
+impl IssueSource for GhCli {
+    fn list_open(
+        &self,
+        repo: &GithubRepo,
+        cursor: Option<&str>,
+    ) -> Result<IssuePage, IssueLoadError> {
+        let mut cmd = std::process::Command::new(&self.gh);
+        crate::process::no_window(&mut cmd)
+            .args(list_args(repo, cursor))
+            .env("GH_PROMPT_DISABLED", "1")
+            .env("GH_NO_UPDATE_NOTIFIER", "1")
+            .env("NO_COLOR", "1")
+            .env("CLICOLOR", "0")
+            .env("GH_PAGER", "")
+            .stdin(std::process::Stdio::null());
+        // The user's home, never a project: a repository's local config must not steer `gh`.
+        if let Some(dirs) = directories::BaseDirs::new() {
+            cmd.current_dir(dirs.home_dir());
+        }
+        match crate::process::run_bounded(cmd, self.timeout) {
+            crate::process::RunOutcome::Exited {
+                code: 0, stdout, ..
+            } => parse_list_page(&stdout),
+            // A GraphQL error exits non-zero and repeats its message on stderr, where
+            // `classify` reads it (contracts/github-issue-source.md §3).
+            outcome => Err(classify(&outcome)),
+        }
+    }
+}
+
+/// The bound on one `gh` run (FR-007's "didn't answer within 10 seconds").
+const GH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);

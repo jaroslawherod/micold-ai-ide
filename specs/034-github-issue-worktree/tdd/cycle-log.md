@@ -227,3 +227,25 @@ failed before the implementation.
   version pin. Every earlier bump updated it in place (its doc lists each), so it follows: renamed
   `the_protocol_version_is_sixteen`, asserting 16, with a doc sentence for 034. Re-run: `mise run
   test-core` 1305 passed, 0 failed.
+
+## Cycle 10: U94 — `GhCli`, the production issue source
+
+- test: `crates/micold-core/tests/github_gh_cli.rs` (new), 3 tests against a stub `gh` the test
+  writes (`sh` on Unix, `.cmd` on Windows) that records its arguments, environment and working
+  directory
+- stub: `GhCli { gh, timeout }` with `new` / `with_timeout`, `list_open` returning `Err(Other(""))`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test github_gh_cli`
+  -> `test result: FAILED. 0 passed; 3 failed`. Decisive lines: `gh_cli_runs_gh_as_specified`:
+  `the stub's page parses: Other("")`; `a_hung_gh_is_timed_out`: `left: Other("") / right:
+  TimedOut`; `exit_4_is_not_signed_in`: `left: Other("") / right: NotSignedIn`.
+- green: `list_open` runs `gh` under `no_window` with exactly `list_args`, the five variables,
+  stdin null, cwd = the user's home, through `run_bounded` (10 s default); exit 0 parses the page,
+  anything else goes to `classify`. -> `3 passed; 0 failed`; `mise run test-core` 1308 passed,
+  0 failed (includes `background_spawns_hide_console.rs`)
+- refactor: removed a first-draft branch that parsed stdout on a non-zero exit carrying
+  `errors[]`. No test drove it, and contracts/github-issue-source.md §3 sends a list failure to
+  `classify` (the stdout rule there is for search, a later milestone). Suite re-run green.
+- notes: T015 also carries `[U63]` (`GhCli` named only in `Capabilities::real()`), a client gate
+  whose seam arrives with the client wiring in M2. T015's implementation is complete in M1 scope,
+  so it is ticked; U63 stays TODO for M2.
+- commit: the commit that adds this entry
