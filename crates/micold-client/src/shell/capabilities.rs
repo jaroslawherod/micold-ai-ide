@@ -73,6 +73,7 @@ use std::sync::Arc;
 use micold_core::env_include::{EnvIncludeResolver, SubprocessResolver};
 use micold_core::fs_scan::{FolderBrowser, FolderScanner, StdFolderScanner};
 use micold_core::git::{Git, GitCli};
+use micold_core::script_path_check::{ScriptPathProbe, StdScriptPathProbe};
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
 
@@ -93,6 +94,7 @@ pub struct Capabilities {
     scanner: Arc<dyn FolderScanner + Send + Sync>,
     browser: Arc<dyn FolderBrowser + Send + Sync>,
     env_include: Arc<dyn EnvIncludeResolver + Send + Sync>,
+    script_path_probe: Arc<dyn ScriptPathProbe + Send + Sync>,
     link_opener: Arc<dyn LinkOpener>,
 }
 
@@ -111,6 +113,7 @@ impl Capabilities {
             scanner: Arc::new(folders),
             browser: Arc::new(folders),
             env_include: Arc::new(SubprocessResolver),
+            script_path_probe: Arc::new(StdScriptPathProbe),
             link_opener: Arc::new(SystemLinkOpener),
         }
     }
@@ -173,6 +176,19 @@ impl Capabilities {
         self
     }
 
+    /// The same capabilities, with `probe` in place of the filesystem's (spec 035).
+    ///
+    /// `base_app()` hands every test a fake through this, so no test examines the developer's own
+    /// files, and a trigger test replaces it with one whose calls it reads.
+    #[cfg(test)]
+    pub(crate) fn with_script_path_probe(
+        mut self,
+        probe: Arc<dyn ScriptPathProbe + Send + Sync>,
+    ) -> Self {
+        self.script_path_probe = probe;
+        self
+    }
+
     /// The project catalog, or `None` when no data directory could be resolved.
     pub fn projects(&self) -> Option<&(dyn ProjectStore + Send + Sync)> {
         self.projects.as_deref()
@@ -203,5 +219,11 @@ impl Capabilities {
     /// Sourcing the environment-include script.
     pub fn env_include(&self) -> &dyn EnvIncludeResolver {
         &*self.env_include
+    }
+
+    /// Whether the stored include-script path names a readable file (spec 035). Owned, because
+    /// the one consumer runs the check on a blocking task.
+    pub fn script_path_probe(&self) -> Arc<dyn ScriptPathProbe + Send + Sync> {
+        Arc::clone(&self.script_path_probe)
     }
 }

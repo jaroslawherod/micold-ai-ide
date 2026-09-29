@@ -696,7 +696,14 @@ pub(crate) fn base_app() -> App {
         caps: Capabilities::real()
             .without_settings()
             .without_projects()
-            .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener)),
+            .with_link_opener(Arc::new(crate::shell::link_opener::NoopLinkOpener))
+            // Spec 035: no test examines the developer's own files. A trigger test swaps in a
+            // fake whose calls it reads.
+            .with_script_path_probe(Arc::new(
+                micold_core::script_path_check::FakeScriptPathProbe::answering(
+                    micold_core::script_path_check::ProbeAnswer::File,
+                ),
+            )),
         core: State::default(),
         reported_scheme: None,
         grids: HashMap::new(),

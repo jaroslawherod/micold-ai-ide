@@ -196,6 +196,8 @@ fn the_only_excluded_implementations_are_fakes() {
         "FakeProjectStore",
         "FakeSettingsStore",
         "FakeAiCliProvider",
+        // Spec 035's (T005), registered before the client took the capability.
+        "FakeScriptPathProbe",
     ]
     .iter()
     .map(|s| s.to_string())

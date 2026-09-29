@@ -72,3 +72,17 @@ existed and failed before the implementation.
 - green: detached `std::thread` + `mpsc::recv_timeout` (research R3) -> 22 passed. Core fast subset
   `scripts/build-lock.sh cargo test -p micold-core --all-targets` -> 1333 passed, 0 failed.
 - refactor: none needed
+
+## Cycle 4: U23 `ScriptPathProbe` is a registered port
+
+- test: existing guards. T005 added `"ScriptPathProbe"` to `PORTS` in
+  `crates/micold-client/tests/inventory/mod.rs` and `"FakeScriptPathProbe"` to the known fakes in
+  `crates/micold-client/tests/no_concrete_implementations.rs`.
+- red: `scripts/build-lock.sh cargo test -p micold-client --test no_concrete_implementations` ->
+  `each_implementation_is_chosen_in_exactly_one_place` FAILED: ``- `StdScriptPathProbe` is chosen
+  in 0 places: []`` (13 passed, 1 failed). `service_capability_fakes` passed on arrival (11 passed):
+  the core fake already exists and the core tests exercise it, which is what that guard asks.
+- green: `Capabilities::real()` constructs `StdScriptPathProbe`; accessor `script_path_probe()` and
+  `#[cfg(test)] with_script_path_probe`; `base_app()` hands every test
+  `FakeScriptPathProbe::answering(File)` -> 14 passed, 11 passed
+- refactor: none needed
