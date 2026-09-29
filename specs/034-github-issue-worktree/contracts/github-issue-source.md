@@ -122,7 +122,8 @@ specific error as "no such open issue" — the `search.nodes` hits are kept and 
 Any other `errors[]` entry, or a non-zero exit with no `data`, goes to `classify`.
 
 - Environment: inherited, plus `GH_PROMPT_DISABLED=1`, `GH_NO_UPDATE_NOTIFIER=1`, `NO_COLOR=1`,
-  `CLICOLOR=0`, `GH_PAGER=` (empty). `no_window` on Windows. No working directory dependence
+  `CLICOLOR=0`, `GH_PAGER=` (empty); `GH_DEBUG` removed, so debug traces never reach the stderr
+  `classify` reads. `no_window` on Windows. No working directory dependence
   (cwd = the user's home, so `gh` never reads a repository's local config).
 - Each invocation is `process::run_bounded(cmd, 10 s)` (FR-007, research R6), which drains stdout
   and stderr concurrently so a large page cannot fill a pipe and stall.

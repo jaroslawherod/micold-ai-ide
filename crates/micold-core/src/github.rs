@@ -272,7 +272,11 @@ pub fn candidate_dirs(inputs: &LocateInputs) -> Vec<PathBuf> {
         .into_iter()
         .flatten()
         .flat_map(|path| path.split(separator))
-        .map(|entry| entry.trim_matches('"'))
+        // Windows allows a quoted entry; on Unix `"` is an ordinary file-name character.
+        .map(|entry| match inputs.os {
+            HostOs::Windows => entry.trim_matches('"'),
+            HostOs::Linux | HostOs::MacOs => entry,
+        })
         .filter(|entry| inputs.os.is_absolute(entry))
         .map(PathBuf::from);
     let well_known = inputs
