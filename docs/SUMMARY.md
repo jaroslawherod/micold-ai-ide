@@ -36,3 +36,4 @@
 - [Packaging for Windows](development/windows-packaging.md)
 - [The documentation site](development/docs-site.md)
 - [Screenshots for the manual visual passes](development/screenshots.md)
+- [Autopilot token usage](development/autopilot-tokens.md)
