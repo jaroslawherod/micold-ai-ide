@@ -2,6 +2,10 @@
 
 For milestone K:
 
+0. **Brief.** `scripts/autopilot/brief.py milestone <feature-dir> MK` prints the milestone's block,
+   its tasks, the requirements it satisfies and its stories' scenarios. Work from that. Do not read
+   spec.md or tasks.md whole; pull anything else with `brief.py section <file> <heading>` or
+   `brief.py items <file> FR-012 T031`.
 1. `speckit-implement` with `Milestone MK only: tasks T0xx–T0yy. Do not start any other task. Stop
    when these are done.` Afterwards confirm every task in the range is ticked and none outside it. Its
    mandatory `tdd.run` hook drives red → green → refactor. For a bug, the first task is a regression

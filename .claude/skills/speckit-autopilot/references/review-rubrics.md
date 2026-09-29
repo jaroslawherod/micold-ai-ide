@@ -12,8 +12,10 @@ Prompt parts, in order:
 
 1. **Role.** "You are reviewing <artifact> for feature <NNN>. You did not write it. Do not edit any
    file."
-2. **Read.** Artifact paths and `.specify/memory/constitution.md`. For code, also the milestone
-   section of `tasks.md` and `git diff origin/main...HEAD`.
+2. **Read.** Artifact paths and `.specify/memory/constitution.md`. For code, instead of spec.md and
+   tasks.md, the milestone brief (`scripts/autopilot/brief.py milestone <feature-dir> M<K>`: block,
+   tasks, requirements, stories), `git diff --stat origin/main...HEAD`, then the diff file by file.
+   Tell it to pull more with `brief.py section|items` rather than reading an artifact whole.
 3. **Rubric.** The matching section below, verbatim.
 4. **Output contract:**
    ```
