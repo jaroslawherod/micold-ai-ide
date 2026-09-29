@@ -60,6 +60,7 @@ use micold_core::sandbox::runtime::RuntimeCapabilities;
 use micold_core::sandbox::{
     Bytes, MilliCpus, SandboxProfile, MIN_MEMORY, MIN_MILLI_CPUS, MIN_PIDS, MIN_STORAGE,
 };
+use micold_core::script_path_check::CheckedScriptPath;
 use micold_core::session::AiCli;
 use micold_core::settings::{DaemonConfig, Settings};
 use micold_core::theme::{SystemScheme, ThemePreference};
@@ -96,6 +97,45 @@ pub struct State {
     /// The placement change the user is being asked to confirm, while the question is open
     /// (FR-032; BUG-003). `None` the rest of the time, which is what closes the dialog.
     pub pending_placement: Option<PendingPlacementChange>,
+    /// What the latest check of the stored environment-include script path found (spec 035).
+    ///
+    /// Not a setting and never persisted (FR-010): it describes the file as it is now, and is
+    /// re-checked each time Settings opens (FR-009).
+    pub script_check: ScriptCheck,
+    /// The sequence number of the latest check started. A result for any other number is stale,
+    /// so a slow answer about an older path can never overwrite a newer one (spec 035 S4).
+    pub script_check_seq: u64,
+    /// The latest check a save started and has not yet reported on. Separate from
+    /// [`Self::script_check_seq`], which gates only what is shown: a save's result must still be
+    /// reported after a newer check has replaced it on the page (spec 035 S5).
+    pub script_check_save_seq: Option<u64>,
+}
+
+/// Why a script path check was started (spec 035, contracts/settings-indication.md §1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckOrigin {
+    /// Settings was shown, or another window changed the settings while it was shown.
+    Opened,
+    /// This window saved Settings.
+    Saved,
+}
+
+/// Where the check of the stored script path stands (spec 035, data-model.md).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum ScriptCheck {
+    /// No check yet, or the path is blank (FR-011).
+    #[default]
+    Idle,
+    /// A check is in flight. `last` is the previous answer, still shown so a re-check does not
+    /// blank the page.
+    Pending {
+        /// The check's sequence number.
+        seq: u64,
+        /// The previous `Done` answer, if there was one.
+        last: Option<CheckedScriptPath>,
+    },
+    /// The latest applied answer.
+    Done(CheckedScriptPath),
 }
 
 /// A placement change that has been asked about and not yet answered (FR-032).
@@ -834,6 +874,21 @@ pub enum Msg {
     Saved,
     /// Dismiss the Settings form without saving (Cancel or Esc).
     Cancelled,
+    /// A check of the stored script path is starting (spec 035 FR-009). Raised by the shell,
+    /// which then runs the check off the UI thread.
+    ScriptPathCheckStarted {
+        /// Why it was started.
+        origin: CheckOrigin,
+    },
+    /// A check of the stored script path finished (spec 035 FR-009).
+    ScriptPathChecked {
+        /// The sequence number [`Msg::ScriptPathCheckStarted`] gave it.
+        seq: u64,
+        /// Why it was started.
+        origin: CheckOrigin,
+        /// What was found, or `None` for a blank path.
+        result: Option<CheckedScriptPath>,
+    },
 }
 
 /// The pure half of this feature's reducer surface: shape A (contract M2).
@@ -875,6 +930,8 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::PlacementMoved(kind) => placement_in_force_changed(state, kind),
         Msg::Saved => saved(state),
         Msg::Cancelled => cancelled(state),
+        Msg::ScriptPathCheckStarted { origin } => script_path_check_started(state, origin),
+        Msg::ScriptPathChecked { seq, result, .. } => script_path_checked(state, seq, result),
     }
     Vec::new()
 }
@@ -1091,6 +1148,45 @@ fn edit(state: &mut crate::app::State, change: impl FnOnce(&mut SettingsDraft)) 
 pub fn saved(state: &mut crate::app::State) {
     state.settings.settings_draft = None;
     state.settings.pending_placement = None;
+}
+
+/// A check of the stored script path is starting (spec 035, contract S1).
+///
+/// It takes the next sequence number, so only its own answer will be shown, and keeps the previous
+/// answer on the page meanwhile: a re-check that blanked the notice for the moment it ran would
+/// make the page flicker on every open. A save's check is also marked as the one to report on.
+pub fn script_path_check_started(state: &mut crate::app::State, origin: CheckOrigin) {
+    let settings = &mut state.settings;
+    settings.script_check_seq += 1;
+    let seq = settings.script_check_seq;
+    let last = match std::mem::take(&mut settings.script_check) {
+        ScriptCheck::Done(checked) => Some(checked),
+        ScriptCheck::Pending { last, .. } => last,
+        ScriptCheck::Idle => None,
+    };
+    settings.script_check = ScriptCheck::Pending { seq, last };
+    if origin == CheckOrigin::Saved {
+        settings.script_check_save_seq = Some(seq);
+    }
+}
+
+/// A check of the stored script path finished (spec 035, contracts S2–S4).
+///
+/// Shown only if it is the latest check started; an older one's answer is about a path the user
+/// may since have changed (S4). `None` is a blank path, which has nothing to show (FR-011).
+pub fn script_path_checked(
+    state: &mut crate::app::State,
+    seq: u64,
+    result: Option<CheckedScriptPath>,
+) {
+    let settings = &mut state.settings;
+    if seq != settings.script_check_seq {
+        return;
+    }
+    settings.script_check = match result {
+        Some(checked) => ScriptCheck::Done(checked),
+        None => ScriptCheck::Idle,
+    };
 }
 
 /// The form was dismissed without saving.

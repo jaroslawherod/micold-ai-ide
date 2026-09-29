@@ -100,11 +100,11 @@ Tests in `crates/micold-client/tests/features_settings.rs`, through `update` and
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U24 | `ScriptPathCheckStarted` raises `script_check_seq` by one and sets `Pending { seq, last }`, with `last` the previous `Done` answer (or `None`) | FR-009 (S1) | example | PENDING | |
-| U25 | `Saved` origin sets `script_check_save_seq = Some(seq)`, and `Opened` leaves it unchanged | FR-004 (S1) | example | PENDING | |
-| U26 | A `ScriptPathChecked` whose `seq` matches sets `Done(c)` | FR-009 (S2) | example | PENDING | |
-| U27 | A matching `ScriptPathChecked` with `result: None` sets `Idle` | FR-011 (S3) | example | PENDING | |
-| U28 | A `ScriptPathChecked` with an older `seq` leaves `script_check` unchanged | FR-009, Edge Cases multi-window (S4) | example | PENDING | |
+| U24 | `ScriptPathCheckStarted` raises `script_check_seq` by one and sets `Pending { seq, last }`, with `last` the previous `Done` answer (or `None`) | FR-009 (S1) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_check::starting_a_check_raises_the_sequence_and_keeps_the_previous_answer_showing` |
+| U25 | `Saved` origin sets `script_check_save_seq = Some(seq)`, and `Opened` leaves it unchanged | FR-004 (S1) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_check::a_save_marks_its_check_as_one_to_report_and_an_open_does_not` |
+| U26 | A `ScriptPathChecked` whose `seq` matches sets `Done(c)` | FR-009 (S2) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_check::the_current_checks_answer_is_shown` |
+| U27 | A matching `ScriptPathChecked` with `result: None` sets `Idle` | FR-011 (S3) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_check::a_blank_paths_answer_leaves_nothing_to_show` |
+| U28 | A `ScriptPathChecked` with an older `seq` leaves `script_check` unchanged | FR-009, Edge Cases multi-window (S4) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_check::an_older_checks_answer_is_dropped` |
 | U29 | `Saved` + `NotFound { tilde: false }` returns exactly one Info `NotificationRaised` reading `The environment-include script was not found: <path>` | FR-004 (S5) | example | PENDING | |
 | U30 | `Saved` + `NotFound { tilde: true }` appends ` (~ is not expanded; use a full path)` | FR-004, Edge Cases `~` (S5) | example | PENDING | |
 | U31 | `Saved` + `NotReadable` reads `The environment-include script is not a readable file: <path>` | FR-004 (S5) | example | PENDING | |
@@ -113,7 +113,7 @@ Tests in `crates/micold-client/tests/features_settings.rs`, through `update` and
 | U34 | A `Saved` result whose display was superseded by a newer `Opened` check still notifies | FR-004 (S5) | example | PENDING | |
 | U35 | An older save's result, after a newer save started, does not notify | FR-004 (S5) | example | PENDING | |
 | U36 | The same `Saved` result delivered twice notifies once | FR-004 (S5) | example | PENDING | |
-| U37 | Neither message changes `settings_draft` or any setting | FR-008, FR-010 (S8) | example | PENDING | |
+| U37 | Neither message changes `settings_draft` or any setting | FR-008, FR-010 (S8) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_check::neither_check_message_touches_the_draft_or_a_setting` |
 
 ### `crates/micold-client/src/features/settings.rs`: `script_path_notice` (feature off, and shared rows)
 
