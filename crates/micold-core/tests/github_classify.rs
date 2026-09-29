@@ -52,7 +52,13 @@ fn not_signed_in() {
 
 #[test]
 fn no_access() {
-    for fixture in ["repository_not_found", "http_404", "http_403", "saml"] {
+    for fixture in [
+        "repository_not_found",
+        "http_404",
+        "http_403",
+        "saml",
+        "graphql_forbidden",
+    ] {
         assert_eq!(
             classify(&exited(1, fixture)),
             IssueLoadError::NoAccess,

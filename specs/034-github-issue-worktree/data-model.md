@@ -24,7 +24,7 @@ Order is config order. Produced by the pure `parse_remote_list(&str) -> Vec<GitR
 
 | Field | Type | Validation |
 |---|---|---|
-| `owner` | `String` | Non-empty; GitHub login charset (`[A-Za-z0-9-]`), as parsed. |
+| `owner` | `String` | Non-empty; GitHub login charset (`[A-Za-z0-9-]`, plus `_` for Enterprise Managed Users such as `jdoe_acme`), as parsed. |
 | `name` | `String` | Non-empty; `.git` suffix and trailing `/` stripped. |
 
 `Display` → `owner/name` (the text FR-025 shows). Constructed only by

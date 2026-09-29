@@ -67,7 +67,7 @@ impl GithubRepo {
         let owner_ok = !owner.is_empty()
             && owner
                 .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'-');
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'));
         let name_ok = !name.is_empty()
             && name
                 .bytes()
@@ -165,6 +165,23 @@ impl HostOs {
         }
     }
 
+    /// Whether `dir` is absolute on this OS, judged by text so every OS's rule is testable on
+    /// any host: `/…` on Unix; `X:\…`, `X:/…` or a `\\server\share` UNC path on Windows. `gh`
+    /// runs in the user's home, so a relative candidate would resolve somewhere else.
+    fn is_absolute(self, dir: &str) -> bool {
+        match self {
+            HostOs::Linux | HostOs::MacOs => dir.starts_with('/'),
+            HostOs::Windows => {
+                let bytes = dir.as_bytes();
+                dir.starts_with("\\\\")
+                    || (bytes.len() >= 3
+                        && bytes[0].is_ascii_alphabetic()
+                        && bytes[1] == b':'
+                        && matches!(bytes[2], b'\\' | b'/'))
+            }
+        }
+    }
+
     /// Where `gh`'s installers put it, for a launch whose `PATH` does not say (research R3).
     fn well_known_dirs(
         self,
@@ -255,9 +272,14 @@ pub fn candidate_dirs(inputs: &LocateInputs) -> Vec<PathBuf> {
         .into_iter()
         .flatten()
         .flat_map(|path| path.split(separator))
-        .filter(|entry| !entry.is_empty())
+        .map(|entry| entry.trim_matches('"'))
+        .filter(|entry| inputs.os.is_absolute(entry))
         .map(PathBuf::from);
-    let well_known = inputs.os.well_known_dirs(inputs.home, inputs.env);
+    let well_known = inputs
+        .os
+        .well_known_dirs(inputs.home, inputs.env)
+        .into_iter()
+        .filter(|dir| inputs.os.is_absolute(&dir.to_string_lossy()));
     let mut dirs: Vec<PathBuf> = Vec::new();
     for dir in from_paths.chain(well_known) {
         if !dirs.contains(&dir) {
@@ -504,8 +526,11 @@ pub fn load_listing(
     let mut cursor: Option<String> = None;
     let total_open = loop {
         let page = source.list_open(repo, cursor.as_deref())?;
+        // A page that adds nothing, or hands back the cursor it was asked with, would be asked
+        // for again forever: end the load with what is held.
+        let stalled = page.issues.is_empty() || page.next_cursor == cursor;
         issues.extend(page.issues);
-        if issues.len() >= ISSUE_LOAD_CAP || page.next_cursor.is_none() {
+        if stalled || issues.len() >= ISSUE_LOAD_CAP || page.next_cursor.is_none() {
             issues.truncate(ISSUE_LOAD_CAP);
             break page.total_open;
         }
@@ -639,6 +664,7 @@ pub fn classify(outcome: &crate::process::RunOutcome) -> IssueLoadError {
         "http 404",
         "http 403",
         "saml",
+        "resource not accessible",
         "not_found",
     ]) {
         IssueLoadError::NoAccess
@@ -705,6 +731,8 @@ impl IssueSource for GhCli {
             .env("NO_COLOR", "1")
             .env("CLICOLOR", "0")
             .env("GH_PAGER", "")
+            // Debug traces would reach the stderr `classify` reads.
+            .env_remove("GH_DEBUG")
             .stdin(std::process::Stdio::null());
         // The user's home, never a project: a repository's local config must not steer `gh`.
         if let Some(dirs) = directories::BaseDirs::new() {

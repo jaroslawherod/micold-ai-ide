@@ -110,3 +110,36 @@ fn first_error_aborts_and_empty_is_complete() {
         "no open issues is a complete, empty list (FR-008)"
     );
 }
+
+#[test]
+fn a_page_that_makes_no_progress_ends_the_load() {
+    // An empty page that still claims more: stop rather than ask again forever.
+    let stalled = IssuePage {
+        issues: vec![],
+        total_open: 5,
+        next_cursor: Some("after-0".into()),
+    };
+    let source = FakeIssueSource::new().with_page(stalled);
+    let listing = load_listing(&source, &repo()).expect("a stall is not an error");
+    assert_eq!(
+        source.calls().len(),
+        1,
+        "no second request after an empty page"
+    );
+    assert!(!listing.complete, "0 of 5 held is not complete");
+
+    // A page that hands back the cursor it was asked with: stop too.
+    let mut repeat = page(3, 2, 10, true);
+    repeat.next_cursor = Some("after-2".into());
+    let source = FakeIssueSource::new()
+        .with_page(page(1, 2, 10, true))
+        .with_page(repeat);
+    let listing = load_listing(&source, &repo()).expect("a repeated cursor is not an error");
+    assert_eq!(
+        source.calls().len(),
+        2,
+        "no third request with the same cursor"
+    );
+    assert_eq!(listing.issues.len(), 4);
+    assert!(!listing.complete);
+}
