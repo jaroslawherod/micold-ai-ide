@@ -52,6 +52,9 @@ grep -lxF -- "- **Worktree branch**: $b" specs/*/autopilot.md specs/*/bugs/*.aut
 Search the working tree, not `origin/main`: an uncommitted or unpushed ledger is the newest copy.
 
 - **One match**: resume it.
+- **None**, but the working tree holds this branch's ledger with **Phase** `done` and
+  `git cherry origin/main HEAD | grep '^+'` prints something: the record PR never merged. Open or
+  merge it, then run the handoff.
 - **None**: `git fetch origin`, then search
   `git grep -lF -- "- **Worktree branch**: $b" origin/main -- 'specs/'`. Resume only a match whose
   Phase on `origin/main` is not `done`. Still nothing: say there is no run to resume here, and stop.
@@ -154,8 +157,10 @@ First verify all three:
 - every PR in the ledger reads `MERGED`
 
 Before the checks, close the ledger: set **Phase** to `done`, record the last merge SHA, and copy
-the Total row and model table of `mise run autopilot-tokens` into *Token usage*. Ship that through
-one more PR (`docs(NNN): record the autopilot run`), merged on green.
+the Total row and model table of `mise run autopilot-tokens` into *Token usage*. Open that last PR
+yourself (`docs(NNN): record the autopilot run`) per
+[references/pr-and-merge.md](references/pr-and-merge.md) §2–6 and merge it on green. It is not
+listed in the ledger; confirm it with `gh pr view`.
 
 If any check fails, report exactly what remains. Otherwise send this with a `PushNotification`:
 
