@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature (from bug BUG-006)
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-09-29
-- **Phase**: 2-clarify, converged (round 2)
-- **Next step**: Phase 3 (plan, tasks, milestones), through opening PR 2, which carries the clarifications.
+- **Phase**: 3-design
+- **Next step**: PR 2 (design) CI and merge; then Phase 4, milestone M1.
 
 ## Pull requests
 
@@ -23,6 +23,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
+| M1 | T001–T012, T014, T015, T017–T021, T032–T033 | Feature off + missing stored path: Settings shows `Script not found: <path>` and says the feature is off; on-state page unchanged (interim U63) | — | pending |
+| M2 | T013, T016, T037–T042 | A save leaving a missing path posts one notification naming it, in either state | — | pending |
+| M3 | T022–T027, T034–T035 | Same report with the feature on (merged with 011's note), FR-014 "exists now" note, other window's save refreshes an open page | — | pending |
+| M4 | T028–T031, T036 | US3 recovery tests (edit or clear the path), architecture doc, full quickstart §B | — | pending |
 
 ## Decisions
 
@@ -39,6 +43,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D9 | 2-clarify r1 | FR-008 (BUG-006 D5): recovery for a missing path? | Report only; the user fixes the path in Settings. US3 reduced to manual edit / clear. | decided by user | escalation round 1 |
 | D10 | 2-clarify r2 | Does every save leaving a missing path notify, or only one that changed the path? | Every such save (FR-009: checked after every save). | agent-resolved | spec.md#FR-009 |
 | D11 | 2-clarify r2 | Clarify round 2 scan | No critical ambiguities left; no markers remain; checklist 3 items newly passing. Clarify converged. | agent-resolved | clarify run, round 2 |
+| D12 | 3-design | Where the check runs | In the client, on the host, like 011's own Settings resolution; a core `ScriptPathProbe` capability with a 2 s bounded worker thread; never on the launch path. The daemon is untouched (#454 out of scope). | agent-resolved | research.md R1–R4, R9 |
+| D13 | 3-design | Notification level | `NoticeLevel::Info`: the save completed; Error means an action could not be completed. There is no "Settings saved." prefix, so it cannot contradict a failed write. | agent-resolved | research.md R6; `features/notifications.rs` |
+| D14 | 3-design | Plan review round 1 | CHANGES: 2 MAJOR (reducer must return `notifications::info` as an Outcome; register the port in `tests/inventory` PORTS and the guard's known fakes), 3 MINOR (main.rs routing, `~` string test, "Settings saved." prefix). All verified and fixed. | agent-resolved | reviewer subagent |
+| D15 | 3-design | Plan review round 2 (sonnet) | CLEAN. One MINOR applied: `Pending` keeps the last answer, so a re-check does not blank the notice. | agent-resolved | reviewer subagent |
+| D16 | 3-design | speckit-analyze | 0 CRITICAL, 1 HIGH: M1 left the on-state page undefined between merges. Fixed with an explicit interim (U63: feature on → exactly 011's lines until M3). 5 MEDIUM and 8 LOW, all fixed (SC-002/SC-004/FR-002/Q2 wording in spec.md, guard-task references, label convention, full paths, quickstart B9/B10 order, B11 off-state save, contract P8). | agent-resolved | speckit-analyze (forked) |
+| D17 | 3-design | Tasks review round 1 | CHANGES: 1 MAJOR (interim wording of 011's line), 5 MINOR. All fixed. On F5 (size), the estimate is about 1,500 changed lines for Setup + Foundational + US1, so US1 was split along acceptance scenario 5 into M1 (indication) and M2 (save notification). M4 folds US3 into Polish: US3 has no production code, its behaviour ships in M1/M2 (T018, T038), and a US3-only milestone would add nothing observable. | agent-resolved | reviewer subagent; milestones.md rules 3, 4, 7 |
+| D20 | 3-design | Tasks review round 2 (sonnet) | CHANGES, 3 MINOR only (mutant evidence for the absence tests A2–A4/U57, FR-013 in M2 Satisfies, T042 in the visual-pass lists). All applied. Tasks review converged. | agent-resolved | reviewer subagent |
+| D18 | 3-design | Checklist `checklists/requirements.md` | All 16 items confirmed by the tasks reviewer. The Notes line about where code paths appear was corrected. | agent-resolved | reviewer subagent |
+| D19 | 3-design | TDD plan (after_tasks hook) | `tdd/test-list.md`: 10 acceptance (A1–A10), 63 unit behaviours; outer loop at `App` in `src/main_tests.rs`. Baseline suite green, 3662 passed at 0f7e0c8f. US3's A9/A10 may pass on arrival; T036 records a mutant as their red. | agent-resolved | speckit-tdd-plan |
 
 ## Declined review findings
 

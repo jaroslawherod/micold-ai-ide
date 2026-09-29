@@ -33,7 +33,7 @@ a consistent report of it in both states. It does not change how 011 sources the
   _(agent-resolved: specs/035-report-missing-include-script/spec.md#FR-006;
   crates/micold-client/src/shell/persist.rs#on_settings_saved)_
 - Q: Is the draft script path checked while the user is typing it? → A: No. The path field has no
-  validation while typing; any draft check happens on Save.
+  validation while typing. The stored path is checked after Save (FR-004, FR-009).
   _(agent-resolved: specs/011-env-include-script/contracts/settings-ui.md#New `Message` variants)_
 - Q: What should happen when the user saves Settings and the saved script path is missing? → A:
   Save anyway, and post a notification at save time that names the missing path. _(decided by
@@ -185,10 +185,13 @@ indication is gone.
   system reports it for the current user. This holds whether the
   feature is on or off. The path is taken literally, as resolution takes it: `~` is not expanded.
   A relative path is not checked; it gets the relative-path indication in Edge Cases instead.
-- **FR-002**: The not-found indication MUST name the path, MUST say whether the path does not
+- **FR-002**: The not-found indication (the path does not exist, or is not a readable file) MUST
+  name the path, MUST say whether the path does not
   exist or is not a readable file, and MUST say whether the feature is currently on or off. While
   the feature is off, it MUST make clear that no script is sourced now and that turning the
-  feature on would not source one until the path is fixed.
+  feature on would not source one until the path is fixed. The relative-path and "could not be
+  checked" indications (Edge Cases) and FR-014's note are separate indications, not the not-found
+  indication.
 - **FR-003**: While the feature is off, checking the path MUST NOT execute or source the script,
   and MUST NOT change what sessions receive: no script is sourced, exactly as in feature 011.
 - **FR-004**: FR-001 and FR-009 already settle that the *stored* path is checked whenever
@@ -246,12 +249,13 @@ indication is gone.
 - **SC-001**: With the feature off and a stored path that does not exist, a user who opens
   Settings learns that the script cannot be found in 100% of cases, without reading logs or files.
 - **SC-002**: With a stored path that exists, or a blank path, the not-found indication appears
-  in 0% of cases, whether the feature is on or off.
+  in 0% of cases, whether the feature is on or off. (FR-014's note about a stale attempt is not a
+  not-found indication.)
 - **SC-003**: Switching the feature on or off never hides a not-found report: in both states the
   same missing path is reported.
 - **SC-004**: With or without a missing path, a session launch does no path check at all,
-  Settings shows its content without waiting for the check, and the indication appears within 2
-  seconds of opening Settings.
+  Settings shows its content without waiting for the check, and the indication appears when the
+  check answers or reaches its 2-second bound (FR-006), whichever is first.
 - **SC-005**: Inspecting the settings file never reveals the not-found state, only the enabled
   flag, the path and the timeout.
 - **SC-006**: From seeing the not-found indication, a user reaches a configuration with no
