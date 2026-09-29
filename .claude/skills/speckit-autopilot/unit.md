@@ -26,6 +26,8 @@ sends you there.
   - Spec artifacts: `scripts/autopilot/brief.py section <file> <heading>` or `items <file> <ID>…`,
     not the whole file.
   - Code: `grep -n` for the lines, then `Read` with `offset`/`limit`.
+  - Finding code across many files: dispatch an `Explore` subagent (it runs on Haiku) and keep
+    its answer, not the file dumps.
   - A saved tool result (`…/tool-results/…`), a gate log or an agent `.output` file: `grep` it;
     never `Read` it whole.
   - Diffs: `git diff --stat` first, then one file at a time.
