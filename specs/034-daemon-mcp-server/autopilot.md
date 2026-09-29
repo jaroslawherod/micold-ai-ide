@@ -30,7 +30,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | D3 | clarify 1 | Cap or rate-limit agent-created worktrees/sessions? | No: same (absent) limits as the user's action (FR-009) | agent-resolved | spec.md#Assumptions; no limit in crates/micold-daemon/src/server.rs |
 | D4 | clarify 1 | FR-010: other projects in scope? | Own project only; other projects' targets read as "not found" | decided by user | AskUserQuestion, clarify round 1 |
 | D5 | clarify 1 | FR-014: destructive-op policy? | Confirm each in an app window; "needs confirmation" after 60 s or with no window attached | decided by user | AskUserQuestion, clarify round 1 |
-| D6 | clarify 1 | FR-016: cross-session read/type? | Three-value Settings option: Off (default, both refused) / Confirm each send (read free, each send confirmed as FR-014) / Auto (both, no confirmation) | decided by user | User's words: "use auto mode means send all no confirm, confirm each send and off by default auto". The three values are the orchestrator's reading, and so is Off as the default |
+| D6 | clarify 1 | FR-016: cross-session read/type? | Three-value Settings option: Auto (default; read and send, no confirmation) / Confirm each send (read allowed, each send confirmed as in FR-014) / Off (both refused) | decided by user | User's words: "use auto mode means send all no confirm, confirm each send and off by default auto"; confirmed: "default auto" |
 
 ## Declined review findings
 
