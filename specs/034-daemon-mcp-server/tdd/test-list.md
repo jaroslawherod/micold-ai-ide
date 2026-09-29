@@ -56,7 +56,7 @@ One per acceptance scenario (US3-AS2 is two behaviors: it states two results joi
 `DaemonState`, a real TCP `POST /mcp` with the session's bearer credential, a stand-in CLI spawned
 through the real spawn path, fake windows registered with `state.register`. That is weaker than an
 end-to-end run with the real `claude` / `copilot` binaries, which the default suite cannot host; the
-real-CLI half of each scenario is quickstart §B (T076), and the container placement is
+real-CLI half of each scenario is quickstart §B, run per milestone (T100–T104) and re-run in full by T076, and the container placement is
 `sandbox_real_mcp.rs` (U147). The profile's acceptance runner (`sandbox_real_*`) hosts only U147.
 
 | id | behavior | traces | kind | state | test |
@@ -432,6 +432,7 @@ each group that changes existing code.
 | U216 | The Environment draft carries `cross_session_access` | FR-016 | example | PENDING | planned: `crates/micold-client/tests/features_settings.rs` |
 | U217 | Choosing a value sends `SettingsSet { cross_session_access: Some(_) }` | FR-016 | example | PENDING | planned: `crates/micold-client/tests/features_settings.rs` |
 | U218 | The Environment page with each new row is a registered covered state | FR-004, FR-016 | example | PENDING | planned: `crates/micold-client/tests/support/covered_states.rs` + `layout_snapshot.rs` |
+| U219 | `create_worktree` through `POST /mcp` from a Default session's credential fails `refused_by_policy` naming Principle III, and nothing on disk or in the catalog changes | US3-AS6, FR-015a | example | PENDING | planned: `crates/micold-daemon/tests/mcp_create_worktree.rs` |
 
 ## Invariants and edge cases still to place
 
@@ -442,7 +443,7 @@ None. Every edge case EC-1…EC-18 has a numbered behavior above.
 - The user-guide half of US1-AS5 and all of FR-019: `crates/micold-core/tests/documentation_is_not_read.rs`
   forbids tests reading `docs/`, so documentation is checked by review in T022/T028/T042/T048/T059/T071/T077, not by a test.
 - The real `claude` / `copilot` binaries accepting the flags, surviving a ~55 s confirmation wait,
-  and their ready signals (R1–R3, R12): not hostable in the default suite; quickstart §B via T076.
+  and their ready signals (R1–R3, R12): not hostable in the default suite; quickstart §B via T100–T104 per milestone, T076 as the final re-run.
 - SC-001's "100 % of sessions" with a real CLI and SC-008 on macOS/Windows with real CLIs: quickstart §B
   on each platform; the automated proxies are A1, U33, U140 and CI's three-platform run.
 - SC-009's *second local account*: no test can create another OS account. Proxies: U30–U33
@@ -456,7 +457,8 @@ None. Every edge case EC-1…EC-18 has a numbered behavior above.
 
 - A-1: US3-AS6's `delete_worktree` refusal is observable only once `delete_worktree` is listed
   (M5, T056); before that the call fails `invalid_input` as an unknown tool. A18 therefore turns
-  green in M5; its create part is green in M3 and its rename part in M4.
+  green in M5; its create part is proved through `POST /mcp` in M3 by U219 (T032) and its rename
+  part in M4.
 - A-2: A self-target of `read_session_output` / `send_session_input` is `invalid_input` even at Off
   (U117): mcp-tools.md orders validation before policy.
 - A-3: With `CLAUDE_CONFIG_DIR` set, `~/.claude.json` is not read (U51): contracts/binding.md §6

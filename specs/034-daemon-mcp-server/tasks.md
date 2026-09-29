@@ -98,7 +98,7 @@ credential registry. Everything here ships in M1.
 - [ ] T021 [US1] [A2][A3][U124][U125][U126][U127][U128][U129][U130][U131][U132][U133][U134][U135][U136][U137][U138][U139][U140] Implement the read-only tool handlers in `crates/micold-daemon/src/mcp/tools.rs` (resolve `Caller` from the credential; scope every target to the caller's project; answer from `catalog_snapshot()` and the worktree cache, no git subprocess except `list_branches` via `worktree::branch_candidates` off the lock) to pass T015
 - [ ] T022 [US1] Create `docs/user-guide/agent-tools.md` (what the tool server is, the read tools, which CLIs are bound and why Pi is not, scope = own project, that no configuration file is changed, the collision rule) and add it to `docs/SUMMARY.md`; add a paragraph to `docs/user-guide/sandboxed-daemon.md` that sandboxed sessions are bound the same way (FR-019)
 
-- [ ] T078 [US1] [A1] Acceptance: US1-AS1 is green through `POST /mcp` in `crates/micold-daemon/tests/mcp_binding_spawn.rs` and the full `mise run gate` passes; the story is not complete before it (milestone M1); the real-CLI half is quickstart §B1 (T076)
+- [ ] T078 [US1] [A1] Acceptance: US1-AS1 is green through `POST /mcp` in `crates/micold-daemon/tests/mcp_binding_spawn.rs` and the full `mise run gate` passes; the story is not complete before it (milestone M1); the real-CLI half is quickstart §B1 (T100)
 - [ ] T079 [US1] [A2] Acceptance: US1-AS2 is green through `POST /mcp` in `crates/micold-daemon/tests/mcp_read_tools.rs` and the full `mise run gate` passes; the story is not complete before it (milestone M1)
 - [ ] T080 [US1] [A3] Acceptance: US1-AS3 is green through `POST /mcp` in `crates/micold-daemon/tests/mcp_read_tools.rs` and the full `mise run gate` passes; the story is not complete before it (milestone M1)
 - [ ] T081 [US1] [A4] Acceptance: US1-AS4 is green through `POST /mcp` in `crates/micold-daemon/tests/mcp_binding_spawn.rs` and the full `mise run gate` passes; the story is not complete before it (milestone M1)
@@ -133,7 +133,7 @@ the create-worktree dialog and the session menu.
 - [ ] T029 [P] [US2] [U141][U142][U143][U144] Write `crates/micold-daemon/tests/ops_extraction.rs`: `ops::create_worktree`, `ops::delete_worktree` and `ops::rename_worktree` called without a client produce the same catalog, provenance record and on-disk result as the `WorktreeCreate` / `WorktreeDelete` / `WorktreeRename` messages do today; the existing `mutation_semantics.rs`, `mutation_atomicity.rs` and `worktree_provenance_rpc.rs` stay green unchanged
 - [ ] T030 [P] [US2] [U104][U105] Create `crates/micold-core/tests/mcp_policy.rs`: `policy::decide` refuses `create_worktree` from a Default caller with `refused_by_policy` naming Principle III (FR-015a), and proceeds for a worktree caller
 - [ ] T031 [P] [US2] [U90][U91][U92][U93][U94] Extend `crates/micold-core/tests/mcp_tools_catalog.rs`: `create_worktree {branch, name?, mode?: new_branch|existing_local|track_remote, remote?}` (`track_remote` without `remote` → `invalid_input`; `overwrite` is not accepted) and `create_session {worktree, ai_cli?: claude_code|copilot|pi, prompt?}` validate as mcp-tools.md says
-- [ ] T032 [P] [US2] [A7][A8][U145][U146][U148][U149][U150][U151] Write `crates/micold-daemon/tests/mcp_create_worktree.rs` (US2 s1, s2; FR-009, FR-011; SC-003, SC-005; edge cases *Invalid names*, *Concurrency*): creates under `.claude/worktrees/<name>` with `name` defaulting to `naming::dir_name_from_branch(branch)`, records provenance (`app_created: true`), a registered fake client receives `CatalogChanged` within 2 s, and the result is the new `WorktreeRow`; an existing or checked-out branch fails `conflict` naming the `BranchSituation`, nothing on disk changes; an invalid name fails `invalid_input` with the dialog's `NamingError`/git message; 10 concurrent creates of one branch from 10 sessions → exactly 1 success, 9 `conflict`, one worktree on disk
+- [ ] T032 [P] [US2] [A7][A8][U145][U146][U148][U149][U150][U151][U219] Write `crates/micold-daemon/tests/mcp_create_worktree.rs` (US2 s1, s2; FR-009, FR-011; SC-003, SC-005; edge cases *Invalid names*, *Concurrency*): creates under `.claude/worktrees/<name>` with `name` defaulting to `naming::dir_name_from_branch(branch)`, records provenance (`app_created: true`), a registered fake client receives `CatalogChanged` within 2 s, and the result is the new `WorktreeRow`; an existing or checked-out branch fails `conflict` naming the `BranchSituation`, nothing on disk changes; an invalid name fails `invalid_input` with the dialog's `NamingError`/git message; 10 concurrent creates of one branch from 10 sessions → exactly 1 success, 9 `conflict`, one worktree on disk; a Default session's credential gets `refused_by_policy` naming Principle III with nothing on disk or in the catalog changed (FR-015a)
 - [ ] T033 [P] [US2] [U38][U39][U40][U118][U119][U120][U121][U122][U123] Write `crates/micold-core/tests/input_readiness.rs`: `AiCliProvider::input_readiness()` is Claude `HookSessionStart`, Pi `ExtensionEvent("session_start")`, Copilot `OutputSettled`; the pure output-settled rule in `crates/micold-core/src/mcp/submission.rs` reports ready only after first output followed by 1.5 s of none (fed with a fake clock); `encode_submission(text, bracketed)` wraps in `ESC[200~ … ESC[201~` when bracketed and always ends with `\r`
 - [ ] T034 [P] [US2] [A9][A10][A11][U152][U153][U154][U155][U156][U157][U158][U159][U160][U161][U162] Write `crates/micold-daemon/tests/mcp_create_session.rs` (US2 s3–s5; FR-017): `create_session` creates and starts a session in a worktree or `default`, visible to a fake client; omitting `ai_cli` uses `default_ai_cli`; a CLI not on the session environment's `PATH` fails `service_error` naming it and **no catalog record exists afterwards**; with `prompt`, a stand-in CLI receives the bracketed submission after the readiness signal (a `SessionStart` POST to the hook receiver for Claude) and the result says `prompt_delivered: true`; with no readiness within 60 s of the request, or a failed start, `prompt_delivered: false` and a later signal delivers nothing; the `SessionStart` hook leaves the activity FSM at `Unknown`
 - [ ] T072 [P] [US2] [U202][U203][U204][U205] Write `crates/micold-daemon/tests/mcp_audit_log.rs` (FR-018, SC-010): every mutating tool listed in `tools/list` writes (the test iterates the list, so each later milestone's tools are covered as they ship) exactly one `info` line with caller, op, target and outcome, and no `prompt` or `text` value appears in the log at any level (capture with the `log_redaction.rs` pattern); every failure in the acceptance tests carries one of the six categories
@@ -143,7 +143,7 @@ the create-worktree dialog and the session menu.
 - [ ] T035 [US2] [U141][U142][U143][U144] Create `crates/micold-daemon/src/ops.rs` by moving the bodies of the `WorktreeCreate`, `WorktreeDelete` and `WorktreeRename` arms of `route()` in `crates/micold-daemon/src/server.rs` into `ops::{create_worktree, delete_worktree, rename_worktree}` returning typed outcomes (create takes an `Option` progress sink for `OperationProgress`); `route()` wraps them and keeps its replies — to pass T029
 - [ ] T036 [US2] [U104][U105] Implement `crates/micold-core/src/mcp/policy.rs` `decide(&Caller, &Operation, &TargetFacts, CrossSessionAccess) -> PolicyDecision` with the FR-015a row for `create_worktree` to pass T030 (later milestones add rows)
 - [ ] T037 [US2] [U90][U91][U92][U93][U94] Add `create_worktree` and `create_session` to `crates/micold-core/src/mcp/tools.rs` to pass T031
-- [ ] T038 [US2] [A7][A8][U145][U146][U148][U149][U150][U151] Implement the `create_worktree` handler in `crates/micold-daemon/src/mcp/tools.rs` (pre-flight via `worktree::preflight`, `CreateMode::is_compatible_with`, then `ops::create_worktree` under `worktree_gate`, `broadcast_catalog`) to pass T032
+- [ ] T038 [US2] [A7][A8][U145][U146][U148][U149][U150][U151][U219] Implement the `create_worktree` handler in `crates/micold-daemon/src/mcp/tools.rs` (pre-flight via `worktree::preflight`, `CreateMode::is_compatible_with`, then `ops::create_worktree` under `worktree_gate`, `broadcast_catalog`) to pass T032
 - [ ] T039 [US2] [U38][U39][U40][U118][U119][U120][U121][U122][U123] Add `InputReadiness` and `AiCliProvider::input_readiness()` to `crates/micold-core/src/provider.rs`, and the output-settled rule and `encode_submission` to `crates/micold-core/src/mcp/submission.rs`, to pass T033
 - [ ] T040 [US2] [U159][U160][U161][U162] Mark sessions ready for input in `crates/micold-daemon/src/state.rs` (`LiveSession.ready`, a `watch` per session): from `SessionStart` in `crates/micold-daemon/src/hooks.rs` (FSM unchanged), from `session_start` in the Pi tail (`crates/micold-daemon/src/activity.rs` `pi_event`, and add `session_start` to `EVENTS` in `crates/micold-daemon/assets/pi-activity.ts`), and from the output-settled rule on the primary PTY's output for `OutputSettled` providers, a declined Pi component, or Claude when the hook receiver is not running
 - [ ] T041 [US2] [A9][A10][A11][U152][U153][U154][U155][U156][U157][U158] Move `spawn_session_start` from `crates/micold-daemon/src/server.rs` into `crates/micold-daemon/src/ops.rs` (route() calls it there) and implement the `create_session` handler in `crates/micold-daemon/src/mcp/tools.rs` (availability check with `provider.is_available` against the env-include `PATH` before `DaemonState::create_session`; `begin_start` + `spawn_session_start` with no reply target; optional prompt wait bounded by 60 s from the request; write `encode_submission` to the primary PTY via `PtySession::write_input`, reading bracketed-paste mode from its `Term`) to pass T034
@@ -258,7 +258,7 @@ confirmation dialog, and the FR-015/FR-015a refusals.
 
 ### Phase Dependencies
 
-- Setup (T001–T002) → Foundational (T003–T010) → US1 (T011–T028, T078–T083).
+- Setup (T001–T002) → Foundational (T003–T010) → US1 (T011–T028, T078–T083, T100–T101).
 - US2 depends on US1 (listener, credentials, tool dispatch).
 - US3's start/rename part depends on US2 (`ops.rs`, `policy.rs`); its confirmation part depends on
   its start/rename part.
@@ -274,10 +274,10 @@ user-guide task last in its group.
 
 - T003–T006 are independent test files.
 - Within US1: T011–T016 in parallel; T023–T025 in parallel.
-- Within US2: T029–T034 in parallel.
+- Within US2: T029–T034 and T072 in parallel.
 - Within US3: T043–T045, then T049–T052 in parallel.
 - Within US4: T060–T065 in parallel.
-- Polish: T072, T074, T075 in parallel.
+- Polish: T074, T075 in parallel.
 
 ## Parallel Example: User Story 1
 
@@ -315,7 +315,8 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `mise run test-core` (`mcp_jsonrpc`, `mcp_binding_plan`, `mcp_name_collision`,
   `ai_cli_provider_seam`, `mcp_tools_catalog`) and `scripts/build-lock.sh cargo test -p
   micold-daemon --test mcp_endpoint --test mcp_binding_file_mode --test mcp_read_tools --test
-  mcp_binding_spawn --test hooks_receiver`; quickstart §B1 steps 1–6 and §B2
+  mcp_binding_spawn --test hooks_receiver` and `scripts/build-lock.sh cargo test -p micold-daemon
+  --lib http`; quickstart §B1 steps 1–6 and §B2
 - **Depends on**: —
 
 ### M2 — The user can turn the binding off
@@ -350,7 +351,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 - **Tasks**: T043–T048, T089
 - **Deliverable**: On `main`, an agent starts an idle, failed or resumable session and renames a
-  worktree, with the result in every window; a Default session's agent cannot rename or delete a
+  worktree, with the result in every window; a Default session's agent cannot rename a
   worktree.
 - **Satisfies**: US3 acceptance scenario 1, and scenario 6 for `rename_worktree` (its `delete_worktree` half ships in M5); FR-012a (start), FR-015a (rename)
 - **Verify**: `mise run test-core` (`mcp_policy`, `mcp_tools_catalog`) and
@@ -365,7 +366,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   the operation and the target; Allow performs it, Deny refuses it, 60 s or no window answers "needs
   confirmation"; self-targets are refused.
 - **Satisfies**: US3 acceptance scenarios 2–5, and scenario 6 for `delete_worktree`; FR-009, FR-011, FR-012a (stop), FR-013, FR-014,
-  FR-015
+  FR-015, FR-015a (delete)
 - **Verify**: `mise run test-core` (`protocol_roundtrip`, `schema_hash`) and
   `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_confirmations --test
   mcp_lifecycle_tools`, `scripts/build-lock.sh cargo test -p micold-client --test
@@ -399,7 +400,8 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ## Notes
 
-- M1 is 22 tasks, above the ~15 guideline: the foundational listener, credentials and binding have
+- M1 is 28 tasks (22 build tasks plus 5 acceptance gates and 1 quickstart run), above the ~15
+  guideline: the foundational listener, credentials and binding have
   no observable deliverable without at least one tool and one bound CLI, and the read-only tools are
   thin handlers over one snapshot. The toggle (US1 s6) is split into M2 along its acceptance
   scenario.
