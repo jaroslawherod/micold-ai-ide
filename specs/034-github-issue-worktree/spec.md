@@ -8,6 +8,18 @@
 
 **Input**: User description: "when creating new worktree add another option github issues. Application should fetch github issues for current project and allow to select one for working with it. The ticket should define an worktree name. The type should be resolved by mapping labels into issues types . The mapping should be global for application for now."
 
+## Clarifications
+
+### Session 2026-09-29
+
+- Q: Which labels does the default label-to-type mapping cover? → A: GitHub's stock type-bearing labels only — `bug` → fix, `enhancement` → feat, `documentation` → docs; the other stock labels (`duplicate`, `good first issue`, `help wanted`, `invalid`, `question`, `wontfix`) say nothing about the kind of work and stay unmapped. _(agent-resolved: this repository's own label set, `gh label list` on origin, is GitHub's stock set; spec.md#FR-021)_
+- Q: Without a GitHub sign-in, should a public repository's issues still be listed anonymously? → A: No — without a sign-in the "not signed in" message is shown, for public repositories too. _(decided by user)_
+- Q: Which GitHub hosts are supported? → A: github.com only; a remote on any other host (GitHub Enterprise, GitLab, Bitbucket) counts as "no GitHub remote". _(decided by user)_
+- Q: Which issues does the picker list? → A: All open issues of the repository, most recently updated first, with search — not filtered to the user's assigned issues, and no closed issues. _(decided by user)_
+- Q: Keep an issue-derived name cut to 50 characters, and at most 1,000 issues loaded? → A: Yes, both limits stand as in FR-010 and FR-004. _(decided by user)_
+- Q: What does the issue picker's search cover? → A: It searches the repository's open issues: typing filters the loaded list at once by number, title and label names, with the existing-branch picker's type-ahead behaviour and keyboard operation (feature 021); when the loaded list is incomplete (more open issues than the 1,000 cap), the search also asks GitHub for matching open issues beyond the cap, with the same error and offline handling as the initial load. _(decided by user)_
+- Q: When the search beyond the load cap returns an issue that matched GitHub's own search only through text the picker does not search (its body or comments), is it shown? → A: No — an issue from that search is shown only when it matches the typed text by number, title or label name, under the same rule as loaded issues, so the results never depend on whether an issue happened to be loaded. _(agent-resolved: spec.md#FR-005; specs/021-branch-typeahead-search/spec.md one matching rule per picker)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Start a worktree from an open issue (Priority: P1)
@@ -22,13 +34,14 @@ A developer's work is tracked as GitHub issues on the project's repository. Toda
 
 1. **Given** the create-worktree form is open on a project whose repository is hosted on GitHub, **When** the user looks at the branch-source choice, **Then** "GitHub issue" is offered alongside "new branch" and "existing branch".
 2. **Given** the user chooses "GitHub issue", **When** the issues load, **Then** the repository's open issues are listed, each showing its number and title, most recently updated first.
-3. **Given** the issue list is showing, **When** the user types in the list's search field, **Then** the list narrows to issues whose number or title matches what was typed.
+3. **Given** the issue list is showing, **When** the user types in the list's search field, **Then** the list narrows as each character is typed to issues whose number, title or label names match what was typed, and the user can move through the results with Up and Down and pick one with Enter without leaving the field.
 4. **Given** the issue list is showing, **When** the user picks issue #42 titled "Crash when opening empty project", **Then** the ticket is set to `42`, the name is set to the title (shortened as FR-010 describes when it is long), and the directory and branch preview update exactly as if the user had typed those values into the new-branch inputs.
 5. **Given** an issue was picked, **When** the user edits the pre-filled name or ticket before submitting, **Then** the edited values are used — the issue supplies a starting point, not a locked value.
 6. **Given** an issue was picked and a type is set, **When** the user submits, **Then** the worktree is created exactly as a new-branch worktree with the same type, ticket and name would be, including the existing prompt when the derived branch already exists.
 7. **Given** the issues are still loading, **When** the user looks at the list, **Then** a loading indication is shown and the rest of the form stays usable, including switching back to another branch source.
 8. **Given** the user typed a ticket and name, or picked another issue earlier, **When** the user picks an issue, **Then** the ticket and name are replaced by the picked issue's number and title.
 9. **Given** the user chooses "GitHub issue", **When** the source is shown, **Then** it states that choosing it contacts GitHub and names the repository (`owner/name`) whose issues are read.
+10. **Given** the repository has more open issues than the load cap, so the loaded list is incomplete, **When** the user types a search that matches an open issue beyond the cap, **Then** that issue appears in the results — found by asking GitHub — alongside the matching loaded issues, and can be picked like any other.
 
 ---
 
@@ -80,6 +93,7 @@ Different teams label differently — one uses `type: bug`, another `defect`. Th
 - **Rate-limited by GitHub**: treated as a load failure with the reason given and a retry offered.
 - **No open issues**: the list says the repository has no open issues, rather than showing an empty control.
 - **Many open issues**: the list stays responsive, and search finds an issue that is not among the first rows shown.
+- **Search beyond the load cap**: when the loaded list is complete, search never contacts GitHub. When it is incomplete, the loaded matches show at once and the GitHub search's matches join them when they arrive, with a searching indication meanwhile; an issue in both appears once. If that search fails (offline, not signed in, rate limit, 10-second timeout), the loaded matches stay shown and the list says the search beyond the loaded issues failed and offers a retry, as FR-007 describes for the initial load. A newer keystroke discards an older search's result (FR-007a).
 - **Pull requests**: GitHub reports pull requests as issues; they are excluded from the list.
 - **Title that slugs to nothing** (for example only emoji or punctuation): the name field is left empty after the pick, and the form's existing "name required" validation applies.
 - **Very long title**: the name filled in from it is shortened as FR-010 describes, so a directory named after a long issue stays within path-length limits on every OS (Windows' being the tightest). A long name the user types by hand is not shortened; that behavior is unchanged.
@@ -104,13 +118,14 @@ Different teams label differently — one uses `type: bug`, another `defect`. Th
 **Choosing an issue**
 
 - **FR-001**: The create-worktree form MUST offer "GitHub issue" as a third branch-source choice, alongside "new branch" and "existing branch".
-- **FR-002**: When the project's repository has no GitHub remote, the "GitHub issue" choice MUST be shown disabled with the reason stated.
-- **FR-003**: Issues MUST be requested only when the user chooses "GitHub issue" in the form — never in the background, on project open, or on application start.
-- **FR-004**: The system MUST list the open issues of the repository's default GitHub remote, excluding pull requests, each with its number, title and labels, ordered most recently updated first. At most the 1,000 most recently updated open issues are loaded; when more exist, the list says that only the most recent 1,000 are shown.
-- **FR-005**: The issue list MUST provide a search over the loaded issues' numbers and titles that matches the way the existing-branch search does (feature 021): literal matches first, then approximate ones. Search MUST NOT contact GitHub.
+- **FR-002**: When the project's repository has no GitHub remote, the "GitHub issue" choice MUST be shown disabled with the reason stated. Only remotes on github.com (including its SSH-over-HTTPS-port host `ssh.github.com`) count as GitHub remotes; a remote on any other host, GitHub Enterprise included, does not.
+- **FR-003**: Issues MUST be requested only when the user chooses "GitHub issue" in the form, or searches in it (FR-005a) — never in the background, on project open, or on application start.
+- **FR-004**: The system MUST list all open issues of the repository's default GitHub remote — not filtered by assignee, author or any other criterion — excluding pull requests and closed issues, each with its number, title and labels, ordered most recently updated first. At most the 1,000 most recently updated open issues are loaded; when more exist, the list says that only the most recent 1,000 are shown and that search also finds the rest (FR-005a).
+- **FR-005**: The issue list MUST provide a type-ahead search field that searches the repository's open issues by number, title and label names, with the existing-branch picker's behaviour (feature 021): the list narrows as the user types, literal matches first, then approximate ones, and results are moved through and picked from the keyboard without leaving the field (021 FR-017, FR-017a). Filtering the loaded issues MUST NOT contact GitHub.
+- **FR-005a**: When the loaded list is incomplete (FR-004's cap was reached), a search MUST also ask GitHub for open issues matching the typed text, excluding pull requests, and merge them into the results without duplicates, keeping only those that match the typed text by FR-005's rule (number, title or label names). This request MUST be subject to FR-007 and FR-007a like the initial load, and its failure MUST leave the loaded matches shown. When the loaded list is complete, search MUST NOT contact GitHub.
 - **FR-006**: While issues load, the form MUST show a loading indication and MUST stay usable, including switching to another branch source.
 - **FR-007**: When issues cannot be loaded, the list MUST state why in plain language — GitHub tooling not installed, no GitHub sign-in, no access to the repository, no network, rate limit, no answer to any single request within 10 seconds (a large list may take several requests), or other failure — and MUST offer a retry.
-- **FR-007a**: When a newer load has been started (retry, re-choosing the source) or the form has been closed, the result of an older load MUST be discarded.
+- **FR-007a**: When a newer load or search has been started (retry, re-choosing the source, a further keystroke) or the form has been closed, the result of an older load or search MUST be discarded.
 - **FR-008**: When the repository has no open issues, the list MUST say so.
 
 **Naming from the issue**
@@ -135,14 +150,14 @@ Different teams label differently — one uses `type: bug`, another `defect`. Th
 - **FR-018**: Settings MUST let the user view, add, change, remove and reorder mapping entries, and restore the default mapping.
 - **FR-019**: Saving the mapping MUST be refused, with the offending entry identified, when an entry's label is blank or duplicates another entry's label ignoring case.
 - **FR-020**: The mapping MUST persist on the local filesystem across application restarts.
-- **FR-021**: Until the user edits it, the mapping MUST be the default: `bug` → fix, `enhancement` → feat, `documentation` → docs, in that order.
+- **FR-021**: Until the user edits it, the mapping MUST be the default: `bug` → fix, `enhancement` → feat, `documentation` → docs, in that order. GitHub's other stock labels stay unmapped.
 
 **Privacy and offline**
 
-- **FR-022**: The system MUST use the user's existing GitHub sign-in on the machine and MUST NOT ask for, store, or display GitHub credentials itself.
+- **FR-022**: The system MUST use the user's existing GitHub sign-in on the machine and MUST NOT ask for, store, or display GitHub credentials itself. Without a sign-in the system MUST NOT fall back to anonymous access, even for a public repository.
 - **FR-023**: Loaded issues MUST NOT be persisted beyond the open form; closing the form discards them.
 - **FR-024**: Every other way of creating a worktree MUST work with no network and no GitHub sign-in.
-- **FR-025**: The "GitHub issue" source MUST state, before and while it loads, that it contacts GitHub, and MUST name the repository (`owner/name`) it reads. The request MUST carry nothing about the project beyond that repository's identity.
+- **FR-025**: The "GitHub issue" source MUST state, before and while it loads, that it contacts GitHub, and MUST name the repository (`owner/name`) it reads. Requests MUST carry nothing about the project beyond that repository's identity and, for a search beyond the loaded issues (FR-005a), the text the user typed.
 - **FR-026**: The issue list's outcomes MUST be the same on Linux, macOS and Windows, including when the application is launched from a desktop launcher rather than a terminal, and MUST NOT depend on whether the project's sessions run in a sandbox.
 
 ### Key Entities
@@ -158,17 +173,15 @@ Different teams label differently — one uses `type: bug`, another `defect`. Th
 
 - **SC-001**: A user can go from the open create-worktree form to a created worktree named after a chosen issue in under 20 seconds, without typing the ticket or the name.
 - **SC-002**: For an issue carrying a mapped label, the worktree is created with no type chosen by hand in 100% of cases.
-- **SC-003**: On a repository with 500 open issues, the user can find a given issue by typing part of its number or title and see the narrowed list within 1 second of typing.
+- **SC-003**: On a repository with 500 open issues, the user can find a given issue by typing part of its number, title or a label name and see the narrowed list within 1 second of typing.
 - **SC-004**: With the network unplugged, "new branch" and "existing branch" creation succeed in 100% of attempts, and the "GitHub issue" choice reports the failure within 10 seconds instead of hanging.
 - **SC-005**: A mapping entry saved in Settings takes effect in every open project on the next issue pick, with no restart.
 - **SC-006**: No GitHub credential or issue content is written to the application's stored files.
 
 ## Assumptions
 
-- "GitHub issues for current project" means issues of the GitHub repository the project's default remote points at; GitHub Enterprise and other hosts (GitLab, Bitbucket) are out of scope for this version.
-- Only open issues are listed; closed issues and pull requests are not offered.
-- The user is already signed in to GitHub on the machine through the standard GitHub tooling; the application relies on that sign-in and does not implement its own. Signing in is outside this feature. Without a sign-in no issues are listed, even for a public repository (no anonymous fallback). Which tooling is used is a plan decision.
-- The 50-character cap on an issue-derived name and the 1,000-issue load cap are agent defaults; `/speckit-clarify` can revisit them.
+- "GitHub issues for current project" means issues of the GitHub repository the project's default remote points at; only github.com is supported (FR-002).
+- The user is already signed in to GitHub on the machine through the standard GitHub tooling; the application relies on that sign-in and does not implement its own. Signing in is outside this feature. Without a sign-in no issues are listed (FR-022). Which tooling is used is a plan decision.
 - Choosing "GitHub issue" is the user's explicit, informed opt-in to contacting GitHub, which satisfies the constitution's local-first principle (IV): nothing is sent unless the user makes that choice.
 - "The ticket should define a worktree name" means the issue number becomes the ticket segment and the issue title becomes the name segment, both passed through the existing naming rules; the resulting name format is unchanged.
 - The mapping is global "for now": a per-project mapping may follow later, and the design should not rule it out, but it is out of scope here.
