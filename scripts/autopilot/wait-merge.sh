@@ -8,7 +8,7 @@
 #   MERGED <pr> <merge-sha>          0  merged (or already merged)
 #   GREEN <pr>                       0  green, --no-merge given
 #   RED <pr> <run-id> <log-file>     1  failed checks listed above it; failing log tail in <log-file>
-#   CHECKLESS <pr> <reason>          3  no `ci complete` after AUTOPILOT_CHECKLESS_AFTER seconds;
+#   CHECKLESS <pr> <reason>          3  no check at all after AUTOPILOT_CHECKLESS_AFTER seconds;
 #                                       reason: conflicting | action_required <run-ids> | no-run
 #   MERGE-FAILED <pr> <message>      4  green, but `gh pr merge` refused
 #   CLOSED <pr>                      5  the PR was closed while waiting
@@ -44,9 +44,13 @@ tick() {
   sleep "$poll"; waited=$((waited + poll))
 }
 
+any_checks() { [ "$(view statusCheckRollup '.statusCheckRollup | length' 2>/dev/null)" -gt 0 ] 2>/dev/null; }
+
 tick "before checks"
+# `ci complete` needs every other job, so it appears only when they finish: while other checks run,
+# keep waiting. Only a PR with no check at all is checkless.
 while [ -z "$(ci_state)" ]; do
-  if [ "$waited" -ge "$checkless_after" ]; then
+  if [ "$waited" -ge "$checkless_after" ] && ! any_checks; then
     if [ "$(view mergeable .mergeable)" = CONFLICTING ]; then
       echo "CHECKLESS $pr conflicting"; exit 3
     fi

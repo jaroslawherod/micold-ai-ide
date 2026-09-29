@@ -93,7 +93,7 @@ Run it with `run_in_background`.
 
 - **Wait for the check to appear first.** Right after a push, `--watch` prints
   `no required checks reported` and exits **0**. That is not green.
-- **Merge only when `ci complete` reads `pass`.** No checks after about 5 minutes means the PR is
+- **Merge only when `ci complete` reads `pass`.** It appears only once every other job finishes. No check at all after about 5 minutes means the PR is
   checkless (see below).
 
 | Result | Action |

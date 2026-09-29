@@ -96,9 +96,10 @@ on its last line (it runs as long as CI does):
 
 ```bash
 log="$SCRATCHPAD/pr-<n>.log"
+# The wrapper writes its own pid: `setsid` may fork, so `$!` is not the process to watch.
 AUTOPILOT_LOG_DIR="$SCRATCHPAD" setsid nohup \
-  bash -c 'scripts/autopilot/wait-merge.sh <n>; echo "WAIT_EXIT=$?"' >"$log" 2>&1 &
-echo $! >"$log.pid"
+  bash -c 'echo $$ >"$0.pid"; scripts/autopilot/wait-merge.sh <n>; echo "WAIT_EXIT=$?"' "$log" \
+  >"$log" 2>&1 &
 # then, with run_in_background (stops too if the script was killed without a result):
 until grep -q '^WAIT_EXIT=' "$log" || ! kill -0 "$(cat "$log.pid")" 2>/dev/null; do sleep 30; done
 tail -6 "$log"
