@@ -134,6 +134,8 @@ pub const PORTS: &[&str] = &[
     // its fake here while `no_concrete_implementations` never sees the real one. Recorded at
     // both sites rather than left as a surprise.
     "OsThemeProbe",
+    // Spec 035's: whether the stored environment-include script path names a readable file.
+    "ScriptPathProbe",
 ];
 
 /// One `impl <Port> for <Type>`, and where it was found.

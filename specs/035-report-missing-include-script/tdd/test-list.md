@@ -91,7 +91,7 @@ Tests in `crates/micold-core/tests/script_path_check.rs`, on `tempfile` director
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U23 | `ScriptPathProbe` is a registered port: it has a core fake that a test exercises, and `StdScriptPathProbe` is named only at its definition and in `Capabilities::real()` | FR-006, FR-003 (the test seam every trigger test relies on); plan R9 | example | PENDING | existing guards, once T005 registers the port |
+| U23 | `ScriptPathProbe` is a registered port: it has a core fake that a test exercises, and `StdScriptPathProbe` is named only at its definition and in `Capabilities::real()` | FR-006, FR-003 (the test seam every trigger test relies on); plan R9 | example | DONE | `crates/micold-client/tests/no_concrete_implementations.rs::each_implementation_is_chosen_in_exactly_one_place`, `service_capability_fakes.rs` (existing guards, port registered by T005) |
 
 ### `crates/micold-client/src/features/settings.rs`: reducer
 
