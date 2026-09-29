@@ -145,9 +145,9 @@ Tests: `crates/micold-daemon/tests/remote_list.rs` (new), the core protocol roun
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U41 | A repo with `origin` (GitHub) and `upstream` answers `OperationResult::RemoteList` with both in order | FR-002 | example | TODO | `remote_list.rs::a_repository_answers_its_remotes` |
-| U42 | A non-repository project is rejected like `BranchList` | FR-002 | example | TODO | `remote_list.rs::a_non_repository_is_rejected` |
-| U43 | `ClientMsg::RemoteList` and `OperationResult::RemoteList` round-trip; `PROTOCOL_VERSION` is 16 | R5 | example | TODO | protocol round-trip test + `schema_hash.rs` pin |
+| U41 | A repo with `origin` (GitHub) and `upstream` answers `OperationResult::RemoteList` with both in order | FR-002 | example | DONE | `remote_list.rs::a_repository_answers_its_remotes` |
+| U42 | A non-repository project is rejected like `BranchList` | FR-002 | example | DONE | `remote_list.rs::a_non_repository_is_rejected` |
+| U43 | `ClientMsg::RemoteList` and `OperationResult::RemoteList` round-trip; `PROTOCOL_VERSION` is 16 | R5 | example | DONE | protocol round-trip test + `schema_hash.rs` pin |
 
 ### `crates/micold-core/src/github.rs`: `GhCli`
 

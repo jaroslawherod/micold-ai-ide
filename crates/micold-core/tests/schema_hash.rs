@@ -172,7 +172,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 14 → 15 for `029` BUG-001's `cwd` on `ClientMsg::AiCliAvailabilityRequest`, which had
 /// developed against the 13 that feature 032's label took to 14. Ninth time, same case, same
 /// answer.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 15;
+///
+/// And 15 → 16 for feature 034's `ClientMsg::RemoteList` / `OperationResult::RemoteList`, which
+/// let the client ask for a project's own remote URLs. Tenth time, same case, same answer.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 16;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

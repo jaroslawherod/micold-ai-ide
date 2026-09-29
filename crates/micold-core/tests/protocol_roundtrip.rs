@@ -6,6 +6,8 @@
 
 use std::path::PathBuf;
 
+use micold_core::git::GitRemote;
+
 use micold_core::protocol::envelope::{Encoding, EnvelopeError, EnvelopeHeader, Kind, HEADER_LEN};
 use micold_core::protocol::grid::{
     CellExtras, GridFrame, LineId, StyleRun, WireColor, WireCursor, WireCursorShape, WireLine,
@@ -165,6 +167,10 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
         },
         ClientMsg::BranchList {
             req: 44,
+            project: PathBuf::from("/a"),
+        },
+        ClientMsg::RemoteList {
+            req: 45,
             project: PathBuf::from("/a"),
         },
         ClientMsg::WorktreeDelete {
@@ -434,6 +440,21 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
         DaemonMsg::OperationOk {
             req: 7,
             result: OperationResult::SessionCreated { session: sid() },
+        },
+        DaemonMsg::OperationOk {
+            req: 8,
+            result: OperationResult::RemoteList {
+                remotes: vec![
+                    GitRemote {
+                        name: "origin".into(),
+                        url: "git@github.com:o/r.git".into(),
+                    },
+                    GitRemote {
+                        name: "upstream".into(),
+                        url: "https://gitlab.com/u/r.git".into(),
+                    },
+                ],
+            },
         },
         DaemonMsg::OperationError {
             req: 4,

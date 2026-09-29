@@ -59,7 +59,10 @@
 /// offered follows the environment a session in that directory is spawned with (FR-003b), so the
 /// request names the directory. An older peer would fail to decode the field. It developed against
 /// 13 while feature 032 took 14 here, so both cannot be 14.
-pub const PROTOCOL_VERSION: u32 = 15;
+/// Bumped 15 → 16 for feature 034's `ClientMsg::RemoteList` / `OperationResult::RemoteList`: the
+/// client asks for a project's own remote URLs to find the GitHub repository behind them. An older
+/// peer would fail to decode either variant.
+pub const PROTOCOL_VERSION: u32 = 16;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

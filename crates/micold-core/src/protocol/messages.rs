@@ -391,6 +391,16 @@ pub enum ClientMsg {
         /// Project path.
         project: PathBuf,
     },
+    /// List the project repository's own remotes and their URLs, in config order (feature 034,
+    /// FR-002), so the client can find the GitHub repository behind them. Reads local config
+    /// only; the daemon never contacts a remote for this. A non-repository is refused exactly as
+    /// [`ClientMsg::BranchList`] refuses it.
+    RemoteList {
+        /// Correlation id.
+        req: u64,
+        /// Project path.
+        project: PathBuf,
+    },
     /// Show a worktree the repository already knows about that lives outside the directory this
     /// app creates its own in (016 BUG-002, FR-027). **Mutates nothing but the app's own settings**
     /// — no git command runs, because the worktree is already registered, which is precisely why it
@@ -1054,6 +1064,11 @@ pub enum OperationResult {
     BranchList {
         /// Every branch, ordered and annotated with any block reason.
         candidates: Vec<BranchCandidate>,
+    },
+    /// The repository's own remotes (feature 034, FR-002).
+    RemoteList {
+        /// Every remote with a URL, in config order, URLs as written.
+        remotes: Vec<crate::git::GitRemote>,
     },
     /// A worktree is now shown (016 BUG-002, FR-027). Carries it as discovery sees it, so the
     /// client renders the daemon's answer rather than deriving a second one.

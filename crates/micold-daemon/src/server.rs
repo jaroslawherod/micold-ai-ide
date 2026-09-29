@@ -1297,6 +1297,38 @@ where
                     ),
                 }
             }
+            ClientMsg::RemoteList { req, project } => {
+                // Read-only and local: `git config`, never a network call (034 FR-002).
+                let Some((repo, true)) = state.project_repo(&project) else {
+                    reject_non_repo(state, id, req, &project);
+                    continue;
+                };
+                let listed = tokio::task::spawn_blocking(move || {
+                    GitCli::new()
+                        .remote_list(&repo)
+                        .map(|raw| micold_core::git::parse_remote_list(&raw))
+                })
+                .await;
+                let reply = match listed {
+                    Ok(Ok(remotes)) => DaemonMsg::OperationOk {
+                        req,
+                        result: OperationResult::RemoteList { remotes },
+                    },
+                    Ok(Err(e)) => DaemonMsg::OperationError {
+                        req,
+                        kind: ErrorKind::GitFailed,
+                        message: "could not list remotes".into(),
+                        detail: Some(e.to_string()),
+                    },
+                    Err(e) => DaemonMsg::OperationError {
+                        req,
+                        kind: ErrorKind::Internal,
+                        message: "could not list remotes".into(),
+                        detail: Some(e.to_string()),
+                    },
+                };
+                state.send(id, reply);
+            }
             ClientMsg::WorktreeDelete {
                 req,
                 project,
