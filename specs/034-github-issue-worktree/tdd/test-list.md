@@ -155,7 +155,7 @@ Tests: `crates/micold-core/tests/github_gh_cli.rs` (new), against a stub `gh` th
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U94 | `GhCli::list_open` passes exactly `list_args`, sets the five `gh` environment variables, runs in the user's home, parses the page; a stub past a short bound → `TimedOut`; exit 4 + not-logged-in text → `NotSignedIn` | FR-007, FR-022, FR-025, R6 | example | TODO | `github_gh_cli.rs::gh_cli_runs_gh_as_specified` |
+| U94 | `GhCli::list_open` passes exactly `list_args`, sets the five `gh` environment variables, runs in the user's home, parses the page; a stub past a short bound → `TimedOut`; exit 4 + not-logged-in text → `NotSignedIn` | FR-007, FR-022, FR-025, R6 | example | DONE | `github_gh_cli.rs::gh_cli_runs_gh_as_specified` |
 
 ### `crates/micold-client/src/features/worktree_form.rs`: availability, load, staleness
 
