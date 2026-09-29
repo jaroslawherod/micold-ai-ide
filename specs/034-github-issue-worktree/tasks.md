@@ -79,7 +79,7 @@ and classifying open issues through `gh`, and the name derived from a title. No 
   - Each `HostOs` value's well-known table, `path_separator()` (`:`/`;`) and `exe_name()` (`gh`/`gh.exe`), on every host.
   - Env-include `PATH` entries come before process `PATH`, which comes before well-known dirs; duplicates keep first position; empty components dropped.
   - `MacOs` with the Dock `PATH` `/usr/bin:/bin:/usr/sbin:/sbin` finds `gh` only in `/opt/homebrew/bin`; `Windows` finds `gh.exe` only under `%LOCALAPPDATA%\Microsoft\WinGet\Links`; a `Path` (not `PATH`) key from the env-include snapshot is honoured; nothing found → `None`.
-- [ ] T005 [P] [US1] [U24] [U25] [U26] [U27] Write `crates/micold-core/tests/github_parse.rs` for the list page, with JSON fixtures under `crates/micold-core/tests/fixtures/gh/` (contracts/github-issue-source.md §3–4):
+- [X] T005 [P] [US1] [U24] [U25] [U26] [U27] Write `crates/micold-core/tests/github_parse.rs` for the list page, with JSON fixtures under `crates/micold-core/tests/fixtures/gh/` (contracts/github-issue-source.md §3–4):
   - `parse_list_page` maps `number`, `title`, `updatedAt`, up to 20 label names, `totalCount` and `pageInfo` into `IssuePage`; `Issue::row_text` is `#<number> <title>` plus `  ·  <l1>, <l2>` only when labelled.
   - `errors[]` with `type: NOT_FOUND` → `NoAccess`; `RATE_LIMITED` → `RateLimited`; malformed JSON → `Other`.
   - `list_args(repo, cursor)` (pure argument builder) is `api graphql --hostname github.com -f query=… -f owner=… -f name=…` plus `-f cursor=…` only with a cursor; every string uses `-f`; a repository named `1` or `true` stays a string; no path, branch or file name appears (FR-025).

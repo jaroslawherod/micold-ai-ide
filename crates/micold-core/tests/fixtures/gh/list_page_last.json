@@ -1,0 +1,27 @@
+{
+  "data": {
+    "repository": {
+      "issues": {
+        "totalCount": 2,
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "Y3Vyc29yOnYyOpK6"
+        },
+        "nodes": [
+          {
+            "number": 1,
+            "title": "Only",
+            "updatedAt": "2026-09-01T00:00:00Z",
+            "labels": {
+              "nodes": [
+                {
+                  "name": "enhancement"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

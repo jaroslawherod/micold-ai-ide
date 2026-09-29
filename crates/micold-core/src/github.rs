@@ -276,3 +276,193 @@ pub fn locate_gh(inputs: &LocateInputs) -> Option<PathBuf> {
         .map(|dir| dir.join(inputs.os.exe_name()))
         .find(|candidate| (inputs.exists)(candidate))
 }
+
+/// One open issue, as the picker shows and ranks it (data-model §2).
+///
+/// Held only in the open form (FR-023). No `Serialize`, so no code path can persist it (SC-006).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Issue {
+    number: u64,
+    title: String,
+    labels: Vec<String>,
+    updated_at: String,
+    row_text: String,
+}
+
+impl Issue {
+    /// An issue, with its row text derived once, here.
+    pub fn new(number: u64, title: String, labels: Vec<String>, updated_at: String) -> Issue {
+        let mut row_text = format!("#{number} {title}");
+        if !labels.is_empty() {
+            row_text.push_str("  ·  ");
+            row_text.push_str(&labels.join(", "));
+        }
+        Issue {
+            number,
+            title,
+            labels,
+            updated_at,
+            row_text,
+        }
+    }
+
+    /// The issue number; the ticket is its decimal text (FR-009).
+    pub fn number(&self) -> u64 {
+        self.number
+    }
+
+    /// The title as GitHub returns it.
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    /// Label names, at most 20 (research R2).
+    pub fn labels(&self) -> &[String] {
+        &self.labels
+    }
+
+    /// RFC 3339 last update, as GitHub returns it.
+    pub fn updated_at(&self) -> &str {
+        &self.updated_at
+    }
+
+    /// `#<number> <title>`, plus `  ·  <l1>, <l2>` when labelled: the text the picker shows and
+    /// ranks (research R12).
+    pub fn row_text(&self) -> &str {
+        &self.row_text
+    }
+}
+
+/// One page of the open-issue connection (data-model §2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IssuePage {
+    /// This page's issues, most recently updated first.
+    pub issues: Vec<Issue>,
+    /// GitHub's `totalCount` of open issues.
+    pub total_open: u64,
+    /// Where the next page starts; `None` on the last page.
+    pub next_cursor: Option<String>,
+}
+
+/// Why issues could not be read (FR-007, research R8). Every variant offers a retry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IssueLoadError {
+    /// `gh` was not found (research R3).
+    ToolMissing,
+    /// Not signed in to GitHub, or the sign-in is no longer valid.
+    NotSignedIn,
+    /// The sign-in cannot see the repository.
+    NoAccess,
+    /// GitHub could not be reached.
+    Offline,
+    /// GitHub's rate limit was reached.
+    RateLimited,
+    /// No answer within 10 seconds; `gh` was killed (research R6).
+    TimedOut,
+    /// Anything else: the first non-empty line `gh` printed.
+    Other(String),
+}
+
+/// The GraphQL document for one page of open issues (contracts/github-issue-source.md §3). One
+/// line, so every argument `gh` receives is one line.
+pub const LIST_QUERY: &str = "query($owner: String!, $name: String!, $cursor: String) { \
+repository(owner: $owner, name: $name) { issues(states: OPEN, first: 100, after: $cursor, \
+orderBy: {field: UPDATED_AT, direction: DESC}) { totalCount pageInfo { hasNextPage endCursor } \
+nodes { number title updatedAt labels(first: 20) { nodes { name } } } } } }";
+
+/// Parse `gh api graphql` stdout for [`LIST_QUERY`] into a page.
+///
+/// A GraphQL `errors[]` entry of type `NOT_FOUND` is [`IssueLoadError::NoAccess`] (GitHub answers
+/// a repository the sign-in cannot see exactly as one that does not exist); `RATE_LIMITED` is
+/// [`IssueLoadError::RateLimited`]; any other error, or JSON that is not the expected shape, is
+/// [`IssueLoadError::Other`].
+pub fn parse_list_page(stdout: &[u8]) -> Result<IssuePage, IssueLoadError> {
+    let json: serde_json::Value = serde_json::from_slice(stdout)
+        .map_err(|e| IssueLoadError::Other(format!("GitHub's answer could not be read: {e}")))?;
+    if let Some(error) = graphql_error(&json) {
+        return Err(error);
+    }
+    let issues = &json["data"]["repository"]["issues"];
+    let unexpected = || IssueLoadError::Other("GitHub's answer had no issue list".into());
+    let total_open = issues["totalCount"].as_u64().ok_or_else(unexpected)?;
+    let nodes = issues["nodes"].as_array().ok_or_else(unexpected)?;
+    let next_cursor = if issues["pageInfo"]["hasNextPage"].as_bool() == Some(true) {
+        issues["pageInfo"]["endCursor"].as_str().map(str::to_string)
+    } else {
+        None
+    };
+    let issues = nodes
+        .iter()
+        .map(|node| issue_from_node(node).ok_or_else(unexpected))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(IssuePage {
+        issues,
+        total_open,
+        next_cursor,
+    })
+}
+
+/// Labels held per issue; the query asks for no more (research R2).
+const LABELS_PER_ISSUE: usize = 20;
+
+/// One `Issue` node: `number`, `title`, `updatedAt`, `labels.nodes[].name`.
+fn issue_from_node(node: &serde_json::Value) -> Option<Issue> {
+    let labels = node["labels"]["nodes"]
+        .as_array()
+        .map(|labels| {
+            labels
+                .iter()
+                .filter_map(|label| label["name"].as_str().map(str::to_string))
+                .take(LABELS_PER_ISSUE)
+                .collect()
+        })
+        .unwrap_or_default();
+    Some(Issue::new(
+        node["number"].as_u64()?,
+        node["title"].as_str()?.to_string(),
+        labels,
+        node["updatedAt"].as_str().unwrap_or_default().to_string(),
+    ))
+}
+
+/// The error a GraphQL `errors[]` array reports, if it has one.
+fn graphql_error(json: &serde_json::Value) -> Option<IssueLoadError> {
+    let first = json["errors"].as_array()?.first()?;
+    Some(match first["type"].as_str() {
+        Some("NOT_FOUND") => IssueLoadError::NoAccess,
+        Some("RATE_LIMITED") => IssueLoadError::RateLimited,
+        _ => IssueLoadError::Other(
+            first["message"]
+                .as_str()
+                .unwrap_or("GitHub reported an error")
+                .to_string(),
+        ),
+    })
+}
+
+/// The arguments after `gh` for one page: only the repository and the cursor leave the machine
+/// (FR-025).
+///
+/// Every variable is a raw string (`-f`): `-F` would turn a repository named `1` or `true` into a
+/// number or a boolean (contracts/github-issue-source.md §3).
+pub fn list_args(repo: &GithubRepo, cursor: Option<&str>) -> Vec<String> {
+    let mut args: Vec<String> = [
+        "api",
+        "graphql",
+        "--hostname",
+        "github.com",
+        "-f",
+        &format!("query={LIST_QUERY}"),
+        "-f",
+        &format!("owner={}", repo.owner),
+        "-f",
+        &format!("name={}", repo.name),
+    ]
+    .map(str::to_string)
+    .to_vec();
+    if let Some(cursor) = cursor {
+        args.push("-f".into());
+        args.push(format!("cursor={cursor}"));
+    }
+    args
+}

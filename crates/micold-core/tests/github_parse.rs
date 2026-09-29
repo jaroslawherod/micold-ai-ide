@@ -1,0 +1,141 @@
+//! Reading one page of open issues from `gh api graphql`, and what is sent to get it (feature 034,
+//! contracts/github-issue-source.md §3–4, research R2).
+
+use std::path::PathBuf;
+
+use micold_core::github::{
+    list_args, parse_list_page, GithubRepo, Issue, IssueLoadError, LIST_QUERY,
+};
+
+fn fixture(name: &str) -> Vec<u8> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/gh")
+        .join(name);
+    std::fs::read(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
+}
+
+fn repo(url: &str) -> GithubRepo {
+    GithubRepo::from_remote_url(url).expect("a GitHub remote")
+}
+
+/// The GitHub label display is truncated long before this; the query asks for this many.
+const LABELS_PER_ISSUE: usize = 20;
+
+#[test]
+fn a_list_page_parses() {
+    let page = parse_list_page(&fixture("list_page.json")).expect("a well-formed page");
+    assert_eq!(page.total_open, 142, "totalCount is the open-issue count");
+    assert_eq!(
+        page.next_cursor.as_deref(),
+        Some("Y3Vyc29yOnYyOpK5"),
+        "a page with more after it carries its end cursor"
+    );
+    let numbers: Vec<u64> = page.issues.iter().map(Issue::number).collect();
+    assert_eq!(numbers, [42, 7, 99], "GitHub's order is kept");
+    let first = &page.issues[0];
+    assert_eq!(first.title(), "Crash when opening empty project");
+    assert_eq!(first.updated_at(), "2026-09-28T10:00:00Z");
+    assert_eq!(first.labels(), ["bug", "good first issue"]);
+    assert_eq!(
+        page.issues[2].labels().len(),
+        LABELS_PER_ISSUE,
+        "at most 20 labels are held per issue"
+    );
+
+    let last = parse_list_page(&fixture("list_page_last.json")).expect("a last page");
+    assert_eq!(
+        last.next_cursor, None,
+        "`hasNextPage: false` ends paging even though an end cursor is present"
+    );
+}
+
+#[test]
+fn row_text_shows_labels_only_when_present() {
+    let page = parse_list_page(&fixture("list_page.json")).unwrap();
+    assert_eq!(
+        page.issues[0].row_text(),
+        "#42 Crash when opening empty project  ·  bug, good first issue"
+    );
+    assert_eq!(
+        page.issues[1].row_text(),
+        "#7 Document the settings file",
+        "no separator when the issue has no labels"
+    );
+    let built = Issue::new(5, "Title".into(), vec!["docs".into()], "t".into());
+    assert_eq!(built.row_text(), "#5 Title  ·  docs");
+}
+
+#[test]
+fn graphql_errors_are_classified() {
+    assert_eq!(
+        parse_list_page(&fixture("list_not_found.json")).unwrap_err(),
+        IssueLoadError::NoAccess,
+        "an unresolvable repository is one the sign-in cannot see"
+    );
+    assert_eq!(
+        parse_list_page(&fixture("list_rate_limited.json")).unwrap_err(),
+        IssueLoadError::RateLimited
+    );
+    assert!(
+        matches!(
+            parse_list_page(b"<html>502 Bad Gateway</html>"),
+            Err(IssueLoadError::Other(_))
+        ),
+        "anything that is not the expected JSON is `Other`, never a panic"
+    );
+    assert!(
+        matches!(
+            parse_list_page(br#"{"data":{}}"#),
+            Err(IssueLoadError::Other(_))
+        ),
+        "JSON without the issues connection is `Other`"
+    );
+}
+
+#[test]
+fn list_args_send_only_the_repository() {
+    let o_r = repo("https://github.com/o/r");
+    assert_eq!(
+        list_args(&o_r, None),
+        [
+            "api",
+            "graphql",
+            "--hostname",
+            "github.com",
+            "-f",
+            &format!("query={LIST_QUERY}"),
+            "-f",
+            "owner=o",
+            "-f",
+            "name=r",
+        ]
+    );
+    let paged = list_args(&o_r, Some("CUR"));
+    assert_eq!(
+        &paged[paged.len() - 2..],
+        ["-f", "cursor=CUR"],
+        "the cursor rides as a raw string, only when there is one"
+    );
+    assert!(
+        !paged.iter().any(|a| a == "-F"),
+        "`-F` would turn a repository named `1` or `true` into a number or a boolean"
+    );
+
+    let odd = repo("https://github.com/1/true");
+    let args = list_args(&odd, None);
+    assert!(args.contains(&"owner=1".to_string()) && args.contains(&"name=true".to_string()));
+    assert!(
+        args.windows(2)
+            .filter(|w| w[1].starts_with("owner=") || w[1].starts_with("name="))
+            .all(|w| w[0] == "-f"),
+        "every string variable uses `-f`: {args:?}"
+    );
+
+    // FR-025: nothing about the project but owner/name leaves the machine.
+    let values: Vec<&String> = args.iter().filter(|a| a.contains('=')).collect();
+    assert_eq!(
+        values.len(),
+        3,
+        "query, owner and name are the only values sent: {values:?}"
+    );
+}

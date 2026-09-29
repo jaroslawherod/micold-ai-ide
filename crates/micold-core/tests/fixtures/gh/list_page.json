@@ -1,0 +1,110 @@
+{
+  "data": {
+    "repository": {
+      "issues": {
+        "totalCount": 142,
+        "pageInfo": {
+          "hasNextPage": true,
+          "endCursor": "Y3Vyc29yOnYyOpK5"
+        },
+        "nodes": [
+          {
+            "number": 42,
+            "title": "Crash when opening empty project",
+            "updatedAt": "2026-09-28T10:00:00Z",
+            "labels": {
+              "nodes": [
+                {
+                  "name": "bug"
+                },
+                {
+                  "name": "good first issue"
+                }
+              ]
+            }
+          },
+          {
+            "number": 7,
+            "title": "Document the settings file",
+            "updatedAt": "2026-09-27T09:30:00Z",
+            "labels": {
+              "nodes": []
+            }
+          },
+          {
+            "number": 99,
+            "title": "Many labels",
+            "updatedAt": "2026-09-26T08:00:00Z",
+            "labels": {
+              "nodes": [
+                {
+                  "name": "l1"
+                },
+                {
+                  "name": "l2"
+                },
+                {
+                  "name": "l3"
+                },
+                {
+                  "name": "l4"
+                },
+                {
+                  "name": "l5"
+                },
+                {
+                  "name": "l6"
+                },
+                {
+                  "name": "l7"
+                },
+                {
+                  "name": "l8"
+                },
+                {
+                  "name": "l9"
+                },
+                {
+                  "name": "l10"
+                },
+                {
+                  "name": "l11"
+                },
+                {
+                  "name": "l12"
+                },
+                {
+                  "name": "l13"
+                },
+                {
+                  "name": "l14"
+                },
+                {
+                  "name": "l15"
+                },
+                {
+                  "name": "l16"
+                },
+                {
+                  "name": "l17"
+                },
+                {
+                  "name": "l18"
+                },
+                {
+                  "name": "l19"
+                },
+                {
+                  "name": "l20"
+                },
+                {
+                  "name": "l21"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}
