@@ -119,15 +119,15 @@ Tests in `crates/micold-client/tests/features_settings.rs`, through `update` and
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U38 | `Idle` passes 011's lines through unchanged: `NonZeroExit` → `Exited with an error` caution plus its diagnostic note; `TimedOut` → `Timed out` plus diagnostic; `Success` or `Disabled` → nothing; `MissingScript` → `Script not found` | FR-005 (N1); 011 FR-013 | example | PENDING | |
-| U39 | `Pending { last: Some(c) }` gives the same lines as `Done(c)`, and `Pending { last: None }` is N1 | FR-009 (N1) | example | PENDING | |
-| U40 | Off + `NotFound { tilde: false }` → `Caution("Script not found: P")`, `Note(OFF)` | FR-002 (N2) | example | PENDING | |
-| U41 | Off + `NotFound { tilde: true }` → the not-found caution, `Note(TILDE)`, `Note(OFF)` | FR-002, Edge Cases `~` (N5) | example | PENDING | |
-| U42 | Off + `NotReadable` → `Caution("Not a readable file: P")`, `Note(OFF)` | FR-002 (N6) | example | PENDING | |
-| U43 | `Relative` → `Note(REL)`, then 011's lines | Edge Cases relative (N8) | example | PENDING | |
-| U44 | `Unchecked` → `Caution("Couldn't check the script path: P")`, `Note(HUNG)`, then 011's lines | FR-006 (N9) | example | PENDING | |
-| U45 | Off + `Present` → no lines | SC-002 (N11) | example | PENDING | |
-| U63 | M1–M2 interim: with `enabled` on, the lines are exactly 011(last) for every check state, so the on-state page is today's until M3. Throughout the interim, 011(last) keeps 011's wording (`Script not found`, no path), also after N8/N9's lines | FR-005 (no regression between merges); contracts/settings-indication.md §2 "Interim, M1–M2" | example | PENDING | superseded in M3 (T024): mark `DROPPED` then |
+| U38 | `Idle` passes 011's lines through unchanged: `NonZeroExit` → `Exited with an error` caution plus its diagnostic note; `TimedOut` → `Timed out` plus diagnostic; `Success` or `Disabled` → nothing; `MissingScript` → `Script not found` | FR-005 (N1); 011 FR-013 | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_notice_off::with_no_check_yet_the_page_shows_011s_note_unchanged` |
+| U39 | `Pending { last: Some(c) }` gives the same lines as `Done(c)`, and `Pending { last: None }` is N1 | FR-009 (N1) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_notice_off::a_check_in_flight_shows_the_previous_answer_or_011s_note_when_there_is_none` |
+| U40 | Off + `NotFound { tilde: false }` → `Caution("Script not found: P")`, `Note(OFF)` | FR-002 (N2) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_notice_off::off_and_not_found_says_so_by_path_and_that_the_feature_is_off`, `every_off_state_problem_names_the_path_and_says_the_feature_is_off_once` |
+| U41 | Off + `NotFound { tilde: true }` → the not-found caution, `Note(TILDE)`, `Note(OFF)` | FR-002, Edge Cases `~` (N5) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_notice_off::off_and_a_tilde_path_explains_that_tilde_is_not_expanded` |
+| U42 | Off + `NotReadable` → `Caution("Not a readable file: P")`, `Note(OFF)` | FR-002 (N6) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_notice_off::off_and_not_readable_says_so_by_path_and_that_the_feature_is_off` |
+| U43 | `Relative` → `Note(REL)`, then 011's lines | Edge Cases relative (N8) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_notice_off::a_relative_path_says_it_is_not_checked_then_011s_note` |
+| U44 | `Unchecked` → `Caution("Couldn't check the script path: P")`, `Note(HUNG)`, then 011's lines | FR-006 (N9) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_notice_off::a_check_with_no_answer_says_it_could_not_check_then_011s_note` |
+| U45 | Off + `Present` → no lines | SC-002 (N11) | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_notice_off::off_and_present_says_nothing` |
+| U63 | M1–M2 interim: with `enabled` on, the lines are exactly 011(last) for every check state, so the on-state page is today's until M3. Throughout the interim, 011(last) keeps 011's wording (`Script not found`, no path), also after N8/N9's lines | FR-005 (no regression between merges); contracts/settings-indication.md §2 "Interim, M1–M2" | example | DONE | `crates/micold-client/tests/features_settings.rs::script_path_notice_off::until_m3_the_on_state_page_is_exactly_011s` (superseded in M3, T024) |
 
 ### `crates/micold-client/src/features/settings.rs`: `script_path_notice` (feature on)
 

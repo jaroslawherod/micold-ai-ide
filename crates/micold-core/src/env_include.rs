@@ -8,11 +8,11 @@
 //! exercised by `cargo test --no-default-features` with real disposable subprocesses (research
 //! R4, contracts/env-include-resolution.md).
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use crate::process::{run_bounded, RunOutcome};
@@ -417,7 +417,7 @@ impl EnvIncludeResolver for SubprocessResolver {
 /// count cannot.
 #[derive(Debug, Default)]
 pub struct FakeEnvIncludeResolver {
-    inner: RefCell<FakeResolverState>,
+    inner: Mutex<FakeResolverState>,
 }
 
 #[derive(Debug, Default)]
@@ -430,16 +430,22 @@ impl FakeEnvIncludeResolver {
     /// A resolver that answers every call with `vars` and `outcome`.
     pub fn answering(vars: Vec<(String, String)>, outcome: EnvIncludeOutcome) -> Self {
         Self {
-            inner: RefCell::new(FakeResolverState {
+            inner: Mutex::new(FakeResolverState {
                 calls: Vec::new(),
                 answer: Some((vars, outcome)),
             }),
         }
     }
 
+    /// Behind a `Mutex` rather than a `RefCell` so the fake is `Sync` and can stand in for the
+    /// client's `Arc<dyn EnvIncludeResolver + Send + Sync>` capability (spec 035).
+    fn state(&self) -> MutexGuard<'_, FakeResolverState> {
+        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     /// Every `(path, cwd, timeout)` this resolver was asked to source, in order (test assertions).
     pub fn calls(&self) -> Vec<(PathBuf, PathBuf, Duration)> {
-        self.inner.borrow().calls.clone()
+        self.state().calls.clone()
     }
 }
 
@@ -450,7 +456,7 @@ impl EnvIncludeResolver for FakeEnvIncludeResolver {
         cwd: &Path,
         timeout: Duration,
     ) -> (Vec<(String, String)>, EnvIncludeOutcome) {
-        let mut state = self.inner.borrow_mut();
+        let mut state = self.state();
         state
             .calls
             .push((path.to_path_buf(), cwd.to_path_buf(), timeout));

@@ -104,3 +104,41 @@ existed and failed before the implementation.
   `crates/micold-client/src/features/settings.rs` -> 21 passed (the whole file)
 - refactor: none needed
 - notes: `script_check_save_seq` is set by S1 as U25 asks; nothing reads it until M2's S5–S7.
+
+## Cycle 6 (outer loop opened): A1–A4 written, red
+
+- test: `crates/micold-client/src/main_tests.rs`, module `tests::script_path_report`, four tests (new),
+  at the entry point of test-list.md: `shell::persist::open_settings` (the real handler, split from
+  `on_settings_opened` so a test can take the job it prepared), `ScriptPathCheckJob::run`,
+  `app.core.update`, then `script_path_notice`.
+- red: `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide script_path_report`
+  against declared stubs -> 1 passed, 3 failed: A1, A2 and A3 each `not yet implemented: T018`
+  (`open_settings` was a stub). A4
+  `off_with_a_missing_stored_path_a_session_launch_examines_and_sources_nothing` passed on arrival:
+  it asserts an absence, and T033 records its mutant.
+- notes: A4 needs a recording resolver behind the client's `Arc<dyn EnvIncludeResolver + Send +
+  Sync>`, so `FakeEnvIncludeResolver` now keeps its state behind a `Mutex` instead of a `RefCell`
+  (same API), and `Capabilities` gains a `#[cfg(test)] with_env_include` narrowing. M3's U61 needs
+  the same seam.
+
+## Cycle 7: U38–U45, U63 `script_path_notice`, feature off and the interim (N1, N2, N5, N6, N8, N9, N11)
+
+- test: `crates/micold-client/tests/features_settings.rs`, module `script_path_notice_off`, ten tests
+  (new)
+- red: `scripts/build-lock.sh cargo test -p micold-client --test features_settings script_path_notice_off`
+  against a stub returning no lines -> 1 passed, 9 failed, for example:
+  - U40 `off_and_not_found_says_so_by_path_...`: `issue #435 (N2) left: [] right: [Caution("Script not found: /tmp/does-not-exist.sh"), Note("Environment include is off, ...")]`
+  - U41 `off_and_a_tilde_path_...`: `N5, feature off left: [] right: [Caution(..), Note("~ is not expanded. Use a full path."), Note(OFF)]`
+  - U42 `off_and_not_readable_...`: `N6 left: [] right: [Caution("Not a readable file: /tmp/does-not-exist.sh"), Note(OFF)]`
+  - U43 `a_relative_path_...`: `N8 with Disabled ... left: [] right: [Note("Relative path: ...")]`
+  - U44 `a_check_with_no_answer_...`: `N9 with Disabled left: [] right: [Caution("Couldn't check the script path: ..."), Note("No answer within 2 seconds. ...")]`
+  - U38 `with_no_check_yet_...`: `left: [] right: [Caution("Exited with an error"), Note("env.sh: line 3: nvm: command not found")]`
+  - U39 `a_check_in_flight_...`: `with no previous answer, the page is 011's (N1) left: [] right: [Caution("Exited with an error"), ..]`
+  - U63 `until_m3_the_on_state_page_is_exactly_011s`: `interim (U63): ... Present with MissingScript ... left: [] right: [Caution("Script not found")]`
+  - U45 `off_and_present_says_nothing` passed on the stub; deliberate mutant (Present returns a
+    not-found caution) -> `left: [Caution("Script not found: /tmp/does-not-exist.sh")] right: []`,
+    then restored.
+- green: `NoticeLine`, `script_path_notice` and `lines_011` (011's `failure()` logic, moved) in
+  `crates/micold-client/src/features/settings.rs` -> 31 passed (the whole file)
+- refactor: none needed; `ui/settings/environment.rs`'s `failure()` is deleted in T019 when the page
+  renders these lines.

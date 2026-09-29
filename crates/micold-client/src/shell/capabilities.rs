@@ -176,6 +176,19 @@ impl Capabilities {
         self
     }
 
+    /// The same capabilities, with `resolver` in place of the subprocess one (spec 035).
+    ///
+    /// For tests that assert the include script was *not* sourced, which only a recording fake can
+    /// show.
+    #[cfg(test)]
+    pub(crate) fn with_env_include(
+        mut self,
+        resolver: Arc<dyn EnvIncludeResolver + Send + Sync>,
+    ) -> Self {
+        self.env_include = resolver;
+        self
+    }
+
     /// The same capabilities, with `probe` in place of the filesystem's (spec 035).
     ///
     /// `base_app()` hands every test a fake through this, so no test examines the developer's own

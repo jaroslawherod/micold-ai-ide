@@ -268,6 +268,11 @@ pub fn on_settings_opened(app: &mut App) -> Task<Message> {
     Task::none()
 }
 
+/// Open Settings and prepare its script path check (spec 035 T1). Stub until T018.
+pub(crate) fn open_settings(_app: &mut App) -> crate::shell::env_include::ScriptPathCheckJob {
+    todo!("T018")
+}
+
 /// Save Settings: validate every section together; on success persist + apply + refresh + close,
 /// on failure keep the view open showing the offending field's section (FR-020/FR-021, feature 027
 /// FR-029; environment-include: FR-014, contracts/settings-ui.md).
