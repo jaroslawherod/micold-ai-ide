@@ -87,6 +87,14 @@ and manage the project's sessions and worktrees the way the user does from the s
   confirmation". A vanished target is "not found". The undefined "cancelled" is removed.
   _(agent-resolved: specs/034-daemon-mcp-server/spec.md#FR-013)_
 
+### Session 2026-09-29 (plan)
+
+- Q: FR-007/SC-009 said another local account "cannot connect" to the tool server; the AI CLIs
+  reach a tool server only over a loopback TCP URL, which any local account can open. What does
+  the guarantee mean? → A: Another account cannot read any credential, and every request it makes is
+  refused with no data. FR-007 and SC-009 now say so; the intent (another account can neither use
+  nor observe the tool server) is unchanged. _(agent-resolved: research.md#R7)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The agent sees the project's sessions and worktrees without any setup (Priority: P1)
@@ -276,7 +284,8 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
   the bounded amount, never the whole buffer.
 - **Cross-platform (Principle VI)**: the binding works for every supported CLI on Linux, macOS and
   Windows, including Windows path forms in returned worktree paths, and on every platform no other
-  local user account can reach the tool server or read a session's credential.
+  local user account can read a session's credential or get any answer from the tool server
+  beyond a refusal.
 - **Disabled**: when the user turns the feature off (FR-004), sessions started afterwards get no
   binding; sessions already running keep theirs until restarted.
 
@@ -307,7 +316,8 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
   deleted or the service restarts.
 - **FR-007**: The tool server MUST be reachable only from the machine (or container) where sessions
   run; it MUST NOT accept connections from other hosts. On every platform, no other local user
-  account MUST be able to read a session's credential.
+  account MUST be able to read a session's credential, and a request from such an account (which
+  has no credential) MUST be refused without any data (FR-006).
 
 **Operations**
 
@@ -435,8 +445,9 @@ including or excluding worktrees the app did not create. These stay user-only in
   (`create_worktree`, `create_session`).
 - **SC-008**: The binding behaves identically on Linux, macOS and Windows, in every placement feature
   027 supports on that platform, verified by the same acceptance scenarios on each.
-- **SC-009**: A second local user account on the same machine cannot connect to the tool server
-  or read any session's credential, on each platform (FR-007).
+- **SC-009**: A second local user account on the same machine cannot read any session's
+  credential, and every request it makes to the tool server is refused without revealing any
+  project, session or worktree data, on each platform (FR-007).
 - **SC-010**: Every failed operation in the acceptance scenarios returns one of the FR-013 reason
   categories, and after every mutating operation the service log holds one entry naming the calling
   session, the operation and its target, with no prompt or input text in it (FR-018).
