@@ -9,10 +9,15 @@ Use **this worktree's own branch** for every PR. Never create other branches.
 ```bash
 git fetch origin
 gh pr view <previous-pr> --json state -q .state      # must print MERGED (skip for PR 1)
-git switch -C "$(git branch --show-current)" origin/main
+if git cherry origin/main HEAD | grep -q '^+'; then
+  git rebase origin/main
+else
+  git switch -C "$(git branch --show-current)" origin/main
+fi
 ```
 
-Always start from `origin/main`. Rebase-merge rewrites SHAs, so stacking on old commits fails with
+Unmerged work from an earlier unit (clarify rounds, a BUG record) is rebased, not dropped. Otherwise
+start from `origin/main`. Rebase-merge rewrites SHAs, so stacking on old commits fails with
 `This branch can't be rebased`.
 
 ## 2. Local gate

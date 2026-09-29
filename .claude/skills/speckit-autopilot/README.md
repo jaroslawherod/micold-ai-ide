@@ -14,10 +14,9 @@ The agent reviews every artifact and diff itself. It asks you only for decisions
 (see [When you are asked](#when-you-are-asked)). When all PRs have merged, it tells you the worktree
 can be removed.
 
-The agent follows [SKILL.md](SKILL.md). This page is the overview for humans.
-
-The session you start only orchestrates: ledger, questions, merges. The spec, design, each
-milestone and the close each run in a fresh subagent.
+The session you start only orchestrates: ledger, questions, CI and merges, per [SKILL.md](SKILL.md).
+The bug triage, spec, each clarify round, design, each milestone and the close each run in a fresh
+subagent that reads only [unit.md](unit.md) and its file in [phases/](phases/).
 
 ## The flow
 
@@ -148,7 +147,9 @@ worktree's branch.
 
 ## Files
 
-- [SKILL.md](SKILL.md): phases, milestone loop, ownership, handoff, red flags
+- [SKILL.md](SKILL.md): the orchestrator: entry, resume, dispatch, CI and merge, ownership, handoff
+- [unit.md](unit.md): rules every unit follows: ledger, reviews, escalating, return format
+- [phases/](phases/): one file per phase unit (bug, spec, clarify, design, milestone, close)
 - [references/escalation.md](references/escalation.md): when the human is asked
 - [references/milestones.md](references/milestones.md): cutting milestones
 - [references/review-rubrics.md](references/review-rubrics.md): reviewer dispatch and rubrics
