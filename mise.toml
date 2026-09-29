@@ -45,6 +45,10 @@ run = "{{config_root}}/scripts/build-lock.sh --no-lock cargo run -p micold-daemo
 description = "Capture the desktop to a PNG, for the manual visual passes (quickstart Part B)"
 run = "scripts/screenshot-session.py"
 
+[tasks.autopilot-tokens]
+description = "Report token usage per autopilot unit from this worktree's Claude Code sessions"
+run = "scripts/autopilot-tokens.py --worktree"
+
 [tasks.fixture]
 description = "Build the 20-worktree reference scene for the frame-time measurement (018 §B8)"
 run = "scripts/reference-scene.sh"

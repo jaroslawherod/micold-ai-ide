@@ -96,6 +96,7 @@ Each **unit** runs in its own `general-purpose` subagent on the session model (o
 | Milestone K | Phase 4 steps 1–5, through opening its PR |
 | Close | Phase 5, through opening the close PR |
 
+- **Description:** name the unit (`Milestone M2 042`, `Review B M2 042`). Token reports group by it.
 - **Prompt:** this file's path and section, the ledger path, the worktree path and branch, and the
   unit's scope (for a milestone, its task IDs). The unit dispatches its own reviewers and forked
   skills.
@@ -225,7 +226,9 @@ First verify all three:
   patch.
 - every PR in the ledger reads `MERGED`
 
-If any check fails, report exactly what remains. Otherwise send this, with a `PushNotification`:
+If any check fails, report exactly what remains. Otherwise run `mise run autopilot-tokens`,
+copy its Total row and model table into the ledger's *Token usage*, commit, and send this with a
+`PushNotification`:
 
 ```
 ✅ WORK COMPLETE — <NNN-feature>

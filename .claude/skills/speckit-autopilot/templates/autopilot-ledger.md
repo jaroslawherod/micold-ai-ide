@@ -38,6 +38,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 None. <or: the banner as sent, and when>
 
+## Token usage
+
+<At the handoff: the Total row and model table from `mise run autopilot-tokens`.>
+
 ## Follow-ups not done
 
 <Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
