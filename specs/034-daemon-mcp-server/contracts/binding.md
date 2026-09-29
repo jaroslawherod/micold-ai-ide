@@ -48,6 +48,10 @@ after a service restart, the credential change).
 | Pi | none | none — logged: "no tool server: Pi has no MCP support" |
 | Regular terminal | none | none, not logged (not an AI CLI) |
 
+The flags are variadic (`--mcp-config <configs...>`, `--allowedTools <tools...>`,
+`--allow-tool [<tools>...]`), so the binding arguments are appended **last**, after every other
+argument the provider builds, with no positional argument following them.
+
 Never passed: `--strict-mcp-config`. Never written: any user or project configuration file.
 
 ## §5 When a session is started unbound (FR-004, FR-005)
@@ -60,6 +64,6 @@ The session then starts with exactly the arguments it has today.
 ## §6 Name collision check (R14)
 
 Read-only, before writing the file: Claude — `mcpServers.micold` at the top level or under the
-session's project path in `<claude config dir>/../.claude.json` (the file Claude Code keeps beside
-its config dir), and in `<cwd>/.mcp.json`; Copilot — `mcpServers.micold` in
+session's project path in `$CLAUDE_CONFIG_DIR/.claude.json` when that variable is set in the
+session's environment, else `~/.claude.json`, and in `<cwd>/.mcp.json`; Copilot — `mcpServers.micold` in
 `<copilot config dir>/mcp-config.json`. An unreadable or malformed file counts as "not taken".

@@ -187,6 +187,9 @@ placement* edge case).
 **Rationale**: the hook receiver works in the container by the same argument today. With outbound
 network disabled the container's loopback interface still exists.
 
+**Alternative rejected**: *publishing the tool server's port to the host*: nothing outside the
+container needs it, and a published port widens FR-007's surface.
+
 **Probe**: covered by the existing real-runtime suite pattern (`crates/micold-daemon/tests/
 sandbox_real_*.rs`, feature `sandbox-real-runtime`), extended with one test that a sandboxed
 session's binding answers `whoami`.
@@ -213,9 +216,35 @@ a branch, and FR-014 lists no create as destructive). The pre-flight (`worktree:
 first and a mode incompatible with the situation (`CreateMode::is_compatible_with`) fails as a
 conflict naming the `BranchSituation`, as the dialog would (US2 scenario 2).
 
-**Session stop**: the sidebar's stop and kill both remove the session and kill its process tree
-(`server.rs` `SessionKill | SessionStop` arm). `stop_session` does the same, so the effect is the
-sidebar's (FR-009).
+**Progress**: the create arm streams `OperationProgress` to the requesting client through
+`state.frame_sender(id)`. `ops::create_worktree` takes a progress sink (`Option<…>`); the tool server
+passes none.
+
+**Invalid names**: the dialog's messages come from `naming::derive` / `NamingError`
+(`crates/micold-core/src/naming.rs`) and from git's own ref-format check in `worktree::preflight`;
+`create_worktree` reports the same text as `invalid_input`.
+
+**Session stop and interrupt have no sidebar action** (the client never sends `SessionStop`,
+`SessionKill` or `SessionInterrupt`; only `SessionDelete`), so FR-009 compares them with the protocol
+operation (spec clarification, plan round). The protocol's `SessionStop` arm only removes the live
+entry and kills the tree, and leaves the catalog lifecycle `Running` with no broadcast (its
+`TODO(T053)`). This feature therefore adds `DaemonState::stop_session(id)`: take the live entry,
+kill its process tree off the lock, set the record's lifecycle to `Idle`, keep its credential (revoked
+only on delete), and `broadcast_catalog`. The conversation stays on disk,
+so the session is resumable. A SIGTERM-then-kill sequence was rejected: the existing stop, delete and
+worktree-delete paths all kill the tree (Windows job objects, feature 030, have no SIGTERM), and a
+second stop semantics would diverge from them. The protocol's `SessionStop` arm is pointed at the new
+method, which fixes its missing broadcast for any future client too.
+
+**No record for a missing CLI**: `DaemonState::create_session` writes the catalog record before any
+spawn, so `create_session` first checks availability (`provider.is_available` against the
+env-include-resolved `PATH`, as `AiCliAvailabilityRequest` does) and fails with `service_error`
+naming the CLI before a record exists (US2 scenario 5).
+
+**Alternatives rejected**: *duplicate the route() bodies in the tool handlers* (drift from the
+sidebar's validation, which FR-009 forbids); *have the tool server act as a fake client over the
+protocol* (a second codec and a synthetic `ClientId` for every call, and attachment exclusivity
+per project would bump the user's window).
 
 ## R10 — Confirmations (FR-014, FR-016 Confirm each send)
 
@@ -226,6 +255,11 @@ channel for at most 60 s. The first answer removes the entry and broadcasts a wi
 client connected the request fails at once with "needs confirmation". Deleting the target or the
 calling session, or stopping the caller, resolves the entry with "not found" and withdraws the
 prompt. A window that connects while a prompt is pending receives it after its handshake.
+
+**Abandoned requests**: if the agent's HTTP connection closes while its request waits (the CLI
+timed out or was stopped), the handler notices the closed socket, resolves the entry as abandoned,
+broadcasts `ConfirmationWithdrawn` and performs nothing, so the user can never allow an operation
+whose result nobody receives (FR-013).
 
 **Rationale**: `DaemonState::broadcast` already reaches every client; a full `CatalogChanged`
 cannot carry a question and its answer. A oneshot per request keeps the wait off the state lock.
@@ -242,6 +276,10 @@ support); *a desktop notification* (not an answer channel).
 present because the grid holds cells, not bytes. N defaults to 200, is clamped to 2,000, and below 1
 is invalid input. `truncated` is true when older lines existed.
 
+**Alternative rejected**: *keeping a separate raw-byte ring per session and stripping escapes*: a
+second buffer that duplicates what the grid already holds, and escape stripping never renders
+cursor movement correctly.
+
 **Rationale**: `Framer::scrollback_range` (`crates/micold-daemon/src/framer.rs`) and
 `oldest_available`/`newest` already address lines by stable `LineId`; the `ScrollbackRequest` arm of
 `route()` shows the lock pattern. The primary process is read even when another shell instance is
@@ -255,16 +293,36 @@ carriage return. The service writes it straight to the primary PTY (`PtySession:
 `SessionInterrupt` does with `0x03`, not through the client input log, whose serials belong to the
 client stamper (`state.rs` `session_input`).
 
+**Alternative rejected**: *through `session_input` with a synthetic serial*: it would corrupt the
+client stamper's monotonic sequence (G2, protocol.md §7).
+
 **Rationale**: AI CLIs enable bracketed paste; without it a multi-line prompt submits at its first
 newline. The mode is read from the target's `Term` at write time.
 
-**Initial prompt (FR-017)**: after `create_session` starts the session, the tool call waits until the
-session's activity first reads `AwaitingInput` (the FSM already fed by hooks for Claude and by the
-event log for Copilot), then writes the submission. It gives up after 60 s from the start or when the
-start fails, and reports `prompt_delivered: false`; a late `AwaitingInput` does not deliver it.
-Pi sessions reach `AwaitingInput` through their activity component; with the component declined,
-activity stays `Unknown` and the prompt is reported undelivered after 60 s, which the user guide
-states.
+**Initial prompt (FR-017)**: a fresh session never reads `AwaitingInput` before its first prompt
+(`activity.rs`: only `Stop`/`Notification` lead there, and `SessionStart` is ignored by
+`hooks.rs`), so the prompt waits on a separate **ready-for-input** signal, chosen per CLI behind the
+provider seam (`AiCliProvider::input_readiness() -> InputReadiness`):
+- `InputReadiness::HookSessionStart` (Claude Code): the hook receiver's `SessionStart` post, which
+  it already receives and ignores, now also marks the session ready. The activity FSM is unchanged.
+- `InputReadiness::ExtensionEvent("session_start")` (Pi): the activity component adds
+  `session_start` to the events it reports; the tail marks the session ready. With the component
+  declined (FR-012e), Pi falls back to the output-settled rule.
+- `InputReadiness::OutputSettled` (Copilot, which writes nothing before the first prompt —
+  026 research: its `events.jsonl` appears on the first user message): the primary terminal has
+  produced output and then none for 1.5 s. This is terminal evidence used only for readiness,
+  never for the activity badge, so `activity.rs`'s rule that activity never becomes `AwaitingInput`
+  from terminal evidence still holds.
+
+The tool call then writes the submission. The 60 s bound counts from the `create_session` request
+(so with R1's 120 s per-server timeout the call always answers in time); on timeout or a failed start
+it returns `prompt_delivered: false` and a later signal delivers nothing. **Probe**: quickstart
+§B3 per CLI.
+
+**Alternatives rejected**: *a prompt argument at launch* (`claude "<prompt>"`, `copilot -i`): the
+spec's Assumption says typed input, and argv is readable by other local accounts on Linux
+(`/proc/<pid>/cmdline`), which would expose prompt text; *writing immediately after spawn* (bytes can
+be discarded or garbled while the TUI initialises); *`AwaitingInput`* (never fires first, above).
 
 ## R13 — Settings (FR-004, FR-016)
 
@@ -275,6 +333,9 @@ states.
 - `tool_server_enabled: bool`, default `true` (FR-004), read when a session is spawned.
 - `cross_session_access: CrossSessionAccess { Auto, ConfirmEachSend, Off }`, default `Auto`
   (FR-016), read on every request.
+
+**Alternative rejected**: *one tri-state setting for both* (FR-004 and FR-016 are separate options by
+the spec); *per-project settings* (the spec defines application-wide Settings options).
 
 Each lands with the milestone that first uses it, so each milestone's protocol bump carries only its
 own wire delta (M1: 15 → 16; M3: confirmation messages, 16 → 17; M4: 17 → 18).

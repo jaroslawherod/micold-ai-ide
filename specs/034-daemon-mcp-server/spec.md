@@ -95,6 +95,20 @@ and manage the project's sessions and worktrees the way the user does from the s
   refused with no data. FR-007 and SC-009 now say so; the intent (another account can neither use
   nor observe the tool server) is unchanged. _(agent-resolved: research.md#R7)_
 
+- Q: FR-017 delivered the prompt on the first "awaiting input", but a fresh session reports that
+  only after a turn ends, so the prompt could never be delivered. When is a new session ready? → A:
+  When it first reports it is ready for input (Claude Code: its session-start hook; Pi: its
+  component's session-start event); Copilot reports nothing before the first prompt, so for it,
+  when its terminal output has settled after startup. The 60-second bound counts from the request.
+  _(agent-resolved: crates/micold-daemon/src/activity.rs — AwaitingInput only from Stop/Notification;
+  specs/026-multi-provider-sessions/research.md — Copilot's event log appears on the first message)_
+- Q: US3 said `stop_session` stops "gracefully", and the Assumptions tied operations to the
+  sidebar, but the sidebar has no stop or interrupt (only the protocol does). What do they mean? →
+  A: Stop ends the session's processes, as the protocol's stop does, marks it `Idle` in every window
+  and keeps its conversation resumable; the Assumption now covers protocol operations and FR-009
+  compares against them where no sidebar action exists. _(agent-resolved:
+  crates/micold-daemon/src/server.rs SessionStop arm; no SessionStop in crates/micold-client/src)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The agent sees the project's sessions and worktrees without any setup (Priority: P1)
@@ -186,8 +200,8 @@ sidebar; the stop and the delete follow FR-014.
 1. **Given** an `Idle`, `Failed` or `InterruptedResumable` session, **When** the agent invokes
    `start_session` on it, **Then** it moves to `Starting` then `Running`, as if started from the
    sidebar.
-2. **Given** a `Running` session, **When** the agent invokes `stop_session`, **Then** it stops
-   gracefully and becomes `Idle`; `interrupt_session` instead delivers an interrupt keystroke and
+2. **Given** a `Running` session, **When** the agent invokes `stop_session`, **Then** its processes
+   end, it becomes `Idle` in every window, and its conversation stays resumable; `interrupt_session` instead delivers an interrupt keystroke and
    leaves it running.
 3. **Given** a worktree with live sessions, **When** the agent invokes `delete_worktree` without
    asking to stop them, **Then** the operation is refused naming the live sessions, and nothing
@@ -368,8 +382,9 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
   - **Off**: both operations are refused by policy.
   Changing the option applies to the next request, including from sessions already running.
 - **FR-017**: `create_session` MUST accept an optional initial prompt and deliver it to the new
-  session's primary process as its first submitted input when the session's activity first
-  reports awaiting input. If that has not happened within 60 seconds of the session starting, or
+  session's primary process as its first submitted input when the session first reports that it
+  is ready for input (for a CLI that reports no such signal, when its terminal output has settled
+  after startup). If that has not happened within 60 seconds of the `create_session` request, or
   the session fails to start, the operation MUST report that the prompt was not delivered, and the
   prompt MUST NOT be delivered later. With a prompt, `create_session` returns only once the prompt
   is delivered or that bound has passed; without one, it returns once the session is created.
@@ -401,7 +416,7 @@ for the project root.
 | `delete_worktree` | Remove a worktree | worktree ref, stop live sessions (default no), delete branch (default yes) | confirmation of what was removed | destructive (FR-014); refused for the caller's own worktree (FR-015) and from a Default session (FR-015a) |
 | `create_session` | Create and start a session in a worktree or Default | worktree ref, optional AI CLI (default: Settings default), optional initial prompt | session ref, lifecycle, whether the prompt was delivered (FR-017) | mutating |
 | `start_session` | Start or resume an `Idle`, `Failed` or `InterruptedResumable` session | session ref | lifecycle after the request | mutating |
-| `stop_session` | Gracefully stop a session | session ref | lifecycle after the request | destructive for other sessions (FR-014); refused for self (FR-015) |
+| `stop_session` | Stop a session: end its processes, leaving it `Idle` and resumable | session ref | lifecycle after the request | destructive for other sessions (FR-014); refused for self (FR-015) |
 | `interrupt_session` | Deliver an interrupt keystroke to a session | session ref | acknowledgement | mutating; destructive for other sessions (FR-014); refused for self (FR-015) |
 | `send_session_input` | Type and submit text into another session's primary process | session ref, text | acknowledgement | mutating; gated by FR-016 |
 | `delete_session` | Delete a session record (stopping it first) | session ref | acknowledgement | destructive (FR-014); refused for self (FR-015) |
@@ -455,8 +470,10 @@ including or excluding worktrees the app did not create. These stay user-only in
 ## Assumptions
 
 - "The daemon server" is the session service (`micold-daemon`); "worktries" means git worktrees.
-- "Manage the sessions and worktrees" means the operations the sidebar already offers, not new
-  capabilities; anything the user cannot do from the sidebar today is out of scope.
+- "Manage the sessions and worktrees" means the operations the sidebar, or the
+  service's client protocol, already offers (stop and interrupt exist only in the protocol today), not
+  new capabilities; anything neither offers is out of scope. Where no sidebar action exists, FR-009's
+  "equivalent user action" is the protocol operation.
 - Claude Code accepts a tool server supplied through launch arguments without touching user
   configuration, as it already does for hook settings. Whether Copilot and Pi can is established in
   planning; if one cannot, FR-005 applies to it.

@@ -59,8 +59,8 @@ reach every window in < 2 s (SC-003) via the existing `broadcast_catalog`.
 no new HTTP framework; no `match` on the concrete CLI outside `provider.rs` (feature 026 rule,
 `crates/micold-client/tests/no_concrete_implementations.rs`).
 
-**Scale/Scope**: 15 tools, 1 listener, 2 settings, 3 new wire messages over 3 protocol bumps, 1 new
-dialog.
+**Scale/Scope**: 15 tools, 1 listener, 2 settings, 3 protocol bumps (M1 and M4 add a settings field
+each; M3 adds the 3 confirmation messages), 1 new dialog, 1 new `DaemonState::stop_session`.
 
 ## Constitution Check
 
@@ -73,7 +73,7 @@ dialog.
   integration tests in `crates/micold-daemon/tests/`. The only glue under the GUI exception is the
   dialog's and settings rows' rendering (`src/ui/`), validated by quickstart §B4/§B6 with the
   `visual-pass` skill; the dialog's reducer (`features/agent_confirm.rs`) is tested.
-- [x] **II. Multi-Session Support**: PASS, with one reading the reviewer must confirm. Credentials,
+- [x] **II. Multi-Session Support**: PASS, with one recorded interpretation (Complexity Tracking). Credentials,
   binding files and audit attribution are per session; a credential acts as exactly one session;
   concurrent calls from many sessions are attributed separately and serialised per project by the
   existing worktree gate (SC-005). The cross-session tools (`read_session_output`,
@@ -124,7 +124,7 @@ requirement's testable form, and no complexity to track.
 | FR-006 | `Credentials` (TM2); binding.md §2 |
 | FR-007 | loopback bind; `platform::write_owner_only`; R7 |
 | FR-008 | `mcp/tools.rs`; contracts/mcp-tools.md |
-| FR-009 | `ops.rs` extraction; R9 |
+| FR-009 | `ops.rs` extraction; `DaemonState::stop_session`; R9 |
 | FR-010 | `Caller` scope resolution (TM4) |
 | FR-011 | existing `broadcast_catalog` after each mutation |
 | FR-012, FR-012a | `Framer::plain_tail`; `LineCount`, `NonEmptyText`; R11 |
@@ -132,7 +132,7 @@ requirement's testable form, and no complexity to track.
 | FR-014 | `mcp/confirm.rs` (TM5); protocol-delta §2; client `features/agent_confirm.rs` |
 | FR-015, FR-015a | `policy::decide` |
 | FR-016 | setting `cross_session_access`; `policy::decide`; protocol-delta §3 |
-| FR-017 | `create_session` prompt wait; R12 |
+| FR-017 | `InputReadiness` seam + `create_session` prompt wait; R12 |
 | FR-018 | audit line (TM7) |
 | FR-019 | `docs/user-guide/agent-tools.md` + settings.md |
 
@@ -143,8 +143,9 @@ requirement's testable form, and no complexity to track.
 | Core unit (`crates/micold-core/tests/mcp_*.rs`) | JSON-RPC parsing and responses; every tool's input validation; `policy::decide` as a table over (caller location, self/other, operation, option); binding plan per `ToolServerSupport`; collision detection over fixture config files; submission encoding; settings round-trip and defaults |
 | Daemon integration (`crates/micold-daemon/tests/mcp_*.rs`) | endpoint auth/bounds/methods over real TCP; each tool against a real `DaemonState` and temp git repos; spawn wiring (argv contains the flags, config files byte-identical — SC-002); file modes; confirmation registry with fake clients; 10-way create race (SC-005); read latency with 50+50 (SC-004); audit lines (SC-010). Isolation & lifecycle gate: Default-session refusals and cross-project `not_found` are integration tests |
 | Client (`crates/micold-client/tests/features_agent_confirm.rs`, settings tests) | the dialog's state: request shows, withdraw hides, answer sends `ConfirmationAnswer` once; settings drafts carry both new fields |
+| Geometry gates (`crates/micold-client/tests/layout_snapshot.rs`, `layout_coverage_registry.rs` + `tests/support/covered_states.rs`) | the confirmation dialog and the Environment page with both new rows are registered covered states |
 | Real runtime (`sandbox_real_mcp.rs`, off by default) | the binding works inside the container (SC-008 for 027) |
-| Quickstart §B | real `claude` / `copilot` accept the binding (R1–R3 probes); dialog and settings rows look right (visual pass) |
+| Quickstart §B | real `claude` / `copilot` accept the binding and survive a ~55 s confirmation wait (R1–R3 probes); readiness per CLI (R12); dialog and settings rows' colour and weight (visual pass) |
 
 ## Project Structure
 
@@ -177,14 +178,14 @@ crates/micold-core/src/
 │   ├── policy.rs           # decide(): FR-010/014/015/015a/016
 │   ├── errors.rs           # ErrorCategory, OpError
 │   ├── binding.rs          # BindingPlan from ToolServerSupport + url + credential; collision check
-│   └── submission.rs       # bracketed-paste + CR encoding
-├── provider.rs             # ToolServerSupport + AiCliProvider::tool_server_support()
+│   └── submission.rs       # bracketed-paste + CR encoding; output-settled readiness rule
+├── provider.rs             # ToolServerSupport, InputReadiness + their AiCliProvider methods
 ├── settings.rs             # tool_server_enabled, cross_session_access
 └── protocol/{messages,version}.rs   # DaemonSettings/SettingsSet fields; confirmation messages
 
 crates/micold-daemon/src/
 ├── http.rs                 # NEW — bounded HTTP/1.1 head/body/respond/drain, extracted from hooks.rs
-├── hooks.rs                # uses http.rs; behaviour unchanged
+├── hooks.rs                # uses http.rs; hook behaviour unchanged
 ├── mcp/                    # NEW
 │   ├── mod.rs
 │   ├── server.rs           # listener, auth, JSON-RPC dispatch
@@ -193,7 +194,9 @@ crates/micold-daemon/src/
 │   └── confirm.rs          # TM5 registry
 ├── ops.rs                  # NEW — worktree create/delete/rename bodies moved out of route()
 ├── framer.rs               # plain_tail()
-├── state.rs                # tool server handle; binding at spawn; primary-process write/read
+├── state.rs                # tool server handle; binding at spawn; primary-process write/read;
+│                           #   stop_session(); ready-for-input marks
+├── hooks.rs / event_log.rs # SessionStart / Pi session_start also mark ready (R12)
 ├── server.rs               # binds the listener; route() calls ops.rs; ConfirmationAnswer arm
 ├── catalog.rs              # the two settings
 └── platform/{mod,unix,windows}.rs   # write_owner_only()
@@ -236,3 +239,11 @@ docs/user-guide/{agent-tools.md (NEW), settings.md, sandboxed-daemon.md}, docs/S
 ## Complexity Tracking
 
 No constitution violations to justify.
+
+**Recorded interpretation (Principle II)**: explicit, user-gated cross-session I/O —
+`read_session_output` and `send_session_input`, each an addressed request, scoped to the caller's
+project, governed by the FR-016 option and audited — is not the implicit filesystem, in-memory or
+configuration leak Principle II forbids. It uses only the target's own input stream, the channel the
+user already types into, and shares or alters no session's environment, files or configuration.
+Confirmed by the plan review (round 1). The isolation & lifecycle gate still applies: Off,
+cross-project `not_found` and per-request option changes are integration tests (`mcp_cross_session.rs`).
