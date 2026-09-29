@@ -27,10 +27,11 @@ waited=0
 
 view() { gh pr view "$pr" --json "$1" -q "$2"; }
 merged_line() { echo "MERGED $pr $(view mergeCommit '.mergeCommit.oid' 2>/dev/null)"; }
-# The newest `ci complete` check run on the current head: a relabel re-run leaves a superseded one.
+# The current `ci complete` run on the head: a relabel re-run leaves a superseded one. A run not yet
+# completed wins (a queued run may carry a zero startedAt); otherwise the latest started.
 ci_state() {
   view statusCheckRollup \
-    '[.statusCheckRollup[] | select(.name=="ci complete")] | sort_by(.startedAt // "") | last
+    '[.statusCheckRollup[] | select(.name=="ci complete")] | sort_by([(.status != "COMPLETED"), (.startedAt // "")]) | last
      | select(. != null) | "\(.status) \(.conclusion // "")"' 2>/dev/null
 }
 # Exits when the PR is no longer open; otherwise sleeps one poll, bounded by max_wait.
@@ -70,6 +71,8 @@ if [ "$conclusion" != SUCCESS ]; then
               and ([.conclusion] | inside(["SUCCESS","SKIPPED","NEUTRAL"]) | not))'
   echo "Failed checks:"
   view statusCheckRollup ".statusCheckRollup[] | $bad | \"- \(.name) \(.conclusion) \(.detailsUrl)\""
+  view statusCheckRollup '.statusCheckRollup[] | select(.context != null and (.state=="FAILURE" or .state=="ERROR"))
+    | "- \(.context) \(.state) \(.targetUrl // "")"'
   run="$( { view statusCheckRollup ".statusCheckRollup[] | $bad | .detailsUrl"
             view statusCheckRollup '.statusCheckRollup[] | select(.name=="ci complete") | .detailsUrl'; } \
     | grep -oE 'runs/[0-9]+' | head -1 | cut -d/ -f2)"
