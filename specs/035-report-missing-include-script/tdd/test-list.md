@@ -52,16 +52,16 @@ Tests in `crates/micold-core/tests/script_path_check.rs`, with `FakeScriptPathPr
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U1  | `""` gives `None`, and the probe is not called | FR-011 (C1) | example | PENDING | |
-| U2  | Whitespace-only `"   "` gives `None`, and the probe is not called | FR-011 (C1) | example | PENDING | |
-| U3  | `"~"` and `"~/env.sh"` give `NotFound { tilde: true }` without a probe call | FR-001, Edge Cases `~` (C2) | example | PENDING | |
-| U4  | `"~\\env.ps1"` gives `NotFound { tilde: true }` on every OS (a string test) | FR-001, FR-012 (C2) | example | PENDING | |
-| U5  | `"~env.sh"` (a name that starts with `~` but is not `~/` or `~\`) is `Relative`, not tilde: the other side of U3's boundary | FR-001 (C2/C3) | example | PENDING | |
-| U6  | `"env.sh"`, `"./env.sh"` and `"scripts/env.sh"` give `Relative` without a probe call | FR-001, Edge Cases relative (C3) | example | PENDING | |
-| U7  | An absolute path whose probe answers `File` gives `Present`. The probe is called once, with the path exactly as stored (no trim, no expansion) | FR-001 (C4) | example | PENDING | |
-| U8  | An absolute path whose probe answers `Missing` gives `NotFound { tilde: false }` | FR-001 (C5) | example | PENDING | |
-| U9  | An absolute path whose probe answers `NotAFile` gives `NotReadable` | FR-001, Edge Cases directory (C6) | example | PENDING | |
-| U10 | An absolute path whose probe answers `Unreadable` gives `NotReadable` | FR-001, Edge Cases check error (C6) | example | PENDING | |
+| U1  | `""` gives `None`, and the probe is not called | FR-011 (C1) | example | DONE | `crates/micold-core/tests/script_path_check.rs::an_empty_path_has_no_check_and_examines_nothing` |
+| U2  | Whitespace-only `"   "` gives `None`, and the probe is not called | FR-011 (C1) | example | DONE | `crates/micold-core/tests/script_path_check.rs::a_whitespace_only_path_has_no_check_and_examines_nothing` |
+| U3  | `"~"` and `"~/env.sh"` give `NotFound { tilde: true }` without a probe call | FR-001, Edge Cases `~` (C2) | example | DONE | `crates/micold-core/tests/script_path_check.rs::a_tilde_path_is_not_found_without_a_probe` |
+| U4  | `"~\\env.ps1"` gives `NotFound { tilde: true }` on every OS (a string test) | FR-001, FR-012 (C2) | example | DONE | `crates/micold-core/tests/script_path_check.rs::a_backslash_tilde_path_is_not_found_on_every_os` |
+| U5  | `"~env.sh"` (a name that starts with `~` but is not `~/` or `~\`) is `Relative`, not tilde: the other side of U3's boundary | FR-001 (C2/C3) | example | DONE | `crates/micold-core/tests/script_path_check.rs::a_name_that_merely_starts_with_a_tilde_is_relative` |
+| U6  | `"env.sh"`, `"./env.sh"` and `"scripts/env.sh"` give `Relative` without a probe call | FR-001, Edge Cases relative (C3) | example | DONE | `crates/micold-core/tests/script_path_check.rs::a_relative_path_is_not_checked` |
+| U7  | An absolute path whose probe answers `File` gives `Present`. The probe is called once, with the path exactly as stored (no trim, no expansion) | FR-001 (C4) | example | DONE | `crates/micold-core/tests/script_path_check.rs::an_absolute_path_that_is_a_file_is_present_and_probed_once_as_stored` |
+| U8  | An absolute path whose probe answers `Missing` gives `NotFound { tilde: false }` | FR-001 (C5) | example | DONE | `crates/micold-core/tests/script_path_check.rs::an_absolute_path_with_nothing_there_is_not_found` |
+| U9  | An absolute path whose probe answers `NotAFile` gives `NotReadable` | FR-001, Edge Cases directory (C6) | example | DONE | `crates/micold-core/tests/script_path_check.rs::an_absolute_path_that_is_not_a_file_is_not_readable` |
+| U10 | An absolute path whose probe answers `Unreadable` gives `NotReadable` | FR-001, Edge Cases check error (C6) | example | DONE | `crates/micold-core/tests/script_path_check.rs::an_absolute_path_that_cannot_be_opened_is_not_readable` |
 
 ### `crates/micold-core/src/script_path_check.rs`: `StdScriptPathProbe`
 
@@ -69,23 +69,23 @@ Tests in `crates/micold-core/tests/script_path_check.rs`, on `tempfile` director
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U11 | A regular readable file answers `File` | FR-001 (P1) | example | PENDING | |
-| U12 | Nothing at the path answers `Missing` | FR-001 (P2) | example | PENDING | |
-| U13 | A directory answers `NotAFile` | FR-001, Edge Cases directory (P3) | example | PENDING | |
-| U14 | `cfg(unix)`: a mode-000 file answers `Unreadable` (skipped as root) | FR-001 (P4) | example | PENDING | |
-| U15 | `cfg(unix)`: a file under a parent without search permission answers `Unreadable`, not `Missing` | Edge Cases check error (P5) | example | PENDING | |
-| U16 | Probing a script that would create a marker file if run leaves no marker | FR-003 (P6) | example | PENDING | |
-| U17 | `cfg(unix)`: a symlink to a regular file answers `File` | FR-001 (P7) | example | PENDING | |
-| U18 | `cfg(unix)`: a dangling symlink answers `Missing` | FR-001 (P8) | example | PENDING | |
+| U11 | A regular readable file answers `File` | FR-001 (P1) | example | DONE | `crates/micold-core/tests/script_path_check.rs::a_regular_file_answers_file` |
+| U12 | Nothing at the path answers `Missing` | FR-001 (P2) | example | DONE | `crates/micold-core/tests/script_path_check.rs::nothing_at_the_path_answers_missing` |
+| U13 | A directory answers `NotAFile` | FR-001, Edge Cases directory (P3) | example | DONE | `crates/micold-core/tests/script_path_check.rs::a_directory_answers_not_a_file` |
+| U14 | `cfg(unix)`: a mode-000 file answers `Unreadable` (skipped as root) | FR-001 (P4) | example | DONE | `crates/micold-core/tests/script_path_check.rs::a_file_the_user_cannot_open_answers_unreadable` |
+| U15 | `cfg(unix)`: a file under a parent without search permission answers `Unreadable`, not `Missing` | Edge Cases check error (P5) | example | DONE | `crates/micold-core/tests/script_path_check.rs::a_file_under_a_directory_without_search_permission_answers_unreadable` |
+| U16 | Probing a script that would create a marker file if run leaves no marker | FR-003 (P6) | example | DONE | `crates/micold-core/tests/script_path_check.rs::probing_a_script_never_runs_it` |
+| U17 | `cfg(unix)`: a symlink to a regular file answers `File` | FR-001 (P7) | example | DONE | `crates/micold-core/tests/script_path_check.rs::a_symlink_to_a_regular_file_answers_file` |
+| U18 | `cfg(unix)`: a dangling symlink answers `Missing` | FR-001 (P8) | example | DONE | `crates/micold-core/tests/script_path_check.rs::a_dangling_symlink_answers_missing` |
 
 ### `crates/micold-core/src/script_path_check.rs`: `check_bounded`
 
 | id  | behavior | traces | kind | state | test |
 | --- | -------- | ------ | ---- | ----- | ---- |
-| U19 | A probe that never answers gives `Some(Unchecked)`, and the call returns within the bound plus slack (100 ms bound, under 1 s) | FR-006, Edge Cases hang (C7) | example | PENDING | |
-| U20 | A probe that answers at once gives the same result as `classify`: the side of the bound where an answer arrives | FR-006 (C8) | example | PENDING | |
-| U21 | A blank path gives `None` without calling the probe | FR-011 | example | PENDING | |
-| U22 | `SCRIPT_PATH_CHECK_BOUND` is 2 s | FR-006, SC-004 | example | PENDING | |
+| U19 | A probe that never answers gives `Some(Unchecked)`, and the call returns within the bound plus slack (100 ms bound, under 1 s) | FR-006, Edge Cases hang (C7) | example | DONE | `crates/micold-core/tests/script_path_check.rs::a_probe_that_never_answers_is_reported_as_unchecked_within_the_bound` |
+| U20 | A probe that answers at once gives the same result as `classify`: the side of the bound where an answer arrives | FR-006 (C8) | example | DONE | `crates/micold-core/tests/script_path_check.rs::a_probe_that_answers_at_once_gives_the_same_result_as_classify` |
+| U21 | A blank path gives `None` without calling the probe | FR-011 | example | DONE | `crates/micold-core/tests/script_path_check.rs::a_bounded_check_of_a_blank_path_is_none_without_a_probe` |
+| U22 | `SCRIPT_PATH_CHECK_BOUND` is 2 s | FR-006, SC-004 | example | DONE | `crates/micold-core/tests/script_path_check.rs::the_bound_is_two_seconds` |
 
 ### Capability guards: `crates/micold-client/tests/inventory/mod.rs`, `no_concrete_implementations.rs`, `service_capability_fakes.rs`
 

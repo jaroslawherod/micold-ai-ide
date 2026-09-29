@@ -10,21 +10,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature (from bug BUG-006)
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-09-29
-- **Phase**: 3-design
-- **Next step**: PR 2 (#462) CI and merge; then Phase 4, milestone M1.
+- **Phase**: 4-milestone
+- **Next step**: M1 in progress (implement, gate, reviews, PR).
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #457 | Spec (also carries the BUG-006 record) | merged | 118f3ce0 |
-| #462 | Design: clarified spec, plan, research, contracts, tasks with M1–M4 | open | — |
+| #462 | Design: clarified spec, plan, research, contracts, tasks with M1–M4 | merged | f954674d |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T012, T014, T015, T017–T021, T032–T033 | Feature off + missing stored path: Settings shows `Script not found: <path>` and says the feature is off; on-state page unchanged (interim U63) | — | pending |
+| M1 | T001–T012, T014, T015, T017–T021, T032–T033 | Feature off + missing stored path: Settings shows `Script not found: <path>` and says the feature is off; on-state page unchanged (interim U63) | — | in progress |
 | M2 | T013, T016, T037–T042 | A save leaving a missing path posts one notification naming it, in either state | — | pending |
 | M3 | T022–T027, T034–T035 | Same report with the feature on (merged with 011's note), FR-014 "exists now" note, other window's save refreshes an open page | — | pending |
 | M4 | T028–T031, T036 | US3 recovery tests (edit or clear the path), architecture doc, full quickstart §B | — | pending |
