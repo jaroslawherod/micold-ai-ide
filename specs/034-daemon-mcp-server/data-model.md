@@ -41,8 +41,9 @@ enum ToolServerSupport {
 
 A second provider method, `input_readiness() -> InputReadiness { HookSessionStart,
 ExtensionEvent(&'static str), OutputSettled }`, says how a fresh session shows it is ready for its
-first prompt (FR-017, research R12): Claude `HookSessionStart`, Pi `ExtensionEvent("session_start")`
-(falling back to `OutputSettled` when the component is declined), Copilot `OutputSettled`. The live
+first prompt (FR-017, research R12): Claude `HookSessionStart` (falling back to `OutputSettled` when the hook receiver is not
+running), Pi `ExtensionEvent("session_start")` (falling back to `OutputSettled` when the component
+is declined), Copilot `OutputSettled`. The live
 session carries a `ready: bool` set by that signal; it never touches the activity FSM.
 
 `BindingPlan { args: Vec<OsString>, config_file: PathBuf }` is what the spawn path appends, built
