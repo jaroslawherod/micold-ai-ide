@@ -111,9 +111,9 @@ Tests: `crates/micold-core/tests/github_parse.rs`, `github_load.rs` (new), fixtu
 | U25 | `row_text` is `#n title` with `  ·  l1, l2` only when labelled | FR-004, US2-7 | example | DONE | `github_parse.rs::row_text_shows_labels_only_when_present` |
 | U26 | `errors[]` NOT_FOUND → `NoAccess`; RATE_LIMITED → `RateLimited`; malformed → `Other` | FR-007 | example | DONE | `github_parse.rs::graphql_errors_are_classified` |
 | U27 | `list_args` uses `-f` for every string, `-f cursor` only with a cursor; repo `1`/`true` stays a string; nothing but owner/name/cursor is sent | FR-025, R2 | example | DONE | `github_parse.rs::list_args_send_only_the_repository` |
-| U28 | Pages concatenate in order until no next cursor; `complete` when held ≥ total | FR-004 | example | TODO | `github_load.rs::pages_concatenate_until_the_last` |
-| U29 | At exactly 1,000 held paging stops, the last page is truncated, `complete` false with total 1,001; with total 1,000 `complete` true (both sides) | FR-004 | example | TODO | `github_load.rs::the_cap_is_1000` |
-| U30 | The first error aborts the load and is returned; zero open → empty complete listing | FR-007, FR-008 | example | TODO | `github_load.rs::first_error_aborts_and_empty_is_complete` |
+| U28 | Pages concatenate in order until no next cursor; `complete` when held ≥ total | FR-004 | example | DONE | `github_load.rs::pages_concatenate_until_the_last` |
+| U29 | At exactly 1,000 held paging stops, the last page is truncated, `complete` false with total 1,001; with total 1,000 `complete` true (both sides) | FR-004 | example | DONE | `github_load.rs::the_cap_is_1000` |
+| U30 | The first error aborts the load and is returned; zero open → empty complete listing | FR-007, FR-008 | example | DONE | `github_load.rs::first_error_aborts_and_empty_is_complete` |
 
 ### `crates/micold-core/src/github.rs`: `classify`, `IssueLoadError::message`
 
