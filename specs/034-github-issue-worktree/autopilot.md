@@ -7,21 +7,21 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Kind**: feature
 - **Worktree branch**: feat/allow-to-create-worktree-from-github-issue
 - **Started**: 2026-09-29
-- **Phase**: 3-design
-- **Next step**: Wait for PR 2 CI, merge.
+- **Phase**: 4-milestones
+- **Next step**: Run milestone M1 (T001–T009, T093, T010–T017).
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #452 | Spec (PR 1) — reviewed: round 1 CHANGES (10 findings, all fixed), round 2 CLEAN (4 MINOR, fixed) | merged | d6c2f33e |
-| #459 | Design (PR 2) — plan review r1 CHANGES (18, 17 fixed, F10 declined), r2 CHANGES (4 LOW, fixed); analyze 0 critical/high (fixed); tasks review r1 CHANGES (11, fixed), r2 CHANGES (2 LOW, fixed) | open | — |
+| #459 | Design (PR 2) — plan review r1 CHANGES (18, 17 fixed, F10 declined), r2 CHANGES (4 LOW, fixed); analyze 0 critical/high (fixed); tasks review r1 CHANGES (11, fixed), r2 CHANGES (2 LOW, fixed) | merged | 13967080 |
 
 ## Milestones
 
 | ID | Tasks | Deliverable | PR | Status |
 |---|---|---|---|---|
-| M1 | T001–T009, T093, T010–T017 | Issue source core (`gh` locate/load/classify, `name_from_title`) + `RemoteList` RPC, protocol 16; no UI yet | — | pending |
+| M1 | T001–T009, T093, T010–T017 | Issue source core (`gh` locate/load/classify, `name_from_title`) + `RemoteList` RPC, protocol 16; no UI yet | — | in-progress |
 | M2 | T018–T031, T066–T075, T032 | 🎯 MVP: **GitHub issue** source in the form — list, search, pick fills ticket/name, create | — | pending |
 | M3 | T033–T036, T094, T076, T037–T042, T077 | Search beyond the 1,000 loaded issues via GitHub | — | pending |
 | M4 | T043–T052, T078–T085 | Issue labels choose the type (default mapping in settings.json) | — | pending |
@@ -48,6 +48,9 @@ Cut notes (milestones.md rule 3): US1 is split by layer into M1 (render-free cor
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | design | plan r1 F10 | Add the new `micold-client` tests to CI's all-platform test list | Editing `.github/workflows/ci.yml` needs a workflow-scoped token (would be an escalation for a docs PR); every platform-sensitive decision (`locate_gh`, `choose_remote`, `classify`, `run_bounded`) lives in `micold-core`, whose whole suite CI already runs on Linux, macOS and Windows; the client reducer tests are platform-neutral. |
+| M1 | code-review A #4 | `load_listing` does not de-duplicate across pages, and `complete` can read true while an issue updated mid-load was skipped | The picker holds a snapshot taken at form open (FR-004, data-model §2); the window is the ~1 s between two page requests, and reopening the form reloads. De-duplicating would hide the drift without closing it; a consistent read needs a GitHub API the plan did not choose. |
+| M1 | code-review A #9 | `GitCli::remote_list` repeats `run_git`'s spawn and error formatting | It differs in exit semantics (1 means "no remotes", not a failure); widening `run_git` for one caller changes every other caller's contract. Duplication is eight lines. |
+| M1 | conformance B F2 | `parse_list_page`'s `errors[]` branch is reachable only when `gh` exits 0 | Follows contract §3 (a non-zero exit goes to `classify`); `parse_list_page` stays total over any GraphQL answer. Revisit with M3's search rule. |
 
 ## Open escalation
 
