@@ -179,6 +179,12 @@ pr_json "$d/fx" 5 OPEN COMPLETED SUCCESS > "$d/fx/pr-5.json.8"
 pr_json "$d/fx" 5 MERGED COMPLETED SUCCESS > "$d/fx/pr-5.merged.json"
 check "wait-merge: waits, then merges on green" 0 '^MERGED 5 abc123' "$S/wait-merge.sh" 5
 
+wm; pr_json "$d/fx" 5 OPEN > "$d/fx/pr-5.json"
+jq '.statusCheckRollup = [{"name":"build + test","status":"IN_PROGRESS","conclusion":""}]' "$d/fx/pr-5.json" > "$d/fx/x" \
+  && mv "$d/fx/x" "$d/fx/pr-5.json"
+pr_json "$d/fx" 5 OPEN COMPLETED SUCCESS > "$d/fx/pr-5.json.9"
+check "wait-merge: other checks running is not checkless" 0 '^GREEN 5' "$S/wait-merge.sh" 5 --no-merge
+
 wm; pr_json "$d/fx" 5 OPEN COMPLETED SUCCESS > "$d/fx/pr-5.json"
 check "wait-merge: --no-merge stops at green" 0 '^GREEN 5' "$S/wait-merge.sh" 5 --no-merge
 
