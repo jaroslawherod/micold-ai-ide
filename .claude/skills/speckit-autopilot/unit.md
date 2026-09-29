@@ -6,7 +6,8 @@ sends you there.
 
 ## Rules
 
-- **Start on the right base.** First run `scripts/autopilot/branch-start.sh`. It resets the branch
+- **Start on the right base.** First run `scripts/autopilot/branch-start.sh <previous-pr>`, passing the
+  ledger's latest PR (none for the first unit); it refuses while that PR is not `MERGED`. It resets the branch
   to `origin/main`, or rebases unmerged work from an earlier unit (clarify rounds, a BUG record,
   close-phase milestones) onto it. On `CONFLICT`, resolve, run the gate, `git rebase --continue`.
 - **Stay in scope.** Do only your unit's work, then return. The orchestrator waits on CI and merges.

@@ -7,7 +7,8 @@ Every PR (spec, design, each milestone, close) follows this path.
 Use **this worktree's own branch** for every PR. Never create other branches.
 
 ```bash
-scripts/autopilot/branch-start.sh    # prints RESET, REBASED <n>, DIRTY or CONFLICT
+scripts/autopilot/branch-start.sh <previous-pr>   # refuses unless it is MERGED; omit for PR 1
+# prints RESET or REBASED <n>, or a refusal: DIRTY, DETACHED, PREVIOUS-PR-OPEN, CONFLICT, …
 ```
 
 Unmerged work from an earlier unit (clarify rounds, a BUG record) is rebased, not dropped. Otherwise
