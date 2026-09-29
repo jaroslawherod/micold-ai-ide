@@ -403,3 +403,35 @@ pub fn display_name(dir_name: &str) -> String {
     // A name that is nothing but separators. Show it as it is rather than an empty row.
     sentence_case(dir_name)
 }
+
+/// The longest slug an issue title may produce as a worktree name (feature 034, FR-010).
+pub const ISSUE_NAME_SLUG_MAX: usize = 50;
+
+/// The worktree name a picked issue's title becomes (feature 034, FR-010,
+/// contracts/issue-naming-and-typing.md §1).
+///
+/// Whitespace is normalised to single spaces. A title whose slug fits in
+/// [`ISSUE_NAME_SLUG_MAX`] is kept as written; a longer one is cut to its longest
+/// whole-word prefix that fits, or, when not even the first word fits, to the first
+/// [`ISSUE_NAME_SLUG_MAX`] characters of its slug. A title that slugs to nothing
+/// yields `""`, so the form's "name required" rule applies.
+pub fn name_from_title(title: &str) -> String {
+    let words: Vec<&str> = title.split_whitespace().collect();
+    let fits = |candidate: &str| slugify(candidate).len() <= ISSUE_NAME_SLUG_MAX;
+    let whole = words.join(" ");
+    if slugify(&whole).is_empty() {
+        return String::new();
+    }
+    if fits(&whole) {
+        return whole;
+    }
+    let prefix = (1..words.len())
+        .rev()
+        .map(|n| words[..n].join(" "))
+        .find(|candidate| fits(candidate) && !slugify(candidate).is_empty());
+    prefix.unwrap_or_else(|| {
+        slugify(&whole)[..ISSUE_NAME_SLUG_MAX]
+            .trim_end_matches('-')
+            .to_owned()
+    })
+}

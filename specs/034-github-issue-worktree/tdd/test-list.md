@@ -133,11 +133,11 @@ Tests: `crates/micold-core/tests/naming_from_title.rs` (new).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U36 | A title whose slug is ≤ 50 is kept (whitespace normalised); a title whose slug is exactly 50 is kept whole and one at 51 is cut (both sides) | FR-010 | example | TODO | `naming_from_title.rs::fits_and_the_50_boundary` |
-| U37 | A long title is cut to the longest whole-word prefix with slug ≤ 50 | FR-010 | example | TODO | `naming_from_title.rs::cut_at_word_boundary` |
-| U38 | A first word longer than 50 slug characters yields the first 50 characters of the slug | FR-010 | example | TODO | `naming_from_title.rs::a_long_first_word_is_cut_at_50` |
-| U39 | A title that slugs to nothing yields `""` | FR-010, Edge "slugs to nothing" | example | TODO | `naming_from_title.rs::empty_slug_yields_empty_name` |
-| U40 | `slugify(name_from_title(t)).len() <= 50` over a corpus | FR-010 | property | TODO | `naming_from_title.rs::slug_never_exceeds_50` (sampled at the boundaries; no property library) |
+| U36 | A title whose slug is ≤ 50 is kept (whitespace normalised); a title whose slug is exactly 50 is kept whole and one at 51 is cut (both sides) | FR-010 | example | DONE | `naming_from_title.rs::fits_and_the_50_boundary` |
+| U37 | A long title is cut to the longest whole-word prefix with slug ≤ 50 | FR-010 | example | DONE | `naming_from_title.rs::cut_at_word_boundary` |
+| U38 | A first word longer than 50 slug characters yields the first 50 characters of the slug | FR-010 | example | DONE | `naming_from_title.rs::a_long_first_word_is_cut_at_50` |
+| U39 | A title that slugs to nothing yields `""` | FR-010, Edge "slugs to nothing" | example | DONE | `naming_from_title.rs::empty_slug_yields_empty_name` |
+| U40 | `slugify(name_from_title(t)).len() <= 50` over a corpus | FR-010 | property | DONE | `naming_from_title.rs::slug_never_exceeds_50` (sampled at the boundaries; no property library) |
 
 ### Protocol and daemon: `RemoteList`
 
