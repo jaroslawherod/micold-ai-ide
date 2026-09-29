@@ -1274,6 +1274,111 @@ impl Registered for ConfirmPlacementDialog {
     }
 }
 
+// --- What the Environment page says about the script path (spec 035, FR-002, FR-005) ---
+
+/// One line under the Environment page's timeout field, in page order (spec 035).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NoticeLine {
+    /// A warning, rendered through `ui::settings::caution`.
+    Caution(String),
+    /// An explanation, rendered through `ui::settings::note`.
+    Note(String),
+}
+
+/// The feature is off, and says what that means for a path that names nothing (spec 035, OFF).
+const NOTICE_OFF: &str = "Environment include is off, so no script is sourced. Turning it on \
+                          will not source one until this path names a readable file.";
+/// `~` is taken literally, as resolution takes it (TILDE).
+const NOTICE_TILDE: &str = "~ is not expanded. Use a full path.";
+/// A relative path is not checked (REL).
+const NOTICE_RELATIVE: &str =
+    "Relative path: whether the script is found depends on each session's directory.";
+/// The check had no answer within [`SCRIPT_PATH_CHECK_BOUND`] (HUNG).
+///
+/// [`SCRIPT_PATH_CHECK_BOUND`]: micold_core::script_path_check::SCRIPT_PATH_CHECK_BOUND
+const NOTICE_HUNG: &str =
+    "No answer within 2 seconds. The file may be on a drive that is not responding.";
+
+/// Every line shown below the Environment page's timeout field (spec 035,
+/// contracts/settings-indication.md §2): what the check found about the stored path, then 011's
+/// note about the last resolution attempt.
+///
+/// Pure, beside [`missing_cli_notice`], for the reason that one is: the view can be looked at, and
+/// these lines can be asserted.
+///
+/// **Interim (M1–M2).** Only the feature-off rows are here. With the feature on, the page is
+/// exactly 011's note, in 011's wording, until M3 merges the two, so between the merges the on
+/// state never says "Script not found" twice.
+pub fn script_path_notice(
+    check: &ScriptCheck,
+    last: &micold_core::env_include::EnvIncludeOutcome,
+) -> Vec<NoticeLine> {
+    use micold_core::script_path_check::ScriptPathState;
+
+    let checked = match check {
+        ScriptCheck::Done(checked) => checked,
+        // A re-check keeps showing the previous answer, so the notice does not blank.
+        ScriptCheck::Pending {
+            last: Some(checked),
+            ..
+        } => checked,
+        ScriptCheck::Idle | ScriptCheck::Pending { last: None, .. } => return lines_011(last),
+    };
+    if checked.enabled {
+        return lines_011(last);
+    }
+    let path = &checked.path;
+    match checked.state {
+        ScriptPathState::NotFound { tilde } => {
+            let mut lines = vec![NoticeLine::Caution(format!("Script not found: {path}"))];
+            if tilde {
+                lines.push(NoticeLine::Note(NOTICE_TILDE.to_string()));
+            }
+            lines.push(NoticeLine::Note(NOTICE_OFF.to_string()));
+            lines
+        }
+        ScriptPathState::NotReadable => vec![
+            NoticeLine::Caution(format!("Not a readable file: {path}")),
+            NoticeLine::Note(NOTICE_OFF.to_string()),
+        ],
+        ScriptPathState::Relative => {
+            let mut lines = vec![NoticeLine::Note(NOTICE_RELATIVE.to_string())];
+            lines.extend(lines_011(last));
+            lines
+        }
+        ScriptPathState::Unchecked => {
+            let mut lines = vec![
+                NoticeLine::Caution(format!("Couldn't check the script path: {path}")),
+                NoticeLine::Note(NOTICE_HUNG.to_string()),
+            ];
+            lines.extend(lines_011(last));
+            lines
+        }
+        ScriptPathState::Present => lines_011(last),
+    }
+}
+
+/// Feature 011's lines for the most recent resolution attempt, unchanged (011 FR-012/FR-013): the
+/// failure category, then its diagnostic when there is one. Nothing when it succeeded or the
+/// feature is off.
+fn lines_011(outcome: &micold_core::env_include::EnvIncludeOutcome) -> Vec<NoticeLine> {
+    use micold_core::env_include::EnvIncludeOutcome;
+
+    let (category, diagnostic) = match outcome {
+        EnvIncludeOutcome::Disabled | EnvIncludeOutcome::Success => return Vec::new(),
+        EnvIncludeOutcome::MissingScript => ("Script not found", ""),
+        EnvIncludeOutcome::NonZeroExit { diagnostic, .. } => {
+            ("Exited with an error", &**diagnostic)
+        }
+        EnvIncludeOutcome::TimedOut { diagnostic } => ("Timed out", &**diagnostic),
+    };
+    let mut lines = vec![NoticeLine::Caution(category.to_string())];
+    if !diagnostic.is_empty() {
+        lines.push(NoticeLine::Note(diagnostic.to_string()));
+    }
+    lines
+}
+
 // --- Where a CLI is missing, and what to say about it (feature 027, FR-023b) ---
 
 /// The sentence shown where an image is chosen and where a CLI is chosen, when the place sessions

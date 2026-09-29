@@ -84,8 +84,7 @@ pub trait ScriptPathProbe {
 ///
 /// Records every call so a test can assert the *absence* of one: for `~`, relative and blank
 /// paths, and on the session-launch path, the claim is that nothing was examined at all.
-/// `Send + Sync`, unlike [`FakeEnvIncludeResolver`](crate::env_include::FakeEnvIncludeResolver),
-/// because the client runs the check on a blocking task.
+/// `Send + Sync`, because the client runs the check on a blocking task.
 #[derive(Debug)]
 pub struct FakeScriptPathProbe {
     answer: Option<ProbeAnswer>,

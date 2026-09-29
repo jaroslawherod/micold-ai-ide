@@ -86,6 +86,25 @@ pub(crate) fn refresh_env_include(app: &mut App, cwd: &Path) {
     app.env_include_cache.insert(cwd.to_path_buf(), snapshot);
 }
 
+/// One check of the stored script path, captured and ready to run off the UI thread (spec 035,
+/// contracts/settings-indication.md §3). Stub until T017.
+pub(crate) struct ScriptPathCheckJob;
+
+impl ScriptPathCheckJob {
+    /// Run the check and say what it found. Stub until T017.
+    pub(crate) fn run(self) -> micold_client::app::Message {
+        todo!("T017")
+    }
+}
+
+/// Start a check of the stored script path. Stub until T017.
+pub(crate) fn prepare_script_path_check(
+    _app: &mut App,
+    _origin: micold_client::features::settings::CheckOrigin,
+) -> ScriptPathCheckJob {
+    todo!("T017")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

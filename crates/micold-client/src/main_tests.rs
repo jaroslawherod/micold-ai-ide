@@ -4053,3 +4053,114 @@ fn opening_settings_seeds_the_unshared_sign_in_from_the_running_sandbox_only() {
         "a stopped sandbox's report outlived it"
     );
 }
+
+// --- Spec 035: a missing environment-include script path is reported (outer loop, A1–A4) ------
+//
+// The highest level a cargo test reaches: the real shell handler, the check job it prepared run
+// synchronously against a fake probe, its answer through the reducer, and the page's lines read
+// from `script_path_notice`. What is actually drawn is quickstart §B's visual pass.
+
+mod script_path_report {
+    use super::*;
+    use micold_client::features::settings::{script_path_notice, NoticeLine};
+    use micold_core::env_include::FakeEnvIncludeResolver;
+    use micold_core::script_path_check::{FakeScriptPathProbe, ProbeAnswer};
+
+    /// The OFF note (contracts/settings-indication.md §2).
+    const OFF: &str = "Environment include is off, so no script is sourced. Turning it on will \
+                       not source one until this path names a readable file.";
+
+    /// An absolute path on every OS, which the fake probe answers for.
+    fn stored_path() -> String {
+        std::env::temp_dir()
+            .join("does-not-exist.sh")
+            .to_str()
+            .expect("utf-8 temp dir")
+            .to_string()
+    }
+
+    /// Environment include off, `path` stored, and a probe that answers `answer`.
+    fn app_with(path: &str, answer: ProbeAnswer) -> (App, Arc<FakeScriptPathProbe>) {
+        let probe = Arc::new(FakeScriptPathProbe::answering(answer));
+        let mut app = base_app();
+        app.caps = app.caps.clone().with_script_path_probe(probe.clone());
+        app.env_include_enabled = false;
+        app.env_include_script_path = path.to_string();
+        (app, probe)
+    }
+
+    /// Open Settings through the shell and let its check land.
+    fn open_and_check(app: &mut App) -> Vec<NoticeLine> {
+        let job = crate::shell::persist::open_settings(app);
+        let landed = job.run();
+        app.core.update(landed);
+        script_path_notice(
+            &app.core.settings.script_check,
+            &app.env_include_last_outcome,
+        )
+    }
+
+    #[test]
+    fn off_with_a_missing_stored_path_the_page_says_it_was_not_found_and_that_the_feature_is_off() {
+        let path = stored_path();
+        let (mut app, _probe) = app_with(&path, ProbeAnswer::Missing);
+
+        assert_eq!(
+            open_and_check(&mut app),
+            vec![
+                NoticeLine::Caution(format!("Script not found: {path}")),
+                NoticeLine::Note(OFF.to_string()),
+            ],
+            "issue #435: with the feature off a missing path was never reported (US1 scenario 1)"
+        );
+    }
+
+    #[test]
+    fn off_with_an_existing_stored_file_the_page_says_nothing() {
+        let (mut app, _probe) = app_with(&stored_path(), ProbeAnswer::File);
+
+        assert_eq!(
+            open_and_check(&mut app),
+            Vec::<NoticeLine>::new(),
+            "a readable file is not a problem to report (US1 scenario 2, SC-002)"
+        );
+    }
+
+    #[test]
+    fn off_with_a_blank_stored_path_the_page_says_nothing_and_nothing_is_examined() {
+        let (mut app, probe) = app_with("", ProbeAnswer::Missing);
+
+        assert_eq!(
+            open_and_check(&mut app),
+            Vec::<NoticeLine>::new(),
+            "a blank path is not a missing script (US1 scenario 3, FR-011)"
+        );
+        assert!(probe.calls().is_empty(), "a blank path must not be probed");
+    }
+
+    #[test]
+    fn off_with_a_missing_stored_path_a_session_launch_examines_and_sources_nothing() {
+        let (mut app, probe) = app_with(&stored_path(), ProbeAnswer::Missing);
+        let resolver = Arc::new(FakeEnvIncludeResolver::default());
+        app.caps = app.caps.clone().with_env_include(resolver.clone());
+        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.core.workspace.active = Some(std::env::temp_dir());
+        let id = SessionId::new();
+
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::Selected(id)));
+
+        assert!(
+            matches!(rx.try_recv(), Ok(ClientMsg::SessionStart { session }) if session == id),
+            "the launch proceeds as before (US1 scenario 4)"
+        );
+        assert!(
+            probe.calls().is_empty(),
+            "a launch must not check the path (FR-006, SC-004)"
+        );
+        assert!(
+            resolver.calls().is_empty(),
+            "nor source the script with the feature off (FR-003)"
+        );
+    }
+}
