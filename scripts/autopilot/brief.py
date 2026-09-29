@@ -80,16 +80,20 @@ def items(lines, idents, task=False):
 
 def expand_ranges(text, prefix):
     """expand_ranges('T001–T003, T090', 'T') -> [T001, T002, T003, T090];
-    expand_ranges('FR-001–FR-003, FR-018a', 'FR-') -> [FR-001, FR-002, FR-003, FR-018a].
-    A range end may drop the prefix ('T001–012'). Suffixed IDs (FR-018a) are never range ends."""
+    expand_ranges('FR-018a–FR-020', 'FR-') -> [FR-018a, FR-019, FR-020].
+    The separator may be an en dash, an em dash or a hyphen; the end may drop the prefix
+    ('SC-001–007'). A descending range keeps just its two ends."""
     ids = []
     p = re.escape(prefix)
-    for a, suf, b in re.findall(
-            r"(?<![\w-])" + p + r"(\d+)([a-z]?)(?![\w])(?:\s*[–—]\s*(?:" + p + r")?(\d+)(?![\w]))?", text):
-        if b and not suf:
-            ids += [f"{prefix}{n:0{len(a)}d}" for n in range(int(a), int(b) + 1)]
-        else:
-            ids.append(f"{prefix}{a}{suf}")
+    pat = (r"(?<![\w])" + p + r"(\d+)([a-z]?)(?![\w])"
+           r"(?:\s*[-–—]\s*(?:" + p + r")?(\d+)([a-z]?)(?![\w]))?")
+    for a, sa, b, sb in re.findall(pat, text):
+        w = len(a)
+        ids.append(f"{prefix}{a}{sa}")
+        if b:
+            lo, hi = int(a), int(b)
+            ids += [f"{prefix}{n:0{w}d}" for n in range(lo + 1, hi)]
+            ids.append(f"{prefix}{int(b):0{w}d}{sb}")
     return list(dict.fromkeys(ids))
 
 
@@ -111,12 +115,13 @@ def milestone(feature, mid):
     feature = Path(feature)
     tasks = lines_of(feature / "tasks.md")
     ms = section(tasks, "Milestones")
-    block = section(ms, mid + " ") if ms else None
+    head = next((ln for ln in ms or [] if re.match(r"^#{2,6} " + re.escape(mid) + r"\b(?!\d)", ln)), None)
+    block = section(ms, head.lstrip("# ")) if head else None
     if not block:
         sys.exit(f"brief: no milestone {mid} under '## Milestones' in {feature / 'tasks.md'}")
     print("\n".join(block))
 
-    others = [ln for ln in ms if re.match(r"^#{2,6} M\d+", ln) and not ln.lstrip("# ").startswith(mid + " ")]
+    others = [ln for ln in ms if re.match(r"^#{2,6} M\d+", ln) and ln != head]
     if others:
         print("\nOther milestones (their tasks are out of scope here):")
         for head in others:

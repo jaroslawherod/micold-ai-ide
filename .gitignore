@@ -37,3 +37,4 @@ Thumbs.db
 # `node_modules` here is ~100 MB of platform-specific binaries, and Playwright's browsers are not
 # in it at all, they are downloaded to a cache outside the repository.
 /site/checks/node_modules/
+__pycache__/
