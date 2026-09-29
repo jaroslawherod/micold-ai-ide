@@ -5,18 +5,18 @@
 
 Each milestone that changes the wire bumps `PROTOCOL_VERSION` once and documents the bump in
 `version.rs`'s changelog comment, as every earlier feature did, and updates the pin in
-`crates/micold-core/tests/schema_hash.rs`. M1 and M4 add settings fields; all three new messages land
-in M3. If another feature takes a number
+`crates/micold-core/tests/schema_hash.rs`. M2 and M6 add settings fields; all three new messages land
+in M5. If another feature takes a number
 first, this feature takes the next one.
 
-## §1 M1 — the binding toggle (15 → 16)
+## §1 M2 — the binding toggle (15 → 16)
 
 - `DaemonSettings.tool_server_enabled: bool`
 - `ClientMsg::SettingsSet.tool_server_enabled: Option<bool>`
 
 Applied to sessions spawned afterwards (FR-004). `SettingsChanged` carries it to every window.
 
-## §2 M3 — confirmations (16 → 17)
+## §2 M5 — confirmations (16 → 17)
 
 ```text
 DaemonMsg::ConfirmationRequested {
@@ -38,7 +38,7 @@ ClientMsg::ConfirmationAnswer { id: u64, allow: bool }
   `id`, is ignored. Resolution in any way broadcasts `ConfirmationWithdrawn`.
 - `SendInput` carries no text: the prompt names the target only.
 
-## §3 M4 — cross-session option (17 → 18)
+## §3 M6 — cross-session option (17 → 18)
 
 - `DaemonSettings.cross_session_access: CrossSessionAccess` (`Auto | ConfirmEachSend | Off`)
 - `ClientMsg::SettingsSet.cross_session_access: Option<CrossSessionAccess>`

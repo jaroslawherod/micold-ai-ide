@@ -47,7 +47,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | spec | rounds 1–3 | none declined | Round 1: 6 MAJOR + 7 MINOR, all fixed. Round 2 (sonnet): 6 MINOR, all fixed. Round 3 (sonnet): CLEAN, 2 MINOR fixed. |
-| plan | round 1 | none declined | 1 BLOCKER (FR-017 readiness), 2 MAJOR (stop path, missing timeout probes), 8 MINOR: all fixed |
+| plan | rounds 1–2 | none declined | Round 1: 1 BLOCKER (FR-017 readiness), 2 MAJOR (stop path, missing timeout probes), 8 MINOR, all fixed. Round 2 (sonnet): no BLOCKER/MAJOR, 3 MINOR fixed. |
 
 ## Open escalation
 

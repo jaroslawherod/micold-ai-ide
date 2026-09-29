@@ -201,8 +201,10 @@ arms of `route()` (`crates/micold-daemon/src/server.rs`) into a new
 `crates/micold-daemon/src/ops.rs` with functions that return a typed outcome instead of replying to
 a `ClientId`. `route()` keeps its behaviour by wrapping them; the tool server calls the same
 functions. Session operations already exist as `DaemonState` methods usable without a client
-(`create_session`, `begin_start` + `spawn_session_start`, `remove_session`, `delete_session`,
-`live_session`, `worktree_live_sessions`), and are called directly.
+(`create_session`, `begin_start`, `remove_session`, `delete_session`, `live_session`,
+`worktree_live_sessions`), and are called directly. `spawn_session_start` is a free function in
+`server.rs`, not a method; it moves to `ops.rs` with the worktree bodies so the tool handlers reach
+it.
 
 **Rationale**: FR-009 requires the same validation, naming, provenance record
 (`record_worktree_provenance`, feature 029) and safeguards as the user action. Duplicating the
@@ -249,7 +251,7 @@ per project would bump the user's window).
 ## R10 — Confirmations (FR-014, FR-016 Confirm each send)
 
 **Decision**: the service holds a registry of pending confirmations and pushes them to every
-connected window with two new daemon messages and one client message (protocol 16 → 17 in M3, see
+connected window with two new daemon messages and one client message (protocol 16 → 17 in M5, see
 [contracts/protocol-delta.md](./contracts/protocol-delta.md)). The tool call waits on a oneshot
 channel for at most 60 s. The first answer removes the entry and broadcasts a withdrawal. With no
 client connected the request fails at once with "needs confirmation". Deleting the target or the
@@ -305,6 +307,9 @@ newline. The mode is read from the target's `Term` at write time.
 provider seam (`AiCliProvider::input_readiness() -> InputReadiness`):
 - `InputReadiness::HookSessionStart` (Claude Code): the hook receiver's `SessionStart` post, which
   it already receives and ignores, now also marks the session ready. The activity FSM is unchanged.
+  When the hook receiver is not running (bind failure), Claude falls back to the output-settled
+  rule. If the §B3 probe shows bytes written right at `SessionStart` are lost, readiness becomes
+  "`SessionStart` and then output settled", which the same two signals already provide.
 - `InputReadiness::ExtensionEvent("session_start")` (Pi): the activity component adds
   `session_start` to the events it reports; the tail marks the session ready. With the component
   declined (FR-012e), Pi falls back to the output-settled rule.
@@ -338,7 +343,7 @@ be discarded or garbled while the TUI initialises); *`AwaitingInput`* (never fir
 the spec); *per-project settings* (the spec defines application-wide Settings options).
 
 Each lands with the milestone that first uses it, so each milestone's protocol bump carries only its
-own wire delta (M1: 15 → 16; M3: confirmation messages, 16 → 17; M4: 17 → 18).
+own wire delta (M2: 15 → 16; M5: confirmation messages, 16 → 17; M6: 17 → 18).
 
 ## R14 — Name collision with a user-configured server
 

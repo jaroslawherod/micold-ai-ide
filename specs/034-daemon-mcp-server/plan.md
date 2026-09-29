@@ -25,7 +25,9 @@ every connected window shows.
 Research (Phase 0) settled: the per-CLI launch flags (R1–R4), a hand-rolled server over the
 existing HTTP code rather than the `rmcp` SDK (R5), a separate listener (R6), credentials and
 owner-only files per platform, with FR-007 sharpened to what a loopback TCP transport can guarantee
-(R7), the sandbox needing no change (R8), and the confirmation channel (R10).
+(R7), the sandbox needing no change (R8), the `ops.rs` extraction and a real `stop_session` (R9),
+the confirmation channel (R10), plain-text output (R11), a per-CLI ready-for-input signal for the
+first prompt (R12), the two settings (R13) and the name-collision rule (R14).
 
 ## Technical Context
 
@@ -140,8 +142,8 @@ requirement's testable form, and no complexity to track.
 
 | Layer | What it proves |
 |---|---|
-| Core unit (`crates/micold-core/tests/mcp_*.rs`) | JSON-RPC parsing and responses; every tool's input validation; `policy::decide` as a table over (caller location, self/other, operation, option); binding plan per `ToolServerSupport`; collision detection over fixture config files; submission encoding; settings round-trip and defaults |
-| Daemon integration (`crates/micold-daemon/tests/mcp_*.rs`) | endpoint auth/bounds/methods over real TCP; each tool against a real `DaemonState` and temp git repos; spawn wiring (argv contains the flags, config files byte-identical — SC-002); file modes; confirmation registry with fake clients; 10-way create race (SC-005); read latency with 50+50 (SC-004); audit lines (SC-010). Isolation & lifecycle gate: Default-session refusals and cross-project `not_found` are integration tests |
+| Core unit (`crates/micold-core/tests/mcp_*.rs`, `input_readiness.rs`) | JSON-RPC parsing and responses; every tool's input validation; `policy::decide` as a table over (caller location, self/other, operation, option); binding plan per `ToolServerSupport`; `input_readiness()` per provider and the output-settled rule (fake clock); collision detection over fixture config files; submission encoding; settings round-trip and defaults |
+| Daemon integration (`crates/micold-daemon/tests/mcp_*.rs`) | endpoint auth/bounds/methods over real TCP; each tool against a real `DaemonState` and temp git repos; spawn wiring (argv contains the flags, config files byte-identical — SC-002); file modes; confirmation registry with fake clients; 10-way create race (SC-005); `prompt_delivered` true/false (60 s from the request, failed start, no late delivery); `stop_session` (record `Idle`, broadcast, credential kept, resumable) and the `SessionStop` arm's new broadcast; the `Abandoned` path on a closed socket; no record when the CLI is missing; read latency with 50+50 (SC-004); audit lines (SC-010). Isolation & lifecycle gate: Default-session refusals and cross-project `not_found` are integration tests |
 | Client (`crates/micold-client/tests/features_agent_confirm.rs`, settings tests) | the dialog's state: request shows, withdraw hides, answer sends `ConfirmationAnswer` once; settings drafts carry both new fields |
 | Geometry gates (`crates/micold-client/tests/layout_snapshot.rs`, `layout_coverage_registry.rs` + `tests/support/covered_states.rs`) | the confirmation dialog and the Environment page with both new rows are registered covered states |
 | Real runtime (`sandbox_real_mcp.rs`, off by default) | the binding works inside the container (SC-008 for 027) |
@@ -218,14 +220,15 @@ docs/user-guide/{agent-tools.md (NEW), settings.md, sandboxed-daemon.md}, docs/S
 
 ## Milestone outline (cut in tasks.md)
 
-1. **M1 — US1**: listener, credentials, binding for Claude and Copilot, the read-only tools, the
-   FR-004 toggle, user guide page. Deliverable: a new Claude Code session can call `whoami`,
-   `list_worktrees`, `list_sessions` with no setup.
-2. **M2 — US2**: `ops.rs` extraction, `create_worktree`, `create_session` with prompt.
-3. **M3 — US3**: policy for destructive operations, confirmation registry, wire messages, dialog,
-   lifecycle tools.
-4. **M4 — US4**: `read_session_output`, `send_session_input`, the FR-016 option.
-5. **M5 — Polish**: audit-log conformance, sandbox real-runtime test, SC-004 timing, docs pass.
+1. **M1 — US1 s1–s5**: listener, credentials, binding for Claude and Copilot, the read-only tools,
+   user guide page.
+2. **M2 — US1 s6**: the FR-004 toggle (protocol 15 → 16).
+3. **M3 — US2**: `ops.rs` extraction, `create_worktree`, `create_session` with prompt.
+4. **M4 — US3 s1, s6**: `start_session`, `rename_worktree`, Default-session refusals.
+5. **M5 — US3 s2–s5**: `stop_session`, confirmation registry and dialog, destructive tools
+   (protocol 16 → 17).
+6. **M6 — US4**: `read_session_output`, `send_session_input`, the FR-016 option (17 → 18).
+7. **M7 — Polish**: audit-log conformance, sandbox real-runtime test, SC-004 timing, §B evidence.
 
 ## Risks
 
