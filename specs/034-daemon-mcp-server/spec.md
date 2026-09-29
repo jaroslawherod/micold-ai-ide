@@ -67,11 +67,10 @@ and manage the project's sessions and worktrees the way the user does from the s
   for the user's confirmation in an application window, and fails with "needs confirmation" after
   60 seconds or when no window is attached (FR-014). _(decided by user)_
 - Q: May an agent read another session's terminal output and type prompts into it? → A: Yes, under
-  a three-value Settings option: **Off** (default; both refused), **Confirm each send** (reading
-  allowed; each send waits for window confirmation as in FR-014), **Auto** (both allowed, no
-  confirmation) (FR-016). _(decided by user — the user's words: "use auto mode means send all no
-  confirm, confirm each send and off by default auto"; reading Off as the default is the
-  orchestrator's interpretation)_
+  a three-value Settings option: **Auto** (default; both allowed, no confirmation), **Confirm each
+  send** (reading allowed; each send waits for window confirmation as in FR-014), **Off** (both
+  refused) (FR-016). _(decided by user — "use auto mode means send all no confirm, confirm each send
+  and off by default auto"; confirmed: "default auto")_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -188,8 +187,8 @@ terminal recently showed, see whether it is working or waiting for input — and
 prompt.
 
 **Why this priority**: Turns separate sessions into an orchestratable team, but it crosses the
-session isolation boundary (Principle II) and so is gated by its own Settings option, off by
-default (FR-016).
+session isolation boundary (Principle II) and so has its own Settings option (FR-016), which the
+user can tighten to per-send confirmation or turn off.
 
 **Independent Test**: With the FR-016 option set to Auto, start session S2 with a prompt via
 `create_session`; from S1, poll `get_session` until S2 is `AwaitingInput`, read its recent output
@@ -197,15 +196,15 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
 
 **Acceptance Scenarios**:
 
-1. **Given** the FR-016 option set to Confirm each send or Auto and sibling S2 in the same project, **When** S1's agent invokes
+1. **Given** the FR-016 option at Auto (the default) or Confirm each send, and sibling S2 in the same project, **When** S1's agent invokes
    `read_session_output` on it, **Then** it receives the last N lines of S2's primary terminal as plain text (N bounded by
    FR-012).
-2. **Given** the FR-016 option set to Auto and sibling S2 awaiting input, **When** S1's agent invokes `send_session_input` with a
+2. **Given** the FR-016 option at Auto (the default) and sibling S2 awaiting input, **When** S1's agent invokes `send_session_input` with a
    prompt, **Then** the text is delivered to S2's primary process exactly as if typed, and
    submitted.
 3. **Given** a session in another project, **When** the agent targets it with any operation,
    **Then** the operation fails as if the session did not exist (FR-010).
-4. **Given** the FR-016 option Off (the default), **When** S1's agent invokes `read_session_output` or
+4. **Given** the FR-016 option set to Off, **When** S1's agent invokes `read_session_output` or
    `send_session_input` on S2, **Then** the operation is refused by policy and S2 is untouched.
 5. **Given** the FR-016 option set to Confirm each send and sibling S2 awaiting input, **When** S1's
    agent invokes `send_session_input`, **Then** the request waits for the user's confirmation in a
@@ -334,11 +333,11 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
 - **FR-016**: `read_session_output` and `send_session_input` on a session other than the caller
   MUST be governed by a Settings option separate from FR-004, "Let agents read and type into other
   sessions", with three values, applied within the scope of FR-010:
-  - **Off** (default): both operations are refused by policy.
+  - **Auto** (default): both operations work without confirmation.
   - **Confirm each send**: `read_session_output` works without confirmation; each
     `send_session_input` waits for the user's confirmation in a window under the FR-014 policy
     (same prompt, 60-second bound, no-window refusal).
-  - **Auto**: both operations work without confirmation.
+  - **Off**: both operations are refused by policy.
   Changing the option applies to the next request, including from sessions already running.
 - **FR-017**: `create_session` MUST accept an optional initial prompt and deliver it to the new
   session's primary process as its first submitted input when the session's activity first
@@ -435,6 +434,11 @@ including or excluding worktrees the app did not create. These stay user-only in
 - The calling agent acts with the user's authority inside its project: it is the user's own agent,
   on the user's machine. The confirmation policy (FR-014) is the guard against mistakes, not
   against a hostile user.
+- With FR-016 at its default (Auto), an agent can read and type into any sibling session in its
+  project without confirmation, so a sibling can be made to run commands in its own worktree. The
+  user chose this default; Confirm each send and Off are the guards they can turn on. Typing into a
+  sibling is read as the user's own interaction, through their agent, the same as typing into its
+  terminal, not as the state leak Principle II forbids.
 - A local process running as the same user that reads a live session's credential can act as that
   session. The tool server does not try to tell processes apart, exactly as the hook receiver does
   not today; the guard is FR-007's per-user protection, not per-process identity.
