@@ -3,19 +3,21 @@
 `/speckit-autopilot <feature idea>`, `/speckit-autopilot bug: <report>` or
 `/speckit-autopilot resume`.
 
-You give it one prompt. For a feature, the agent writes the spec and merges it, clarifies it with
-you, plans and cuts the work into milestones, then ships each milestone to `main` as its own
-reviewed PR. For a bug, it reproduces it, records it against the spec that owns the behaviour, and
-ships the regression test and fix as one PR. It reviews every artifact and every diff itself; no
-human does. It asks you only for decisions that are yours (see
-[When you are asked](#when-you-are-asked)). When everything has merged, it tells you the worktree
+You give one prompt.
+
+- **Feature:** the agent writes and merges the spec, clarifies it with you, plans, cuts milestones,
+  then ships each milestone to `main` as its own reviewed PR.
+- **Bug:** the agent reproduces it, records it against the owning spec, and ships the regression
+  test and fix as one PR.
+
+The agent reviews every artifact and diff itself. It asks you only for decisions that are yours
+(see [When you are asked](#when-you-are-asked)). When all PRs have merged, it tells you the worktree
 can be removed.
 
-The agent follows [SKILL.md](SKILL.md). This page is the human-facing overview.
+The agent follows [SKILL.md](SKILL.md). This page is the overview for humans.
 
-The session you start only orchestrates: it keeps the ledger, asks you questions and merges. The
-spec, the design, each milestone and the close each run in their own subagent with a fresh
-context, so a long run does not drag every earlier phase along.
+The session you start only orchestrates: ledger, questions, merges. The spec, design, each
+milestone and the close each run in a fresh subagent.
 
 ## The flow
 
@@ -28,26 +30,26 @@ flowchart TD
     BUGPATH -->|"fixed and merged"| DONE
 
     TRIAGE -->|feature| SPEC["speckit-specify"]
-    SPEC --> SREV["Fresh-context reviewer: spec rubric"]
+    SPEC --> SREV["Reviewer: spec rubric"]
     SREV -->|"changes, max 3 rounds"| SPEC
-    SREV -->|clean| PR1["PR 1: spec, merged on green"]
+    SREV -->|clean| PR1["PR 1: spec"]
 
     PR1 --> CSCAN["speckit-clarify, one round"]
     CSCAN --> CQ{"Questions left?"}
     CQ -->|none| PLAN
-    CQ -->|yes| CTRI{"Settled by the repo? constitution, specs, code"}
-    CTRI -->|yes| CAUTO["Agent answers and cites the evidence"]
-    CTRI -->|"no: a real decision"| H1["ACTION REQUIRED: batched questions, each with a recommendation"]
+    CQ -->|yes| CTRI{"Repo settles it?"}
+    CTRI -->|yes| CAUTO["Agent answers, cites evidence"]
+    CTRI -->|"no: a real decision"| H1["ACTION REQUIRED: batched questions"]
     CAUTO --> CSCAN
     H1 --> CSCAN
 
-    PLAN["speckit-plan"] --> PREV["Reviewer: plan against constitution and spec"]
+    PLAN["speckit-plan"] --> PREV["Reviewer: plan rubric"]
     PREV -->|changes| PLAN
     PREV -->|clean| TASKS["speckit-tasks"]
-    TASKS --> MCUT["Cut milestones: each one ships a deliverable"]
-    MCUT --> ANA["speckit-analyze, tasks and milestone review, close checklists"]
+    TASKS --> MCUT["Cut milestones"]
+    MCUT --> ANA["speckit-analyze, tasks review, checklists"]
     ANA -->|"changes, max 3 rounds"| PLAN
-    ANA -->|clean| PR2["PR 2: clarifications, plan, tasks, milestones, merged on green"]
+    ANA -->|clean| PR2["PR 2: plan, tasks, milestones"]
 
     PR2 --> MLOOP[["Milestone loop, one PR per milestone"]]
     MLOOP --> MORE{"More milestones?"}
@@ -55,7 +57,7 @@ flowchart TD
     MORE -->|no| CLOSE["speckit-converge, tdd-verify, docguard-guard"]
     CLOSE -->|"unbuilt work: new milestone"| MLOOP
     CLOSE -->|complete| FIN["Final PR: spec status Closed"]
-    FIN --> DONE(["WORK COMPLETE: PRs listed, decisions summarised, worktree safe to remove in micold IDE"])
+    FIN --> DONE(["WORK COMPLETE: worktree safe to remove"])
 
     ESC["ACTION REQUIRED: escalation"]
     SREV -.->|"not converging"| ESC
@@ -72,21 +74,21 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    M0["Reset the worktree branch to origin/main, once the previous PR is MERGED"] --> M1["speckit-implement, limited to this milestone's tasks"]
-    M1 --> M2["tdd-run: red, green, refactor for each behaviour"]
-    M2 --> GATE["mise run gate: fmt, clippy, tests, shell suites"]
-    GATE --> EXTRA["If cfg changed: macOS cross-check. If visuals changed: visual-pass"]
-    EXTRA --> REV["Review A: code-review high. Review B: fresh subagent checks deliverable, scenarios, constitution"]
+    M0["Reset branch to origin/main after previous PR MERGED"] --> M1["speckit-implement: this milestone only"]
+    M1 --> M2["tdd-run: red, green, refactor"]
+    M2 --> GATE["mise run gate"]
+    GATE --> EXTRA["cfg changed: macOS check. Visuals changed: visual-pass"]
+    EXTRA --> REV["Review A: code-review high. Review B: conformance"]
     REV -->|"real findings, max 3 rounds"| GATE
-    REV -->|clean| PR["Ledger updated, push, PR with deliverable and review summary"]
+    REV -->|clean| PR["Update ledger, push, open PR"]
     PR --> CI{"ci complete"}
     CI -->|"red in this flow's code"| FIX["systematic-debugging, fix, push"]
     FIX -->|"attempts 1 to 3"| CI
     FIX -.->|"attempt 4"| ESC["ACTION REQUIRED"]
     CI -.->|"red outside this flow"| ESC
-    CI -->|"no checks"| DIAG["Conflicting? Awaiting approval? Outage?"]
+    CI -->|"no checks"| DIAG["Conflict? Approval? Outage?"]
     DIAG --> CI
-    CI -->|green| MERGE["gh pr merge --rebase, no branch deletion, confirm MERGED"]
+    CI -->|green| MERGE["gh pr merge --rebase, confirm MERGED"]
     MERGE --> SHIP(["Milestone shipped on main"])
 
     classDef human fill:#ffe0e0,stroke:#c00,stroke-width:2px,color:#000
@@ -97,22 +99,22 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    B0(["bug: your report"]) --> REPRO["systematic-debugging: reproduce on origin/main, with variations"]
+    B0(["bug: your report"]) --> REPRO["systematic-debugging: reproduce on origin/main"]
     REPRO --> RQ{"Reproduces?"}
-    RQ -.->|no| ESCR["ACTION REQUIRED: the missing reproduction detail"]
+    RQ -.->|no| ESCR["ACTION REQUIRED: missing detail"]
     ESCR -.->|"your answer"| REPRO
-    RQ -->|yes| OWN{"Which spec owns the broken behaviour?"}
-    OWN -->|none| FEAT["Feature path from speckit-specify, citing the reproduction"]
-    OWN -.->|"a feature still in flight"| ESCO["ACTION REQUIRED: blocked by work outside my flow"]
-    OWN -->|"a Closed spec"| REP["bugfix-report: BUG-k.md with root cause and false completions, ledger beside it"]
-    REP --> PATCH["bugfix-patch: missing requirement, reopened tasks, fix tasks"]
+    RQ -->|yes| OWN{"Which spec owns it?"}
+    OWN -->|none| FEAT["Feature path from speckit-specify"]
+    OWN -.->|"a feature still in flight"| ESCO["ACTION REQUIRED: blocked by outside work"]
+    OWN -->|"a Closed spec"| REP["bugfix-report: BUG-k.md and ledger"]
+    REP --> PATCH["bugfix-patch: requirement, reopened and fix tasks"]
     PATCH --> VER["bugfix-verify, then fresh reviewer: bug rubric"]
     VER -->|"changes, max 3 rounds"| PATCH
     VER -->|clean| SIZE{"New behaviour, or more than 10 tasks?"}
     SIZE -->|yes| FEAT
-    SIZE -->|no| RED["Regression test fails on origin/main for the reported reason"]
-    RED --> MS[["One milestone: fix, gate, reviews A and B, PR fix(NNN) BUG-k, CI, merge"]]
-    MS --> BDONE(["WORK COMPLETE: BUG-k fixed, worktree safe to remove in micold IDE"])
+    SIZE -->|no| RED["Regression test fails on origin/main"]
+    RED --> MS[["One milestone: fix, gate, reviews, PR, CI, merge"]]
+    MS --> BDONE(["WORK COMPLETE: BUG-k fixed"])
 
     classDef human fill:#ffe0e0,stroke:#c00,stroke-width:2px,color:#000
     classDef pr fill:#e0f0ff,stroke:#06c,color:#000
@@ -120,60 +122,35 @@ flowchart TD
     class MS pr
 ```
 
-A bug gets no spec PR, design PR or close phase: the BUG record, the spec patch, the regression test
-and the fix all ship in one PR. If the fix turns out to be new behaviour, the bug becomes the input
-to a normal feature flow.
+A bug gets no spec PR, design PR or close phase. The BUG record, spec patch, regression test and fix
+ship in one PR. If the fix is new behaviour, the bug becomes input to the feature flow.
 
 ## When you are asked
 
-Every question arrives as a `🛑 ACTION REQUIRED FROM YOU` banner and a push notification. The banner
-says:
-- what is needed
-- why the agent cannot decide it
-- what it already checked
-- what it recommends
-- what stays paused while it waits
+The agent asks you only for product decisions, constitution conflicts, irreversible actions,
+missing access, things that will not converge, or a plan that proved false. Every question arrives as
+a `🛑 ACTION REQUIRED FROM YOU` banner and a push notification. The agent handles everything else
+itself. See [SKILL.md](SKILL.md#asking-the-human) and [references/escalation.md](references/escalation.md).
 
-Questions are batched. You are asked only when one of these applies:
+## Ownership
 
-1. A product or scope decision that the repo does not already settle.
-2. A conflict with the constitution.
-3. An irreversible or outward action beyond merging the flow's own PRs: a release, a settings or
-   ruleset change, secrets, deleting data.
-4. Access the agent lacks.
-5. Something that will not converge: a review after 3 rounds, CI after 3 fixes, clarification after
-   4 rounds, a bug that will not reproduce. This includes a flow blocked by work outside it.
-6. The plan proved false in a way that changes requirements.
-
-Everything else the agent handles itself: review findings, lint and test failures, merge conflicts,
-flaky CI, visual checks, and implementation choices. Details:
-[references/escalation.md](references/escalation.md).
-
-## What the agent owns
-
-The agent owns only the work its own flow created:
-- this worktree and its branch
-- the feature directory it created, or for a bug, the BUG record it filed and its patch to the
-  owning Closed spec
-- the PRs recorded in its ledger
-
-It never merges, reviews or fixes other sessions' PRs, specs or worktrees. It never deletes the
-worktree or the branch. Removing the worktree in micold IDE cleans up both.
+The agent owns only its worktree, branch, feature directory (or BUG record) and the PRs in its
+ledger. It never touches other sessions' work and never deletes the worktree. Remove the worktree in
+micold IDE to clean up.
 
 ## Resuming
 
-Progress is kept in `specs/<NNN>-<slug>/autopilot.md`, or for a bug in `bugs/BUG-<k>.autopilot.md`
-beside the BUG record. It is committed with every PR and holds the phase, PRs, milestones, every decision (and who made it), declined review findings, and follow-ups.
-After a crash or `/clear`, run `/speckit-autopilot resume` in the same worktree. It finds the run
-itself, from the unfinished ledger that records this worktree's branch.
+The ledger is `specs/<NNN>-<slug>/autopilot.md`, or for a bug `bugs/BUG-<k>.autopilot.md` beside the
+BUG record. It is committed with every PR. It holds the phase, PRs, milestones, every decision (and
+who made it), declined review findings, and follow-ups. After a crash or `/clear`, run
+`/speckit-autopilot resume` in the same worktree. It finds the unfinished ledger that records this
+worktree's branch.
 
 ## Files
 
-| File | Holds |
-|---|---|
-| [SKILL.md](SKILL.md) | The phases, the milestone loop, ownership, the handoff, red flags |
-| [references/escalation.md](references/escalation.md) | When and how the human is asked |
-| [references/milestones.md](references/milestones.md) | How tasks become deliverable milestones |
-| [references/review-rubrics.md](references/review-rubrics.md) | Reviewer dispatch and the rubric for each artifact and for code |
-| [references/pr-and-merge.md](references/pr-and-merge.md) | Local gate, PR format, waiting for CI, merging, known failure modes |
-| [templates/autopilot-ledger.md](templates/autopilot-ledger.md) | The progress ledger |
+- [SKILL.md](SKILL.md): phases, milestone loop, ownership, handoff, red flags
+- [references/escalation.md](references/escalation.md): when the human is asked
+- [references/milestones.md](references/milestones.md): cutting milestones
+- [references/review-rubrics.md](references/review-rubrics.md): reviewer dispatch and rubrics
+- [references/pr-and-merge.md](references/pr-and-merge.md): gate, PR, CI, merge
+- [templates/autopilot-ledger.md](templates/autopilot-ledger.md): the ledger

@@ -1,7 +1,7 @@
 # Autopilot ledger — <NNN>-<slug> [BUG-<k>]
 
-Maintained by the `speckit-autopilot` skill. It is the record of what this flow owns and how far it
-has got. `resume` finds this file by its **Worktree branch** line and reads it. Keep it true.
+Kept by the `speckit-autopilot` skill. Records what this flow owns and how far it got. `resume`
+finds this file by its **Worktree branch** line. Keep it true.
 
 - **Input**: <the user's original prompt, verbatim>
 - **Kind**: feature | bug
@@ -36,9 +36,8 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 
 ## Open escalation
 
-None. <or: the banner as sent, and when it was sent>
+None. <or: the banner as sent, and when>
 
 ## Follow-ups not done
 
-<Defects found outside this flow's work, scope deliberately cut, and so on. This list is copied into
-the handoff.>
+<Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
