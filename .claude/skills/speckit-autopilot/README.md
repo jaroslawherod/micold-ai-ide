@@ -149,7 +149,7 @@ worktree's branch.
 
 - [SKILL.md](SKILL.md): the orchestrator: entry, resume, dispatch, CI and merge, ownership, handoff
 - [unit.md](unit.md): rules every unit follows: ledger, reviews, escalating, return format
-- [phases/](phases/): one file per phase unit (bug, spec, clarify, design, milestone, close)
+- [phases/](phases/): one file per phase unit (bug, spec, clarify, design, milestone, close, record)
 - [references/escalation.md](references/escalation.md): when the human is asked
 - [references/milestones.md](references/milestones.md): cutting milestones
 - [references/review-rubrics.md](references/review-rubrics.md): reviewer dispatch and rubrics

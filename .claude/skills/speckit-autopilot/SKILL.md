@@ -51,7 +51,7 @@ GitHub's state for each recorded PR.
 | 0 | `LEDGER-ON-MAIN …` | Run `scripts/autopilot/branch-start.sh`, then `resume.sh` again. |
 | 2 | `NONE` | Say there is no run to resume here, and stop. |
 | 3 | several ledgers | Ask with one `AskUserQuestion`: each option names a ledger's feature, phase and next step. Recommend the most recently committed one. |
-| 4 | `RECORD-PR-PENDING` | The run finished but its record PR never merged. Open or merge it, then run the handoff. |
+| 4 | `RECORD-PR-PENDING` | The run finished but its record PR never merged. Merge it if open, else dispatch the record unit; then run the handoff. |
 
 **When GitHub and the ledger disagree, GitHub is right.** Fix the ledger. A milestone marked merged
 whose PR is open, or whose changes are missing from `origin/main`, goes back to a milestone unit.
@@ -68,12 +68,22 @@ question was never answered: ask it again, then dispatch a fresh unit of that ph
 | 3 | **Design** | Design: [phases/3-design.md](phases/3-design.md) | **PR 2**: clarified spec, plan, research, contracts, tasks with `## Milestones` |
 | 4 | **Milestones**, one at a time | Milestone K: [phases/4-milestone.md](phases/4-milestone.md) | One PR per milestone |
 | 5 | **Close** | Close: [phases/5-close.md](phases/5-close.md) | New milestones (back to 4, then close again), or the close PR, then the **handoff** |
+| 6 | **Record** | Record: [phases/6-record.md](phases/6-record.md) | The record PR, opened at the **handoff** |
 
 Every PR merges on green before the next unit starts.
 
 ### Dispatching a unit
 
-Run each unit in its own `general-purpose` subagent on the session model (omit `model`).
+Run each unit in its own `general-purpose` subagent. Pick the model by the work, not the phase
+name. A unit keeps its model when continued with `SendMessage`.
+
+| Unit | `model` |
+|---|---|
+| Spec, clarify round 1, design, bug, close, and a milestone that touches code or tests | omit (session model) |
+| Clarify round 2 and later, and a milestone whose tasks touch only docs or specs | `"sonnet"` |
+| Record | `"haiku"` |
+
+A cheaper unit that returns `FAILED` is retried on the session model.
 
 - **Description:** name the unit (`Milestone M2 042`, `Clarify round 3 042`). Token reports group by
   it.
@@ -153,11 +163,9 @@ PRs, visual checks, or a choice between equivalent implementations. Handle those
 
 ## Handoff: the last message
 
-First close the ledger: set **Phase** to `done`, record the last merge SHA, and copy
-the Total row and model table of `mise run autopilot-tokens` into *Token usage*. Open that last PR
-yourself (`docs(NNN): record the autopilot run`) per
-[references/pr-and-merge.md](references/pr-and-merge.md) §2–6 and merge it on green. It is not
-listed in the ledger, so pass it to the checks.
+First dispatch the record unit with the last PR and its merge SHA. It closes the ledger and opens
+the record PR; wait on it and merge it as any other. It is not listed in the ledger, so pass it to
+the checks.
 
 Then run `scripts/autopilot/handoff-check.sh <ledger> <record-pr>`. It checks the tree is clean,
 every commit is on `origin/main` (by patch, since rebase-merge rewrites SHAs), and every PR reads
