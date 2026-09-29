@@ -178,3 +178,23 @@ failed before the implementation.
 - refactor: none needed
 - notes: every test was red on the stub, so no deliberate-mutant check was needed
 - commit: the commit that adds this entry
+
+## Cycle 8: U36–U40 — a worktree name from an issue title
+
+- test: `crates/micold-core/tests/naming_from_title.rs` (new), 5 tests
+- stub: `ISSUE_NAME_SLUG_MAX = 0`, `name_from_title` returning `""`
+- red: `scripts/build-lock.sh cargo test -p micold-core --test naming_from_title`
+  -> `test result: FAILED. 2 passed; 3 failed`. Decisive lines: `fits_and_the_50_boundary`:
+  `left: 0 / right: 50`; `cut_at_word_boundary`: `left: "" / right: "When the sidebar is collapsed
+  the create worktree"`; `a_long_first_word_is_cut_at_50`: `left: "" / right: "aaaa…"` (50).
+  `empty_slug_yields_empty_name` and `slug_never_exceeds_50` passed on the stub.
+- green: `name_from_title` normalises whitespace, keeps a title whose slug fits, else the longest
+  whole-word prefix with a non-empty slug that fits, else the slug's first 50 characters. The
+  first green attempt returned `"🔥🔥 !!!"` for a title that slugs to nothing
+  (`empty_slug_yields_empty_name`: `left: "🔥🔥 !!!" / right: ""`), so that test was red
+  against a real implementation; an empty-slug check made it pass. -> `5 passed; 0 failed`;
+  `mise run test-core` passed, 0 failed
+- mutant: `slug_never_exceeds_50` with the fit bound mutated to `ISSUE_NAME_SLUG_MAX + 1` ->
+  `"xxx…x y" -> "xxx…x y" slugs past 50`, FAILED; code restored exactly
+- refactor: none needed
+- commit: the commit that adds this entry
