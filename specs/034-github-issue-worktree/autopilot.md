@@ -15,6 +15,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #452 | Spec (PR 1) — reviewed: round 1 CHANGES (10 findings, all fixed), round 2 CLEAN (4 MINOR, fixed) | merged | d6c2f33e |
+| #459 | Design (PR 2) — plan review r1 CHANGES (18, 17 fixed, F10 declined), r2 CHANGES (4 LOW, fixed); analyze 0 critical/high (fixed); tasks review r1 CHANGES (11, fixed), r2 CHANGES (2 LOW, fixed) | open | — |
 
 ## Milestones
 
