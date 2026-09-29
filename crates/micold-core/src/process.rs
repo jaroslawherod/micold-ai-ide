@@ -136,6 +136,11 @@ pub fn kill_process_group(pid: u32) {
 /// process (an agent daemon, a version-manager helper); if such a grandchild inherits the pipe
 /// and outlives its parent, reading to EOF would otherwise block forever (this exact deadlock was
 /// observed with a `sleep`-under-`source`-under-command-substitution during development).
+///
+/// stdout and stderr are drained on two reader threads **while** the child runs (feature 034,
+/// research R6): a child that writes more than the OS pipe buffer (64 KiB on Linux, less on macOS
+/// and Windows) would otherwise block on its write, never exit, and be killed as a timeout. The
+/// readers are joined after the group kill above, which is what guarantees they reach EOF.
 pub fn run_bounded(mut cmd: Command, timeout: Duration) -> RunOutcome {
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(unix)]
@@ -147,6 +152,8 @@ pub fn run_bounded(mut cmd: Command, timeout: Duration) -> RunOutcome {
         Ok(child) => child,
         Err(err) => return RunOutcome::SpawnFailed(err.to_string()),
     };
+    let stdout_reader = child.stdout.take().map(drain);
+    let stderr_reader = child.stderr.take().map(drain);
     // Only the Unix kill needs the pid; binding it unconditionally warns on Windows, and this
     // crate is built with warnings denied.
     #[cfg(unix)]
@@ -185,14 +192,8 @@ pub fn run_bounded(mut cmd: Command, timeout: Duration) -> RunOutcome {
     #[cfg(not(any(unix, windows)))]
     let _ = child.kill();
 
-    let mut stdout = Vec::new();
-    let mut stderr = String::new();
-    if let Some(mut out) = child.stdout.take() {
-        let _ = out.read_to_end(&mut stdout);
-    }
-    if let Some(mut err) = child.stderr.take() {
-        let _ = err.read_to_string(&mut stderr);
-    }
+    let stdout = joined(stdout_reader);
+    let stderr = String::from_utf8_lossy(&joined(stderr_reader)).into_owned();
 
     if timed_out {
         RunOutcome::TimedOut { stderr }
@@ -206,6 +207,22 @@ pub fn run_bounded(mut cmd: Command, timeout: Duration) -> RunOutcome {
             Err(err) => RunOutcome::SpawnFailed(err.to_string()),
         }
     }
+}
+
+/// Read `pipe` to EOF on its own thread, so the child never blocks on a full pipe.
+fn drain(mut pipe: impl Read + Send + 'static) -> std::thread::JoinHandle<Vec<u8>> {
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = pipe.read_to_end(&mut bytes);
+        bytes
+    })
+}
+
+/// What a [`drain`] thread read, or nothing when there was no pipe or the thread panicked.
+fn joined(reader: Option<std::thread::JoinHandle<Vec<u8>>>) -> Vec<u8> {
+    reader
+        .and_then(|handle| handle.join().ok())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

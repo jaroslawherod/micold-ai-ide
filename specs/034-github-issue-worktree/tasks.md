@@ -62,7 +62,7 @@ and classifying open issues through `gh`, and the name derived from a title. No 
 
 ### Tests for User Story 1, slice A (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T001 [P] [US1] [U1] [U2] [U3] [U4] [U5] Write `crates/micold-core/tests/process_run_bounded.rs` against `micold_core::process::run_bounded` (research R6):
+- [X] T001 [P] [US1] [U1] [U2] [U3] [U4] [U5] Write `crates/micold-core/tests/process_run_bounded.rs` against `micold_core::process::run_bounded` (research R6):
   - A child that sleeps past the bound returns `RunOutcome::TimedOut` within bound + 1 s and leaves no child process.
   - A child writing 1 MiB to stdout and 64 KiB to stderr returns `Exited` with every byte of both (pipes drained while waiting).
   - A child exiting non-zero returns its status, stdout and stderr.
@@ -99,7 +99,7 @@ and classifying open issues through `gh`, and the name derived from a title. No 
 
 ### Implementation for User Story 1, slice A
 
-- [ ] T010 [US1] [U1] [U2] [U3] [U4] [U5] Move `run_bounded`, `RunOutcome` and `kill_process_group` from `crates/micold-core/src/env_include.rs` to `crates/micold-core/src/process.rs` as `pub` (process.rs imports `crate::win_job::JobHandle`, which stays where it is), and drain stdout and stderr on reader threads while waiting (research R6). `env_include.rs` calls `process::run_bounded`. Then run `scripts/build-lock.sh cargo check --target aarch64-apple-darwin -p micold-core` (moved `cfg` arms) where the target is installed.
+- [X] T010 [US1] [U1] [U2] [U3] [U4] [U5] Move `run_bounded`, `RunOutcome` and `kill_process_group` from `crates/micold-core/src/env_include.rs` to `crates/micold-core/src/process.rs` as `pub` (process.rs imports `crate::win_job::JobHandle`, which stays where it is), and drain stdout and stderr on reader threads while waiting (research R6). `env_include.rs` calls `process::run_bounded`. Then run `scripts/build-lock.sh cargo check --target aarch64-apple-darwin -p micold-core` (moved `cfg` arms) where the target is installed.
 - [ ] T011 [P] [US1] [U6] [U7] [U8] [U9] [U10] In `crates/micold-core/src/git.rs`, add `Git::remote_list(&self, repo) -> io::Result<String>` (`config --local --get-regexp ^remote\..+\.url$`, exit 1 → `Ok(String::new())`), `GitRemote { name, url }` (serde), `parse_remote_list`, and `FakeGit::with_remote(repo, name, url)` keeping insertion order.
 - [ ] T012 [US1] [U11] [U12] [U13] [U14] [U15] [U16] Create `crates/micold-core/src/github.rs` and add `pub mod github;` to `crates/micold-core/src/lib.rs`: `GithubRepo` (fields `owner` non-empty `[A-Za-z0-9-]`, `name` non-empty with `.git` and trailing `/` stripped; constructible only by `from_remote_url`, host `github.com` or `ssh.github.com` ignoring case, userinfo discarded; `Display` = `owner/name`), `RemoteChoice` and `choose_remote`.
 - [ ] T013 [US1] [U17] [U18] [U19] [U20] [U21] [U22] [U23] In `crates/micold-core/src/github.rs`, add `HostOs` (`current()`, `exe_name()`, `path_separator()`), `LocateInputs { os, env_include_path, process_path, home, env, exists }`, `candidate_dirs` and `locate_gh` with the per-OS well-known table of research R3. No host `split_paths` or `PATHEXT`.

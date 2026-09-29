@@ -55,11 +55,11 @@ Tests: `crates/micold-core/tests/process_run_bounded.rs` (new).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U1  | A child sleeping past the bound returns `TimedOut` within bound + 1 s and is killed | FR-007, SC-004, R6 | example | TODO | `process_run_bounded.rs::a_child_past_the_bound_is_killed_and_reported` |
-| U2  | A child finishing just inside the bound returns `Exited` (other side of the boundary) | FR-007 | example | TODO | `process_run_bounded.rs::a_child_inside_the_bound_exits_normally` |
-| U3  | A child writing 1 MiB stdout and 64 KiB stderr returns every byte of both, not `TimedOut` | FR-007, R6 | example | TODO | `process_run_bounded.rs::large_output_is_drained_while_waiting` |
-| U4  | A non-zero exit returns its status with stdout and stderr | FR-007 | example | TODO | `process_run_bounded.rs::a_failing_child_reports_status_and_output` |
-| U5  | The existing env-include suites stay green after the move | R6 | characterization | BASELINE | `crates/micold-core/tests/env_include*.rs` (existing) |
+| U1  | A child sleeping past the bound returns `TimedOut` within bound + 1 s and is killed | FR-007, SC-004, R6 | example | DONE | `process_run_bounded.rs::a_child_past_the_bound_is_killed_and_reported` |
+| U2  | A child finishing just inside the bound returns `Exited` (other side of the boundary) | FR-007 | example | DONE | `process_run_bounded.rs::a_child_inside_the_bound_exits_normally` |
+| U3  | A child writing 1 MiB stdout and 64 KiB stderr returns every byte of both, not `TimedOut` | FR-007, R6 | example | DONE | `process_run_bounded.rs::large_output_is_drained_while_waiting` |
+| U4  | A non-zero exit returns its status with stdout and stderr | FR-007 | example | DONE | `process_run_bounded.rs::a_failing_child_reports_status_and_output` |
+| U5  | The existing env-include suites stay green after the move | R6 | characterization | DONE | `crates/micold-core/tests/env_include*.rs` (existing) |
 
 ### `crates/micold-core/src/git.rs`: `remote_list`, `parse_remote_list`
 
