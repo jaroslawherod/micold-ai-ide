@@ -486,9 +486,9 @@ including or excluding worktrees the app did not create. These stay user-only in
   against a hostile user.
 - With FR-016 at its default (Auto), an agent can read and type into any sibling session in its
   project without confirmation, so a sibling can be made to run commands in its own worktree. The
-  user chose this default; Confirm each send and Off are the guards they can turn on. Typing into a
-  sibling is read as the user's own interaction, through their agent, the same as typing into its
-  terminal, not as the state leak Principle II forbids.
+  user chose this default; Confirm each send and Off are the guards they can turn on. This crosses
+  Principle II's session isolation; the user accepted it as a justified violation, recorded in
+  plan.md Complexity Tracking, with no constitution amendment.
 - A local process running as the same user that reads a live session's credential can act as that
   session. The tool server does not try to tell processes apart, exactly as the hook receiver does
   not today; the guard is FR-007's per-user protection, not per-process identity.
