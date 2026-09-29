@@ -50,3 +50,23 @@ failed before the implementation.
   time, 5 passed again.
 - refactor: none needed
 - commit: the commit that adds this entry
+
+## Cycle 2: U6–U10, U97 — a repository's own remotes
+
+- test: `crates/micold-core/tests/git_remotes.rs` (new), 6 tests
+- stub: `GitRemote`, `parse_remote_list` returning `[]`, `Git::remote_list` returning `Ok("")` on
+  both `GitCli` and `FakeGit`, `FakeGit::with_remote` recording nothing
+- red: `scripts/build-lock.sh cargo test -p micold-core --test git_remotes`
+  -> `test result: FAILED. 0 passed; 6 failed`. Decisive lines, e.g.
+  `a_dotted_remote_name_is_kept_whole`: `the name is everything between remote. and the last .url /
+  left: [] / right: [GitRemote { name: "a.b", … }]`; `global_insteadof_is_not_applied`: `the
+  repository's own URL is listed as written … / left: [] / right: [GitRemote { name: "origin",
+  url: "gh:o/r" }]`; `git_cli_lists_remotes_and_none_is_not_an_error`: `left: []`.
+- green: `parse_remote_list` (split on the first space, strip `remote.` / `.url`, first URL per
+  name); `GitCli::remote_list` runs `config --local --get-regexp ^remote\..+\.url$` and maps exit 1
+  to `Ok("")`; `FakeGit` keeps remotes per repo in insertion order. -> `6 passed; 0 failed`;
+  `mise run test-core` 1275 passed, 0 failed
+- refactor: none needed
+- notes: U97 appended to the list — T011 names `FakeGit::with_remote`, which no listed behaviour
+  covered
+- commit: the commit that adds this entry

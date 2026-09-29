@@ -67,11 +67,12 @@ Tests: `crates/micold-core/tests/git_remotes.rs` (new).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U6  | `remote.<name>.url <url>` lines parse to `GitRemote`s in config order | FR-002, R5 | example | TODO | `git_remotes.rs::lines_parse_in_config_order` |
-| U7  | A dotted remote name (`remote.a.b.url`) parses to name `a.b` | R5 | example | TODO | `git_remotes.rs::a_dotted_remote_name_is_kept_whole` |
-| U8  | A second `url` for one remote is ignored (first wins); empty output → empty list | R5 | example | TODO | `git_remotes.rs::first_url_wins_and_empty_is_empty` |
-| U9  | `GitCli::remote_list` on a temp repo with two remotes lists both; with none returns `Ok("")` | FR-002 | example | TODO | `git_remotes.rs::git_cli_lists_remotes_and_none_is_not_an_error` |
-| U10 | A global `insteadOf` rewrite is not applied to the listed URL | FR-026, R5 | example | TODO | `git_remotes.rs::global_insteadof_is_not_applied` |
+| U6  | `remote.<name>.url <url>` lines parse to `GitRemote`s in config order | FR-002, R5 | example | DONE | `git_remotes.rs::lines_parse_in_config_order` |
+| U7  | A dotted remote name (`remote.a.b.url`) parses to name `a.b` | R5 | example | DONE | `git_remotes.rs::a_dotted_remote_name_is_kept_whole` |
+| U8  | A second `url` for one remote is ignored (first wins); empty output → empty list | R5 | example | DONE | `git_remotes.rs::first_url_wins_and_empty_is_empty` |
+| U9  | `GitCli::remote_list` on a temp repo with two remotes lists both; with none returns `Ok("")` | FR-002 | example | DONE | `git_remotes.rs::git_cli_lists_remotes_and_none_is_not_an_error` |
+| U10 | A global `insteadOf` rewrite is not applied to the listed URL | FR-026, R5 | example | DONE | `git_remotes.rs::global_insteadof_is_not_applied` |
+| U97 | `FakeGit::with_remote` lists remotes in the order added, as git lists config order (added in M1 cycle 2: T011 names the fake) | R5 | example | DONE | `git_remotes.rs::fake_git_lists_remotes_in_insertion_order` |
 
 ### `crates/micold-core/src/github.rs`: `GithubRepo`, `choose_remote`
 

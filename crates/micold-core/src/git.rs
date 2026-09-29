@@ -96,6 +96,50 @@ pub trait Git {
         worktree_path: &Path,
         on_line: &mut dyn FnMut(String),
     ) -> io::Result<()>;
+
+    /// Raw `git config --local --get-regexp ^remote\..+\.url$` output: the repository's own
+    /// remote URLs, un-rewritten, for [`parse_remote_list`] (feature 034, research R5).
+    ///
+    /// Local config only — this MUST NOT contact a remote (Principle IV) and MUST NOT read global
+    /// config, so the answer is the same wherever the daemon runs (FR-026). No remotes is
+    /// `Ok("")`, not an error. Contract: `specs/034-github-issue-worktree/contracts/remote-list-rpc.md`.
+    fn remote_list(&self, repo: &Path) -> io::Result<String>;
+}
+
+/// One remote of a repository, as its own config names it (feature 034, research R5).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct GitRemote {
+    /// `origin`, `upstream`, … — may contain dots.
+    pub name: String,
+    /// `remote.<name>.url` as written in the repository's config, not rewritten by `insteadOf`.
+    pub url: String,
+}
+
+/// Parse [`Git::remote_list`] output into remotes, in config order, first URL per remote.
+///
+/// Each line is `remote.<name>.url <url>`: the name is everything between `remote.` and the last
+/// `.url` (remote names may contain dots), the URL the rest of the line after the first space.
+pub fn parse_remote_list(raw: &str) -> Vec<GitRemote> {
+    let mut remotes: Vec<GitRemote> = Vec::new();
+    for line in raw.lines() {
+        let Some((key, url)) = line.split_once(' ') else {
+            continue;
+        };
+        let Some(name) = key
+            .strip_prefix("remote.")
+            .and_then(|rest| rest.strip_suffix(".url"))
+        else {
+            continue;
+        };
+        if name.is_empty() || remotes.iter().any(|r| r.name == name) {
+            continue;
+        }
+        remotes.push(GitRemote {
+            name: name.to_string(),
+            url: url.trim_end().to_string(),
+        });
+    }
+    remotes
 }
 
 /// Production [`Git`] backed by the user's `git` binary (research R7). Cross-platform via the
@@ -300,6 +344,25 @@ impl Git for GitCli {
         worktree_path.join(".gitmodules").is_file()
     }
 
+    fn remote_list(&self, repo: &Path) -> io::Result<String> {
+        let args = ["config", "--local", "--get-regexp", r"^remote\..+\.url$"];
+        let output = no_window(&mut Command::new("git"))
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()?;
+        match output.status.code() {
+            Some(0) => Ok(String::from_utf8_lossy(&output.stdout).into_owned()),
+            // `--get-regexp` exits 1 when nothing matches: a repository without remotes.
+            Some(1) => Ok(String::new()),
+            _ => Err(io::Error::other(format!(
+                "git {} failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&output.stderr).trim()
+            ))),
+        }
+    }
+
     fn submodule_update_init_recursive(
         &self,
         worktree_path: &Path,
@@ -480,6 +543,8 @@ struct FakeState {
     remote_branches: BTreeMap<PathBuf, BTreeSet<String>>,
     /// repo -> local branch -> its upstream, as `<remote>/<branch>` (feature 016).
     upstreams: BTreeMap<PathBuf, BTreeMap<String, String>>,
+    /// repo -> (remote name, URL), in the order added (feature 034).
+    remotes: BTreeMap<PathBuf, Vec<(String, String)>>,
     /// repo -> list of (worktree path, branch).
     worktrees: BTreeMap<PathBuf, Vec<(PathBuf, String)>>,
     /// Branches passed to `worktree_add_existing_branch`, in call order (feature 016 assertions).
@@ -650,6 +715,17 @@ impl FakeGit {
     /// assertions, feature 010).
     pub fn submodule_update_calls(&self) -> Vec<PathBuf> {
         self.inner.borrow().submodule_update_calls.clone()
+    }
+
+    /// A remote of `repo`, listed by [`Git::remote_list`] in the order added (feature 034).
+    pub fn with_remote(self, repo: impl Into<PathBuf>, name: &str, url: &str) -> Self {
+        self.inner
+            .borrow_mut()
+            .remotes
+            .entry(repo.into())
+            .or_default()
+            .push((name.to_string(), url.to_string()));
+        self
     }
 
     /// Snapshot the branches known for a repo (test assertions).
@@ -892,6 +968,15 @@ impl Git for FakeGit {
 
     fn has_submodules(&self, worktree_path: &Path) -> bool {
         self.inner.borrow().submodules.contains(worktree_path)
+    }
+
+    fn remote_list(&self, repo: &Path) -> io::Result<String> {
+        let state = self.inner.borrow();
+        let mut out = String::new();
+        for (name, url) in state.remotes.get(repo).into_iter().flatten() {
+            out.push_str(&format!("remote.{name}.url {url}\n"));
+        }
+        Ok(out)
     }
 
     fn submodule_update_init_recursive(
