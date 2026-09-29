@@ -207,6 +207,18 @@ jq '.statusCheckRollup = [
   {"context":"some/status","state":"SUCCESS"}]' "$d/fx/pr-5.json" > "$d/fx/x" && mv "$d/fx/x" "$d/fx/pr-5.json"
 check "wait-merge: the newest ci complete wins over a superseded one" 0 '^GREEN 5' "$S/wait-merge.sh" 5 --no-merge
 
+wm; pr_json "$d/fx" 5 OPEN COMPLETED SUCCESS > "$d/fx/pr-5.json"
+jq '.statusCheckRollup = [
+  {"name":"ci complete","status":"COMPLETED","conclusion":"SUCCESS","startedAt":"2026-01-01T10:00:00Z","detailsUrl":"https://x/actions/runs/70/job/1"},
+  {"name":"ci complete","status":"QUEUED","conclusion":"","startedAt":"0001-01-01T00:00:00Z","detailsUrl":"https://x/actions/runs/71/job/1"}]' \
+  "$d/fx/pr-5.json" > "$d/fx/x" && mv "$d/fx/x" "$d/fx/pr-5.json"
+check "wait-merge: a queued re-run is not overtaken by an older green" 6 '^TIMEOUT 5 ' \
+  env AUTOPILOT_MAX_WAIT=0 "$S/wait-merge.sh" 5 --no-merge
+
+wm; pr_json "$d/fx" 5 OPEN COMPLETED FAILURE > "$d/fx/pr-5.json"
+jq '.statusCheckRollup += [{"context":"ext/lint","state":"ERROR","targetUrl":"https://ext/1"}]' "$d/fx/pr-5.json" > "$d/fx/x" && mv "$d/fx/x" "$d/fx/pr-5.json"
+check "wait-merge: red lists a failed commit status" 1 '^- ext/lint ERROR https://ext/1' "$S/wait-merge.sh" 5
+
 wm; pr_json "$d/fx" 5 OPEN COMPLETED FAILURE > "$d/fx/pr-5.json"
 jq '.statusCheckRollup[0].conclusion = "CANCELLED"' "$d/fx/pr-5.json" > "$d/fx/x" && mv "$d/fx/x" "$d/fx/pr-5.json"
 check "wait-merge: red names a cancelled check" 1 'build \+ test CANCELLED' "$S/wait-merge.sh" 5
