@@ -14,7 +14,7 @@ the pair went unnoticed through many launches. Settings showed the stored string
 Sessions got the service's own environment, so a CLI that `~/.bashrc` would have put on `PATH` was
 missing. Nothing said the script could not be found. The issue's position: "A path that does not
 exist is not a working configuration, whether the feature is switched on or off." It leaves three
-points open, and this spec leaves them open for clarification (FR-004, FR-007, FR-008).
+points open; Clarifications settles them (FR-004, FR-007, FR-008).
 
 **Relation to feature 011**: Feature 011 (Closed) owns environment-include. Its FR-013 and SC-006
 already require a Settings note when an *attempt* to resolve the script fails, and with the
@@ -35,6 +35,17 @@ a consistent report of it in both states. It does not change how 011 sources the
 - Q: Is the draft script path checked while the user is typing it? → A: No. The path field has no
   validation while typing; any draft check happens on Save.
   _(agent-resolved: specs/011-env-include-script/contracts/settings-ui.md#New `Message` variants)_
+- Q: What should happen when the user saves Settings and the saved script path is missing? → A:
+  Save anyway, and post a notification at save time that names the missing path. _(decided by
+  user)_
+- Q: When a resolution cannot find the script, is that reported anywhere besides Settings? → A:
+  No. Settings only. _(decided by user)_
+- Q: What recovery does the application offer for a stored path that has gone missing? → A:
+  None. Report only; the user fixes the path in Settings. _(decided by user)_
+- Q: Does every save that leaves a missing path post the notification, or only a save that
+  changed the path? → A: Every such save. The check runs after every save (FR-009), and the
+  user's answer is that a save leaving a missing path is not silent; a non-blocking notification
+  per save is the cost. _(agent-resolved: specs/035-report-missing-include-script/spec.md#FR-009)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -66,6 +77,9 @@ Settings again: no indication.
 4. **Given** the not-found indication is showing while the feature is off, **When** the user
    launches a session, **Then** the launch proceeds as it does today, with no script sourced and
    no delay.
+5. **Given** either state of the feature, **When** the user saves Settings with a stored path that
+   names no existing file, **Then** the settings are saved and a notification names the path and
+   says the script cannot be found (FR-004).
 
 ---
 
@@ -104,7 +118,7 @@ A user sees that the stored script path does not exist. They can get back to a w
 configuration from within the application, without editing any file by hand.
 
 **Why this priority**: Reporting the problem (User Stories 1 and 2) is the fix the issue asks for
-first. A guided recovery is a convenience on top, and its shape is not yet decided (FR-008).
+first. No guided recovery is offered (FR-008): the user edits the path in Settings.
 
 **Independent Test**: Store a missing path. From the not-found indication, reach a configuration
 whose path exists (or that is deliberately blank), using only the application, and confirm the
@@ -112,12 +126,10 @@ indication is gone.
 
 **Acceptance Scenarios**:
 
-1. **Given** the not-found indication is showing, and FR-008's answer offers an in-app recovery,
-   **When** the user follows it, **Then** the stored configuration no longer names a missing
-   file and the indication is gone. (If FR-008's answer is "report only", this scenario is
-   dropped and scenario 2 is the recovery.)
-2. **Given** the not-found indication is showing, **When** the user types an existing path
+1. **Given** the not-found indication is showing, **When** the user types an existing path
    themselves and saves, **Then** the indication is gone.
+2. **Given** the not-found indication is showing, **When** the user clears the path and saves,
+   **Then** the indication is gone (a blank path is not reported, FR-011).
 
 ---
 
@@ -181,12 +193,13 @@ indication is gone.
   and MUST NOT change what sessions receive: no script is sourced, exactly as in feature 011.
 - **FR-004**: FR-001 and FR-009 already settle that the *stored* path is checked whenever
   Settings is shown and after every save. The draft path is not checked while the user types, and
-  saving is never refused because the path is missing (Clarifications). On Save, the application
-  MUST [NEEDS CLARIFICATION: Save closes Settings (`persist.rs` `apply_save`), so the post-save
-  indication is only seen when Settings is next opened. Options: check the saved path and, if it
-  is missing, save anyway and post a notification naming the path; or do not check at save and
-  let the indication appear the next time Settings is opened. Issue #435's first open point,
-  BUG-006 ledger D3.]
+  saving is never refused because the path is missing (Clarifications). Because Save closes
+  Settings, when a save leaves a non-blank stored path that the check does not find to be a
+  readable file, the application MUST save as usual and then post a notification that names the
+  path and says it cannot be found (or is not a readable file), in either state of the feature. A
+  save that changes nothing about the path still posts it (Clarifications). A relative path gets
+  no notification (it is not checked, FR-001). A check that has no answer within FR-006's bound
+  posts no notification; the indication covers it.
 - **FR-005**: With the feature on, the existing failure indication for a missing script (feature
   011, FR-013) MUST remain. Its wording MUST agree with FR-002, so the path is reported as the
   same problem in both states and the indication does not disappear when the feature is switched
@@ -195,19 +208,12 @@ indication is gone.
   Settings, saving the other settings, or launching a session. The check MUST NOT run as part of
   a session launch, and Settings MUST show its content without waiting for the check. If the
   check has no answer within 2 seconds, the indication MUST say the path could not be checked.
-- **FR-007**: When a resolution cannot find the script, the application MUST report that
-  [NEEDS CLARIFICATION: outside Settings too, and how often? Options: only in Settings (FR-001,
-  FR-005); also once per application run in the main window, for example at the first session
-  launch; also inside the notice about a missing AI CLI (feature 027 FR-023b), which today does
-  not mention that environment-include is off or broken. This is issue #435's second open point
-  ("report that once rather than silently falling back") and BUG-006 ledger D4. A report at
-  session launch would come from the daemon's per-directory resolution, whose silent failures
-  are issue #454; choosing that option overlaps #454's scope.]
-- **FR-008**: The application's response to a stored path that has gone missing MUST be
-  [NEEDS CLARIFICATION: which? Options: offer to switch to the platform default path (011 FR-004)
-  when that file exists; offer to clear the path; offer to turn the feature off; or report only
-  and leave the fix to the user's own edit in Settings (User Story 3, scenario 2). This is issue
-  #435's third open point and BUG-006 ledger D5.]
+- **FR-007**: A resolution that cannot find the script MUST be reported only in Settings (FR-001,
+  FR-005) and, at save time, by FR-004's notification. The application MUST NOT add a report at
+  session launch, in the main window, or in any other notice.
+- **FR-008**: The application MUST NOT offer an automatic recovery (switching to the default
+  path, clearing the path, or turning the feature off). It reports the missing path, and the user
+  fixes it by editing the path in Settings (User Story 3).
 - **FR-009**: The indication MUST reflect the path as it is each time Settings is shown, and
   after every save. A path that has become valid MUST no longer be reported. A path that has
   disappeared MUST be reported.
@@ -227,9 +233,9 @@ indication is gone.
 
 - **Environment-Include Setting** (feature 011, unchanged): the enabled flag, the script path and
   the timeout. It is the only persisted part.
-- **Script Path Check**: the in-memory result of asking whether the stored path (and, if FR-004 says
-  so, the draft path) names a readable file: *present*, *not found*, *not a readable file*,
-  *relative (not checked)* or *could not be checked*, plus the path it was checked for. It is never
+- **Script Path Check**: the in-memory result of asking whether the stored path names a readable
+  file: *present*, *not found*, *not a readable file*, *relative (not checked)* or *could not be
+  checked*, plus the path it was checked for. It is never
   persisted, and it is independent of the enabled flag. It is not a resolution attempt: it never
   runs the script.
 
@@ -250,13 +256,14 @@ indication is gone.
   flag, the path and the timeout.
 - **SC-006**: From seeing the not-found indication, a user reaches a configuration with no
   missing path without editing any file outside the application (at the least by editing the
-  path in Settings, plus whatever FR-008 adds).
+  path in Settings; FR-008 adds no other route).
 
 ## Assumptions
 
 - The Settings interface's environment-include group (feature 011, FR-014/FR-015) is the surface
-  for the indication. No new notification system is needed for FR-001 to FR-006. Whether one is
-  needed for FR-007 is part of that marker.
+  for the indication. No new notification system is needed: FR-004's save-time notification uses
+  the application's existing notifications, as other save outcomes already do
+  (`crates/micold-client/src/shell/persist.rs` `apply_save`).
 - "Readable file" is defined in FR-001. It is stricter than feature 011's resolver, which only
   asks whether the path exists; a directory therefore passes the resolver's own check and fails
   later (see Edge Cases). The check runs on the machine where sessions run, which is the user's

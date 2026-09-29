@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Kind**: feature (from bug BUG-006)
 - **Worktree branch**: fix/github-issues
 - **Started**: 2026-09-29
-- **Phase**: 2-clarify, round 1
-- **Next step**: the orchestrator asks the round-1 escalation (Open escalation), then continues the clarify unit with the answers; round 2 follows.
+- **Phase**: 2-clarify, converged (round 2)
+- **Next step**: Phase 3 (plan, tasks, milestones), through opening PR 2, which carries the clarifications.
 
 ## Pull requests
 
@@ -34,6 +34,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D4 | 2-clarify r1 | May Save be refused while the draft path is missing (FR-004)? | No: FR-006 forbids blocking the other settings, and one Save writes the whole form. Recorded in spec Clarifications. | agent-resolved | spec.md#FR-006; `crates/micold-client/src/shell/persist.rs` `on_settings_saved` |
 | D5 | 2-clarify r1 | Is the draft path checked as the user types (FR-004)? | No: 011's contract gives the path field no validation while typing. FR-004's marker narrowed to: notify on save, or report only at next open. | agent-resolved | `specs/011-env-include-script/contracts/settings-ui.md` (New `Message` variants) |
 | D6 | 2-clarify r1 | `speckit-clarify` scan beyond the three markers | No further critical ambiguities; the remaining open items are FR-004 (narrowed), FR-007, FR-008, all product decisions. | agent-resolved | clarify run, round 1 |
+| D7 | 2-clarify r1 | FR-004 (BUG-006 D3): on Save with a missing path? | Save anyway and post a notification naming the path at save time. | decided by user | escalation round 1 |
+| D8 | 2-clarify r1 | FR-007 (BUG-006 D4): report a failed resolution outside Settings? | No. Settings only. | decided by user | escalation round 1 |
+| D9 | 2-clarify r1 | FR-008 (BUG-006 D5): recovery for a missing path? | Report only; the user fixes the path in Settings. US3 reduced to manual edit / clear. | decided by user | escalation round 1 |
+| D10 | 2-clarify r2 | Does every save leaving a missing path notify, or only one that changed the path? | Every such save (FR-009: checked after every save). | agent-resolved | spec.md#FR-009 |
+| D11 | 2-clarify r2 | Clarify round 2 scan | No critical ambiguities left; no markers remain; checklist 3 items newly passing. Clarify converged. | agent-resolved | clarify run, round 2 |
 
 ## Declined review findings
 
@@ -42,10 +47,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Open escalation
 
-Clarify round 1, category 1 (product decision), three questions:
-- FR-004 (BUG-006 D3): on Save with a missing path, notify (Recommended) or show the indication only at the next open?
-- FR-007 (BUG-006 D4): report a failed resolution only in Settings (Recommended), in the missing-default-CLI notice as well, or once per run at launch?
-- FR-008 (BUG-006 D5): report only (Recommended), offer the platform default, offer to clear the path, or offer to turn the feature off?
+None.
 
 ## Follow-ups not done
 
