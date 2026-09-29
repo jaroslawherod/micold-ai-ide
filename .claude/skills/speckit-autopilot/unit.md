@@ -6,11 +6,9 @@ sends you there.
 
 ## Rules
 
-- **Start on the right base.** First run `git fetch origin`. If
-  `git cherry origin/main HEAD | grep '^+'` prints nothing, run
-  `git switch -C "$(git branch --show-current)" origin/main`. Otherwise the branch holds unmerged work
-  from an earlier unit (clarify rounds, a BUG record, close-phase milestones): keep it and run
-  `git rebase origin/main`, which drops commits already merged.
+- **Start on the right base.** First run `scripts/autopilot/branch-start.sh`. It resets the branch
+  to `origin/main`, or rebases unmerged work from an earlier unit (clarify rounds, a BUG record,
+  close-phase milestones) onto it. On `CONFLICT`, resolve, run the gate, `git rebase --continue`.
 - **Stay in scope.** Do only your unit's work, then return. The orchestrator waits on CI and merges.
 - **Ledger first.** Update the ledger before every commit and before you return. The orchestrator
   reads the ledger, not your transcript.

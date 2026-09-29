@@ -155,3 +155,4 @@ worktree's branch.
 - [references/review-rubrics.md](references/review-rubrics.md): reviewer dispatch and rubrics
 - [references/pr-and-merge.md](references/pr-and-merge.md): gate, PR, CI, merge
 - [templates/autopilot-ledger.md](templates/autopilot-ledger.md): the ledger
+- `scripts/autopilot/`: `resume.sh`, `branch-start.sh`, `wait-merge.sh`, `handoff-check.sh`: the fixed sequences, one call each

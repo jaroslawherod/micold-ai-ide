@@ -7,13 +7,7 @@ Every PR (spec, design, each milestone, close) follows this path.
 Use **this worktree's own branch** for every PR. Never create other branches.
 
 ```bash
-git fetch origin
-gh pr view <previous-pr> --json state -q .state      # must print MERGED (skip for PR 1)
-if git cherry origin/main HEAD | grep -q '^+'; then
-  git rebase origin/main
-else
-  git switch -C "$(git branch --show-current)" origin/main
-fi
+scripts/autopilot/branch-start.sh    # prints RESET, REBASED <n>, DIRTY or CONFLICT
 ```
 
 Unmerged work from an earlier unit (clarify rounds, a BUG record) is rebased, not dropped. Otherwise
@@ -83,6 +77,9 @@ Milestone body:
 Record the PR number in the ledger at once.
 
 ## 5. Wait for `ci complete`
+
+The orchestrator runs `scripts/autopilot/wait-merge.sh <n>`, which does this section and §6 and
+prints one result line. The rules it follows, and what to do by hand when it stops:
 
 `ci complete` is the only required check. Watch it in the background. Do not poll:
 
