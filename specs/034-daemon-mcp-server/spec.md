@@ -72,6 +72,21 @@ and manage the project's sessions and worktrees the way the user does from the s
   refused) (FR-016). _(decided by user — "use auto mode means send all no confirm, confirm each send
   and off by default auto"; confirmed: "default auto")_
 
+### Session 2026-09-29 (round 2)
+
+- Q: Does a change to the FR-016 option reach sessions that are already running? → A: Yes, from the
+  next request: the option is checked per request at the tool server, unlike FR-004, which only
+  decides whether a binding is written at spawn. _(agent-resolved:
+  specs/034-daemon-mcp-server/spec.md#FR-004, #FR-006)_
+- Q: Which windows show a pending confirmation, and which answer counts? → A: Every connected
+  window shows it. The first answer applies and the prompt is withdrawn from the rest, as the
+  pending-confirmation edge case already requires. _(agent-resolved:
+  specs/034-daemon-mcp-server/spec.md#Edge Cases, FR-011)_
+- Q: Which FR-013 category does a declined confirmation, or a pending request whose target
+  vanished, return? → A: A decline is "refused by policy". A timeout or no window is "needs
+  confirmation". A vanished target is "not found". The undefined "cancelled" is removed.
+  _(agent-resolved: specs/034-daemon-mcp-server/spec.md#FR-013)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The agent sees the project's sessions and worktrees without any setup (Priority: P1)
@@ -208,8 +223,9 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
    `send_session_input` on S2, **Then** the operation is refused by policy and S2 is untouched.
 5. **Given** the FR-016 option set to Confirm each send and sibling S2 awaiting input, **When** S1's
    agent invokes `send_session_input`, **Then** the request waits for the user's confirmation in a
-   window as FR-014 describes; confirmed, the text is delivered as in scenario 2; declined, timed out
-   or with no window attached, it fails with "needs confirmation" and S2 is untouched.
+   window as FR-014 describes; confirmed, the text is delivered as in scenario 2; declined, it is refused
+   by policy; timed out or with no window attached, it fails with "needs confirmation"; either way
+   S2 is untouched.
 
 ---
 
@@ -239,8 +255,9 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
   session's credential acts as that session; this is accepted (see Assumptions).
 - **Target changes while a confirmation is pending (FR-014)**: if the target worktree or session is
   deleted, or the calling session is stopped or deleted, before the user answers, the pending
-  request fails with "not found" or "cancelled", the confirmation prompt is withdrawn from every
-  window, and nothing changes.
+  request fails with "not found" (for a stopped caller, the request is abandoned, since no one is
+  left to receive the answer), the confirmation prompt is withdrawn from every window, and nothing
+  changes.
 - **Hidden assistant-owned worktrees (feature 014)**: `list_worktrees` returns the same set the
   sidebar shows with its reveal control off, so worktrees feature 014 hides are left out unless the
   agent asks to include them, in which case each is flagged as assistant-owned.
@@ -320,8 +337,9 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
   `stop_session` or `interrupt_session` on a session other than the caller. They MUST follow one
   policy: each request waits for the user to confirm it in an application window, which names the
   calling session, the operation and its target. Nothing changes until the user confirms. The
-  request fails with "needs confirmation" if the user declines, if no answer arrives within 60
-  seconds, or if no window is attached.
+  prompt appears in every connected window; the first answer applies and withdraws it from the
+  others. The request is refused by policy ("declined by the user") if the user declines, and fails
+  with "needs confirmation" if no answer arrives within 60 seconds or no window is attached.
 - **FR-015**: An agent MUST NOT stop, delete, or delete the hosting worktree of its own calling
   session through the tool server; such a request MUST be refused by policy. `send_session_input`,
   `read_session_output` and `interrupt_session` targeting the calling session itself MUST be refused
