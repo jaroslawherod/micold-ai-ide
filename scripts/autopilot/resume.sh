@@ -37,6 +37,7 @@ case "${#open[@]}" in
   *) for f in "${open[@]}"; do report "$f"; echo; done; exit 3 ;;
 esac
 
+git fetch -q origin
 if git cherry origin/main HEAD 2>/dev/null | grep -q '^+'; then
   done_ledger="$(ledgers | head -1)"
   if [ -n "$done_ledger" ]; then
@@ -45,9 +46,10 @@ if git cherry origin/main HEAD 2>/dev/null | grep -q '^+'; then
   fi
 fi
 
-git fetch -q origin
+# git grep has no -x: take substring hits, then keep only files with the exact line.
 found="$(git grep -lF -- "$line" origin/main -- 'specs/' 2>/dev/null | sed 's/^origin\/main://' \
   | while read -r f; do
+      git show "origin/main:$f" | grep -qxF -- "$line" || continue
       ph="$(git show "origin/main:$f" | sed -n 's/^- \*\*Phase\*\*: //p' | head -1)"
       [ "$ph" != done ] && echo "$f (phase $ph)"
     done | head -1)"

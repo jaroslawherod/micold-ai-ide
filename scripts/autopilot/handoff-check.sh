@@ -6,13 +6,19 @@
 set -uo pipefail
 ledger="${1:?usage: handoff-check.sh <ledger> [extra-pr...]}"; shift
 left=()
+[ -f "$ledger" ] || { echo "NOT DONE"; echo "- ledger $ledger not found"; exit 1; }
 
 dirty="$(git status --porcelain)"
 [ -n "$dirty" ] && left+=("uncommitted work: $(echo "$dirty" | wc -l) path(s)")
 
-git fetch -q origin
-unmerged="$(git cherry origin/main HEAD | grep -c '^+' || true)"
-[ "$unmerged" -gt 0 ] && left+=("$unmerged commit(s) not on origin/main")
+if ! git fetch -q origin; then
+  left+=("git fetch origin failed")
+elif ! cherry="$(git cherry origin/main HEAD)"; then
+  left+=("git cherry origin/main HEAD failed")
+else
+  unmerged="$(grep -c '^+' <<<"$cherry" || true)"
+  [ "$unmerged" -gt 0 ] && left+=("$unmerged commit(s) not on origin/main")
+fi
 
 prs="$(sed -n '/^## Pull requests/,/^## Decisions/p' "$ledger" | grep -oE '#[0-9]+' | tr -d '#' | sort -un)"
 for pr in $prs "$@"; do

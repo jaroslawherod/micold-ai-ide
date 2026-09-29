@@ -96,9 +96,10 @@ on its last line (it runs as long as CI does):
 
 ```bash
 log="$SCRATCHPAD/pr-<n>.log"
-AUTOPILOT_LOG_DIR="$SCRATCHPAD" setsid nohup scripts/autopilot/wait-merge.sh <n> >"$log" 2>&1 &
+AUTOPILOT_LOG_DIR="$SCRATCHPAD" setsid nohup \
+  bash -c 'scripts/autopilot/wait-merge.sh <n>; echo "WAIT_EXIT=$?"' >"$log" 2>&1 &
 # then, with run_in_background:
-until grep -qE '^(MERGED|RED|CHECKLESS|MERGE-FAILED) ' "$log"; do sleep 30; done; tail -5 "$log"
+until grep -q '^WAIT_EXIT=' "$log"; do sleep 30; done; tail -6 "$log"
 ```
 
 | Last line | Do |
@@ -107,6 +108,8 @@ until grep -qE '^(MERGED|RED|CHECKLESS|MERGE-FAILED) ' "$log"; do sleep 30; done
 | `RED <n> <run> <log>` | In this flow's code: continue the unit that opened the PR with `SendMessage` and the log path (at most 3 attempts). Outside it: handle it per [references/pr-and-merge.md](references/pr-and-merge.md) §5. |
 | `CHECKLESS <n> <reason>` | Handle the reason per the reference's *A PR with no checks*, then run the script again. |
 | `MERGE-FAILED <n> <message>` | Fix per the reference's §6 table, then run the script again. |
+| `CLOSED <n>` | Someone closed the PR. Escalate (category 1); never reopen it unasked. |
+| `TIMEOUT <n> <what>` or no result line | Check `gh auth status` and the PR by hand, then run the script again. |
 
 ## Ownership: only this flow's work
 
