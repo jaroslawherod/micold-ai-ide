@@ -580,3 +580,89 @@ impl IssueSource for FakeIssueSource {
         })
     }
 }
+
+impl IssueLoadError {
+    /// The plain-language text the form shows: the cause, and what to do (FR-007,
+    /// contracts/github-issue-source.md §5).
+    pub fn message(&self, repo: &GithubRepo) -> String {
+        match self {
+            Self::ToolMissing => "Couldn't read issues: the GitHub CLI (`gh`) isn't installed. \
+                                  Install it from cli.github.com, then sign in with `gh auth login`."
+                .to_owned(),
+            Self::NotSignedIn => "Couldn't read issues: you're not signed in to GitHub. \
+                                  Run `gh auth login` in a terminal, then retry."
+                .to_owned(),
+            Self::NoAccess => format!("Couldn't read issues: your GitHub sign-in can't access {repo}."),
+            Self::Offline => "Couldn't reach GitHub. Check your connection, then retry.".to_owned(),
+            Self::RateLimited => {
+                "GitHub's rate limit was reached. Wait a minute, then retry.".to_owned()
+            }
+            Self::TimedOut => "GitHub didn't answer within 10 seconds.".to_owned(),
+            Self::Other(detail) => format!("Couldn't read issues: {detail}"),
+        }
+    }
+}
+
+/// The reason a failed `gh` run gives (research R8), read from its exit status and stderr.
+///
+/// Order matters: a rate limit can arrive as HTTP 403, so it is checked before the
+/// access failures that HTTP 403 otherwise means.
+pub fn classify(outcome: &crate::process::RunOutcome) -> IssueLoadError {
+    use crate::process::RunOutcome;
+    let (code, stderr) = match outcome {
+        RunOutcome::TimedOut { .. } => return IssueLoadError::TimedOut,
+        RunOutcome::SpawnFailed(reason) => {
+            let lower = reason.to_ascii_lowercase();
+            return if lower.contains("os error 2") || lower.contains("not found") {
+                IssueLoadError::ToolMissing
+            } else {
+                IssueLoadError::Other(reason.clone())
+            };
+        }
+        RunOutcome::Exited { code, stderr, .. } => (*code, stderr),
+    };
+    let lower = stderr.to_ascii_lowercase();
+    let says = |needles: &[&str]| needles.iter().any(|n| lower.contains(n));
+    if code == GH_EXIT_AUTH
+        || says(&[
+            "gh auth login",
+            "not logged in",
+            "http 401",
+            "bad credentials",
+        ])
+    {
+        IssueLoadError::NotSignedIn
+    } else if says(&["rate limit", "rate_limited", "http 429"]) {
+        IssueLoadError::RateLimited
+    } else if says(&[
+        "could not resolve to a repository",
+        "http 404",
+        "http 403",
+        "saml",
+        "not_found",
+    ]) {
+        IssueLoadError::NoAccess
+    } else if says(&[
+        "error connecting to",
+        "dial tcp",
+        "no such host",
+        "could not resolve host",
+        "connection refused",
+        "network is unreachable",
+        "tls handshake timeout",
+        "i/o timeout",
+    ]) {
+        IssueLoadError::Offline
+    } else {
+        IssueLoadError::Other(
+            stderr
+                .lines()
+                .map(str::trim)
+                .find(|line| !line.is_empty())
+                .map_or_else(|| format!("gh exited with status {code}"), str::to_owned),
+        )
+    }
+}
+
+/// `gh`'s documented exit status for "authentication required".
+const GH_EXIT_AUTH: i32 = 4;
