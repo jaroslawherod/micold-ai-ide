@@ -141,3 +141,20 @@ failed before the implementation.
   every variable. -> `4 passed; 0 failed`; `mise run test-core` passed, 0 failed
 - refactor: none needed
 - commit: the commit that adds this entry
+
+## Cycle 6: U28–U30 — paging up to the 1,000-issue cap
+
+- test: `crates/micold-core/tests/github_load.rs` (new), 3 tests with `FakeIssueSource`
+- stub: `ISSUE_LOAD_CAP`, `IssueListing`, `trait IssueSource { list_open }`, `load_listing`
+  returning `Err(Other(""))`. `FakeIssueSource` (scripted pages/errors, records calls) is the test
+  double, written in full with the stub.
+- red: `scripts/build-lock.sh cargo test -p micold-core --test github_load`
+  -> `test result: FAILED. 0 passed; 3 failed`. Decisive lines: `pages_concatenate_until_the_last`:
+  `loaded: Other("")`; `the_cap_is_1000`: `called Result::unwrap() on an Err value: Other("")`;
+  `first_error_aborts_and_empty_is_complete`: `a failed page fails the whole load; … / left:
+  Other("") / right: Offline`.
+- green: `load_listing` pages with the previous page's cursor, stops at no cursor or at the cap,
+  truncates to the cap, returns the first error, and sets `complete = held >= total_open`.
+  -> `3 passed; 0 failed`; `mise run test-core` passed, 0 failed
+- refactor: none needed
+- commit: the commit that adds this entry

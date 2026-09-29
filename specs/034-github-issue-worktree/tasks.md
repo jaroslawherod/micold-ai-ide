@@ -83,7 +83,7 @@ and classifying open issues through `gh`, and the name derived from a title. No 
   - `parse_list_page` maps `number`, `title`, `updatedAt`, up to 20 label names, `totalCount` and `pageInfo` into `IssuePage`; `Issue::row_text` is `#<number> <title>` plus `  ·  <l1>, <l2>` only when labelled.
   - `errors[]` with `type: NOT_FOUND` → `NoAccess`; `RATE_LIMITED` → `RateLimited`; malformed JSON → `Other`.
   - `list_args(repo, cursor)` (pure argument builder) is `api graphql --hostname github.com -f query=… -f owner=… -f name=…` plus `-f cursor=…` only with a cursor; every string uses `-f`; a repository named `1` or `true` stays a string; no path, branch or file name appears (FR-025).
-- [ ] T006 [P] [US1] [U28] [U29] [U30] Write `crates/micold-core/tests/github_load.rs` with `FakeIssueSource` (contracts/github-issue-source.md §4):
+- [X] T006 [P] [US1] [U28] [U29] [U30] Write `crates/micold-core/tests/github_load.rs` with `FakeIssueSource` (contracts/github-issue-source.md §4):
   - Pages concatenate in order until `next_cursor` is `None`; `complete` is true when held ≥ `total_open`.
   - At `ISSUE_LOAD_CAP` (1,000) paging stops, the last page is truncated to the cap, and `complete` is false when `total_open` > 1,000.
   - The first error aborts the whole load and is returned; zero open issues → an empty, complete listing.

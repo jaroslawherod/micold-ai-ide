@@ -466,3 +466,117 @@ pub fn list_args(repo: &GithubRepo, cursor: Option<&str>) -> Vec<String> {
     }
     args
 }
+
+/// Open issues the form holds at most (FR-004).
+pub const ISSUE_LOAD_CAP: usize = 1_000;
+
+/// The open issues a load produced (data-model §2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IssueListing {
+    /// Most recently updated first, at most [`ISSUE_LOAD_CAP`].
+    pub issues: Vec<Issue>,
+    /// GitHub's count of open issues.
+    pub total_open: u64,
+    /// Every open issue is held, so search never needs to reach GitHub (FR-005a).
+    pub complete: bool,
+}
+
+/// Where open issues come from (research R7): [`GhCli`] in production, [`FakeIssueSource`] in
+/// tests. The paging, cap and classification around it are pure functions in this module.
+pub trait IssueSource {
+    /// One page of open issues, most recently updated first.
+    fn list_open(
+        &self,
+        repo: &GithubRepo,
+        cursor: Option<&str>,
+    ) -> Result<IssuePage, IssueLoadError>;
+}
+
+/// Load open issues page by page, up to [`ISSUE_LOAD_CAP`] (contracts/github-issue-source.md §4).
+///
+/// Pages until there is no next cursor or the cap is held, truncating the page that crosses it.
+/// The first error aborts the whole load: a partial list is never shown as the list.
+pub fn load_listing(
+    source: &dyn IssueSource,
+    repo: &GithubRepo,
+) -> Result<IssueListing, IssueLoadError> {
+    let mut issues: Vec<Issue> = Vec::new();
+    let mut cursor: Option<String> = None;
+    let total_open = loop {
+        let page = source.list_open(repo, cursor.as_deref())?;
+        issues.extend(page.issues);
+        if issues.len() >= ISSUE_LOAD_CAP || page.next_cursor.is_none() {
+            issues.truncate(ISSUE_LOAD_CAP);
+            break page.total_open;
+        }
+        cursor = page.next_cursor;
+    };
+    Ok(IssueListing {
+        complete: issues.len() as u64 >= total_open,
+        issues,
+        total_open,
+    })
+}
+
+/// A scripted [`IssueSource`] for tests: answers each call with the next scripted page or error,
+/// and records every call. Public (not `#[cfg(test)]`) so every crate's tests can use it, like
+/// [`crate::git::FakeGit`].
+#[derive(Debug, Default)]
+pub struct FakeIssueSource {
+    script: std::sync::Mutex<std::collections::VecDeque<Result<IssuePage, IssueLoadError>>>,
+    calls: std::sync::Mutex<Vec<(String, Option<String>)>>,
+}
+
+impl FakeIssueSource {
+    /// A source with nothing scripted.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Answer the next unanswered call with `page`.
+    pub fn with_page(self, page: IssuePage) -> Self {
+        self.lock_script().push_back(Ok(page));
+        self
+    }
+
+    /// Answer the next unanswered call with `error`.
+    pub fn with_error(self, error: IssueLoadError) -> Self {
+        self.lock_script().push_back(Err(error));
+        self
+    }
+
+    /// Every `list_open` call so far, as (`owner/name`, cursor).
+    pub fn calls(&self) -> Vec<(String, Option<String>)> {
+        self.calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    fn lock_script(
+        &self,
+    ) -> std::sync::MutexGuard<'_, std::collections::VecDeque<Result<IssuePage, IssueLoadError>>>
+    {
+        self.script
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+impl IssueSource for FakeIssueSource {
+    fn list_open(
+        &self,
+        repo: &GithubRepo,
+        cursor: Option<&str>,
+    ) -> Result<IssuePage, IssueLoadError> {
+        self.calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((repo.to_string(), cursor.map(str::to_string)));
+        self.lock_script().pop_front().unwrap_or_else(|| {
+            Err(IssueLoadError::Other(
+                "FakeIssueSource: no page scripted for this call".into(),
+            ))
+        })
+    }
+}
