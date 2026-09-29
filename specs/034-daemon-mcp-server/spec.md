@@ -46,6 +46,21 @@ and manage the project's sessions and worktrees the way the user does from the s
   session runs, without the user configuring anything.
 - **Operation**: one tool the server offers (see *Operations* below).
 
+## Clarifications
+
+### Session 2026-09-29
+
+- Q: May an agent interrupt its own calling session through `interrupt_session`? → A: No. It is
+  refused as invalid input, like `send_session_input` and `read_session_output` on self (FR-015):
+  the interrupt keystroke would abort the very turn that made the call, so its result could never
+  be returned as FR-013 requires. _(agent-resolved: specs/034-daemon-mcp-server/spec.md#FR-013,
+  crates/micold-core/src/protocol/messages.rs#SessionInterrupt)_
+- Q: Does the tool server cap how many worktrees or sessions an agent may create, or how often? →
+  A: No cap or rate limit beyond what the service applies to the same user action, which today is
+  none; operations match the sidebar's (FR-009). _(agent-resolved:
+  specs/034-daemon-mcp-server/spec.md#Assumptions, crates/micold-daemon/src/server.rs — no
+  session or worktree limit exists)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The agent sees the project's sessions and worktrees without any setup (Priority: P1)
@@ -223,6 +238,8 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
   its launch changes.
 - **User already configured a server with the same name**: the binding must not collide with, or
   silently replace, a tool server the user configured themselves.
+- **Many requests**: an agent that creates worktrees or sessions in a loop is not throttled or
+  capped; the service applies the same (absent) limits it applies to the user.
 - **Long outputs**: `read_session_output` on a session with a very large scrollback returns at most
   the bounded amount, never the whole buffer.
 - **Cross-platform (Principle VI)**: the binding works for every supported CLI on Linux, macOS and
@@ -293,8 +310,9 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
   Default assumed here: (b) — the operation waits for the user's confirmation in a window and fails
   with "needs confirmation" if none is given within 60 seconds or no window is attached.]
 - **FR-015**: An agent MUST NOT stop, delete, or delete the hosting worktree of its own calling
-  session through the tool server; such a request MUST be refused by policy. `send_session_input`
-  and `read_session_output` targeting the calling session itself MUST be refused as invalid input.
+  session through the tool server; such a request MUST be refused by policy. `send_session_input`,
+  `read_session_output` and `interrupt_session` targeting the calling session itself MUST be refused
+  as invalid input.
 - **FR-015a**: When the calling session is a Default session (it runs in the project root),
   `create_worktree`, `rename_worktree` and `delete_worktree` MUST be refused by policy, because
   Principle III forbids a Default session to create, modify or remove any git worktree. Every
@@ -342,7 +360,7 @@ for the project root.
 | `create_session` | Create and start a session in a worktree or Default | worktree ref, optional AI CLI (default: Settings default), optional initial prompt | session ref, lifecycle, whether the prompt was delivered (FR-017) | mutating |
 | `start_session` | Start or resume an `Idle`, `Failed` or `InterruptedResumable` session | session ref | lifecycle after the request | mutating |
 | `stop_session` | Gracefully stop a session | session ref | lifecycle after the request | destructive for other sessions (FR-014); refused for self (FR-015) |
-| `interrupt_session` | Deliver an interrupt keystroke to a session | session ref | acknowledgement | mutating; destructive for other sessions (FR-014) |
+| `interrupt_session` | Deliver an interrupt keystroke to a session | session ref | acknowledgement | mutating; destructive for other sessions (FR-014); refused for self (FR-015) |
 | `send_session_input` | Type and submit text into another session's primary process | session ref, text | acknowledgement | mutating; gated by FR-016 |
 | `delete_session` | Delete a session record (stopping it first) | session ref | acknowledgement | destructive (FR-014); refused for self (FR-015) |
 
