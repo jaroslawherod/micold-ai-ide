@@ -23,10 +23,14 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | M1 | T001–T022, T078–T082, T100 | Bound sessions (Claude, Copilot) with the read tools | — | planned |
 | M2 | T023–T028, T083, T101 | Settings toggle for the tool server (protocol 16) | — | planned |
 | M3 | T029–T042, T072–T073, T084–T088, T102 | create_worktree / create_session with first prompt, audit line | — | planned |
-| M4 | T043–T048, T089 | start_session / stop_session / rename_worktree | — | planned |
+| M4 | T043–T048, T089 | start_session / rename_worktree; policy rows for the destructive tools | — | planned |
 | M5 | T049–T059, T090–T094, T103 | Confirmations in app windows; destructive tools (protocol 17) | — | planned |
 | M6 | T060–T071, T095–T099, T104 | Cross-session read/send under the FR-016 setting (protocol 18) | — | planned |
 | M7 | T074–T077 | Read latency, sandbox placement, final real-CLI pass, user guide | — | planned |
+
+Size note: M1 (28), M3 (22), M5 (17) and M6 (18) exceed the ~15 guideline because each carries its
+acceptance-gate and quickstart tasks and no split along an acceptance scenario leaves an observable
+deliverable (tasks.md Notes).
 
 ## Decisions
 
@@ -57,6 +61,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 |---|---|---|---|
 | spec | rounds 1–3 | none declined | Round 1: 6 MAJOR + 7 MINOR, all fixed. Round 2 (sonnet): 6 MINOR, all fixed. Round 3 (sonnet): CLEAN, 2 MINOR fixed. |
 | plan | analyze | C1 CRITICAL (Principle II) | Not declined: resolved by the user as a justified violation (D16, D17); plan.md Complexity Tracking records it |
+| tasks | round 1 | none declined | 2 MAJOR (M3 Default refusal untested through `POST /mcp`; M1 gate pointed at M7's T076), 7 MINOR, all fixed. |
 | plan | rounds 1–2 | none declined | Round 1: 1 BLOCKER (FR-017 readiness), 2 MAJOR (stop path, missing timeout probes), 8 MINOR, all fixed. Round 2 (sonnet): no BLOCKER/MAJOR, 3 MINOR fixed. |
 
 ## Open escalation

@@ -448,9 +448,8 @@ including or excluding worktrees the app did not create. These stay user-only in
   user-configured server of the same name (FR-003), the agent can
   invoke `whoami` on its first turn, with zero configuration steps by the user.
 - **SC-002**: After starting 20 bound sessions, the service has created, modified or deleted none of
-  the user's own CLI configuration files or any project's configuration files: with a stand-in CLI
-  that writes nothing, they are byte-identical to before (the real CLIs' own writes, such as Claude
-  Code's state in `~/.claude.json`, are theirs, not the binding's).
+  the user's own CLI configuration files or any project's configuration files. Files the AI CLI
+  itself writes during a session are out of scope.
 - **SC-003**: A worktree or session created, renamed or deleted by an agent appears in, or
   disappears from, every connected window within 2 seconds, with no manual refresh.
 - **SC-004**: Read-only operations answer within 1 second for a project with 50 worktrees and 50

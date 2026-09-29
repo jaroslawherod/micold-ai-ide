@@ -31,11 +31,11 @@
 
 ## Notes
 
-- Three `[NEEDS CLARIFICATION]` markers are left open for Phase 2 (clarify): FR-010 (project
-  scope), FR-014 (destructive-operation policy), FR-016 (cross-session output and input). Each
-  carries the default the rest of the spec assumes.
-- Security wording is stated as outcomes, not mechanisms: "no other local user account can reach
-  the tool server or read a credential" (FR-007), "logged at the default log level" (FR-018),
+- The three `[NEEDS CLARIFICATION]` markers (FR-010, FR-014, FR-016) were resolved in clarify rounds
+  1–2 (ledger D4–D9); spec.md has none left.
+- Security wording is stated as outcomes, not mechanisms: "no other local user account can read a
+  credential or act through the tool server; a request without one is refused without any data"
+  (FR-007), "logged at the default log level" (FR-018),
   "lives only in what the service itself owns" (FR-003). How each is achieved per platform is for
   the plan.
 - "MCP" (Model Context Protocol) is named because the user asked for it by name: it is the
