@@ -35,8 +35,9 @@
   concurrency edge cases, informed opt-in, load cap and timeout were added). GitHub and git remotes are named because they are the
   feature's subject, not an implementation choice; how issues are fetched (CLI, API, library) is
   left to the plan.
-- Defaults chosen without asking (see Assumptions): open issues only, github.com only, issue number
-  → ticket and title → name (both editable), first matching mapping entry wins, no match leaves the
-  type unselected, default mapping `bug`→fix / `enhancement`→feat / `documentation`→docs, existing
+- Defaults (see Assumptions and Clarifications): the user decided on 2026-09-29 — open issues only,
+  github.com only, no anonymous fallback, the 50-character name cap and the 1,000-issue load cap, and
+  search scope. Agent-resolved: issue number → ticket and title → name (both editable), first
+  matching mapping entry wins, no match clears the type, default mapping `bug`→fix / `enhancement`→feat / `documentation`→docs, existing
   GitHub sign-in reused (no anonymous fallback), a pick replaces ticket/name and
   replaces or clears the type, issue-derived names capped at 50 characters, at most 1,000 issues loaded. `/speckit-clarify` can revisit any of them.
