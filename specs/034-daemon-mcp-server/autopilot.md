@@ -8,7 +8,7 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 - **Worktree branch**: feat/daemon-should-expose-mcp-server-for-agent
 - **Started**: 2026-09-29
 - **Phase**: 3-design
-- **Next step**: Waiting for the user on the Principle II escalation below; then finish the tasks/milestone review, the gate and PR 2
+- **Next step**: Design unit: tasks/milestone review, checklist sign-off, docs gate, PR 2
 
 ## Pull requests
 
@@ -47,27 +47,21 @@ has got. `resume` finds this file by its **Worktree branch** line and reads it. 
 | D13 | plan | rmcp SDK or hand-rolled server? | Hand-rolled stateless Streamable HTTP on the hook receiver's HTTP code | agent-resolved | research.md#R5 |
 | D14 | plan | FR-017 waited for a first "awaiting input" that a fresh session never reports | Deliver on a per-CLI ready-for-input signal (Claude SessionStart hook, Pi component event, Copilot output settled); bound counts from the request; spec reworded | agent-resolved | crates/micold-daemon/src/activity.rs; research.md#R12 |
 | D15 | plan | "Gracefully" stop, and stop/interrupt have no sidebar action | Stop ends processes, marks Idle, broadcasts, stays resumable; Assumption covers protocol operations | agent-resolved | crates/micold-daemon/src/server.rs SessionStop arm; research.md#R9 |
-| D16 | plan | Does Auto-default cross-session read/type conflict with Principle II? | Superseded: plan review round 1 said no conflict; speckit-analyze (C1 CRITICAL) and a tie-break review said CONFLICT. Open escalation below | pending user | .specify/memory/constitution.md#II |
+| D16 | plan | Does Auto-default cross-session read/type conflict with Principle II? | Yes, a conflict (speckit-analyze C1, tie-break review). Keep `Auto`; record a justified violation in plan.md Complexity Tracking; Principle II check marked "justified violation"; keep FR-010/016/018 guards and `mcp_cross_session.rs`; no amendment | decided by user | plan.md#Complexity Tracking; .specify/memory/constitution.md#II, #Governance |
+| D17 | design | Resolve the Principle II conflict how: justified violation, MINOR amendment, or default `Off`? | Option 1, justified violation; no constitution amendment | decided by user | Coordinator relay of the user's decision on the escalation |
+| D18 | design | Milestones M1–M7 as cut? | Ship as cut, M1 through M7 in order, no changes | decided by user | Coordinator relay of the user's decision |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | spec | rounds 1–3 | none declined | Round 1: 6 MAJOR + 7 MINOR, all fixed. Round 2 (sonnet): 6 MINOR, all fixed. Round 3 (sonnet): CLEAN, 2 MINOR fixed. |
+| plan | analyze | C1 CRITICAL (Principle II) | Not declined: resolved by the user as a justified violation (D16, D17); plan.md Complexity Tracking records it |
 | plan | rounds 1–2 | none declined | Round 1: 1 BLOCKER (FR-017 readiness), 2 MAJOR (stop path, missing timeout probes), 8 MINOR, all fixed. Round 2 (sonnet): no BLOCKER/MAJOR, 3 MINOR fixed. |
 
 ## Open escalation
 
-- **Category 2, constitution conflict (Design, M6).** FR-016's default `Auto` lets one session's
-  agent read another session's scrollback and type into it with no per-request user act. Principle II
-  says sessions are "fully isolated" and "no session may leak state ... into another session". The
-  plan's "recorded interpretation" is neither removal nor justification (Governance/Compliance).
-  Options: (1, recommended) record a justified violation in plan.md Complexity Tracking, row II
-  "justified violation", keeping the FR-010/016/018 guards and `mcp_cross_session.rs` tests; ships as
-  the user specified, no amendment. (2) MINOR amendment 1.6.1 → 1.7.0 adding a narrow, named Principle
-  II exception (more durable; 1.3.0/1.5.0 precedent). (3) Make FR-016 default `Off` (overrides D6
-  "default auto"; `Confirm each send` alone does not remove the conflict, reads stay ungated).
-  Evidence: plan review round 1 (no conflict), speckit-analyze C1 CRITICAL, tie-break review CONFLICT.
+None.
 
 ## Follow-ups not done
 

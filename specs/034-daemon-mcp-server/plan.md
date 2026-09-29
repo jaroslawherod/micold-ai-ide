@@ -77,16 +77,15 @@ each; M5 adds the 3 confirmation messages), 1 new dialog, 1 new `DaemonState::st
   integration tests in `crates/micold-daemon/tests/`. The only glue under the GUI exception is the
   dialog's and settings rows' rendering (`src/ui/`), validated by quickstart §B4/§B6 with the
   `visual-pass` skill; the dialog's reducer (`features/agent_confirm.rs`) is tested.
-- [x] **II. Multi-Session Support**: PASS, with one recorded interpretation (Complexity Tracking). Credentials,
-  binding files and audit attribution are per session; a credential acts as exactly one session;
-  concurrent calls from many sessions are attributed separately and serialised per project by the
-  existing worktree gate (SC-005). The cross-session tools (`read_session_output`,
-  `send_session_input`) move data between sessions **only on an explicit agent request under a
-  user-controlled option** (FR-016, default Auto). The spec's Assumption reads this as the user's own
-  interaction through their agent — the same act as the user typing into that session's terminal —
-  not as the implicit filesystem, in-memory or configuration leak Principle II forbids; no session's
-  environment, files or configuration is shared or altered by another. Nothing is persisted across
-  sessions.
+- [x] **II. Multi-Session Support**: **Justified violation** (Complexity Tracking), decided by the
+  user. Credentials, binding files and audit attribution are per session; a credential acts as
+  exactly one session; concurrent calls from many sessions are attributed separately and serialised
+  per project by the existing worktree gate (SC-005). Nothing is persisted across sessions. The
+  violation: at the FR-016 default `Auto`, `read_session_output` moves one session's in-memory
+  scrollback into another session, and `send_session_input` lets one session's agent drive another
+  session's process, with no per-request user act. That is the cross-session state flow Principle II
+  forbids, so it is recorded as a justified violation under Governance/Compliance ("removed or
+  explicitly justified and recorded"), not as an interpretation.
 - [x] **III. Worktree Integration**: PASS. Agent-made worktrees go through the app's own create path
   (location `.claude/worktrees/<name>`, provenance record, gate), so the app still owns their
   lifecycle; `create_session` places a session only in a worktree of the project or in Default. A
@@ -243,13 +242,15 @@ docs/user-guide/{agent-tools.md (NEW), settings.md, sandboxed-daemon.md}, docs/S
 
 ## Complexity Tracking
 
-No principle is violated, so there is nothing to justify here; the entry below records how Principle
-II was read for this feature.
+| Violation | Why needed | Simpler alternative rejected because |
+|---|---|---|
+| Principle II (Multi-Session Support): at the FR-016 default `Auto`, one session's agent reads another session's scrollback (`read_session_output`) and types into it (`send_session_input`) with no per-request user act | US4: an agent orchestrating sibling sessions in the same project is the feature's purpose, and the user chose `Auto` as the default (ledger D6, "default auto") | Default `Off` removes the conflict but overrides the user's recorded choice; default `Confirm each send` does not remove it, because reads stay ungated. A constitution amendment was declined by the user (ledger D17) |
 
-**Recorded interpretation (Principle II)**: explicit, user-gated cross-session I/O —
-`read_session_output` and `send_session_input`, each an addressed request, scoped to the caller's
-project, governed by the FR-016 option and audited — is not the implicit filesystem, in-memory or
-configuration leak Principle II forbids. It uses only the target's own input stream, the channel the
-user already types into, and shares or alters no session's environment, files or configuration.
-Confirmed by the plan review (round 1). The isolation & lifecycle gate still applies: Off,
-cross-project `not_found` and per-request option changes are integration tests (`mcp_cross_session.rs`).
+Guards that bound the violation, all kept: FR-010 (only sessions of the caller's own project; any
+other target reads as `not_found`), FR-016 (the user can switch to `Confirm each send` or `Off`,
+effective from the next request), FR-018 (each send leaves one audit line naming caller and target,
+no prompt text), FR-015 (no interrupt or send to the calling session itself). The isolation &
+lifecycle gate applies: `Off`, cross-project `not_found` and per-request option changes are
+integration tests (`crates/micold-daemon/tests/mcp_cross_session.rs`). No session's environment, files
+or configuration is shared or altered by another. Decided by the user after speckit-analyze C1 and a
+tie-break review ruled the Auto default a conflict; no constitution amendment is made.
