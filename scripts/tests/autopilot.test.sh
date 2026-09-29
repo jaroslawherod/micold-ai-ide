@@ -254,7 +254,11 @@ Scenario: menu copies it.
 - **FR-001**: MUST open links,
   across wrapped rows.
 - **FR-002**: MUST copy links.
+- **FR-003**: MUST show a hover.
+- **FR-003a**: MUST underline on hover.
 - **SC-001**: One gesture.
+### User Story 3 - Hover a link (Priority: P3)
+Scenario: hover underlines it.
 MD
 cat > "$d/f/tasks.md" <<'MD'
 # Tasks
@@ -263,6 +267,8 @@ cat > "$d/f/tasks.md" <<'MD'
   - sub-bullet of T001
 - [ ] T002 [US1] Implement opening
 - [ ] T003 [US2] Copy
+- [ ] T004 Hover test
+- [ ] T005 Hover
 ## Milestones
 ### M1 — Open links
 - **Tasks**: T001–T002
@@ -270,6 +276,13 @@ cat > "$d/f/tasks.md" <<'MD'
 ### M2 — Copy
 - **Tasks**: T003
 - **Satisfies**: FR-002
+### M3 — Hover
+- **Tasks**: T004,
+  T005
+- **Satisfies**: FR-001–FR-003,
+  FR-003a, US3
+## Dependencies
+- T004 and T005 together
 MD
 B="$S/brief.py"
 check "brief: milestone block" 0 '^### M1 — Open links' "$B" milestone "$d/f" M1
@@ -277,7 +290,13 @@ check "brief: milestone tasks with sub-bullets" 0 'sub-bullet of T001' "$B" mile
 check "brief: milestone counts its tasks" 0 '^## Tasks of M1 \(2 of 2\)' "$B" milestone "$d/f" M1
 check "brief: requirement with its wrapped line" 0 'across wrapped rows' "$B" milestone "$d/f" M1
 check "brief: the story the tasks tag" 0 'click opens it' "$B" milestone "$d/f" M1
-check "brief: leaves out other milestones' tasks" 0 '^ok$' bash -c "! '$B' milestone '$d/f' M1 | grep -qE 'T003|FR-002|menu copies' && echo ok"
+check "brief: leaves out other milestones' tasks" 0 '^ok$' bash -c "! '$B' milestone '$d/f' M1 | grep -qE '[]] T003|[*]FR-002|menu copies' && echo ok"
+check "brief: the leave-out check can see a task line" 0 '^ok$' bash -c "'$B' milestone '$d/f' M2 | grep -qE '[]] T003' && echo ok"
+check "brief: wrapped Tasks field" 0 '^## Tasks of M3 \(2 of 2\)' "$B" milestone "$d/f" M3
+check "brief: requirement range and suffixed ID" 0 '^ok$' bash -c "out=\$('$B' milestone '$d/f' M3); grep -q 'FR-002' <<<\"\$out\" && grep -q 'FR-003a' <<<\"\$out\" && echo ok"
+check "brief: story named only in Satisfies" 0 'hover underlines it' "$B" milestone "$d/f" M3
+check "brief: non-checkbox bullets are not tasks" 0 '^ok$' bash -c "! '$B' milestone '$d/f' M3 | grep -q 'together' && echo ok"
+check "brief: lists other milestones' task ranges" 0 '^- M1 — Open links: T001–T002' "$B" milestone "$d/f" M3
 check "brief: unknown milestone fails" 1 'no milestone M9' "$B" milestone "$d/f" M9
 check "brief: section stops at a sibling heading" 0 '^ok$' bash -c "out=\$('$B' section '$d/f/spec.md' 'User Story 1'); grep -q 'click opens' <<<\"\$out\" && ! grep -q 'Story 2' <<<\"\$out\" && echo ok"
 check "brief: items by ID" 0 '^- \*\*SC-001' "$B" items "$d/f/spec.md" FR-002 SC-001

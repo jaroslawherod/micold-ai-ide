@@ -42,22 +42,26 @@ def section(lines, text):
     return None
 
 
-def item_pattern(ident):
-    # "- **FR-001**: …", "- [X] T004 …", "- [ ] T004 …"
-    return re.compile(r"^\s*- (?:\[[ xX]\] )?(?:\*\*)?" + re.escape(ident) + r"\b")
+def item_pattern(ident, task=False):
+    # A task is only a checkbox line ("- [X] T004 …"): other bullets name tasks too ("- T004–T007
+    # together"). A requirement is "- **FR-001**: …".
+    if task:
+        return re.compile(r"^\s*- \[[ xX]\] " + re.escape(ident) + r"(?![\w])")
+    return re.compile(r"^\s*- (?:\[[ xX]\] )?(?:\*\*)?" + re.escape(ident) + r"(?![\w])")
 
 
-def items(lines, idents):
-    """Each bullet whose ID is in `idents`, with the more-indented or wrapped lines under it."""
-    pats = {i: item_pattern(i) for i in idents}
-    found, out = set(), []
+def items(lines, idents, task=False):
+    """Each bullet whose ID is in `idents`, with the more-indented or wrapped lines under it.
+    Returns (lines, missing IDs, IDs matched more than once)."""
+    pats = {i: item_pattern(i, task) for i in idents}
+    found, out = [], []
     i = 0
     while i < len(lines):
         hit = next((k for k, p in pats.items() if p.match(lines[i])), None)
         if hit is None:
             i += 1
             continue
-        found.add(hit)
+        found.append(hit)
         indent = len(lines[i]) - len(lines[i].lstrip())
         out.append(lines[i])
         i += 1
@@ -70,26 +74,36 @@ def items(lines, idents):
                 break
             out.append(nxt)
             i += 1
-    return out, [k for k in idents if k not in found]
+    dup = sorted({k for k in found if found.count(k) > 1})
+    return out, [k for k in idents if k not in found], dup
 
 
-def expand_ranges(text):
-    """'T001–T012, T082–T086, T090' -> ['T001', …]."""
+def expand_ranges(text, prefix):
+    """expand_ranges('T001–T003, T090', 'T') -> [T001, T002, T003, T090];
+    expand_ranges('FR-001–FR-003, FR-018a', 'FR-') -> [FR-001, FR-002, FR-003, FR-018a].
+    A range end may drop the prefix ('T001–012'). Suffixed IDs (FR-018a) are never range ends."""
     ids = []
-    for a, b in re.findall(r"\b(T\d+)(?:\s*[–—-]\s*(T\d+))?", text):
-        if b:
-            width = len(a) - 1
-            ids += [f"T{n:0{width}d}" for n in range(int(a[1:]), int(b[1:]) + 1)]
+    p = re.escape(prefix)
+    for a, suf, b in re.findall(
+            r"(?<![\w-])" + p + r"(\d+)([a-z]?)(?![\w])(?:\s*[–—]\s*(?:" + p + r")?(\d+)(?![\w]))?", text):
+        if b and not suf:
+            ids += [f"{prefix}{n:0{len(a)}d}" for n in range(int(a), int(b) + 1)]
         else:
-            ids.append(a)
+            ids.append(f"{prefix}{a}{suf}")
     return list(dict.fromkeys(ids))
 
 
 def field(block, name):
-    for line in block:
+    """A `- **Name**: …` field, with its wrapped continuation lines joined."""
+    for i, line in enumerate(block):
         m = re.match(r"^- \*\*" + re.escape(name) + r"\*\*:\s*(.*)$", line)
         if m:
-            return m.group(1)
+            parts = [m.group(1)]
+            for rest in block[i + 1:]:
+                if not rest.strip() or rest.lstrip().startswith("- **") or HEADING.match(rest):
+                    break
+                parts.append(rest.strip())
+            return " ".join(parts)
     return ""
 
 
@@ -102,23 +116,34 @@ def milestone(feature, mid):
         sys.exit(f"brief: no milestone {mid} under '## Milestones' in {feature / 'tasks.md'}")
     print("\n".join(block))
 
-    task_ids = expand_ranges(field(block, "Tasks"))
-    task_lines, missing = items(tasks, task_ids)
+    others = [ln for ln in ms if re.match(r"^#{2,6} M\d+", ln) and not ln.lstrip("# ").startswith(mid + " ")]
+    if others:
+        print("\nOther milestones (their tasks are out of scope here):")
+        for head in others:
+            sub = section(ms, head.lstrip("# "))
+            print(f"- {head.lstrip('# ')}: {field(sub, 'Tasks') or '?'}")
+
+    task_ids = expand_ranges(field(block, "Tasks"), "T")
+    task_lines, missing, dup = items(tasks, task_ids, task=True)
     print(f"\n## Tasks of {mid} ({len(task_ids) - len(missing)} of {len(task_ids)})\n")
     print("\n".join(task_lines))
     if missing:
         print(f"\nNot found in tasks.md: {', '.join(missing)}")
+    if dup:
+        print(f"\nIn tasks.md more than once (check which belongs here): {', '.join(dup)}")
 
     spec = lines_of(feature / "spec.md")
-    req_ids = list(dict.fromkeys(re.findall(r"\b(?:FR|SC|NFR)-\d+\b", field(block, "Satisfies"))))
+    satisfies = field(block, "Satisfies")
+    req_ids = [i for p in ("FR-", "SC-", "NFR-") for i in expand_ranges(satisfies, p)]
     if req_ids:
-        req_lines, missing = items(spec, req_ids)
+        req_lines, missing, _ = items(spec, req_ids)
         print(f"\n## Requirements {mid} satisfies\n")
         print("\n".join(req_lines))
         if missing:
             print(f"\nNot found in spec.md: {', '.join(missing)}")
 
-    stories = sorted({int(n) for n in re.findall(r"\[US(\d+)\]", "\n".join(task_lines))})
+    stories = sorted({int(n) for n in re.findall(r"\[US(\d+)\]", "\n".join(task_lines))}
+                     | {int(n) for n in re.findall(r"\bUS ?(\d+)\b", satisfies)})
     for n in stories:
         story = section(spec, f"User Story {n} ")
         if story:
@@ -139,7 +164,7 @@ def main(argv):
             sys.exit(f"brief: no heading containing {' '.join(rest)!r} in {target}")
         print("\n".join(out))
     else:
-        out, missing = items(lines_of(target), rest)
+        out, missing, _ = items(lines_of(target), rest)
         print("\n".join(out))
         if missing:
             sys.exit(f"brief: not found in {target}: {', '.join(missing)}")
