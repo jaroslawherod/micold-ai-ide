@@ -198,3 +198,32 @@ failed before the implementation.
   `"xxx…x y" -> "xxx…x y" slugs past 50`, FAILED; code restored exactly
 - refactor: none needed
 - commit: the commit that adds this entry
+
+## Cycle 9: U41–U43 — `RemoteList` on the wire, protocol 16
+
+- test: `crates/micold-daemon/tests/remote_list.rs` (new, 2 tests over `serve_connection`);
+  `protocol_roundtrip.rs` gains a `ClientMsg::RemoteList` and an `OperationResult::RemoteList`
+  sample; `schema_hash.rs` pins `PROTOCOL_VERSION` to 16
+- stub: the two variants in `messages.rs`, and a daemon arm answering
+  `OperationError { kind: Internal, message: "" }` so the workspace builds
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test remote_list`
+  -> `test result: FAILED. 0 passed; 2 failed`. Decisive lines: `a_repository_answers_its_remotes`:
+  `expected a RemoteList result, got OperationError { req: 7, kind: Internal, message: "", detail:
+  None }`; `a_non_repository_is_rejected`: `left: (Internal, "", None) / right: (Refused, "project
+  is not a git repository", None)`.
+  `scripts/build-lock.sh cargo test -p micold-core --test schema_hash --test protocol_roundtrip`
+  -> `the_wire_changes_for_this_feature_cost_exactly_one_version_bump`: `left: 15 / right: 16`;
+  the round-trip samples passed on the stub (derived serde).
+- green: the daemon arm (non-repository -> `reject_non_repo`; `spawn_blocking` `remote_list` +
+  `parse_remote_list`; git failure -> `GitFailed "could not list remotes"`; join failure ->
+  `Internal`), `PROTOCOL_VERSION` 15 -> 16 with its doc line. -> `2 passed`, `9 passed`, `8
+  passed`; `cargo check --workspace --all-targets` clean; `mise run test-core` passed, 0 failed
+- mutant: `#[serde(skip)]` on `OperationResult::RemoteList::remotes` ->
+  `every_daemon_message_json_round_trips` FAILED; code restored exactly
+- refactor: none needed
+- commit: the commit that adds this entry
+- notes (added after the cycle 9 entry, same commit): the first `mise run test-core` after green
+  failed `protocol_auth.rs::the_protocol_version_is_fifteen` (`left: 16 / right: 15`), a second
+  version pin. Every earlier bump updated it in place (its doc lists each), so it follows: renamed
+  `the_protocol_version_is_sixteen`, asserting 16, with a doc sentence for 034. Re-run: `mise run
+  test-core` 1305 passed, 0 failed.
