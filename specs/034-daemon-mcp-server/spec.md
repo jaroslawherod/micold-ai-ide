@@ -60,6 +60,18 @@ and manage the project's sessions and worktrees the way the user does from the s
   none; operations match the sidebar's (FR-009). _(agent-resolved:
   specs/034-daemon-mcp-server/spec.md#Assumptions, crates/micold-daemon/src/server.rs — no
   session or worktree limit exists)_
+- Q: Should an agent see and manage sessions and worktrees of other projects in the catalog, or
+  only its own project? → A: Own project only; targets in other projects read as "not found"
+  (FR-010). _(decided by user)_
+- Q: How should destructive operations be handled when an agent requests them? → A: Each one waits
+  for the user's confirmation in an application window, and fails with "needs confirmation" after
+  60 seconds or when no window is attached (FR-014). _(decided by user)_
+- Q: May an agent read another session's terminal output and type prompts into it? → A: Yes, under
+  a three-value Settings option: **Off** (default; both refused), **Confirm each send** (reading
+  allowed; each send waits for window confirmation as in FR-014), **Auto** (both allowed, no
+  confirmation) (FR-016). _(decided by user — the user's words: "use auto mode means send all no
+  confirm, confirm each send and off by default auto"; reading Off as the default is the
+  orchestrator's interpretation)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -176,25 +188,29 @@ terminal recently showed, see whether it is working or waiting for input — and
 prompt.
 
 **Why this priority**: Turns separate sessions into an orchestratable team, but it crosses the
-session isolation boundary (Principle II) and so is gated on a product decision and its own
-Settings toggle (FR-016).
+session isolation boundary (Principle II) and so is gated by its own Settings option, off by
+default (FR-016).
 
-**Independent Test**: With the FR-016 toggle on, start session S2 with a prompt via
+**Independent Test**: With the FR-016 option set to Auto, start session S2 with a prompt via
 `create_session`; from S1, poll `get_session` until S2 is `AwaitingInput`, read its recent output
 with `read_session_output`, and send it a follow-up with `send_session_input`. The follow-up appears in S2's terminal.
 
 **Acceptance Scenarios**:
 
-1. **Given** the FR-016 toggle on and sibling S2 in the same project, **When** S1's agent invokes
+1. **Given** the FR-016 option set to Confirm each send or Auto and sibling S2 in the same project, **When** S1's agent invokes
    `read_session_output` on it, **Then** it receives the last N lines of S2's primary terminal as plain text (N bounded by
    FR-012).
-2. **Given** the FR-016 toggle on and sibling S2 awaiting input, **When** S1's agent invokes `send_session_input` with a
+2. **Given** the FR-016 option set to Auto and sibling S2 awaiting input, **When** S1's agent invokes `send_session_input` with a
    prompt, **Then** the text is delivered to S2's primary process exactly as if typed, and
    submitted.
 3. **Given** a session in another project, **When** the agent targets it with any operation,
    **Then** the operation fails as if the session did not exist (FR-010).
-4. **Given** the FR-016 toggle off, **When** S1's agent invokes `read_session_output` or
+4. **Given** the FR-016 option Off (the default), **When** S1's agent invokes `read_session_output` or
    `send_session_input` on S2, **Then** the operation is refused by policy and S2 is untouched.
+5. **Given** the FR-016 option set to Confirm each send and sibling S2 awaiting input, **When** S1's
+   agent invokes `send_session_input`, **Then** the request waits for the user's confirmation in a
+   window as FR-014 describes; confirmed, the text is delivered as in scenario 2; declined, timed out
+   or with no window attached, it fails with "needs confirmation" and S2 is untouched.
 
 ---
 
@@ -285,9 +301,8 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
   the application: the same validation, the same naming and placement rules, the same catalog
   records (a worktree created by an agent is app-created), and the same safeguards (a worktree with
   live sessions is not deleted unless stopping them was requested).
-- **FR-010**: Operations MUST be scoped to the calling project. [NEEDS CLARIFICATION: Should an
-  agent be able to see and manage sessions and worktrees of *other* projects in the catalog, or only
-  its own project? Default assumed here: own project only.] A target outside the scope MUST be
+- **FR-010**: Operations MUST be scoped to the calling project; sessions and worktrees of other
+  projects in the catalog are neither visible nor manageable. A target outside the scope MUST be
   reported as "not found".
 - **FR-011**: Every change an operation makes MUST reach every connected window through the same
   catalog update a user-made change produces, within the time bound of SC-003.
@@ -304,11 +319,10 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
   MUST leave nothing half-done.
 - **FR-014**: The destructive operations are exactly: `delete_worktree`, `delete_session`, and
   `stop_session` or `interrupt_session` on a session other than the caller. They MUST follow one
-  policy.
-  [NEEDS CLARIFICATION: Should destructive operations (a) run without asking, (b) require the user
-  to confirm each one in the application window, or (c) be left out of the tool server entirely?
-  Default assumed here: (b) — the operation waits for the user's confirmation in a window and fails
-  with "needs confirmation" if none is given within 60 seconds or no window is attached.]
+  policy: each request waits for the user to confirm it in an application window, which names the
+  calling session, the operation and its target. Nothing changes until the user confirms. The
+  request fails with "needs confirmation" if the user declines, if no answer arrives within 60
+  seconds, or if no window is attached.
 - **FR-015**: An agent MUST NOT stop, delete, or delete the hosting worktree of its own calling
   session through the tool server; such a request MUST be refused by policy. `send_session_input`,
   `read_session_output` and `interrupt_session` targeting the calling session itself MUST be refused
@@ -318,13 +332,14 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
   Principle III forbids a Default session to create, modify or remove any git worktree. Every
   other operation stays available to it.
 - **FR-016**: `read_session_output` and `send_session_input` on a session other than the caller
-  MUST be governed by a Settings toggle separate from FR-004, "Let agents read and type into other
-  sessions". When it is off, both MUST be refused by policy; when it is on, both MUST work within
-  the scope of FR-010 without the FR-014 confirmation. [NEEDS CLARIFICATION: Should cross-session
-  output reading and input sending be (a) allowed by default (toggle on), (b) allowed but off by
-  default, (c) allowed only with a per-send confirmation like FR-014, or (d) left out entirely?
-  Default assumed here: (b) — the toggle exists and starts off, since input into another agent can
-  make it run any command in that session's worktree.]
+  MUST be governed by a Settings option separate from FR-004, "Let agents read and type into other
+  sessions", with three values, applied within the scope of FR-010:
+  - **Off** (default): both operations are refused by policy.
+  - **Confirm each send**: `read_session_output` works without confirmation; each
+    `send_session_input` waits for the user's confirmation in a window under the FR-014 policy
+    (same prompt, 60-second bound, no-window refusal).
+  - **Auto**: both operations work without confirmation.
+  Changing the option applies to the next request, including from sessions already running.
 - **FR-017**: `create_session` MUST accept an optional initial prompt and deliver it to the new
   session's primary process as its first submitted input when the session's activity first
   reports awaiting input. If that has not happened within 60 seconds of the session starting, or
@@ -338,7 +353,7 @@ with `read_session_output`, and send it a follow-up with `send_session_input`. T
 **Visibility**
 
 - **FR-019**: The user guide MUST document the tool server: what it offers, which CLIs are bound,
-  the Settings toggle, the confirmation policy, and the scope.
+  the Settings toggle, the cross-session option (FR-016), the confirmation policy, and the scope.
 
 ### Operations
 
@@ -378,7 +393,8 @@ including or excluding worktrees the app did not create. These stay user-only in
   never in user or project configuration.
 - **Operation request**: calling session, operation, inputs, outcome. Logged per FR-018 for
   mutating operations.
-- **Pending confirmation** (if FR-014 resolves to (b)): the destructive request awaiting the user,
+- **Pending confirmation**: a destructive request (FR-014), or a `send_session_input` under Confirm
+  each send (FR-016), awaiting the user,
   with its calling session, target and expiry.
 
 ## Success Criteria *(mandatory)*
