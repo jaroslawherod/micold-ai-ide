@@ -30,7 +30,7 @@ phase file. Overview and diagrams for humans: [README.md](README.md).
 
 | Argument | Start at |
 |---|---|
-| `resume` | Find this worktree's ledger (see *Resuming*), check each recorded PR's `state` with `gh pr view`, and continue at the first unfinished step. **Never** rebuild progress from `gh pr list` or from memory. |
+| `resume` | Run `scripts/autopilot/resume.sh` (see *Resuming*) and continue at the first unfinished step. **Never** rebuild progress from `gh pr list` or from memory. |
 | `bug: …`, or text describing broken behaviour | Bug unit |
 | anything else | Spec unit |
 
@@ -41,25 +41,17 @@ output of `git branch --show-current`; `resume` finds the ledger by it.
 
 ### Resuming
 
-Your ledger records this worktree's branch and is not `done`:
+Run `scripts/autopilot/resume.sh`. It finds this worktree's ledger (working tree first, where an
+unpushed ledger is newest; then `origin/main`) and prints its phase, next step, open escalation, and
+GitHub's state for each recorded PR.
 
-```bash
-b=$(git branch --show-current)
-grep -lxF -- "- **Worktree branch**: $b" specs/*/autopilot.md specs/*/bugs/*.autopilot.md 2>/dev/null \
-  | xargs -r grep -LxF -- '- **Phase**: done'
-```
-
-Search the working tree, not `origin/main`: an uncommitted or unpushed ledger is the newest copy.
-
-- **One match**: resume it.
-- **None**, but the working tree holds this branch's ledger with **Phase** `done` and
-  `git cherry origin/main HEAD | grep '^+'` prints something: the record PR never merged. Open or
-  merge it, then run the handoff.
-- **None**: `git fetch origin`, then search
-  `git grep -lF -- "- **Worktree branch**: $b" origin/main -- 'specs/'`. Resume only a match whose
-  Phase on `origin/main` is not `done`. Still nothing: say there is no run to resume here, and stop.
-- **Several**: ask with one `AskUserQuestion`. Each option names a ledger's feature, phase and next
-  step. Recommend the most recently committed one.
+| Exit | Meaning | Do |
+|---|---|---|
+| 0 | `LEDGER …` | Resume at the first unfinished step. |
+| 0 | `LEDGER-ON-MAIN …` | Run `scripts/autopilot/branch-start.sh`, then `resume.sh` again. |
+| 2 | `NONE` | Say there is no run to resume here, and stop. |
+| 3 | several ledgers | Ask with one `AskUserQuestion`: each option names a ledger's feature, phase and next step. Recommend the most recently committed one. |
+| 4 | `RECORD-PR-PENDING` | The run finished but its record PR never merged. Open or merge it, then run the handoff. |
 
 **When GitHub and the ledger disagree, GitHub is right.** Fix the ledger. A milestone marked merged
 whose PR is open, or whose changes are missing from `origin/main`, goes back to a milestone unit.
@@ -99,15 +91,22 @@ Run each unit in its own `general-purpose` subagent on the session model (omit `
 
 ### Waiting and merging
 
-After a unit returns `DONE` with a PR, follow [references/pr-and-merge.md](references/pr-and-merge.md)
-§5–6: wait for `ci complete` in the background, then `gh pr merge <n> --rebase` and confirm `state`
-is `MERGED`.
+After a unit returns `DONE` with a PR, run `scripts/autopilot/wait-merge.sh <n>` detached, and wait
+on its last line (it runs as long as CI does):
 
-- **Red in this flow's code:** continue the unit that opened the PR with `SendMessage` and the failing
-  log (at most 3 attempts). That subagent still holds the change's context.
-- **Red outside this flow, or no checks:** handle it per the reference.
+```bash
+log="$SCRATCHPAD/pr-<n>.log"
+AUTOPILOT_LOG_DIR="$SCRATCHPAD" setsid nohup scripts/autopilot/wait-merge.sh <n> >"$log" 2>&1 &
+# then, with run_in_background:
+until grep -qE '^(MERGED|RED|CHECKLESS|MERGE-FAILED) ' "$log"; do sleep 30; done; tail -5 "$log"
+```
 
-After the merge, record the merge SHA in the ledger and dispatch the next unit.
+| Last line | Do |
+|---|---|
+| `MERGED <n> <sha>` | Record the SHA in the ledger, dispatch the next unit. |
+| `RED <n> <run> <log>` | In this flow's code: continue the unit that opened the PR with `SendMessage` and the log path (at most 3 attempts). Outside it: handle it per [references/pr-and-merge.md](references/pr-and-merge.md) §5. |
+| `CHECKLESS <n> <reason>` | Handle the reason per the reference's *A PR with no checks*, then run the script again. |
+| `MERGE-FAILED <n> <message>` | Fix per the reference's §6 table, then run the script again. |
 
 ## Ownership: only this flow's work
 
@@ -148,21 +147,15 @@ PRs, visual checks, or a choice between equivalent implementations. Handle those
 
 ## Handoff: the last message
 
-First verify all three:
-
-- `git status --porcelain` is empty
-- after `git fetch origin`, `git cherry origin/main HEAD | grep '^+'` prints nothing. Rebase-merge
-  rewrites SHAs, so `git log origin/main..HEAD` still lists merged commits; `git cherry` matches by
-  patch.
-- every PR in the ledger reads `MERGED`
-
-Before the checks, close the ledger: set **Phase** to `done`, record the last merge SHA, and copy
+First close the ledger: set **Phase** to `done`, record the last merge SHA, and copy
 the Total row and model table of `mise run autopilot-tokens` into *Token usage*. Open that last PR
 yourself (`docs(NNN): record the autopilot run`) per
 [references/pr-and-merge.md](references/pr-and-merge.md) §2–6 and merge it on green. It is not
-listed in the ledger; confirm it with `gh pr view`.
+listed in the ledger, so pass it to the checks.
 
-If any check fails, report exactly what remains. Otherwise send this with a `PushNotification`:
+Then run `scripts/autopilot/handoff-check.sh <ledger> <record-pr>`. It checks the tree is clean,
+every commit is on `origin/main` (by patch, since rebase-merge rewrites SHAs), and every PR reads
+`MERGED`. If it prints `NOT DONE`, report exactly what remains. Otherwise send this with a `PushNotification`:
 
 ```
 ✅ WORK COMPLETE — <NNN-feature>
@@ -187,4 +180,4 @@ This worktree has no uncommitted work, no unpushed commits and no open PRs.
 | "main is red, I'll wait for it to recover" | Silent waiting stalls the flow. Escalate as *blocked by work outside my flow*. |
 | "Quick question for the user…" | Batch it with a recommendation under the banner, or resolve it from evidence. |
 | "I remember where I was" | The ledger and `gh pr view` say where you are. Memory does not. |
-| "Everything merged. Done!" | Run the three checks, then send the WORK COMPLETE handoff. |
+| "Everything merged. Done!" | Run `handoff-check.sh`, then send the WORK COMPLETE handoff. |
