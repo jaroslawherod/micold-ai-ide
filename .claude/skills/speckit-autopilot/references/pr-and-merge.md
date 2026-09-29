@@ -35,7 +35,7 @@ setsid nohup bash -c 'mise run gate; echo "GATE_EXIT=$?"' >"$log" 2>&1 &
   `scripts/build-lock.sh cargo check --workspace --target aarch64-apple-darwin`.
 - **Changed how something looks?** Run the `visual-pass` skill. Save its evidence in the spec
   directory.
-- **Docs- and specs-only PRs** (PR 1, PR 2, close): run `scripts/tests/*.test.sh` only.
+- **Docs- and specs-only PRs** (PR 1, PR 2, and a close PR that touches no code or tests): run `scripts/tests/*.test.sh` only.
 
 ## 3. Commit and push
 

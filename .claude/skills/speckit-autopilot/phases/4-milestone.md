@@ -21,7 +21,7 @@ For milestone K:
 
    Verify each finding against the code first. Fix real ones and go back to step 2. Decline a
    finding that contradicts the spec, and record why in the ledger.
-4. Tick the milestone's tasks, update the ledger, commit, push, and open the PR. Title
+4. Check the ticks from step 1, update the ledger, commit, push, and open the PR. Title
    `feat(NNN): <deliverable>`, or `fix(NNN): … (BUG-<k>)` for a bug.
 
 **Continued with a red CI log:** run `systematic-debugging`, fix, re-run the gate, push, and return
