@@ -210,3 +210,47 @@ fn none_when_absent() {
         None
     );
 }
+
+#[test]
+fn relative_path_entries_are_dropped_and_quotes_removed() {
+    // `gh` runs in the user's home, so a relative entry would resolve somewhere other than where
+    // it was found — or run whatever `gh` sits in the current directory.
+    let inputs = LocateInputs {
+        os: HostOs::Linux,
+        env_include_path: Some("bin:/from/profile"),
+        process_path: ".:node_modules/.bin:/usr/bin",
+        home: None,
+        env: &no_env,
+        exists: &nothing_exists,
+    };
+    let dirs = candidate_dirs(&inputs);
+    assert!(
+        dirs.iter().all(|d| d.to_string_lossy().starts_with('/')),
+        "only absolute directories are candidates: {dirs:?}"
+    );
+    assert_eq!(
+        dirs.iter().take(2).cloned().collect::<Vec<_>>(),
+        [PathBuf::from("/from/profile"), PathBuf::from("/usr/bin")]
+    );
+
+    // Windows allows a quoted `PATH` entry; `cmd` strips the quotes, so must we.
+    let inputs = LocateInputs {
+        os: HostOs::Windows,
+        env_include_path: None,
+        process_path: "\"C:\\Tools\\gh cli\";.;bin;C:\\Windows;\\\\server\\share\\bin",
+        home: None,
+        env: &no_env,
+        exists: &nothing_exists,
+    };
+    assert_eq!(
+        candidate_dirs(&inputs)
+            .into_iter()
+            .take(3)
+            .collect::<Vec<_>>(),
+        [
+            PathBuf::from("C:\\Tools\\gh cli"),
+            PathBuf::from("C:\\Windows"),
+            PathBuf::from("\\\\server\\share\\bin"),
+        ]
+    );
+}

@@ -137,3 +137,12 @@ fn no_github_remote() {
         RemoteChoice::NoGithubRemote
     );
 }
+
+#[test]
+fn managed_user_owner_with_underscore() {
+    // Enterprise Managed Users on github.com have logins like `jdoe_acme`.
+    assert_eq!(
+        repo_of("git@github.com:jdoe_acme/tool.git").as_deref(),
+        Some("jdoe_acme/tool")
+    );
+}

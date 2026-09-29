@@ -52,6 +52,7 @@ fn stub(dir: &Path, then: Then) -> PathBuf {
            echo \"NO_COLOR=$NO_COLOR\"\n\
            echo \"CLICOLOR=$CLICOLOR\"\n\
            echo \"GH_PAGER=${{GH_PAGER-unset}}\"\n\
+           echo \"GH_DEBUG=${{GH_DEBUG-unset}}\"\n\
          }} > \"$dir/env.txt\"\n\
          pwd -P > \"$dir/cwd.txt\"\n\
          {tail}\n"
@@ -101,6 +102,8 @@ fn home() -> PathBuf {
 fn gh_cli_runs_gh_as_specified() {
     let dir = tempfile::tempdir().unwrap();
     let gh = stub(dir.path(), Then::PrintPage);
+    // A user who debugs `gh` from their shell profile; the app must not inherit that.
+    std::env::set_var("GH_DEBUG", "api");
 
     let page = GhCli::new(gh)
         .list_open(&repo(), Some("CUR"))
@@ -136,6 +139,10 @@ fn gh_cli_runs_gh_as_specified() {
         );
     }
     if cfg!(unix) {
+        assert!(
+            env.lines().any(|l| l == "GH_DEBUG=unset"),
+            "GH_DEBUG is removed, so debug traces never reach the stderr `classify` reads: {env}"
+        );
         assert!(
             env.lines().any(|l| l == "GH_PAGER="),
             "GH_PAGER is set, and empty, so gh never pages: {env}"

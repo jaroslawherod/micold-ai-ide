@@ -156,6 +156,11 @@ Tests: `crates/micold-core/tests/github_gh_cli.rs` (new), against a stub `gh` th
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
 | U94 | `GhCli::list_open` passes exactly `list_args`, sets the five `gh` environment variables, runs in the user's home, parses the page; a stub past a short bound → `TimedOut`; exit 4 + not-logged-in text → `NotSignedIn` | FR-007, FR-022, FR-025, R6 | example | DONE | `github_gh_cli.rs::gh_cli_runs_gh_as_specified` |
+| U98 | Relative `PATH` entries are never candidates; a quoted Windows entry is unquoted (added in M1 review A) | FR-026 | example | DONE | `github_locate.rs::relative_path_entries_are_dropped_and_quotes_removed` |
+| U99 | An owner with `_` (Enterprise Managed User) is a GitHub owner (added in M1 review A) | FR-002 | example | DONE | `github_remote.rs::managed_user_owner_with_underscore` |
+| U100 | A page that adds nothing or repeats its cursor ends the load (added in M1 review A) | FR-004 | example | DONE | `github_load.rs::a_page_that_makes_no_progress_ends_the_load` |
+| U101 | GraphQL "Resource not accessible by personal access token" → `NoAccess` (added in M1 review A) | FR-007 | example | DONE | `github_classify.rs::no_access` (fixture `graphql_forbidden.stderr`) |
+| U102 | `GhCli` removes `GH_DEBUG` from `gh`'s environment (added in M1 review A) | FR-007 | example | DONE | `github_gh_cli.rs::gh_cli_runs_gh_as_specified` |
 
 ### `crates/micold-client/src/features/worktree_form.rs`: availability, load, staleness
 

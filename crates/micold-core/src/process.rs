@@ -120,7 +120,7 @@ pub enum RunOutcome {
 /// process reported success without the target group actually dying), whereas the direct syscall
 /// from this same process is unambiguous.
 #[cfg(unix)]
-pub fn kill_process_group(pid: u32) {
+fn kill_process_group(pid: u32) {
     // Safety: `kill(2)` with a negative pid signals the process group; passing an invalid/already-
     // reaped group id is a documented, safe no-op (returns -1/ESRCH) rather than undefined
     // behavior.
@@ -163,16 +163,18 @@ pub fn run_bounded(mut cmd: Command, timeout: Duration) -> RunOutcome {
     let job = JobHandle::capture(&child);
 
     let start = Instant::now();
-    let timed_out = loop {
+    // `Err` holds a failed wait. The group is still killed and the readers still joined below,
+    // so nothing outlives the call.
+    let waited: Result<bool, std::io::Error> = loop {
         match child.try_wait() {
-            Ok(Some(_)) => break false,
+            Ok(Some(_)) => break Ok(false),
             Ok(None) => {
                 if start.elapsed() >= timeout {
-                    break true;
+                    break Ok(true);
                 }
                 std::thread::sleep(POLL_INTERVAL);
             }
-            Err(err) => return RunOutcome::SpawnFailed(err.to_string()),
+            Err(err) => break Err(err),
         }
     };
 
@@ -195,6 +197,10 @@ pub fn run_bounded(mut cmd: Command, timeout: Duration) -> RunOutcome {
     let stdout = joined(stdout_reader);
     let stderr = String::from_utf8_lossy(&joined(stderr_reader)).into_owned();
 
+    let timed_out = match waited {
+        Ok(timed_out) => timed_out,
+        Err(err) => return RunOutcome::SpawnFailed(err.to_string()),
+    };
     if timed_out {
         RunOutcome::TimedOut { stderr }
     } else {

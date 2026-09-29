@@ -249,3 +249,32 @@ failed before the implementation.
   whose seam arrives with the client wiring in M2. T015's implementation is complete in M1 scope,
   so it is ticked; U63 stays TODO for M2.
 - commit: the commit that adds this entry
+
+## Cycle 11: U98–U102 — Review A (code-review, high) findings
+
+- tests (each extends its file): `github_locate.rs::relative_path_entries_are_dropped_and_quotes_removed`,
+  `github_remote.rs::managed_user_owner_with_underscore`,
+  `github_load.rs::a_page_that_makes_no_progress_ends_the_load`, `github_classify.rs::no_access`
+  (new fixture `graphql_forbidden.stderr`, from GitHub's documented text), and a `GH_DEBUG`
+  assertion in `github_gh_cli.rs::gh_cli_runs_gh_as_specified`
+- red: `scripts/build-lock.sh cargo test --no-fail-fast -p micold-core --test github_locate --test
+  github_remote --test github_load --test github_gh_cli` and `--test github_classify`. Decisive
+  lines: `only absolute directories are candidates: ["bin", "/from/profile", ".",
+  "node_modules/.bin", …]`; `left: None / right: Some("jdoe_acme/tool")`; `a stall is not an
+  error: Other("FakeIssueSource: no page scripted for this call")`; `left: Other("GraphQL: Resource
+  not accessible by personal access token (repository.issues)") / right: NoAccess`; `GH_DEBUG is
+  removed, so debug traces never reach the stderr `classify` reads: GH_PROMPT_DISABLED=1 …`.
+- green: `HostOs::is_absolute` (text rule per OS) filters candidates, and entries are unquoted;
+  `_` allowed in owners (data-model.md and T012 updated to match); `load_listing` stops on an
+  empty page or a repeated cursor; `resource not accessible` classified `NoAccess`;
+  `env_remove("GH_DEBUG")`. -> all six affected files pass.
+- also (no test, structural): `run_bounded` no longer returns early when `try_wait` fails; it
+  kills the group and joins both readers first, then reports `SpawnFailed`. `kill_process_group`
+  is private again, as it was in `env_include.rs`. A failing `try_wait` cannot be induced from a
+  test.
+- refactor: none needed
+- commit: the commit that adds this entry
+- notes (Review B F1): the macOS cross-check that T010 asks for after the structural move has run
+  on the full branch: `scripts/build-lock.sh cargo check --workspace --target aarch64-apple-darwin`
+  exit 0 (after `mise run gate` passed at 939ef459). Review B also ran `cargo check -p micold-core
+  --all-targets` for `aarch64-apple-darwin` and `x86_64-pc-windows-msvc`: both clean.
