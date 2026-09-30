@@ -615,6 +615,7 @@ fn the_pick_sets_or_clears_the_type() {
     );
 
     pick(&mut state, 42, default_mapping());
+    assert_eq!(form(&state).type_, Some(ConventionalType::Fix));
     send(&mut state, Msg::TypeSelected(ConventionalType::Refactor));
     assert_eq!(
         form(&state).type_,

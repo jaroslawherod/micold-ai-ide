@@ -235,7 +235,7 @@ clears it; the default mapping is stored in `settings.json`.
 - [X] T083 [US2] [A15] Outer loop green: A15 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
 - [X] T084 [US2] [A16] Outer loop green: A16 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
 - [X] T085 [US2] [A17] Outer loop green: A17 passes via `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue` in `crates/micold-client/src/main_tests.rs`
-- [ ] T052 [US2] Re-run quickstart §B4 (type `fix` from a `bug` label, labels visible on rows — AS7) with the `visual-pass` skill and record it in `specs/034-github-issue-worktree/evidence/quickstart-b.md`.
+- [X] T052 [US2] Re-run quickstart §B4 (type `fix` from a `bug` label, labels visible on rows — AS7) with the `visual-pass` skill and record it in `specs/034-github-issue-worktree/evidence/quickstart-b.md`.
 
 **Checkpoint**: US2 works with the default mapping; `mise run gate` passes.
 

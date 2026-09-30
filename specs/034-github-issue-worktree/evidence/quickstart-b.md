@@ -46,3 +46,19 @@ Date 2026-09-30, commit c1c43e14, dev build (client + daemon built in one invoca
 ### B6 observations
 - D6: the results overlay sits directly under the field and covers the caption/searching/failed line while it is open, so the "Searching GitHub…" and failure lines can only be seen when the list is closed or empty. Check whether the line is meant to show with the list open.
 - Not run: failed-search line (network fault not injected for this row); light scheme; Enter to pick.
+
+## §B4 — labels choose the type (milestone M4)
+
+Date 2026-09-30, commit d721635b, dev build (client + daemon built in one invocation, copied to ~/vp/b4m4bin; the pair connected). Private Xvfb :95 + lavapipe, NOT a real display, on a loaded machine (input and redraw lag of several seconds, so waits were long). Private XDG dirs. Project /tmp/issue-demo (shallow clone of cli/cli, 1,036 open issues). Default label mapping (bug→fix, enhancement→feat, documentation→docs), no settings.json edit. No worktree created.
+
+| # | Criterion | Verdict | Notes / screenshots (evidence/) |
+|---|---|---|---|
+| 1 | Rows show their labels (AS7) | PASS | Rows read `#n title · label, label`, e.g. `#14528 ... · enhancement, gh-issue`; long label lists are ellipsised. `b4m4-list-labels-dark.png` |
+| 2 | Pick a `bug` issue: Type `fix` with no hand choice | PASS | Typed "bug", picked #13022 "Bug with the --exclude option for pr diff" (labels bug, priority-3, ...). Type = fix, Ticket = 13022, Name = title, Directory `.claude/worktrees/fix-13022_bug-with-the-exclude-option-for-pr-diff`, Branch `fix/13022_bug-with-the-exclude-option-for-pr-diff`. `b4m4-bug-narrow-dark.png`, `b4m4-bug-picked-fix-dark.png` |
+| 3 | `chore` by hand, then pick an unmapped issue: Type empty | PASS (with note) | First run: #9414 (only `needs-triage`) after fix from the bug pick: Type empty, Create disabled (`b4m4-unmapped-type-empty-dark.png`). Then chose `chore` by hand (form showed `chore/9414_...`), re-picked #9598 (`more-info-needed, needs-triage, gh-auth`): Type empty, Ticket 9598, Name "Host validation", Create disabled (`b4m4-chore-then-unmapped-empty-dark.png`). Note: the form "asks for a type" only by the empty Type field and disabled Create; no explicit message or preview is shown. |
+| 4 | Pick an `enhancement` issue: Type `feat` | PASS | #9533 (`enhancement, needs-triage`): Type = feat, Directory `.claude/worktrees/feat-9533_pr-fetch-command`, Branch `feat/9533_pr-fetch-command`. `b4m4-enhancement-feat-dark.png` |
+
+### B4/M4 observations
+- No defects found for the M4 behaviour. Dark scheme only; light scheme not run.
+- Once the Type is empty the preview (Directory/Branch) disappears and Create is disabled; nothing names the missing field beyond the empty Type box.
+- After picking, the Issue field still shows the typed query (D2 above), unchanged by M4.
