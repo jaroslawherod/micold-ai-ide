@@ -5,10 +5,10 @@ write. Give it paths, not a summary. It never edits.
 
 ## Dispatching a reviewer
 
-Before each round, run `scripts/autopilot/review-snapshot.sh` and record the SHA it prints in the
+Before each round, run `scripts/autopilot/review-snapshot.sh` and record the `<tree>:<head>` it prints in the
 ledger's *Review rounds*. Nothing needs committing: the snapshot holds the working tree as is.
-Use `Agent` (`subagent_type: general-purpose`). Round 1 of every review (including review B's first
-pass): omit `model`. Round 2 and later: `model: "sonnet"`.
+Use `Agent` (`subagent_type: general-purpose`). A full round (round 1, including review B's first
+pass): omit `model`. A scoped re-review (below): `model: "sonnet"`.
 
 Prompt parts, in order:
 
@@ -52,7 +52,8 @@ Run a full round instead, with `model` omitted, when:
 
 - the last round ended with `+<n> more`. This round finds the rest and does not count toward the
   limit below;
-- the snapshot is missing from the ledger, or `review-snapshot.sh diff` exits 2.
+- the snapshot is missing from the ledger, or `review-snapshot.sh diff` exits 2 (unknown, or
+  stale after a rebase).
 
 After it returns:
 
@@ -60,8 +61,10 @@ After it returns:
 - Fix every BLOCKER and MAJOR that holds up. Fix a MINOR only if it takes a few minutes.
 - **Stop when clean.** `CLEAN`, or only MINORs: the review is done; fixing MINORs needs no new
   round. Otherwise fix, commit, and dispatch a **new** reviewer, never the old one.
-- At most 3 rounds per review. A third round that still finds a BLOCKER or MAJOR is an escalation
-  (category 5); never run a fourth.
+- **Round limit.** A round counts only when it follows fixes to that review's own BLOCKER or
+  MAJOR findings, or is round 1. A `+<n> more` continuation, and a review B round run only because
+  review A's fixes changed code, do not count unless they find a BLOCKER or MAJOR. At most 3
+  counted rounds: a third that still finds one is an escalation (category 5); never run a fourth.
 
 ## Bug rubric (Phase 0, after `speckit-bugfix-verify`)
 

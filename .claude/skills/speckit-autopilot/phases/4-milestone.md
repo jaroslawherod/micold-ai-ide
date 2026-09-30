@@ -26,8 +26,8 @@ For milestone K:
 
    Verify each finding against the code first. Fix real ones, re-run the gate (step 2), then run a
    next round of each review whose last round had a real BLOCKER or MAJOR. B also runs a next
-   (scoped) round when A's fixes changed code after B's last round; that round does not count
-   toward B's limit unless it finds something. Decline a finding that contradicts the spec, and
+   (scoped) round when A's fixes changed code after B's last round. What counts toward the round
+   limit: [../references/review-rubrics.md](../references/review-rubrics.md) *After it returns*. Decline a finding that contradicts the spec, and
    record why in the ledger.
 4. Check the ticks from step 1, update the ledger, commit, push, and open the PR. Title
    `feat(NNN): <deliverable>`, or `fix(NNN): … (BUG-<k>)` for a bug.
