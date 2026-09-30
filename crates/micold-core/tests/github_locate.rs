@@ -24,15 +24,18 @@ fn nothing_exists(_: &Path) -> bool {
 fn separator_and_exe_come_from_host_os() {
     assert_eq!(
         (HostOs::Linux.path_separator(), HostOs::Linux.exe_name()),
-        (':', "gh")
+        (':', "gh"),
+        "Linux splits PATH on `:` and looks for `gh`"
     );
     assert_eq!(
         (HostOs::MacOs.path_separator(), HostOs::MacOs.exe_name()),
-        (':', "gh")
+        (':', "gh"),
+        "macOS splits PATH on `:` and looks for `gh`"
     );
     assert_eq!(
         (HostOs::Windows.path_separator(), HostOs::Windows.exe_name()),
-        (';', "gh.exe")
+        (';', "gh.exe"),
+        "Windows splits PATH on `;` and looks for `gh.exe`"
     );
 }
 
@@ -115,7 +118,11 @@ fn windows_finds_winget_gh() {
         env: &env,
         exists: &exists,
     };
-    assert_eq!(locate_gh(&inputs), Some(winget_gh.clone()));
+    assert_eq!(
+        locate_gh(&inputs),
+        Some(winget_gh.clone()),
+        "a Start-menu launch cannot see WinGet's Links on its PATH, so the well-known table finds it"
+    );
 
     let dirs = candidate_dirs(&inputs);
     for expected in [
@@ -132,7 +139,7 @@ fn windows_finds_winget_gh() {
     assert!(
         !dirs
             .iter()
-            .any(|d| d.to_string_lossy().contains("chocolatey")),
+            .any(|d| d.to_string_lossy().to_lowercase().contains("chocolatey")),
         "a well-known directory whose variable is unset is skipped, not guessed: {dirs:?}"
     );
 }
@@ -191,7 +198,8 @@ fn path_key_is_matched_ignoring_case() {
     );
     assert_eq!(
         env_include_path(&[("PATH".to_string(), "/opt/x".to_string())]),
-        Some("/opt/x")
+        Some("/opt/x"),
+        "Unix spells the key `PATH`"
     );
     assert_eq!(env_include_path(&[]), None, "no PATH contributed");
 }
@@ -207,7 +215,8 @@ fn none_when_absent() {
             env: &no_env,
             exists: &nothing_exists,
         }),
-        None
+        None,
+        "no candidate holds `gh`, so there is nothing to run"
     );
 }
 
@@ -230,7 +239,8 @@ fn relative_path_entries_are_dropped_and_quotes_removed() {
     );
     assert_eq!(
         dirs.iter().take(2).cloned().collect::<Vec<_>>(),
-        [PathBuf::from("/from/profile"), PathBuf::from("/usr/bin")]
+        [PathBuf::from("/from/profile"), PathBuf::from("/usr/bin")],
+        "relative entries of either PATH are skipped, absolute ones kept in order"
     );
 
     // Windows allows a quoted `PATH` entry; `cmd` strips the quotes, so must we.
@@ -251,6 +261,7 @@ fn relative_path_entries_are_dropped_and_quotes_removed() {
             PathBuf::from("C:\\Tools\\gh cli"),
             PathBuf::from("C:\\Windows"),
             PathBuf::from("\\\\server\\share\\bin"),
-        ]
+        ],
+        "quotes are stripped, relative entries dropped, drive and UNC paths kept"
     );
 }

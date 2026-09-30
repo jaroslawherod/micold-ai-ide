@@ -141,26 +141,43 @@ fn query(state: &mut State, text: &str) {
 
 // --- T018: availability, loading, staleness ------------------------------------------------
 
-/// U96 — the caption under the switch says what the chip can do, and before the choice that
-/// contacts GitHub it names the repository it would read (FR-002, FR-025).
+/// U96 — while the remotes are read the caption says so, and nothing is requested (FR-002).
 #[test]
-fn captions_follow_availability() {
+fn captions_follow_availability_while_checking() {
     let state = opened();
-    assert_eq!(form(&state).github, GithubAvailability::Checking);
-    assert_eq!(form(&state).issues, IssueList::NotRequested);
+    assert_eq!(
+        form(&state).github,
+        GithubAvailability::Checking,
+        "a form just opened is still reading the remotes"
+    );
+    assert_eq!(
+        form(&state).issues,
+        IssueList::NotRequested,
+        "opening the form requests no issues"
+    );
     assert_eq!(
         form(&state).source_caption().as_deref(),
         Some(CHECKING),
         "while the remotes are read the chip is disabled and says why"
     );
+}
 
+/// U96 — with no GitHub remote the caption says the chip cannot be used (FR-002).
+#[test]
+fn captions_follow_availability_without_a_github_remote() {
     let mut state = opened();
     send(&mut state, Msg::RemotesListed(Ok(vec![])));
     assert_eq!(
         form(&state).source_caption().as_deref(),
-        Some(NO_GITHUB_REMOTE)
+        Some(NO_GITHUB_REMOTE),
+        "no GitHub remote is the reason given"
     );
+}
 
+/// U96 — before the choice that contacts GitHub the caption names the repository it would read,
+/// and the body notice is the issue source's alone (FR-025).
+#[test]
+fn captions_follow_availability_before_the_choice() {
     let state = available();
     assert_eq!(
         form(&state).source_caption(),
@@ -174,7 +191,11 @@ fn captions_follow_availability() {
         None,
         "the body notice belongs to the issue source only"
     );
+}
 
+/// U96 — once the issue source is chosen its body notice names the repository instead.
+#[test]
+fn captions_follow_availability_once_chosen() {
     let (state, _) = loading();
     assert_eq!(
         form(&state).source_caption(),
@@ -183,21 +204,27 @@ fn captions_follow_availability() {
     );
     assert_eq!(
         form(&state).issue_notice(),
-        Some(format!("Reads open issues of {OWNER_NAME} from GitHub."))
+        Some(format!("Reads open issues of {OWNER_NAME} from GitHub.")),
+        "the body notice names the repository read"
     );
 }
 
-/// U44 — the remotes decide whether the chip is usable, and a failed lookup says why (FR-002).
+/// U44 — a github.com remote makes the source available for its repository (FR-002).
 #[test]
-fn remotes_decide_availability() {
+fn remotes_decide_availability_with_a_github_remote() {
     let state = available();
     assert_eq!(
         form(&state).github,
         GithubAvailability::Available(
             GithubRepo::from_remote_url("https://github.com/o/r").unwrap()
-        )
+        ),
+        "origin on github.com names o/r"
     );
+}
 
+/// U44 — a remote on another host leaves the source unavailable, saying why (FR-002).
+#[test]
+fn remotes_decide_availability_without_a_github_remote() {
     let mut state = opened();
     send(
         &mut state,
@@ -205,9 +232,14 @@ fn remotes_decide_availability() {
     );
     assert_eq!(
         form(&state).github,
-        GithubAvailability::Unavailable(NO_GITHUB_REMOTE.to_string())
+        GithubAvailability::Unavailable(NO_GITHUB_REMOTE.to_string()),
+        "a gitlab.com remote is not a GitHub remote"
     );
+}
 
+/// U44 — a failed remote lookup leaves the source unavailable with the failure's reason (FR-002).
+#[test]
+fn remotes_decide_availability_when_the_lookup_fails() {
     let mut state = opened();
     send(
         &mut state,
@@ -218,7 +250,8 @@ fn remotes_decide_availability() {
         GithubAvailability::Unavailable(
             "Couldn't read this repository's remotes: not connected to the session service"
                 .to_string()
-        )
+        ),
+        "the lookup's failure is the reason given"
     );
 }
 
@@ -232,27 +265,46 @@ fn the_source_is_chosen_only_when_available() {
         BranchSource::New,
         "while checking, the chip is disabled and a stray press changes nothing"
     );
-    assert_eq!(form(&state).issues, IssueList::NotRequested);
+    assert_eq!(
+        form(&state).issues,
+        IssueList::NotRequested,
+        "a refused choice loads nothing"
+    );
 
     let mut state = opened();
     send(&mut state, Msg::RemotesListed(Ok(vec![])));
     send(&mut state, Msg::SourceChanged(BranchSource::Issue));
-    assert_eq!(form(&state).source, BranchSource::New);
-    assert_eq!(form(&state).issues, IssueList::NotRequested);
+    assert_eq!(
+        form(&state).source,
+        BranchSource::New,
+        "with no GitHub remote the choice is refused"
+    );
+    assert_eq!(
+        form(&state).issues,
+        IssueList::NotRequested,
+        "a refused choice loads nothing"
+    );
 
     let before = available().worktree_form.issue_request_seq;
     let (state, seq) = loading();
-    assert_eq!(form(&state).source, BranchSource::Issue);
+    assert_eq!(
+        form(&state).source,
+        BranchSource::Issue,
+        "with a GitHub remote the choice is accepted"
+    );
     assert!(
         seq > before,
         "a load is given a fresh seq ({seq} after {before})"
     );
-    assert_eq!(state.worktree_form.issue_request_seq, seq);
+    assert_eq!(
+        state.worktree_form.issue_request_seq, seq,
+        "the load awaits the seq last handed out"
+    );
 }
 
-/// U46 — only the result the form is waiting for applies (invariant 2, FR-007a).
+/// U46 — a result for another request is dropped (invariant 2, FR-007a).
 #[test]
-fn only_the_awaited_result_applies() {
+fn only_the_awaited_result_applies_another_seq_is_dropped() {
     let (mut state, seq) = loading();
     send(&mut state, loaded_result(seq + 1, issues()));
     assert_eq!(
@@ -260,7 +312,12 @@ fn only_the_awaited_result_applies() {
         Some(seq),
         "a result for another request is dropped"
     );
+}
 
+/// U46 — the awaited result applies, a listing or an error alike (invariant 2, FR-007a).
+#[test]
+fn only_the_awaited_result_applies_the_awaited_one_does() {
+    let (mut state, seq) = loading();
     send(&mut state, loaded_result(seq, issues()));
     assert!(is_loaded(&state), "the awaited result applies");
 
@@ -277,9 +334,14 @@ fn only_the_awaited_result_applies() {
         form(&state).issues,
         IssueList::Failed {
             error: IssueLoadError::NotSignedIn
-        }
+        },
+        "the awaited failure applies"
     );
+}
 
+/// U46 — with no form open a result is dropped (invariant 2, FR-007a).
+#[test]
+fn only_the_awaited_result_applies_no_form_drops_it() {
     let mut closed = State::default();
     send(&mut closed, loaded_result(1, issues()));
     assert_eq!(
@@ -333,10 +395,18 @@ fn switching_away_keeps_fields_and_drops_the_load() {
     send(&mut state, Msg::NameChanged("typed".into()));
 
     send(&mut state, Msg::SourceChanged(BranchSource::New));
-    assert_eq!(form(&state).type_, Some(ConventionalType::Fix));
-    assert_eq!(form(&state).ticket, "12");
-    assert_eq!(form(&state).name, "typed");
-    assert_eq!(form(&state).issues, IssueList::NotRequested);
+    assert_eq!(
+        form(&state).type_,
+        Some(ConventionalType::Fix),
+        "leaving keeps the type"
+    );
+    assert_eq!(form(&state).ticket, "12", "leaving keeps the ticket");
+    assert_eq!(form(&state).name, "typed", "leaving keeps the name");
+    assert_eq!(
+        form(&state).issues,
+        IssueList::NotRequested,
+        "leaving forgets the issues"
+    );
 
     send(&mut state, loaded_result(seq, issues()));
     assert_eq!(
@@ -347,7 +417,10 @@ fn switching_away_keeps_fields_and_drops_the_load() {
 
     send(&mut state, Msg::SourceChanged(BranchSource::Issue));
     let again = awaited(&state).expect("returning loads afresh");
-    assert!(again > seq);
+    assert!(
+        again > seq,
+        "returning awaits a new seq ({again} after {seq})"
+    );
 }
 
 /// U49 — zero open issues is a state of its own, not an empty picker (FR-008).
@@ -358,9 +431,9 @@ fn no_open_issues() {
     let IssueList::Loaded { listing, .. } = &form(&state).issues else {
         panic!("an empty listing is still a loaded listing");
     };
-    assert!(listing.issues.is_empty());
-    assert!(listing.complete);
-    assert!(form(&state).issue_matches.is_empty());
+    assert!(listing.issues.is_empty(), "no issues are held");
+    assert!(listing.complete, "zero of zero is every open issue");
+    assert!(form(&state).issue_matches.is_empty(), "nothing is offered");
 }
 
 /// U50 — closing the form forgets the issues; reopening starts over (FR-023, Edge "form closed").
@@ -370,10 +443,25 @@ fn closing_the_form_forgets_issues() {
     send(&mut state, Msg::Cancelled);
     send(&mut state, Msg::Opened);
 
-    assert_eq!(form(&state).issues, IssueList::NotRequested);
-    assert_eq!(form(&state).github, GithubAvailability::Checking);
-    assert!(form(&state).issue_matches.is_empty());
-    assert_eq!(form(&state).source, BranchSource::New);
+    assert_eq!(
+        form(&state).issues,
+        IssueList::NotRequested,
+        "the reopened form holds no issues"
+    );
+    assert_eq!(
+        form(&state).github,
+        GithubAvailability::Checking,
+        "the reopened form reads the remotes again"
+    );
+    assert!(
+        form(&state).issue_matches.is_empty(),
+        "the reopened form offers nothing"
+    );
+    assert_eq!(
+        form(&state).source,
+        BranchSource::New,
+        "the reopened form starts on the new-branch source"
+    );
 }
 
 /// U51 — the seq outlives the form, so a closed form's late result cannot match a new form's
@@ -423,7 +511,11 @@ fn the_query_ranks_row_text() {
 
     query(&mut state, "flicker");
     assert_eq!(offered(&state), vec![7], "a title fragment narrows");
-    assert_eq!(form(&state).issue_query, "flicker");
+    assert_eq!(
+        form(&state).issue_query,
+        "flicker",
+        "the query is kept as typed"
+    );
 }
 
 /// U53 — the highlight never points past the results (invariant 3).
@@ -431,7 +523,7 @@ fn the_query_ranks_row_text() {
 fn highlight_stays_in_range() {
     let mut state = loaded();
     send(&mut state, Msg::IssueFocused);
-    assert!(form(&state).issue_list_open);
+    assert!(form(&state).issue_list_open, "focus opens the list");
     for _ in 0..5 {
         send(&mut state, Msg::IssueHighlightMoved(Direction::Next));
     }
@@ -442,19 +534,22 @@ fn highlight_stays_in_range() {
     );
 
     query(&mut state, "flicker");
-    let f = form(&state);
-    assert!(
-        f.issue_highlight.is_none_or(|i| i < f.issue_matches.len()),
-        "re-ranking under the highlight re-seats it, got {:?} over {} rows",
-        f.issue_highlight,
-        f.issue_matches.len()
+    assert_eq!(
+        form(&state).issue_highlight,
+        Some(0),
+        "a highlight past the shrunk results re-seats on the first row, not nowhere"
+    );
+    assert_eq!(
+        state.worktree_form.issue_number_at(0),
+        Some(7),
+        "the first row is #7, the one `flicker` finds"
     );
 
     query(&mut state, "zzzz");
     assert_eq!(form(&state).issue_highlight, None, "no rows, nowhere to be");
 
     send(&mut state, Msg::IssueDismissed);
-    assert!(!form(&state).issue_list_open);
+    assert!(!form(&state).issue_list_open, "a dismissal closes the list");
 }
 
 /// U54 — an index into the shown results resolves to that row's number, and only inside the
@@ -463,13 +558,21 @@ fn highlight_stays_in_range() {
 fn issue_number_at_bounds() {
     let mut state = loaded();
     query(&mut state, "documentation");
-    assert_eq!(state.worktree_form.issue_number_at(0), Some(108));
+    assert_eq!(
+        state.worktree_form.issue_number_at(0),
+        Some(108),
+        "the only row is #108"
+    );
     assert_eq!(
         state.worktree_form.issue_number_at(1),
         None,
         "one past the end is no row"
     );
-    assert_eq!(State::default().worktree_form.issue_number_at(0), None);
+    assert_eq!(
+        State::default().worktree_form.issue_number_at(0),
+        None,
+        "with no form open there are no rows"
+    );
 }
 
 /// U55 — a pick fills the ticket (no `#`) and the name from the title, clears the error and closes
@@ -490,10 +593,13 @@ fn a_pick_fills_ticket_and_name() {
     );
 
     let f = form(&state);
-    assert_eq!(f.ticket, "42");
-    assert_eq!(f.name, "Crash when opening empty project");
-    assert_eq!(f.error, None);
-    assert_eq!(f.picked_issue, Some(42));
+    assert_eq!(f.ticket, "42", "the ticket is the number, no `#`");
+    assert_eq!(
+        f.name, "Crash when opening empty project",
+        "the name is the title"
+    );
+    assert_eq!(f.error, None, "a pick clears the last validation error");
+    assert_eq!(f.picked_issue, Some(42), "the pick is remembered");
     assert!(!f.issue_list_open, "a pick closes the list");
     assert_eq!(
         f.type_, None,
@@ -505,6 +611,34 @@ fn a_pick_fills_ticket_and_name() {
         form(&state).name,
         "edited",
         "picked values stay editable (FR-011)"
+    );
+}
+
+/// U121 — a pick replaces a ticket and name typed before it, and those of an earlier pick
+/// (FR-010a; mutant M7 at the reducer).
+#[test]
+fn a_pick_replaces_typed_ticket_and_name() {
+    let mut state = loaded();
+    send(&mut state, Msg::TicketChanged("1".into()));
+    send(&mut state, Msg::NameChanged("typed".into()));
+    pick(&mut state, 7, vec![]);
+    assert_eq!(form(&state).ticket, "7", "the pick replaces a typed ticket");
+    assert_eq!(
+        form(&state).name,
+        "Sidebar flickers on resize",
+        "the pick replaces a typed name"
+    );
+
+    pick(&mut state, 108, vec![]);
+    assert_eq!(
+        form(&state).ticket,
+        "108",
+        "a second pick replaces the first pick's ticket"
+    );
+    assert_eq!(
+        form(&state).name,
+        "Document the sandbox placement",
+        "a second pick replaces the first pick's name"
     );
 }
 
@@ -520,8 +654,16 @@ fn a_stale_pick_is_ignored() {
             mapping: vec![],
         },
     );
-    assert_eq!(form(&state).name, "mine");
-    assert_eq!(form(&state).picked_issue, None);
+    assert_eq!(
+        form(&state).name,
+        "mine",
+        "a pick the listing does not hold changes no field"
+    );
+    assert_eq!(
+        form(&state).picked_issue,
+        None,
+        "a pick the listing does not hold is not remembered"
+    );
 
     let (mut state, _) = loading();
     send(
@@ -531,8 +673,16 @@ fn a_stale_pick_is_ignored() {
             mapping: vec![],
         },
     );
-    assert_eq!(form(&state).ticket, "");
-    assert_eq!(form(&state).picked_issue, None);
+    assert_eq!(
+        form(&state).ticket,
+        "",
+        "a pick while loading fills nothing"
+    );
+    assert_eq!(
+        form(&state).picked_issue,
+        None,
+        "a pick while loading is not remembered"
+    );
 }
 
 /// U57 — the issue source previews and validates exactly as the new-branch source (FR-012).
@@ -582,11 +732,9 @@ fn pick(state: &mut State, number: u64, mapping: Vec<LabelTypeEntry>) {
     send(state, Msg::IssuePicked { number, mapping });
 }
 
-/// U83 — a pick sets the type from the first matching mapping entry, replaces a selected type, and
-/// clears it when no label matches, so the existing "type required" validation applies (AS1, AS3,
-/// AS6, FR-013, FR-014).
+/// U83 — an issue labelled `bug` selects `fix` under the default mapping (AS1, FR-013).
 #[test]
-fn the_pick_sets_or_clears_the_type() {
+fn the_pick_sets_or_clears_the_type_a_mapped_label_sets_it() {
     let mut state = loaded();
     pick(&mut state, 42, default_mapping());
     assert_eq!(
@@ -594,7 +742,12 @@ fn the_pick_sets_or_clears_the_type() {
         Some(ConventionalType::Fix),
         "an issue labelled `bug` selects `fix` (AS1)"
     );
+}
 
+/// U83 — a mapped label replaces a type selected before the pick (AS6, FR-013).
+#[test]
+fn the_pick_sets_or_clears_the_type_a_mapped_label_replaces_it() {
+    let mut state = loaded();
     send(&mut state, Msg::TypeSelected(ConventionalType::Chore));
     pick(&mut state, 108, default_mapping());
     assert_eq!(
@@ -602,7 +755,14 @@ fn the_pick_sets_or_clears_the_type() {
         Some(ConventionalType::Docs),
         "a mapped label replaces the selected type (AS6)"
     );
+}
 
+/// U83 — no mapped label clears the type, so the existing "type required" validation applies
+/// (AS3, FR-014).
+#[test]
+fn the_pick_sets_or_clears_the_type_no_mapped_label_clears_it() {
+    let mut state = loaded();
+    pick(&mut state, 42, default_mapping());
     pick(&mut state, 7, default_mapping());
     assert_eq!(
         form(&state).type_,
@@ -613,9 +773,13 @@ fn the_pick_sets_or_clears_the_type() {
         !form(&state).can_submit(),
         "with the type cleared the form asks for one, as it does today"
     );
+}
 
+/// U83 — a type chosen by hand after the pick is kept (AS4, FR-015).
+#[test]
+fn the_pick_sets_or_clears_the_type_a_hand_choice_after_it_stands() {
+    let mut state = loaded();
     pick(&mut state, 42, default_mapping());
-    assert_eq!(form(&state).type_, Some(ConventionalType::Fix));
     send(&mut state, Msg::TypeSelected(ConventionalType::Refactor));
     assert_eq!(
         form(&state).type_,
@@ -662,7 +826,11 @@ fn leaving_the_source_forgets_the_pick() {
         },
     );
     send(&mut state, Msg::SourceChanged(BranchSource::New));
-    assert_eq!(form(&state).picked_issue, None);
+    assert_eq!(
+        form(&state).picked_issue,
+        None,
+        "leaving the source forgets the pick"
+    );
     assert_eq!(
         form(&state).ticket,
         "42",
@@ -695,7 +863,8 @@ fn the_cap_caption_counts_the_loaded_and_the_open() {
     );
     assert_eq!(
         form(&state).issue_cap_caption().as_deref(),
-        Some("Showing the 3 most recently updated of 1,234 open issues — search also looks on GitHub.")
+        Some("Showing the 3 most recently updated of 1,234 open issues — search also looks on GitHub."),
+        "a capped listing counts the loaded and the open, with thousands separated"
     );
 }
 
@@ -777,10 +946,9 @@ fn search_only_when_incomplete() {
     );
 }
 
-/// U72 — the debounce acts only for the current keystroke, and only the current search's answer
-/// applies (FR-007a).
+/// U72 — an older keystroke's debounce starts nothing (FR-007a).
 #[test]
-fn a_newer_keystroke_discards_an_older_search() {
+fn a_newer_keystroke_discards_an_older_search_debounce() {
     let mut state = capped();
     query(&mut state, "cra");
     let stale = pending_seq(&state);
@@ -790,7 +958,12 @@ fn a_newer_keystroke_discards_an_older_search() {
         matches!(search(&state), SearchState::Pending { .. }),
         "an older keystroke's debounce starts nothing"
     );
+}
 
+/// U72 — an older search's answer is dropped while the newer search runs (FR-007a).
+#[test]
+fn a_newer_keystroke_discards_an_older_search_answer() {
+    let mut state = capped();
     let old = searching(&mut state, "crash");
     let new = searching(&mut state, "crash when");
     send(
@@ -800,12 +973,23 @@ fn a_newer_keystroke_discards_an_older_search() {
             result: Ok(vec![issue(1200, "Crash when saving", &[])]),
         },
     );
-    assert_eq!(search(&state), SearchState::Searching { seq: new });
+    assert_eq!(
+        search(&state),
+        SearchState::Searching { seq: new },
+        "the newer search is still awaited"
+    );
     assert!(
         !offered(&state).contains(&1200),
         "the older answer is dropped"
     );
+}
 
+/// U72 — the current search's answer joins the loaded matches once, and its issue can be picked
+/// (FR-005a, invariant 4, AS10).
+#[test]
+fn a_newer_keystroke_discards_an_older_search_current_answer_applies() {
+    let mut state = capped();
+    let new = searching(&mut state, "crash when");
     send(
         &mut state,
         Msg::IssueSearched {
@@ -816,7 +1000,11 @@ fn a_newer_keystroke_discards_an_older_search() {
             ]),
         },
     );
-    assert_eq!(search(&state), SearchState::Idle);
+    assert_eq!(
+        search(&state),
+        SearchState::Idle,
+        "the awaited answer ends the search"
+    );
     let shown = offered(&state);
     assert!(
         shown.contains(&1200),
@@ -839,7 +1027,11 @@ fn a_newer_keystroke_discards_an_older_search() {
         "1200",
         "a searched issue can be picked (AS10)"
     );
-    assert_eq!(form(&state).name, "Crash when saving");
+    assert_eq!(
+        form(&state).name,
+        "Crash when saving",
+        "the searched issue's title fills the name"
+    );
 }
 
 /// U73 — a failed search keeps the loaded matches, and Retry runs the search again.

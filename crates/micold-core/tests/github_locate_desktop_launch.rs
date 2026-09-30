@@ -37,15 +37,30 @@ fn launcher_path(os: HostOs) -> String {
     }
 }
 
+/// The opt-out for a machine that has no `gh` a desktop launch could find. Set it to `1` to skip
+/// this test with a printed reason; without it, a missing `gh` fails, so a local green always
+/// means the lookup ran. Ignored on CI, where a skip would record the arm green unrun.
+const SKIP_VAR: &str = "MICOLD_SKIP_GH_LAUNCH_TEST";
+
 /// Whether this is a CI run. GitHub Actions sets `CI=true`; other runners use `1`.
 fn on_ci() -> bool {
     std::env::var("CI").is_ok_and(|value| !matches!(value.as_str(), "" | "0" | "false" | "FALSE"))
 }
 
-/// Skip with a printed reason, or fail on CI, where a skip would record the arm green unrun.
-fn skip_unless_ci(reason: &str) {
-    assert!(!on_ci(), "{reason}; on CI this test must run, not skip");
-    eprintln!("skipped: {reason}");
+/// Whether the developer opted out of this test with [`SKIP_VAR`].
+fn opted_out() -> bool {
+    std::env::var(SKIP_VAR).is_ok_and(|value| matches!(value.as_str(), "1" | "true" | "TRUE"))
+}
+
+/// Skip with a printed reason when [`SKIP_VAR`] is set off CI; fail otherwise, so neither CI nor
+/// a developer's run can report the lookup green without having run it.
+fn skip_only_if_opted_out(reason: &str) {
+    assert!(
+        opted_out() && !on_ci(),
+        "{reason}; install `gh` where its installer puts it, or set {SKIP_VAR}=1 to skip this \
+         test off CI"
+    );
+    eprintln!("skipped ({SKIP_VAR} is set): {reason}");
 }
 
 #[test]
@@ -54,7 +69,9 @@ fn a_desktop_launch_finds_a_working_gh() {
     // `locate_gh` also walks the well-known install directories, so `None` here means `gh` is on
     // neither this `PATH` nor any directory the lookup knows: there is nothing to find.
     let Some(from_terminal) = locate_gh_on_host(None, &terminal_path) else {
-        skip_unless_ci("`gh` is on neither PATH nor any well-known install directory of this OS");
+        skip_only_if_opted_out(
+            "`gh` is on neither PATH nor any well-known install directory of this OS",
+        );
         return;
     };
 
@@ -68,9 +85,9 @@ fn a_desktop_launch_finds_a_working_gh() {
     // shares, not on which binary runs.
     let Some(from_desktop) = from_desktop else {
         // A version manager (mise, asdf, Nix) puts `gh` where only the environment include can
-        // find it; this test has the include off, so a developer's machine may skip. A runner
+        // find it; this test has the include off, so such a machine fails unless it opts out. A runner
         // installs `gh` where its platform's installer does, which is what this arm is about.
-        skip_unless_ci(&format!(
+        skip_only_if_opted_out(&format!(
             "`gh` is at {} only, where a desktop launch without the environment include cannot see it",
             from_terminal.display()
         ));

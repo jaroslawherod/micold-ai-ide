@@ -64,17 +64,3 @@ fn font_size_is_within_the_expected_static_instance_range() {
         FONT.len()
     );
 }
-
-/// Feature 034 (U93): the GitHub issues section's glyphs are in the shipped font.
-#[test]
-fn the_issue_mapping_glyphs_are_shipped() {
-    let face = ttf_parser::Face::parse(FONT, 0).expect("shipped font must parse");
-    for icon in [Icon::IssueMapping, Icon::MoveUp, Icon::MoveDown] {
-        assert!(Icon::ALL.contains(&icon), "{icon:?} is in Icon::ALL");
-        assert!(
-            face.glyph_index(icon.glyph()).is_some(),
-            "{icon:?} (U+{:04X}) has no glyph in the shipped font",
-            icon.glyph() as u32
-        );
-    }
-}

@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-29
 
-**Status**: Draft
+**Status**: Closed 2026-09-30 — shipped in PRs #452, #459, #460, #468, #472, #478, #495, #496, #500 and the close PR
 
 **Input**: User description: "when creating new worktree add another option github issues. Application should fetch github issues for current project and allow to select one for working with it. The ticket should define an worktree name. The type should be resolved by mapping labels into issues types . The mapping should be global for application for now."
 

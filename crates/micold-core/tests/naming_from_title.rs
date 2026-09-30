@@ -11,7 +11,7 @@ fn five_words(last: usize) -> String {
 
 #[test]
 fn fits_and_the_50_boundary() {
-    assert_eq!(ISSUE_NAME_SLUG_MAX, 50);
+    assert_eq!(ISSUE_NAME_SLUG_MAX, 50, "FR-010's bound");
     assert_eq!(
         name_from_title("Crash when opening empty project"),
         "Crash when opening empty project",
@@ -49,7 +49,7 @@ fn cut_at_word_boundary() {
         name, "When the sidebar is collapsed the create worktree",
         "the longest whole-word prefix whose slug fits"
     );
-    assert!(slugify(&name).len() <= 50);
+    assert!(slugify(&name).len() <= 50, "the cut name's slug fits");
 }
 
 #[test]
@@ -69,38 +69,55 @@ fn empty_slug_yields_empty_name() {
         "",
         "nothing sluggable: the name is left empty and 'name required' applies"
     );
-    assert_eq!(name_from_title(""), "");
+    assert_eq!(name_from_title(""), "", "no title, no name");
 }
 
 #[test]
 fn slug_never_exceeds_50() {
     let long_word = "x".repeat(49);
-    let mut corpus: Vec<String> = vec![
-        "Crash when opening empty project".into(),
-        "Fix: the — thing (again) & again!".into(),
-        "Ünïcödé títle with ascii bits 123".into(),
-        format!("{long_word} y"),
-        format!("{long_word}z"),
-        format!("{long_word}zz tail"),
-        "a b c d e f g h i j k l m n o p q r s t u v w x y z a b c d e f g h".into(),
-        "con".into(),
-        "🔥 fire in the hole".into(),
+    let four_words = "abcdefghij abcdefghij abcdefghij abcdefghij";
+    let mut cases: Vec<(String, String)> = vec![
+        (
+            "Crash when opening empty project".into(),
+            "Crash when opening empty project".into(),
+        ),
+        (
+            "Fix: the — thing (again) & again!".into(),
+            "Fix: the — thing (again) & again!".into(),
+        ),
+        (
+            "Ünïcödé títle with ascii bits 123".into(),
+            "Ünïcödé títle with ascii bits 123".into(),
+        ),
+        (format!("{long_word} y"), long_word.clone()),
+        (format!("{long_word}z"), format!("{long_word}z")),
+        (format!("{long_word}zz tail"), format!("{long_word}z")),
+        (
+            "a b c d e f g h i j k l m n o p q r s t u v w x y z a b c d e f g h".into(),
+            "a b c d e f g h i j k l m n o p q r s t u v w x y".into(),
+        ),
+        ("con".into(), "con".into()),
+        ("🔥 fire in the hole".into(), "🔥 fire in the hole".into()),
+        (five_words(0), four_words.into()),
     ];
-    for last in 0..=10 {
-        corpus.push(five_words(last));
+    for last in 1..=6 {
+        cases.push((five_words(last), five_words(last)));
     }
-    for n in 45..=56 {
-        corpus.push("w".repeat(n));
+    for last in 7..=10 {
+        cases.push((five_words(last), four_words.into()));
     }
-    for title in &corpus {
+    for n in 45..=50 {
+        cases.push(("w".repeat(n), "w".repeat(n)));
+    }
+    for n in 51..=56 {
+        cases.push(("w".repeat(n), "w".repeat(50)));
+    }
+    for (title, expected) in &cases {
         let name = name_from_title(title);
         assert!(
             slugify(&name).len() <= ISSUE_NAME_SLUG_MAX,
             "{title:?} -> {name:?} slugs past 50"
         );
-        let normalised = title.split_whitespace().collect::<Vec<_>>().join(" ");
-        if slugify(&normalised).len() <= ISSUE_NAME_SLUG_MAX {
-            assert_eq!(name, normalised, "{title:?} fits, so it is kept whole");
-        }
+        assert_eq!(&name, expected, "the name {title:?} becomes");
     }
 }

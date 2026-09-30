@@ -149,34 +149,9 @@ fn the_two_new_refusals_are_distinct_values() {
     assert_eq!(auth, RefusalReason::AuthRejected);
 }
 
-/// P-6: the version moved, and it moved *with* these fields rather than ahead of them.
-///
-/// This feature's whole wire delta is one number: the sandbox handshake (the auth token, the build
-/// fingerprint and the stale-dev-image refusal) and `ClientMsg::RepoRootQuery` /
-/// `OperationResult::RepoRoot`, which moves the open-project gate to whichever side can actually
-/// see the folder (research R2 part 2).
-///
-/// It was 6 and then 7 while the feature was in flight, and 8 on the merge: feature 026 took 7
-/// on main for its own five additions, and both wire changes are present here, so both cannot be
-/// 7. See the constant's own comment. It is 9 since `010` BUG-022 made a client window nameable
-/// on the wire — another feature's bump, which this literal follows rather than resisting. And 10
-/// since feature 029 added `ClientMsg::WorktreeRefresh`; same case, same answer. And 11 since
-/// feature 029's Pi provider added `AiCli::Pi` and the activity-component switch. And 12 since `002`
-/// BUG-003 added `ClientMsg::ProjectActivate`. And 13 since `006` BUG-007 added
-/// `ClientMsg::TerminalColorScheme`. And 14 since feature 032 put `SessionLabel::Derived` on
-/// `SessionSummary.title`. And 15 since `029` BUG-001 put the directory on
-/// `ClientMsg::AiCliAvailabilityRequest`, having developed against 13 while 032 took 14. And 16 since
-/// feature 034 added `ClientMsg::RemoteList` / `OperationResult::RemoteList`. And 17 since feature
-/// 034's M2 put `tool_server_enabled` on `DaemonSettings` and `SettingsSet`.
-///
-/// The literal is the point. `SCHEMA_HASH` is generated and moves on its own; this integer does
-/// not, so a message added without touching it ships a wire change under an unchanged version and
-/// two builds that disagree will shake hands anyway. Failing here is the reminder — and it worked:
-/// 029 arrived here because of this test, not despite it.
-#[test]
-fn the_protocol_version_is_seventeen() {
-    assert_eq!(PROTOCOL_VERSION, 17);
-}
+// P-6, the literal protocol-version pin, is `schema_hash.rs::
+// the_wire_changes_for_this_feature_cost_exactly_one_version_bump`: one pin, so a bump edits one
+// literal.
 
 /// The daemon finds its token where the image says it will. If these two drift, a sandbox starts
 /// and then refuses every connection, with the cause a mount path away from anything visible.

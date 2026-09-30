@@ -8,7 +8,6 @@
 //! the child wrote rather than comparing the whole stream.
 
 use std::io::Write;
-use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
@@ -16,8 +15,12 @@ use micold_core::process::{run_bounded, RunOutcome};
 
 /// Selects what [`child_helper`] does when this binary runs as the child.
 const CHILD_MODE: &str = "MICOLD_RUN_BOUNDED_CHILD";
-/// Where a sleeping child writes its marker if it lives long enough.
+/// Where a beating child writes its heartbeat for as long as it lives.
 const CHILD_MARKER: &str = "MICOLD_RUN_BOUNDED_MARKER";
+/// How often a beating child writes its heartbeat.
+const BEAT: Duration = Duration::from_millis(50);
+/// How long a heartbeat must stay unchanged before the child counts as dead: ten beats.
+const QUIET: Duration = Duration::from_millis(500);
 
 /// 1 MiB: well over every OS's pipe buffer (64 KiB on Linux, less on macOS and Windows).
 const LARGE_STDOUT: usize = 1024 * 1024;
@@ -33,10 +36,13 @@ fn child_helper() {
     let mut out = std::io::stdout();
     let mut err = std::io::stderr();
     match mode.as_str() {
-        "sleep-then-mark" => {
-            std::thread::sleep(Duration::from_secs(3));
+        "beat" => {
+            // Outlives any bound these tests set, writing a new count every beat while alive.
             let marker = std::env::var(CHILD_MARKER).expect("marker path");
-            std::fs::write(marker, b"still alive").expect("write marker");
+            for beat in 0..400u32 {
+                std::fs::write(&marker, beat.to_string()).expect("write heartbeat");
+                std::thread::sleep(BEAT);
+            }
             std::process::exit(0);
         }
         "brief" => {
@@ -77,7 +83,7 @@ fn a_child_past_the_bound_is_killed_and_reported() {
     let dir = tempfile::tempdir().unwrap();
     let marker = dir.path().join("marker");
     let bound = Duration::from_millis(500);
-    let mut cmd = child("sleep-then-mark");
+    let mut cmd = child("beat");
     cmd.env(CHILD_MARKER, &marker);
 
     let started = Instant::now();
@@ -92,12 +98,28 @@ fn a_child_past_the_bound_is_killed_and_reported() {
         took < bound + Duration::from_secs(1),
         "the runner returns within bound + 1 s (FR-007), took {took:?}"
     );
-    // The child would have written the marker at 3 s had it survived the kill.
-    std::thread::sleep(Duration::from_secs(4));
     assert!(
-        !Path::new(&marker).exists(),
-        "a timed-out child is killed, not left running"
+        marker.exists(),
+        "precondition: the child was beating before the bound"
     );
+    // Dead means the heartbeat stays unchanged for `QUIET`; a live child changes it every `BEAT`.
+    // Polled against a deadline, so a dead child passes in about `QUIET` and a live one fails.
+    let heartbeat = || std::fs::read_to_string(&marker).unwrap_or_default();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut last = heartbeat();
+    let mut unchanged_since = Instant::now();
+    while unchanged_since.elapsed() < QUIET {
+        assert!(
+            Instant::now() < deadline,
+            "a timed-out child is killed, not left running: its heartbeat is still at {last:?}"
+        );
+        std::thread::sleep(BEAT);
+        let now = heartbeat();
+        if now != last {
+            last = now;
+            unchanged_since = Instant::now();
+        }
+    }
 }
 
 #[test]

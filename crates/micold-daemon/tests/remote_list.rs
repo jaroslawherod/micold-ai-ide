@@ -14,7 +14,7 @@ use futures_util::{SinkExt, StreamExt};
 use micold_core::git::GitRemote;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::codec::{ClientCodec, Frame};
-use micold_core::protocol::messages::{ClientMsg, DaemonMsg, OperationResult};
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg, ErrorKind, OperationResult};
 use micold_core::protocol::version::{
     BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
 };
@@ -202,11 +202,18 @@ async fn a_non_repository_is_rejected() {
                 detail: branch_detail,
                 ..
             },
-        ) => assert_eq!(
-            (kind, message, detail),
-            (branch_kind, branch_message, branch_detail),
-            "a non-repository is refused exactly as BranchList refuses it"
-        ),
+        ) => {
+            assert_eq!(
+                (kind, message.as_str()),
+                (ErrorKind::Refused, "project is not a git repository"),
+                "a non-repository is refused, and the refusal says why"
+            );
+            assert_eq!(
+                (kind, message, detail),
+                (branch_kind, branch_message, branch_detail),
+                "a non-repository is refused exactly as BranchList refuses it"
+            );
+        }
         other => panic!("both requests must be refused, got {other:?}"),
     }
 }

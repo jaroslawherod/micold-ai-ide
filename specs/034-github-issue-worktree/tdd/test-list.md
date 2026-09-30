@@ -4,7 +4,7 @@ loop: outside-in
 profile: .specify/memory/tdd-profile.md
 spec_criteria: 23 # US1 1–10, US2 1–7, US3 1–6
 planned_at: d6c2f33e
-updated_at: d6c2f33e
+updated_at: 37105ac3
 suite_baseline: pending # measured by the first M1 cycle on its own base; see cycle-log.md
 ---
 
@@ -43,8 +43,8 @@ the repository can test without a display and without the network. The rendered 
 | A18 | Opening Settings → GitHub issues shows the stored mapping as ordered label → type entries | US3-1, FR-018 | example | DONE | `main_tests.rs::issue_settings_shows_the_mapping` |
 | A19 | Adding `defect → fix` and saving, then picking a `defect` issue in a project selects `fix` without restart | US3-2, FR-016, SC-005 | example | DONE | `main_tests.rs::issue_an_added_entry_types_the_next_pick` |
 | A20 | Changing, removing and reordering entries then saving types the next pick by the new mapping | US3-3, FR-017, FR-018 | example | DONE | `main_tests.rs::issue_edited_mapping_types_the_next_pick` |
-| A21 | A saved mapping is read back from `settings.json` by a fresh store (restart) | US3-4, FR-020 | example | DONE | `main_tests.rs::issue_the_mapping_survives_a_restart` |
-| A22 | A blank label, or `Bug` beside `bug`, refuses the save with an error on that entry and the file is unchanged | US3-5, FR-019 | example | DONE | `main_tests.rs::issue_an_invalid_mapping_is_not_saved` |
+| A21 | A saved mapping is read back from `settings.json` by a fresh store (restart) | US3-4, FR-020 | example | DONE | `settings_issue_mapping.rs::round_trip_and_default` (the file round trip); the shell half — `Saved` hands the edited mapping to the store — is `main_tests.rs::issue_the_mapping_survives_a_restart` (T098) |
+| A22 | A blank label, or `Bug` beside `bug`, refuses the save with an error on that entry and the file is unchanged | US3-5, FR-019 | example | DONE | `main_tests.rs::issue_an_invalid_mapping_blank_label_is_not_saved` + `main_tests.rs::issue_an_invalid_mapping_duplicate_label_is_not_saved` (split, T098; "file unchanged" is "no save attempted") |
 | A23 | Never edited → the default three entries are shown; after edits, Restore defaults returns them | US3-6, FR-021, FR-018 | example | DONE | `main_tests.rs::issue_restore_defaults_returns_the_default_mapping` |
 
 ## Inner loop: unit behaviors
@@ -70,7 +70,7 @@ Tests: `crates/micold-core/tests/git_remotes.rs` (new).
 | U6  | `remote.<name>.url <url>` lines parse to `GitRemote`s in config order | FR-002, R5 | example | DONE | `git_remotes.rs::lines_parse_in_config_order` |
 | U7  | A dotted remote name (`remote.a.b.url`) parses to name `a.b` | R5 | example | DONE | `git_remotes.rs::a_dotted_remote_name_is_kept_whole` |
 | U8  | A second `url` for one remote is ignored (first wins); empty output → empty list | R5 | example | DONE | `git_remotes.rs::first_url_wins_and_empty_is_empty` |
-| U9  | `GitCli::remote_list` on a temp repo with two remotes lists both; with none returns `Ok("")` | FR-002 | example | DONE | `git_remotes.rs::git_cli_lists_remotes_and_none_is_not_an_error` |
+| U9  | `GitCli::remote_list` on a temp repo with two remotes lists both; with none returns `Ok("")` | FR-002 | example | DONE | `git_remotes.rs::git_cli_lists_remotes` + `git_remotes.rs::git_cli_lists_no_remotes_without_error` (split in T105) |
 | U10 | A global `insteadOf` rewrite is not applied to the listed URL | FR-026, R5 | example | DONE | `git_remotes.rs::global_insteadof_is_not_applied` |
 | U97 | `FakeGit::with_remote` lists remotes in the order added, as git lists config order (added in M1 cycle 2: T011 names the fake) | R5 | example | DONE | `git_remotes.rs::fake_git_lists_remotes_in_insertion_order` |
 
@@ -123,7 +123,7 @@ Tests: `crates/micold-core/tests/github_classify.rs` (new), `tests/fixtures/gh/*
 | --- | --- | --- | --- | --- | --- |
 | U31 | Exit 4 / "gh auth login" / HTTP 401 → `NotSignedIn` | FR-007, FR-022 | example | DONE | `github_classify.rs::not_signed_in` |
 | U32 | 404, 403, SAML → `NoAccess` | FR-007 | example | DONE | `github_classify.rs::no_access` |
-| U33 | DNS/connection failures → `Offline`; rate-limit text → `RateLimited`; `TimedOut` outcome → `TimedOut` | FR-007, SC-004 | example | DONE | `github_classify.rs::offline_rate_limited_timed_out` |
+| U33 | DNS/connection failures → `Offline`; rate-limit text → `RateLimited`; `TimedOut` outcome → `TimedOut` | FR-007, SC-004 | example | DONE | `github_classify.rs::offline` + `::rate_limited` + `::timed_out_and_spawn_failed` (split in T105) |
 | U34 | Unknown stderr → `Other(first non-empty line)` | FR-007 | example | DONE | `github_classify.rs::unknown_text_is_other` |
 | U35 | `message(repo)` returns the §5 text per variant, `ToolMissing` included, naming `owner/name` for `NoAccess` | FR-007, Edge "tooling not installed" | example | DONE | `github_classify.rs::messages_name_cause_and_remedy` |
 
@@ -147,7 +147,7 @@ Tests: `crates/micold-daemon/tests/remote_list.rs` (new), the core protocol roun
 | --- | --- | --- | --- | --- | --- |
 | U41 | A repo with `origin` (GitHub) and `upstream` answers `OperationResult::RemoteList` with both in order | FR-002 | example | DONE | `remote_list.rs::a_repository_answers_its_remotes` |
 | U42 | A non-repository project is rejected like `BranchList` | FR-002 | example | DONE | `remote_list.rs::a_non_repository_is_rejected` |
-| U43 | `ClientMsg::RemoteList` and `OperationResult::RemoteList` round-trip; `PROTOCOL_VERSION` is 16 | R5 | example | DONE | protocol round-trip test + `schema_hash.rs` pin |
+| U43 | `ClientMsg::RemoteList` and `OperationResult::RemoteList` round-trip; `PROTOCOL_VERSION` is 16, since 17 (M2's `tool_server_enabled`) | R5 | example | DONE | `protocol_roundtrip.rs` (a two-remote and an empty `RemoteList`) + `schema_hash.rs::the_wire_changes_for_this_feature_cost_exactly_one_version_bump`, the one pin (T106 dropped `protocol_auth.rs`'s duplicate) |
 
 ### `crates/micold-core/src/github.rs`: `GhCli`
 
@@ -155,12 +155,12 @@ Tests: `crates/micold-core/tests/github_gh_cli.rs` (new), against a stub `gh` th
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U94 | `GhCli::list_open` passes exactly `list_args`, sets the five `gh` environment variables, runs in the user's home, parses the page; a stub past a short bound → `TimedOut`; exit 4 + not-logged-in text → `NotSignedIn` | FR-007, FR-022, FR-025, R6 | example | DONE | `github_gh_cli.rs::gh_cli_runs_gh_as_specified` |
+| U94 | `GhCli::list_open` passes exactly `list_args`, sets the five `gh` environment variables, runs in the user's home, parses the page; a stub past a short bound → `TimedOut`; exit 4 + not-logged-in text → `NotSignedIn` | FR-007, FR-022, FR-025, R6 | example | DONE | `github_gh_cli.rs::gh_cli_runs_gh_as_specified` + `::gh_cli_sets_the_gh_environment` + `::gh_cli_runs_in_the_home_directory` + `::a_hung_gh_is_timed_out` + `::exit_4_is_not_signed_in` (split in T105) |
 | U98 | Relative `PATH` entries are never candidates; a quoted Windows entry is unquoted (added in M1 review A) | FR-026 | example | DONE | `github_locate.rs::relative_path_entries_are_dropped_and_quotes_removed` |
 | U99 | An owner with `_` (Enterprise Managed User) is a GitHub owner (added in M1 review A) | FR-002 | example | DONE | `github_remote.rs::managed_user_owner_with_underscore` |
 | U100 | A page that adds nothing or repeats its cursor ends the load (added in M1 review A) | FR-004 | example | DONE | `github_load.rs::a_page_that_makes_no_progress_ends_the_load` |
 | U101 | GraphQL "Resource not accessible by personal access token" → `NoAccess` (added in M1 review A) | FR-007 | example | DONE | `github_classify.rs::no_access` (fixture `graphql_forbidden.stderr`) |
-| U102 | `GhCli` removes `GH_DEBUG` from `gh`'s environment (added in M1 review A) | FR-007 | example | DONE | `github_gh_cli.rs::gh_cli_runs_gh_as_specified` |
+| U102 | `GhCli` removes `GH_DEBUG` from `gh`'s environment (added in M1 review A) | FR-007 | example | DONE | `github_gh_cli.rs::gh_cli_removes_gh_debug` (in a child process with `GH_DEBUG=api`; the Windows stub records it too, T101/T105) |
 
 ### `crates/micold-client/src/features/worktree_form.rs`: availability, load, staleness
 
@@ -168,7 +168,7 @@ Tests: `crates/micold-client/tests/issue_source_state.rs` (new).
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U96 | `Opened` starts with `github = Checking` and `issues = NotRequested`; `source_caption()` gives the Checking text, the Unavailable reason, or — while `Available` and the source is not `Issue` — the opt-in notice naming `owner/name`; `issue_notice()` names `owner/name` while the source is `Issue` | FR-002, FR-025 | example | DONE | `issue_source_state.rs::captions_follow_availability` |
+| U96 | `Opened` starts with `github = Checking` and `issues = NotRequested`; `source_caption()` gives the Checking text, the Unavailable reason, or — while `Available` and the source is not `Issue` — the opt-in notice naming `owner/name`; `issue_notice()` names `owner/name` while the source is `Issue` | FR-002, FR-025 | example | DONE | `issue_source_state.rs::captions_follow_availability_*` (split, T105) |
 | U103 | Leaving the issue source forgets the picked issue (added in M2 review A #5) | FR-003 | example | DONE | `issue_source_state.rs::leaving_the_source_forgets_the_pick` |
 | U104 | `issue_cap_caption()` counts the loaded and the open issues when the listing is not complete, and is `None` when it is (added in M2 review A #2, B F4) | FR-004 | example | DONE | `issue_source_state.rs::the_cap_caption_counts_the_loaded_and_the_open` |
 | U105 | A Typeahead row pick (`IssueRowPicked(row)`) resolves to that row's issue and fills ticket and name (added in M2 review B F1) | FR-006 | example | DONE | `main_tests.rs::issue_source::issue_a_row_pick_resolves_to_its_issue` |
@@ -178,10 +178,14 @@ Tests: `crates/micold-client/tests/issue_source_state.rs` (new).
 | U109 | A keystroke that changes only surrounding whitespace starts no new search | FR-005a, R9, Review A | example | DONE | `issue_source_state.rs::whitespace_alone_does_not_search_again` |
 | U112 | `classify` reads a missing-scopes refusal as `NoAccess` | FR-007, Review A | example | DONE | `github_classify.rs::no_access` (`insufficient_scopes.stderr`) |
 | U110 | A debounce that ends while a create runs still starts the search, so none is left pending (revised in review A round 2) | FR-005a, Review A | example | DONE | `issue_source_state.rs::a_search_due_while_creating_is_not_left_pending` |
-| U111 | `GhCli` uses a non-zero exit's stdout only when the parser accepts it; an error the answer types exactly stands, one it only names (`Other`) is classified from stderr (SAML → `NoAccess`), and GitHub's own message is kept when stderr adds nothing | FR-007, Review A | example | DONE | `github_gh_cli.rs::a_partial_response_is_parsed` + `github_gh_cli.rs::a_typed_error_stands_at_any_exit_status` |
-| U44 | `RemotesListed(Ok)` → `Available(repo)`; no GitHub remote → `Unavailable("This repository has no GitHub remote.")`; `Err(d)` → `Unavailable("Couldn't read this repository's remotes: d")` | FR-002 | example | DONE | `issue_source_state.rs::remotes_decide_availability` |
+| U111 | `GhCli` uses a non-zero exit's stdout only when the parser accepts it; an error the answer types exactly stands, one it only names (`Other`) is classified from stderr (SAML → `NoAccess`), and GitHub's own message is kept when stderr adds nothing | FR-007, Review A | example | DONE | `github_gh_cli.rs::a_refused_answer_is_classified_from_stderr` + `::a_typed_error_stands_at_any_exit_status` + `::a_named_error_keeps_githubs_words` (split in T105) |
+| U120 | Typing on a complete listing schedules no debounce and never calls the source's search (added in T100: mutant M13 survived the shell) | FR-005a | example | DONE | `main_tests.rs::issue_source::issue_typing_on_a_complete_list_never_searches` |
+| U121 | A pick replaces a typed ticket and name, and an earlier pick's (added in T100: mutant M7 survived the reducer) | FR-010a | example | DONE | `issue_source_state.rs::a_pick_replaces_typed_ticket_and_name` |
+| U122 | Opening the form, rendering it and switching among the other sources locate no `gh`, build no source and load nothing (added in T104: FR-003's behaviour pin beside U62's scan) | FR-003 | example | DONE | `main_tests.rs::issue_source::issue_opening_the_form_loads_no_issues` |
+| U130 | A desktop launch (the launcher's `PATH`, no environment include) finds a working `gh` through `locate_gh_on_host` on every CI OS; with no `gh` to find it fails unless `MICOLD_SKIP_GH_LAUNCH_TEST=1` is set off CI (added in T095; made unable to pass unrun in T097) | FR-026, quickstart §B10 | example | DONE | `github_locate_desktop_launch.rs::a_desktop_launch_finds_a_working_gh` |
+| U44 | `RemotesListed(Ok)` → `Available(repo)`; no GitHub remote → `Unavailable("This repository has no GitHub remote.")`; `Err(d)` → `Unavailable("Couldn't read this repository's remotes: d")` | FR-002 | example | DONE | `issue_source_state.rs::remotes_decide_availability_*` (split, T105) |
 | U45 | `SourceChanged(Issue)` is refused while `Checking` or `Unavailable`, accepted while `Available` → `Loading { seq }` | FR-003, inv. 1 | example | DONE | `issue_source_state.rs::the_source_is_chosen_only_when_available` |
-| U46 | `IssuesLoaded` with the awaited seq applies; with any other seq is dropped; with no form open is dropped | FR-007a, inv. 2 | example | DONE | `issue_source_state.rs::only_the_awaited_result_applies` |
+| U46 | `IssuesLoaded` with the awaited seq applies; with any other seq is dropped; with no form open is dropped | FR-007a, inv. 2 | example | DONE | `issue_source_state.rs::only_the_awaited_result_applies_*` (split, T105) |
 | U47 | `IssueRetry` from `Failed` → `Loading` with a new seq; from `NotRequested` or `Loaded` does nothing | FR-007, inv. 1 | example | DONE | `issue_source_state.rs::retry_only_from_failed` |
 | U48 | Switching away keeps type/ticket/name, returns to `NotRequested`, and a late result is dropped | Edges "switch mid-load", "switch back", inv. 7 | example | DONE | `issue_source_state.rs::switching_away_keeps_fields_and_drops_the_load` |
 | U49 | A zero-issue listing is the empty state | FR-008 | example | DONE | `issue_source_state.rs::no_open_issues` |
@@ -221,7 +225,7 @@ Tests: unit tests in `toggle_chip.rs`, `material_builder_api.rs`, `showcase_comp
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
 | U64 | A disabled chip emits no press; an enabled one does (both sides) | FR-002, Principle VIII | example | DONE | `toggle_chip.rs::a_disabled_chip_emits_no_press` |
-| U65 | `.disabled(bool)` is chainable and the gallery poses it | Principle VIII | example | DONE | `material_builder_api.rs`, `showcase_completeness.rs` |
+| U65 | `.disabled(bool)` is chainable and the gallery poses it | Principle VIII | example | DONE | `toggle_chip.rs`'s unit test (`.disabled(..)` in the chain, compiled), `material_builder_api.rs::every_optional_input_is_a_chainable_builder_step`, `showcase_completeness.rs` (T105 dropped the source grep) |
 
 ### Search beyond the cap (`github.rs`, `worktree_form.rs`, shell)
 
@@ -235,10 +239,10 @@ Tests: `crates/micold-core/tests/github_parse.rs`, `github_search.rs` (new), `cr
 | U69 | `merge_searched` drops numbers already loaded | FR-005a, inv. 4 | example | DONE | `github_search.rs::merge_drops_loaded_numbers` |
 | U70 | A searched issue that does not match by number, title or label is not displayed: `typeahead::rank` over `row_text` drops it (core), and the reducer leaves it out of `issue_matches` | FR-005a, inv. 5 | example | DONE | `github_search.rs::a_body_only_match_is_hidden` + `issue_source_state.rs::an_unmatched_searched_issue_is_hidden` |
 | U71 | Non-empty query on an incomplete listing → `Pending`; on a complete listing or an empty query → `Idle` | FR-005a, inv. 6 | example | DONE | `issue_source_state.rs::search_only_when_incomplete` |
-| U72 | `IssueSearchDue` acts only for the current `Pending` seq; an older `IssueSearched` is dropped | FR-007a | example | DONE | `issue_source_state.rs::a_newer_keystroke_discards_an_older_search` |
+| U72 | `IssueSearchDue` acts only for the current `Pending` seq; an older `IssueSearched` is dropped | FR-007a | example | DONE | `issue_source_state.rs::a_newer_keystroke_discards_an_older_search_*` (split, T105) |
 | U73 | `IssueSearched(Err)` → `SearchState::Failed` with loaded matches kept; `IssueRetry` → `Searching` | FR-005a, FR-007 | example | DONE | `issue_source_state.rs::a_failed_search_keeps_loaded_matches` |
 | U74 | A keystroke schedules one 300 ms debounce; `IssueSearchDue` runs `search_open` with the load's `gh` path | R9 | example | DONE | `main_tests.rs::issue_search_is_debounced` |
-| U95 | `GhCli` returns stdout that parses as JSON with `data` whatever the exit status (partial response); non-zero exit without JSON goes to `classify` | FR-005a, R2 | example | DONE | `github_gh_cli.rs::a_partial_response_is_parsed` |
+| U95 | `GhCli` returns stdout that parses as JSON with `data` whatever the exit status (partial response); non-zero exit without JSON goes to `classify` | FR-005a, R2 | example | DONE | `github_gh_cli.rs::a_partial_response_is_parsed` + `::a_failure_without_json_is_classified_from_stderr` (split in T105) |
 | U75 | Ranking 1,000 issue rows for a 3-character query takes < 50 ms in release | SC-003 | example | DONE | `typeahead_budget.rs` (new case) |
 
 ### `crates/micold-core/src/issue_types.rs`, `settings.rs`
@@ -261,7 +265,7 @@ Tests: `crates/micold-client/tests/issue_source_state.rs`, `features_settings.rs
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U83 | `IssuePicked { mapping }` sets `type_` from a match, replaces a selected type, clears it on no match | FR-013, FR-014 | example | DONE | `issue_source_state.rs::the_pick_sets_or_clears_the_type` |
+| U83 | `IssuePicked { mapping }` sets `type_` from a match, replaces a selected type, clears it on no match | FR-013, FR-014 | example | DONE | `issue_source_state.rs::the_pick_sets_or_clears_the_type_*` (split, T105) |
 | U84 | A pick with mapping A then one with mapping B uses B; the first pick's type is not recomputed | FR-014a | example | DONE | `issue_source_state.rs::the_mapping_is_read_at_the_pick` |
 | U85 | The shell fills `mapping` from the settings store at the pick, `default_mapping()` with no store | FR-014a | example | DONE | `main_tests.rs::issue_the_pick_reads_the_stored_mapping` |
 | U86 | `ValidSettings::into_settings()` carries the mapping; a theme-only save keeps it | FR-016, FR-020 | example | DONE | `features_settings.rs::the_mapping_survives_other_saves` |
@@ -278,7 +282,7 @@ Tests: `crates/micold-client/tests/features_settings.rs`, `settings_sections.rs`
 | U90 | Move up at index 0 and move down at the last index are no-ops; elsewhere they swap (both sides) | FR-017, FR-018 | example | DONE | `features_settings.rs::issue_mapping::entries_are_reordered` |
 | U91 | Restore defaults replaces the draft with `default_mapping()` | FR-018 | example | DONE | `features_settings.rs::issue_mapping::restore_defaults` |
 | U92 | An invalid mapping maps to `FieldError { IssueMappingLabel(i), GithubIssues }` and nothing is written | FR-019 | example | DONE | `features_settings.rs::issue_mapping::an_invalid_mapping_refuses_the_save` |
-| U93 | `IssueMapping`, `MoveUp`, `MoveDown` glyphs are in the shipped font | Principle VIII | example | DONE | `icons_font.rs::the_issue_mapping_glyphs_are_shipped`, `icons.rs` |
+| U93 | `IssueMapping`, `MoveUp`, `MoveDown` glyphs are in the shipped font | Principle VIII | example | DONE | `icons_font.rs::every_icon_codepoint_has_a_glyph` + `icons.rs` (exhaustive codepoint table, `Icon::ALL` size); T105 dropped the duplicate `the_issue_mapping_glyphs_are_shipped` |
 
 ## Invariants and edge cases still to place
 

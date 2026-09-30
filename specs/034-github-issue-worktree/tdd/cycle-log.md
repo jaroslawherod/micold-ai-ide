@@ -680,3 +680,82 @@ failed before the implementation.
 - refactor: review A round 1 — the test and `shell/capabilities.rs` both call the new `micold_core::github::locate_gh_on_host` (was a copy); off CI a `gh` only a version manager's include can see skips instead of failing; `CI=1` counts as CI.
 - notes: the macOS and Windows runs are CI's `build + test` matrix (`cargo test -p micold-core --all-targets`).
 - commit: the commit that adds this entry
+
+## Cycle R-C1: T096 — A4's preview comparison can fail (F1)
+
+- test: `main_tests.rs::issue_source::issue_a_pick_fills_ticket_and_name` — the type is chosen after the pick (as A5), the preview must be `Ok` with branch `fix/42_crash-when-opening-empty-project`, then equal the `BranchSource::New` preview.
+- red: mutant `preview()` returns `Err(NamingError::NoType)` for `BranchSource::Issue` (the old A4 passed on it: both sides were `Err(NoType)`) -> `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide issue_a_pick_fills_ticket_and_name` 1 failed at `main_tests.rs:5475` ("a picked issue with a type previews a branch").
+- green: mutant restored -> 1 passed.
+- notes: tests-only; no production change.
+
+## Cycle R-C2: T098 — A21/A22 re-pinned honestly (F4)
+
+- test: A21 `issue_the_mapping_survives_a_restart` asserts only `store.saves().last().issue_label_types == expected` (serde round trip and `stored(&store)` dropped; doc and test-list row A21 point persistence at `settings_issue_mapping.rs::round_trip_and_default`). A22 split into `issue_an_invalid_mapping_blank_label_is_not_saved` and `issue_an_invalid_mapping_duplicate_label_is_not_saved`, each asserting the marked field and `saves().is_empty()`; the tautological `stored(&store) == default_mapping()` dropped.
+- red: M10 (`into_settings` drops the mapping) -> A21 1 failed, `left: Some([]) right: Some([bug→Fix, enhancement→Feat, documentation→Docs, defect→Feat])`. Duplicate check disabled in `SettingsDraft::mapping` -> duplicate test failed (`a refused save leaves Settings open`), blank test passed; blank check disabled -> blank test failed, duplicate passed.
+- green: restored -> `cargo test -p micold-client --bin micold-ai-ide issue_the_mapping issue_an_invalid` 3 passed.
+
+## Cycle R-C3: T099 — A1, A2, A3, U85, U53 and `capped_rig` assert what they claim (F8)
+
+- test: A1 asserts `Available(o/r)`, the caption naming `o/r`, and that `SourceChanged(Issue)` is accepted; A2 asserts every row's full `row_text` in order; A3 asserts Down lands on row 0, row 0 is `#42`, and Enter fills ticket `42` and #42's title (no oracle derived from `issue_number_at`); `capped_rig` asserts `Loaded { listing } if !listing.complete`; U85 sends three shell messages after the store save before reading the type; U53 asserts the re-seated highlight is `Some(0)` on `#7`.
+- red (one mutant each, restored after): reducer refuses `Issue` while available -> A1 failed `left: New right: Issue` (old A1 passed it); core `row_text` drops labels -> A2 failed on the row list (old A2 passed it); `issue_number_at` indexes the held list, not the matches -> A3 failed `left: [7] right: [108]` (the old A3 also failed there, at its `documentation` line: its Down/Enter half could not); load forced to `Err(Offline)` -> `issue_search_is_debounced` failed in `capped_rig` at `main_tests.rs:5695` (the old guard passed on `Failed`); a keystroke re-types the picked issue from the store -> U85 failed `left: Some(Perf) right: Some(Chore)` (old passed); `rematch_issues` clears a highlight past the end -> U53 failed `left: None right: Some(0)` (old `is_none_or` passed).
+- green: `scripts/build-lock.sh cargo test -p micold-client --test issue_source_state --bin micold-ai-ide issue` -> bin 34 passed, `issue_source_state` 40 passed.
+
+## Cycle R-C4: T100 — the unit and shell layers mutation found missing (F3; M7, M13)
+
+- test: `issue_source_state.rs::a_pick_replaces_typed_ticket_and_name` (U121) and `main_tests.rs::issue_source::issue_typing_on_a_complete_list_never_searches` (U120).
+- red: M7 (a pick keeps an existing ticket) -> U121 failed `left: "1" right: "7"`; M13 (`issue_query_changed` searches on a complete list too) -> U120 failed at `main_tests.rs:5768`, a debounce was scheduled.
+- green: restored -> both pass.
+
+## Cycle R-C5: T104 (client half) — FR-003 behaviour pin; the scan fails on read errors (F12)
+
+- test: `main_tests.rs::issue_source::issue_opening_the_form_loads_no_issues` (U122): open, render, switch to Existing and New, type — no `gh` located, no source built, no load or search, `issues == NotRequested`. `issues_are_requested_only_on_named_events.rs` walks with `unwrap_or_else(panic!)` on `read_dir`, entries and `read_to_string`.
+- red: `on_source_changed` loads on any source change -> U122 failed at `main_tests.rs:5646` (a `gh` lookup); the scan pointed at a missing `src-missing` dir -> both scan tests panic `cannot list …` at `:86` (the old walk returned silently and `issues_are_fetched_only_from_the_named_events` passed).
+- green: restored -> `cargo test -p micold-client --test issues_are_requested_only_on_named_events` 2 passed.
+
+## Cycle R-C6: T105 (client half) — messages, eager-test splits, the shipped fake (F14, F16)
+
+- no behaviour change: every assertion in U44–U56, U103, U104 carries a message; U44, U46, U72, U83, U96 split into one test per behaviour (`<old name>_*`, test-list rows updated); U60 uses `FakeEnvIncludeResolver::answering(..)` and asserts its `calls()` (script, project) instead of the hand-rolled `PathResolver`.
+- verified by: `issue_source_state` 40 passed, bin `issue` 34 passed, before and after every mutant above.
+
+## Cycle R-10: T097 — T095 can no longer pass silently off CI (F2)
+
+- test: `github_locate_desktop_launch.rs` fails when the lookup finds no `gh`, unless `MICOLD_SKIP_GH_LAUNCH_TEST=1` is set off CI; on CI (`CI` set, not `0`/`false`) the opt-out is ignored.
+- red: empty `HOME`, `PATH=/usr/bin:/bin` -> the old test passed (return after `eprintln!`); the new one fails with the reason. Opt-out -> passes; opt-out with `CI=true` -> fails.
+- green: this host finds `gh` in `~/bin` (a directory the lookup searches) -> `scripts/build-lock.sh cargo test -p micold-core --test github_locate_desktop_launch` 1 passed.
+- notes: CI already failed when `gh` was missing; its behaviour is unchanged.
+
+## Cycle R-11: T101 — no process-global env mutation (F5)
+
+- test: `git_remotes.rs` and `github_gh_cli.rs` re-run the env-dependent test in a child copy of the test binary with `GIT_CONFIG_GLOBAL` / `GH_DEBUG` set on that child only.
+- red: `GH_DEBUG` removal taken out of `github.rs` (M11) -> the `github_gh_cli` test fails; `GIT_CONFIG_GLOBAL` not passed to the child -> the `git_remotes` test fails.
+- green: restored -> the 20x repeat passed 17 of 20: the misses were `ToolMissing` from the Unix stub (`ETXTBSY`: a sibling thread's fork inherited this process's write fd on the stub before exec). The stub is now written by a child `sh` (`write_executable`), so this process never holds a write fd on it -> `cargo test -p micold-core --test git_remotes --test github_gh_cli` passed 40 of 40 repeats; `grep -n set_var` on both files is empty.
+
+## Cycle R-12: T102 — U42, U40, U70 oracles (F6, F7, F9)
+
+- test: U42 asserts `(Refused, "project is not a git repository")`; U40 literal expected names, no `if`; U70 core adds `a_number_or_label_match_is_shown`.
+- red (one mutant each, restored after): refusal text `"not a repository"` -> `remote_list.rs:206` failed `left: (Refused, "not a repository")`; slug bound `<=` -> `<` -> `fits_and_the_50_boundary` and `slug_never_exceeds_50` failed; `row_text` drops labels -> `github_search.rs:79` failed `left: [] right: [1200]`.
+- green: `cargo test -p micold-daemon --test remote_list` and `-p micold-core --test naming_from_title --test github_search` pass.
+
+## Cycle R-13: T103 — SC-006 and SC-003 checks are load-bearing (F10, F11)
+
+- test: U82 compares the full sorted top-level key list of settings.json; the typeahead guard matches `ISSUE_BUDGET_MS` and expects at least 5 budget tests; the issue test asserts 1,000 rows and a non-empty match set.
+- red: `save` writes an extra `gh_token` key -> `settings_issue_mapping.rs:178` failed on the key list; the issue budget test loses its `cfg_attr(debug_assertions, ignore)` -> `every_frame_budget_measurement_is_release_only` failed at `typeahead_budget.rs:265`.
+- green: restored -> both targets pass.
+
+## Cycle R-14: T104 (core half) — no fixed sleep in `process_run_bounded` (F13)
+
+- test: `a_child_past_the_bound_is_killed_and_reported` uses a heartbeat child and polls until the heartbeat stays unchanged for 500 ms (10 s deadline) instead of sleeping 4 s.
+- red: `kill_process_group(pid)` removed -> failed at `process_run_bounded.rs:97` after the deadline.
+- green: restored -> `cargo test -p micold-core --test process_run_bounded` 5 passed.
+
+## Cycle R-15: T105 (non-client half) — messages, splits, weak negatives (F14, F15, F17)
+
+- no behaviour change: bare assertions in the named core files carry messages; U9, U33, U94/U102 and U95/U111 split; U93 (`icons_font.rs:70-80`) and U65 (`material_builder_api.rs` source grep) deleted as covered by `tests/icons.rs` and the `toggle_chip.rs` unit test; the Windows `.cmd` stub records `GH_DEBUG`.
+- red (F17, one mutant each, restored after): `total_open` set to the held count -> U29 failed `left: 1000 right: 1001`; `gh auth login` / `not logged in` dropped from the auth texts -> U31 failed at exit 1 (`Other(..) != NotSignedIn`); fallback text `gh failed ({code})` -> U34 failed on the exact text; Chocolatey dir guessed with a capital `C` and a default `ProgramData` -> U20 `windows_finds_winget_gh` failed.
+- green: `mise run test-core` passes.
+
+## Cycle R-16: T106 — bookkeeping (F18)
+
+- no behaviour change: test-list row U130 (T095), U43 says the pin is 17, split and deleted rows re-pointed, `updated_at` refreshed; the duplicate version pin in `protocol_auth.rs` dropped (`schema_hash.rs` keeps it); `protocol_roundtrip.rs` round-trips an empty `RemoteList`.
+- verified by: `cargo test -p micold-core --test protocol_roundtrip --test schema_hash --test protocol_auth` pass.
+- cross-check: `cargo check -p micold-core --tests --target x86_64-pc-windows-msvc` clean (the Windows stub edits).

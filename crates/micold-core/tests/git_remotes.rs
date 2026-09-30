@@ -13,6 +13,34 @@ fn remote(name: &str, url: &str) -> GitRemote {
     }
 }
 
+/// Set in the child copy of this test binary that [`in_child`] starts.
+const CHILD_VAR: &str = "MICOLD_TEST_CHILD";
+
+/// Run `test` again in a child copy of this test binary, with `vars` set on that child only, and
+/// return `true` in the child. The variables never touch this process, whose other tests run in
+/// parallel threads and spawn processes of their own.
+fn in_child(test: &str, vars: &[(&str, &std::ffi::OsStr)]) -> bool {
+    if std::env::var_os(CHILD_VAR).is_some() {
+        return true;
+    }
+    let mut child = std::process::Command::new(std::env::current_exe().expect("this test binary"));
+    child
+        .args(["--exact", test, "--test-threads=1", "--nocapture"])
+        .env(CHILD_VAR, "1");
+    for (name, value) in vars {
+        child.env(name, value);
+    }
+    let out = child.output().expect("the child test binary runs");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success() && stdout.contains("1 passed"),
+        "{test} failed in its child process: {}\n{stdout}\n{}",
+        out.status,
+        String::from_utf8_lossy(&out.stderr)
+    );
+    false
+}
+
 fn git(dir: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
         .arg("-C")
@@ -80,8 +108,9 @@ fn fake_git_lists_remotes_in_insertion_order() {
     );
 }
 
+/// U9 — `GitCli` lists a real repository's remotes.
 #[test]
-fn git_cli_lists_remotes_and_none_is_not_an_error() {
+fn git_cli_lists_remotes() {
     let with = tempfile::tempdir().unwrap();
     git(with.path(), &["init", "-q"]);
     git(
@@ -98,16 +127,22 @@ fn git_cli_lists_remotes_and_none_is_not_an_error() {
         vec![
             remote("origin", "https://github.com/o/r.git"),
             remote("upstream", "https://gitlab.com/u/r.git"),
-        ]
+        ],
+        "both remotes of a real repository, in config order"
     );
+}
 
+/// U9 — a real repository without remotes lists nothing, and that is not an error.
+#[test]
+fn git_cli_lists_no_remotes_without_error() {
     let without = tempfile::tempdir().unwrap();
     git(without.path(), &["init", "-q"]);
     assert_eq!(
         GitCli::new().remote_list(without.path()).expect(
             "git exits 1 when nothing matches, which means no remotes rather than a failure"
         ),
-        ""
+        "",
+        "no remotes, no output"
     );
 }
 
@@ -120,9 +155,13 @@ fn global_insteadof_is_not_applied() {
         "[url \"https://github.com/\"]\n\tinsteadOf = gh:\n",
     )
     .unwrap();
-    // Every git this binary runs reads this file as the global config from here on; no other test
-    // here depends on the global config.
-    std::env::set_var("GIT_CONFIG_GLOBAL", &global);
+    // Every git the child runs, `GitCli`'s included, reads this file as the global config.
+    if !in_child(
+        "global_insteadof_is_not_applied",
+        &[("GIT_CONFIG_GLOBAL", global.as_os_str())],
+    ) {
+        return;
+    }
 
     let repo = tempfile::tempdir().unwrap();
     git(repo.path(), &["init", "-q"]);
