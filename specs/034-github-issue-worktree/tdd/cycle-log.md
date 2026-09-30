@@ -453,3 +453,20 @@ failed before the implementation.
   GraphQL's error types do not (SAML, scopes), so a refused list answer stays with `classify`, and
   `parse_list_page`'s `errors[]` branch remains the exit-0 path M1 declined.
 - commit: the commit that adds this entry
+
+## Cycle 17: U110 (revised), U111 — M3 review A round 2
+
+- red: U110 rewritten to the opposite expectation (a debounce ending while a create runs still
+  searches; round 1's #7 fix left the search `Pending` for good once the form returned to editing):
+  `scripts/build-lock.sh cargo test -p micold-client --test issue_source_state creating` ->
+  `a_search_due_while_creating_is_not_left_pending` `:874:5 left: Pending { seq: 2 } right: Searching { seq: 2 }`.
+  U111 extended with the `ListNotFound` stub (exit 1, empty stderr, NOT_FOUND answer):
+  `scripts/build-lock.sh cargo test -p micold-core --test github_gh_cli partial` ->
+  `github_gh_cli.rs:259:5 left: Other("gh exited with status 1") right: NoAccess`.
+- green: `issue_search_due` back on `with_form`; `GhCli::run` keeps an error the parser types
+  exactly and sends only `Other` to `classify`; the highlight falls back to `rematch_issues`'
+  clamp when the answer dropped its issue (no new test: MINOR); the redundant `listing.complete`
+  arm folded; module doc corrected. -> `github_gh_cli` 4, `github_parse` 7, `issue_source_state`
+  25, `--bin micold-ai-ide issue` 17 passed.
+- notes: U110's first form (cycle 16) is superseded, with the reason above; the log keeps both.
+- commit: the commit that adds this entry

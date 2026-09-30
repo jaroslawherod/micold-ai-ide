@@ -17,8 +17,9 @@
 //!
 //! GitHub's search API allows 30 requests a minute, so a search waits [`ISSUE_SEARCH_DEBOUNCE`]
 //! after the last keystroke (research R9). The local ranking does not wait: the reducer re-ranks
-//! the held issues on every keystroke. Every keystroke hands out a fresh seq, so an older
-//! keystroke's timer, or an older search's answer, finds nothing to apply to (FR-007a).
+//! the held issues on every keystroke. Every keystroke that changes the trimmed text hands out a
+//! fresh seq, so an older keystroke's timer, or an older search's answer, finds nothing to apply
+//! to (FR-007a); one that changes only surrounding whitespace keeps the search as it is.
 //!
 //! # Why the environment include is resolved inside the load
 //!

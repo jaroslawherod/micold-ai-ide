@@ -858,9 +858,7 @@ pub fn issue_query_changed(state: &mut crate::app::State, text: String) {
                 // Nothing typed: the list is the loaded issues alone again.
                 searched.clear();
                 *search = SearchState::Idle;
-            } else if listing.complete {
-                *search = SearchState::Idle;
-            } else if !same_search {
+            } else if !listing.complete && !same_search {
                 started = true;
                 *search = SearchState::Pending { seq: next_seq };
             }
@@ -874,8 +872,9 @@ pub fn issue_query_changed(state: &mut crate::app::State, text: String) {
 
 /// The debounce ran out: search, if this is still the latest keystroke's (research R9).
 pub fn issue_search_due(state: &mut crate::app::State, seq: u64) {
-    // Not while a create runs or a prompt is up: GitHub is asked only for a form being edited.
-    while_editing_unprompted(state, |form| {
+    // Even while a create runs: the keystroke was the named event, and a search left pending here
+    // would never run once the form is back to editing.
+    with_form(state, |form| {
         if let IssueList::Loaded { search, .. } = &mut form.issues {
             if *search == (SearchState::Pending { seq }) {
                 *search = SearchState::Searching { seq };
@@ -919,9 +918,11 @@ pub fn issue_searched(
             .issue_highlight
             .and_then(|row| form.issue_number_at(row));
         form.rematch_issues();
-        if let Some(number) = highlighted {
-            form.issue_highlight = (0..form.issue_matches.len())
-                .find(|row| form.issue_number_at(*row) == Some(number));
+        // An issue the answer dropped leaves the highlight where `rematch_issues` clamped it.
+        if let Some(row) = highlighted.and_then(|number| {
+            (0..form.issue_matches.len()).find(|row| form.issue_number_at(*row) == Some(number))
+        }) {
+            form.issue_highlight = Some(row);
         }
     });
 }
