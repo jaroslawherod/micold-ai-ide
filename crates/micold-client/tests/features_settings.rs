@@ -552,9 +552,7 @@ mod script_path_check {
     fn a_missing_path_starting_with_a_tilde_says_the_tilde_is_not_expanded() {
         assert_eq!(
             saved_with(ScriptPathState::NotFound { tilde: true }),
-            info(&format!(
-                "{NOT_FOUND} (~ is not expanded; use a full path)"
-            )),
+            info(&format!("{NOT_FOUND} (~ is not expanded; use a full path)")),
         );
     }
 
@@ -562,9 +560,7 @@ mod script_path_check {
     fn a_path_that_is_not_a_readable_file_says_so() {
         assert_eq!(
             saved_with(ScriptPathState::NotReadable),
-            info(
-                "The environment-include script is not a readable file: /tmp/does-not-exist.sh"
-            ),
+            info("The environment-include script is not a readable file: /tmp/does-not-exist.sh"),
         );
     }
 
@@ -653,11 +649,7 @@ mod script_path_check {
         let second = landed(&mut app, seq, CheckOrigin::Saved, missing);
 
         assert_eq!(first, info(NOT_FOUND));
-        assert_eq!(
-            second,
-            Vec::<Outcome>::new(),
-            "one save, one notice"
-        );
+        assert_eq!(second, Vec::<Outcome>::new(), "one save, one notice");
     }
 }
 
