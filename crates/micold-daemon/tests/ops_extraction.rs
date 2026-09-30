@@ -27,6 +27,13 @@ use tokio_util::codec::Framed;
 
 type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
 
+/// Worktree rows (dir, branch, display name), provenance records, and directories on disk.
+type Outcome = (
+    Vec<(String, Option<String>, String)>,
+    Vec<String>,
+    Vec<String>,
+);
+
 /// One project with a store, as a window or the tool server would find it.
 struct Side {
     state: Arc<DaemonState>,
@@ -59,13 +66,7 @@ impl Side {
     }
 
     /// What the operation left behind, in a form two projects can be compared by.
-    fn outcome(
-        &self,
-    ) -> (
-        Vec<(String, Option<String>, String)>,
-        Vec<String>,
-        Vec<String>,
-    ) {
+    fn outcome(&self) -> Outcome {
         self.state.refresh_worktrees(self.repo());
         let snapshot = self.state.catalog_snapshot();
         let project = snapshot
